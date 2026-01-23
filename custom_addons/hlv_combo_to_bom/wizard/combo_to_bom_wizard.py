@@ -97,7 +97,7 @@ class ComboToBomWizard(models.TransientModel):
             try:
                 # Chuyển loại sản phẩm nếu được chọn (Odoo 18)
                 if self.convert_product_type:
-                    update_vals = {'type': 'goods'}  # Set to goods first
+                    update_vals = {'type': 'consu'}  # Set to consu (consumable/goods)
                     if self.new_product_type == 'storable':
                         update_vals['is_storable'] = True
                     else:
