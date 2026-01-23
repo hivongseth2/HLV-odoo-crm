@@ -67,25 +67,25 @@ def _get_product_image_url(product):
     # Nên dùng route image custom của mình ở dưới, trong đó sẽ handle việc fallback.
     return f"/search_stock/image/{product.id}"
 
-class PublicInventory(http.Controller):
+# --- CẬP NHẬT: Helper check combo qua BoM Kit ---
+def _is_combo_product(env, product_tmpl_id):
+    # Check if this product template has any active phantom BoM (Kit)
+    if not product_tmpl_id: return False
     
-    # --- CẬP NHẬT: Helper check combo qua BoM Kit ---
-    def _is_combo_product(env, product_tmpl_id):
-        # Check if this product template has any active phantom BoM (Kit)
-        if not product_tmpl_id: return False
+    # 1. Check field is_combo (backward compatibility/fast check)
+    if 'is_combo' in env['product.template']._fields:
+        if product_tmpl_id.is_combo: return True
         
-        # 1. Check field is_combo (backward compatibility/fast check)
-        if 'is_combo' in env['product.template']._fields:
-            if product_tmpl_id.is_combo: return True
-            
-        # 2. Check BoM Kit
-        # Cache optimization could be needed here but for now direct search
-        count = env['mrp.bom'].sudo().search_count([
-            ('product_tmpl_id', '=', product_tmpl_id.id),
-            ('active', '=', True),
-            ('type', '=', 'phantom')
-        ])
-        return count > 0
+    # 2. Check BoM Kit
+    # Cache optimization could be needed here but for now direct search
+    count = env['mrp.bom'].sudo().search_count([
+        ('product_tmpl_id', '=', product_tmpl_id.id),
+        ('active', '=', True),
+        ('type', '=', 'phantom')
+    ])
+    return count > 0
+
+class PublicInventory(http.Controller):
 
     
     # --- CẬP NHẬT: Route ảnh có fallback mặc định ---
