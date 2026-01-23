@@ -138,24 +138,11 @@ class PublicInventory(http.Controller):
         # 3. DOMAIN
         domain = [("active", "=", True)]
         
-        # --- CẬP NHẬT: Lọc Combo (BoM Kit) nếu không check ---
+        # --- Lọc Combo (BoM Kit) ---
+        # combo_search_mode = OFF: Lọc BỎ sản phẩm có BOM Kit (không hiển thị combo)
+        # combo_search_mode = ON: Tìm TẤT CẢ sản phẩm (bao gồm cả combo)
         if not combo_search_mode:
-            # Tìm tất cả sản phẩm là Kit
-            # Lưu ý: Search này có thể nặng nếu nhiều Kit, nhưng cần thiết để filter
-            # Tối ưu: Nếu có field is_combo dùng field thì nhanh hơn, nhưng user yêu cầu bỏ.
-            # Dùng subquery domain
-            domain.append(('product_tmpl_id.bom_ids.type', '!=', 'phantom')) 
-            # Note: bom_ids là One2many, operator != phantom có thể không hoạt động như mong đợi (nó loại nếu MỌI bom != phantom?)
-            # Odoo search One2many != value thường có nghĩa "không có dòng nào = value" -> Chính xác là cái ta cần?
-            # Test: Product A has 1 BoM (phantom). A.bom_ids.type != phantom returns False?
-            # Product B has no BoM. B.bom_ids.type != phantom returns True? (Empty set logic)
-            # Safe logic: exclude IDs
-            # kit_boms = env['mrp.bom'].sudo().search([('type', '=', 'phantom'), ('active', '=', True)])
-            # kit_tmpl_ids = kit_boms.mapped('product_tmpl_id').ids
-            # if kit_tmpl_ids:
-            #     domain.append(('product_tmpl_id', 'not in', kit_tmpl_ids))
-            
-            # Sử dụng cách NOT IN cho an toàn
+            # Tìm tất cả BOM Kit và exclude chúng
             kit_boms = env['mrp.bom'].sudo().search([('type', '=', 'phantom'), ('active', '=', True)])
             kit_tmpl_ids = kit_boms.mapped('product_tmpl_id').ids
             if kit_tmpl_ids:
