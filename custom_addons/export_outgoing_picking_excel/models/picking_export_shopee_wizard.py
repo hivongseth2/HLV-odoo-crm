@@ -69,6 +69,33 @@ class PickingExportShopeeWizard(models.TransientModel):
             
         return ''
 
+    def _build_row_data(self, picking, so, prod, ml, move,
+                        scheduled_date_str, picking_name, partner_code, partner_name,
+                        partner_address, partner_vat, sale_name, sale_user_code,
+                        dien_giai, ly_do_xuat, warehouse_code):
+        """
+        Override to fix fields showing FALSE and hardcode warehouse code
+        """
+        row = super()._build_row_data(
+            picking, so, prod, ml, move,
+            scheduled_date_str, picking_name, partner_code, partner_name,
+            partner_address, partner_vat, sale_name, sale_user_code,
+            dien_giai, ly_do_xuat, warehouse_code
+        )
+        
+        # 1. Fix FALSE issue for 3 fields
+        if not row.get('hinh_thuc_giao_hang'):
+            row['hinh_thuc_giao_hang'] = ''
+        if not row.get('hinh_thuc_thanh_toan_so'):
+            row['hinh_thuc_thanh_toan_so'] = ''
+        if not row.get('ben_tra_phi_van_chuyen'):
+            row['ben_tra_phi_van_chuyen'] = ''
+
+        # 2. Hardcode Ma kho
+        row['ma_kho'] = 'HLV'
+        
+        return row
+
     def action_export(self):
         self.ensure_one()
         if Workbook is None:
