@@ -14,6 +14,29 @@ class PickingExportShopeeWizard(models.TransientModel):
     _inherit = "picking.export.wizard"
     _description = "Xuất Excel lệnh xuất kho Shopee"
 
+    def _domain(self):
+        """
+        Override _domain to filter for Shopee orders only
+        """
+        self.ensure_one()
+        if self.date_from > self.date_to:
+            raise UserError(_("Khoảng ngày không hợp lệ."))
+
+        domain = [
+            ("picking_type_code", "=", "outgoing"),
+            ("date_done", ">=", fields.Date.to_date(self.date_from)),
+            ("date_done", "<=", fields.Date.to_date(self.date_to)),
+            ("state", "=", "done"),
+        ]
+
+        if self.warehouse_ids:
+            domain.append(("picking_type_id.warehouse_id", "in", self.warehouse_ids.ids))
+
+        # Filter: Only customers with 'shopee' in name (case-insensitive)
+        domain.append(('partner_id.name', 'ilike', 'shopee'))
+
+        return domain
+
     def _thuoc_combo_code_for_move(self, move):
         """
         Overridden to use BoM Kit logic.
@@ -30,16 +53,11 @@ class PickingExportShopeeWizard(models.TransientModel):
 
         # If move product is same as SOL product, it hasn't successfully exploded into components 
         # (or it's not a kit).
-        # However, we should just check if SOL product is a kit.
         if sol_product.id == move.product_id.id:
-            # Check if it really is a kit but somehow didn't explode or is just top level?
-            # Usuaully if it's a kit, move product should be component.
-            # If they are same, assume not a component of a combo.
             return ''
 
         # Check if sol_product is a BoM Kit (phantom)
         # We search for any active phantom BoM for this product template.
-        # This is a simplified check.
         is_kit = self.env['mrp.bom'].search_count([
             ('product_tmpl_id', '=', sol_product.product_tmpl_id.id),
             ('type', '=', 'phantom'),
@@ -52,16 +70,13 @@ class PickingExportShopeeWizard(models.TransientModel):
         return ''
 
     def action_export(self):
-        """
-        Copy of action_export to fix res_model in attachment
-        """
         self.ensure_one()
         if Workbook is None:
             raise UserError(_("Thiếu thư viện openpyxl. Vui lòng cài đặt 'openpyxl' cho Python."))
 
         pickings = self.env["stock.picking"].sudo().search(self._domain(), order="scheduled_date asc, id asc")
         if not pickings:
-            raise UserError(_("Không tìm thấy phiếu xuất kho nào trong khoảng ngày đã chọn."))
+            raise UserError(_("Không tìm thấy phiếu xuất kho Shopee nào trong khoảng ngày đã chọn."))
 
         # Tạo dữ liệu
         all_rows = []
