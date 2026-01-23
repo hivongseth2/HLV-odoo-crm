@@ -26,15 +26,14 @@
     <field name="name">Xuất Excel lệnh mua hàng</field>
     <field name="res_model">purchase.export.wizard</field>
     <field name="view_mode">form</field>
+    <field name="view_id" ref="view_purchase_export_wizard_form"/>
     <field name="target">new</field>
-    <field name="binding_model_id" ref="purchase.model_purchase_order"/>
   </record>
 
-  <!-- Menu Item trong Purchase -->
-  <menuitem
-    id="menu_purchase_export_wizard"
-    name="Xuất Excel lệnh mua hàng"
-    parent="purchase.menu_purchase_root"
-    action="action_purchase_export_wizard"
-    sequence="100"/>
+  <!-- Menu item chung với các wizard khác trong Kho hàng > Công cụ Excel -->
+  <menuitem id="menu_purchase_export_wizard"
+            name="Xuất lệnh mua hàng (Excel)"
+            action="action_purchase_export_wizard"
+            parent="menu_export_excel_root"
+            sequence="3"/>
 </odoo>
