@@ -262,11 +262,23 @@ def _get_combo_product_display(order_line):
     
     # Get combo components
     try:
-        ComboLine = request.env['combo.product'].sudo()
-        combo_lines = ComboLine.search([
-            ('product_template_id', '=', product.product_tmpl_id.id)
-        ])
+        combo_lines = []
+        # 1. Old Logic
+        if hasattr(request.env, 'combo.product'):
+            combo_lines = request.env['combo.product'].sudo().search([
+                ('product_template_id', '=', product.product_tmpl_id.id)
+            ])
         
+        # 2. New Logic (BoM)
+        if not combo_lines:
+             bom = request.env['mrp.bom'].sudo().search([
+                ('product_tmpl_id', '=', product.product_tmpl_id.id),
+                ('active', '=', True),
+                ('type', '=', 'phantom')
+            ], limit=1)
+             if bom:
+                 combo_lines = bom.bom_line_ids
+
         if combo_lines:
             component_names = [line.product_id.name for line in combo_lines if line.product_id]
             if component_names:
@@ -366,10 +378,21 @@ def _get_order_lines(order):
                 parent_combo_lines[line.id] = line
                 
                 # Lấy danh sách component
-                ComboLine = request.env['combo.product'].sudo()
-                combo_lines = ComboLine.search([
-                    ('product_template_id', '=', product.product_tmpl_id.id)
-                ])
+                combo_lines = []
+                if hasattr(request.env, 'combo.product'):
+                    combo_lines = request.env['combo.product'].sudo().search([
+                        ('product_template_id', '=', product.product_tmpl_id.id)
+                    ])
+                
+                if not combo_lines:
+                     bom = request.env['mrp.bom'].sudo().search([
+                        ('product_tmpl_id', '=', product.product_tmpl_id.id),
+                        ('active', '=', True),
+                        ('type', '=', 'phantom')
+                    ], limit=1)
+                     if bom:
+                         combo_lines = bom.bom_line_ids
+
                 for combo_line in combo_lines:
                     if combo_line.product_id:
                         # Map component product -> parent line

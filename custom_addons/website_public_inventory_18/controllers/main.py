@@ -248,18 +248,43 @@ class PublicInventory(http.Controller):
         )
 
     def _compute_combo_qty(self, env, product, warehouse_id):
-        ComboLines = env['combo.product'].sudo().search([('product_template_id', '=', product.product_tmpl_id.id)])
+        # 1. Thử lấy từ combo.product (Logic cũ)
+        ComboLines = []
+        if hasattr(env, 'combo.product'):
+            ComboLines = env['combo.product'].sudo().search([('product_template_id', '=', product.product_tmpl_id.id)])
+        
+        # 2. Nếu không có combo.product, lấy từ BOM (Logic mới)
+        if not ComboLines:
+            bom = env['mrp.bom'].sudo().search([
+                ('product_tmpl_id', '=', product.product_tmpl_id.id),
+                ('active', '=', True),
+                ('type', '=', 'phantom') # Chỉ lấy Kit
+            ], limit=1)
+            if bom:
+                ComboLines = bom.bom_line_ids
+            # Mapping field name cho consistent
+            # combo.product: product_id, product_quantity
+            # mrp.bom.line: product_id, product_qty (dùng getattr để handle cả 2)
+
         if not ComboLines: return 0.0
+        
         possible_sets = []
         for line in ComboLines:
             comp = line.product_id
             if not comp: continue
+            
             if warehouse_id: comp_ctx = comp.with_context(warehouse=warehouse_id, location=False)
             else: comp_ctx = comp.with_context(warehouse=False, location=False)
+            
+            # Lấy qty available
             hand_qty = comp_ctx.qty_available
-            needed_qty = line.product_quantity or 1.0
+            
+            # Lấy qty needed (handle cả field name cũ và mới)
+            needed_qty = getattr(line, 'product_quantity', 0) or getattr(line, 'product_qty', 1.0)
+            
             if needed_qty > 0: possible_sets.append(int(hand_qty // needed_qty))
             else: possible_sets.append(999999)
+            
         return float(max(0, min(possible_sets))) if possible_sets else 0.0
 
     @http.route(["/search_stock/json"], type="json", auth="public", methods=["POST"])
@@ -305,8 +330,22 @@ class PublicInventory(http.Controller):
             if wid: wh = Warehouse.browse(wid).exists(); warehouses = wh if wh else Warehouse.browse([])
             else: warehouses = _get_allowed_warehouses() or Warehouse.search([])
             
-            ComboLine = env["combo.product"].sudo().with_context(allowed_company_ids=company_ids)
-            lines = ComboLine.search([("product_template_id", "=", tmpl.id)])
+            # 1. Thử lấy từ combo.product
+            lines = []
+            if hasattr(env, 'combo.product'):
+                ComboLine = env["combo.product"].sudo().with_context(allowed_company_ids=company_ids)
+                lines = ComboLine.search([("product_template_id", "=", tmpl.id)])
+            
+            # 2. Nếu không có -> BOM
+            if not lines:
+                 bom = env['mrp.bom'].sudo().search([
+                    ('product_tmpl_id', '=', tmpl.id),
+                    ('active', '=', True),
+                    ('type', '=', 'phantom')
+                ], limit=1)
+                 if bom:
+                     lines = bom.bom_line_ids
+            
             rows = []
             for line in lines:
                 child = line.product_id
@@ -318,7 +357,7 @@ class PublicInventory(http.Controller):
                 rows.append({
                     "child_product_id": child.id, "default_code": child.default_code or "", "name": child.name or "", "uom": child.uom_id.name or "",
                     "image_url": _get_product_image_url(child),
-                    "component_qty_in_combo": float(line.product_quantity or 1.0), "warehouses": wh_rows
+                    "component_qty_in_combo": float(getattr(line, 'product_quantity', 0) or getattr(line, 'product_qty', 1.0)), "warehouses": wh_rows
                 })
             return {"ok": True, "mode": "components_by_warehouse", "rows": rows}
 

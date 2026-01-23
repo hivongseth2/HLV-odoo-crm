@@ -207,6 +207,14 @@ class PickingExportWizard(models.TransientModel):
         
         # 🆕 Đọc từ Studio fields
         try:
+            # 1. Logic cho BoM Kit (Standard Odoo)
+            # Nếu move từ Sale Line mà sản phẩm khác nhau -> Là thành phần của Kit
+            if sol.product_id and sol.product_id != move.product_id:
+                # Đây là thành phần combo (children)
+                # Trả về Mã của Parent (sol.product_id)
+                return sol.product_id.default_code or ''
+
+            # 2. Logic cũ (Studio fields)
             is_combo_child = getattr(sol, 'x_studio_is_combo_child', False)
             combo_parent_code = getattr(sol, 'x_studio_combo_parent_code', False)
             
