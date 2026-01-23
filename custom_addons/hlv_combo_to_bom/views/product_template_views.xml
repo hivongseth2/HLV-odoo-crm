@@ -17,8 +17,8 @@
                                 string="🔄 Tạo BOM từ Combo" 
                                 class="btn-primary"
                                 invisible="has_bom_from_combo"/>
-                        <label string="✅ Đã tạo BOM" class="text-success"
-                               invisible="not has_bom_from_combo"/>
+                        <span class="o_form_label text-success"
+                              invisible="not has_bom_from_combo">✅ Đã tạo BOM</span>
                     </group>
                 </group>
             </xpath>
