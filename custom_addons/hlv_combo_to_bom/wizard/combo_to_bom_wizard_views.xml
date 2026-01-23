@@ -19,14 +19,6 @@
                         <field name="skip_existing_bom"/>
                     </group>
                 </group>
-                <separator string="Combo Items sẽ được chuyển thành BOM Lines"/>
-                <field name="product_template_ids" mode="tree" readonly="1">
-                    <tree string="Chi tiết Combo Items" create="0" delete="0">
-                        <field name="name"/>
-                        <field name="default_code"/>
-                        <field name="combo_product_id" widget="many2many_tags" string="Thành phần"/>
-                    </tree>
-                </field>
                 <footer>
                     <button name="action_convert" type="object" string="Chuyển đổi" class="btn-primary"/>
                     <button name="action_preview" type="object" string="Xem trước" class="btn-secondary"/>
