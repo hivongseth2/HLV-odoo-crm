@@ -91,7 +91,7 @@ class PublicInventory(http.Controller):
         
         record = request.env['product.product'].sudo().browse(product_id).exists()
         
-        # Nếu không có record hoặc không có ảnh -> Trả về placeholder mặc định của Odoo
+        # Nếu không có record hoặc không có ảnh -> Trả về placeholder mặc định 
         if not record or not record.image_128:
             return request.redirect('/web/static/img/placeholder.png')
 
