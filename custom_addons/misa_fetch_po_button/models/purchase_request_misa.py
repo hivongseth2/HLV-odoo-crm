@@ -240,7 +240,7 @@ class PurchaseRequestMisa(models.Model):
                 addr_upper = delivery_address.upper()
                 
                 # Kho Bến Cam (ID 17)
-                if any(k in addr_upper for k in ["BẾN CAM", "BEN CAM", "BENCAM"]):
+                if any(k in addr_upper for k in ["BẾN CAM", "BEN CAM", "BENCAM", "KBC", "BC"]):
                     picking_type_id = 17
                 
                 # Kho Tân Sơn Nhì (ID 9)
