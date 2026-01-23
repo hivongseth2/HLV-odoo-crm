@@ -329,7 +329,8 @@ class SaleOrder(models.Model):
             if sid:
                 stock_id = sid
                 break
-
+         _logger.warning("stock_id",stock_id)
+      
         if stock_id and stock_id in stock_mapping:
             location_name = stock_mapping[stock_id]
             location = self.env['stock.location'].search([
