@@ -30,14 +30,14 @@
                 border-left: 1px solid #dee2e6;
             }
 
-            #inv-table th, #inv-table td {
+            #inv-table > thead > tr > th, #inv-table > tbody > tr > td {
                 border-right: 1px solid #dee2e6;
                 text-align: center !important; /* Căn giữa nội dung */
                 vertical-align: middle;
             }
 
             /* 3. Thiết lập cho dòng header */
-            #inv-table thead th {
+            #inv-table > thead > tr > th {
                 position: -webkit-sticky; /* Hỗ trợ Safari */
                 position: sticky;
                 top: 0; /* Mặc định lên sát mép trên */
@@ -49,7 +49,7 @@
 
             /* Nếu website Odoo của bạn có thanh navbar cố định phía trên (thường cao 56px-70px)
               Hãy điều chỉnh top bằng đúng chiều cao đó để không bị che mất header bảng */
-            .o_header_standard + #wrap #inv-table thead th {
+            .o_header_standard + #wrap #inv-table > thead > tr > th {
                 top: 56px; 
             }
         }
@@ -278,7 +278,7 @@
                                 <button type="button" class="btn btn-sm btn-light text-primary btn-expand rounded-circle"
                                         t-att-data-pid="r['id']"
                                         t-att-data-is-combo="str(bool(r.get('is_combo'))).lower()">
-                                  <i class="fa fa-plus"></i>
+                                  <i class="fa fa-minus"></i>
                                 </button>
                               </td>
                               <td>
@@ -316,6 +316,86 @@
                               <td>
                                 <t t-if="r['website_url']"><a t-att-href="r['website_url']" target="_blank" class="text-decoration-none"><i class="fa fa-external-link"></i></a></t>
                               </td>
+                            </tr>
+                            <!-- DETAIL ROW (Server-Side Rendered) -->
+                            <tr class="detail-row">
+                                <td colspan="14" style="padding:0; border:none;">
+                                    <t t-set="bk" t-value="r.get('breakdown', {})"/>
+                                    <!-- COMBO LAYOUT -->
+                                    <t t-if="is_combo">
+                                        <div class="p-3 detail-container-mobile">
+                                            <div class="row g-3">
+                                                <t t-foreach="bk.get('rows', [])" t-as="c">
+                                                    <div class="col-12 col-md-12">
+                                                        <div class="card h-100 shadow-sm">
+                                                            <div class="card-header bg-white d-flex align-items-center py-2">
+                                                                <img t-att-src="c['image_url']" class="me-3" style="width:40px; height:40px; object-fit:contain;"/>
+                                                                <div class="flex-grow-1">
+                                                                    <div class="fw-bold text-primary"><t t-esc="c['name']"/></div>
+                                                                    <div class="small text-muted">SL Combo: <b><t t-esc="'{:,.0f}'.format(c['component_qty_in_combo'])"/></b></div>
+                                                                </div>
+                                                            </div>
+                                                            <div class="card-body p-0">
+                                                                <t t-foreach="c.get('warehouses', [])" t-as="w">
+                                                                    <div class="border-bottom p-2">
+                                                                        <div class="fw-bold small mb-1"><t t-esc="w['warehouse_name']"/></div>
+                                                                        <div class="d-flex">
+                                                                            <div class="flex-fill text-center border-end">
+                                                                                <div class="small text-muted">Sẵn sàng</div>
+                                                                                <div class="fw-bold text-success"><t t-esc="'{:,.0f}'.format(w['qty_available'])"/></div>
+                                                                            </div>
+                                                                            <div class="flex-fill text-center">
+                                                                                <div class="small text-muted">Thực tế</div>
+                                                                                <div><t t-esc="'{:,.0f}'.format(w['qty_total'])"/></div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </t>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </t>
+                                            </div>
+                                        </div>
+                                    </t>
+                                    
+                                    <!-- REGULAR LAYOUT -->
+                                    <t t-else="">
+                                        <div class="detail-container-mobile">
+                                            <!-- Desktop -->
+                                            <div class="d-none d-md-block p-3 bg-white">
+                                                <table class="table table-sm mb-0">
+                                                    <thead><tr><th>Kho hàng</th><th class="text-end">Tồn</th><th class="text-end">Giữ</th><th class="text-end">Sẵn sàng</th></tr></thead>
+                                                    <tbody>
+                                                        <t t-foreach="bk.get('rows', [])" t-as="w">
+                                                            <tr>
+                                                                <td><t t-esc="w['warehouse_name']"/></td>
+                                                                <td class="text-end"><t t-esc="'{:,.0f}'.format(w['qty_total'])"/></td>
+                                                                <td class="text-end"><t t-esc="'{:,.0f}'.format(w['qty_reserved'])"/></td>
+                                                                <td t-attf-class="text-end #{ 'text-success fw-bold' if w['qty_available'] > 0 else 'text-muted' }">
+                                                                    <t t-esc="'{:,.0f}'.format(w['qty_available'])"/>
+                                                                </td>
+                                                            </tr>
+                                                        </t>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <!-- Mobile -->
+                                            <div class="d-md-none">
+                                                <t t-foreach="bk.get('rows', [])" t-as="w">
+                                                     <div class="wh-card">
+                                                       <div class="wh-header"><t t-esc="w['warehouse_name']"/></div>
+                                                       <div class="wh-stats">
+                                                         <div t-attf-class="wh-stat-col #{ 'dim' if w['qty_total']==0 else '' }"><div class="wh-label">Tổng</div><div class="wh-val"><t t-esc="'{:,.0f}'.format(w['qty_total'])"/></div></div>
+                                                         <div t-attf-class="wh-stat-col #{ 'dim' if w['qty_reserved']==0 else '' }"><div class="wh-label">Đã giữ</div><div class="wh-val text-muted"><t t-esc="'{:,.0f}'.format(w['qty_reserved'])"/></div></div>
+                                                         <div class="wh-stat-col highlight"><div class="wh-label">Có thể bán</div><div class="wh-val"><t t-esc="'{:,.0f}'.format(w['qty_available'])"/></div></div>
+                                                       </div>
+                                                     </div>
+                                                </t>
+                                            </div>
+                                        </div>
+                                    </t>
+                                </td>
                             </tr>
                           </t>
                         </tbody>
@@ -412,7 +492,7 @@
                    else if (q > 5) badgeClass = 'bg-info';
                    else if (q > 0) badgeClass = 'bg-warning text-dark';
                    
-                   var qtyInfo = (q > 0) ? ('<span class="badge ' + badgeClass + ' text-white border ms-2">Tồn: ' + fmt(q) + '</span>') : '<span class="badge bg-danger bg-opacity-25 text-danger border border-danger ms-2">Hết hàng</span>';
+                   var qtyInfo = (q > 0) ? ('<span class="badge ' + badgeClass + ' text-white border ms-2">Tồn: ' + fmt(q) + '</span>') : '<span class="badge bg-light text-danger border ms-2">Hết hàng</span>';
                    if (q > 0 && q <= 5) qtyInfo = '<span class="badge ' + badgeClass + ' border ms-2">Tồn: ' + fmt(q) + '</span>';
                    
                    html += '<div class="suggestion-item border-bottom p-2" data-name="' + displayName + '" style="cursor:pointer;">';
@@ -446,106 +526,23 @@
                 });
                 $(document).on('click', function(e) { if (!$(e.target).closest('#chip-container, #search-suggestions').length) $dropdown.hide(); });
                 
-                // --- XỬ LÝ EXPAND ROW ---
+                // --- TOGGLE DETAIL ROW ---
                 $(document).on('click', '.btn-expand', function () {
                    var $btn = $(this);
-                   var pid = $btn.data('pid');
-                   var isCombo = String($btn.data('is-combo')) === 'true';
                    var $row = $btn.closest('tr'); 
-                   var $next = $row.next();
+                   var $next = $row.next('.detail-row');
 
-                   if ($next.length && $next.hasClass('detail-row') && $next.is(':visible')) { $next.remove(); $btn.html('<i class="fa fa-plus"></i>'); return; }
-                   
-                   var colCount = $row.children('td').length;
-                   var $detail = $('<tr class="detail-row"><td colspan="' + colCount + '"><div class="p-3 bg-light text-center"><span class="spinner-border spinner-border-sm me-2"></span>Đang tải...</div></td></tr>');
-                   $row.after($detail);
-                   $btn.html('<i class="fa fa-minus"></i>');
-
-                   var currentWid = $('select[name="warehouse_id"]').val() || '';
-                   var detailMode = isCombo ? 'per_warehouse' : null;
-
-                   $.ajax({
-                      url: "/search_stock/product_breakdown",
-                      type: "POST", dataType: "json", contentType: "application/json",
-                      data: JSON.stringify({jsonrpc: "2.0", method: "call", params: { product_id: pid, warehouse_id: currentWid, detail_mode: detailMode }, id: 1}),
-                      success: function(resp) {
-                          var res = (resp && resp.result) ? resp.result : {};
-                          if(res.ok) {
-                              $detail.find('td').html(buildDetailTable(res));
-                          } else {
-                              $detail.find('td').html('<div class="text-danger small p-3">Lỗi: ' + (res.error || 'Unknown') + '</div>');
-                          }
-                      }
-                   });
+                   if ($next.is(':visible')) { 
+                       $next.hide(); 
+                       $btn.html('<i class="fa fa-plus"></i>'); 
+                   } else {
+                       $next.show();
+                       $btn.html('<i class="fa fa-minus"></i>');
+                   }
                 });
-
-                // >>> TỰ ĐỘNG BUNG HẾT DÒNG KHI LOAD TRANG <<<
-                $('.btn-expand').trigger('click');
               });
               
               function fmt(n) { return (parseFloat(n)||0).toLocaleString('en-US'); }
-              
-              function buildDetailTable(data) {
-                  var html = '';
-                  var rows = data.rows || [];
-
-                  // CASE 1: COMBO
-                  if(data.mode === 'components_by_warehouse') {
-                      html += '<div class="p-3 detail-container-mobile"><div class="row g-3">';
-                      rows.forEach(function(c){
-                          var imgUrl = c.image_url || '/web/static/img/placeholder.png';
-                          html += '<div class="col-12 col-md-12">';
-                          html += '  <div class="card h-100 shadow-sm">';
-                          html += '    <div class="card-header bg-white d-flex align-items-center py-2">';
-                          html += '      <img src="' + imgUrl + '" class=" me-3" style="width:40px; height:40px; object-fit:contain;">';
-                          html += '      <div class="flex-grow-1">';
-                          html += '        <div class="fw-bold text-primary">' + c.name + '</div>';
-                          html += '        <div class="small text-muted">SL Combo: <b>' + fmt(c.component_qty_in_combo) + '</b></div>';
-                          html += '      </div>';
-                          html += '    </div>';
-                          html += '    <div class="card-body p-0">';
-                          (c.warehouses||[]).forEach(function(w){
-                              html += '<div class="border-bottom p-2">';
-                              html += '  <div class="fw-bold small mb-1">' + w.warehouse_name + '</div>';
-                              html += '  <div class="d-flex">';
-                              html += '    <div class="flex-fill text-center border-end"><div class="small text-muted">Sẵn sàng</div><div class="fw-bold text-success">' + fmt(w.qty_available) + '</div></div>';
-                              html += '    <div class="flex-fill text-center"><div class="small text-muted">Thực tế</div><div>' + fmt(w.qty_total) + '</div></div>';
-                              html += '  </div>';
-                              html += '</div>';
-                          });
-                          html += '    </div></div></div>';
-                      });
-                      html += '</div></div>';
-                  } 
-                  
-                  // CASE 2: SẢN PHẨM THƯỜNG
-                  else {
-                      html += '<div class="detail-container-mobile">';
-                      html += '<div class="d-none d-md-block p-3 bg-white">';
-                      html += '<table class="table table-sm mb-0"><thead><tr><th>Kho hàng</th><th class="text-end">Tồn</th><th class="text-end">Giữ</th><th class="text-end">Sẵn sàng</th></tr></thead><tbody>';
-                      rows.forEach(function(r){
-                          var availClass = (r.qty_available > 0) ? 'text-success fw-bold' : 'text-muted';
-                          html += '<tr><td>' + r.warehouse_name + '</td><td class="text-end">' + fmt(r.qty_total) + '</td><td class="text-end">' + fmt(r.qty_reserved) + '</td><td class="text-end ' + availClass + '">' + fmt(r.qty_available) + '</td></tr>';
-                      });
-                      html += '</tbody></table></div>';
-
-                      html += '<div class="d-md-none">';
-                      rows.forEach(function(r){
-                           html += '<div class="wh-card">';
-                           html += '  <div class="wh-header">' + r.warehouse_name + '</div>';
-                           html += '  <div class="wh-stats">';
-                           html += '    <div class="wh-stat-col ' + (r.qty_total==0 ? 'dim':'') + '"><div class="wh-label">Tổng</div><div class="wh-val">' + fmt(r.qty_total) + '</div></div>';
-                           html += '    <div class="wh-stat-col ' + (r.qty_reserved==0 ? 'dim':'') + '"><div class="wh-label">Đã giữ</div><div class="wh-val text-muted">' + fmt(r.qty_reserved) + '</div></div>';
-                           html += '    <div class="wh-stat-col highlight"><div class="wh-label">Có thể bán</div><div class="wh-val">' + fmt(r.qty_available) + '</div></div>';
-                           html += '  </div>';
-                           html += '</div>';
-                      });
-                      html += '</div>';
-                      html += '</div>';
-                  }
-                  
-                  return html;
-              }
 
             })();
           ]]></script>

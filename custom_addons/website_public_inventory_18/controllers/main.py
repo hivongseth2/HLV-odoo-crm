@@ -91,7 +91,7 @@ class PublicInventory(http.Controller):
         
         record = request.env['product.product'].sudo().browse(product_id).exists()
         
-        # Nếu không có record hoặc không có ảnh -> Trả về placeholder mặc định của Odoo
+        # Nếu không có record hoặc không có ảnh -> Trả về placeholder mặc định 
         if not record or not record.image_128:
             return request.redirect('/web/static/img/placeholder.png')
 
@@ -100,6 +100,60 @@ class PublicInventory(http.Controller):
         mimetype = guess_mimetype(image_data)
         headers = [('Content-Type', mimetype), ('Cache-Control', 'public, max-age=604800')]
         return request.make_response(image_data, headers)
+
+    def _get_breakdown_details(self, env, product, warehouse_id, company_ids):
+        Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
+        Warehouse = env["stock.warehouse"].sudo().with_context(allowed_company_ids=company_ids)
+        
+        def _get_qty(pid, wh):
+             domain = [("product_id", "=", pid), ("location_id", "child_of", wh.view_location_id.id), ("location_id.usage", "=", "internal")]
+             grps = Quant.read_group(domain, ["product_id", "quantity:sum", "reserved_quantity:sum"], ["product_id"], lazy=False)
+             if grps:
+                 g = grps[0]
+                 return _rg_sum(g, "quantity"), _rg_sum(g, "reserved_quantity")
+             return 0.0, 0.0
+
+        tmpl = product.product_tmpl_id
+        is_combo = _is_combo_product(env, tmpl)
+        
+        if warehouse_id: wh = Warehouse.browse(int(warehouse_id)).exists(); warehouses = wh if wh else Warehouse.browse([])
+        else: warehouses = _get_allowed_warehouses() or Warehouse.search([])
+
+        if is_combo:
+            lines = []
+            bom = env['mrp.bom'].sudo().search([
+                ('product_tmpl_id', '=', tmpl.id),
+                ('active', '=', True),
+                ('type', '=', 'phantom')
+            ], limit=1)
+            if bom:
+                lines = bom.bom_line_ids
+            
+            rows = []
+            for line in lines:
+                child = line.product_id
+                if not child: continue
+                wh_rows = []
+                for wh in warehouses:
+                    qt, qr = _get_qty(child.id, wh)
+                    wh_rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_total": qt, "qty_reserved": qr, "qty_available": qt - qr})
+                
+                rows.append({
+                    "child_product_id": child.id,
+                    "default_code": child.default_code or "",
+                    "name": child.name or "",
+                    "uom": child.uom_id.name or "",
+                    "image_url": _get_product_image_url(child),
+                    "component_qty_in_combo": float(line.product_qty or 1.0),
+                    "warehouses": wh_rows
+                })
+            return {"mode": "components_by_warehouse", "rows": rows}
+        else:
+            rows = []
+            for wh in warehouses:
+                qt, qr = _get_qty(product.id, wh)
+                rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr})
+            return {"mode": "warehouses", "rows": rows}
 
     @http.route(["/search_stock"], type="http", auth="public", website=True, sitemap=True)
     def inventory_page(self, q="", warehouse_id=None, page=1, **kw):
@@ -269,6 +323,7 @@ class PublicInventory(http.Controller):
                 "image_url": _get_product_image_url(p),
                 "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
                 "is_combo": is_combo,
+                "breakdown": self._get_breakdown_details(env, p, wid, company_ids),
             })
 
         return request.render(
