@@ -324,6 +324,7 @@ class SaleOrder(models.Model):
             "HIỀNĐỨC": "KHD/Tồn kho",
             "HIENDUC": "KHD/Tồn kho",
             "DANANG": "KDN/Tồn kho",
+            "": "TSN/Stock",
         }
 
         old_wh = None
