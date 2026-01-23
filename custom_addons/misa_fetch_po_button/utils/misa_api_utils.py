@@ -15,13 +15,16 @@ class MisaApiUtils(models.AbstractModel):
     
     def get_or_create_combo_product(self, combo_data, children_data, env=None, sale_headers=None):
         """
-        Tạo/cập nhật combo product với cơ chế đúng theo model combo.product
+        Tạo/cập nhật combo product VỚI BOM (Kit/phantom) thay vì combo.product lines
+        - Chuyển sang loại storable (is_storable=True)
+        - Tạo BOM Kit để tự động giao các thành phần khi bán
         """
         env = env or self.env
         Product = env['product.product']
         ProductTmpl = env['product.template']
-        ComboProduct = env['combo.product']
         OdooUtils = env['odoo.utils']
+        MrpBom = env['mrp.bom']
+        MrpBomLine = env['mrp.bom.line']
 
         combo_code = (combo_data.get('ProductIDText') or '').strip()
         combo_name = (combo_data.get('Description') or combo_code).strip()
@@ -39,10 +42,10 @@ class MisaApiUtils(models.AbstractModel):
         except Exception:
             combo_uom = False
 
-        # === Helper: GHI VÀO TEMPLATE ===
-        def _write_combo_children(target_tmpl, children_list, parent_qty_in_order=1.0):
+        # === Helper: TẠO/CẬP NHẬT BOM TỪ CHILDREN ===
+        def _write_bom_from_children(target_tmpl, children_list, parent_qty_in_order=1.0):
             """
-            Ghi thông tin sản phẩm con vào combo.product
+            Tạo/cập nhật BOM Kit (phantom) từ danh sách children
             target_tmpl: record product.template
             children_list: [{ProductIDText, Amount, UnitIDText, Price, ...}]
             parent_qty_in_order: số lượng combo cha trong đơn hàng (để tính lại base qty)
@@ -50,13 +53,31 @@ class MisaApiUtils(models.AbstractModel):
             if not target_tmpl or not children_list:
                 return
 
-            # 1) Xóa sạch các dòng cũ
-            old_lines = ComboProduct.search([('product_template_id', '=', target_tmpl.id)])
-            if old_lines:
-                old_lines.sudo().unlink()
-                _logger.info("🗑️ Đã xóa %d dòng combo.product cũ của %s", len(old_lines), target_tmpl.display_name)
+            # 1) Tìm BOM hiện có (active) cho sản phẩm này
+            existing_bom = MrpBom.search([
+                ('product_tmpl_id', '=', target_tmpl.id),
+                ('active', '=', True)
+            ], limit=1)
 
-            # 2) Loại bỏ trùng lặp: gom theo ProductIDText, giữ lại item đầu tiên
+            # 2) Nếu có BOM cũ -> xóa các lines và cập nhật
+            if existing_bom:
+                # Xóa tất cả BOM lines cũ
+                if existing_bom.bom_line_ids:
+                    existing_bom.bom_line_ids.sudo().unlink()
+                    _logger.info("🗑️ Đã xóa %d BOM lines cũ của %s", 
+                                len(existing_bom.bom_line_ids), target_tmpl.display_name)
+                bom = existing_bom
+            else:
+                # Tạo BOM mới (Kit/phantom)
+                bom = MrpBom.sudo().create({
+                    'product_tmpl_id': target_tmpl.id,
+                    'type': 'phantom',  # Kit - tự động giao các thành phần
+                    'product_qty': 1.0,
+                    'code': f'BOM-MISA: {combo_code}',
+                })
+                _logger.info("✅ Đã tạo BOM Kit mới cho %s (id=%s)", target_tmpl.display_name, bom.id)
+
+            # 3) Loại bỏ trùng lặp: gom theo ProductIDText
             seen_codes = set()
             unique_children = []
             for ch in children_list:
@@ -68,6 +89,7 @@ class MisaApiUtils(models.AbstractModel):
             if len(unique_children) < len(children_list):
                 _logger.info("🔧 Đã loại bỏ %d dòng con trùng lặp", len(children_list) - len(unique_children))
 
+            # 4) Tạo BOM lines cho từng child
             created = 0
             for ch in unique_children:
                 c_code = (ch.get('ProductIDText') or '').strip()
@@ -80,8 +102,6 @@ class MisaApiUtils(models.AbstractModel):
                 c_price = float(ch.get('Price') or 0.0)
                 
                 # 🔧 FIX: Tính lại số lượng base (MISA trả về Amount đã nhân với qty đơn hàng)
-                # Ví dụ: combo cha qty=3, con base=0.1 → MISA trả Amount=0.3
-                # Ta cần chia ngược lại: 0.3 / 3 = 0.1
                 if parent_qty_in_order and parent_qty_in_order > 0:
                     c_qty = c_qty_raw / parent_qty_in_order
                 else:
@@ -96,10 +116,13 @@ class MisaApiUtils(models.AbstractModel):
                             name=c_name, 
                             unit_name=c_uom_name,
                             cost=c_price, 
-                            product_type='product', 
+                            product_type='consu',  # storable
                             purchase_ok=True, 
                             sale_ok=True
                         )
+                        # Set storable nếu có field is_storable
+                        if c_prod and hasattr(c_prod.product_tmpl_id, 'is_storable'):
+                            c_prod.product_tmpl_id.write({'is_storable': True})
                     except Exception as e:
                         _logger.error("❌ Không tạo được sản phẩm con %s: %s", c_code, e)
                         continue
@@ -108,22 +131,24 @@ class MisaApiUtils(models.AbstractModel):
                     _logger.warning("⚠️ Bỏ qua sản phẩm con %s (không tạo được)", c_code)
                     continue
 
-                # 2) Tạo dòng combo.product theo đúng schema
+                # Lấy UoM cho BOM line
+                c_uom = c_prod.uom_id
+
+                # Tạo BOM line
                 try:
-                    ComboProduct.sudo().create({
-                        'product_template_id': target_tmpl.id,
+                    MrpBomLine.sudo().create({
+                        'bom_id': bom.id,
                         'product_id': c_prod.id,
-                        'product_quantity': c_qty,
-                        'price': c_price,
-                        # uom_id là related field nên không cần set
+                        'product_qty': c_qty,
+                        'product_uom_id': c_uom.id if c_uom else False,
                     })
                     created += 1
-                    _logger.info("✅ Thêm sản phẩm con: %s (qty=%s) vào combo %s", 
+                    _logger.info("✅ Thêm BOM line: %s (qty=%s) vào BOM %s", 
                             c_code, c_qty, target_tmpl.display_name)
                 except Exception as e:
-                    _logger.error("❌ Lỗi tạo combo.product cho %s: %s", c_code, e)
+                    _logger.error("❌ Lỗi tạo BOM line cho %s: %s", c_code, e)
 
-            _logger.info("✅ Đã tạo %s dòng combo.product cho combo %s", created, target_tmpl.display_name)
+            _logger.info("✅ Đã tạo %s BOM lines cho combo %s", created, target_tmpl.display_name)
 
         # === Lấy/tạo combo cha ===
         combo_prod = Product.search([('default_code', '=', combo_code)], limit=1)
@@ -132,10 +157,16 @@ class MisaApiUtils(models.AbstractModel):
             # Sản phẩm đã tồn tại
             tmpl = combo_prod.product_tmpl_id
             
-            # Đảm bảo tick is_combo + cập nhật UoM nếu cần
+            # Đảm bảo tick is_combo + chuyển sang storable
             update_vals = {}
             if not getattr(tmpl, 'is_combo', False):
                 update_vals['is_combo'] = True
+            
+            # Chuyển sang storable (type=consu + is_storable=True)
+            if tmpl.type == 'service':
+                update_vals['type'] = 'consu'
+            if hasattr(tmpl, 'is_storable') and not tmpl.is_storable:
+                update_vals['is_storable'] = True
             
             if combo_uom:
                 try:
@@ -153,7 +184,7 @@ class MisaApiUtils(models.AbstractModel):
                 except Exception as e:
                     _logger.error("❌ Lỗi cập nhật template combo %s: %s", combo_code, e)
 
-            # Nếu thiếu con -> tự fetch từ API
+            # Nếu thiếu children -> tự fetch từ API
             qty_divider = combo_qty_in_order  # Mặc định: children từ đơn hàng cần chia
             if not children_data and sale_headers:
                 try:
@@ -172,9 +203,9 @@ class MisaApiUtils(models.AbstractModel):
                 except Exception as e:
                     _logger.warning("⚠️ Không fetch được children cho combo %s: %s", combo_code, e)
 
-            # 🔥 LUÔN GHI CHILDREN VÀO TEMPLATE (cập nhật mỗi lần sync)
-            _write_combo_children(tmpl, children_data or [], qty_divider)
-            _logger.info("✅ Đã cập nhật children cho combo đã tồn tại: %s", combo_code)
+            # 🔥 TẠO/CẬP NHẬT BOM TỪ CHILDREN
+            _write_bom_from_children(tmpl, children_data or [], qty_divider)
+            _logger.info("✅ Đã cập nhật BOM cho combo đã tồn tại: %s", combo_code)
             return combo_prod
 
         # === Chưa có -> tạo mới ===
@@ -183,11 +214,15 @@ class MisaApiUtils(models.AbstractModel):
         vals = {
             'name': combo_name or combo_code,
             'default_code': combo_code,
-            'type': 'service',  # Combo thường là service
+            'type': 'consu',  # Consumable/Goods (thay vì service)
             'sale_ok': True,
             'purchase_ok': False,
             'is_combo': True,
         }
+        
+        # Set storable nếu có field
+        if 'is_storable' in ProductTmpl._fields:
+            vals['is_storable'] = True
         
         if combo_uom:
             vals['uom_id'] = combo_uom.id
@@ -230,10 +265,11 @@ class MisaApiUtils(models.AbstractModel):
             except Exception as e:
                 _logger.warning("⚠️ Không fetch được children: %s", e)
 
-        # Ghi children vào template
-        _write_combo_children(tmpl, children_data or [], qty_divider)
+        # Tạo BOM từ children
+        _write_bom_from_children(tmpl, children_data or [], qty_divider)
         
         return combo_prod
+
 
     def _get_misa_token(self):
             # Step 1: Đăng nhập lấy cookie
