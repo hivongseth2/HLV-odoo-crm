@@ -157,10 +157,8 @@ class MisaApiUtils(models.AbstractModel):
             # Sản phẩm đã tồn tại
             tmpl = combo_prod.product_tmpl_id
             
-            # Đảm bảo tick is_combo + chuyển sang storable
+            # Chuyển sang storable (type=consu + is_storable=True)
             update_vals = {}
-            if not getattr(tmpl, 'is_combo', False):
-                update_vals['is_combo'] = True
             
             # Chuyển sang storable (type=consu + is_storable=True)
             if tmpl.type == 'service':
@@ -217,7 +215,6 @@ class MisaApiUtils(models.AbstractModel):
             'type': 'consu',  # Consumable/Goods (thay vì service)
             'sale_ok': True,
             'purchase_ok': False,
-            'is_combo': True,
         }
         
         # Set storable nếu có field
