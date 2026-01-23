@@ -28,10 +28,10 @@ class ComboToBomWizard(models.TransientModel):
     )
     
     new_product_type = fields.Selection([
-        ('product', 'Storable (Có theo dõi tồn kho)'),
-        ('consu', 'Consumable (Tiêu hao)'),
-    ], string='Loại sản phẩm mới', default='product',
-       help='Storable: Theo dõi tồn kho. Consumable: Không theo dõi tồn kho.')
+        ('storable', 'Storable (Có theo dõi tồn kho)'),
+        ('goods', 'Goods (Hàng hóa - không theo dõi tồn kho)'),
+    ], string='Loại sản phẩm mới', default='storable',
+       help='Storable: Theo dõi tồn kho. Goods: Hàng hóa không theo dõi số lượng.')
     
     skip_existing_bom = fields.Boolean(
         string='Bỏ qua sản phẩm đã có BOM',
@@ -95,11 +95,14 @@ class ComboToBomWizard(models.TransientModel):
                     )
             
             try:
-                # Chuyển loại sản phẩm nếu được chọn
+                # Chuyển loại sản phẩm nếu được chọn (Odoo 18)
                 if self.convert_product_type:
-                    product_tmpl.write({
-                        'detailed_type': self.new_product_type,
-                    })
+                    update_vals = {'type': 'goods'}  # Set to goods first
+                    if self.new_product_type == 'storable':
+                        update_vals['is_storable'] = True
+                    else:
+                        update_vals['is_storable'] = False
+                    product_tmpl.write(update_vals)
                 
                 # Tạo BOM
                 bom_vals = {
