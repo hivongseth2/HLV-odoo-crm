@@ -329,6 +329,9 @@ class SaleOrder(models.Model):
             if sid:
                 stock_id = sid
                 break
+
+        if not stock_id:
+           stock_id = "HLV"
         
         _logger.warning("stock_id",stock_id)
       
