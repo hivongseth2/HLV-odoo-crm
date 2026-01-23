@@ -412,7 +412,7 @@
                    else if (q > 5) badgeClass = 'bg-info';
                    else if (q > 0) badgeClass = 'bg-warning text-dark';
                    
-                   var qtyInfo = (q > 0) ? ('<span class="badge ' + badgeClass + ' text-white border ms-2">Tồn: ' + fmt(q) + '</span>') : '<span class="badge bg-light text-muted border ms-2">Hết hàng</span>';
+                   var qtyInfo = (q > 0) ? ('<span class="badge ' + badgeClass + ' text-white border ms-2">Tồn: ' + fmt(q) + '</span>') : '<span class="badge bg-danger bg-opacity-25 text-danger border border-danger ms-2">Hết hàng</span>';
                    if (q > 0 && q <= 5) qtyInfo = '<span class="badge ' + badgeClass + ' border ms-2">Tồn: ' + fmt(q) + '</span>';
                    
                    html += '<div class="suggestion-item border-bottom p-2" data-name="' + displayName + '" style="cursor:pointer;">';
