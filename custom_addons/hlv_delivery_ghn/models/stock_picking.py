@@ -164,6 +164,8 @@ class StockPicking(models.Model):
             
             html += '</div>'
             record.ghn_tracking_timeline = html
+    
+    @api.onchange('ghn_receiver_district_id')
     def _onchange_ghn_receiver_district_id(self):
         """Fetch wards from GHN when receiver district changes."""
         if not self.ghn_receiver_district_id:

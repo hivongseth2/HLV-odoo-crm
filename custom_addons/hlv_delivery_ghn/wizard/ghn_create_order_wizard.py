@@ -187,6 +187,48 @@ class GHNCreateOrderWizard(models.TransientModel):
             if selection and self.service_id not in [s[0] for s in selection]:
                 self.service_id = selection[0][0]
     
+    @api.onchange('district_id')
+    def _onchange_district_id(self):
+        """Fetch wards from GHN when receiver district changes in wizard."""
+        if not self.district_id:
+            return
+        
+        client = self._get_ghn_client()
+        wards = client.get_wards(self.district_id.district_id)
+        WardModel = self.env['ghn.ward']
+        for w in wards:
+            exist = WardModel.search([
+                ('ward_code', '=', w['WardCode']),
+                ('district_id', '=', self.district_id.id)
+            ], limit=1)
+            if not exist:
+                WardModel.create({
+                    'ward_code': w['WardCode'],
+                    'name': w['WardName'],
+                    'district_id': self.district_id.id
+                })
+    
+    @api.onchange('sender_district_id')
+    def _onchange_sender_district_id(self):
+        """Fetch wards from GHN when sender district changes in wizard."""
+        if not self.sender_district_id:
+            return
+        
+        client = self._get_ghn_client()
+        wards = client.get_wards(self.sender_district_id.district_id)
+        WardModel = self.env['ghn.ward']
+        for w in wards:
+            exist = WardModel.search([
+                ('ward_code', '=', w['WardCode']),
+                ('district_id', '=', self.sender_district_id.id)
+            ], limit=1)
+            if not exist:
+                WardModel.create({
+                    'ward_code': w['WardCode'],
+                    'name': w['WardName'],
+                    'district_id': self.sender_district_id.id
+                })
+    
     @api.onchange('district_id', 'ward_id', 'service_id', 'weight', 'length', 'width', 'height', 'insurance_value', 'cod_amount')
     def _onchange_auto_calculate_fee(self):
         """Automatically calculate shipping fee when all required data is available."""
