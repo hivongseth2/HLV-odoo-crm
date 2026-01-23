@@ -530,6 +530,7 @@ class SaleOrder(models.Model):
                 "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE TBCN",
                 "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY",
                 "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK HLV"
                 "TOOL DEWALT",
                 "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE HLV",
                 "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY",
