@@ -551,7 +551,6 @@ class ProductImportWizard(models.TransientModel):
             try:
                 # 1. Cập nhật / Tạo mới Product Template
                 vals = {
-                    'is_combo': True, 
                     'type': 'consu', # Storable
                 }
                 # Check if is_storable exists (Odoo 17+)
