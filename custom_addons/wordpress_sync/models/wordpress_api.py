@@ -539,9 +539,8 @@ class StockSyncService:
         self.api = WooCommerceAPI(config.wc_domain, wc_key, wc_secret)
 
     def _get_stock_field(self):
-        """Get configured stock field name"""
-        ICP = self.env['ir.config_parameter'].sudo()
-        return ICP.get_param('wordpress_sync.stock_status_field', 'qty_available')
+        """Get configured stock field name from wordpress.config"""
+        return self.config.stock_status_field or 'qty_available'
 
     def _is_in_stock(self, product):
         """

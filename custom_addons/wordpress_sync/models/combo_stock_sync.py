@@ -81,9 +81,10 @@ class WordPressComboStockSync(models.TransientModel):
     # HELPER METHODS
     # ===========================================
     def _get_stock_field(self):
-        """Get configured stock field name"""
-        ICP = self.env['ir.config_parameter'].sudo()
-        return ICP.get_param('wordpress_sync.stock_status_field', 'qty_available')
+        """Get configured stock field name from wordpress.config"""
+        if self.wordpress_config_id:
+            return self.wordpress_config_id.stock_status_field or 'qty_available'
+        return 'qty_available'
 
     def _is_product_in_stock(self, product_tmpl):
         """Kiểm tra product.template còn hàng không"""

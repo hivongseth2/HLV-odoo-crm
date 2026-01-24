@@ -38,9 +38,35 @@
                         <group>
                             <field name="cache_purge_url" placeholder="/wp-json/litespeed/v1/purge?type=product&amp;sku="/>
                             <field name="sync_log_days"/>
+                            <field name="batch_size"/>
+                            <field name="sync_delay"/>
                         </group>
                         <group>
                             <field name="last_sync_date" readonly="True"/>
+                        </group>
+                    </group>
+                    
+                    <separator string="Cài đặt tự động đồng bộ"/>
+                    
+                    <group>
+                        <group string="Tự động đồng bộ">
+                            <field name="auto_sync_price" widget="boolean_toggle"/>
+                            <field name="auto_sync_combo_stock" widget="boolean_toggle"/>
+                        </group>
+                        <group string="Tình trạng kho">
+                            <field name="stock_status_field"/>
+                        </group>
+                    </group>
+                    
+                    <separator string="Giá sản phẩm Combo"/>
+                    
+                    <group>
+                        <group string="Phương pháp tính giá">
+                            <field name="combo_pricing_method" widget="radio"/>
+                        </group>
+                        <group string="Cấu hình">
+                            <field name="combo_discount_percentage" 
+                                   invisible="combo_pricing_method != 'discount_percentage'"/>
                         </group>
                     </group>
                 </sheet>

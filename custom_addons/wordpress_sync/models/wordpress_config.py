@@ -71,6 +71,45 @@ class WordPressConfig(models.Model):
         help='Thời gian chờ giữa các lần gửi batch để tránh bị chặn'
     )
 
+    # ===========================================
+    # COMBO PRICING SETTINGS
+    # ===========================================
+    combo_pricing_method = fields.Selection([
+        ('sum_combo_price', 'Cộng giá bán trong combo'),
+        ('discount_percentage', 'Tổng giá giảm %'),
+    ], string='Phương pháp tính giá combo',
+       default='sum_combo_price',
+       help='Chọn phương pháp tính giá bán cho sản phẩm combo (dựa trên BOM)')
+
+    combo_discount_percentage = fields.Float(
+        string='Phần trăm giảm giá combo (%)',
+        default=0.0,
+        help='Phần trăm giảm giá khi tính giá combo (VD: 10 = giảm 10%)'
+    )
+
+    # ===========================================
+    # STOCK SYNC SETTINGS
+    # ===========================================
+    stock_status_field = fields.Selection([
+        ('qty_available', 'Số lượng hiện có (qty_available)'),
+        ('virtual_available', 'Số lượng dự kiến (virtual_available)'),
+        ('free_qty', 'Số lượng khả dụng (free_qty)'),
+    ], string='Trường xác định tình trạng kho',
+       default='qty_available',
+       help='Chọn trường để xác định sản phẩm còn hàng hay hết hàng')
+
+    auto_sync_price = fields.Boolean(
+        string='Tự động đồng bộ giá',
+        default=False,
+        help='Tự động đồng bộ giá lên WordPress khi giá sản phẩm thay đổi'
+    )
+
+    auto_sync_combo_stock = fields.Boolean(
+        string='Tự động đồng bộ stock combo',
+        default=False,
+        help='Tự động cập nhật tình trạng kho của combo khi sản phẩm con thay đổi'
+    )
+
     last_sync_date = fields.Datetime(
         string='Đồng bộ lần cuối',
         readonly=True

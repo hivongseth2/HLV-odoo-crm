@@ -35,9 +35,14 @@ class ProductTemplate(models.Model):
     @api.depends('bom_ids', 'bom_ids.bom_line_ids')
     def _compute_combo_selling_price(self):
         """Tính giá combo dựa trên BOM và phương pháp được cấu hình"""
-        ICP = self.env['ir.config_parameter'].sudo()
-        pricing_method = ICP.get_param('wordpress_sync.combo_pricing_method', 'sum_combo_price')
-        discount_pct = float(ICP.get_param('wordpress_sync.combo_discount_percentage', '0') or 0)
+        # Get settings from wordpress.config
+        config = self._get_wordpress_config()
+        if config:
+            pricing_method = config.combo_pricing_method or 'sum_combo_price'
+            discount_pct = config.combo_discount_percentage or 0.0
+        else:
+            pricing_method = 'sum_combo_price'
+            discount_pct = 0.0
 
         for product in self:
             product.computed_combo_selling_price = product._calculate_combo_price(
@@ -169,10 +174,10 @@ class ProductTemplate(models.Model):
     # ===========================================
     def _is_auto_sync_enabled(self):
         """Kiểm tra auto-sync có được bật không"""
-        value = self.env['ir.config_parameter'].sudo().get_param(
-            'wordpress_sync.auto_sync_enabled', 'False'
-        )
-        return value in ('1', 'true', 'True', True)
+        config = self._get_wordpress_config()
+        if config:
+            return config.auto_sync_price
+        return False
 
     def _get_wordpress_config(self):
         """Lấy config WordPress để đồng bộ"""
