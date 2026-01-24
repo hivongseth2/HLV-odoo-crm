@@ -318,8 +318,32 @@ class PriceSyncService:
             return result
 
         # Get prices from Odoo
-        regular_price = getattr(product, 'x_studio_ga_hng_nim_yt', 0.0) or 0.0
-        sale_price = getattr(product, 'x_studio_ga_web', 0.0) or 0.0
+        # Check if this is a combo product (has BOM) and use computed combo price
+        regular_price = 0.0
+        sale_price = 0.0
+        
+        # Check for BOM (combo product)
+        has_bom = self.env['mrp.bom'].search_count([
+            ('product_tmpl_id', '=', product.id),
+            ('type', '=', 'phantom'),
+            ('active', '=', True)
+        ]) > 0
+        
+        if has_bom:
+            # Use computed combo price
+            combo_price = product.computed_combo_selling_price
+            if combo_price > 0:
+                sale_price = combo_price
+                # Regular price: lấy giá niêm yết hoặc cao hơn combo price
+                regular_price = getattr(product, 'x_studio_ga_hng_nim_yt', 0.0) or 0.0
+                if regular_price <= 0:
+                    regular_price = sale_price  # Use combo price as regular if no niêm yết
+        
+        # Fallback to regular price fields if not combo or no combo price
+        if regular_price <= 0:
+            regular_price = getattr(product, 'x_studio_ga_hng_nim_yt', 0.0) or 0.0
+        if sale_price <= 0:
+            sale_price = getattr(product, 'x_studio_ga_web', 0.0) or 0.0
 
         result['regular_price'] = regular_price
         result['sale_price'] = sale_price
@@ -479,3 +503,221 @@ class PriceSyncService:
                         results[pid]['message'] = error_msg
 
         return results
+
+
+# ===========================================
+# STOCK SYNC SERVICE
+# ===========================================
+class StockSyncService:
+    """
+    Service xử lý logic đồng bộ tình trạng kho
+
+    Usage:
+        service = StockSyncService(env, config)
+        result = service.sync_stock_status(product)
+    """
+
+    # Stock status mapping
+    STOCK_STATUS_MAP = {
+        'in_stock': 'instock',
+        'out_of_stock': 'outofstock'
+    }
+
+    def __init__(self, env, config):
+        """
+        Initialize service
+
+        Args:
+            env: Odoo environment
+            config: wordpress.config record
+        """
+        self.env = env
+        self.config = config
+
+        # Initialize API client
+        wc_key, wc_secret = config.get_credentials()
+        self.api = WooCommerceAPI(config.wc_domain, wc_key, wc_secret)
+
+    def _get_stock_field(self):
+        """Get configured stock field name"""
+        ICP = self.env['ir.config_parameter'].sudo()
+        return ICP.get_param('wordpress_sync.stock_status_field', 'qty_available')
+
+    def _is_in_stock(self, product):
+        """
+        Kiểm tra sản phẩm còn hàng không dựa trên field được cấu hình
+
+        Args:
+            product: product.template record
+
+        Returns:
+            bool: True nếu còn hàng
+        """
+        stock_field = self._get_stock_field()
+
+        # For product.template, we need to check all variants
+        # Get total qty from all product variants
+        total_qty = 0
+        for variant in product.product_variant_ids:
+            qty = getattr(variant, stock_field, 0) or 0
+            total_qty += qty
+
+        return total_qty > 0
+
+    def sync_stock_status(self, product):
+        """
+        Đồng bộ tình trạng kho một product lên WordPress
+
+        Args:
+            product: product.template record
+
+        Returns:
+            dict: {
+                'success': bool,
+                'message': str,
+                'wc_product_id': str,
+                'stock_status': str
+            }
+        """
+        sku = product.default_code or ''
+        result = {
+            'success': False,
+            'message': '',
+            'wc_product_id': '',
+            'sku': sku,
+            'stock_status': ''
+        }
+
+        # Validate SKU
+        if not sku:
+            result['message'] = 'Product không có SKU'
+            return result
+
+        # Get stock status
+        is_in_stock = self._is_in_stock(product)
+        stock_status = self.STOCK_STATUS_MAP['in_stock'] if is_in_stock else self.STOCK_STATUS_MAP['out_of_stock']
+        result['stock_status'] = stock_status
+
+        # Find product on WordPress
+        wc_product = self.api.find_product_by_sku(sku)
+        if not wc_product:
+            result['message'] = f'Không tìm thấy product trên WordPress (SKU: {sku})'
+            return result
+
+        # Extract WC product info
+        wc_id = wc_product.get('id')
+        is_variation = wc_product.get('type') == 'variation'
+        parent_id = wc_product.get('parent_id', 0) if is_variation else None
+
+        result['wc_product_id'] = str(wc_id)
+
+        # Prepare stock payload
+        payload = {'stock_status': stock_status}
+
+        # Update product on WordPress
+        response = self.api.update_product(
+            wc_id,
+            payload,
+            is_variation=is_variation,
+            parent_id=parent_id
+        )
+
+        if response:
+            result['success'] = True
+            status_text = 'Còn hàng' if is_in_stock else 'Hết hàng'
+            result['message'] = f'Stock status: {status_text} → {stock_status}'
+
+            # Purge cache
+            self.api.purge_cache(self.config.cache_purge_url, sku)
+
+            _logger.info(f"Synced stock status for {product.name} (SKU: {sku}) → {stock_status}")
+        else:
+            result['message'] = 'Không thể cập nhật stock status lên WordPress'
+
+        return result
+
+    def sync_products_stock_batch(self, products, product_map=None):
+        """
+        Đồng bộ stock status danh sách sản phẩm theo batch
+        """
+        # 1. Prepare map if not provided
+        if product_map is None:
+            _logger.info("Fetching all products from WooCommerce to build map...")
+            product_map = self.api.get_all_products_map()
+            _logger.info(f"Fetched {len(product_map)} products from WooCommerce")
+
+        batch_data = []
+        results = {}  # {product_id: result_dict}
+
+        # 2. Build batch payload
+        for product in products:
+            sku = product.default_code
+            if not sku:
+                results[product.id] = {
+                    'success': False,
+                    'message': 'Không có SKU',
+                    'sku': '',
+                    'wc_product_id': '',
+                    'stock_status': ''
+                }
+                continue
+
+            wc_info = product_map.get(sku)
+            if not wc_info:
+                results[product.id] = {
+                    'success': False,
+                    'message': f'Không tìm thấy SKU {sku} trên WordPress',
+                    'sku': sku,
+                    'wc_product_id': '',
+                    'stock_status': ''
+                }
+                continue
+
+            # Get stock status
+            is_in_stock = self._is_in_stock(product)
+            stock_status = self.STOCK_STATUS_MAP['in_stock'] if is_in_stock else self.STOCK_STATUS_MAP['out_of_stock']
+
+            # Prepare item payload
+            item_data = {
+                'id': wc_info['id'],
+                'stock_status': stock_status
+            }
+
+            batch_data.append(item_data)
+
+            # Init result entry
+            results[product.id] = {
+                'success': False,  # Will update later
+                'message': 'Lỗi không xác định',
+                'sku': sku,
+                'wc_product_id': str(wc_info['id']),
+                'stock_status': stock_status
+            }
+
+        # 3. Send Batch Request if data exists
+        if batch_data:
+            response = self.api.update_products_batch(batch_data)
+
+            if response and 'update' in response:
+                updated_items = {str(item.get('id')): item for item in response['update']}
+
+                for product in products:
+                    if product.id in results and results[product.id]['wc_product_id']:
+                        wc_id = results[product.id]['wc_product_id']
+
+                        if wc_id in updated_items:
+                            item_resp = updated_items[wc_id]
+                            if 'error' in item_resp:
+                                results[product.id]['success'] = False
+                                results[product.id]['message'] = str(item_resp['error'])
+                            else:
+                                results[product.id]['success'] = True
+                                results[product.id]['message'] = 'Cập nhật stock thành công (Batch)'
+            else:
+                error_msg = 'Batch request failed'
+                for pid in results:
+                    if results[pid]['wc_product_id']:
+                        results[pid]['message'] = error_msg
+
+        return results
+

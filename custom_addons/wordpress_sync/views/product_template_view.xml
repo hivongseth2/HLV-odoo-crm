@@ -12,11 +12,35 @@
                 <header>
                     <button name="action_sync_to_wordpress"
                             type="object"
-                            string="Sync to WordPress"
+                            string="Sync Price to WP"
                             class="btn-primary"
                             title="Đồng bộ giá sản phẩm lên WordPress"/>
+                    <button name="action_sync_stock_to_wordpress"
+                            type="object"
+                            string="Sync Stock to WP"
+                            class="btn-secondary"
+                            title="Đồng bộ tình trạng kho lên WordPress"/>
                 </header>
+            </xpath>
+            
+            <!-- Add combo price field in pricing section -->
+            <xpath expr="//field[@name='list_price']" position="after">
+                <field name="x_wp_combo_price" 
+                       string="Giá bán trong combo"
+                       widget="monetary"
+                       options="{'currency_field': 'currency_id'}"/>
+            </xpath>
+            
+            <!-- Add computed combo price (readonly) -->
+            <xpath expr="//field[@name='list_price']" position="after">
+                <field name="computed_combo_selling_price" 
+                       string="Giá combo tính toán"
+                       widget="monetary"
+                       options="{'currency_field': 'currency_id'}"
+                       readonly="1"
+                       invisible="computed_combo_selling_price == 0"/>
             </xpath>
         </field>
     </record>
 </odoo>
+
