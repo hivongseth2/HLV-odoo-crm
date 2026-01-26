@@ -117,11 +117,11 @@ class WordPressUpdateStockWizardLine(models.TransientModel):
     _description = 'Chi tiết cập nhật stock combo'
 
     wizard_id = fields.Many2one('wordpress.update.stock.wizard', string='Wizard')
-    product_id = fields.Many2one('product.template', string='Sản phẩm Combo', readonly=True)
+    product_id = fields.Many2one('product.template', string='Sản phẩm Combo')
     current_status = fields.Selection([
         ('instock', 'Còn hàng'),
         ('outofstock', 'Hết hàng'),
         ('discontinued', 'Ngừng kinh doanh'),
-    ], string='Trạng thái hiện tại', readonly=True)
+    ], string='Trạng thái hiện tại')
     
     to_update = fields.Boolean(string='Cập nhật', default=True)
