@@ -62,11 +62,16 @@ class ProductTemplate(models.Model):
             
             # Auto-update Odoo price fields if calculated
             # User request: update x_studio_ga_web and x_studio_ga_hng_nim_yt from BOM
-            if combo_price > 0:
-                 product.x_studio_ga_web = combo_price
+            vals = {}
+            if combo_price > 0 and 'x_studio_ga_web' in product._fields:
+                 vals['x_studio_ga_web'] = combo_price
             
-            if listed_price > 0:
-                 product.x_studio_ga_hng_nim_yt = listed_price
+            if listed_price > 0 and 'x_studio_ga_hng_nim_yt' in product._fields:
+                 vals['x_studio_ga_hng_nim_yt'] = listed_price
+                 
+            if vals:
+                # Use write to update fields safely
+                product.write(vals)
 
     def _calculate_combo_price(self, pricing_method='sum_combo_price', discount_pct=0.0):
         """Deprecated: Use _calculate_combo_price_values instead"""
