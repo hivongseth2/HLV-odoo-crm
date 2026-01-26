@@ -20,9 +20,8 @@
         </field>
     </record>
 
-    <!-- Set this filter as default for the Contacts app action -->
     <record id="contacts.action_contacts" model="ir.actions.act_window">
-        <!-- Ensure default_is_company is True so new contacts are companies by default -->
-        <field name="context">{'default_is_company': True, 'search_default_filter_only_parents': 1}</field>
+        <!-- We remove the search bar default filter to prevent conflict with Search Panel counters -->
+        <field name="context">{'default_is_company': True}</field>
     </record>
 </odoo>

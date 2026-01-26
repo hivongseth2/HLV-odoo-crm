@@ -31,16 +31,28 @@ class ResPartner(models.Model):
 
         for partner in self:
             tag_ids = []
-            # Use getattr for safety if fields are missing despite dependencies
             cus_rank = getattr(partner, 'customer_rank', 0)
             sup_rank = getattr(partner, 'supplier_rank', 0)
             
-            if cus_rank > 0 and customer_tag:
-                tag_ids.append(customer_tag.id)
-            if sup_rank > 0 and vendor_tag:
-                tag_ids.append(vendor_tag.id)
-            if not partner.parent_id and main_tag:
-                tag_ids.append(main_tag.id)
-            if partner.type == 'delivery' and delivery_tag:
-                tag_ids.append(delivery_tag.id)
+            # 1. Customer: check rank OR actual sales order
+            if cus_rank > 0:
+                if customer_tag: tag_ids.append(customer_tag.id)
+            elif partner.id:
+                if self.env['sale.order'].search_count([('partner_id', 'child_of', partner.id)], limit=1):
+                    if customer_tag: tag_ids.append(customer_tag.id)
+
+            # 2. Vendor: check rank OR actual purchase order
+            if sup_rank > 0:
+                if vendor_tag: tag_ids.append(vendor_tag.id)
+            elif partner.id:
+                if self.env['purchase.order'].search_count([('partner_id', 'child_of', partner.id)], limit=1):
+                    if vendor_tag: tag_ids.append(vendor_tag.id)
+            
+            # 3. Main Contact vs Delivery Address
+            if not partner.parent_id:
+                if main_tag: tag_ids.append(main_tag.id)
+            
+            if partner.type == 'delivery':
+                if delivery_tag: tag_ids.append(delivery_tag.id)
+                
             partner.hlv_filter_tag_ids = [(6, 0, tag_ids)]
