@@ -46,27 +46,37 @@ class WordPressSyncQueue(models.Model):
         config = self.env['wordpress.config'].search([('active', '=', True)], limit=1)
         max_retries = config.max_retry_attempts if config else 3
 
-        # Find pending jobs
-        jobs = self.search([
-            ('status', 'in', ['pending', 'failed']),
-            ('attempt_count', '<', max_retries), 
-            ('next_execution', '<=', fields.Datetime.now())
-        ], limit=limit, order='priority desc, create_date asc')
-
-        if not jobs:
-            return
-
-        # Get service mapping
-        # We need config to init service. We assume default config for now, 
-        # or we should store config_id on queue? 
-        # For simplicity, we use the product's _get_wordpress_config logic.
-        
-        # Group by config to optimize init?
-        # For now, simplistic loop
-        
-        for job in jobs:
+        # Process jobs one by one with locking
+        for _ in range(limit):
+            # Fetch 1 job with SKIP LOCKED to avoid concurrency issues
+            query = """
+                SELECT id FROM wordpress_sync_queue
+                WHERE status IN ('pending', 'failed')
+                  AND attempt_count < %s
+                  AND next_execution <= %s
+                ORDER BY priority DESC, create_date ASC
+                LIMIT 1
+                FOR UPDATE SKIP LOCKED
+            """
+            self.env.cr.execute(query, (max_retries, fields.Datetime.now()))
+            res = self.env.cr.fetchone()
+            
+            if not res:
+                break
+                
+            job_id = res[0]
+            job = self.browse(job_id)
+            
+            # Update status immediately
             job.write({'status': 'processing', 'attempt_count': job.attempt_count + 1})
-            self.env.cr.commit() # Commit status change
+            # We do NOT commit here to keep the lock until we finish (or we commit to save 'processing' state?)
+            # Actually, if we crash during process, we want 'processing' state? 
+            # If we commit here, we lose the lock.
+            # But process can take time.
+            # Standard Odoo queue often commits 'started' state.
+            # However, if we commit here, another worker CANNOT pick it up because status is 'processing' (not in SELECT query anymore).
+            # So it is safe to commit here.
+            self.env.cr.commit() 
             
             try:
                 # Identify config and service
@@ -88,10 +98,6 @@ class WordPressSyncQueue(models.Model):
                     stock_service = StockSyncService(self.env, config)
                     result = stock_service.sync_stock_status(product)
 
-                # If stock sync needed? Current requirement focuses on Price.
-                # But if we want to be generic...
-                # For now, just price.
-                
                 if result['success']:
                     job.write({
                         'status': 'done',
@@ -117,7 +123,7 @@ class WordPressSyncQueue(models.Model):
                     'next_execution': next_exec
                 })
                 
-            # Commit after each job to prevent long transaction
+            # Commit after each job
             self.env.cr.commit()
 
     @api.model
