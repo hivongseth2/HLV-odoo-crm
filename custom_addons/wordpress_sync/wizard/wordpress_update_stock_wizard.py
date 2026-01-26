@@ -90,12 +90,6 @@ class WordPressUpdateStockWizard(models.TransientModel):
 
         return {'type': 'ir.actions.act_window_close'}
 
-            # Log message on parents
-            for p in parents_to_update:
-                p.message_post(body=f"WordPress Stock Status cập nhật theo sản phẩm con {self.product_id.name} -> {self.new_status}")
-
-        return {'type': 'ir.actions.act_window_close'}
-
 
 class WordPressUpdateStockWizardLine(models.TransientModel):
     _name = 'wordpress.update.stock.wizard.line'
