@@ -142,8 +142,19 @@ class ProductTemplate(models.Model):
         if has_price_change and not self.env.context.get('skip_wordpress_sync'):
             if self._is_auto_sync_enabled():
                 self._auto_sync_to_wordpress()
+                
+        # 3. Check for manual stock status change
+        if 'x_wp_stock_status' in vals and not self.env.context.get('skip_wordpress_sync'):
+             self._auto_sync_stock_to_wordpress() # Reuse queue mechanism
 
         return result
+
+    def _auto_sync_stock_to_wordpress(self):
+        """Queue stock sync job"""
+        Queue = self.env['wordpress.sync.queue']
+        for product in self:
+            if not product.default_code: continue
+            Queue.create_job(product, sync_type='stock', priority=50) # Manual change = High priority
 
     def _update_parent_combo_prices(self):
         """Tìm và cập nhật giá của các combo cha chứa sản phẩm này"""
