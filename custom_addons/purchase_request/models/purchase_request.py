@@ -37,7 +37,8 @@ class PurchaseRequest(models.Model):
     def _default_picking_type(self):
         type_obj = self.env["stock.picking.type"]
         company_id = self.env.context.get("company_id") or self.env.company.id
-            [("code", "=", "incoming")]
+        types = type_obj.search(
+            [("code", "=", "incoming"), ("warehouse_id.company_id", "=", company_id)]
         )
         if not types:
             types = type_obj.search(
