@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api
+import logging
+
+_logger = logging.getLogger(__name__)
 
 class WordPressUpdateStockWizard(models.TransientModel):
     _name = 'wordpress.update.stock.wizard'
@@ -54,12 +57,25 @@ class WordPressUpdateStockWizard(models.TransientModel):
     def action_confirm(self):
         self.ensure_one()
         
+        _logger.info(f"[Wizard] Confirming Update. Product: {self.product_id.name}, New Status: {self.new_status}")
+        
         # 1. Update Child Product
-        self.product_id.write({'x_wp_stock_status': self.new_status})
+        if self.product_id.x_wp_stock_status != self.new_status:
+            _logger.info(f"[Wizard] Updating Child {self.product_id.name} from {self.product_id.x_wp_stock_status} to {self.new_status}")
+            self.product_id.write({'x_wp_stock_status': self.new_status})
+        else:
+            _logger.info(f"[Wizard] Child {self.product_id.name} already has status {self.new_status}")
         
         # 2. Update Selected Parent Combos
         parents_to_update = self.line_ids.filtered(lambda l: l.to_update).mapped('product_id')
+        
+        _logger.info(f"[Wizard] Found {len(parents_to_update)} parents to update: {parents_to_update.mapped('name')}")
+        
         if parents_to_update:
+            # Check current status of parents for debugging
+            for p in parents_to_update:
+                _logger.info(f"[Wizard] Parent {p.name} current: {p.x_wp_stock_status} -> new: {self.new_status}")
+            
             parents_to_update.write({'x_wp_stock_status': self.new_status})
             
             # Log message on parents
