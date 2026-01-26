@@ -117,7 +117,7 @@ class WordPressSyncQueue(models.Model):
             self.env.cr.commit()
 
     @api.model
-    def create_job(self, product, sync_type='price', priority=10):
+    def create_job(self, product, sync_type='price', priority=10, initial_log=None):
         """
         Helper to create or update existing pending job
         """
@@ -128,18 +128,23 @@ class WordPressSyncQueue(models.Model):
             ('sync_type', '=', sync_type)
         ], limit=1)
         
+        vals = {
+            'status': 'pending', 
+            'next_execution': fields.Datetime.now(),
+            'priority': max(existing.priority if existing else 0, priority)
+        }
+        
+        if initial_log:
+             vals['log'] = f"{initial_log}\n{existing.log or ''}" if existing else initial_log
+
         if existing:
             # Just touch it to ensure it's processed
-            existing.write({
-                'status': 'pending', 
-                'next_execution': fields.Datetime.now(),
-                'priority': max(existing.priority, priority)
-            })
+            existing.write(vals)
             return existing
         else:
-            return self.create({
+            vals.update({
                 'product_id': product.id,
                 'sync_type': sync_type,
-                'priority': priority,
-                'status': 'pending'
+                'priority': priority
             })
+            return self.create(vals)
