@@ -12,8 +12,10 @@
         - Users can still see child contacts by removing the filter or opening the parent contact.
     """,
     'author': 'Antigravity',
-    'depends': ['base', 'contacts'],
+    'depends': ['base', 'contacts', 'sale', 'purchase'],
     'data': [
+        'security/ir.model.access.csv',
+        'data/filter_tag_data.xml',
         'views/res_partner_views.xml',
         'data/ir_actions_server.xml',
     ],
