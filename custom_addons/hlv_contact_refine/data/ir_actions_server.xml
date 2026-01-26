@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_convert_to_company" model="ir.actions.server">
+        <field name="name">Convert to Company (Auto-detect)</field>
+        <field name="model_id" ref="base.model_res_partner"/>
+        <field name="binding_model_id" ref="base.model_res_partner"/>
+        <field name="binding_view_types">list,form</field>
+        <field name="state">code</field>
+        <field name="code">
+keywords = ['công ty', 'cty', 'doanh nghiệp', 'tnhh', 'chi nhánh', 'dntn', 'corporation', 'inc.', 'ltd']
+for record in records:
+    if not record.is_company and record.name:
+        name_lower = record.name.lower()
+        if any(kw in name_lower for kw in keywords):
+            record.write({'is_company': True})
+        </field>
+    </record>
+</odoo>

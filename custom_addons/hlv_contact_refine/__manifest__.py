@@ -15,6 +15,7 @@
     'depends': ['base', 'contacts'],
     'data': [
         'views/res_partner_views.xml',
+        'data/ir_actions_server.xml',
     ],
     'application': False,
     'installable': True,
