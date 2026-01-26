@@ -31,8 +31,8 @@
             </xpath>
             
             <!-- Display badge if there are children -->
-            <xpath expr="//div[hasclass('oe_kanban_details')]" position="inside">
-                <div t-if="record.child_contact_count.value > 0" class="mt-1">
+            <xpath expr="//div[hasclass('o_kanban_record_headings')]" position="inside">
+                <div t-if="record.child_contact_count.raw_value > 0" class="mt-1">
                     <span class="badge rounded-pill text-bg-info">
                         <i class="fa fa-users me-1"/>
                         <t t-esc="record.child_contact_count.value"/> Sub-contacts
