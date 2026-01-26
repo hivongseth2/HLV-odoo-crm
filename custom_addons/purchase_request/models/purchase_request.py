@@ -37,8 +37,7 @@ class PurchaseRequest(models.Model):
     def _default_picking_type(self):
         type_obj = self.env["stock.picking.type"]
         company_id = self.env.context.get("company_id") or self.env.company.id
-        types = type_obj.search(
-            [("code", "=", "incoming"), ("warehouse_id.company_id", "=", company_id)]
+            [("code", "=", "incoming")]
         )
         if not types:
             types = type_obj.search(
@@ -135,6 +134,7 @@ class PurchaseRequest(models.Model):
         string="Loại lấy hàng",
         required=True,
         default=_default_picking_type,
+        domain=[("code", "=", "incoming")],
     )
     group_id = fields.Many2one(
         comodel_name="procurement.group",
@@ -159,6 +159,20 @@ class PurchaseRequest(models.Model):
         string="Tổng chi phí ước tính",
         store=True,
     )
+    date_required = fields.Date(
+        string="Ngày mong muốn nhận hàng",
+        compute="_compute_date_required",
+        store=True,
+        help="Ngày mong muốn nhận hàng (Lấy ngày sớm nhất từ chi tiết)",
+    )
+
+    @api.depends("line_ids.date_required")
+    def _compute_date_required(self):
+        for rec in self:
+            if rec.line_ids:
+                rec.date_required = min(rec.line_ids.mapped("date_required"))
+            else:
+                rec.date_required = False
 
     @api.depends("line_ids", "line_ids.estimated_cost")
     def _compute_estimated_cost(self):
@@ -279,6 +293,9 @@ class PurchaseRequest(models.Model):
     def button_draft(self):
         if not self.env.user.has_group("purchase_request.group_purchase_request_manager"):
             raise UserError(_("Bạn không có quyền thực hiện hành động này."))
+        self.ensure_one()
+        if self.purchase_count > 0:
+             raise UserError(_("Bạn không thể thiết lập lại khi đã có đơn mua hàng/báo giá được tạo."))
         self.mapped("line_ids").do_uncancel()
         return self.write({"state": "draft"})
 

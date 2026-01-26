@@ -13,6 +13,7 @@ const ENABLED_MODELS = [
     'stock.picking',
     'sale.order',
     'hlv.undelivered.report',
+    'purchase.request',
 ];
 
 // Config cho product search - model -> order line field và product field path
@@ -64,6 +65,14 @@ const SELECTION_FIELDS = {
             { value: 'purchase', label: 'Đơn mua hàng', color: '#28a745' },
             { value: 'done', label: 'Đã khoá', color: '#714B67' },
             { value: 'cancel', label: 'Đã hủy', color: '#dc3545' },
+        ],
+        'purchase.request': [
+            { value: 'draft', label: 'Mới', color: '#6c757d' },
+            { value: 'to_approve', label: 'Chờ phê duyệt', color: '#ffc107' },
+            { value: 'approved', label: 'Đã phê duyệt', color: '#17a2b8' },
+            { value: 'in_progress', label: 'Đang thực hiện', color: '#0dcaf0' },
+            { value: 'done', label: 'Hoàn thành', color: '#28a745' },
+            { value: 'rejected', label: 'Từ chối', color: '#dc3545' },
         ],
     },
     'invoice_status': {
