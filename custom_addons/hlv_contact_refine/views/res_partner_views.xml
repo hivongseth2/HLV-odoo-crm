@@ -12,6 +12,10 @@
                 <separator/>
             </xpath>
             <xpath expr="//search" position="inside">
+                <searchpanel>
+                    <field name="hlv_partner_type" icon="fa-users" enable_counters="1"/>
+                    <field name="hlv_filter_tag_ids" string="Phân loại" icon="fa-tags" select="multi" enable_counters="1"/>
+                </searchpanel>
             </xpath>
         </field>
     </record>
