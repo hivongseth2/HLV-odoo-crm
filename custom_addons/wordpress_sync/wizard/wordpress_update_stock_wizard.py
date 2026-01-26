@@ -15,6 +15,12 @@ class WordPressUpdateStockWizard(models.TransientModel):
         ('discontinued', 'Ngừng kinh doanh'),
     ], string='Trạng thái hiện tại', readonly=True)
     
+    new_status = fields.Selection([
+        ('instock', 'Còn hàng'),
+        ('outofstock', 'Hết hàng'),
+        ('discontinued', 'Ngừng kinh doanh'),
+    ], string='Trạng thái mới', required=True, default='outofstock')
+
     # Price Fields
     current_list_price = fields.Float(string='Giá bán lẻ hiện tại', readonly=True)
     new_list_price = fields.Float(string='Giá bán lẻ mới', required=True)
