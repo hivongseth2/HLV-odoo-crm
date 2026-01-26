@@ -318,7 +318,12 @@ msgstr ""
 #. module: purchase_request
 #: model:ir.model.fields,field_description:purchase_request.field_purchase_request_line_make_purchase_order_item__keep_description
 msgid "Copy descriptions to new PO"
-msgstr "Sao chép mô tả sang PO mới"
+msgstr "Lấy mô tả từ Yêu cầu (Tạo dòng riêng)"
+
+#. module: purchase_request
+#: model:ir.model.fields,field_description:purchase_request.field_purchase_request_line_make_purchase_order_item__keep_estimated_cost
+msgid "Copy estimated cost to new PO"
+msgstr "Lấy giá dự trù làm giá mua (Tạo dòng riêng)"
 
 #. module: purchase_request
 #: model:ir.actions.act_window,name:purchase_request.action_purchase_request_line_make_purchase_order
@@ -591,7 +596,7 @@ msgstr "Hóa đơn thủ công"
 #. module: purchase_request
 #: model:ir.model.fields,field_description:purchase_request.field_purchase_request_line_make_purchase_order__sync_data_planned
 msgid "Match existing PO lines by Scheduled Date"
-msgstr "Khớp các dòng PO hiện có theo Ngày theo kế hoạch"
+msgstr "Chỉ gộp nếu trùng Ngày dự kiến"
 
 #. module: purchase_request
 #: model:ir.model.fields,field_description:purchase_request.field_purchase_request__message_has_error
