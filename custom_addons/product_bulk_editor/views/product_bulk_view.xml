@@ -55,7 +55,7 @@
                            decoration-warning="x_wp_stock_status == 'discontinued'"/>
                     <button name="%(wordpress_sync.action_wordpress_update_stock_wizard)d"
                             type="action"
-                            string="Cập nhật"
+                            string="Sửa tình trạng"
                             class="btn-secondary"
                             icon="fa-shield"/>
                     <field name="uom_id" optional="hide" string="Đơn vị tính"/>
