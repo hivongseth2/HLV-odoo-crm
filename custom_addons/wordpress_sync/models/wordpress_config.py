@@ -104,6 +104,12 @@ class WordPressConfig(models.Model):
        default='qty_available',
        help='Chọn trường để xác định sản phẩm còn hàng hay hết hàng')
 
+    sync_stock_based_on_quantity = fields.Boolean(
+        string='Đồng bộ dựa trên số lượng tồn',
+        default=True,
+        help='Nếu Tắt: Chỉ đồng bộ dựa trên "Tình trạng WP" thủ công. Nếu Bật: Kết hợp kiểm tra số lượng tồn kho.'
+    )
+
     auto_sync_price = fields.Boolean(
         string='Tự động đồng bộ giá',
         default=False,

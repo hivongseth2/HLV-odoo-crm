@@ -56,7 +56,8 @@
                             <field name="combo_stock_check_interval" invisible="not auto_sync_combo_stock"/>
                         </group>
                         <group string="Tình trạng kho">
-                            <field name="stock_status_field"/>
+                            <field name="sync_stock_based_on_quantity" widget="boolean_toggle"/>
+                            <field name="stock_status_field" invisible="not sync_stock_based_on_quantity"/>
                         </group>
                     </group>
                     

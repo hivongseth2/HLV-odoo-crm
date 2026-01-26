@@ -567,7 +567,13 @@ class StockSyncService:
             _logger.info(f"Checking stock for {product.name}: All components in stock. Kit is In Stock.")
             return True
 
-        # 3. Computed from Quantity (Standard)
+        # 3. Check Configuration: Sync based on Qty?
+        if not self.config.sync_stock_based_on_quantity:
+            # If Config says "Don't sync based on quantity" -> We assume In Stock (unless Manual Override was OOS)
+            _logger.info(f"Checking stock for {product.name}: Sync based on Qty is OFF -> Returning In Stock.")
+            return True
+
+        # 4. Computed from Quantity (Standard)
         stock_field = self._get_stock_field()
 
         # For product.template, we need to check all variants
