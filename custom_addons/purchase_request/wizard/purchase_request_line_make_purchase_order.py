@@ -30,7 +30,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         domain=[("state", "=", "draft")],
     )
     sync_data_planned = fields.Boolean(
-        string="Khớp các dòng PO hiện có theo Ngày dự kiến",
+        string="Chỉ gộp nếu trùng Ngày dự kiến",
         help=(
             "Khi được chọn, các dòng PO trên đơn mua hàng đã chọn chỉ được sử dụng lại "
             "nếu ngày dự kiến cũng khớp."
@@ -368,13 +368,13 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         "res.currency", string="Tiền tệ", related="line_id.currency_id", readonly=True
     )
     keep_description = fields.Boolean(
-        string="Sao chép mô tả sang PO mới",
+        string="Lấy mô tả từ Yêu cầu (Tạo dòng riêng)",
         help="Đặt thành đúng nếu bạn muốn giữ "
         "mô tả được cung cấp trong "
         "trình thuật sĩ vào PO mới.",
     )
     keep_estimated_cost = fields.Boolean(
-        string="Sao chép chi phí ước tính sang PO mới",
+        string="Lấy giá dự trù làm giá mua (Tạo dòng riêng)",
         help="Đặt thành đúng nếu bạn muốn giữ "
         "chi phí ước tính được cung cấp trong "
         "trình thuật sĩ vào PO mới.",
