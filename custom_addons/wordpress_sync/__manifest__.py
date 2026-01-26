@@ -19,13 +19,13 @@
     'data': [
         'security/ir.model.access.csv',
         'views/wordpress_config_view.xml',
+        'wizard/wordpress_update_stock_wizard_view.xml',
         'views/product_template_view.xml',
         'views/wordpress_price_sync_view.xml',
         'views/combo_stock_sync_view.xml',
         'views/wordpress_queue_view.xml',
         'views/res_config_settings_views.xml',
         'views/product_view_cleanup.xml',
-        'wizard/wordpress_update_stock_wizard_view.xml',
     ],
     'external_dependencies': {
         'python': ['requests'],
