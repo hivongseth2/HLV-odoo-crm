@@ -55,14 +55,9 @@
                            decoration-warning="x_wp_stock_status == 'discontinued'"/>
                     <button name="%(wordpress_sync.action_wordpress_update_stock_wizard)d"
                             type="action"
-                            string="Sửa tình trạng"
-                            class="btn-secondary"
-                            icon="fa-shield"/>
-                    <button name="%(wordpress_sync.action_wordpress_update_price_wizard)d"
-                            type="action"
-                            string="Sửa giá"
+                            string="Cập nhật An toàn"
                             class="btn-primary"
-                            icon="fa-dollar"/>
+                            icon="fa-shield"/>
                     <field name="uom_id" optional="hide" string="Đơn vị tính"/>
                     <field name="active" column_invisible="True"/>
                     <field name="currency_id" column_invisible="True"/>
