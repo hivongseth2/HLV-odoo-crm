@@ -32,8 +32,8 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
     sync_data_planned = fields.Boolean(
         string="Chỉ gộp nếu trùng Ngày dự kiến",
         help=(
-            "Khi được chọn, các dòng PO trên đơn mua hàng đã chọn chỉ được sử dụng lại "
-            "nếu ngày dự kiến cũng khớp."
+            "Nếu chọn, hệ thống chỉ cộng dồn số lượng vào mặt hàng đã có sẵn trong đơn mua hàng "
+            "nếu trùng cả Ngày dự kiến nhận hàng. Nếu khác ngày, hệ thống sẽ tách thành một dòng riêng."
         ),
     )
 
@@ -369,15 +369,17 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
     )
     keep_description = fields.Boolean(
         string="Lấy mô tả từ Yêu cầu (Tạo dòng riêng)",
-        help="Đặt thành đúng nếu bạn muốn giữ "
-        "mô tả được cung cấp trong "
-        "trình thuật sĩ vào PO mới.",
+        help=(
+            "Nếu chọn, hệ thống sẽ giữ nguyên nội dung mô tả chi tiết từ yêu cầu này sang "
+            "đơn mua hàng và luôn tạo thành một dòng riêng (không cộng dồn với các mặt hàng khác)."
+        ),
     )
     keep_estimated_cost = fields.Boolean(
         string="Lấy giá dự trù làm giá mua (Tạo dòng riêng)",
-        help="Đặt thành đúng nếu bạn muốn giữ "
-        "chi phí ước tính được cung cấp trong "
-        "trình thuật sĩ vào PO mới.",
+        help=(
+            "Nếu chọn, hệ thống sẽ lấy giá bạn đã dự trù để làm giá mua chính thức và "
+            "luôn tạo thành một dòng riêng (không cộng dồn với các mặt hàng khác)."
+        ),
     )
 
     @api.onchange("product_id")
