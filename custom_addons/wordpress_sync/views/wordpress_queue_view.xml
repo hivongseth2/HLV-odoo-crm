@@ -93,7 +93,6 @@
             <field name="code">model.process_queue()</field>
             <field name="interval_number">1</field>
             <field name="interval_type">minutes</field>
-            <field name="numbercall">-1</field>
             <field name="doall" eval="False"/>
         </record>
     </data>
