@@ -747,6 +747,9 @@ class JTCreateOrderWizard(models.TransientModel):
         weight_val = max(self.weight, 0.01)
         weight_str = "{:.2f}".format(weight_val)
 
+        # Payload
+        picking = self.picking_id
+
         # REF: Fix J&T Delivery Quantity Logic - Use package quantity instead of product quantities
         # Calculate package quantity (ensure at least 1)
         pkg_qty = self.manual_package_qty if self.manual_package_qty > 0 else (len(picking.move_line_ids.mapped('result_package_id')) or 1)
@@ -755,8 +758,6 @@ class JTCreateOrderWizard(models.TransientModel):
         product_names = ", ".join([line.product_id.name for line in picking.move_ids_without_package if line.product_id])
         product_names = (product_names or "Hàng hóa")[:199] # Truncate to avoid limit
 
-        # Payload
-        picking = self.picking_id
         customer_code = jnt_customer_code # Use the already defined jnt_customer_code
         biz_params = {
             "customerCode": customer_code,
