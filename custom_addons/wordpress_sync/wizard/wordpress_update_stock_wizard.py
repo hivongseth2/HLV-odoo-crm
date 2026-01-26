@@ -59,10 +59,20 @@ class WordPressUpdateStockWizard(models.TransientModel):
         
         _logger.error(f"[Wizard-DEBUG] Confirming Update. Product: {self.product_id.name}, New Status: {self.new_status}")
         
+        # Debug Line IDs
+        _logger.error(f"[Wizard-DEBUG] Line IDs count: {len(self.line_ids)}")
+        for line in self.line_ids:
+            _logger.error(f"[Wizard-DEBUG] Line: {line.product_id.name} | To Update: {line.to_update}")
+
         parents_to_update = self.line_ids.filtered(lambda l: l.to_update).mapped('product_id')
         
         # 3. DIRECT SQL UPDATE (Nuclear Option against Reverts)
-        # Update Parents
+        # Updates ...
+        
+        # Capture Old Values for Logging
+        parent_old_values = {p.id: p.x_wp_stock_status for p in parents_to_update}
+        child_old_value = self.product_id.x_wp_stock_status
+
         if parents_to_update:
             _logger.error(f"[Wizard-SQL] Updating {len(parents_to_update)} parents to {self.new_status} via SQL")
             self.env.cr.execute(
@@ -86,8 +96,12 @@ class WordPressUpdateStockWizard(models.TransientModel):
         
         # Manually trigger sync since SQL bypasses triggers
         _logger.error(f"[Wizard-DEBUG] Triggering manual sync for Child {self.product_id.id} and {len(parents_to_update)} Parents")
-        self.product_id._auto_sync_stock_to_wordpress()
-        parents_to_update._auto_sync_stock_to_wordpress()
+        
+        self.product_id._auto_sync_stock_to_wordpress(old_value=child_old_value, new_value=self.new_status)
+        
+        for p in parents_to_update:
+             old_val = parent_old_values.get(p.id)
+             p._auto_sync_stock_to_wordpress(old_value=old_val, new_value=self.new_status)
         
         # Log message on parents with Verification
         for p in parents_to_update:
