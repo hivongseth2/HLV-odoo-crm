@@ -11,10 +11,12 @@
                 <filter string="Địa chỉ giao hàng" name="filter_type_delivery" domain="[('type', '=', 'delivery')]"/>
                 <separator/>
             </xpath>
-            <searchpanel>
-                <field name="company_type" icon="fa-users" enable_counters="1"/>
-                <field name="hlv_filter_tag_ids" string="Phân loại" icon="fa-tags" select="multi" enable_counters="1"/>
-            </searchpanel>
+            <xpath expr="//search" position="inside">
+                <searchpanel>
+                    <field name="company_type" icon="fa-users" enable_counters="1"/>
+                    <field name="hlv_filter_tag_ids" string="Phân loại" icon="fa-tags" select="multi" enable_counters="1"/>
+                </searchpanel>
+            </xpath>
         </field>
     </record>
 
