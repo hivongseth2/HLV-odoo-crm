@@ -32,8 +32,8 @@
                 
                 <label for="x_wp_stock_status" string="Tình trạng WordPress"/>
                 <div class="o_row">
-                    <field name="x_wp_stock_status"/>
-                    <button name="%(action_wordpress_update_stock_wizard)d" 
+                    <field name="x_wp_stock_status" readonly="1" force_save="1"/>
+                    <button name="%(wordpress_sync.action_wordpress_update_stock_wizard)d" 
                             string="Cập nhật an toàn" 
                             type="action" 
                             class="btn btn-secondary btn-sm"
