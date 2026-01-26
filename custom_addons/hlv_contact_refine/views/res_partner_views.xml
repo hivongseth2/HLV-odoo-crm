@@ -13,27 +13,9 @@
         </field>
     </record>
 
-    <!-- Tree/List View Redesign -->
-    <record id="view_partner_tree_refine" model="ir.ui.view">
-        <field name="name">res.partner.list.refine</field>
-        <field name="model">res.partner</field>
-        <field name="inherit_id" ref="base.view_partner_tree"/>
-        <field name="arch" type="xml">
-            <!-- Using name instead of display_name as it is more standard -->
-            <xpath expr="//field[@name='name']" position="after">
-                <field name="child_contact_count" string="Addr Count" 
-                       invisible="child_contact_count == 0"
-                       optional="show"
-                       decoration-info="child_contact_count > 0" 
-                       widget="badge"/>
-            </xpath>
-        </field>
-    </record>
-
-    <!-- Set List view as default and apply the filter -->
+    <!-- Set this filter as default for the Contacts app action -->
     <record id="contacts.action_contacts" model="ir.actions.act_window">
-        <!-- view_mode: list first -->
-        <field name="view_mode">list,kanban,form</field>
+        <!-- Ensure default_is_company is True so new contacts are companies by default -->
         <field name="context">{'default_is_company': True, 'search_default_filter_only_parents': 1}</field>
     </record>
 </odoo>
