@@ -38,6 +38,7 @@
                         <group>
                             <field name="cache_purge_url" placeholder="/wp-json/litespeed/v1/purge?type=product&amp;sku="/>
                             <field name="sync_log_days"/>
+                            <field name="max_retry_attempts"/>
                             <field name="batch_size"/>
                             <field name="sync_delay"/>
                         </group>

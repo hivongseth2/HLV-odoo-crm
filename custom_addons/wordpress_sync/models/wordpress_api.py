@@ -543,6 +543,7 @@ class StockSyncService:
         # 1. Manual Override
         manual_status = getattr(product, 'x_wp_stock_status', False)
         if manual_status:
+            _logger.info(f"Checking stock for {product.name}: Manual Override found = {manual_status}")
             if manual_status == 'instock':
                 return True
             if manual_status in ('outofstock', 'discontinued'):
@@ -560,8 +561,10 @@ class StockSyncService:
             for line in bom.bom_line_ids:
                 child = line.product_id.product_tmpl_id
                 if not self._is_in_stock(child):
+                    _logger.info(f"Checking stock for {product.name}: Component {child.name} is OOS. Kit is OOS.")
                     return False
             # All components in stock -> Kit is in stock
+            _logger.info(f"Checking stock for {product.name}: All components in stock. Kit is In Stock.")
             return True
 
         # 3. Computed from Quantity (Standard)

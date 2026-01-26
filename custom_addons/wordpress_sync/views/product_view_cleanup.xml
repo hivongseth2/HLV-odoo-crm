@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="product_template_price_cleanup_view" model="ir.ui.view">
+        <field name="name">product.template.price.cleanup</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_only_form_view"/>
+        <field name="arch" type="xml">
+            <!-- Locate the main group (usually inside sheet/notebook/page or just group) -->
+            <!-- We will try to replace the list_price div or find the right place -->
+            
+            <xpath expr="//label[@for='list_price']" position="before">
+                <group string="Giá Web &amp; TMĐT" name="website_pricing">
+                    <field name="x_studio_ga_web"/>
+                    <field name="x_studio_ga_hng_nim_yt"/>
+                    <field name="x_studio_gia_san_tmdt"/>
+                    <field name="x_studio_gi_bn_thng_mi"/>
+                </group>
+            </xpath>
+            
+            <!-- Hide individual occurrences if they are duplicates or clutter -->
+            <!-- Note: if these fields are added by Studio, they might be in specific xpaths. 
+                 Since we don't know Studio XPaths, we might just grouping them here. 
+                 To really "cleanup", we might need to hide them if they appear elsewhere. 
+                 For now, let's just create the Group and see. 
+                 We can try to attributes="invisible" on list_price if requested, 
+                 but user might still need it. -->
+                 
+             <!-- Move list_price into this group for context? -->
+        </field>
+    </record>
+</odoo>

@@ -136,15 +136,20 @@ class ProductTemplate(models.Model):
 
         # 1. Update Parent Combos if I am a child and my price changed
         if has_price_change:
+            _logger.info(f"Price change detected for {self.name} (IDs: {self.ids}). Updating parent combos...")
             self._update_parent_combo_prices()
 
         # 2. Auto-sync to WordPress if enabled
         if has_price_change and not self.env.context.get('skip_wordpress_sync'):
             if self._is_auto_sync_enabled():
+                _logger.info(f"Auto-sync enabled. Queuing sync for {self.name}...")
                 self._auto_sync_to_wordpress()
+            else:
+                 _logger.info(f"Auto-sync disabled or config missing.")
                 
         # 3. Check for manual stock status change
         if 'x_wp_stock_status' in vals and not self.env.context.get('skip_wordpress_sync'):
+             _logger.info(f"Manual Stock Status change detected for {self.name}. Queuing sync...")
              self._auto_sync_stock_to_wordpress() # Reuse queue mechanism
              self._update_parent_combos_stock()
 
@@ -163,6 +168,8 @@ class ProductTemplate(models.Model):
         # 3. Find parent phantom/kit BOMs
         parent_boms = bom_lines.mapped('bom_id').filtered(lambda b: b.type == 'phantom' and b.active)
         parent_combos = parent_boms.mapped('product_tmpl_id')
+        
+        _logger.info(f"Found {len(parent_combos)} parent combos for {self.name}: {parent_combos.mapped('name')}")
         
         if not parent_combos:
              return

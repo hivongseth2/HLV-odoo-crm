@@ -59,6 +59,12 @@ class WordPressConfig(models.Model):
         help='Số ngày giữ lại sync logs'
     )
 
+    max_retry_attempts = fields.Integer(
+        string='Số lần thử lại tối đa',
+        default=3,
+        help='Số lần thử lại khi gặp lỗi trước khi dừng hẳn'
+    )
+
     batch_size = fields.Integer(
         string='Số lượng/Batch',
         default=50,

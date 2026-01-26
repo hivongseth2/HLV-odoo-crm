@@ -42,10 +42,14 @@ class WordPressSyncQueue(models.Model):
         """
         Cron method to process pending queue items
         """
+        # Get retry limit from default config
+        config = self.env['wordpress.config'].search([('active', '=', True)], limit=1)
+        max_retries = config.max_retry_attempts if config else 3
+
         # Find pending jobs
         jobs = self.search([
             ('status', 'in', ['pending', 'failed']),
-            ('attempt_count', '<', 3), # Hardcoded max attempts check in query
+            ('attempt_count', '<', max_retries), 
             ('next_execution', '<=', fields.Datetime.now())
         ], limit=limit, order='priority desc, create_date asc')
 
