@@ -49,7 +49,7 @@
                     <field name="x_studio_gi_bn_thng_mi" string="Giá Thương Mại" optional="show" widget="monetary"/>
                     <field name="x_studio_gia_san_tmdt" string="Giá Sàn TMĐT" optional="show" widget="monetary"/>
                     <field name="x_wp_stock_status" string="Tình trạng WP" optional="show"
-                           readonly="1"
+                           readonly="1" force_save="1"
                            decoration-success="x_wp_stock_status == 'instock'"
                            decoration-danger="x_wp_stock_status == 'outofstock'"
                            decoration-warning="x_wp_stock_status == 'discontinued'"/>

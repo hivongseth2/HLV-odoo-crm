@@ -57,30 +57,38 @@ class WordPressUpdateStockWizard(models.TransientModel):
     def action_confirm(self):
         self.ensure_one()
         
-        _logger.info(f"[Wizard] Confirming Update. Product: {self.product_id.name}, New Status: {self.new_status}")
+        _logger.error(f"[Wizard-DEBUG] Confirming Update. Product: {self.product_id.name}, New Status: {self.new_status}")
         
         # 1. Update Child Product
         if self.product_id.x_wp_stock_status != self.new_status:
-            _logger.info(f"[Wizard] Updating Child {self.product_id.name} from {self.product_id.x_wp_stock_status} to {self.new_status}")
+            _logger.error(f"[Wizard-DEBUG] Updating Child {self.product_id.name} from {self.product_id.x_wp_stock_status} to {self.new_status}")
             self.product_id.write({'x_wp_stock_status': self.new_status})
+            self.env.cr.commit() # FORCE COMMIT
         else:
-            _logger.info(f"[Wizard] Child {self.product_id.name} already has status {self.new_status}")
+            _logger.error(f"[Wizard-DEBUG] Child {self.product_id.name} already has status {self.new_status}")
         
         # 2. Update Selected Parent Combos
         parents_to_update = self.line_ids.filtered(lambda l: l.to_update).mapped('product_id')
         
-        _logger.info(f"[Wizard] Found {len(parents_to_update)} parents to update: {parents_to_update.mapped('name')} (IDs: {parents_to_update.ids})")
+        _logger.error(f"[Wizard-DEBUG] Found {len(parents_to_update)} parents to update: {parents_to_update.mapped('name')} (IDs: {parents_to_update.ids})")
         
         if parents_to_update:
             # Check current status of parents for debugging
             for p in parents_to_update:
-                _logger.info(f"[Wizard] Parent {p.name} (ID: {p.id}) current: {p.x_wp_stock_status} -> new: {self.new_status}")
+                _logger.error(f"[Wizard-DEBUG] Parent {p.name} (ID: {p.id}) current: {p.x_wp_stock_status} -> new: {self.new_status}")
             
             parents_to_update.write({'x_wp_stock_status': self.new_status})
+            self.env.cr.commit() # FORCE COMMIT
             
             # Verify update
             for p in parents_to_update:
-                 _logger.info(f"[Wizard] Parent {p.name} (ID: {p.id}) AFTER WRITE: {p.x_wp_stock_status}")
+                 _logger.error(f"[Wizard-DEBUG] Parent {p.name} (ID: {p.id}) AFTER WRITE: {p.x_wp_stock_status}")
+
+            # Log message on parents
+            for p in parents_to_update:
+                p.message_post(body=f"WordPress Stock Status cập nhật theo sản phẩm con {self.product_id.name} -> {self.new_status}")
+
+        return {'type': 'ir.actions.act_window_close'}
 
             # Log message on parents
             for p in parents_to_update:
