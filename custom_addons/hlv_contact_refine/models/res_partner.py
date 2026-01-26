@@ -7,15 +7,6 @@ class ResPartner(models.Model):
     child_contact_count = fields.Integer(compute='_compute_child_contact_count', string="Number of Child Contacts")
     hlv_filter_tag_ids = fields.Many2many('hlv.contact.filter.tag', compute='_compute_hlv_filter_tag_ids', 
                                           string="Filter Tags", store=True)
-    hlv_partner_type = fields.Selection([
-        ('company', 'Công ty'),
-        ('person', 'Cá nhân')
-    ], compute='_compute_hlv_partner_type', string="Loại liên hệ", store=True)
-
-    @api.depends('is_company')
-    def _compute_hlv_partner_type(self):
-        for partner in self:
-            partner.hlv_partner_type = 'company' if partner.is_company else 'person'
 
     @api.depends('child_ids')
     def _compute_child_contact_count(self):
