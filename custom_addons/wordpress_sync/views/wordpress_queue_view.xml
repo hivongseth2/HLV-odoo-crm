@@ -81,7 +81,7 @@
         <!-- Menu -->
         <menuitem id="menu_wordpress_sync_queue"
                   name="Hàng đợi đồng bộ"
-                  parent="menu_wordpress_sync_root"
+                  parent="menu_wordpress_sync"
                   action="action_wordpress_sync_queue"
                   sequence="30"/>
 
