@@ -58,6 +58,11 @@
                             string="Sửa tình trạng"
                             class="btn-secondary"
                             icon="fa-shield"/>
+                    <button name="%(wordpress_sync.action_wordpress_update_price_wizard)d"
+                            type="action"
+                            string="Sửa giá"
+                            class="btn-primary"
+                            icon="fa-dollar"/>
                     <field name="uom_id" optional="hide" string="Đơn vị tính"/>
                     <field name="active" column_invisible="True"/>
                     <field name="currency_id" column_invisible="True"/>
