@@ -289,7 +289,7 @@ class PurchaseRequest(models.Model):
     def button_approved(self):
         if not self.env.user.has_group("purchase_request.group_purchase_request_manager"):
             raise UserError(_("Bạn không có quyền thực hiện hành động này."))
-        return self.write({"state": "approved"})
+        return self.write({"state": "in_progress"})
 
     def button_rejected(self):
         if not self.env.user.has_group("purchase_request.group_purchase_request_manager"):

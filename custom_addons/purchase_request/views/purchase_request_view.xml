@@ -32,7 +32,7 @@
                     />
                     <button
                         name="button_in_progress"
-                        invisible="state != 'approved'"
+                        invisible="1"
                         string="Đang thực hiện"
                         type="object"
                         groups="purchase_request.group_purchase_request_manager"
@@ -45,7 +45,7 @@
                     />
                     <button
                         name="button_done"
-                        invisible="state not in ('approved', 'in_progress')"
+                        invisible="1"
                         string="Hoàn thành"
                         type="object"
                         class="oe_highlight"
@@ -61,7 +61,7 @@
                     <field
                         name="state"
                         widget="statusbar"
-                        statusbar_visible="draft,to_approve,approved,done,in_progress"
+                        statusbar_visible="draft,to_approve,in_progress,done"
                         statusbar_colors='{"approved":"blue"}'
                     />
                 </header>
