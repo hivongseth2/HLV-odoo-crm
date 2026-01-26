@@ -88,7 +88,7 @@
         <!-- Cron Job -->
         <record id="ir_cron_wordpress_sync_queue" model="ir.cron">
             <field name="name">WordPress: Process Sync Queue</field>
-            <field name="model_id" ref="model_wordpress_sync_queue"/>
+            <field name="model_id" ref="wordpress_sync.model_wordpress_sync_queue"/>
             <field name="state">code</field>
             <field name="code">model.process_queue()</field>
             <field name="interval_number">1</field>
