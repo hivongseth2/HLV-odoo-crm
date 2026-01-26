@@ -91,7 +91,7 @@ class WordPressUpdateStockWizard(models.TransientModel):
                 verify_msg = f" (Kiểm tra lại DB: {p.x_wp_stock_status})"
                 p.message_post(body=start_msg + verify_msg)
 
-        return {'type': 'ir.actions.act_window_close'}
+        return {'type': 'ir.actions.client', 'tag': 'reload'}
 
 
 class WordPressUpdateStockWizardLine(models.TransientModel):
