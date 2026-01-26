@@ -38,9 +38,6 @@ class ProductTemplate(models.Model):
         'bom_ids.active',
         'bom_ids.bom_line_ids',
         'bom_ids.bom_line_ids.product_qty',
-        'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_studio_ga_web',
-        'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_studio_ga_hng_nim_yt',
-        'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_wp_combo_price',
         'bom_ids.bom_line_ids.product_id.product_tmpl_id.list_price'
     )
     def _compute_combo_selling_price(self):
@@ -130,19 +127,45 @@ class ProductTemplate(models.Model):
     # OVERRIDE METHODS
     # ===========================================
     def write(self, vals):
-        """Override write để auto-sync khi giá thay đổi"""
+        """Override write để auto-sync khi giá thay đổi và cập nhật combo cha"""
         # Các field giá cần theo dõi
-        price_fields = ['x_studio_ga_web', 'x_studio_gi_bn_thng_mi']
+        price_fields = ['x_studio_ga_web', 'x_studio_gi_bn_thng_mi', 'x_wp_combo_price', 'list_price']
         has_price_change = any(field in vals for field in price_fields)
 
         result = super().write(vals)
 
-        # Auto-sync nếu có thay đổi giá và đã bật trong settings
+        # 1. Update Parent Combos if I am a child and my price changed
+        if has_price_change:
+            self._update_parent_combo_prices()
+
+        # 2. Auto-sync to WordPress if enabled
         if has_price_change and not self.env.context.get('skip_wordpress_sync'):
             if self._is_auto_sync_enabled():
                 self._auto_sync_to_wordpress()
 
         return result
+
+    def _update_parent_combo_prices(self):
+        """Tìm và cập nhật giá của các combo cha chứa sản phẩm này"""
+        # Tìm tất cả BOM line chứa sản phẩm này (hoặc variant của nó)
+        # Note: product.template -> product.product
+        variants = self.product_variant_ids
+        bom_lines = self.env['mrp.bom.line'].search([
+            ('product_id', 'in', variants.ids)
+        ])
+        
+        # Lấy các BOM cha (chỉ phantom)
+        parent_boms = bom_lines.mapped('bom_id').filtered(lambda b: b.type == 'phantom' and b.active)
+        parent_products = parent_boms.mapped('product_tmpl_id')
+        
+        # Recompute price for parents
+        # Gọi _compute_combo_selling_price để update lại giá và các field x_studio
+        # Vì store=True nên cần invalidate cache hoặc ghi đè? 
+        # computed method store=True sẽ tự chạy khi depends đổi, 
+        # nhưng manual trigger thì ta gọi hàm tính toán và write
+        for parent in parent_products:
+             # Force re-calculate
+             parent._compute_combo_selling_price()
 
     # ===========================================
     # ACTIONS
