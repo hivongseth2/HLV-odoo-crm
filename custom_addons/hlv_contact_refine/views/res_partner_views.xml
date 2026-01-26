@@ -26,7 +26,7 @@
         <field name="inherit_id" ref="base.res_partner_kanban_view"/>
         <field name="arch" type="xml">
             <!-- Add field to template -->
-            <xpath expr="//field[@name='id']" position="after">
+            <xpath expr="//templates" position="before">
                 <field name="child_contact_count"/>
             </xpath>
             
