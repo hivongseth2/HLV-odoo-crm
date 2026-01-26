@@ -747,6 +747,14 @@ class JTCreateOrderWizard(models.TransientModel):
         weight_val = max(self.weight, 0.01)
         weight_str = "{:.2f}".format(weight_val)
 
+        # REF: Fix J&T Delivery Quantity Logic - Use package quantity instead of product quantities
+        # Calculate package quantity (ensure at least 1)
+        pkg_qty = self.manual_package_qty if self.manual_package_qty > 0 else (len(picking.move_line_ids.mapped('result_package_id')) or 1)
+        
+        # Concatenate product names
+        product_names = ", ".join([line.product_id.name for line in picking.move_ids_without_package if line.product_id])
+        product_names = (product_names or "Hàng hóa")[:199] # Truncate to avoid limit
+
         # Payload
         picking = self.picking_id
         customer_code = jnt_customer_code # Use the already defined jnt_customer_code
@@ -789,16 +797,17 @@ class JTCreateOrderWizard(models.TransientModel):
                 "volume": str(int(max(self.length * self.width * self.height / 6000.0, 1.0)))
             },
             "itemsValue": goods_val_str,
-            "totalQuantity": self.manual_package_qty if self.manual_package_qty > 0 else (len(picking.move_line_ids.mapped('result_package_id')) or 1),
+            "totalQuantity": pkg_qty,
             "items": [{
-                "itemName": line.product_id.name[:100],
-                "englishName": line.product_id.name[:100],
-                "number": str(int(line.product_uom_qty)),
-                "itemValue": int(line.product_id.list_price or 1) # Ensure item value is at least 1 and is a number
-            } for line in picking.move_ids_without_package]
+                "itemName": product_names,
+                "englishName": product_names,
+                "number": str(int(pkg_qty)),
+                "itemValue": str(int(max(self.goods_value, 1.0))) # Ensure value is valid
+            }]
         }
 
         _logger.info("J&T Creating Order for %s", self.picking_id.name)
+        _logger.info("J&T Request Payload: %s", biz_params)
         result = client.add_order(biz_params)
 
         if result.get('code') == '1':
