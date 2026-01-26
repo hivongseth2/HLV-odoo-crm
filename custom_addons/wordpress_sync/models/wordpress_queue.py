@@ -80,6 +80,9 @@ class WordPressSyncQueue(models.Model):
                 if job.sync_type in ('price', 'full'):
                     price_service = PriceSyncService(self.env, config)
                     result = price_service.sync_product(product)
+                elif job.sync_type == 'stock':
+                    stock_service = StockSyncService(self.env, config)
+                    result = stock_service.sync_stock_status(product)
 
                 # If stock sync needed? Current requirement focuses on Price.
                 # But if we want to be generic...
