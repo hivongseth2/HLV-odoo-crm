@@ -14,6 +14,8 @@
     'author': 'Antigravity',
     'depends': ['base', 'contacts'],
     'data': [
+        'security/ir.model.access.csv',
+        'data/filter_tag_data.xml',
         'views/res_partner_views.xml',
         'data/ir_actions_server.xml',
     ],
