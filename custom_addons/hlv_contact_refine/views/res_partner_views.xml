@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Add generic filter for top-level contacts -->
+    <record id="view_res_partner_filter_refine" model="ir.ui.view">
+        <field name="name">res.partner.select.refine</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_res_partner_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[@name='type_person']" position="before">
+                <filter string="Main Contacts" name="filter_only_parents" domain="[('parent_id', '=', False)]"/>
+                <separator/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Set this filter as default for the Contacts app action -->
+    <record id="contacts.action_contacts" model="ir.actions.act_window">
+        <!-- Ensure default_is_company is True so new contacts are companies by default -->
+        <field name="context">{'default_is_company': True, 'search_default_filter_only_parents': 1}</field>
+    </record>
+
+    <!-- Kanban View Redesign -->
+    <record id="res_partner_kanban_view_refine" model="ir.ui.view">
+        <field name="name">res.partner.kanban.refine</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.res_partner_kanban_view"/>
+        <field name="arch" type="xml">
+            <!-- Add field to template -->
+            <xpath expr="//templates" position="before">
+                <field name="child_contact_count"/>
+            </xpath>
+            
+            <!-- Display badge if there are children -->
+            <xpath expr="//div[hasclass('oe_kanban_details')]" position="inside">
+                <div t-if="record.child_contact_count.value > 0" class="mt-1">
+                    <span class="badge rounded-pill text-bg-info">
+                        <i class="fa fa-users me-1"/>
+                        <t t-esc="record.child_contact_count.value"/> Sub-contacts
+                    </span>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>
