@@ -15,7 +15,6 @@ class ResPartner(models.Model):
 
     @api.depends('customer_rank', 'supplier_rank', 'parent_id', 'type')
     def _compute_hlv_filter_tag_ids(self):
-        tag_obj = self.env['hlv.contact.filter.tag']
         customer_tag = self.env.ref('hlv_contact_refine.tag_customer', raise_if_not_found=False)
         vendor_tag = self.env.ref('hlv_contact_refine.tag_vendor', raise_if_not_found=False)
         main_tag = self.env.ref('hlv_contact_refine.tag_main', raise_if_not_found=False)
@@ -23,9 +22,13 @@ class ResPartner(models.Model):
 
         for partner in self:
             tag_ids = []
-            if partner.customer_rank > 0 and customer_tag:
+            # Use getattr for safety if fields are missing despite dependencies
+            cus_rank = getattr(partner, 'customer_rank', 0)
+            sup_rank = getattr(partner, 'supplier_rank', 0)
+            
+            if cus_rank > 0 and customer_tag:
                 tag_ids.append(customer_tag.id)
-            if partner.supplier_rank > 0 and vendor_tag:
+            if sup_rank > 0 and vendor_tag:
                 tag_ids.append(vendor_tag.id)
             if not partner.parent_id and main_tag:
                 tag_ids.append(main_tag.id)
