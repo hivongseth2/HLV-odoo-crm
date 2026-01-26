@@ -12,17 +12,26 @@ keywords = ['công ty', 'cty', 'doanh nghiệp', 'tnhh', 'chi nhánh', 'dntn', '
 
 # If triggered from Menu (no active_ids), search ALL candidates
 if not env.context.get('active_ids'):
-    # Search for Individual contacts (is_company=False) that have no parent
-    records = env['res.partner'].search([('is_company', '=', False), ('parent_id', '=', False)])
+    # Search for Individual contacts (is_company=False) or any independent contact that needs tag update
+    records = env['res.partner'].search([('parent_id', '=', False)])
 
 # Process records
-count = 0
+count_company = 0
+count_tags = 0
 for record in records:
+    # 1. Conversion logic
+    old_is_company = record.is_company
     if not record.is_company and record.name:
         name_lower = record.name.lower()
         if any(kw in name_lower for kw in keywords):
             record.write({'is_company': True})
-            count += 1
+            count_company += 1
+    
+    # 2. Trigger tag recompute (stored field)
+    # We touch a field it depends on or call recompute manually if needed, 
+    # but simplest is to just call the method if it's store=True
+    record._compute_hlv_filter_tag_ids()
+    count_tags += 1
 
 # Notify user
 if not env.context.get('active_ids'):
@@ -30,8 +39,8 @@ if not env.context.get('active_ids'):
         'type': 'ir.actions.client',
         'tag': 'display_notification',
         'params': {
-            'title': 'Hoàn thành',
-            'message': 'Đã chuyển đổi %s liên hệ thành Công ty.' % count,
+            'title': 'Hoàn thành quét',
+            'message': 'Đã chuyển đổi %s Công ty và cập nhật phân loại cho %s liên hệ.' % (count_company, count_tags),
             'type': 'success',
             'sticky': False,
             'next': {'type': 'ir.actions.act_window_close'},
