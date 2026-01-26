@@ -800,8 +800,8 @@ class JTCreateOrderWizard(models.TransientModel):
             "itemsValue": goods_val_str,
             "totalQuantity": pkg_qty,
             "items": [{
-                "itemName": product_names,
-                "englishName": product_names,
+                "itemName": product_names[:79],
+                "englishName": product_names[:79],
                 "number": str(int(pkg_qty)),
                 "itemValue": str(int(max(self.goods_value, 1.0))) # Ensure value is valid
             }]
