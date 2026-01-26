@@ -2,16 +2,16 @@
 <odoo>
     <data>
         <!-- Tree View -->
-        <record id="view_wordpress_sync_queue_tree" model="ir.ui.view">
+        <record id="view_wordpress_sync_queue_list" model="ir.ui.view">
             <field name="name">wordpress.sync.queue.list</field>
             <field name="model">wordpress.sync.queue</field>
             <field name="arch" type="xml">
-                <list string="WordPress Sync Queue" decoration-danger="status=='failed'" decoration-info="status=='pending'" decoration-muted="status=='done'">
+                <list string="Hàng đợi đồng bộ" decoration-danger="status=='failed'" decoration-info="status=='pending'" decoration-success="status=='done'">
                     <field name="priority" widget="handle"/>
                     <field name="product_id"/>
                     <field name="sku"/>
                     <field name="sync_type"/>
-                    <field name="status"/>
+                    <field name="status" widget="badge" decoration-success="status == 'done'" decoration-warning="status == 'pending'" decoration-danger="status == 'failed'"/>
                     <field name="attempt_count"/>
                     <field name="next_execution"/>
                     <field name="last_error"/>
@@ -24,9 +24,9 @@
             <field name="name">wordpress.sync.queue.form</field>
             <field name="model">wordpress.sync.queue</field>
             <field name="arch" type="xml">
-                <form string="Queue Job">
+                <form string="Chi tiết Job">
                     <header>
-                        <button name="process_queue" string="Process Now" type="object" class="oe_highlight" 
+                        <button name="process_queue" string="Chạy ngay" type="object" class="oe_highlight" 
                                 invisible="status in ('done')"/>
                         <field name="status" widget="statusbar"/>
                     </header>
@@ -44,7 +44,7 @@
                             </group>
                         </group>
                         <notebook>
-                            <page string="Log">
+                            <page string="Nhật ký">
                                 <field name="log" readonly="1"/>
                             </page>
                         </notebook>
@@ -58,13 +58,13 @@
             <field name="name">wordpress.sync.queue.search</field>
             <field name="model">wordpress.sync.queue</field>
             <field name="arch" type="xml">
-                <search string="Search Queue">
+                <search string="Tìm kiếm">
                     <field name="product_id"/>
                     <field name="sku"/>
-                    <filter string="Pending" name="pending" domain="[('status', '=', 'pending')]"/>
-                    <filter string="Failed" name="failed" domain="[('status', '=', 'failed')]"/>
-                    <group expand="0" string="Group By">
-                        <filter string="Status" name="group_status" context="{'group_by': 'status'}"/>
+                    <filter string="Chờ xử lý" name="pending" domain="[('status', '=', 'pending')]"/>
+                    <filter string="Lỗi" name="failed" domain="[('status', '=', 'failed')]"/>
+                    <group expand="0" string="Nhóm theo">
+                        <filter string="Trạng thái" name="group_status" context="{'group_by': 'status'}"/>
                     </group>
                 </search>
             </field>
@@ -72,10 +72,32 @@
 
         <!-- Action -->
         <record id="action_wordpress_sync_queue" model="ir.actions.act_window">
-            <field name="name">Sync Queue</field>
+            <field name="name">Hàng đợi đồng bộ</field>
             <field name="res_model">wordpress.sync.queue</field>
             <field name="view_mode">list,form</field>
             <field name="context">{'search_default_pending': 1}</field>
+            <field name="help" type="html">
+               <p class="o_view_nocontent_smiling_face">
+                   Chưa có yêu cầu đồng bộ nào
+               </p>
+               <p>
+                   Các thay đổi giá sẽ tự động xuất hiện ở đây.
+                   Hệ thống tự động chạy mỗi 1 phút.
+               </p>
+            </field>
+        </record>
+
+        <!-- Server Action: Chạy ngay -->
+        <record id="action_process_queue_server" model="ir.actions.server">
+            <field name="name">Chạy ngay</field>
+            <field name="model_id" ref="wordpress_sync.model_wordpress_sync_queue"/>
+            <field name="binding_model_id" ref="wordpress_sync.model_wordpress_sync_queue"/>
+            <field name="binding_view_types">list</field>
+            <field name="state">code</field>
+            <field name="code">
+                for record in records:
+                    record.process_queue()
+            </field>
         </record>
 
         <!-- Menu -->

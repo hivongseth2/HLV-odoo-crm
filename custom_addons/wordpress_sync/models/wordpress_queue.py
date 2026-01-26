@@ -10,33 +10,33 @@ class WordPressSyncQueue(models.Model):
     _description = 'WordPress Sync Queue'
     _order = 'priority desc, create_date asc'
 
-    product_id = fields.Many2one('product.template', string='Product', required=True, ondelete='cascade')
-    product_name = fields.Char(related='product_id.name', string='Product Name', readonly=True)
-    sku = fields.Char(related='product_id.default_code', string='SKU', readonly=True)
+    product_id = fields.Many2one('product.template', string='Sản phẩm', required=True, ondelete='cascade')
+    product_name = fields.Char(related='product_id.name', string='Tên sản phẩm', readonly=True)
+    sku = fields.Char(related='product_id.default_code', string='Mã SKU', readonly=True)
     
     status = fields.Selection([
-        ('draft', 'Draft'),
-        ('pending', 'Pending'),
-        ('processing', 'Processing'),
-        ('done', 'Done'),
-        ('failed', 'Failed')
-    ], string='Status', default='pending', index=True)
+        ('draft', 'Nháp'),
+        ('pending', 'Chờ xử lý'),
+        ('processing', 'Đang xử lý'),
+        ('done', 'Hoàn thành'),
+        ('failed', 'Lỗi')
+    ], string='Trạng thái', default='pending', index=True)
     
     sync_type = fields.Selection([
-        ('price', 'Price Update'),
-        ('stock', 'Stock Update'),
-        ('full', 'Full Sync')
-    ], string='Type', default='price')
+        ('price', 'Cập nhật giá'),
+        ('stock', 'Cập nhật kho'),
+        ('full', 'Đồng bộ tất cả')
+    ], string='Loại', default='price')
     
-    priority = fields.Integer(string='Priority', default=10, help='Higher number = process first')
+    priority = fields.Integer(string='Độ ưu tiên', default=10, help='Số càng lớn càng ưu tiên')
     
-    log = fields.Text(string='Log')
-    last_error = fields.Char(string='Last Error')
+    log = fields.Text(string='Nhật ký')
+    last_error = fields.Char(string='Lỗi gần nhất')
     
-    attempt_count = fields.Integer(string='Attempts', default=0)
-    max_attempts = fields.Integer(string='Max Attempts', default=3)
+    attempt_count = fields.Integer(string='Số lần thử', default=0)
+    max_attempts = fields.Integer(string='Số lần thử tối đa', default=3)
     
-    next_execution = fields.Datetime(string='Next Execution', default=fields.Datetime.now, index=True)
+    next_execution = fields.Datetime(string='Thời gian chạy tiếp theo', default=fields.Datetime.now, index=True)
 
     def process_queue(self, limit=50):
         """
