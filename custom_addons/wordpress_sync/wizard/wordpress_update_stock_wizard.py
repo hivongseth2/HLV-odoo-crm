@@ -69,15 +69,19 @@ class WordPressUpdateStockWizard(models.TransientModel):
         # 2. Update Selected Parent Combos
         parents_to_update = self.line_ids.filtered(lambda l: l.to_update).mapped('product_id')
         
-        _logger.info(f"[Wizard] Found {len(parents_to_update)} parents to update: {parents_to_update.mapped('name')}")
+        _logger.info(f"[Wizard] Found {len(parents_to_update)} parents to update: {parents_to_update.mapped('name')} (IDs: {parents_to_update.ids})")
         
         if parents_to_update:
             # Check current status of parents for debugging
             for p in parents_to_update:
-                _logger.info(f"[Wizard] Parent {p.name} current: {p.x_wp_stock_status} -> new: {self.new_status}")
+                _logger.info(f"[Wizard] Parent {p.name} (ID: {p.id}) current: {p.x_wp_stock_status} -> new: {self.new_status}")
             
             parents_to_update.write({'x_wp_stock_status': self.new_status})
             
+            # Verify update
+            for p in parents_to_update:
+                 _logger.info(f"[Wizard] Parent {p.name} (ID: {p.id}) AFTER WRITE: {p.x_wp_stock_status}")
+
             # Log message on parents
             for p in parents_to_update:
                 p.message_post(body=f"WordPress Stock Status cập nhật theo sản phẩm con {self.product_id.name} -> {self.new_status}")
