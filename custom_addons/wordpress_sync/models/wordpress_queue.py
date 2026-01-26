@@ -37,6 +37,9 @@ class WordPressSyncQueue(models.Model):
     max_attempts = fields.Integer(string='Số lần thử tối đa', default=3)
     
     next_execution = fields.Datetime(string='Thời gian chạy tiếp theo', default=fields.Datetime.now, index=True)
+    
+    old_value = fields.Char(string='Giá trị cũ')
+    new_value = fields.Char(string='Giá trị mới')
 
     def process_queue(self, limit=50):
         """
@@ -127,7 +130,7 @@ class WordPressSyncQueue(models.Model):
             self.env.cr.commit()
 
     @api.model
-    def create_job(self, product, sync_type='price', priority=10, initial_log=None):
+    def create_job(self, product, sync_type='price', priority=10, initial_log=None, old_value=None, new_value=None):
         """
         Helper to create or update existing pending job
         """
@@ -144,6 +147,9 @@ class WordPressSyncQueue(models.Model):
             'priority': max(existing.priority if existing else 0, priority)
         }
         
+        if old_value: vals['old_value'] = old_value
+        if new_value: vals['new_value'] = new_value
+        
         if initial_log:
              vals['log'] = f"{initial_log}\n{existing.log or ''}" if existing else initial_log
 
@@ -155,6 +161,8 @@ class WordPressSyncQueue(models.Model):
             vals.update({
                 'product_id': product.id,
                 'sync_type': sync_type,
-                'priority': priority
+                'priority': priority,
+                'old_value': old_value,
+                'new_value': new_value
             })
             return self.create(vals)

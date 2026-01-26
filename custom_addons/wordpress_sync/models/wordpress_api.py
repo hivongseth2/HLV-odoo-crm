@@ -540,13 +540,20 @@ class StockSyncService:
         Kiểm tra sản phẩm còn hàng không dựa trên field được cấu hình
         Priority: Manual Override (x_wp_stock_status) > Computed Qty
         """
+        # 0. Invalidate cache to ensure fresh data from DB (in case of race/cache issues)
+        product.invalidate_recordset(['x_wp_stock_status'])
+
         # 1. Manual Override
         manual_status = getattr(product, 'x_wp_stock_status', False)
+        
+        _logger.info(f"[WP-STOCK-DEBUG] {product.name} (ID: {product.id}) | Manual Override: '{manual_status}'")
+
         if manual_status:
-            _logger.info(f"Checking stock for {product.name}: Manual Override found = {manual_status}")
             if manual_status == 'instock':
+                _logger.info(f"[WP-STOCK-DEBUG] {product.name} -> RETURNING INSTOCK (Manual)")
                 return True
             if manual_status in ('outofstock', 'discontinued'):
+                _logger.info(f"[WP-STOCK-DEBUG] {product.name} -> RETURNING OUTOFSTOCK (Manual)")
                 return False
 
         # 2. Check Phantom BOM (Recursive)

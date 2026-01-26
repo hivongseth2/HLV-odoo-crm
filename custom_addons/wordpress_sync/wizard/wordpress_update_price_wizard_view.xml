@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_wordpress_update_price_wizard_form" model="ir.ui.view">
+        <field name="name">wordpress.update.price.wizard.form</field>
+        <field name="model">wordpress.update.price.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Cập nhật giá WordPress">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="product_id"/>
+                            <field name="current_price" widget="monetary"/>
+                        </group>
+                        <group>
+                            <field name="new_price" widget="monetary" class="oe_inline" style="font-size: 1.5em; font-weight: bold; color: #28a745;"/>
+                        </group>
+                    </group>
+                    
+                    <label for="line_ids" string="Các sản phẩm Combo bị ảnh hưởng (Sẽ được tính toán và cập nhật theo)"/>
+                    <field name="line_ids">
+                        <list editable="bottom" create="0">
+                            <field name="to_update" widget="boolean_toggle"/>
+                            <field name="product_id" force_save="1" readonly="1"/>
+                            <field name="qty_in_combo" string="SL" force_save="1" readonly="1"/>
+                            <field name="current_price" widget="monetary" force_save="1" readonly="1"/>
+                            <field name="new_price" widget="monetary" decoration-bf="1" decoration-info="1" force_save="1" readonly="1"/>
+                        </list>
+                    </field>
+                </sheet>
+                <footer>
+                    <button name="action_confirm" string="Xác nhận cập nhật" type="object" class="btn-primary" data-hotkey="q"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel" data-hotkey="z"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_wordpress_update_price_wizard" model="ir.actions.act_window">
+        <field name="name">Cập nhật giá an toàn</field>
+        <field name="res_model">wordpress.update.price.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>
