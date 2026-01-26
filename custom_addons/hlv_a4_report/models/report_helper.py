@@ -127,8 +127,37 @@ class HlvReportHelper(models.AbstractModel):
             
             # Calculate parent quantity
             if is_bom_kit:
-                # For Kit: use qty_delivered (Odoo auto-calculates from components)
-                parent_qty = sol.qty_delivered or 0.0
+                # For Kit: calculate from component moves in this picking
+                # We avoid sol.qty_delivered because it might be 0 before validation
+                parent_qty = 0.0
+                candidate_qtys = []
+
+                # 1. Try using bom_line_id (Standard Odoo)
+                for m in moves:
+                    m_qty = m.quantity if hasattr(m, 'quantity') and m.quantity else (m.product_uom_qty or 0.0)
+                    if m.bom_line_id and m.bom_line_id.product_qty:
+                        candidate_qtys.append(m_qty / m.bom_line_id.product_qty)
+                
+                # 2. Fallback: Find BoM manually if bom_line_id missing
+                if not candidate_qtys:
+                    try:
+                        boms = self.env['mrp.bom'].sudo()._bom_find(parent_product, company_id=picking.company_id.id or self.env.company.id, bom_type='phantom')
+                        bom = boms.get(parent_product)
+                        if bom:
+                            bom_map = {l.product_id.id: l.product_qty for l in bom.bom_line_ids}
+                            for m in moves:
+                                m_qty = m.quantity if hasattr(m, 'quantity') and m.quantity else (m.product_uom_qty or 0.0)
+                                b_qty = bom_map.get(m.product_id.id, 0.0)
+                                if b_qty > 0:
+                                    candidate_qtys.append(m_qty / b_qty)
+                    except Exception:
+                        pass
+
+                if candidate_qtys:
+                    parent_qty = max(candidate_qtys)
+                else:
+                    # Final fallback: use delivered qty (might be 0)
+                    parent_qty = sol.qty_delivered or 0.0
             else:
                 # For regular product: sum move quantities
                 parent_qty = sum(
