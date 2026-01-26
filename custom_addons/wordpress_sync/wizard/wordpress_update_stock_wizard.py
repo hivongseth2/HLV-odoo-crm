@@ -85,6 +85,7 @@ class WordPressUpdateStockWizard(models.TransientModel):
         parents_to_update.invalidate_recordset(['x_wp_stock_status'])
         
         # Manually trigger sync since SQL bypasses triggers
+        _logger.error(f"[Wizard-DEBUG] Triggering manual sync for Child {self.product_id.id} and {len(parents_to_update)} Parents")
         self.product_id._auto_sync_stock_to_wordpress()
         parents_to_update._auto_sync_stock_to_wordpress()
         

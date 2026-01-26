@@ -200,6 +200,7 @@ class ProductTemplate(models.Model):
         Queue = self.env['wordpress.sync.queue']
         for product in self:
             if not product.default_code: continue
+            _logger.error(f"[Sync-DEBUG] Auto-Syncing Stock for {product.name} (ID: {product.id})")
             Queue.create_job(product, sync_type='stock', priority=50) # Manual change = High priority
 
     def _update_parent_combo_prices(self):
