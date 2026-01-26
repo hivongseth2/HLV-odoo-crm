@@ -363,7 +363,7 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
     product_uom_id = fields.Many2one(
         comodel_name="uom.uom", string="ĐVT", required=True
     )
-    estimated_cost = fields.Monetary(currency_field="currency_id")
+    estimated_cost = fields.Monetary(string="Chi phí ước tính", currency_field="currency_id")
     currency_id = fields.Many2one(
         "res.currency", string="Tiền tệ", related="line_id.currency_id", readonly=True
     )
