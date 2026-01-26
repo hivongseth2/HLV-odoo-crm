@@ -23,6 +23,13 @@ class ProductTemplate(models.Model):
     x_studio_gia_san_tmdt = fields.Monetary(string="Giá Sàn TMĐT")
     x_studio_gi_bn_thng_mi = fields.Monetary(string="Giá Thương Mại")
 
+    x_wp_stock_status = fields.Selection([
+        ('instock', 'Còn hàng'),
+        ('outofstock', 'Hết hàng'),
+        ('discontinued', 'Ngừng kinh doanh')
+    ], string='Tình trạng WP', 
+       help='Tình trạng kho trên WordPress (ghi đè tự động)')
+
     x_wp_combo_price = fields.Float(
         string='Giá bán trong combo',
         default=0.0,

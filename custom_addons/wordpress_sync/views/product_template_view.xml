@@ -29,6 +29,17 @@
                        string="Giá bán trong combo"
                        widget="monetary"
                        options="{'currency_field': 'currency_id'}"/>
+                
+                <label for="x_wp_stock_status" string="Tình trạng WordPress"/>
+                <div class="o_row">
+                    <field name="x_wp_stock_status"/>
+                    <button name="%(action_wordpress_update_stock_wizard)d" 
+                            string="Cập nhật an toàn" 
+                            type="action" 
+                            class="btn btn-secondary btn-sm"
+                            icon="fa-shield"
+                            help="Cập nhật trạng thái và đồng bộ các Combo cha liên quan"/>
+                </div>
             </xpath>
             
             <!-- Add computed combo price (readonly) -->
