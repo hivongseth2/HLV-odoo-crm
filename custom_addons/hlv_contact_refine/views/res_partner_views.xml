@@ -8,6 +8,7 @@
         <field name="arch" type="xml">
             <xpath expr="//filter[@name='type_person']" position="before">
                 <filter string="Main Contacts" name="filter_only_parents" domain="[('parent_id', '=', False)]"/>
+                <filter string="Delivery Addresses" name="filter_type_delivery" domain="[('type', '=', 'delivery')]"/>
                 <separator/>
             </xpath>
         </field>
