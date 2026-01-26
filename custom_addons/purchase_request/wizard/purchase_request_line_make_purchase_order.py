@@ -292,7 +292,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             res.append(purchase.id)
 
         purchase_requests = self.item_ids.mapped("request_id")
-        purchase_requests.button_in_progress()
+        purchase_requests.sudo().button_done()
         return {
             "domain": [("id", "in", res)],
             "name": _("Yêu cầu báo giá"),

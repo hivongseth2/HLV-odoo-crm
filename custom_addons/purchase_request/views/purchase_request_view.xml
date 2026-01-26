@@ -45,7 +45,7 @@
                     />
                     <button
                         name="button_done"
-                        invisible="state not in ('approved', 'in_progress')"
+                        invisible="1"
                         string="Hoàn thành"
                         type="object"
                         class="oe_highlight"

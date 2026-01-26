@@ -318,32 +318,25 @@ class PriceSyncService:
             return result
 
         # Get prices from Odoo
-        # Check if this is a combo product (has BOM) and use computed combo price
-        regular_price = 0.0
-        sale_price = 0.0
+        # Priority: Manual price > Computed combo price
+        regular_price = getattr(product, 'x_studio_ga_hng_nim_yt', 0.0) or 0.0
+        sale_price = getattr(product, 'x_studio_ga_web', 0.0) or 0.0
         
-        # Check for BOM (combo product)
+        # Check for BOM (combo product) - only use computed price if NO manual price
         has_bom = self.env['mrp.bom'].search_count([
             ('product_tmpl_id', '=', product.id),
             ('type', '=', 'phantom'),
             ('active', '=', True)
         ]) > 0
         
-        if has_bom:
-            # Use computed combo price
+        if has_bom and sale_price <= 0:
+            # No manual sale price -> use computed combo price
             combo_price = product.computed_combo_selling_price
             if combo_price > 0:
                 sale_price = combo_price
-                # Regular price: lấy giá niêm yết hoặc cao hơn combo price
-                regular_price = getattr(product, 'x_studio_ga_hng_nim_yt', 0.0) or 0.0
+                # If no regular price either, use combo price
                 if regular_price <= 0:
-                    regular_price = sale_price  # Use combo price as regular if no niêm yết
-        
-        # Fallback to regular price fields if not combo or no combo price
-        if regular_price <= 0:
-            regular_price = getattr(product, 'x_studio_ga_hng_nim_yt', 0.0) or 0.0
-        if sale_price <= 0:
-            sale_price = getattr(product, 'x_studio_ga_web', 0.0) or 0.0
+                    regular_price = combo_price
 
         result['regular_price'] = regular_price
         result['sale_price'] = sale_price
