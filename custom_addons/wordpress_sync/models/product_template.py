@@ -25,14 +25,24 @@ class ProductTemplate(models.Model):
     computed_combo_selling_price = fields.Float(
         string='Giá combo tính toán',
         compute='_compute_combo_selling_price',
-        store=False,
+        store=True,
         help='Giá bán combo được tính tự động từ BOM'
     )
 
     # ===========================================
     # COMPUTED METHODS
     # ===========================================
-    @api.depends('bom_ids', 'bom_ids.bom_line_ids')
+    @api.depends(
+        'bom_ids',
+        'bom_ids.type',
+        'bom_ids.active',
+        'bom_ids.bom_line_ids',
+        'bom_ids.bom_line_ids.product_qty',
+        'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_studio_ga_web',
+        'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_studio_ga_hng_nim_yt',
+        'bom_ids.bom_line_ids.product_id.product_tmpl_id.x_wp_combo_price',
+        'bom_ids.bom_line_ids.product_id.product_tmpl_id.list_price'
+    )
     def _compute_combo_selling_price(self):
         """Tính giá combo dựa trên BOM và phương pháp được cấu hình"""
         # Get settings from wordpress.config
@@ -45,20 +55,30 @@ class ProductTemplate(models.Model):
             discount_pct = 0.0
 
         for product in self:
-            product.computed_combo_selling_price = product._calculate_combo_price(
+            combo_price, listed_price = product._calculate_combo_price_values(
                 pricing_method, discount_pct
             )
+            product.computed_combo_selling_price = combo_price
+            
+            # Auto-update Odoo price fields if calculated
+            # User request: update x_studio_ga_web and x_studio_ga_hng_nim_yt from BOM
+            if combo_price > 0:
+                 product.x_studio_ga_web = combo_price
+            
+            if listed_price > 0:
+                 product.x_studio_ga_hng_nim_yt = listed_price
 
     def _calculate_combo_price(self, pricing_method='sum_combo_price', discount_pct=0.0):
-        """
-        Tính giá combo dựa trên BOM
+        """Deprecated: Use _calculate_combo_price_values instead"""
+        price, _ = self._calculate_combo_price_values(pricing_method, discount_pct)
+        return price
 
-        Args:
-            pricing_method: 'sum_combo_price' hoặc 'discount_percentage'
-            discount_pct: Phần trăm giảm giá (0-100)
+    def _calculate_combo_price_values(self, pricing_method='sum_combo_price', discount_pct=0.0):
+        """
+        Tính giá combo (bán và niêm yết) dựa trên BOM
 
         Returns:
-            float: Giá combo tính toán
+            tuple: (selling_price, listed_price)
         """
         self.ensure_one()
 
@@ -70,13 +90,18 @@ class ProductTemplate(models.Model):
         ], limit=1)
 
         if not bom:
-            return 0.0
+            return 0.0, 0.0
 
-        total_price = 0.0
+        total_selling_price = 0.0
+        total_listed_price = 0.0
 
         for line in bom.bom_line_ids:
             child_product = line.product_id.product_tmpl_id
             qty = line.product_qty or 1.0
+            
+            # Tính giá listed (luôn là tổng listed con)
+            child_listed = getattr(child_product, 'x_studio_ga_hng_nim_yt', 0) or child_product.list_price or 0.0
+            total_listed_price += child_listed * qty
 
             if pricing_method == 'sum_combo_price':
                 # Lấy x_wp_combo_price, nếu = 0 thì lấy giá bán thường
@@ -84,17 +109,17 @@ class ProductTemplate(models.Model):
                 if combo_price <= 0:
                     # Fallback to regular price (x_studio_ga_web or list_price)
                     combo_price = getattr(child_product, 'x_studio_ga_web', 0) or child_product.list_price or 0.0
-                total_price += combo_price * qty
+                total_selling_price += combo_price * qty
             else:
                 # discount_percentage method
                 regular_price = getattr(child_product, 'x_studio_ga_web', 0) or child_product.list_price or 0.0
-                total_price += regular_price * qty
+                total_selling_price += regular_price * qty
 
         # Apply discount if using discount_percentage method
         if pricing_method == 'discount_percentage' and discount_pct > 0:
-            total_price = total_price * (1 - discount_pct / 100)
+            total_selling_price = total_selling_price * (1 - discount_pct / 100)
 
-        return total_price
+        return total_selling_price, total_listed_price
 
     # ===========================================
     # OVERRIDE METHODS
