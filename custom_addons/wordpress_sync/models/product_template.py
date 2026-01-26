@@ -129,7 +129,7 @@ class ProductTemplate(models.Model):
     def write(self, vals):
         """Override write để auto-sync khi giá thay đổi và cập nhật combo cha"""
         # Các field giá cần theo dõi
-        price_fields = ['x_studio_ga_web', 'x_studio_gi_bn_thng_mi', 'x_wp_combo_price', 'list_price']
+        price_fields = ['x_studio_ga_web', 'x_studio_gi_bn_thng_mi', 'x_wp_combo_price', 'list_price', 'x_studio_ga_hng_nim_yt']
         has_price_change = any(field in vals for field in price_fields)
 
         result = super().write(vals)
@@ -246,70 +246,25 @@ class ProductTemplate(models.Model):
         return self.env['wordpress.config'].search([('active', '=', True)], limit=1)
 
     def _auto_sync_to_wordpress(self):
-        """Tự động đồng bộ giá lên WordPress khi thay đổi"""
+        """Tự động đồng bộ giá lên WordPress: Create Queue Jobs"""
         config = self._get_wordpress_config()
         if not config:
             _logger.warning("Auto-sync: No active WordPress configuration found")
             return
 
-        # Kiểm tra credentials
-        wc_key, wc_secret = config.get_credentials()
-        if not wc_key or not wc_secret:
-            _logger.warning(f"Auto-sync: No credentials for config {config.name}")
-            return
-
-        # Khởi tạo service
-        service = PriceSyncService(self.env, config)
-
+        # Create Queue Jobs for each product
+        QueueModel = self.env['wordpress.sync.queue']
+        
         for product in self:
-            # Bỏ qua product không có SKU
+            # Check SKU
             if not product.default_code:
                 continue
-
-            try:
-                result = service.sync_product(product)
-
-                if result['success']:
-                    _logger.info(f"Auto-synced: {product.name} (SKU: {product.default_code})")
-
-                    # Tạo internal note trên product
-                    self._post_sync_note(product, result)
-
-                    # Tạo log
-                    self.env['product.sync.log'].create_log(
-                        product=product,
-                        status='success',
-                        message=result['message'],
-                        sync_type='auto',
-                        sku=result.get('sku', ''),
-                        wc_product_id=result.get('wc_product_id', ''),
-                        new_regular_price=result.get('regular_price', 0),
-                        new_sale_price=result.get('sale_price', 0)
-                    )
-                else:
-                    _logger.warning(f"Auto-sync failed: {product.name} - {result['message']}")
-
-                    # Tạo internal note về lỗi
-                    self._post_sync_note(product, result, success=False)
-
-                    # Tạo log thất bại
-                    self.env['product.sync.log'].create_log(
-                        product=product,
-                        status='failed',
-                        message=result['message'],
-                        sync_type='auto',
-                        sku=result.get('sku', product.default_code or ''),
-                        wc_product_id=result.get('wc_product_id', ''),
-                        new_regular_price=result.get('regular_price', 0),
-                        new_sale_price=result.get('sale_price', 0)
-                    )
-
-            except Exception as e:
-                _logger.exception(f"Auto-sync error for {product.name}: {e}")
-
-                # Tạo note cho exception
-                error_result = {'message': str(e)}
-                self._post_sync_note(product, error_result, success=False)
+                
+            QueueModel.create_job(product, sync_type='price', priority=10)
+            _logger.info(f"Queued sync for product {product.name} (SKU: {product.default_code})")
+            
+            # Post internal note about queued status? 
+            # Maybe too spammy. Let's just create job.
 
     def _post_sync_note(self, product, result, success=True):
         """Tạo internal note trên product sau khi sync"""
