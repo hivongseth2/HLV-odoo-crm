@@ -58,8 +58,9 @@ class ProductTemplate(models.Model):
         result = super().write(vals)
 
         # Check if WordPress stock status was changed
-        if 'x_wp_stock_status' in vals and not self.env.context.get('skip_wordpress_sync'):
-            self._sync_wp_stock_status()
+        # DISABLED: Use wordpress_sync module instead (Async Queue)
+        # if 'x_wp_stock_status' in vals and not self.env.context.get('skip_wordpress_sync'):
+        #     self._sync_wp_stock_status()
 
         return result
 
