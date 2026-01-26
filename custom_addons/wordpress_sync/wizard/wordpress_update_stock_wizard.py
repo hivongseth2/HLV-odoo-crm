@@ -59,39 +59,42 @@ class WordPressUpdateStockWizard(models.TransientModel):
         
         _logger.error(f"[Wizard-DEBUG] Confirming Update. Product: {self.product_id.name}, New Status: {self.new_status}")
         
-        # 1. Update Child Product
-        if self.product_id.x_wp_stock_status != self.new_status:
-            _logger.error(f"[Wizard-DEBUG] Updating Child {self.product_id.name} from {self.product_id.x_wp_stock_status} to {self.new_status}")
-            self.product_id.write({'x_wp_stock_status': self.new_status})
-            self.env.cr.commit() # FORCE COMMIT
-        else:
-            _logger.error(f"[Wizard-DEBUG] Child {self.product_id.name} already has status {self.new_status}")
-        
-        # 2. Update Selected Parent Combos
         parents_to_update = self.line_ids.filtered(lambda l: l.to_update).mapped('product_id')
         
-        _logger.error(f"[Wizard-DEBUG] Found {len(parents_to_update)} parents to update: {parents_to_update.mapped('name')} (IDs: {parents_to_update.ids})")
-        
+        # 3. DIRECT SQL UPDATE (Nuclear Option against Reverts)
+        # Update Parents
         if parents_to_update:
-            # Check current status of parents for debugging
-            for p in parents_to_update:
-                _logger.error(f"[Wizard-DEBUG] Parent {p.name} (ID: {p.id}) current: {p.x_wp_stock_status} -> new: {self.new_status}")
-            
-            parents_to_update.write({'x_wp_stock_status': self.new_status})
-            self.env.cr.commit() # FORCE COMMIT
-            
-            # Verify update
-            for p in parents_to_update:
-                 _logger.error(f"[Wizard-DEBUG] Parent {p.name} (ID: {p.id}) AFTER WRITE: {p.x_wp_stock_status}")
+            _logger.error(f"[Wizard-SQL] Updating {len(parents_to_update)} parents to {self.new_status} via SQL")
+            self.env.cr.execute(
+                "UPDATE product_template SET x_wp_stock_status = %s WHERE id IN %s",
+                (self.new_status, tuple(parents_to_update.ids))
+            )
+        
+        # Update Child
+        if self.product_id.x_wp_stock_status != self.new_status:
+            _logger.error(f"[Wizard-SQL] Updating Child {self.product_id.id} to {self.new_status} via SQL")
+            self.env.cr.execute(
+                "UPDATE product_template SET x_wp_stock_status = %s WHERE id = %s",
+                (self.new_status, self.product_id.id)
+            )
 
-            # Log message on parents with Verification
-            for p in parents_to_update:
-                p.invalidate_recordset(['x_wp_stock_status']) # Ensure fresh read
-                start_msg = f"WordPress Stock Status cập nhật theo sản phẩm con {self.product_id.name} -> {self.new_status}."
-                verify_msg = f" (Kiểm tra lại DB: {p.x_wp_stock_status})"
-                p.message_post(body=start_msg + verify_msg)
+        self.env.cr.commit() # FORCE PERSISTENCE
+        
+        # 4. Invalidate Cache & Trigger Sync Manually
+        self.product_id.invalidate_recordset(['x_wp_stock_status'])
+        parents_to_update.invalidate_recordset(['x_wp_stock_status'])
+        
+        # Manually trigger sync since SQL bypasses triggers
+        self.product_id._auto_sync_stock_to_wordpress()
+        parents_to_update._auto_sync_stock_to_wordpress()
+        
+        # Log message on parents with Verification
+        for p in parents_to_update:
+            start_msg = f"WordPress Stock Status cập nhật theo sản phẩm con {self.product_id.name} -> {self.new_status} (SQL Force)."
+            verify_msg = f" (Kiểm tra lại DB: {p.x_wp_stock_status})"
+            p.message_post(body=start_msg + verify_msg)
 
-        return {'type': 'ir.actions.client', 'tag': 'reload'}
+        return {'type': 'ir.actions.act_window_close'}
 
 
 class WordPressUpdateStockWizardLine(models.TransientModel):
