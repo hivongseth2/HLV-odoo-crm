@@ -8,5 +8,6 @@ access_wordpress_price_sync_manager,WordPress Price Sync - Manager,model_wordpre
 access_wordpress_price_sync_user,WordPress Price Sync - User,model_wordpress_price_sync,base.group_user,1,1,1,0
 access_wordpress_combo_stock_sync_admin,WordPress Combo Stock Sync - Admin,model_wordpress_combo_stock_sync,base.group_system,1,1,1,1
 access_wordpress_combo_stock_sync_manager,WordPress Combo Stock Sync - Manager,model_wordpress_combo_stock_sync,sales_team.group_sale_manager,1,1,1,0
+access_wordpress_combo_stock_sync,wordpress.combo.stock.sync,model_wordpress_combo_stock_sync,base.group_user,1,1,1,1
+access_wordpress_sync_queue,wordpress.sync.queue,model_wordpress_sync_queue,base.group_user,1,1,1,10
 access_wordpress_combo_stock_sync_user,WordPress Combo Stock Sync - User,model_wordpress_combo_stock_sync,base.group_user,1,1,1,0
-
