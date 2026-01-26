@@ -49,9 +49,15 @@
                     <field name="x_studio_gi_bn_thng_mi" string="Giá Thương Mại" optional="show" widget="monetary"/>
                     <field name="x_studio_gia_san_tmdt" string="Giá Sàn TMĐT" optional="show" widget="monetary"/>
                     <field name="x_wp_stock_status" string="Tình trạng WP" optional="show"
+                           readonly="1"
                            decoration-success="x_wp_stock_status == 'instock'"
                            decoration-danger="x_wp_stock_status == 'outofstock'"
                            decoration-warning="x_wp_stock_status == 'discontinued'"/>
+                    <button name="%(wordpress_sync.action_wordpress_update_stock_wizard)d"
+                            type="action"
+                            string="Cập nhật"
+                            class="btn-secondary"
+                            icon="fa-shield"/>
                     <field name="uom_id" optional="hide" string="Đơn vị tính"/>
                     <field name="active" column_invisible="True"/>
                     <field name="currency_id" column_invisible="True"/>
