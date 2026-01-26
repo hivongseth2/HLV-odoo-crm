@@ -25,6 +25,7 @@
         'views/wordpress_queue_view.xml',
         'views/res_config_settings_views.xml',
         'views/product_view_cleanup.xml',
+        'wizard/wordpress_update_stock_wizard_view.xml',
     ],
     'external_dependencies': {
         'python': ['requests'],
