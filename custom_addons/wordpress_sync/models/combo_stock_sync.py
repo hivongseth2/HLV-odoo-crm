@@ -291,35 +291,44 @@ class WordPressComboStockSync(models.TransientModel):
                               'Không tìm thấy combo nào có sản phẩm con hết hàng', 'info')
 
         # Sync
-        service = StockSyncService(self.env, self.wordpress_config_id)
-
-        success_count = 0
-        failed_count = 0
-
+        QueueModel = self.env['wordpress.sync.queue']
         for combo in affected_combos:
-            try:
-                result = service.sync_stock_status(combo)
-                if result['success']:
-                    success_count += 1
-                    self.env['product.sync.log'].create_log(
-                        product=combo,
-                        status='success',
-                        message=f"Auto Combo Stock: {result['message']}",
-                        sync_type='auto',
-                        sku=result.get('sku', ''),
-                        wc_product_id=result.get('wc_product_id', '')
-                    )
-                else:
-                    failed_count += 1
-            except Exception as e:
-                failed_count += 1
-                _logger.exception(f"Error syncing combo {combo.name}: {e}")
+            QueueModel.create_job(combo, sync_type='stock', priority=20) # Priority higher than price
+            success_count += 1
 
         return self._notify(
-            'Cập nhật Combo Stock',
-            f"Đã cập nhật {success_count} combo. Thất bại: {failed_count}",
-            'success' if failed_count == 0 else 'warning'
+            'Đã tạo yêu cầu cập nhật',
+            f"Đã thêm {success_count} combo vào hàng đợi cập nhật tồn kho.",
+            'success'
         )
+
+    @api.model
+    def cron_auto_check_combo_stock(self):
+        """
+        Cron Job: Tự động kiểm tra và cập nhật stock cho combo
+        """
+        # 1. Kiểm tra config
+        config = self._default_wordpress_config()
+        if not config:
+            return
+            
+        config_record = self.env['wordpress.config'].browse(config)
+        if not config_record.active or not config_record.auto_sync_combo_stock:
+            return
+
+        # 2. Tìm combo bị ảnh hưởng
+        wizard = self.create({'sync_mode': 'out_of_stock_child', 'wordpress_config_id': config})
+        affected_combos = wizard._find_combos_with_out_of_stock_child()
+        
+        if affected_combos:
+            _logger.info(f"Cron Combo Stock: Found {len(affected_combos)} combos to update.")
+            
+            # 3. Queue jobs
+            QueueModel = self.env['wordpress.sync.queue']
+            for combo in affected_combos:
+                QueueModel.create_job(combo, sync_type='stock', priority=15)
+        else:
+            _logger.info("Cron Combo Stock: No affected combos found.")
 
     # ===========================================
     # HELPER

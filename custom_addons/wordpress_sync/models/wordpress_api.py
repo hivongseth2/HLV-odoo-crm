@@ -538,13 +538,17 @@ class StockSyncService:
     def _is_in_stock(self, product):
         """
         Kiểm tra sản phẩm còn hàng không dựa trên field được cấu hình
-
-        Args:
-            product: product.template record
-
-        Returns:
-            bool: True nếu còn hàng
+        Priority: Manual Override (x_wp_stock_status) > Computed Qty
         """
+        # 1. Manual Override
+        manual_status = getattr(product, 'x_wp_stock_status', False)
+        if manual_status:
+            if manual_status == 'instock':
+                return True
+            if manual_status in ('outofstock', 'discontinued'):
+                return False
+
+        # 2. Computed from Quantity
         stock_field = self._get_stock_field()
 
         # For product.template, we need to check all variants

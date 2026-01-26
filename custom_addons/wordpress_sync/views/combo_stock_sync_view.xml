@@ -56,4 +56,13 @@
               action="action_wordpress_combo_stock_sync"
               parent="stock.menu_stock_warehouse_mgmt"
               sequence="99"/>
+    <!-- Cron Job -->
+    <record id="ir_cron_auto_check_combo_stock" model="ir.cron">
+        <field name="name">WordPress: Auto Check Combo Stock</field>
+        <field name="model_id" ref="wordpress_sync.model_wordpress_combo_stock_sync"/>
+        <field name="state">code</field>
+        <field name="code">model.cron_auto_check_combo_stock()</field>
+        <field name="interval_number">10</field>
+        <field name="interval_type">minutes</field>
+    </record>
 </odoo>
