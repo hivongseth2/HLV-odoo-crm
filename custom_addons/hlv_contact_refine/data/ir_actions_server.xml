@@ -12,8 +12,8 @@ keywords = ['công ty', 'cty', 'doanh nghiệp', 'tnhh', 'chi nhánh', 'dntn', '
 
 # If triggered from Menu (no active_ids), search ALL candidates
 if not env.context.get('active_ids'):
-    # Search for Individual contacts (is_company=False) or any independent contact that needs tag update
-    records = env['res.partner'].search([('parent_id', '=', False)])
+    # Search for ALL contacts in the system to ensure children (Delivery Addresses) are also tagged
+    records = env['res.partner'].search([])
 
 # Process records
 count_company = 0
