@@ -16,7 +16,7 @@
                     <list editable="bottom" create="0">
                         <field name="to_update" widget="boolean_toggle"/>
                         <field name="product_id"/>
-                        <field name="current_status"/>
+                        <field name="current_status" string="Trạng thái cũ"/>
                     </list>
                 </field>
                 

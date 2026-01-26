@@ -84,9 +84,12 @@ class WordPressUpdateStockWizard(models.TransientModel):
             for p in parents_to_update:
                  _logger.error(f"[Wizard-DEBUG] Parent {p.name} (ID: {p.id}) AFTER WRITE: {p.x_wp_stock_status}")
 
-            # Log message on parents
+            # Log message on parents with Verification
             for p in parents_to_update:
-                p.message_post(body=f"WordPress Stock Status cập nhật theo sản phẩm con {self.product_id.name} -> {self.new_status}")
+                p.invalidate_recordset(['x_wp_stock_status']) # Ensure fresh read
+                start_msg = f"WordPress Stock Status cập nhật theo sản phẩm con {self.product_id.name} -> {self.new_status}."
+                verify_msg = f" (Kiểm tra lại DB: {p.x_wp_stock_status})"
+                p.message_post(body=start_msg + verify_msg)
 
         return {'type': 'ir.actions.act_window_close'}
 
