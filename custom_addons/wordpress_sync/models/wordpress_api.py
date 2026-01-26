@@ -543,12 +543,37 @@ class StockSyncService:
         # 1. Manual Override
         manual_status = getattr(product, 'x_wp_stock_status', False)
         if manual_status:
+            _logger.info(f"Checking stock for {product.name}: Manual Override found = {manual_status}")
             if manual_status == 'instock':
                 return True
             if manual_status in ('outofstock', 'discontinued'):
                 return False
 
-        # 2. Computed from Quantity
+        # 2. Check Phantom BOM (Recursive)
+        bom = self.env['mrp.bom'].search([
+            ('product_tmpl_id', '=', product.id),
+            ('type', '=', 'phantom'),
+            ('active', '=', True)
+        ], limit=1)
+        
+        if bom:
+            # If ANY component is OOS, the Kit is OOS
+            for line in bom.bom_line_ids:
+                child = line.product_id.product_tmpl_id
+                if not self._is_in_stock(child):
+                    _logger.info(f"Checking stock for {product.name}: Component {child.name} is OOS. Kit is OOS.")
+                    return False
+            # All components in stock -> Kit is in stock
+            _logger.info(f"Checking stock for {product.name}: All components in stock. Kit is In Stock.")
+            return True
+
+        # 3. Check Configuration: Sync based on Qty?
+        if not self.config.sync_stock_based_on_quantity:
+            # If Config says "Don't sync based on quantity" -> We assume In Stock (unless Manual Override was OOS)
+            _logger.info(f"Checking stock for {product.name}: Sync based on Qty is OFF -> Returning In Stock.")
+            return True
+
+        # 4. Computed from Quantity (Standard)
         stock_field = self._get_stock_field()
 
         # For product.template, we need to check all variants

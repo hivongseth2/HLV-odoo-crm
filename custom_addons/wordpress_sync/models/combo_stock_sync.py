@@ -136,6 +136,29 @@ class WordPressComboStockSync(models.TransientModel):
 
         return affected_combos
 
+        return affected_combos
+
+    def _get_oos_reason(self, combo):
+        """
+        Identify which children are Out of Stock
+        """
+        reasons = []
+        bom = self.env['mrp.bom'].search([
+            ('product_tmpl_id', '=', combo.id), 
+            ('type', '=', 'phantom'), 
+            ('active', '=', True)
+        ], limit=1)
+        
+        if bom:
+            for line in bom.bom_line_ids:
+                child = line.product_id.product_tmpl_id
+                if not self._is_product_in_stock(child):
+                    reasons.append(child.name)
+        
+        if reasons:
+            return f"Cập nhật do SP con hết hàng: {', '.join(reasons)}"
+        return "Cập nhật stock combo (Auto)"
+
     def _find_parent_combos(self, product_tmpl):
         """
         Tìm tất cả combo cha chứa sản phẩm này (qua BOM)
@@ -293,7 +316,8 @@ class WordPressComboStockSync(models.TransientModel):
         # Sync
         QueueModel = self.env['wordpress.sync.queue']
         for combo in affected_combos:
-            QueueModel.create_job(combo, sync_type='stock', priority=20) # Priority higher than price
+            reason = self._get_oos_reason(combo)
+            QueueModel.create_job(combo, sync_type='stock', priority=20, initial_log=reason)
             success_count += 1
 
         return self._notify(
@@ -326,7 +350,8 @@ class WordPressComboStockSync(models.TransientModel):
             # 3. Queue jobs
             QueueModel = self.env['wordpress.sync.queue']
             for combo in affected_combos:
-                QueueModel.create_job(combo, sync_type='stock', priority=15)
+                reason = self._get_oos_reason(combo)
+                QueueModel.create_job(combo, sync_type='stock', priority=15, initial_log=reason)
         else:
             _logger.info("Cron Combo Stock: No affected combos found.")
 

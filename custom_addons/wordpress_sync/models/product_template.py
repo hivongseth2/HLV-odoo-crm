@@ -14,8 +14,15 @@ class ProductTemplate(models.Model):
     _inherit = 'product.template'
 
     # ===========================================
+    # ===========================================
     # NEW FIELDS
     # ===========================================
+    # Define Studio fields explicitly to avoid view errors if Studio not loaded yet/module isolation
+    x_studio_ga_web = fields.Monetary(string="Giá Web")
+    x_studio_ga_hng_nim_yt = fields.Monetary(string="Giá Niêm Yết")
+    x_studio_gia_san_tmdt = fields.Monetary(string="Giá Sàn TMĐT")
+    x_studio_gi_bn_thng_mi = fields.Monetary(string="Giá Thương Mại")
+
     x_wp_combo_price = fields.Float(
         string='Giá bán trong combo',
         default=0.0,
@@ -136,18 +143,50 @@ class ProductTemplate(models.Model):
 
         # 1. Update Parent Combos if I am a child and my price changed
         if has_price_change:
+            _logger.info(f"Price change detected for {self.name} (IDs: {self.ids}). Updating parent combos...")
             self._update_parent_combo_prices()
 
         # 2. Auto-sync to WordPress if enabled
         if has_price_change and not self.env.context.get('skip_wordpress_sync'):
             if self._is_auto_sync_enabled():
+                _logger.info(f"Auto-sync enabled. Queuing sync for {self.name}...")
                 self._auto_sync_to_wordpress()
+            else:
+                 _logger.info(f"Auto-sync disabled or config missing.")
                 
         # 3. Check for manual stock status change
         if 'x_wp_stock_status' in vals and not self.env.context.get('skip_wordpress_sync'):
+             _logger.info(f"Manual Stock Status change detected for {self.name}. Queuing sync...")
              self._auto_sync_stock_to_wordpress() # Reuse queue mechanism
+             self._update_parent_combos_stock()
 
         return result
+
+    def _update_parent_combos_stock(self):
+        """Find parent combos and queue stock sync"""
+        # 1. Find variants
+        variants = self.product_variant_ids
+        
+        # 2. Find BOM lines using these variants
+        bom_lines = self.env['mrp.bom.line'].search([
+            ('product_id', 'in', variants.ids)
+        ])
+        
+        # 3. Find parent phantom/kit BOMs
+        parent_boms = bom_lines.mapped('bom_id').filtered(lambda b: b.type == 'phantom' and b.active)
+        parent_combos = parent_boms.mapped('product_tmpl_id')
+        
+        _logger.info(f"Found {len(parent_combos)} parent combos for {self.name}: {parent_combos.mapped('name')}")
+        
+        if not parent_combos:
+             return
+
+        # 4. Queue Sync
+        QueueModel = self.env['wordpress.sync.queue']
+        for combo in parent_combos:
+            reason = f"Cập nhật do SP con thay đổi trạng thái: {self.name}"
+            # Use lower priority than direct update but enough to process
+            QueueModel.create_job(combo, sync_type='stock', priority=30, initial_log=reason)
 
     def _auto_sync_stock_to_wordpress(self):
         """Queue stock sync job"""

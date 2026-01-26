@@ -59,6 +59,12 @@ class WordPressConfig(models.Model):
         help='Số ngày giữ lại sync logs'
     )
 
+    max_retry_attempts = fields.Integer(
+        string='Số lần thử lại tối đa',
+        default=3,
+        help='Số lần thử lại khi gặp lỗi trước khi dừng hẳn'
+    )
+
     batch_size = fields.Integer(
         string='Số lượng/Batch',
         default=50,
@@ -98,6 +104,12 @@ class WordPressConfig(models.Model):
        default='qty_available',
        help='Chọn trường để xác định sản phẩm còn hàng hay hết hàng')
 
+    sync_stock_based_on_quantity = fields.Boolean(
+        string='Đồng bộ dựa trên số lượng tồn',
+        default=True,
+        help='Nếu Tắt: Chỉ đồng bộ dựa trên "Tình trạng WP" thủ công. Nếu Bật: Kết hợp kiểm tra số lượng tồn kho.'
+    )
+
     auto_sync_price = fields.Boolean(
         string='Tự động đồng bộ giá',
         default=False,
@@ -108,6 +120,13 @@ class WordPressConfig(models.Model):
         string='Tự động đồng bộ stock combo',
         default=False,
         help='Tự động cập nhật tình trạng kho của combo khi sản phẩm con thay đổi'
+    )
+    
+    combo_stock_check_interval = fields.Integer(
+        string='Chu kỳ kiểm tra (phút)',
+        default=10,
+        help='Thời gian giữa các lần quét stock combo (tối thiểu 1 phút)',
+        inverse='_inverse_combo_cron_interval'
     )
 
     last_sync_date = fields.Datetime(
@@ -148,6 +167,15 @@ class WordPressConfig(models.Model):
         for record in self:
             if record.id and record.wc_secret:
                 ICP.set_param(f'wordpress_sync.config_{record.id}.wc_secret', record.wc_secret)
+
+    def _inverse_combo_cron_interval(self):
+        """Cập nhật thời gian chạy cron khi thay đổi"""
+        cron = self.env.ref('wordpress_sync.ir_cron_auto_check_combo_stock', raise_if_not_found=False)
+        if cron:
+            for record in self:
+                if record.combo_stock_check_interval < 1:
+                    record.combo_stock_check_interval = 1
+                cron.sudo().write({'interval_number': record.combo_stock_check_interval})
 
     # ===========================================
     # CONSTRAINTS

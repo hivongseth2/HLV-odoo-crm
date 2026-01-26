@@ -33,8 +33,13 @@
             <field name="model">product.template</field>
             <field name="inherit_id" eval="False"/>
             <field name="arch" type="xml">
-                <list string="Sửa nhanh sản phẩm" editable="bottom" multi_edit="1" sample="1">
+                <list string="Sửa nhanh sản phẩm" editable="bottom" multi_edit="1" sample="1"
+                      default_order="is_combo_product asc, default_code asc">
+                    <field name="is_combo_product" column_invisible="True"/>
                     <field name="default_code" optional="show" width="100px" string="Mã nội bộ"/>
+                    <field name="bulk_product_type_label" string="Loại" optional="show" widget="badge"
+                           decoration-success="bulk_product_type_label == 'single'"
+                           decoration-info="bulk_product_type_label == 'combo'"/>
                     <field name="name" optional="show" string="Tên sản phẩm"/>
                     <field name="barcode" optional="show" string="Mã vạch"/>
                     <field name="standard_price" string="Giá vốn" optional="show" widget="monetary"/>

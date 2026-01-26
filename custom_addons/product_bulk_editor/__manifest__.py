@@ -14,7 +14,7 @@
     'website': "http://www.yourcompany.com",
     'category': 'Sales',
     'version': '0.2',
-    'depends': ['product', 'sale', 'stock', 'wordpress_sync'],
+    'depends': ['product', 'sale', 'stock', 'wordpress_sync', 'mrp'],
     'data': [
         'views/product_bulk_view.xml',
     ],

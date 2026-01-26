@@ -26,6 +26,33 @@ class ProductTemplate(models.Model):
     ], string='Tình trạng WP', default='instock',
        help='Tình trạng kho sản phẩm trên WordPress. Thay đổi field này sẽ tự động cập nhật lên WordPress.')
 
+    # Bulk Editor Fields
+    is_combo_product = fields.Boolean(
+        string='Là Combo',
+        compute='_compute_is_combo_product',
+        store=True,
+        index=True
+    )
+    
+    bulk_product_type_label = fields.Selection([
+        ('single', 'Sản phẩm lẻ'),
+        ('combo', 'Combo')
+    ], string='Loại sản phẩm', compute='_compute_bulk_product_type_label')
+
+    @api.depends('bom_ids', 'bom_ids.type', 'bom_ids.active')
+    def _compute_is_combo_product(self):
+        for record in self:
+            # Check for any phantom bom
+            has_kit = False
+            if hasattr(record, 'bom_ids'):
+                has_kit = any(b.type == 'phantom' and b.active for b in record.bom_ids)
+            record.is_combo_product = has_kit
+
+    @api.depends('is_combo_product')
+    def _compute_bulk_product_type_label(self):
+        for record in self:
+            record.bulk_product_type_label = 'combo' if record.is_combo_product else 'single'
+
     def write(self, vals):
         """Override write để sync WordPress stock status khi thay đổi"""
         result = super().write(vals)

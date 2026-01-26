@@ -38,6 +38,7 @@
                         <group>
                             <field name="cache_purge_url" placeholder="/wp-json/litespeed/v1/purge?type=product&amp;sku="/>
                             <field name="sync_log_days"/>
+                            <field name="max_retry_attempts"/>
                             <field name="batch_size"/>
                             <field name="sync_delay"/>
                         </group>
@@ -52,9 +53,11 @@
                         <group string="Tự động đồng bộ">
                             <field name="auto_sync_price" widget="boolean_toggle"/>
                             <field name="auto_sync_combo_stock" widget="boolean_toggle"/>
+                            <field name="combo_stock_check_interval" invisible="not auto_sync_combo_stock"/>
                         </group>
                         <group string="Tình trạng kho">
-                            <field name="stock_status_field"/>
+                            <field name="sync_stock_based_on_quantity" widget="boolean_toggle"/>
+                            <field name="stock_status_field" invisible="not sync_stock_based_on_quantity"/>
                         </group>
                     </group>
                     
