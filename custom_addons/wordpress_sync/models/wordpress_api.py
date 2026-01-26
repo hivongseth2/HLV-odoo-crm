@@ -548,7 +548,23 @@ class StockSyncService:
             if manual_status in ('outofstock', 'discontinued'):
                 return False
 
-        # 2. Computed from Quantity
+        # 2. Check Phantom BOM (Recursive)
+        bom = self.env['mrp.bom'].search([
+            ('product_tmpl_id', '=', product.id),
+            ('type', '=', 'phantom'),
+            ('active', '=', True)
+        ], limit=1)
+        
+        if bom:
+            # If ANY component is OOS, the Kit is OOS
+            for line in bom.bom_line_ids:
+                child = line.product_id.product_tmpl_id
+                if not self._is_in_stock(child):
+                    return False
+            # All components in stock -> Kit is in stock
+            return True
+
+        # 3. Computed from Quantity (Standard)
         stock_field = self._get_stock_field()
 
         # For product.template, we need to check all variants

@@ -52,6 +52,7 @@
                         <group string="Tự động đồng bộ">
                             <field name="auto_sync_price" widget="boolean_toggle"/>
                             <field name="auto_sync_combo_stock" widget="boolean_toggle"/>
+                            <field name="combo_stock_check_interval" invisible="not auto_sync_combo_stock"/>
                         </group>
                         <group string="Tình trạng kho">
                             <field name="stock_status_field"/>
