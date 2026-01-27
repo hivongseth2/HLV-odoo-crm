@@ -49,10 +49,25 @@ if not env.context.get('active_ids'):
         </field>
     </record>
 
+    <record id="action_misa_contact_bulk_sync" model="ir.actions.server">
+        <field name="name">Cập nhật thông tin từ MISA</field>
+        <field name="model_id" ref="base.model_res_partner"/>
+        <field name="state">code</field>
+        <field name="code">
+action = model.action_misa_update_bulk()
+        </field>
+    </record>
+
     <!-- Menu Item to Trigger Global Scan -->
     <menuitem id="menu_convert_company_scan"
               name="Quét &amp; Chuyển đổi Công ty"
               parent="contacts.res_partner_menu_config"
               action="action_convert_to_company"
               sequence="50"/>
+
+    <menuitem id="menu_misa_contact_bulk_sync"
+              name="Cập nhật thông tin từ MISA"
+              parent="contacts.res_partner_menu_config"
+              action="action_misa_contact_bulk_sync"
+              sequence="60"/>
 </odoo>
