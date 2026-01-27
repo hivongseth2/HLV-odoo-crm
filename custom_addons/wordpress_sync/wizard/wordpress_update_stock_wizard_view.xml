@@ -50,5 +50,6 @@
         <field name="res_model">wordpress.update.stock.wizard</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
+        <field name="context">{'dialog_size': 'large'}</field>
     </record>
 </odoo>
