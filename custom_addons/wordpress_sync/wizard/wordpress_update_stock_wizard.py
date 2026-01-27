@@ -89,16 +89,32 @@ class WordPressUpdateStockWizard(models.TransientModel):
             
         return res
 
-    @api.onchange('new_combo_price', 'new_listed_price')
+    @api.onchange('new_combo_price', 'new_list_price', 'new_listed_price', 'new_status')
     def _onchange_prices(self):
-        """Update projected parent prices"""
-        # 1. Combo Price Change -> Parent Selling Price
-        if self.current_combo_price is not False: 
-            diff_combo = self.new_combo_price - self.current_combo_price
-            for line in self.line_ids:
-                line.new_parent_selling_price = line.current_parent_selling_price + (diff_combo * line.qty_in_combo)
+        """Update projected parent prices and status with Fallback Logic"""
+        
+        # 0. Status Projection (Wizard forces parents to same status)
+        for line in self.line_ids:
+            line.new_status = self.new_status
 
-        # 2. Listed Price Change -> Parent Listed Price
+        # 1. Selling Price Projection (Sum of Components)
+        # Logic: If Combo Price > 0, use it. Else use List Price.
+        
+        effective_old = self.current_combo_price if self.current_combo_price else self.current_list_price
+        effective_new = self.new_combo_price if self.new_combo_price else self.new_list_price
+        
+        diff_selling = effective_new - effective_old
+        
+        if diff_selling != 0:
+            for line in self.line_ids:
+                line.new_parent_selling_price = line.current_parent_selling_price + (diff_selling * line.qty_in_combo)
+        else:
+             # Reset if no change
+             for line in self.line_ids:
+                line.new_parent_selling_price = line.current_parent_selling_price
+
+        # 2. Listed Price Change -> Parent Listed Price (Always Sum of Listed)
+        # Note: Listed Price usually doesn't have "Combo Price" fallback logic, it's just Sum of Listed.
         if self.current_listed_price is not False:
             diff_listed = self.new_listed_price - self.current_listed_price
             for line in self.line_ids:
@@ -199,6 +215,12 @@ class WordPressUpdateStockWizardLine(models.TransientModel):
         ('outofstock', 'Hết hàng'),
         ('discontinued', 'Ngừng kinh doanh'),
     ], string='Trạng thái hiện tại')
+    
+    new_status = fields.Selection([
+        ('instock', 'Còn hàng'),
+        ('outofstock', 'Hết hàng'),
+        ('discontinued', 'Ngừng kinh doanh'),
+    ], string='Trạng thái dự kiến')
     
     # Projected Parent Prices
     current_parent_selling_price = fields.Float(string='Giá bán cũ', readonly=True, force_save=True)
