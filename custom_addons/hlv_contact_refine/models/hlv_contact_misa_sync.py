@@ -13,9 +13,9 @@ class ResPartner(models.Model):
         """
         Action to update contact information from MISA API for all main contacts (non-delivery).
         Logic:
-        1. Search by account_object_code -> Match with Odoo 'ref'
+        1. Search by account_object_code -> Match with Odoo 'company_registry'
         2. If not found, search by account_object_name (exact) -> Match with Odoo 'name'
-        Update: company_tax_code -> Odoo 'vat', account_object_code -> Odoo 'ref' (if matched by name).
+        Update: company_tax_code -> Odoo 'vat', account_object_code -> Odoo 'company_registry'.
         """
         misa_utils = self.env['misa.api.utils']
         misa_config = self.env['misa.config']
@@ -46,11 +46,9 @@ class ResPartner(models.Model):
         ]
         
         misa_records = []
-        _logger.info("Starting MISA Contact Sync with custom payload...")
-        
         for cat in categories:
             page_index = 1
-            page_size = 500 # Smaller batch size to avoid timeout with rich views
+            page_size = 500
             
             while True:
                 payload = {
@@ -72,21 +70,20 @@ class ResPartner(models.Model):
                 try:
                     response = misa_utils.sudo()._fetch_with_retry(url, headers, payload)
                     if response.status_code != 200:
-                        _logger.error("MISA API failed for %s at page %s: %s", cat["type"], page_index, response.text)
+                        _logger.error("MISA API failed for %s at page %s", cat["type"], page_index)
                         break
                     
                     data = response.json()
                     if not data.get("Success"):
-                        _logger.error("MISA API Success=False for %s at page %s: %s", cat["type"], page_index, data.get("UserMessage"))
+                        _logger.error("MISA API Success=False for %s at page %s", cat["type"], page_index)
                         break
                     
                     batch_raw = data.get("Data", [])
-                    # MISA can return Data as a JSON-encoded string
                     if isinstance(batch_raw, str):
                         try:
                             batch = json.loads(batch_raw)
                         except Exception:
-                            _logger.error("Failed to parse MISA Data string: %s", batch_raw[:100])
+                            _logger.error("Failed to parse MISA Data string for %s", cat["type"])
                             break
                     else:
                         batch = batch_raw
@@ -99,10 +96,10 @@ class ResPartner(models.Model):
                         break
                     
                     page_index += 1
-                    if page_index > 100: break # Safety break
+                    if page_index > 100: break
                         
                 except Exception as e:
-                    _logger.exception("Error calling MISA API for %s at page %s", cat["type"], page_index)
+                    _logger.exception("Error calling MISA API for %s", cat["type"])
                     break
 
         if not misa_records:
@@ -111,15 +108,14 @@ class ResPartner(models.Model):
                 'tag': 'display_notification',
                 'params': {
                     'title': _('Thông báo'),
-                    'message': _('Không tìm thấy dữ liệu từ MISA hoặc có lỗi trong quá trình lấy dữ liệu.'),
+                    'message': _('Không tìm thấy dữ liệu từ MISA.'),
                     'type': 'warning',
                     'sticky': False,
                 }
             }
 
-        _logger.info("Fetched %s total records from MISA (Customers + Vendors). Starting update...", len(misa_records))
+        _logger.info("Fetched %s records from MISA. Starting update...", len(misa_records))
 
-        # Use dictionaries for fast lookup
         misa_map_by_code = {}
         misa_map_by_name = {}
         
@@ -133,17 +129,16 @@ class ResPartner(models.Model):
             if name:
                 misa_map_by_name[name] = r
 
-        # Get Odoo partners (non-delivery contacts)
         partners = self.env['res.partner'].sudo().search([('parent_id', '=', False), ('type', '!=', 'delivery')])
         
         updated_count = 0
         for partner in partners:
             misa_data = None
             
-            # 1. Match by Code (ref)
-            ref_val = str(partner.ref or '').strip()
-            if ref_val and ref_val in misa_map_by_code:
-                misa_data = misa_map_by_code[ref_val]
+            # 1. Match by Code (MISA account_object_code -> Odoo company_registry)
+            code_val = str(partner.company_registry or '').strip()
+            if code_val and code_val in misa_map_by_code:
+                misa_data = misa_map_by_code[code_val]
             
             # 2. Match by Name (exact)
             else:
@@ -158,8 +153,8 @@ class ResPartner(models.Model):
                     vals['vat'] = tax_code
                 
                 obj_code = str(misa_data.get('account_object_code') or '').strip()
-                if obj_code and partner.ref != obj_code:
-                    vals['ref'] = obj_code
+                if obj_code and partner.company_registry != obj_code:
+                    vals['company_registry'] = obj_code
                 
                 if vals:
                     partner.sudo().write(vals)
