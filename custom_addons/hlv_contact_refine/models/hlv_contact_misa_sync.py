@@ -80,8 +80,18 @@ class ResPartner(models.Model):
                         _logger.error("MISA API Success=False for %s at page %s: %s", cat["type"], page_index, data.get("UserMessage"))
                         break
                     
-                    batch = data.get("Data", [])
-                    if not batch:
+                    batch_raw = data.get("Data", [])
+                    # MISA can return Data as a JSON-encoded string
+                    if isinstance(batch_raw, str):
+                        try:
+                            batch = json.loads(batch_raw)
+                        except Exception:
+                            _logger.error("Failed to parse MISA Data string: %s", batch_raw[:100])
+                            break
+                    else:
+                        batch = batch_raw
+
+                    if not batch or not isinstance(batch, list):
                         break
                     
                     misa_records.extend(batch)
@@ -114,6 +124,8 @@ class ResPartner(models.Model):
         misa_map_by_name = {}
         
         for r in misa_records:
+            if not isinstance(r, dict):
+                continue
             code = str(r.get('account_object_code') or '').strip()
             name = str(r.get('account_object_name') or r.get('account_object_name_finance') or '').strip()
             if code:
@@ -150,7 +162,7 @@ class ResPartner(models.Model):
                     vals['ref'] = obj_code
                 
                 if vals:
-                    partner.write(vals)
+                    partner.sudo().write(vals)
                     updated_count += 1
 
         _logger.info("MISA Contact Sync completed. Updated %s partners.", updated_count)
