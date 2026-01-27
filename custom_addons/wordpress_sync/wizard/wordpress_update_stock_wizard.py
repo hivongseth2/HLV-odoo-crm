@@ -25,6 +25,9 @@ class WordPressUpdateStockWizard(models.TransientModel):
     current_list_price = fields.Float(string='Giá bán lẻ hiện tại', readonly=True)
     new_list_price = fields.Float(string='Giá bán lẻ mới', required=True)
     
+    current_web_price = fields.Float(string='Giá Web hiện tại', readonly=True)
+    new_web_price = fields.Float(string='Giá Web mới', required=True)
+    
     current_combo_price = fields.Float(string='Giá combo hiện tại', readonly=True)
     new_combo_price = fields.Float(string='Giá combo mới', required=True)
     
@@ -46,6 +49,8 @@ class WordPressUpdateStockWizard(models.TransientModel):
             res.update({
                 'current_list_price': product.list_price,
                 'new_list_price': product.list_price,
+                'current_web_price': product.x_studio_ga_web,
+                'new_web_price': product.x_studio_ga_web,
                 'current_combo_price': product.x_wp_combo_price,
                 'new_combo_price': product.x_wp_combo_price,
                 'current_listed_price': product.x_studio_ga_hng_nim_yt,
@@ -89,7 +94,7 @@ class WordPressUpdateStockWizard(models.TransientModel):
             
         return res
 
-    @api.onchange('new_combo_price', 'new_list_price', 'new_listed_price', 'new_status')
+    @api.onchange('new_combo_price', 'new_web_price', 'new_listed_price', 'new_status')
     def _onchange_prices(self):
         """Update projected parent prices and status with Fallback Logic"""
         
@@ -98,10 +103,10 @@ class WordPressUpdateStockWizard(models.TransientModel):
             line.new_status = self.new_status
 
         # 1. Selling Price Projection (Sum of Components)
-        # Logic: If Combo Price > 0, use it. Else use List Price.
+        # Logic: If Combo Price > 0, use it. Else use Web Price.
         
-        effective_old = self.current_combo_price if self.current_combo_price else self.current_list_price
-        effective_new = self.new_combo_price if self.new_combo_price else self.new_list_price
+        effective_old = self.current_combo_price if self.current_combo_price else self.current_web_price
+        effective_new = self.new_combo_price if self.new_combo_price else self.new_web_price
         
         diff_selling = effective_new - effective_old
         
@@ -131,7 +136,9 @@ class WordPressUpdateStockWizard(models.TransientModel):
         vals = {}
         if self.new_list_price != self.current_list_price:
             vals['list_price'] = self.new_list_price
-            vals['x_studio_ga_web'] = self.new_list_price # Sync logic often uses this
+        
+        if self.new_web_price != self.current_web_price:
+             vals['x_studio_ga_web'] = self.new_web_price
             
         if self.new_combo_price != self.current_combo_price:
             vals['x_wp_combo_price'] = self.new_combo_price

@@ -11,12 +11,14 @@
                             <field name="product_id" readonly="1"/>
                             <field name="current_status" string="Tình trạng cũ"/>
                             <field name="current_list_price" widget="monetary"/>
+                            <field name="current_web_price" widget="monetary"/>
                             <field name="current_combo_price" widget="monetary"/>
                             <field name="current_listed_price" widget="monetary"/>
                         </group>
                         <group string="Cập nhật Mới">
                             <field name="new_status" widget="radio" class="oe_inline"/>
                             <field name="new_list_price" widget="monetary" class="oe_inline" style="font-weight: bold; color: #28a745;"/>
+                            <field name="new_web_price" widget="monetary" class="oe_inline" style="font-weight: bold; color: #0056b3;"/>
                             <field name="new_combo_price" widget="monetary" class="oe_inline" style="font-weight: bold; color: #17a2b8;"/>
                             <field name="new_listed_price" widget="monetary" class="oe_inline" style="font-weight: bold; color: #dc3545;"/>
                         </group>
@@ -60,7 +62,6 @@
         <field name="name">Cập nhật kho WordPress</field>
         <field name="res_model">wordpress.update.stock.wizard</field>
         <field name="view_mode">form</field>
-        <field name="target">new</field>
-        <field name="context">{'dialog_size': 'large'}</field>
+        <field name="target">current</field>
     </record>
 </odoo>
