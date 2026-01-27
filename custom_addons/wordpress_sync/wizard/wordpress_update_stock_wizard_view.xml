@@ -4,25 +4,42 @@
         <field name="name">wordpress.update.stock.wizard.form</field>
         <field name="model">wordpress.update.stock.wizard</field>
         <field name="arch" type="xml">
-            <form string="Cập nhật trạng thái kho WordPress">
-                <group>
-                    <field name="product_id"/>
-                    <field name="current_status"/>
-                    <field name="new_status"/>
-                </group>
-                
-                <label for="line_ids" string="Các sản phẩm Combo bị ảnh hưởng (Sẽ được cập nhật theo)"/>
-                <field name="line_ids">
-                    <list editable="bottom" create="0">
-                        <field name="to_update" widget="boolean_toggle"/>
-                        <field name="product_id" force_save="1" readonly="1"/>
-                        <field name="current_status" string="Trạng thái cũ" force_save="1" readonly="1"/>
-                    </list>
-                </field>
-                
+            <form string="Cập nhật An toàn (WordPress)">
+                <sheet>
+                    <group>
+                        <group string="Sản phẩm">
+                            <field name="product_id" readonly="1"/>
+                            <field name="current_status" string="Tình trạng cũ"/>
+                            <field name="current_list_price" widget="monetary"/>
+                            <field name="current_combo_price" widget="monetary"/>
+                            <field name="current_listed_price" widget="monetary"/>
+                        </group>
+                        <group string="Cập nhật Mới">
+                            <field name="new_status" widget="radio" class="oe_inline"/>
+                            <field name="new_list_price" widget="monetary" class="oe_inline" style="font-weight: bold; color: #28a745;"/>
+                            <field name="new_combo_price" widget="monetary" class="oe_inline" style="font-weight: bold; color: #17a2b8;"/>
+                            <field name="new_listed_price" widget="monetary" class="oe_inline" style="font-weight: bold; color: #dc3545;"/>
+                        </group>
+                    </group>
+                    
+                    <label for="line_ids" string="Các sản phẩm Combo bị ảnh hưởng (Dự kiến)"/>
+                    <field name="line_ids">
+                        <list editable="bottom" create="0">
+                            <field name="to_update" widget="boolean_toggle"/>
+                            <field name="product_id" force_save="1" readonly="1"/>
+                            <field name="qty_in_combo" string="SL" force_save="1" readonly="1" optional="show"/>
+                            
+                            <field name="current_parent_selling_price" string="Giá bán cũ" widget="monetary" force_save="1" readonly="1" optional="show"/>
+                            <field name="new_parent_selling_price" string="Giá bán mới" widget="monetary" decoration-bf="1" decoration-info="1" force_save="1" readonly="1" optional="show"/>
+                            
+                            <field name="current_parent_listed_price" string="Giá niêm yết cũ" widget="monetary" force_save="1" readonly="1" optional="hide"/>
+                            <field name="new_parent_listed_price" string="Giá niêm yết mới" widget="monetary" decoration-bf="1" force_save="1" readonly="1" optional="hide"/>
+                        </list>
+                    </field>
+                </sheet>
                 <footer>
-                    <button name="action_confirm" string="Xác nhận cập nhật" type="object" class="btn-primary"/>
-                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                    <button name="action_confirm" string="Xác nhận &amp; Đồng bộ" type="object" class="btn-primary" data-hotkey="q"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel" data-hotkey="z"/>
                 </footer>
             </form>
         </field>
@@ -33,5 +50,6 @@
         <field name="res_model">wordpress.update.stock.wizard</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
+        <field name="context">{'dialog_size': 'large'}</field>
     </record>
 </odoo>

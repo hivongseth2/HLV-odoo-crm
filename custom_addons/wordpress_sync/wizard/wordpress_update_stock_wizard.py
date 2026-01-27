@@ -22,8 +22,14 @@ class WordPressUpdateStockWizard(models.TransientModel):
     ], string='Trạng thái mới', required=True, default='outofstock')
 
     # Price Fields
-    current_price = fields.Float(string='Giá hiện tại', readonly=True)
-    new_price = fields.Float(string='Giá mới', required=True)
+    current_list_price = fields.Float(string='Giá bán lẻ hiện tại', readonly=True)
+    new_list_price = fields.Float(string='Giá bán lẻ mới', required=True)
+    
+    current_combo_price = fields.Float(string='Giá combo hiện tại', readonly=True)
+    new_combo_price = fields.Float(string='Giá combo mới', required=True)
+    
+    current_listed_price = fields.Float(string='Giá niêm yết hiện tại', readonly=True)
+    new_listed_price = fields.Float(string='Giá niêm yết mới', required=True)
 
     line_ids = fields.One2many('wordpress.update.stock.wizard.line', 'wizard_id', string='Sản phẩm Combo ảnh hưởng')
 
@@ -37,9 +43,14 @@ class WordPressUpdateStockWizard(models.TransientModel):
             res['current_status'] = product.x_wp_stock_status
             
             # Price init
-            current_price = product.x_studio_ga_web or product.list_price
-            res['current_price'] = current_price
-            res['new_price'] = current_price
+            res.update({
+                'current_list_price': product.list_price,
+                'new_list_price': product.list_price,
+                'current_combo_price': product.x_wp_combo_price,
+                'new_combo_price': product.x_wp_combo_price,
+                'current_listed_price': product.x_studio_ga_hng_nim_yt,
+                'new_listed_price': product.x_studio_ga_hng_nim_yt,
+            })
             
             # Compute lines
             lines = []
@@ -57,13 +68,19 @@ class WordPressUpdateStockWizard(models.TransientModel):
                 ], limit=1)
                 qty = relevant_line.product_qty if relevant_line else 1.0
                 
-                combo_price = combo.x_studio_ga_web or combo.list_price
+                # Parent Prices
+                # Parent Selling Price (computed_combo_selling_price or x_studio_ga_web)
+                p_selling = combo.x_studio_ga_web or combo.list_price
+                # Parent Listed Price
+                p_listed = combo.x_studio_ga_hng_nim_yt
 
                 lines.append((0, 0, {
                     'product_id': combo.id,
                     'current_status': combo.x_wp_stock_status,
-                    'current_price': combo_price,
-                    'new_price': combo_price, # Init same
+                    'current_parent_selling_price': p_selling,
+                    'new_parent_selling_price': p_selling,
+                    'current_parent_listed_price': p_listed,
+                    'new_parent_listed_price': p_listed,
                     'qty_in_combo': qty,
                     'to_update': True 
                 }))
@@ -72,27 +89,43 @@ class WordPressUpdateStockWizard(models.TransientModel):
             
         return res
 
-    @api.onchange('new_price')
-    def _onchange_new_price(self):
-        """Update projected parent prices when child price changes"""
-        if not self.current_price: return
-        diff_unit = self.new_price - self.current_price
-        for line in self.line_ids:
-            line.new_price = line.current_price + (diff_unit * line.qty_in_combo)
+    @api.onchange('new_combo_price', 'new_listed_price')
+    def _onchange_prices(self):
+        """Update projected parent prices"""
+        # 1. Combo Price Change -> Parent Selling Price
+        if self.current_combo_price is not False: 
+            diff_combo = self.new_combo_price - self.current_combo_price
+            for line in self.line_ids:
+                line.new_parent_selling_price = line.current_parent_selling_price + (diff_combo * line.qty_in_combo)
+
+        # 2. Listed Price Change -> Parent Listed Price
+        if self.current_listed_price is not False:
+            diff_listed = self.new_listed_price - self.current_listed_price
+            for line in self.line_ids:
+                line.new_parent_listed_price = line.current_parent_listed_price + (diff_listed * line.qty_in_combo)
 
     def action_confirm(self):
         self.ensure_one()
         
-        _logger.error(f"[Wizard-DEBUG] Confirming Update. Product: {self.product_id.name}, Status: {self.new_status}, Price: {self.new_price}")
+        _logger.error(f"[Wizard-DEBUG] Confirming Update. Product: {self.product_id.name}, Status: {self.new_status}")
         
         parents_to_update = self.line_ids.filtered(lambda l: l.to_update).mapped('product_id')
         
-        # 1. PRICE UPDATE (Standard Write)
-        price_changed = self.new_price != self.current_price
-        if price_changed:
-            vals = {'x_studio_ga_web': self.new_price, 'list_price': self.new_price}
+        # 1. PRICE UPDATE
+        vals = {}
+        if self.new_list_price != self.current_list_price:
+            vals['list_price'] = self.new_list_price
+            vals['x_studio_ga_web'] = self.new_list_price # Sync logic often uses this
+            
+        if self.new_combo_price != self.current_combo_price:
+            vals['x_wp_combo_price'] = self.new_combo_price
+            
+        if self.new_listed_price != self.current_listed_price:
+            vals['x_studio_ga_hng_nim_yt'] = self.new_listed_price
+
+        if vals:
             self.product_id.write(vals)
-            _logger.info(f"Updated Child Price to {self.new_price}")
+            _logger.info(f"Updated Child Prices: {vals}")
 
         # 2. STOCK UPDATE (SQL Force)
         status_changed = self.product_id.x_wp_stock_status != self.new_status
@@ -119,21 +152,13 @@ class WordPressUpdateStockWizard(models.TransientModel):
         
         # 3. VERIFICATION & SYNC
         
-        # Invalidate cache for BOTH fields
-        self.product_id.invalidate_recordset(['x_wp_stock_status', 'x_studio_ga_web', 'list_price'])
-        parents_to_update.invalidate_recordset(['x_wp_stock_status', 'x_studio_ga_web', 'list_price'])
-        
-        # Manually trigger sync
-        # Note: Price change triggers auto-sync via `write` override (for Child).
-        # But for Parents, Price update is triggered via `_update_parent_combo_prices` (called by child write).
-        # Stock update for parents needs manual trigger since we used SQL.
+        # Invalidate cache
+        self.product_id.invalidate_recordset(['x_wp_stock_status', 'x_studio_ga_web', 'list_price', 'x_wp_combo_price', 'x_studio_ga_hng_nim_yt'])
+        parents_to_update.invalidate_recordset(['x_wp_stock_status', 'x_studio_ga_web', 'list_price', 'x_studio_ga_hng_nim_yt'])
         
         # Trigger Sync for STOCK (Manual)
         _logger.error(f"[Wizard-DEBUG] Triggering manual stock sync...")
         
-        # Child Sync (Manual Stock + Price Auto)
-        # Price Auto Sync is queued by `write` above.
-        # Stock Manual Sync:
         self.product_id._auto_sync_stock_to_wordpress(old_value=child_old_status, new_value=self.new_status)
         
         # Parents Sync
@@ -141,22 +166,22 @@ class WordPressUpdateStockWizard(models.TransientModel):
              old_val = parent_old_statuses.get(p.id)
              p._auto_sync_stock_to_wordpress(old_value=old_val, new_value=self.new_status)
              
-             # Also Force Recompute Price for Parents (to be safe)
-             if price_changed:
+             # Force Recompute Price for Parents
+             if vals:
                  p._compute_combo_selling_price()
 
         # Log to Chatter
         msg_body = "<b>Cập nhật an toàn (Wizard):</b><ul>"
         if status_changed:
              msg_body += f"<li>Status: {self.new_status} (SQL Force)</li>"
-        if price_changed:
-             msg_body += f"<li>Price: {self.current_price:,.0f} -> {self.new_price:,.0f}</li>"
+        if vals:
+             msg_body += f"<li>Prices Updated: {vals}</li>"
         msg_body += "</ul>"
         
         self.product_id.message_post(body=msg_body)
         
         for p in parents_to_update:
-             p.message_post(body=f"Cập nhật theo linh kiện {self.product_id.name}:<br/>Status: {self.new_status} (Check DB: {p.x_wp_stock_status})")
+             p.message_post(body=f"Cập nhật theo linh kiện {self.product_id.name}:<br/>Status: {self.new_status}")
 
         return {'type': 'ir.actions.act_window_close'}
 
@@ -175,9 +200,13 @@ class WordPressUpdateStockWizardLine(models.TransientModel):
         ('discontinued', 'Ngừng kinh doanh'),
     ], string='Trạng thái hiện tại')
     
-    # Price Fields
-    current_price = fields.Float(string='Giá cũ', readonly=True, force_save=True)
-    new_price = fields.Float(string='Giá mới (Dự kiến)', readonly=True, force_save=True)
+    # Projected Parent Prices
+    current_parent_selling_price = fields.Float(string='Giá bán cũ', readonly=True, force_save=True)
+    new_parent_selling_price = fields.Float(string='Giá bán mới', readonly=True, force_save=True)
+    
+    current_parent_listed_price = fields.Float(string='Giá niêm yết cũ', readonly=True, force_save=True)
+    new_parent_listed_price = fields.Float(string='Giá niêm yết mới', readonly=True, force_save=True)
+    
     qty_in_combo = fields.Float(string='SL trong Combo', readonly=True)
     
     to_update = fields.Boolean(string='Cập nhật', default=True)
