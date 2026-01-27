@@ -71,49 +71,49 @@
                          When report action is triggered, it passes docids = wizard.ids.
                          So 'docs' are the wizard records. -->
                     
-                    <t t-set="print_type" t-value="wizard.print_type"/>
+                <t t-set="print_type" t-value="print_type"/>
 
-                    <!-- Assuming we iterate based on quantity here. 
-                         Standard Odoo reports usually prepare a list of (product, quantity) or explode it.
-                         Let's use a helper method from the wizard if available, or reproduce logic.
-                         In product.label.layout:
-                         dic = {product_tmpl_id: qty}
-                    -->
-                    
-                    <t t-foreach="wizard.product_tmpl_ids" t-as="product">
-                        <t t-set="qty" t-value="wizard.custom_quantity if wizard.custom_quantity > 0 else 1"/>
-                        <!-- If we want to support picking-like quantities, we would need to inspect how the wizard was called. 
-                             Standard wizard behaves:
-                             - If 'custom_quantity' is set, use it for all selected products.
-                             - If not (0), it tries to use context quantities (not applicable here typically).
-                        -->
-                        <t t-foreach="range(qty)" t-as="i">
-                            <div class="label-wrapper-35x22">
-                                <div class="label-container-35x22">
-                                    <div class="product-name-35x22">
-                                        <span t-field="product.name"/>
-                                    </div>
-                                    
-                                    <!-- Barcode Section -->
-                                    <t t-if="print_type == 'barcode' and product.barcode">
-                                        <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'Code128', 'width': 500, 'height': 120, 'img_style': 'width:95%; height:9mm; display:block; margin:0 auto;'}"/>
-                                        <div class="product-code-35x22">
-                                            <span t-field="product.barcode"/>
-                                        </div>
-                                    </t>
+                <t t-set="print_type" t-value="print_type"/>
 
-                                    <!-- QR Code Section -->
-                                    <t t-if="print_type == 'qr' and product.barcode">
-                                        <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'QR', 'width': 200, 'height': 200, 'img_style': 'width:12mm; height:12mm; display:block; margin:0 auto;'}"/>
-                                    </t>
-                                    
-                                    <t t-if="not product.barcode">
-                                        <div style="margin-top: 2px; font-size: 8px;">No Barcode</div>
-                                    </t>
+                <!-- Define a reusable call for the label content -->
+                <t t-name="label_content">
+                        <div class="label-wrapper-35x22">
+                            <div class="label-container-35x22">
+                                <div class="product-name-35x22">
+                                    <span t-field="product.name"/>
                                 </div>
+                                
+                                <!-- Barcode Section -->
+                                <t t-if="print_type == 'barcode' and product.barcode">
+                                    <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'Code128', 'width': 500, 'height': 120, 'img_style': 'width:95%; height:9mm; display:block; margin:0 auto;'}"/>
+                                    <div class="product-code-35x22">
+                                        <span t-field="product.barcode"/>
+                                    </div>
+                                </t>
+
+                                <!-- QR Code Section -->
+                                <t t-if="print_type == 'qr' and product.barcode">
+                                    <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'QR', 'width': 200, 'height': 200, 'img_style': 'width:12mm; height:12mm; display:block; margin:0 auto;'}"/>
+                                </t>
+                                
+                                <t t-if="not product.barcode">
+                                    <div style="margin-top: 2px; font-size: 8px;">No Barcode</div>
+                                </t>
                             </div>
-                        </t>
-                    </t>
+                        </div>
+                </t>
+
+                <!-- Loop for Product Templates -->
+                <t t-foreach="product_tmpl_ids" t-as="p_id">
+                    <t t-set="product" t-value="request.env['product.template'].browse(p_id)"/>
+                    <t t-call="label_content"/>
+                </t>
+
+                <!-- Loop for Product Variants -->
+                <t t-foreach="product_variant_ids" t-as="p_id">
+                    <t t-set="product" t-value="request.env['product.product'].browse(p_id)"/>
+                    <t t-call="label_content"/>
+                </t>
                 </t>
             </div>
         </t>
