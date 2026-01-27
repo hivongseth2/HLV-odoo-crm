@@ -23,12 +23,13 @@
                 </header>
             </xpath>
             
-            <!-- Add combo price field in pricing section -->
-            <xpath expr="//field[@name='x_studio_ga_web']" position="after">
-                <field name="x_wp_combo_price" 
-                       string="Giá bán trong combo"
-                       widget="monetary"
-                       options="{'currency_field': 'currency_id'}"/>
+            <!-- Add combo price field in pricing section (New Row after List Price) -->
+            <xpath expr="//div[field[@name='list_price']]" position="after">
+                <label for="x_wp_combo_price" string="Giá bán trong combo"/>
+                <div class="o_row">
+                    <field name="x_wp_combo_price" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                    <field name="computed_combo_selling_price" widget="monetary" options="{'currency_field': 'currency_id'}" class="oe_grey"/>
+                </div>
                 
                 <label for="x_wp_stock_status" string="Tình trạng WordPress"/>
                 <div class="o_row">
@@ -40,14 +41,6 @@
                             icon="fa-shield"
                             help="Cập nhật trạng thái và đồng bộ các Combo cha liên quan"/>
                 </div>
-            </xpath>
-            
-            <!-- Add computed combo price (readonly) -->
-            <xpath expr="//field[@name='x_studio_ga_web']" position="after">
-                <field name="computed_combo_selling_price" 
-                       string="Giá combo tính toán"
-                       widget="monetary"
-                       options="{'currency_field': 'currency_id'}"/>
             </xpath>
         </field>
     </record>
