@@ -1,6 +1,6 @@
 {
     'name': 'Product Label 3x3 (35x22mm)',
-    'version': '1.1',
+    'version': '1.0',
     'summary': 'In tem sản phẩm 3x3 kích thước 35x22mm cho Product Template',
     'description': """
         Module hỗ trợ in tem nhãn sản phẩm kích thước 35x22mm bố cục 3x3.
