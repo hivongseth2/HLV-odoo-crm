@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="action_report_product_label_3x3" model="ir.actions.report">
+    <record id="report_product_label_3x3" model="ir.actions.report">
         <field name="name">Tem Sản Phẩm 3x3 (35x22mm)</field>
-        <field name="model">product.template.label.wizard</field>
+        <field name="model">product.label.layout</field>
         <field name="report_type">qweb-pdf</field>
         <field name="report_name">product_label_3x3.report_product_label_3x3_template</field>
         <field name="report_file">product_label_3x3.report_product_label_3x3_template</field>
-        <field name="binding_type">report</field>
-        <field name="paperformat_id" ref="base.paperformat_euro"/> <!-- We will override CSS anyway, but keeping a default just in case -->
+        <field name="print_report_name">'Tem_San_Pham_3x3'</field>
+        <field name="binding_model_id" eval="False"/> <!-- No direct binding, called via wizard -->
+        <field name="paperformat_id" ref="product_label_3x3.paperformat_product_label_3x3_35x22"/>
     </record>
 </odoo>
