@@ -34,6 +34,7 @@ registry.category("ir.actions.report handlers").add(
             "custom_picking_label.report_label_35x22_template",
             "custom_picking_label.report_label_template",
             "product.report_producttemplatelabel_dymo",
+            "product_label_3x3.report_product_label_3x3_template",
         ];
         if (IGNORED_REPORTS.includes(action.report_name)) {
             return false;
