@@ -17,7 +17,8 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         comodel_name="res.partner",
         string="Nhà cung cấp",
         required=True,
-        context={"res_partner_search_mode": "supplier"},
+        context={"res_partner_search_mode": "supplier", "hlv_prioritize_company": True},
+        domain=[("type", "!=", "delivery")],
     )
     item_ids = fields.One2many(
         comodel_name="purchase.request.line.make.purchase.order.item",
