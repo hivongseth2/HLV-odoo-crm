@@ -10,6 +10,17 @@ from odoo.tools import html_escape
 class PurchaseOrder(models.Model):
     _inherit = "purchase.order"
 
+    hlv_product_ids = fields.Many2many(
+        comodel_name="product.product",
+        string="Sản phẩm yêu cầu",
+        compute="_compute_hlv_product_ids",
+    )
+
+    @api.depends("order_line.product_id")
+    def _compute_hlv_product_ids(self):
+        for rec in self:
+            rec.hlv_product_ids = rec.order_line.mapped("product_id")
+
     def _purchase_request_confirm_message_content(self, request, request_dict=None):
         self.ensure_one()
         if not request_dict:

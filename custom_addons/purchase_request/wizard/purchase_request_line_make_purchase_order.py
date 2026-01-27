@@ -13,11 +13,20 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
     _name = "purchase.request.line.make.purchase.order"
     _description = "Tạo đơn mua hàng từ chi tiết yêu cầu mua hàng"
 
+    hlv_product_ids = fields.Many2many(
+        comodel_name="product.product",
+        string="Sản phẩm yêu cầu",
+        compute="_compute_hlv_product_ids",
+    )
     supplier_id = fields.Many2one(
         comodel_name="res.partner",
         string="Nhà cung cấp",
         required=True,
-        context={"res_partner_search_mode": "supplier", "hlv_prioritize_company": True},
+        context={
+            "res_partner_search_mode": "supplier",
+            "hlv_prioritize_company": True,
+            "hlv_product_ids": "hlv_product_ids",
+        },
         domain=[("type", "!=", "delivery")],
     )
     item_ids = fields.One2many(
@@ -37,6 +46,11 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
             "nếu trùng cả Ngày dự kiến nhận hàng. Nếu khác ngày, hệ thống sẽ tách thành một dòng riêng."
         ),
     )
+
+    @api.depends("item_ids.product_id")
+    def _compute_hlv_product_ids(self):
+        for rec in self:
+            rec.hlv_product_ids = rec.item_ids.mapped("product_id")
 
     @api.model
     def _prepare_item(self, line):
