@@ -78,8 +78,19 @@ class WordPressUpdateStockWizard(models.TransientModel):
                 p_selling = combo.x_studio_ga_web or combo.list_price
                 # Parent Listed Price
                 p_listed = combo.x_studio_ga_hng_nim_yt
-                # Parent List Price
-                p_list = combo.list_price
+                
+                # Parent List Price (Computed from Components)
+                # Find active phantom BOM
+                bom = self.env['mrp.bom'].search([
+                    ('product_tmpl_id', '=', combo.id), 
+                    ('type', '=', 'phantom'), 
+                    ('active', '=', True)
+                ], limit=1)
+                
+                if bom:
+                    p_list = sum(l.product_id.list_price * l.product_qty for l in bom.bom_line_ids)
+                else:
+                    p_list = combo.list_price
 
                 lines.append((0, 0, {
                     'product_id': combo.id,

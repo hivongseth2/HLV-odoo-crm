@@ -65,6 +65,6 @@
         <field name="name">Cập nhật kho WordPress</field>
         <field name="res_model">wordpress.update.stock.wizard</field>
         <field name="view_mode">form</field>
-        <field name="target">current</field>
+        <field name="target">new</field>
     </record>
 </odoo>
