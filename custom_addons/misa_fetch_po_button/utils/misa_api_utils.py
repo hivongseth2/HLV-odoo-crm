@@ -334,7 +334,7 @@ class MisaApiUtils(models.AbstractModel):
     def _fetch_with_retry(self, url, headers, payload):
         """Fetch API with retry on token expiration"""
         response = requests.post(url, headers=headers, json=payload)
-        _logger.info("Response text: %s", response.text)
+        # response text log removed to comply with user request
         if response.status_code == 401:
             _logger.warning("🔁 Token hết hạn, đang đăng nhập lại...")
             new_token = self._get_misa_token()
