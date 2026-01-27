@@ -6,7 +6,7 @@
         <field name="inherit_id" ref="product.product_label_layout_form"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='print_format']" position="after">
-                <field name="print_type" widget="radio" attrs="{'invisible': [('print_format', '!=', '3x3_35x22')]}"/>
+                <field name="print_type" widget="radio" invisible="print_format != '3x3_35x22'"/>
             </xpath>
         </field>
     </record>
