@@ -1,5 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <template id="report_product_label_3x3_content">
+        <div class="label-wrapper-35x22">
+            <div class="label-container-35x22">
+                <div class="product-name-35x22">
+                    <span t-field="product.name"/>
+                </div>
+                
+                <!-- Barcode Section -->
+                <t t-if="print_type == 'barcode' and product.barcode">
+                    <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'Code128', 'width': 500, 'height': 120, 'img_style': 'width:95%; height:9mm; display:block; margin:0 auto;'}"/>
+                    <div class="product-code-35x22">
+                        <span t-field="product.barcode"/>
+                    </div>
+                </t>
+
+                <!-- QR Code Section -->
+                <t t-if="print_type == 'qr' and product.barcode">
+                    <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'QR', 'width': 200, 'height': 200, 'img_style': 'width:12mm; height:12mm; display:block; margin:0 auto;'}"/>
+                </t>
+                
+                <t t-if="not product.barcode">
+                    <div style="margin-top: 2px; font-size: 8px;">No Barcode</div>
+                </t>
+            </div>
+        </div>
+    </template>
+
     <template id="report_product_label_3x3_template">
         <t t-call="web.basic_layout">
             <div class="page">
@@ -59,61 +86,22 @@
                         margin-top: 2px;
                     }
                 </style>
-                <t t-foreach="docs" t-as="wizard">
-                    <!-- Note: wizard is a product.label.layout record -->
-                    <!-- In Odoo 16+, wizard.process() prepares qweb_context with 'products' if we extend it, 
-                         or we can call wizard.get_data_for_report() if we defined it, 
-                         or in standard product.label.layout, the data is usually passed via docids. 
-                         Wait, product.label.layout doesn't rely on QWeb iteration of itself typically for the content,
-                         it relies on 'quantity_by_product' dictionary or similar logic. 
-                         
-                         However, in my override of _prepare_report_data, I passed xml_id. 
-                         When report action is triggered, it passes docids = wizard.ids.
-                         So 'docs' are the wizard records. -->
-                    
+                
+                <!-- We do NOT iterate over docs (wizard) because it might be deleted. 
+                     We use data passed in context. -->
+                
                 <t t-set="print_type" t-value="print_type"/>
-
-                <t t-set="print_type" t-value="print_type"/>
-
-                <!-- Define a reusable call for the label content -->
-                <t t-name="label_content">
-                        <div class="label-wrapper-35x22">
-                            <div class="label-container-35x22">
-                                <div class="product-name-35x22">
-                                    <span t-field="product.name"/>
-                                </div>
-                                
-                                <!-- Barcode Section -->
-                                <t t-if="print_type == 'barcode' and product.barcode">
-                                    <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'Code128', 'width': 500, 'height': 120, 'img_style': 'width:95%; height:9mm; display:block; margin:0 auto;'}"/>
-                                    <div class="product-code-35x22">
-                                        <span t-field="product.barcode"/>
-                                    </div>
-                                </t>
-
-                                <!-- QR Code Section -->
-                                <t t-if="print_type == 'qr' and product.barcode">
-                                    <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'QR', 'width': 200, 'height': 200, 'img_style': 'width:12mm; height:12mm; display:block; margin:0 auto;'}"/>
-                                </t>
-                                
-                                <t t-if="not product.barcode">
-                                    <div style="margin-top: 2px; font-size: 8px;">No Barcode</div>
-                                </t>
-                            </div>
-                        </div>
-                </t>
 
                 <!-- Loop for Product Templates -->
                 <t t-foreach="product_tmpl_ids" t-as="p_id">
                     <t t-set="product" t-value="request.env['product.template'].browse(p_id)"/>
-                    <t t-call="label_content"/>
+                    <t t-call="product_label_3x3.report_product_label_3x3_content"/>
                 </t>
 
                 <!-- Loop for Product Variants -->
                 <t t-foreach="product_variant_ids" t-as="p_id">
                     <t t-set="product" t-value="request.env['product.product'].browse(p_id)"/>
-                    <t t-call="label_content"/>
-                </t>
+                    <t t-call="product_label_3x3.report_product_label_3x3_content"/>
                 </t>
             </div>
         </t>
