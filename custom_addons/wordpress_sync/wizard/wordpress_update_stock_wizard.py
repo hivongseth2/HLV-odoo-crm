@@ -164,7 +164,7 @@ class WordPressUpdateStockWizard(models.TransientModel):
                 (self.new_status, self.product_id.id)
             )
 
-        self.env.cr.commit() # FORCE PERSISTENCE
+        self.env.cr.commit() 
         
         # 3. VERIFICATION & SYNC
         
