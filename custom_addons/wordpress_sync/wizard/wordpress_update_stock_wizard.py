@@ -78,12 +78,16 @@ class WordPressUpdateStockWizard(models.TransientModel):
                 p_selling = combo.x_studio_ga_web or combo.list_price
                 # Parent Listed Price
                 p_listed = combo.x_studio_ga_hng_nim_yt
+                # Parent List Price
+                p_list = combo.list_price
 
                 lines.append((0, 0, {
                     'product_id': combo.id,
                     'current_status': combo.x_wp_stock_status,
                     'current_parent_selling_price': p_selling,
                     'new_parent_selling_price': p_selling,
+                    'current_parent_list_price': p_list,
+                    'new_parent_list_price': p_list,
                     'current_parent_listed_price': p_listed,
                     'new_parent_listed_price': p_listed,
                     'qty_in_combo': qty,
@@ -118,7 +122,13 @@ class WordPressUpdateStockWizard(models.TransientModel):
              for line in self.line_ids:
                 line.new_parent_selling_price = line.current_parent_selling_price
 
-        # 2. Listed Price Change -> Parent Listed Price (Always Sum of Listed)
+        # 2. List Price Change -> Parent List Price (Always Sum)
+        if self.current_list_price is not False:
+            diff_list = self.new_list_price - self.current_list_price
+            for line in self.line_ids:
+                line.new_parent_list_price = line.current_parent_list_price + (diff_list * line.qty_in_combo)
+
+        # 3. Listed Price Change -> Parent Listed Price (Always Sum of Listed)
         # Note: Listed Price usually doesn't have "Combo Price" fallback logic, it's just Sum of Listed.
         if self.current_listed_price is not False:
             diff_listed = self.new_listed_price - self.current_listed_price
@@ -230,8 +240,11 @@ class WordPressUpdateStockWizardLine(models.TransientModel):
     ], string='Trạng thái dự kiến')
     
     # Projected Parent Prices
-    current_parent_selling_price = fields.Float(string='Giá bán cũ', readonly=True, force_save=True)
+    current_parent_selling_price = fields.Float(string='Giá bán cũ', readonly=True, force_save=True) # Web Price
     new_parent_selling_price = fields.Float(string='Giá bán mới', readonly=True, force_save=True)
+    
+    current_parent_list_price = fields.Float(string='Giá bán lẻ cũ', readonly=True, force_save=True)
+    new_parent_list_price = fields.Float(string='Giá bán lẻ mới', readonly=True, force_save=True)
     
     current_parent_listed_price = fields.Float(string='Giá niêm yết cũ', readonly=True, force_save=True)
     new_parent_listed_price = fields.Float(string='Giá niêm yết mới', readonly=True, force_save=True)

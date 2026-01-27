@@ -42,6 +42,9 @@
                             
                             <field name="qty_in_combo" string="SL" force_save="1" readonly="1" optional="show"/>
                             
+                            <field name="current_parent_list_price" string="Giá bán lẻ cũ" widget="monetary" force_save="1" readonly="1" optional="show"/>
+                            <field name="new_parent_list_price" string="Giá bán lẻ mới" widget="monetary" decoration-bf="1" decoration-info="1" force_save="1" readonly="1" optional="show"/>
+                            
                             <field name="current_parent_selling_price" string="Giá bán web cũ" widget="monetary" force_save="1" readonly="1" optional="show"/>
                             <field name="new_parent_selling_price" string="Giá bán web mới" widget="monetary" decoration-bf="1" decoration-info="1" force_save="1" readonly="1" optional="show"/>
                             
