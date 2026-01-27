@@ -46,13 +46,13 @@ class ResPartner(models.Model):
         _logger.info("Starting MISA Contact Sync...")
         
         while True:
-            # Based on user's response example, this table is likely AccountObject
-            # We assume a standard MISA grid payload structure
+            # Based on MISA error message, 'dataType' is required.
+            # In AMIS Kế toán, dataType 1 usually refers to AccountObject.
             payload = {
-                "TableName": "AccountObject",
-                "PageIndex": page_index,
-                "PageSize": page_size,
-                "Columns": "account_object_id,account_object_code,account_object_name,company_tax_code,address",
+                "dataType": 1,
+                "pageIndex": page_index,
+                "pageSize": page_size,
+                "columns": "account_object_id,account_object_code,account_object_name,company_tax_code,address",
                 "loadMode": 2
             }
 
