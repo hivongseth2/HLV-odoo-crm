@@ -11,12 +11,14 @@
                             <field name="product_id" readonly="1"/>
                             <field name="current_status" string="Tình trạng cũ"/>
                             <field name="current_list_price" widget="monetary"/>
+                            <field name="current_web_price" widget="monetary"/>
                             <field name="current_combo_price" widget="monetary"/>
                             <field name="current_listed_price" widget="monetary"/>
                         </group>
                         <group string="Cập nhật Mới">
                             <field name="new_status" widget="radio" class="oe_inline"/>
                             <field name="new_list_price" widget="monetary" class="oe_inline" style="font-weight: bold; color: #28a745;"/>
+                            <field name="new_web_price" widget="monetary" class="oe_inline" style="font-weight: bold; color: #0056b3;"/>
                             <field name="new_combo_price" widget="monetary" class="oe_inline" style="font-weight: bold; color: #17a2b8;"/>
                             <field name="new_listed_price" widget="monetary" class="oe_inline" style="font-weight: bold; color: #dc3545;"/>
                         </group>
@@ -27,10 +29,21 @@
                         <list editable="bottom" create="0">
                             <field name="to_update" widget="boolean_toggle"/>
                             <field name="product_id" force_save="1" readonly="1"/>
+                            
+                            <field name="current_status" string="TT kho cũ" force_save="1" readonly="1" optional="show" widget="badge"
+                                   decoration-success="current_status == 'instock'"
+                                   decoration-danger="current_status == 'outofstock'"
+                                   decoration-warning="current_status == 'discontinued'"/>
+                                   
+                            <field name="new_status" string="TT kho mới" force_save="1" readonly="1" optional="show" widget="badge"
+                                   decoration-success="new_status == 'instock'"
+                                   decoration-danger="new_status == 'outofstock'"
+                                   decoration-warning="new_status == 'discontinued'"/>
+                            
                             <field name="qty_in_combo" string="SL" force_save="1" readonly="1" optional="show"/>
                             
-                            <field name="current_parent_selling_price" string="Giá bán cũ" widget="monetary" force_save="1" readonly="1" optional="show"/>
-                            <field name="new_parent_selling_price" string="Giá bán mới" widget="monetary" decoration-bf="1" decoration-info="1" force_save="1" readonly="1" optional="show"/>
+                            <field name="current_parent_selling_price" string="Giá bán web cũ" widget="monetary" force_save="1" readonly="1" optional="show"/>
+                            <field name="new_parent_selling_price" string="Giá bán web mới" widget="monetary" decoration-bf="1" decoration-info="1" force_save="1" readonly="1" optional="show"/>
                             
                             <field name="current_parent_listed_price" string="Giá niêm yết cũ" widget="monetary" force_save="1" readonly="1" optional="hide"/>
                             <field name="new_parent_listed_price" string="Giá niêm yết mới" widget="monetary" decoration-bf="1" force_save="1" readonly="1" optional="hide"/>
@@ -49,7 +62,6 @@
         <field name="name">Cập nhật kho WordPress</field>
         <field name="res_model">wordpress.update.stock.wizard</field>
         <field name="view_mode">form</field>
-        <field name="target">new</field>
-        <field name="context">{'dialog_size': 'large'}</field>
+        <field name="target">current</field>
     </record>
 </odoo>
