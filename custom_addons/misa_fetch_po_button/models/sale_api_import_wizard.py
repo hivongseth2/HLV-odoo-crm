@@ -1235,25 +1235,9 @@ class SaleApiImportWizard(models.TransientModel):
                                 sale_ok=True
                             )
                         elif is_combo_child:
-                            # COMBO CON: chỉ get product (KHÔNG UPDATE cost vì MISA không trả giá đúng)
-                            # Tìm product existing TRƯỚC, nếu chưa có mới tạo với cost = 0
-                            product = self.env['product.product'].search([
-                                ('default_code', '=', product_code)
-                            ], limit=1)
-                            
-                            if not product:
-                                # Chưa có → tạo mới với cost tạm = 0 (sẽ được cập nhật từ purchase order sau)
-                                _logger.info("🆕 Tạo product mới cho combo child: %s (cost tạm = 0)", product_code)
-                                product = odoo_utils._get_or_create_product(
-                                    code=product_code,
-                                    name=description,
-                                    unit_name=uom_name,
-                                    cost=0.0,  # Cost tạm, không lấy từ MISA vì không đúng
-                                    product_type="consu",
-                                    purchase_ok=True,
-                                    sale_ok=True
-                                )
-                            # Nếu đã có → dùng luôn, KHÔNG cập nhật cost
+                            # COMBO CON: Bỏ qua không tạo dòng SO (đã có BoM Kit ở parent)
+                            _logger.info("ℹ️ Skip combo child line: %s", product_code)
+                            continue
                         else:
                             # DÒNG THƯỜNG: tạo/cập nhật product với đầy đủ thông tin
                             product = odoo_utils._get_or_create_product(
@@ -1297,26 +1281,9 @@ class SaleApiImportWizard(models.TransientModel):
                             # MISA không có thuế (null) → Clear thuế trong Odoo (không dùng default)
                             vals_line['tax_id'] = [(5, 0, 0)]  # Unlink all taxes
                         
-                        # ===== 🆕 STUDIO FIELDS =====
-                        if is_combo_child:
-                            # Dòng con combo: đánh dấu + lưu mã cha - TRA CỨU THEO MISA LINE ID
-                            misa_line_id = line.get("ID")
-                            parent_code = combo_parent_map.get(misa_line_id, False)
-                            vals_line['x_studio_is_combo_child'] = True
-                            vals_line['x_studio_combo_parent_code'] = parent_code
-                            
-                            if parent_code:
-                                _logger.info("✅ Combo child '%s' (ID=%s) → parent '%s'", 
-                                           product_code, misa_line_id, parent_code)
-                            else:
-                                _logger.warning("⚠️ Combo child '%s' (ID=%s) KHÔNG tìm thấy parent trong map! IsChildProduct=%s", 
-                                              product_code, misa_line_id, line.get("IsChildProduct"))
-                                _logger.warning("   ParentProductID=%s, ParentProductIDText=%s", 
-                                              line.get("ParentProductID"), line.get("ParentProductIDText"))
-                        else:
-                            # Dòng cha combo hoặc dòng thường
-                            vals_line['x_studio_is_combo_child'] = False
-                            vals_line['x_studio_combo_parent_code'] = False
+                        # Studio fields (Cleaned up)
+                        vals_line['x_studio_is_combo_child'] = False
+                        vals_line['x_studio_combo_parent_code'] = False
                         
                         # ===== PRODUCTION STATUS FROM MISA =====
                         production_status_text = line.get("CustomField4") or ""
@@ -1513,23 +1480,9 @@ class SaleApiImportWizard(models.TransientModel):
                                     sale_ok=True
                                 )
                             elif is_combo_child:
-                                # COMBO CON: chỉ get product (KHÔNG UPDATE cost vì MISA không trả giá đúng)
-                                product = self.env['product.product'].search([
-                                    ('default_code', '=', product_code)
-                                ], limit=1)
-                                
-                                if not product:
-                                    # Chưa có → tạo mới với cost tạm = 0
-                                    _logger.info("🆕 Tạo product mới cho combo child: %s (cost tạm = 0)", product_code)
-                                    product = odoo_utils._get_or_create_product(
-                                        code=product_code,
-                                        name=description,
-                                        unit_name=uom_name,
-                                        cost=0.0,  # Cost tạm
-                                        product_type="consu",
-                                        purchase_ok=True,
-                                        sale_ok=True
-                                    )
+                                # COMBO CON: Bỏ qua không tạo dòng SO
+                                _logger.info("ℹ️ Skip combo child line: %s", product_code)
+                                continue
                                 # Nếu đã có → dùng luôn, KHÔNG cập nhật cost
                             else:
                                 # DÒNG THƯỜNG: có giá đầy đủ
@@ -1574,20 +1527,9 @@ class SaleApiImportWizard(models.TransientModel):
                                 # MISA không có thuế → Clear thuế
                                 line_vals['tax_id'] = [(5, 0, 0)]
                             
-                            # ===== 🆕 STUDIO FIELDS =====
-                            if is_combo_child:
-                                # Dòng con combo - TRA CỨU THEO MISA LINE ID
-                                misa_line_id = line.get("ID")
-                                parent_code = combo_parent_map_global.get(misa_line_id, False)
-                                line_vals['x_studio_is_combo_child'] = True
-                                line_vals['x_studio_combo_parent_code'] = parent_code
-                                if not parent_code:
-                                    _logger.warning("⚠️ Multi-warehouse: Child '%s' (ID=%s) không tìm thấy parent!", 
-                                                  product_code, misa_line_id)
-                            else:
-                                # Dòng cha combo hoặc dòng thường
-                                line_vals['x_studio_is_combo_child'] = False
-                                line_vals['x_studio_combo_parent_code'] = False
+                            # Studio fields (Cleaned up)
+                            line_vals['x_studio_is_combo_child'] = False
+                            line_vals['x_studio_combo_parent_code'] = False
                             
                             # ===== PRODUCTION STATUS FROM MISA =====
                             production_status_text = line.get("CustomField4") or ""
