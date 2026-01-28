@@ -191,7 +191,7 @@ class BarcodeShipper {
         }
 
         this.html5QrCode = new Html5Qrcode(readerId);
-        const config = { fps: 10, qrbox: { width: 280, height: 150 } };
+        const config = { fps: 20, qrbox: { width: 280, height: 150 } };
 
         try {
             await this.html5QrCode.start(
@@ -246,7 +246,7 @@ class BarcodeShipper {
                 input.value = decodedText;
                 this.scanItem();
                 this.html5QrCode.pause();
-                setTimeout(() => this.html5QrCode.resume(), 200);
+                setTimeout(() => this.html5QrCode.resume(), 500);
             }
         }
     }
