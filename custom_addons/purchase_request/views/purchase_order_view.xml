@@ -24,6 +24,10 @@
                     icon="fa-folder-open-o"
                 />
             </xpath>
+            <xpath expr="//header/button[@name='button_confirm']" position="attributes">
+                <attribute name="states">draft,sent</attribute>
+            </xpath>
+
         </field>
     </record>
     <record id="purchase_order_line_form2" model="ir.ui.view">
