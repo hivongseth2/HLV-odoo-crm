@@ -53,19 +53,30 @@ class MisaApiUtils(models.AbstractModel):
             if not target_tmpl or not children_list:
                 return
 
-            # 1) Tìm BOM hiện có (active) cho sản phẩm này
+            # 1) PRE-FILTER: Lọc danh sách con hợp lệ trước
+            # Tránh trường hợp children_list có item rác nhưng không có ProductIDText -> tạo BoM rỗng
+            valid_children = []
+            seen_codes = set()
+            for ch in children_list:
+                c_code = (ch.get('ProductIDText') or '').strip()
+                if c_code and c_code not in seen_codes:
+                    seen_codes.add(c_code)
+                    valid_children.append(ch)
+            
+            if not valid_children:
+                _logger.warning("⚠️ Không tìm thấy children hợp lệ cho combo %s. Bỏ qua tạo BoM.", target_tmpl.display_name)
+                return
+
+            # 2) Tìm BOM hiện có (active) cho sản phẩm này
             existing_bom = MrpBom.search([
                 ('product_tmpl_id', '=', target_tmpl.id),
                 ('active', '=', True)
             ], limit=1)
 
-            # 2) Nếu có BOM cũ -> xóa các lines và cập nhật
+            # 3) Nếu có BOM cũ -> xóa các lines và cập nhật
             if existing_bom:
-                # Xóa tất cả BOM lines cũ
                 if existing_bom.bom_line_ids:
                     existing_bom.bom_line_ids.sudo().unlink()
-                    _logger.info("🗑️ Đã xóa %d BOM lines cũ của %s", 
-                                len(existing_bom.bom_line_ids), target_tmpl.display_name)
                 bom = existing_bom
             else:
                 # Tạo BOM mới (Kit/phantom)
@@ -73,28 +84,14 @@ class MisaApiUtils(models.AbstractModel):
                     'product_tmpl_id': target_tmpl.id,
                     'type': 'phantom',  # Kit - tự động giao các thành phần
                     'product_qty': 1.0,
-                    'code': f'BOM-MISA: {combo_code}',
+                    'code': f'BOM-MISA: {target_tmpl.default_code}',
                 })
                 _logger.info("✅ Đã tạo BOM Kit mới cho %s (id=%s)", target_tmpl.display_name, bom.id)
 
-            # 3) Loại bỏ trùng lặp: gom theo ProductIDText
-            seen_codes = set()
-            unique_children = []
-            for ch in children_list:
-                c_code = (ch.get('ProductIDText') or '').strip()
-                if c_code and c_code not in seen_codes:
-                    seen_codes.add(c_code)
-                    unique_children.append(ch)
-            
-            if len(unique_children) < len(children_list):
-                _logger.info("🔧 Đã loại bỏ %d dòng con trùng lặp", len(children_list) - len(unique_children))
-
             # 4) Tạo BOM lines cho từng child
             created = 0
-            for ch in unique_children:
+            for ch in valid_children:
                 c_code = (ch.get('ProductIDText') or '').strip()
-                if not c_code:
-                    continue
                 
                 c_name = (ch.get('Description') or c_code).strip()
                 c_uom_name = (ch.get('UnitIDText') or 'Cái').strip()
