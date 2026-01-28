@@ -25,8 +25,13 @@
                     icon="fa-folder-open-o"
                 />
             </xpath>
-            <xpath expr="//header/button[@name='button_confirm']" position="attributes">
-                <attribute name="invisible">state not in ('draft', 'sent')</attribute>
+            <xpath expr="//header/button[@name='button_confirm']" position="replace">
+                <button name="button_confirm" 
+                        type="object" 
+                        string="Xác nhận đơn hàng" 
+                        invisible="state not in ('draft', 'sent')" 
+                        class="oe_highlight" 
+                        data-hotkey="v"/>
             </xpath>
 
         </field>
