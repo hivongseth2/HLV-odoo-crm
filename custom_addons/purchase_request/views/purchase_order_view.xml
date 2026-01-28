@@ -25,7 +25,7 @@
                 />
             </xpath>
             <xpath expr="//header/button[@name='button_confirm']" position="attributes">
-                <attribute name="states">draft,sent</attribute>
+                <attribute name="invisible">state not in ('draft', 'sent')</attribute>
             </xpath>
 
         </field>
