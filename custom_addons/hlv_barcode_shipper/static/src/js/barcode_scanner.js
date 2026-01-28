@@ -166,7 +166,7 @@ class BarcodeShipper {
         }
 
         this.html5QrCode = new Html5Qrcode(readerId);
-        const config = { fps: 10, qrbox: { width: 280, height: 150 } };
+        const config = { fps: 20, qrbox: { width: 280, height: 150 } };
 
         // Support Code 128 and QR Code
         const formatsToSupport = [
@@ -241,7 +241,7 @@ class BarcodeShipper {
                 // Continuous scanning: DO NOT stop camera.
                 // Just pause briefly to avoid double scans
                 this.html5QrCode.pause();
-                setTimeout(() => this.html5QrCode.resume(), 1500);
+                setTimeout(() => this.html5QrCode.resume(), 500);
             }
         }
     }
