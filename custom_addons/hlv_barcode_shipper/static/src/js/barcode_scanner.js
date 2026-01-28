@@ -135,13 +135,39 @@ class BarcodeShipper {
     }
 
     playSound(type = 'success') {
+        // 1. Vibration
+        if (navigator.vibrate) {
+            if (type === 'success') navigator.vibrate(200);
+            else navigator.vibrate([100, 50, 100]);
+        }
+
+        // 2. Sound (AudioContext)
         try {
-            const soundPath = type === 'success'
-                ? '/custom_barcode_scan_redirect/static/src/sound/success.mp3'
-                : '/custom_barcode_scan_redirect/static/src/sound/error.mp3';
-            new Audio(soundPath).play().catch(() => { });
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+
+            const ctx = new AudioContext();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            if (type === 'success') {
+                osc.type = 'sine';
+                osc.frequency.value = 1000; // 1000Hz beep
+                gain.gain.value = 0.1;
+                osc.start();
+                osc.stop(ctx.currentTime + 0.15); // 150ms
+            } else {
+                osc.type = 'sawtooth';
+                osc.frequency.value = 200; // Low buzz
+                gain.gain.value = 0.1;
+                osc.start();
+                osc.stop(ctx.currentTime + 0.3);
+            }
         } catch (e) {
-            console.warn('Sound play failed:', e);
+            console.warn('Audio play failed:', e);
         }
     }
 
