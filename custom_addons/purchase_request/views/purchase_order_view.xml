@@ -29,8 +29,9 @@
                 <button name="button_confirm" 
                         type="object" 
                         string="Xác nhận đơn hàng" 
-                        invisible="state not in ('draft', 'sent')" 
+                        states="draft,sent"
                         class="oe_highlight" 
+                        groups="purchase.group_purchase_user"
                         data-hotkey="v"/>
             </xpath>
 
