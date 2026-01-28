@@ -1217,7 +1217,7 @@ class SaleApiImportWizard(models.TransientModel):
                             # COMBO CHA: tạo combo product
                             combo_product = misa_utils.get_or_create_combo_product(
                                 combo_data=line,
-                                children_data=[],  # util tự fetch children nếu cần
+                                children_data=children_by_parent.get(product_code, []), 
                                 env=self.env,
                                 sale_headers=sale_headers,
                             )
@@ -1476,7 +1476,7 @@ class SaleApiImportWizard(models.TransientModel):
                                 # COMBO CHA
                                 combo_product = misa_utils.get_or_create_combo_product(
                                     combo_data=line,
-                                    children_data=[],
+                                    children_data=children_by_parent_global.get(product_code, []),
                                     env=self.env,
                                     sale_headers=sale_headers,
                                 )
