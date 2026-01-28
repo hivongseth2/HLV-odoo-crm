@@ -25,13 +25,13 @@
                     icon="fa-folder-open-o"
                 />
             </xpath>
-            <xpath expr="//header/button[@name='button_confirm']" position="replace">
+            <xpath expr="//header/button[@name='button_confirm']" position="after">
                 <button name="button_confirm" 
                         type="object" 
                         string="Xác nhận đơn hàng" 
-                        invisible="state == 'purchase' or state == 'done' or state == 'cancel'"
+                        invisible="state != 'sent'"
                         class="oe_highlight" 
-                        data-hotkey="v"/>
+                        data-hotkey="x"/>
             </xpath>
 
         </field>
