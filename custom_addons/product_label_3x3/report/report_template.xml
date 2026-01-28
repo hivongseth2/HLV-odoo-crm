@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="report_product_label_3x3_content">
+        <div class="label-wrapper-35x22">
+            <div class="label-container-35x22">
+                <div class="product-name-35x22">
+                    <span t-field="product.name"/>
+                </div>
+                
+                <!-- Barcode Section -->
+                <t t-if="print_type == 'barcode' and product.barcode">
+                    <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'Code128', 'width': 500, 'height': 120, 'img_style': 'width:95%; height:9mm; display:block; margin:0 auto;'}"/>
+                    <div class="product-code-35x22">
+                        <span t-field="product.barcode"/>
+                    </div>
+                </t>
+
+                <!-- QR Code Section -->
+                <t t-if="print_type == 'qr' and product.barcode">
+                    <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'QR', 'width': 200, 'height': 200, 'img_style': 'width:12mm; height:12mm; display:block; margin:0 auto;'}"/>
+                </t>
+                
+                <t t-if="not product.barcode">
+                    <div style="margin-top: 2px; font-size: 8px;">No Barcode</div>
+                </t>
+            </div>
+        </div>
+    </template>
+
+    <template id="report_product_label_3x3_template">
+        <t t-call="web.basic_layout">
+            <div class="page">
+                <style>
+                    /* Reset Standard Odoo Report Padding/Margins */
+                    body, html {
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        width: 100%;
+                    }
+                    .page {
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        border: none !important;
+                    }
+                    .container {
+                        padding: 0 !important;
+                        margin: 0 !important;
+                    }
+                    /* Custom 3-Column Label Styling */
+                    .label-wrapper-35x22 {
+                        width: 33mm; /* 33mm * 3 = 99mm (fits in 105mm with margin) */
+                        height: 19.5mm; /* Buffer vertical */
+                        float: left;
+                        padding: 1mm;
+                        margin: 1.25mm 0 0 0; /* Center vertically: (22-19.5)/2 = 1.25mm */
+                        box-sizing: border-box;
+                        overflow: hidden;
+                        page-break-inside: avoid;
+                    }
+                    .label-container-35x22 {
+                        width: 100%;
+                        height: 100%;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                        text-align: center;
+                        overflow: hidden;
+                    }
+                    .product-name-35x22 {
+                        font-weight: bold;
+                        font-size: 7px;
+                        line-height: 8px;
+                        max-height: 16px;
+                        overflow: hidden;
+                        display: -webkit-box;
+                        -webkit-line-clamp: 2;
+                        -webkit-box-orient: vertical;
+                        width: 100%;
+                        margin-bottom: 2px;
+                        white-space: normal;
+                    }
+                    .product-code-35x22 {
+                        font-size: 7px;
+                        font-weight: bold;
+                        margin-top: 2px;
+                    }
+                </style>
+                
+                <!-- We do NOT iterate over docs (wizard) because it might be deleted. 
+                     We use data passed in context. -->
+                
+                <t t-set="print_type" t-value="print_type"/>
+
+                <!-- Loop for Product Templates -->
+                <t t-foreach="product_tmpl_ids" t-as="p_id">
+                    <t t-set="product" t-value="request.env['product.template'].browse(p_id)"/>
+                    <t t-call="product_label_3x3.report_product_label_3x3_content"/>
+                </t>
+
+                <!-- Loop for Product Variants -->
+                <t t-foreach="product_variant_ids" t-as="p_id">
+                    <t t-set="product" t-value="request.env['product.product'].browse(p_id)"/>
+                    <t t-call="product_label_3x3.report_product_label_3x3_content"/>
+                </t>
+            </div>
+        </t>
+    </template>
+</odoo>
