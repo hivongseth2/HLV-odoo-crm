@@ -352,6 +352,18 @@ class CustomBarcodeScanController(http.Controller):
             _logger.error("❌ Không tìm thấy phiếu pack!")
             return request.not_found()
 
+        # [V3.7] Auto-assign: Nếu phiếu PACK chưa được assign, tự động gọi action_assign
+        # để Odoo propagate packages từ PICK sang PACK
+        if picking.state in ['confirmed', 'waiting']:
+            try:
+                _logger.info(f"[PACK_VIEW] Auto-assigning picking {picking.name} (state: {picking.state})")
+                picking.action_assign()
+                # Reload picking để lấy data mới sau assign
+                picking = request.env['stock.picking'].sudo().browse(picking_id)
+                _logger.info(f"[PACK_VIEW] After assign: state={picking.state}, move_lines={len(picking.move_line_ids)}")
+            except Exception as e:
+                _logger.warning(f"[PACK_VIEW] Auto-assign failed: {e}")
+
         lines = picking.move_ids_without_package.filtered(lambda m: m.product_id)
 
         # Tìm PICK gốc để hiển thị
@@ -398,27 +410,70 @@ class CustomBarcodeScanController(http.Controller):
 
         # Lấy danh sách packages của picking hiện tại (bao gồm cả package từ PICK và package tạo mới)
         picking_packages = []
-        # Gộp cả result_package_id và package_id
+        
+        # 1. Lấy packages từ phiếu PACK hiện tại
         all_pkgs = (picking.move_line_ids.mapped('result_package_id') | picking.move_line_ids.mapped('package_id'))
+        
+        # 2. [V3.7] Truy vết packages từ phiếu PICK gốc qua move_orig_ids
+        # Khi PICK đóng gói và validate, packages nằm ở result_package_id của PICK's move_lines
+        origin_pkgs = request.env['stock.quant.package'].sudo()
+        origin_pkg_mls_map = {}  # Lưu mapping package_id -> move_lines từ origin
+        
+        for move in picking.move_ids:
+            for orig_move in move.move_orig_ids:
+                for orig_ml in orig_move.move_line_ids:
+                    if orig_ml.result_package_id:
+                        origin_pkgs |= orig_ml.result_package_id
+                        pkg_id = orig_ml.result_package_id.id
+                        if pkg_id not in origin_pkg_mls_map:
+                            origin_pkg_mls_map[pkg_id] = request.env['stock.move.line'].sudo()
+                        origin_pkg_mls_map[pkg_id] |= orig_ml
+        
+        # 3. Gộp tất cả packages (loại bỏ trùng lặp do toán tử |)
+        all_pkgs = all_pkgs | origin_pkgs
+        
+        _logger.info(f"[PACK_VIEW] Picking {picking.name}: Found {len(all_pkgs)} packages (local + origin)")
         
         if all_pkgs:
             for pkg in all_pkgs:
-                # Lọc các dòng thuộc package này (nguồn hoặc đích)
+                # Lọc các dòng thuộc package này từ PACK hiện tại
                 pkg_mls = picking.move_line_ids.filtered(lambda ml: ml.result_package_id.id == pkg.id or ml.package_id.id == pkg.id)
+                
+                # [V3.7] Nếu không có move_lines từ PACK, lấy từ origin PICK
+                is_from_origin = False
+                if not pkg_mls and pkg.id in origin_pkg_mls_map:
+                    pkg_mls = origin_pkg_mls_map[pkg.id]
+                    is_from_origin = True
+                    _logger.info(f"[PACK_VIEW] Package {pkg.name} loaded from origin PICK with {len(pkg_mls)} lines")
+                
                 if not pkg_mls:
                     continue
                 
-                picking_packages.append({
-                    'id': pkg.id,
-                    'name': pkg.name,
-                    'qty': sum(ml.qty_done for ml in pkg_mls),
-                    'package_lines': [{
+                # Tính qty: nếu từ origin thì lấy quantity/qty_done từ PICK
+                if is_from_origin:
+                    total_qty = sum(getattr(ml, 'quantity', 0) or getattr(ml, 'qty_done', 0) or 0 for ml in pkg_mls)
+                    package_lines = [{
+                        'product_name': ml.product_id.display_name,
+                        'product_qty': getattr(ml, 'quantity', 0) or getattr(ml, 'qty_done', 0) or 0,
+                        'product_uom': ml.product_uom_id.name,
+                        'reserved_qty': getattr(ml, 'quantity', 0) or getattr(ml, 'qty_done', 0) or 0,
+                    } for ml in pkg_mls]
+                else:
+                    total_qty = sum(ml.qty_done for ml in pkg_mls)
+                    package_lines = [{
                         'product_name': ml.product_id.display_name,
                         'product_qty': ml.qty_done,
                         'product_uom': ml.product_uom_id.name,
                         # [V3.6] Hiển thị reservation thông minh (truy vết từ PICK nếu cần)
                         'reserved_qty': self._get_ml_demand(ml),
-                    } for ml in pkg_mls],
+                    } for ml in pkg_mls]
+                
+                picking_packages.append({
+                    'id': pkg.id,
+                    'name': pkg.name,
+                    'qty': total_qty,
+                    'package_lines': package_lines,
+                    'is_from_origin': is_from_origin,  # Flag để UI biết đây là package từ PICK
                 })
 
         return request.render("custom_barcode_scan_redirect.pack_scan_template", {

@@ -853,24 +853,9 @@ class SaleOrder(models.Model):
                 _logger.info("⚠️ Không có thuế cho '%s' (TaxPercentIDText='%s') → Clear thuế", 
                             product_code, ln.get('TaxPercentIDText'))
             
-            # ===== GÁN 2 TRƯỜNG STUDIO CHO COMBO =====
-            if is_combo_child:
-                # Dòng combo child - TRA CỨU THEO MISA LINE ID
-                vals_line['x_studio_is_combo_child'] = True
-                misa_line_id = ln.get("ID")  # MISA line ID (unique)
-                parent_code = combo_parent_map.get(misa_line_id, False)
-                vals_line['x_studio_combo_parent_code'] = parent_code
-                
-                if parent_code:
-                    _logger.info("✅ Combo child '%s' (MISA_ID=%s) → parent '%s'", 
-                               product_code, misa_line_id, parent_code)
-                else:
-                    _logger.warning("⚠️ Combo child '%s' (MISA_ID=%s) KHÔNG tìm thấy parent trong map!", 
-                                  product_code, misa_line_id)
-            else:
-                # Dòng thường hoặc combo parent
-                vals_line['x_studio_is_combo_child'] = False
-                vals_line['x_studio_combo_parent_code'] = False
+            
+            # NOTE: Combo children được skip ở trên nếu parent có BOM Kit
+            # Các dòng đến đây là: dòng thường, combo parent, hoặc combo child của parent chưa có BOM
             
             # ===== PRODUCTION STATUS FROM MISA =====
             production_status_text = ln.get("CustomField4") or ""
