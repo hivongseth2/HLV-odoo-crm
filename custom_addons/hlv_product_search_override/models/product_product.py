@@ -10,15 +10,13 @@ class ProductProduct(models.Model):
         Override name_search to prioritize products WITHOUT a BOM (Single products)
         over products WITH a BOM (Combo products).
         """
+        import logging
+        _logger = logging.getLogger(__name__)
+        
         if not args:
             args = []
             
         # 1. Get initial search results from super()
-        # We fetch more than the limit to ensure we have enough candidates to sort and filter
-        # If we just fetch 'limit', we might miss some high-priority "single" products that 
-        # would have appeared after the 'limit' cut-off in the default sort order.
-        # However, fetching ALL results might be too slow. 
-        # A reasonable compromise is fetching a larger batch if limit is set.
         search_limit = limit * 2 if limit else None
         res = super(ProductProduct, self).name_search(name=name, args=args, operator=operator, limit=search_limit)
         
@@ -29,18 +27,14 @@ class ProductProduct(models.Model):
         product_ids = [x[0] for x in res]
         
         # 2. Find which of these products have BOMs
-        # We search for BOMs where the product_id or product_tmpl_id matches our candidates.
-        # Note: BOMs can be defined on product template or specific product variant.
-        
         # Products that have specific BOM variants
         boms_variant = self.env['mrp.bom'].search([('product_id', 'in', product_ids)]).mapped('product_id.id')
         
         # Products whose templates have BOMs (and no specific variant BOM overrides, or applies to all)
-        # We need to map back to product.product IDs.
         products = self.browse(product_ids)
         product_tmpls_with_boms = self.env['mrp.bom'].search([
             ('product_tmpl_id', 'in', products.mapped('product_tmpl_id').ids),
-            ('product_id', '=', False) # BOM applies to all variants or template level
+            ('product_id', '=', False) 
         ]).mapped('product_tmpl_id.id')
         
         # 3. Partition results
@@ -52,7 +46,9 @@ class ProductProduct(models.Model):
         for p in products:
             if p.product_tmpl_id.id in product_tmpls_with_boms:
                 combo_ids.add(p.id)
-                
+        
+        _logger.info(f"HLV Search: Found {len(product_ids)} products. Combo IDs: {combo_ids}")
+
         for r in res:
             p_id = r[0]
             if p_id in combo_ids:
