@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Add generic filter for top-level contacts -->
+    <record id="view_res_partner_filter_refine" model="ir.ui.view">
+        <field name="name">res.partner.select.refine</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_res_partner_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[@name='type_person']" position="before">
+                <filter string="Liên hệ chính" name="filter_only_parents" domain="[('parent_id', '=', False)]"/>
+                <filter string="Địa chỉ giao hàng" name="filter_type_delivery" domain="[('type', '=', 'delivery')]"/>
+                <separator/>
+            </xpath>
+            <xpath expr="//search" position="inside">
+                <searchpanel>
+                    <field name="hlv_partner_type" icon="fa-users" enable_counters="1"/>
+                    <field name="hlv_filter_tag_ids" string="Phân loại" icon="fa-tags" select="multi" enable_counters="1"/>
+                </searchpanel>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="contacts.action_contacts" model="ir.actions.act_window">
+        <!-- We remove the search bar default filter to prevent conflict with Search Panel counters -->
+        <field name="context">{'default_is_company': True}</field>
+    </record>
+</odoo>
