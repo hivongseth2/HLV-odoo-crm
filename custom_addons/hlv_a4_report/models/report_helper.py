@@ -85,36 +85,129 @@ class HlvReportHelper(models.AbstractModel):
     @api.model
     def get_enriched_lines_for_picking_combo(self, picking):
         """
-        Build danh sách hiển thị (parent trước, rồi tới các child của nó; còn lại là standalone).
-        Fix: tính qty của parent dựa trên qty của child trong picking.
+        Build danh sách hiển thị cho BBBG.
+        Hỗ trợ:
+        1. BoM Kit (Phantom BoM) - Standard Odoo
+        2. Legacy Studio Combo (x_studio_combo_parent_code)
+        
+        BoM Kit Logic:
+        - Parent product: sale_line_id.product_id
+        - Components: stock.move.product_id (khác parent)
+        - Detect: move.product_id != move.sale_line_id.product_id
         """
-        result_data = self.get_combo_parent_lines_for_picking(picking)
-        lines_to_show = result_data['lines_to_show']
-        parent_sol_by_code = result_data.get('parent_sol_by_code', {})  # {parent_code: parent_sol}
-
-        if not lines_to_show:
+        if not picking or not picking.move_ids:
             return []
-
-        # Tổng qty theo sale_line_id trong picking này
-        # Logic: ưu tiên quantity (reserved), fallback qty_done nếu không có
-        sol_qty_in_picking = {}
+        
+        enriched = []
+        processed_sol_ids = set()
+        
+        # ===== PHASE 1: BoM Kit Logic (Standard Odoo) =====
+        # Group moves by sale_line_id
+        moves_by_sol = {}
         for move in picking.move_ids:
             if move.sale_line_id:
-                # Lấy quantity (reserved qty), nếu không có thì dùng qty_done
-                qty_to_add = 0.0
-                if hasattr(move, 'quantity') and move.quantity:
-                    qty_to_add = move.quantity
-                else:
-                    # Fallback: tổng qty_done từ move_line_ids
-                    qty_to_add = sum(ml.qty_done or 0.0 for ml in move.move_line_ids)
+                if move.sale_line_id not in moves_by_sol:
+                    moves_by_sol[move.sale_line_id] = []
+                moves_by_sol[move.sale_line_id].append(move)
+        
+        # Process each SO Line (sorted by sequence)
+        sorted_sols = sorted(moves_by_sol.keys(), key=lambda l: (l.sequence or 0, l.id))
+        
+        for sol in sorted_sols:
+            moves = moves_by_sol[sol]
+            parent_product = sol.product_id
+            
+            # Detect BoM Kit: at least one move has different product
+            is_bom_kit = any(m.product_id != parent_product for m in moves)
+            
+            # Skip Legacy Studio Child lines (will process in Phase 2)
+            is_studio_child = hasattr(sol, 'x_studio_is_combo_child') and getattr(sol, 'x_studio_is_combo_child', False)
+            if is_studio_child:
+                continue
+            
+            # Calculate parent quantity
+            if is_bom_kit:
+                # For Kit: use qty_delivered (Odoo auto-calculates from components)
+                parent_qty = sol.qty_delivered or 0.0
+            else:
+                # For regular product: sum move quantities
+                parent_qty = sum(
+                    (m.quantity if hasattr(m, 'quantity') and m.quantity else (m.product_uom_qty or 0.0))
+                    for m in moves
+                )
+            
+            if parent_qty > 0:
+                # Add Parent/Standalone line
+                enriched.append({
+                    'type': 'parent' if is_bom_kit else 'standalone',
+                    'product_name': parent_product.display_name if parent_product else '',
+                    'product_code': parent_product.default_code if parent_product else '',
+                    'qty': parent_qty,
+                    'uom': sol.product_uom.name if sol.product_uom else '',
+                    'price_unit': sol.price_unit or 0.0,
+                    'tax_percent': sol.tax_id[0].amount if sol.tax_id else 0.0,
+                    'is_combo_child': False,
+                    'parent_code': '',
+                    'sol': sol,
+                })
                 
+                # Add Component lines (if Kit)
+                if is_bom_kit:
+                    # Group components by product to avoid duplicates
+                    comp_qty_map = {}
+                    for m in moves:
+                        comp_product = m.product_id
+                        if comp_product not in comp_qty_map:
+                            comp_qty_map[comp_product] = 0.0
+                        comp_qty_map[comp_product] += (
+                            m.quantity if hasattr(m, 'quantity') and m.quantity else (m.product_uom_qty or 0.0)
+                        )
+                    
+                    # Add each component
+                    for comp_product, comp_qty in comp_qty_map.items():
+                        if comp_qty > 0:
+                            enriched.append({
+                                'type': 'child',
+                                'product_name': comp_product.display_name,
+                                'product_code': comp_product.default_code or '',
+                                'qty': comp_qty,
+                                'uom': comp_product.uom_id.name if comp_product.uom_id else '',
+                                'price_unit': 0.0,
+                                'tax_percent': 0.0,
+                                'is_combo_child': True,
+                                'parent_code': parent_product.default_code or '',
+                                'sol': sol,
+                            })
+                
+                processed_sol_ids.add(sol.id)
+        
+        # ===== PHASE 2: Legacy Studio Combo (Fallback) =====
+        result_data = self.get_combo_parent_lines_for_picking(picking)
+        lines_to_show = result_data['lines_to_show']
+        
+        if not lines_to_show:
+            return enriched
+        
+        # Filter out already processed lines
+        legacy_lines = lines_to_show.filtered(lambda l: l.id not in processed_sol_ids)
+        if not legacy_lines:
+            return enriched
+        
+        # Calculate qty for legacy lines
+        sol_qty_in_picking = {}
+        for move in picking.move_ids:
+            if move.sale_line_id and move.sale_line_id.id not in processed_sol_ids:
+                qty_to_add = (
+                    move.quantity if (hasattr(move, 'quantity') and move.quantity)
+                    else sum(ml.qty_done or 0.0 for ml in move.move_line_ids)
+                )
                 sol_qty_in_picking[move.sale_line_id.id] = sol_qty_in_picking.get(move.sale_line_id.id, 0.0) + qty_to_add
-
-        # Gom nhóm children theo parent_code
-        children_by_parent_code = {}  # {parent_code: [child_sol, ...]}
+        
+        # Group children by parent_code
+        children_by_parent_code = {}
         standalone_lines = []
-
-        for sol in lines_to_show:
+        
+        for sol in legacy_lines:
             is_child = bool(getattr(sol, 'x_studio_is_combo_child', False))
             code = sol.product_id.default_code if sol.product_id else False
             if is_child:
@@ -123,54 +216,43 @@ class HlvReportHelper(models.AbstractModel):
                     children_by_parent_code.setdefault(pcode, []).append(sol)
             else:
                 standalone_lines.append(sol)
-
+        
         # Sort
         standalone_lines = sorted(standalone_lines, key=lambda l: (l.sequence or 0, l.id))
         for pcode in children_by_parent_code:
             children_by_parent_code[pcode] = sorted(children_by_parent_code[pcode], key=lambda l: (l.sequence or 0, l.id))
-
-        enriched = []
-
+        
+        # Process legacy standalone lines
         for sol in standalone_lines:
             code = sol.product_id.default_code if sol.product_id else ''
             qty_parent_move = sol_qty_in_picking.get(sol.id, 0.0)
-
-            # Là parent nếu có children cùng parent_code = mã này
             is_combo_parent = code in children_by_parent_code
-
+            
             if is_combo_parent:
-                # TÍNH QTY PARENT TỪ CHILD:
+                # Calculate parent qty from children
                 parent_qty_from_children = None
-                parent_qty_on_so = sol.product_uom_qty or 0.0  # qty parent trên SOL (để suy tỷ lệ)
+                parent_qty_on_so = sol.product_uom_qty or 0.0
                 for child_sol in children_by_parent_code[code]:
                     child_qty_in_picking = sol_qty_in_picking.get(child_sol.id, 0.0)
                     if child_qty_in_picking <= 0:
                         continue
-
-                    # Tỷ lệ component = child_qty_trên_SOL / parent_qty_trên_SOL
-                    # (nếu trên SO: child_qty = parent_qty * component_qty)
+                    
                     comp_ratio = 0.0
                     child_qty_on_so = child_sol.product_uom_qty or 0.0
                     if parent_qty_on_so and parent_qty_on_so > 0:
                         comp_ratio = child_qty_on_so / parent_qty_on_so
-
-                    # Nếu không có tỷ lệ (edge case), fallback: coi comp_ratio = 1 để không crash
+                    
                     if comp_ratio and comp_ratio > 0:
                         candidate_parent_qty = child_qty_in_picking / comp_ratio
                     else:
-                        candidate_parent_qty = child_qty_in_picking  # fallback
-
+                        candidate_parent_qty = child_qty_in_picking
+                    
                     parent_qty_from_children = candidate_parent_qty if parent_qty_from_children is None else min(parent_qty_from_children, candidate_parent_qty)
-
-                # Fallback cuối: nếu không child nào có qty>0 thì coi như 0
+                
                 parent_qty_from_children = parent_qty_from_children or 0.0
-
-                # Nếu parent có move riêng, dùng max để không bị thấp
                 parent_qty_final = max(qty_parent_move, parent_qty_from_children)
-
-                # CHỈ PUSH PARENT NÊU CÓ QTY > 0 (tránh hiển thị combo không có trong picking)
+                
                 if parent_qty_final > 0:
-                    # Push parent
                     enriched.append({
                         'type': 'parent',
                         'product_name': sol.product_id.display_name if sol.product_id else '',
@@ -183,8 +265,7 @@ class HlvReportHelper(models.AbstractModel):
                         'parent_code': '',
                         'sol': sol,
                     })
-
-                    # Push children (chỉ child có qty>0 trong picking)
+                    
                     for child_sol in children_by_parent_code[code]:
                         child_qty = sol_qty_in_picking.get(child_sol.id, 0.0)
                         if child_qty > 0:
@@ -200,9 +281,8 @@ class HlvReportHelper(models.AbstractModel):
                                 'parent_code': getattr(child_sol, 'x_studio_combo_parent_code', '') or '',
                                 'sol': child_sol,
                             })
-
             else:
-                # Standalone (không phải parent combo)
+                # Standalone
                 qty = sol_qty_in_picking.get(sol.id, 0.0)
                 if qty > 0:
                     enriched.append({
@@ -217,5 +297,6 @@ class HlvReportHelper(models.AbstractModel):
                         'parent_code': '',
                         'sol': sol,
                     })
-
+        
         return enriched
+
