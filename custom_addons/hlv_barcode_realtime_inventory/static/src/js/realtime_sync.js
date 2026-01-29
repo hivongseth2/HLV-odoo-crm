@@ -37,11 +37,26 @@ function getSessionId(inventoryContext) {
 }
 
 /**
- * Check if current page is Inventory Adjustment (action 364)
+ * Kiểm tra xem hiện tại có đang trong barcode view cho inventory không
+ * Không check action ID cụ thể mà dựa vào URL pattern và context
  */
-function isInventoryAdjustment() {
+function isInventoryBarcodeView() {
     const url = window.location.href;
-    return url.includes("action=364") || url.includes("action-364");
+
+    // Check cho các barcode views liên quan đến inventory
+    // Pattern 1: stock_barcode actions
+    if (url.includes('stock_barcode')) return true;
+
+    // Pattern 2: Bất kỳ action nào có model là stock.quant
+    if (url.includes('model=stock.quant')) return true;
+
+    // Pattern 3: Check view type là barcode/client_action
+    if (url.includes('view_type=form') && url.includes('barcode')) return true;
+
+    // Pattern 4: Legacy check cho action có chứa inventory
+    if (url.includes('action=') && document.querySelector('.o_barcode_client_action')) return true;
+
+    return false;
 }
 
 /**
@@ -78,12 +93,12 @@ function updateIndicator(message, type = 'info') {
     badge.style.cssText += styles[type] || styles.info;
     badge.innerHTML = message;
 
-    // Auto hide sau 3s nếu là success
+    // Auto hide sau 5s nếu là success
     if (type === 'success') {
         setTimeout(() => {
             badge.style.opacity = '0';
             setTimeout(() => badge.remove(), 300);
-        }, 3000);
+        }, 5000);
     }
 }
 
@@ -99,44 +114,38 @@ function showSyncStatus(totalScans, lastProduct = '') {
 }
 
 // ============================================================================
-// PATCH BarcodeModel
+// PATCH BarcodeModel - LUÔN LUÔN ACTIVE KHI TRONG BARCODE VIEW
 // ============================================================================
 
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
 
-        // Chỉ activate cho Inventory Adjustment
-        if (!isInventoryAdjustment()) {
-            return;
-        }
-
-        console.log(
-            '%c[HLV Realtime Inventory] Module loaded',
-            'padding:4px 8px;border-radius:4px;background:#0c5460;color:#d1ecf1;font-weight:bold'
-        );
-
-        // Initialize device ID
+        // Luôn initialize - sẽ check context khi scan
         this._deviceId = getDeviceId();
         this._sessionId = null;
         this._syncCount = 0;
+        this._realtimeEnabled = true; // Enable by default
 
-        updateIndicator('✅ Real-time sync ACTIVE', 'success');
+        console.log(
+            '%c[HLV Realtime Inventory] Module ACTIVE - Real-time sync enabled',
+            'padding:4px 8px;border-radius:4px;background:#0c5460;color:#d1ecf1;font-weight:bold'
+        );
+
+        // Show indicator khi vào barcode view
+        setTimeout(() => {
+            updateIndicator('✅ Real-time sync ACTIVE', 'success');
+        }, 500);
     },
 
     /**
      * Override processBarcode để sync real-time
      */
     async processBarcode(barcode) {
-        // Skip nếu không phải Inventory Adjustment
-        if (!isInventoryAdjustment()) {
-            return await super.processBarcode(...arguments);
-        }
-
         // Cho Odoo xử lý trước
         const result = await super.processBarcode(...arguments);
 
-        // Nếu không scan được product, không sync
+        // Nếu không scan được hoặc là command, bỏ qua
         if (!barcode || barcode.startsWith("O-CMD")) {
             return result;
         }
@@ -150,7 +159,7 @@ patch(BarcodeModel.prototype, {
 
         // Lấy location context
         const locationId = this.location?.id || null;
-        const recordId = this.record?.id || 'new';
+        const recordId = this.record?.id || Date.now();
 
         // Generate session ID if not exists
         if (!this._sessionId) {
@@ -192,7 +201,7 @@ patch(BarcodeModel.prototype, {
     },
 
     /**
-     * Safe identify product (copied from hlv_barcode_stock_qty_v3)
+     * Safe identify product
      */
     async _identifyProductSafe(barcode) {
         // Check trong cache
@@ -245,6 +254,6 @@ patch(BarcodeModel.prototype, {
 });
 
 console.log(
-    '%c🚀 [HLV Realtime Inventory] Loaded successfully',
+    '%c🚀 [HLV Realtime Inventory] Loaded successfully - ALL barcode views enabled',
     'padding:4px 8px;border-radius:4px;background:#155724;color:#d4edda;font-weight:bold'
 );
