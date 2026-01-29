@@ -103,12 +103,13 @@ function updateIndicator(message, type = 'info') {
 }
 
 /**
- * Show sync status persistently
+ * Show sync status persistently with inventory quantity
  */
-function showSyncStatus(totalScans, lastProduct = '') {
+function showSyncStatus(productName, currentQty, totalScans) {
     updateIndicator(
-        `🔄 Real-time sync: ${totalScans} scans<br/>
-        <small style="opacity: 0.8">${lastProduct}</small>`,
+        `✅ ${productName}<br/>
+        <b style="font-size: 16px;">Số lượng: ${currentQty}</b><br/>
+        <small style="opacity: 0.7">(${totalScans} lần quét)</small>`,
         'info'
     );
 }
@@ -185,9 +186,12 @@ patch(BarcodeModel.prototype, {
 
             if (syncResult.success) {
                 this._syncCount = syncResult.total_scans || (this._syncCount + 1);
-                console.log(`✅ [Realtime] Synced #${this._syncCount}:`, product.display_name);
+                const currentQty = syncResult.current_inventory_qty || 0;
+                const productName = syncResult.product_name || product.display_name;
 
-                showSyncStatus(this._syncCount, product.display_name);
+                console.log(`✅ [Realtime] Updated: ${productName} = ${currentQty} (scan #${this._syncCount})`);
+
+                showSyncStatus(productName, currentQty, this._syncCount);
             } else {
                 throw new Error(syncResult.error || 'Unknown sync error');
             }
