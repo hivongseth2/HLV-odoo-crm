@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="product_template_form_view_crawler" model="ir.ui.view">
+        <field name="name">product.template.form.crawler</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_only_form_view"/>
+        <field name="arch" type="xml">
+            <header position="inside">
+                <button name="action_crawl_all" string="Auto Crawl Specs" type="object" class="oe_highlight"/>
+            </header>
+            <notebook position="inside">
+                <page string="Crawler Info" name="crawler_info">
+                    <group>
+                        <group string="Source URLs">
+                            <label for="ketnoitieudung_url"/>
+                            <div class="o_row">
+                                <field name="ketnoitieudung_url"/>
+                                <button name="action_crawl_ketnoitieudung" string="Fetch" type="object" class="btn-secondary"/>
+                            </div>
+                            
+                            <label for="visior_url"/>
+                            <div class="o_row">
+                                <field name="visior_url"/>
+                                <button name="action_crawl_visior" string="Fetch" type="object" class="btn-secondary"/>
+                            </div>
+
+                            <label for="thbvietnam_url"/>
+                            <div class="o_row">
+                                <field name="thbvietnam_url"/>
+                                <button name="action_crawl_thbvietnam" string="Fetch" type="object" class="btn-secondary"/>
+                            </div>
+                        </group>
+                    </group>
+                    <group string="Crawled Data">
+                        <field name="crawled_specs" nolabel="1"/>
+                    </group>
+                </page>
+            </notebook>
+        </field>
+    </record>
+</odoo>
