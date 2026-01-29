@@ -352,6 +352,18 @@ class CustomBarcodeScanController(http.Controller):
             _logger.error("❌ Không tìm thấy phiếu pack!")
             return request.not_found()
 
+        # [V3.7] Auto-assign: Nếu phiếu PACK chưa được assign, tự động gọi action_assign
+        # để Odoo propagate packages từ PICK sang PACK
+        if picking.state in ['confirmed', 'waiting']:
+            try:
+                _logger.info(f"[PACK_VIEW] Auto-assigning picking {picking.name} (state: {picking.state})")
+                picking.action_assign()
+                # Reload picking để lấy data mới sau assign
+                picking = request.env['stock.picking'].sudo().browse(picking_id)
+                _logger.info(f"[PACK_VIEW] After assign: state={picking.state}, move_lines={len(picking.move_line_ids)}")
+            except Exception as e:
+                _logger.warning(f"[PACK_VIEW] Auto-assign failed: {e}")
+
         lines = picking.move_ids_without_package.filtered(lambda m: m.product_id)
 
         # Tìm PICK gốc để hiển thị
