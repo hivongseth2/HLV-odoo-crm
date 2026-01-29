@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_convert_to_company" model="ir.actions.server">
+        <field name="name">Cập nhật thành Công ty (Quét tự động)</field>
+        <field name="model_id" ref="base.model_res_partner"/>
+        <field name="binding_model_id" ref="base.model_res_partner"/>
+        <field name="binding_view_types">list,form</field>
+        <field name="state">code</field>
+        <field name="code">
+# Define keywords
+keywords = ['công ty', 'cty', 'doanh nghiệp', 'tnhh', 'chi nhánh', 'dntn', 'corporation', 'inc.', 'ltd']
+
+# If triggered from Menu (no active_ids), search ALL candidates
+if not env.context.get('active_ids'):
+    # Search for ALL contacts in the system to ensure children (Delivery Addresses) are also tagged
+    records = env['res.partner'].search([])
+
+# Process records
+count_company = 0
+count_tags = 0
+for record in records:
+    # 1. Conversion logic
+    old_is_company = record.is_company
+    if not record.is_company and record.name:
+        name_lower = record.name.lower()
+        if any(kw in name_lower for kw in keywords):
+            record.write({'is_company': True})
+            count_company += 1
+    
+    # 2. Trigger tag recompute (stored field)
+    # We touch a field it depends on or call recompute manually if needed, 
+    # but simplest is to just call the method if it's store=True
+    record._compute_hlv_filter_tag_ids()
+    count_tags += 1
+
+# Notify user
+if not env.context.get('active_ids'):
+    action = {
+        'type': 'ir.actions.client',
+        'tag': 'display_notification',
+        'params': {
+            'title': 'Hoàn thành quét',
+            'message': 'Đã chuyển đổi %s Công ty và cập nhật phân loại cho %s liên hệ.' % (count_company, count_tags),
+            'type': 'success',
+            'sticky': False,
+            'next': {'type': 'ir.actions.act_window_close'},
+        }
+    }
+        </field>
+    </record>
+
+    <record id="action_misa_contact_bulk_sync" model="ir.actions.server">
+        <field name="name">Cập nhật thông tin từ MISA</field>
+        <field name="model_id" ref="base.model_res_partner"/>
+        <field name="state">code</field>
+        <field name="code">
+action = model.action_misa_update_bulk()
+        </field>
+    </record>
+
+    <!-- Menu Item to Trigger Global Scan -->
+    <menuitem id="menu_convert_company_scan"
+              name="Quét &amp; Chuyển đổi Công ty"
+              parent="contacts.res_partner_menu_config"
+              action="action_convert_to_company"
+              sequence="50"/>
+
+    <menuitem id="menu_misa_contact_bulk_sync"
+              name="Cập nhật thông tin từ MISA"
+              parent="contacts.res_partner_menu_config"
+              action="action_misa_contact_bulk_sync"
+              sequence="60"/>
+</odoo>
