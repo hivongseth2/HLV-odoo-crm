@@ -198,24 +198,31 @@ class PickingExportWizard(models.TransientModel):
     def _thuoc_combo_code_for_move(self, move):
         """
         Trả về mã combo cha (default_code) cho move nếu là dòng con của combo.
-        Sử dụng Studio fields x_studio_is_combo_child và x_studio_combo_parent_code
-        để xác định chính xác thay vì dựa vào giá = 0.
+        Sử dụng logic BoM Kit (phantom) thay vì Studio fields.
         """
         sol = getattr(move, 'sale_line_id', False)
         if not sol:
             return ''
         
-        # 🆕 Đọc từ Studio fields
-        try:
-            is_combo_child = getattr(sol, 'x_studio_is_combo_child', False)
-            combo_parent_code = getattr(sol, 'x_studio_combo_parent_code', False)
-            
-            if is_combo_child and combo_parent_code:
-                return combo_parent_code
-        except Exception as e:
-            # Fallback nếu Studio fields không tồn tại
-            pass
+        sol_product = sol.product_id
+        if not sol_product:
+            return ''
+
+        # Nếu sản phẩm trên move trùng với sản phẩm trên SOL -> chính nó (không phải component)
+        # THường combo kit sẽ explode ra component, nên move.product != sol.product
+        if sol_product.id == move.product_id.id:
+            return ''
+
+        # Kiểm tra xem SOL product có phải là Kit không
+        is_kit = self.env['mrp.bom'].search_count([
+            ('product_tmpl_id', '=', sol_product.product_tmpl_id.id),
+            ('type', '=', 'phantom'),
+            ('active', '=', True)
+        ])
         
+        if is_kit:
+            return sol_product.default_code
+            
         return ''
 
     def _get_move_line_rows(self, picking):

@@ -798,6 +798,21 @@ class SaleOrder(models.Model):
                 _logger.exception("❌ Lỗi tạo combo product %s: %s", combo_code, e)
 
         # ===== 8.1) THÊM LINES (có quy đổi UoM nếu khác mặc định) =====
+        # 🔥 Build set các combo codes đã có BOM để skip children
+        combo_codes_with_bom = set()
+        for combo_code_check in combo_products_created:
+            # Kiểm tra xem combo này đã có BOM chưa
+            combo_prod_check = env['product.product'].search([('default_code', '=', combo_code_check)], limit=1)
+            if combo_prod_check:
+                has_bom = env['mrp.bom'].search_count([
+                    ('product_tmpl_id', '=', combo_prod_check.product_tmpl_id.id),
+                    ('type', '=', 'phantom'),
+                    ('active', '=', True)
+                ]) > 0
+                if has_bom:
+                    combo_codes_with_bom.add(combo_code_check)
+                    _logger.info("📦 Combo '%s' có BOM Kit → sẽ skip children từ MISA", combo_code_check)
+
         for ln in (lines or []):
             product_code = ln.get("ProductIDText")
             description  = ln.get("Description") or product_code
@@ -812,6 +827,15 @@ class SaleOrder(models.Model):
             tth = (ln.get("CustomField4") or "").strip()
             # Xác định loại dòng (để gán Studio fields)
             is_combo_child = ln.get("IsChildProduct")
+            
+            # 🔥 SKIP COMBO CHILD NẾU PARENT ĐÃ CÓ BOM KIT
+            # (vì BOM Kit sẽ tự động explode ra children trong picking)
+            if is_combo_child:
+                misa_line_id = ln.get("ID")
+                parent_code = combo_parent_map.get(misa_line_id)
+                if parent_code and parent_code in combo_codes_with_bom:
+                    _logger.info("⏭️ Skip combo child '%s' (parent '%s' có BOM Kit)", product_code, parent_code)
+                    continue
 
             # tạo/lấy product (đơn vị mặc định của Odoo là product.uom_id)
             # sửa purchase_ok và sale_ok True
