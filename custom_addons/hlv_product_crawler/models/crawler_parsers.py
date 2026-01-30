@@ -73,24 +73,25 @@ class CrawlerUtils:
         
         # Add product name variations
         if product_name:
-            queries.append(product_name)  # Full name
+            queries.append(product_name)
             keywords = CrawlerUtils.extract_keywords(product_name)
-            # Try brand + model
             if len(keywords) >= 2:
                 queries.append(' '.join(keywords[:2]))
-            # Try just brand or first keyword
             if keywords:
                 queries.append(keywords[0])
         
         for query in queries:
-            search_url = f"{base_url}/tim-kiem?q={urllib.parse.quote(query)}"
+            # FIXED: Correct URL is /san-pham.html?keyword= (not /tim-kiem?q=)
+            search_url = f"{base_url}/san-pham.html?keyword={urllib.parse.quote(query)}"
             html, error = CrawlerUtils.fetch_url(search_url)
             if not html:
                 continue
             
             soup = BeautifulSoup(html, 'html.parser')
-            product_item = (soup.select_one('.product-item a') or
-                           soup.select_one('a[href*="/san-pham/"]'))
+            # FIXED: Correct selector is .product-card__name a
+            product_item = (soup.select_one('.product-card__name a') or
+                           soup.select_one('.product-card a') or
+                           soup.select_one('a[href*=".html"]'))
             if product_item:
                 href = product_item.get('href')
                 if href:
@@ -200,15 +201,16 @@ class CrawlerUtils:
                 queries.append(keywords[0])
         
         for query in queries:
-            # CORRECTED: Use /tim-kiem instead of /catalogsearch/result/
-            search_url = f"{base_url}/tim-kiem?q={urllib.parse.quote(query)}"
+            # FIXED: Parameter is 'keywords' not 'q'
+            search_url = f"{base_url}/tim-kiem?keywords={urllib.parse.quote(query)}"
             html, error = CrawlerUtils.fetch_url(search_url)
             if not html:
                 continue
                 
             soup = BeautifulSoup(html, 'html.parser')
             # Try multiple selectors
-            product_item = (soup.select_one('.product-item-link') or
+            product_item = (soup.select_one('.item a') or
+                           soup.select_one('.product-item-link') or
                            soup.select_one('.product-item a') or
                            soup.select_one('a[href*="/san-pham/"]'))
             if product_item:
