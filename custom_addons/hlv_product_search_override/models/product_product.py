@@ -17,7 +17,9 @@ class ProductProduct(models.Model):
             args = []
             
         # 1. Get initial search results from super()
-        search_limit = limit * 2 if limit else None
+        # We need to fetch many more results because single products might be ranked lower
+        # by Odoo's default search, and we want to bring them to the top
+        search_limit = limit * 10 if limit else None
         res = super(ProductProduct, self).name_search(name=name, args=args, operator=operator, limit=search_limit)
         
         if not res:
