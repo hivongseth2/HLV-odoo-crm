@@ -361,7 +361,7 @@ class PickingExportWizard(models.TransientModel):
                             picking, so, sol.product_id, None, None,
                             scheduled_date_str, picking_name, partner_code, partner_name,
                             partner_address, partner_vat, sale_name, sale_user_code,
-                            dien_giai, ly_do_xuat, warehouse_code
+                            dien_giai, ly_do_xuat, warehouse_code, sale_line=sol
                         )
                         rows.append(service_row)
                         processed_sale_lines.add(sol.id)
@@ -441,7 +441,7 @@ class PickingExportWizard(models.TransientModel):
     def _build_row_data(self, picking, so, prod, ml, move,
                         scheduled_date_str, picking_name, partner_code, partner_name,
                         partner_address, partner_vat, sale_name, sale_user_code,
-                        dien_giai, ly_do_xuat, warehouse_code, pos_line=None):
+                        dien_giai, ly_do_xuat, warehouse_code, pos_line=None, sale_line=None):
         """Xây dựng dữ liệu cho 1 dòng"""
         
         product_code = prod.default_code or (prod.barcode if hasattr(prod, 'barcode') else "") or ""
@@ -457,8 +457,11 @@ class PickingExportWizard(models.TransientModel):
                 if pos_lines:
                     pos_line = pos_lines[0]  # Lấy dòng đầu tiên nếu có nhiều
         
-        # Ưu tiên 2: Sale Order Line
-        sol = getattr(move, 'sale_line_id', False) if move else False
+        # Ưu tiên 2: Sale Order Line (truyền vào hoặc tìm từ move)
+        if sale_line:
+            sol = sale_line
+        else:
+            sol = getattr(move, 'sale_line_id', False) if move else False
         
         # Logic lấy dữ liệu theo thứ tự ưu tiên
         if pos_line:
@@ -512,9 +515,13 @@ class PickingExportWizard(models.TransientModel):
             if ml:
                 uom = ml.product_uom_id or prod.uom_id
                 qty = ml.qty_done or 0.0
-            else:
+            elif move:
                 uom = move.product_uom or prod.uom_id
                 qty = move.qty_done if hasattr(move, 'qty_done') else (move.product_uom_qty or 0.0)
+            else:
+                # Trường hợp không có move/ml (VD: service product không thông qua sale_line)
+                uom = prod.uom_id
+                qty = 1.0 # Default value
             
             # Fallback: lấy giá từ product
             don_gia = prod.list_price or 0.0
