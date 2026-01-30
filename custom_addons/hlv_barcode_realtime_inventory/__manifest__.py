@@ -1,7 +1,7 @@
 {
-    'name': 'HLV Inventory Scanner',
+    'name': 'HLV Stock Scanner',
     'version': '18.0.1.0.0',
-    'summary': 'Standalone barcode inventory scanner với real-time sync',
+    'summary': 'Standalone inventory scanner with real-time sync',
     'description': """
         Module kiểm kê tồn kho độc lập sử dụng barcode:
         - Quét mã vị trí kho → Quét sản phẩm → Xác nhận

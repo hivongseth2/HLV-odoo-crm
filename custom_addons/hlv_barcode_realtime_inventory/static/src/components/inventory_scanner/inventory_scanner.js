@@ -27,6 +27,7 @@ export class InventoryScanner extends Component {
     setup() {
         this.orm = useService("orm");
         this.notification = useService("notification");
+        this.action = useService("action");
 
         this.videoRef = useRef("cameraVideo");
 
@@ -410,6 +411,133 @@ export class InventoryScanner extends Component {
                 this.state.productCount = result.product_count;
                 this.state.totalScans = result.total_scans;
             }
+        } finally {
+            this.state.syncing = false;
+        }
+    }
+
+    // ==========================================================================
+    // UI Actions
+    // ==========================================================================
+
+    goBack() {
+        this.action.doAction('menu_inventory_scanner_root'); // Hoặc logic back khác tùy ý
+        // Nếu muốn về trang chủ Odoo:
+        // window.location.href = '/web';
+    }
+
+    toggleScannerMode(mode) {
+        // Toggle logic: nếu đang camera thì sang keyboard và ngược lại
+        const targetMode = mode || (this.state.scannerMode === 'camera' ? 'keyboard' : 'camera');
+
+        this.state.scannerMode = targetMode;
+
+        if (targetMode === 'camera') {
+            this.tryStartCamera();
+        } else {
+            this.stopCamera();
+        }
+    }
+
+    // ==========================================================================
+    // Add Product Dialog
+    // ==========================================================================
+
+    openAddProductDialog() {
+        this.state.showAddProductDialog = true;
+        this.state.addProduct = {
+            searchTerm: '',
+            searchResults: [],
+            selectedProduct: null,
+            quantity: 1,
+        };
+    }
+
+    closeAddProductDialog() {
+        this.state.showAddProductDialog = false;
+    }
+
+    onProductSearchChange(ev) {
+        this.state.addProduct.searchTerm = ev.target.value;
+        // Có thể thêm debounce search logic ở đây nếu muốn list gợi ý
+    }
+
+    setAddQty(qty) {
+        this.state.addProduct.quantity = qty;
+    }
+
+    adjustAddQty(delta) {
+        const newQty = this.state.addProduct.quantity + delta;
+        if (newQty >= 0) {
+            this.state.addProduct.quantity = newQty;
+        }
+    }
+
+    async confirmAddProduct() {
+        const term = this.state.addProduct.searchTerm;
+        const qty = this.state.addProduct.quantity;
+
+        if (!term) {
+            this.notification.add("Vui lòng nhập tên hoặc mã sản phẩm", { type: "warning" });
+            return;
+        }
+
+        if (qty <= 0) {
+            this.notification.add("Số lượng phải lớn hơn 0", { type: "warning" });
+            return;
+        }
+
+        // Search và add giống như scan
+        await this.processBarcode(term); // Tạm dùng logic này, sẽ cải tiến nếu cần tạo mới
+
+        // Nếu search ra và add thành công (dựa vào line count tăng lên hoặc notif)
+        // Hiện tại processBarcode đã handle logic tìm+add.
+
+        // Cần truyền qty vào processBarcode hoặc scanProduct?
+        // Hiện tại scanProduct mặc định qty=1. 
+        // Logic đúng: Search product -> lấy ID -> gọi register_scan với qty cụ thể.
+
+        await this.manualAddProduct(term, qty);
+        this.closeAddProductDialog();
+    }
+
+    async manualAddProduct(term, qty) {
+        try {
+            this.state.syncing = true;
+            const productResult = await this.orm.call(
+                "inventory.scan.session",
+                "search_product",
+                [term] // Có thể cần sửa backend để search flexible hơn
+            );
+
+            if (!productResult.success) {
+                this.notification.add(productResult.error, { type: "warning" });
+                return;
+            }
+
+            const scanResult = await this.orm.call(
+                "inventory.scan.session",
+                "register_scan",
+                [
+                    this.state.sessionId,
+                    productResult.product_id,
+                    this.state.locationId,
+                    qty,
+                    false,
+                    false,
+                ]
+            );
+
+            if (scanResult.success) {
+                this.updateOrAddLine(scanResult);
+                this.notification.add(
+                    `Đã thêm: ${productResult.product_name} (${qty})`,
+                    { type: "success" }
+                );
+            }
+        } catch (error) {
+            console.error("Manual add error:", error);
+            this.notification.add("Lỗi khi thêm sản phẩm", { type: "danger" });
         } finally {
             this.state.syncing = false;
         }
