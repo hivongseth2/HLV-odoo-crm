@@ -106,7 +106,8 @@ export class InventoryScanner extends Component {
     }
 
     // Fix Open Location Selector
-    openLocationSelector() {
+    openLocationSelector(forAddProduct = false) {
+        this.state.selectingLocationForAddProduct = forAddProduct;
         this.state.showLocationSelector = true;
         this.state.locationSearch = '';
         this.loadLocations('');
@@ -115,6 +116,10 @@ export class InventoryScanner extends Component {
             const input = document.getElementById('hlv-loc-search-input');
             if (input) input.focus();
         }, 100);
+    }
+
+    openAddProductLocationSelector() {
+        this.openLocationSelector(true);
     }
 
     async onLocationSearchChange(ev) {
@@ -390,6 +395,13 @@ export class InventoryScanner extends Component {
     }
 
     async selectLocation(loc) {
+        if (this.state.selectingLocationForAddProduct) {
+            this.state.addProduct.locationId = loc.id;
+            this.state.addProduct.locationName = loc.name;
+            this.state.showLocationSelector = false;
+            return;
+        }
+
         this.state.locationId = loc.id;
         this.state.locationName = loc.name;
 
@@ -399,6 +411,7 @@ export class InventoryScanner extends Component {
                 "set_location",
                 [[this.state.sessionId], loc.id]
             );
+            this.notification.add("Đã chuyển vị trí: " + loc.name, { type: "success" });
         }
 
         this.closeLocationSelector();
@@ -546,18 +559,16 @@ export class InventoryScanner extends Component {
         const term = this.state.addProduct.searchTerm;
         const qty = this.state.addProduct.quantity;
 
+        // Use specific location if selected in dialog, otherwise session location
+        const targetLocationId = this.state.addProduct.locationId || this.state.locationId;
+
         if (qty <= 0) {
             this.notification.add("Số lượng phải lớn hơn 0", { type: "warning" });
             return;
         }
 
-        let barcodeToScan = term;
-
-        // Nếu đã chọn từ dropdown thì dùng chính xác ID hoặc Barcode của nó
         if (selected) {
-            // Logic register_scan hỗ trợ cả product_id nhưng hiện tại đang nhận search string
-            // Tốt nhất là gọi register_scan trực tiếp với ID nếu có
-            await this.manualAddProductById(selected.id, qty, selected.display_name);
+            await this.manualAddProductById(selected.id, qty, selected.display_name, targetLocationId);
             this.closeAddProductDialog();
             return;
         }
@@ -568,20 +579,23 @@ export class InventoryScanner extends Component {
         }
 
         // Fallback: search string manual
-        await this.manualAddProduct(term, qty);
+        await this.manualAddProduct(term, qty, targetLocationId);
         this.closeAddProductDialog();
     }
 
-    async manualAddProductById(productId, qty, name) {
+    async manualAddProductById(productId, qty, name, locationId) {
         try {
             this.state.syncing = true;
+            // Use passed locationId
+            const locId = locationId || this.state.locationId;
+
             const scanResult = await this.orm.call(
                 "inventory.scan.session",
                 "register_scan",
                 [
                     this.state.sessionId,
                     productId,
-                    this.state.locationId,
+                    locId,
                     qty,
                     false,
                     false,
@@ -602,9 +616,11 @@ export class InventoryScanner extends Component {
         }
     }
 
-    async manualAddProduct(term, qty) {
+    async manualAddProduct(term, qty, locationId) {
         try {
             this.state.syncing = true;
+            const locId = locationId || this.state.locationId;
+
             const productResult = await this.orm.call(
                 "inventory.scan.session",
                 "search_product",
@@ -622,7 +638,7 @@ export class InventoryScanner extends Component {
                 [
                     this.state.sessionId,
                     productResult.product_id,
-                    this.state.locationId,
+                    locId,
                     qty,
                     false,
                     false,
