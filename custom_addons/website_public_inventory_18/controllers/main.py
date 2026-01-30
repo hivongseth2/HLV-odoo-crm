@@ -67,7 +67,21 @@ def _get_product_image_url(product):
     # Nên dùng route image custom của mình ở dưới, trong đó sẽ handle việc fallback.
     return f"/search_stock/image/{product.id}"
 
+# --- CẬP NHẬT: Helper check combo qua BoM Kit ---
+def _is_combo_product(env, product_tmpl_id):
+    # Check if this product template has any active phantom BoM (Kit)
+    if not product_tmpl_id: return False
+    
+    # Check BoM Kit only (removed is_combo field dependency)
+    count = env['mrp.bom'].sudo().search_count([
+        ('product_tmpl_id', '=', product_tmpl_id.id),
+        ('active', '=', True),
+        ('type', '=', 'phantom')
+    ])
+    return count > 0
+
 class PublicInventory(http.Controller):
+
     
     # --- CẬP NHẬT: Route ảnh có fallback mặc định ---
     @http.route(["/search_stock/image/<int:product_id>"], type="http", auth="public")
@@ -77,19 +91,69 @@ class PublicInventory(http.Controller):
         
         record = request.env['product.product'].sudo().browse(product_id).exists()
         
-        # Nếu không có record hoặc không có ảnh -> Trả về placeholder mặc định của Odoo
+        # Nếu không có record hoặc không có ảnh -> Trả về placeholder mặc định 
         if not record or not record.image_128:
             return request.redirect('/web/static/img/placeholder.png')
 
         image_base64 = record.image_128
         image_data = base64.b64decode(image_base64)
         mimetype = guess_mimetype(image_data)
-        
-        headers = [
-            ('Content-Type', mimetype),
-            ('Cache-Control', 'public, max-age=604800'),
-        ]
+        headers = [('Content-Type', mimetype), ('Cache-Control', 'public, max-age=604800')]
         return request.make_response(image_data, headers)
+
+    def _get_breakdown_details(self, env, product, warehouse_id, company_ids):
+        Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
+        Warehouse = env["stock.warehouse"].sudo().with_context(allowed_company_ids=company_ids)
+        
+        def _get_qty(pid, wh):
+             domain = [("product_id", "=", pid), ("location_id", "child_of", wh.view_location_id.id), ("location_id.usage", "=", "internal")]
+             grps = Quant.read_group(domain, ["product_id", "quantity:sum", "reserved_quantity:sum"], ["product_id"], lazy=False)
+             if grps:
+                 g = grps[0]
+                 return _rg_sum(g, "quantity"), _rg_sum(g, "reserved_quantity")
+             return 0.0, 0.0
+
+        tmpl = product.product_tmpl_id
+        is_combo = _is_combo_product(env, tmpl)
+        
+        if warehouse_id: wh = Warehouse.browse(int(warehouse_id)).exists(); warehouses = wh if wh else Warehouse.browse([])
+        else: warehouses = _get_allowed_warehouses() or Warehouse.search([])
+
+        if is_combo:
+            lines = []
+            bom = env['mrp.bom'].sudo().search([
+                ('product_tmpl_id', '=', tmpl.id),
+                ('active', '=', True),
+                ('type', '=', 'phantom')
+            ], limit=1)
+            if bom:
+                lines = bom.bom_line_ids
+            
+            rows = []
+            for line in lines:
+                child = line.product_id
+                if not child: continue
+                wh_rows = []
+                for wh in warehouses:
+                    qt, qr = _get_qty(child.id, wh)
+                    wh_rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_total": qt, "qty_reserved": qr, "qty_available": qt - qr})
+                
+                rows.append({
+                    "child_product_id": child.id,
+                    "default_code": child.default_code or "",
+                    "name": child.name or "",
+                    "uom": child.uom_id.name or "",
+                    "image_url": _get_product_image_url(child),
+                    "component_qty_in_combo": float(line.product_qty or 1.0),
+                    "warehouses": wh_rows
+                })
+            return {"mode": "components_by_warehouse", "rows": rows}
+        else:
+            rows = []
+            for wh in warehouses:
+                qt, qr = _get_qty(product.id, wh)
+                rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr})
+            return {"mode": "warehouses", "rows": rows}
 
     @http.route(["/search_stock"], type="http", auth="public", website=True, sitemap=True)
     def inventory_page(self, q="", warehouse_id=None, page=1, **kw):
@@ -122,17 +186,21 @@ class PublicInventory(http.Controller):
         Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
         Product = env["product.product"].sudo().with_context(allowed_company_ids=company_ids)
         
-        # Lấy param từ request
         low_stock_mode = request.params.get('low_stock') in ('1', 'true', 'on')
         combo_search_mode = request.params.get('combo_search') in ('1', 'true', 'on')
 
         # 3. DOMAIN
         domain = [("active", "=", True)]
         
-        # --- CẬP NHẬT: Lọc Combo nếu không check ---
+        # --- Lọc Combo (BoM Kit) ---
+        # combo_search_mode = OFF: Lọc BỎ sản phẩm có BOM Kit (không hiển thị combo)
+        # combo_search_mode = ON: Tìm TẤT CẢ sản phẩm (bao gồm cả combo)
         if not combo_search_mode:
-            # Giả sử field is_combo nằm trên product.template
-            domain.append(("product_tmpl_id.is_combo", "=", False))
+            # Tìm tất cả BOM Kit và exclude chúng
+            kit_boms = env['mrp.bom'].sudo().search([('type', '=', 'phantom'), ('active', '=', True)])
+            kit_tmpl_ids = kit_boms.mapped('product_tmpl_id').ids
+            if kit_tmpl_ids:
+                domain.append(('product_tmpl_id', 'not in', kit_tmpl_ids))
 
         if q:
             search_groups = [t.strip() for t in q.split(",") if t.strip()]
@@ -158,15 +226,30 @@ class PublicInventory(http.Controller):
         found_products = Product.search(domain, order="name asc") 
         final_product_ids = set()
         
+        # Pre-fetch BoM status for found products to avoid N+1 queries loop
+        # Map tmpl_id -> is_combo
+        found_tmpl_ids = found_products.mapped('product_tmpl_id').ids
+        # Find which of these are combos
+        boms = env['mrp.bom'].sudo().search([
+            ('product_tmpl_id', 'in', found_tmpl_ids),
+            ('type', '=', 'phantom'), 
+            ('active', '=', True)
+        ])
+        combo_tmpl_ids = set(boms.mapped('product_tmpl_id').ids)
+
         for p in found_products:
             final_product_ids.add(p.id)
-            # Chỉ bung Combo con nếu chế độ tìm combo đang BẬT
             if combo_search_mode:
-                is_combo = getattr(p.product_tmpl_id, "is_combo", False)
+                is_combo = p.product_tmpl_id.id in combo_tmpl_ids
+                # Nếu là combo (và đang bật search combo), bung children (nếu cần show con)
+                # Logic cũ bung con từ combo.product. Logic mới lấy từ BoM.
                 if is_combo:
-                    combo_items = p.product_tmpl_id.combo_product_id
-                    child_ids = combo_items.mapped('product_id').ids
-                    final_product_ids.update(child_ids)
+                    # Find children for this specific product
+                    # Optimized: filter boms in memory
+                    product_bom = next((b for b in boms if b.product_tmpl_id.id == p.product_tmpl_id.id), None)
+                    if product_bom:
+                         child_ids = product_bom.bom_line_ids.mapped('product_id').ids
+                         final_product_ids.update(child_ids)
 
         sorted_pids = sorted(list(final_product_ids))
         
@@ -195,11 +278,21 @@ class PublicInventory(http.Controller):
         quant_groups = Quant.read_group(quant_domain, ["product_id", "quantity:sum"], ["product_id"], lazy=False)
         qty_map = {g["product_id"][0]: _rg_sum(g, "quantity") for g in quant_groups if g.get("product_id")}
 
+        # Check combos for current page products
+        # We need to re-check combo status for page_pids (some might be children added above)
+        page_tmpl_ids = products_to_display.mapped('product_tmpl_id').ids
+        page_boms = env['mrp.bom'].sudo().search([
+            ('product_tmpl_id', 'in', page_tmpl_ids),
+            ('type', '=', 'phantom'), 
+            ('active', '=', True)
+        ])
+        page_combo_tmpl_ids = set(page_boms.mapped('product_tmpl_id').ids)
+
         # 6. BUILD ROWS
         rows = []
         for p in products_to_display:
             pid = p.id
-            is_combo = bool(getattr(p.product_tmpl_id, "is_combo", False))
+            is_combo = p.product_tmpl_id.id in page_combo_tmpl_ids
             qty_total = 0.0
             
             if is_combo: qty_total = self._compute_combo_qty(env, p, wid)
@@ -221,7 +314,6 @@ class PublicInventory(http.Controller):
                 "uom": p.uom_id.name,
                 "qty_forecasted": qty_forecasted,
                 "qty_total": qty_total, 
-                "qty_total": qty_total, 
                 "list_price": p.list_price,
                 "price_web": getattr(p.product_tmpl_id, "x_studio_ga_web", 0.0) or 0.0,
                 "price_tmdt": getattr(p.product_tmpl_id, "x_studio_gia_san_tmdt", 0.0) or 0.0,
@@ -231,6 +323,7 @@ class PublicInventory(http.Controller):
                 "image_url": _get_product_image_url(p),
                 "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
                 "is_combo": is_combo,
+                "breakdown": self._get_breakdown_details(env, p, wid, company_ids),
             })
 
         return request.render(
@@ -248,18 +341,30 @@ class PublicInventory(http.Controller):
         )
 
     def _compute_combo_qty(self, env, product, warehouse_id):
-        ComboLines = env['combo.product'].sudo().search([('product_template_id', '=', product.product_tmpl_id.id)])
-        if not ComboLines: return 0.0
+        # Get BOM Kit lines
+        bom = env['mrp.bom'].sudo().search([
+            ('product_tmpl_id', '=', product.product_tmpl_id.id),
+            ('active', '=', True),
+            ('type', '=', 'phantom')
+        ], limit=1)
+        
+        if not bom or not bom.bom_line_ids:
+            return 0.0
+        
         possible_sets = []
-        for line in ComboLines:
+        for line in bom.bom_line_ids:
             comp = line.product_id
             if not comp: continue
+            
             if warehouse_id: comp_ctx = comp.with_context(warehouse=warehouse_id, location=False)
             else: comp_ctx = comp.with_context(warehouse=False, location=False)
+            
             hand_qty = comp_ctx.qty_available
-            needed_qty = line.product_quantity or 1.0
+            needed_qty = line.product_qty or 1.0
+            
             if needed_qty > 0: possible_sets.append(int(hand_qty // needed_qty))
             else: possible_sets.append(999999)
+            
         return float(max(0, min(possible_sets))) if possible_sets else 0.0
 
     @http.route(["/search_stock/json"], type="json", auth="public", methods=["POST"])
@@ -275,6 +380,7 @@ class PublicInventory(http.Controller):
         pid = _as_int_or_none(product_id)
         if not pid: return {"ok": False, "error": "invalid_product_id", "rows": []}
         
+        # ... helper ...
         def _sum_for_product_in_wh(Quant, product_id, warehouse):
             domain = [("product_id", "=", product_id), ("location_id", "child_of", warehouse.view_location_id.id), ("location_id.usage", "=", "internal")]
             grps = Quant.read_group(domain, ["product_id", "quantity:sum", "reserved_quantity:sum"], ["product_id"], lazy=False)
@@ -299,14 +405,22 @@ class PublicInventory(http.Controller):
         if not product: return {"ok": False, "error": "product_not_found", "rows": []}
         
         tmpl = product.product_tmpl_id
-        is_combo = bool(getattr(tmpl, "is_combo", False))
+        # Check BoM
+        is_combo = _is_combo_product(env, tmpl)
 
         if is_combo:
             if wid: wh = Warehouse.browse(wid).exists(); warehouses = wh if wh else Warehouse.browse([])
             else: warehouses = _get_allowed_warehouses() or Warehouse.search([])
             
-            ComboLine = env["combo.product"].sudo().with_context(allowed_company_ids=company_ids)
-            lines = ComboLine.search([("product_template_id", "=", tmpl.id)])
+            lines = []
+            bom = env['mrp.bom'].sudo().search([
+                ('product_tmpl_id', '=', tmpl.id),
+                ('active', '=', True),
+                ('type', '=', 'phantom')
+            ], limit=1)
+            if bom:
+                lines = bom.bom_line_ids
+            
             rows = []
             for line in lines:
                 child = line.product_id
@@ -318,7 +432,7 @@ class PublicInventory(http.Controller):
                 rows.append({
                     "child_product_id": child.id, "default_code": child.default_code or "", "name": child.name or "", "uom": child.uom_id.name or "",
                     "image_url": _get_product_image_url(child),
-                    "component_qty_in_combo": float(line.product_quantity or 1.0), "warehouses": wh_rows
+                    "component_qty_in_combo": float(getattr(line, 'product_quantity', 0) or getattr(line, 'product_qty', 1.0)), "warehouses": wh_rows
                 })
             return {"ok": True, "mode": "components_by_warehouse", "rows": rows}
 
@@ -330,7 +444,6 @@ class PublicInventory(http.Controller):
             rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr})
         return {"ok": True, "mode": "warehouses", "rows": rows}
     
-    # --- CẬP NHẬT: Gợi ý cũng lọc theo checkbox và bổ sung thông tin tồn kho ---
     @http.route(["/search_stock/suggest"], type="json", auth="public", methods=["POST"])
     def search_suggest(self, q="", combo_search=False):
         if not _pw_allowed(): return {"ok": False, "error": "access_denied", "products": []}
@@ -343,9 +456,12 @@ class PublicInventory(http.Controller):
         Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
         
         domain = [('active', '=', True)]
-        # Nếu không tick tìm combo -> Lọc bỏ combo
+        # Nếu không tick tìm combo -> Lọc bỏ combo (BoM Kit)
         if not combo_search:
-            domain.append(("product_tmpl_id.is_combo", "=", False))
+            kit_boms = env['mrp.bom'].sudo().search([('type', '=', 'phantom'), ('active', '=', True)])
+            kit_tmpl_ids = kit_boms.mapped('product_tmpl_id').ids
+            if kit_tmpl_ids:
+                domain.append(('product_tmpl_id', 'not in', kit_tmpl_ids))
 
         tokens = q.split()
         domains_per_token = []
@@ -354,14 +470,12 @@ class PublicInventory(http.Controller):
         
         if domains_per_token: domain = expression.AND([domain, expression.AND(domains_per_token)])
         
-        products = Product.search(domain, limit=10, order='name')
+        # Search ALL matching products first (no limit yet) to calculate stock for sorting
+        products = Product.search(domain, limit=100, order='name')
         
-        # Tính toán tồn kho tổng cho các warehouse được phép
+        # Tính toán tồn kho
         pids = products.ids
-        quant_domain = [
-            ("product_id", "in", pids),
-            ("location_id.usage", "=", "internal")
-        ]
+        quant_domain = [("product_id", "in", pids), ("location_id.usage", "=", "internal")]
         allowed_whs = _get_allowed_warehouses()
         if allowed_whs:
             quant_domain.append(("location_id", "child_of", allowed_whs.mapped('view_location_id').ids))
@@ -369,9 +483,18 @@ class PublicInventory(http.Controller):
         quant_groups = Quant.read_group(quant_domain, ["product_id", "quantity:sum"], ["product_id"], lazy=False)
         qty_map = {g["product_id"][0]: _rg_sum(g, "quantity") for g in quant_groups if g.get("product_id")}
 
+        # Check combos for suggestions
+        prod_tmpl_ids = products.mapped('product_tmpl_id').ids
+        prod_boms = env['mrp.bom'].sudo().search([
+            ('product_tmpl_id', 'in', prod_tmpl_ids),
+            ('type', '=', 'phantom'), 
+            ('active', '=', True)
+        ])
+        combo_tmpl_ids = set(prod_boms.mapped('product_tmpl_id').ids)
+
         results = []
         for p in products:
-            is_combo = bool(getattr(p.product_tmpl_id, "is_combo", False))
+            is_combo = p.product_tmpl_id.id in combo_tmpl_ids
             qty_total = 0.0
             if is_combo:
                 qty_total = self._compute_combo_qty(env, p, None)
@@ -388,7 +511,8 @@ class PublicInventory(http.Controller):
                 "is_combo": is_combo,
             })
         
-        # Sắp xếp theo số lượng tồn kho giảm dần
-        results.sort(key=lambda x: x['qty_total'], reverse=True)
+        # Sort by quantity (stock first), then limit to 10
+        results.sort(key=lambda x: (-x['qty_total'], x['name']))  # Negative for descending qty, then name ascending
+        results = results[:10]
         
         return {"ok": True, "products": results}

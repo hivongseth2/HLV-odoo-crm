@@ -249,33 +249,36 @@ def _build_search_domain(order_code, phone, email):
 
 def _get_combo_product_display(order_line):
     """
-    Get product display for combo products.
+    Get product display for combo products (using BOM Kit).
     Returns a string like "Product A (Combo: X, Y, Z)"
     """
     product = order_line.product_id
-    if not product or not hasattr(product.product_tmpl_id, 'is_combo'):
-        return product.name if product else ""
+    if not product:
+        return ""
     
-    # Check if it's a combo
-    if not getattr(product.product_tmpl_id, 'is_combo', False):
+    # Check if it's a combo via BOM Kit
+    bom = request.env['mrp.bom'].sudo().search([
+        ('product_tmpl_id', '=', product.product_tmpl_id.id),
+        ('active', '=', True),
+        ('type', '=', 'phantom')
+    ], limit=1)
+    
+    if not bom:
         return product.name
     
-    # Get combo components
+    # Get BOM components
     try:
-        ComboLine = request.env['combo.product'].sudo()
-        combo_lines = ComboLine.search([
-            ('product_template_id', '=', product.product_tmpl_id.id)
-        ])
-        
-        if combo_lines:
-            component_names = [line.product_id.name for line in combo_lines if line.product_id]
+        if bom.bom_line_ids:
+            component_names = [line.product_id.name for line in bom.bom_line_ids if line.product_id]
             if component_names:
-                components_str = ", ".join(component_names)  # Show all components
+                components_str = ", ".join(component_names)
                 return f"{product.name} (Combo: {components_str})"
     except Exception as e:
         _logger.debug(f"Could not fetch combo components: {e}")
     
     return product.name
+
+
 
 
 def _get_order_products_summary(order):
@@ -354,26 +357,30 @@ def _get_order_lines(order):
         return order_lines
     
     # Bước 1: Xây dựng mapping: product_id -> combo parent line id
-    # để biết line nào là component của combo nào
+    # Sử dụng BOM Kit thay vì is_combo
     component_to_parent_map = {}  # {component_product_id: parent_line_id}
     parent_combo_lines = {}  # {line_id: line} - lưu các combo parent line
     
     for line in order.order_line:
         product = line.product_id
-        if product and hasattr(product.product_tmpl_id, 'is_combo'):
-            if getattr(product.product_tmpl_id, 'is_combo', False):
-                # Đây là combo product parent
-                parent_combo_lines[line.id] = line
-                
-                # Lấy danh sách component
-                ComboLine = request.env['combo.product'].sudo()
-                combo_lines = ComboLine.search([
-                    ('product_template_id', '=', product.product_tmpl_id.id)
-                ])
-                for combo_line in combo_lines:
-                    if combo_line.product_id:
-                        # Map component product -> parent line
-                        component_to_parent_map[combo_line.product_id.id] = line.id
+        if not product:
+            continue
+            
+        # Check if combo via BOM Kit
+        bom = request.env['mrp.bom'].sudo().search([
+            ('product_tmpl_id', '=', product.product_tmpl_id.id),
+            ('active', '=', True),
+            ('type', '=', 'phantom')
+        ], limit=1)
+        
+        if bom:
+            # Đây là combo product parent
+            parent_combo_lines[line.id] = line
+            
+            # Lấy danh sách component từ BOM
+            for bom_line in bom.bom_line_ids:
+                if bom_line.product_id:
+                    component_to_parent_map[bom_line.product_id.id] = line.id
     
     # Bước 2: Build order lines với flag is_component và parent_combo_name
     for line in order.order_line:
@@ -386,63 +393,36 @@ def _get_order_lines(order):
         
         # Kiểm tra xem line này có phải là component của combo không
         if product and product.id in component_to_parent_map:
-            # Đây là component line
             is_component = True
             parent_line_id = component_to_parent_map[product.id]
             if parent_line_id in parent_combo_lines:
                 parent_line = parent_combo_lines[parent_line_id]
                 parent_combo_name = parent_line.product_id.name if parent_line.product_id else ""
         
-        # Try to get combo product display if available
-        if product and hasattr(product.product_tmpl_id, 'is_combo'):
-            try:
-                if getattr(product.product_tmpl_id, 'is_combo', False):
-                    is_combo = True
-                    
-                    # Kiểm tra tất cả component lines đã được giao đủ chưa
-                    # Tìm các order lines là component của combo này
-                    all_components_delivered = True
-                    
-                    for check_line in order.order_line:
-                        check_product = check_line.product_id
-                        # Nếu line này là component của combo hiện tại
-                        if check_product and check_product.id in component_to_parent_map:
-                            if component_to_parent_map[check_product.id] == line.id:
-                                # Đây là component của combo này
-                                qty_ordered = check_line.product_uom_qty or 0
-                                qty_delivered = check_line.qty_delivered or 0
-                                
-                                _logger.info(
-                                    f"Checking component: {check_product.name}, "
-                                    f"Ordered: {qty_ordered}, Delivered: {qty_delivered}"
-                                )
-                                
-                                if qty_delivered < qty_ordered:
-                                    all_components_delivered = False
-                    
-                    is_fully_delivered = all_components_delivered
-                    
-                    # DEBUG LOG
-                    _logger.info(
-                        f"Combo: {product_name}, "
-                        f"Is fully delivered: {is_fully_delivered}"
-                    )
+        # Check if this line is a combo (has BOM Kit)
+        if product and line.id in parent_combo_lines:
+            is_combo = True
+            
+            # Kiểm tra tất cả component lines đã được giao đủ chưa
+            all_components_delivered = True
+            
+            for check_line in order.order_line:
+                check_product = check_line.product_id
+                if check_product and check_product.id in component_to_parent_map:
+                    if component_to_parent_map[check_product.id] == line.id:
+                        qty_ordered = check_line.product_uom_qty or 0
+                        qty_delivered = check_line.qty_delivered or 0
                         
-            except Exception as e:
-                _logger.error(f"Error checking combo delivery: {e}", exc_info=True)
+                        if qty_delivered < qty_ordered:
+                            all_components_delivered = False
+            
+            is_fully_delivered = all_components_delivered
         else:
-            # Sản phẩm thường hoặc component - check delivery theo qty_delivered
+            # Sản phẩm thường hoặc component
             qty_ordered = line.product_uom_qty or 0
             qty_delivered = line.qty_delivered or 0
             if qty_ordered > 0 and qty_delivered >= qty_ordered:
                 is_fully_delivered = True
-            
-            # DEBUG LOG
-            _logger.info(
-                f"Regular/Component product: {product_name}, "
-                f"Ordered: {qty_ordered}, Delivered: {qty_delivered}, "
-                f"Is fully delivered: {is_fully_delivered}"
-            )
         
         order_lines.append({
             'product_name': product_name,
