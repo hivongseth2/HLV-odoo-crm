@@ -322,38 +322,25 @@ class PickingExportWizard(models.TransientModel):
         product_code = prod.default_code or (prod.barcode if hasattr(prod, 'barcode') else "") or ""
         product_name = prod.display_name or prod.name or ""
         
-        # UoM
-        if ml:
-            uom = ml.product_uom_id or prod.uom_id
-            qty = ml.qty_done or 0.0
-            location_name = (ml.location_id and ml.location_id.complete_name) or ""
-        else:
-            uom = move.product_uom or prod.uom_id
-            qty = move.qty_done if hasattr(move, 'qty_done') else (move.product_uom_qty or 0.0)
-            location_name = (move.location_id and move.location_id.complete_name) or ""
-        
-        uom_name = (uom and uom.name) or ""
-        
-        # Lấy thông tin từ Sale Order Line
+        # Lấy thông tin từ Sale Order Line trước
         sol = getattr(move, 'sale_line_id', False) if move else False
-        don_gia = 0.0
-        thanh_tien = 0.0
-        ty_le_ck = 0.0
-        tien_chiet_khau = 0.0
-        ty_le_thue_gtgt = 0.0
-        tien_thue_gtgt = 0.0
         
+        # UoM và quantity: Ưu tiên từ Sale Order Line
         if sol:
+            # Lấy từ Sale Order Line
+            uom = sol.product_uom or prod.uom_id
+            qty = sol.product_uom_qty or 0.0
             don_gia = sol.price_unit or 0.0
             ty_le_ck = sol.discount or 0.0
             
-            # Tính tiền chiết khấu dựa trên số lượng của Picking
+            # Tính tiền chiết khấu
             tien_chiet_khau = (don_gia * qty * ty_le_ck) / 100
             
-            # Thành tiền = (Đơn giá * Số lượng) - Chiết khấu
-            thanh_tien = (don_gia * qty) - tien_chiet_khau
+            # Thành tiền = price_subtotal từ Sale Order Line (đã tính sẵn chiết khấu)
+            thanh_tien = sol.price_subtotal or 0.0
             
             # Thuế GTGT
+            ty_le_thue_gtgt = 0.0
             if sol.tax_id:
                 for tax in sol.tax_id:
                     ty_le_thue_gtgt = tax.amount or 0.0
@@ -362,13 +349,29 @@ class PickingExportWizard(models.TransientModel):
             # Tiền thuế = (Thành tiền sau chiết khấu) * % thuế
             tien_thue_gtgt = (thanh_tien * ty_le_thue_gtgt) / 100
         else:
-            # Fallback: lấy từ product
+            # Fallback: lấy từ picking/move line
+            if ml:
+                uom = ml.product_uom_id or prod.uom_id
+                qty = ml.qty_done or 0.0
+            else:
+                uom = move.product_uom or prod.uom_id
+                qty = move.qty_done if hasattr(move, 'qty_done') else (move.product_uom_qty or 0.0)
+            
+            # Fallback: lấy giá từ product
             don_gia = prod.list_price or 0.0
             thanh_tien = don_gia * qty
             tien_chiet_khau = 0.0
             ty_le_ck = 0.0
             ty_le_thue_gtgt = 0.0
             tien_thue_gtgt = 0.0
+        
+        # Location name (vẫn lấy từ move/move_line vì không có trong SOL)
+        if ml:
+            location_name = (ml.location_id and ml.location_id.complete_name) or ""
+        else:
+            location_name = (move.location_id and move.location_id.complete_name) or ""
+        
+        uom_name = (uom and uom.name) or ""
         
         # Đơn giá vốn và tiền vốn
         don_gia_von = prod.standard_price or 0.0
@@ -818,41 +821,52 @@ class PickingExportWizard(models.TransientModel):
         moves = picking.move_line_ids if picking.move_line_ids else picking.move_ids_without_package
         
         for line in moves:
-            # Determine product, qty, uom
+            # Determine move first
             if line._name == 'stock.move.line':
                 prod = line.product_id
-                qty = line.qty_done
-                uom = line.product_uom_id
                 move = line.move_id
             else:
                 prod = line.product_id
-                qty = line.quantity_done if hasattr(line, 'quantity_done') else line.product_uom_qty
-                uom = line.product_uom
                 move = line # Itself
             
             if not prod: continue
 
-            # Pricing from SOL
+            # Pricing and quantity from SOL (ưu tiên)
             sol = move.sale_line_id if move and hasattr(move, 'sale_line_id') else False
-            price_unit = 0
-            price_subtotal = 0
-            discount = 0
-            tax_amount = 0
             
             if sol:
-                price_unit = sol.price_unit
-                discount = sol.discount
+                # Lấy từ Sale Order Line
+                qty = sol.product_uom_qty or 0.0
+                uom = sol.product_uom or prod.uom_id
+                price_unit = sol.price_unit or 0.0
+                discount = sol.discount or 0.0
+                price_subtotal = sol.price_subtotal or 0.0
+                
+                tax_amount = 0.0
                 if sol.tax_id:
                     tax_amount = sol.tax_id[0].amount
             else:
-                 # Fallback to product list price if no SOL
-                 price_unit = prod.list_price
-                 discount = 0.0
+                # Fallback: lấy từ picking/move line
+                if line._name == 'stock.move.line':
+                    qty = line.qty_done
+                    uom = line.product_uom_id
+                else:
+                    qty = line.quantity_done if hasattr(line, 'quantity_done') else line.product_uom_qty
+                    uom = line.product_uom
+                
+                # Fallback to product list price if no SOL
+                price_unit = prod.list_price
+                discount = 0.0
+                price_subtotal = 0.0
+                tax_amount = 0.0
 
-            # Computed fields dựa trên số lượng của Picking
+            # Computed fields
             tien_ck = (price_unit * qty * discount / 100)
-            # Thành tiền = (Đơn giá * Số lượng) - Chiết khấu
-            thanh_tien = (price_unit * qty) - tien_ck
+            # Thành tiền: Ưu tiên price_subtotal từ SOL, nếu không có thì tính
+            if sol and price_subtotal:
+                thanh_tien = price_subtotal
+            else:
+                thanh_tien = (price_unit * qty) - tien_ck
             
             # Tiền thuế = (Thành tiền sau chiết khấu) * % thuế
             tien_thue = (thanh_tien * tax_amount / 100) if tax_amount else 0
