@@ -256,7 +256,7 @@ class GHNCreateOrderWizard(models.TransientModel):
                 "service_id": int(self.service_id),
                 "height": int(self.height or 10),
                 "length": int(self.length or 10),
-                "weight": int(self.weight or 100),
+                "weight": int(self.weight or 1000),
                 "width": int(self.width or 10),
                 "insurance_value": int(self.insurance_value or 0),
                 "cod_value": int(self.cod_amount or 0)
@@ -341,7 +341,7 @@ class GHNCreateOrderWizard(models.TransientModel):
             # Dimensions & Weight using default logic first
             weight, l, w, h = picking._calculate_ghn_dimensions()
             res.update({
-                'weight': weight,
+                'weight': weight or 1000,
                 'length': l,
                 'width': w,
                 'height': h,
@@ -446,7 +446,7 @@ class GHNCreateOrderWizard(models.TransientModel):
             "service_id": int(self.service_id),
             "height": int(self.height),
             "length": int(self.length),
-            "weight": int(self.weight),
+            "weight": int(self.weight or 1000),
             "width": int(self.width),
             "insurance_value": int(self.insurance_value),
             "cod_value": int(self.cod_amount)
@@ -503,7 +503,7 @@ class GHNCreateOrderWizard(models.TransientModel):
             "to_district_id": int(self.district_id.district_id),
             "cod_amount": int(self.cod_amount),
             "content": str(self.content or f"Đơn hàng {order_ref}"),
-            "weight": int(self.weight),
+            "weight": int(self.weight or 1000),
             "length": int(self.length),
             "width": int(self.width),
             "height": int(self.height),
