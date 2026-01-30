@@ -55,6 +55,41 @@ class CrawlerUtils:
         
         # Remove duplicates while preserving order
         return list(dict.fromkeys(keywords))
+    
+    @staticmethod
+    def format_specs_table(soup_table, site_name, site_color="#007bff"):
+        """Format specs table into beautiful HTML"""
+        if not soup_table:
+            return ""
+        
+        rows = soup_table.find_all('tr')
+        if not rows:
+            return ""
+        
+        html = f"""
+        <div style='background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin: 15px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+            <div style='border-bottom: 3px solid {site_color}; padding-bottom: 10px; margin-bottom: 15px;'>
+                <h3 style='color: {site_color}; margin: 0; font-size: 18px; font-weight: 600;'>📦 {site_name}</h3>
+            </div>
+            <table style='width: 100%; border-collapse: collapse;'>
+        """
+        
+        for i, row in enumerate(rows):
+            cols = row.find_all('td')
+            if len(cols) >= 2:
+                label = cols[0].get_text(strip=True)
+                value = cols[1].get_text(strip=True)
+                
+                bg_color = '#f8f9fa' if i % 2 == 0 else '#ffffff'
+                html += f"""
+                <tr style='background: {bg_color};'>
+                    <td style='padding: 10px; font-weight: 500; color: #495057; width: 35%; border-bottom: 1px solid #e9ecef;'>{label}</td>
+                    <td style='padding: 10px; color: #212529; border-bottom: 1px solid #e9ecef;'>{value}</td>
+                </tr>
+                """
+        
+        html += """</table></div>"""
+        return html
 
     @staticmethod
     def search_ketnoitieudung(sku, product_name=None):
@@ -110,12 +145,14 @@ class CrawlerUtils:
         soup = BeautifulSoup(html, 'html.parser')
         
         # FIXED: Check new selector first, then fall back to old ones
-        specs_div = (soup.select_one('#tab-specification table') or
-                    soup.select_one('#thong-so-ky-thuat') or 
-                    soup.select_one('.tbl-technical'))
+        specs_table = (soup.select_one('#tab-specification table') or
+                      soup.select_one('#thong-so-ky-thuat table') or 
+                      soup.select_one('.tbl-technical'))
         
-        if specs_div:
-            return str(specs_div), None
+        if specs_table:
+            # Format into beautiful HTML
+            formatted_html = CrawlerUtils.format_specs_table(specs_table, "Ketnoitieudung.vn", "#28a745")
+            return formatted_html, None
         return None, "Không tìm thấy thông số kỹ thuật"
 
     @staticmethod
