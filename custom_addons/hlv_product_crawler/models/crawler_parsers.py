@@ -306,30 +306,31 @@ class CrawlerUtils:
                 continue
                 
             soup = BeautifulSoup(html, 'html.parser')
-            # Try multiple selectors for product items
-            # Grid view uses .product__items, table view uses rows
-            product_item = (soup.select_one('.mecsu-button-popup-lg') or
-                           soup.select_one('.product__items a') or
-                           soup.select_one('a[href*="/chi-tiet/"]'))
             
-            if product_item:
-                # For mecsu-button-popup-lg, need to find detail link nearby
-                if 'mecsu-button-popup-lg' in (product_item.get('class') or []):
-                    # This is the specs popup button, find the actual product link
-                    detail_link = soup.select_one('a[href*="/chi-tiet/"]')
-                    if detail_link:
-                        href = detail_link.get('href')
-                    else:
-                        continue
-                else:
-                    href = product_item.get('href')
+            # FIXED: Mecsu search results use popups, not direct links
+            # IMPORTANT: Filter by title="Thông số kỹ thuật" to get specs button (not "Tải bảng giá")
+            popup_btn = soup.select_one('a.mecsu-button-popup-lg[title="Thông số kỹ thuật"]')
+            if popup_btn:
+                # Extract quick-view URL from value attribute
+                quick_view_path = popup_btn.get('value')
+                if quick_view_path and 'product-quick-view' in quick_view_path:
+                    # Step 2: Fetch quick-view page to get actual product link
+                    quick_view_url = f"{base_url}{quick_view_path}"
+                    quick_html, quick_error = CrawlerUtils.fetch_url(quick_view_url)
                     
-                if href:
-                    if not href.startswith('http'):
-                        return f"{base_url}{href}", None
-                    return href, None
+                    if quick_html:
+                        quick_soup = BeautifulSoup(quick_html, 'html.parser')
+                        # Step 3: Find "Xem chi tiết" link in quick-view response
+                        detail_links = quick_soup.select('a[href*="/chi-tiet/"]')
+                        for link in detail_links:
+                            if 'Xem chi tiết' in link.get_text():
+                                href = link.get('href')
+                                if href:
+                                    if not href.startswith('http'):
+                                        return f"{base_url}{href}", None
+                                    return href, None
         
-        return None, "Không tìm thấy sản phẩm (đã thử nhiều  biến thể)"
+        return None, "Không tìm thấy sản phẩm (đã thử nhiều biến thể)"
 
     @staticmethod
     def parse_mecsu_details(url):
