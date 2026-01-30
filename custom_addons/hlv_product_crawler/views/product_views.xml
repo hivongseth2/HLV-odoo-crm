@@ -38,7 +38,7 @@
                         </group>
                     </group>
                     <separator string="Crawled Specifications"/>
-                    <field name="crawled_specs" widget="html" nolabel="1" class="oe_memo_crawler"/>
+                    <field name="crawled_specs" widget="iframe" nolabel="1" style="min-height: 400px;"/>
                 </page>
             </notebook>
         </field>
