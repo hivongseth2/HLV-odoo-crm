@@ -38,7 +38,9 @@
                         </group>
                     </group>
                     <separator string="Crawled Specifications"/>
-                    <field name="crawled_specs" widget="iframe" nolabel="1" style="min-height: 400px;"/>
+                    <div class="oe_form_sheet_width">
+                        <field name="crawled_specs" widget="html" nolabel="1" options="{'style-inline': true}"/>
+                    </div>
                 </page>
             </notebook>
         </field>
