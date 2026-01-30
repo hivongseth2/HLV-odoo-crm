@@ -37,20 +37,32 @@ class CrawlerUtils:
     def search_ketnoitieudung(sku):
         """Search for product and return (url, error_message) tuple"""
         base_url = "https://www.ketnoitieudung.vn"
-        search_url = f"{base_url}/tim-kiem?q={urllib.parse.quote(sku)}"
-        html, error = CrawlerUtils.fetch_url(search_url)
-        if not html:
-            return None, error or "Không tìm thấy"
         
-        soup = BeautifulSoup(html, 'html.parser')
-        product_item = soup.select_one('.product-item a') 
-        if product_item:
-            href = product_item.get('href')
-            if href:
-                if not href.startswith('http'):
-                    return f"{base_url}{href}", None
-                return href, None
-        return None, "Không tìm thấy sản phẩm"
+        # Try multiple query variations for better matching
+        queries = [
+            sku,
+            sku.replace('-', '').replace(' ', ''),
+            sku.upper(),
+            sku.lower(),
+        ]
+        
+        for query in queries:
+            search_url = f"{base_url}/tim-kiem?q={urllib.parse.quote(query)}"
+            html, error = CrawlerUtils.fetch_url(search_url)
+            if not html:
+                continue
+        
+            soup = BeautifulSoup(html, 'html.parser')
+            product_item = (soup.select_one('.product-item a') or
+                           soup.select_one('a[href*="/san-pham/"]'))
+            if product_item:
+                href = product_item.get('href')
+                if href:
+                    if not href.startswith('http'):
+                        return f"{base_url}{href}", None
+                    return href, None
+        
+        return None, "Không tìm thấy sản phẩm (đã thử nhiều biến thể)"
 
     @staticmethod
     def parse_ketnoitieudung_details(url):
@@ -70,20 +82,35 @@ class CrawlerUtils:
     def search_visior(sku):
         """Search for product and return (url, error_message) tuple"""
         base_url = "https://visior.vn"
-        search_url = f"{base_url}/tim-kiem?q={urllib.parse.quote(sku)}"
-        html, error = CrawlerUtils.fetch_url(search_url)
-        if not html:
-            return None, error or "Không tìm thấy"
         
-        soup = BeautifulSoup(html, 'html.parser')
-        product_item = soup.select_one('.product-block .name a')
-        if product_item:
-             href = product_item.get('href')
-             if href:
-                if not href.startswith('http'):
-                    return f"{base_url}{href}", None
-                return href, None
-        return None, "Không tìm thấy sản phẩm"
+        # Try multiple query variations for better matching
+        queries = [
+            sku,  # Original
+            sku.replace('-', '').replace(' ', ''),  # No dashes/spaces: 48228301
+            sku.upper(),  # Uppercase
+            sku.lower(),  # Lowercase
+        ]
+        
+        for query in queries:
+            # CORRECTED: Use /search instead of /tim-kiem
+            search_url = f"{base_url}/search?q={urllib.parse.quote(query)}"
+            html, error = CrawlerUtils.fetch_url(search_url)
+            if not html:
+                continue  # Try next variation
+            
+            soup = BeautifulSoup(html, 'html.parser')
+            # Try multiple selectors
+            product_item = (soup.select_one('.product-block .name a') or 
+                           soup.select_one('.product-item a') or
+                           soup.select_one('a[href*="/san-pham/"]'))
+            if product_item:
+                 href = product_item.get('href')
+                 if href:
+                    if not href.startswith('http'):
+                        return f"{base_url}{href}", None
+                    return href, None
+        
+        return None, "Không tìm thấy sản phẩm (đã thử nhiều biến thể)"
 
     @staticmethod
     def parse_visior_details(url):
@@ -105,18 +132,33 @@ class CrawlerUtils:
     def search_thbvietnam(sku):
         """Search for product and return (url, error_message) tuple"""
         base_url = "https://thbvietnam.com"
-        search_url = f"{base_url}/catalogsearch/result/?q={urllib.parse.quote(sku)}"
-        html, error = CrawlerUtils.fetch_url(search_url)
-        if not html:
-            return None, error or "Không tìm thấy"
-            
-        soup = BeautifulSoup(html, 'html.parser')
-        product_item = soup.select_one('.product-item-link')
-        if product_item:
-            href = product_item.get('href')
-            if href:
-                return href, None
-        return None, "Không tìm thấy sản phẩm"
+        
+        # Try multiple query variations
+        queries = [
+            sku,
+            sku.replace('-', '').replace(' ', ''),
+            sku.upper(),
+            sku.lower(),
+        ]
+        
+        for query in queries:
+            # CORRECTED: Use /tim-kiem instead of /catalogsearch/result/
+            search_url = f"{base_url}/tim-kiem?q={urllib.parse.quote(query)}"
+            html, error = CrawlerUtils.fetch_url(search_url)
+            if not html:
+                continue
+                
+            soup = BeautifulSoup(html, 'html.parser')
+            # Try multiple selectors
+            product_item = (soup.select_one('.product-item-link') or
+                           soup.select_one('.product-item a') or
+                           soup.select_one('a[href*="/san-pham/"]'))
+            if product_item:
+                href = product_item.get('href')
+                if href:
+                    return href, None
+        
+        return None, "Không tìm thấy sản phẩm (đã thử nhiều biến thể)"
 
     @staticmethod
     def parse_thbvietnam_details(url):
