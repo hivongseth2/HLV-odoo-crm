@@ -438,7 +438,7 @@ class GHNCreateOrderWizard(models.TransientModel):
                 "code": product.default_code or str(product.id),
                 "quantity": int(move.product_uom_qty),
                 "price": int(product.lst_price or 0),
-                "weight": int((product.weight or 0) * 1000) or 100,
+                "weight": int((product.weight or 0) * 1000) or 1000,
                 "length": int(product.product_length or 10),
                 "width": int(product.product_width or 10),
                 "height": int(product.product_height or 10),
