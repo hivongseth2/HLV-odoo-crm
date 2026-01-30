@@ -29,6 +29,12 @@
                                 <field name="thbvietnam_url"/>
                                 <button name="action_crawl_thbvietnam" string="Fetch" type="object" class="btn-secondary"/>
                             </div>
+
+                            <label for="mecsu_url"/>
+                            <div class="o_row">
+                                <field name="mecsu_url"/>
+                                <button name="action_crawl_mecsu" string="Fetch" type="object" class="btn-secondary"/>
+                            </div>
                         </group>
                     </group>
                     <group string="Crawled Data">
