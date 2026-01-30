@@ -10,7 +10,7 @@ class ProductTemplate(models.Model):
     thbvietnam_url = fields.Char(string="THB Vietnam URL", help="URL to crawl technical specs from thbvietnam.com")
     mecsu_url = fields.Char(string="Mecsu URL", help="URL to crawl technical specs from mecsu.vn")
     
-    crawled_specs = fields.Html(string="Crawled Specifications", sanitize=False)
+    crawled_specs = fields.Html(string="Crawled Specifications", sanitize=False, sanitize_attributes=False, sanitize_tags=False, strip_style=False)
 
     def action_crawl_ketnoitieudung(self):
         import logging
