@@ -37,9 +37,8 @@
                             </div>
                         </group>
                     </group>
-                    <group string="Crawled Data">
-                        <field name="crawled_specs" widget="html" nolabel="1"/>
-                    </group>
+                    <separator string="Crawled Specifications"/>
+                    <field name="crawled_specs" widget="html" nolabel="1" class="oe_memo_crawler"/>
                 </page>
             </notebook>
         </field>
