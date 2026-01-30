@@ -357,19 +357,28 @@ class PickingExportWizard(models.TransientModel):
             # Logic cho non-POS orders: Xuất service combo headers và stock moves
             processed_sale_lines = set()  # Track đã xuất combo cha chưa
             
-            # Bước 1: Xuất tất cả service combo headers từ Sale Order
+            # Bước 1: Xuất tất cả combo headers từ Sale Order (Cả Service và BoM Kit)
             if so:
                 for sol in so.order_line:
-                    # Chỉ xuất service products (combo headers không có stock move)
+                    is_combo = False
+                    # 1. Check Service
                     if sol.product_id.type == 'service':
-                        # Xuất dòng service combo
-                        service_row = self._build_row_data(
+                        is_combo = True
+                    # 2. Check BoM Kit (Phantom)
+                    else:
+                        bom = self.env['mrp.bom']._bom_find(sol.product_id, bom_type='phantom')
+                        if bom:
+                            is_combo = True
+                    
+                    if is_combo:
+                        # Xuất dòng combo header
+                        combo_row = self._build_row_data(
                             picking, so, sol.product_id, None, None,
                             scheduled_date_str, picking_name, partner_code, partner_name,
                             partner_address, partner_vat, sale_name, sale_user_code,
                             dien_giai, ly_do_xuat, warehouse_code, sale_line=sol
                         )
-                        rows.append(service_row)
+                        rows.append(combo_row)
                         processed_sale_lines.add(sol.id)
             else:
                  # Nếu không tìm thấy SO thì không thể xuất service lines
