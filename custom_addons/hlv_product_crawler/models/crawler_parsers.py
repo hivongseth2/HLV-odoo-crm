@@ -109,7 +109,10 @@ class CrawlerUtils:
             return None, error or "Lỗi tải trang"
         soup = BeautifulSoup(html, 'html.parser')
         
-        specs_div = soup.select_one('#thong-so-ky-thuat') or soup.select_one('.tbl-technical')
+        # FIXED: Check new selector first, then fall back to old ones
+        specs_div = (soup.select_one('#tab-specification table') or
+                    soup.select_one('#thong-so-ky-thuat') or 
+                    soup.select_one('.tbl-technical'))
         
         if specs_div:
             return str(specs_div), None
