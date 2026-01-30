@@ -115,18 +115,61 @@ class ProductTemplate(models.Model):
                 self.crawled_specs = (self.crawled_specs or "") + msg
 
     def action_crawl_all(self):
+        import logging
+        _logger = logging.getLogger(__name__)
+        
         for record in self:
+            _logger.info(f"=== Starting crawl for product: {record.name} (ID: {record.id}) ===")
+            _logger.info(f"Product default_code: {record.default_code}")
+            
+            # Check if product has default_code
+            if not record.default_code:
+                record.crawled_specs = """
+                    <div style='background: #fff3cd; padding: 15px; border-radius: 5px; border-left: 4px solid #ffc107;'>
+                        <h3 style='color: #856404; margin: 0 0 10px 0;'>⚠️ Không thể tìm kiếm</h3>
+                        <p style='margin: 0; color: #856404;'>Sản phẩm chưa có <b>Mã nội bộ (Internal Reference)</b>.</p>
+                        <p style='margin: 5px 0 0 0; color: #856404;'>Vui lòng thêm mã sản phẩm trước khi crawl.</p>
+                    </div>
+                """
+                _logger.warning(f"Product {record.name} has no default_code, skipping crawl")
+                continue
+            
             # Clear previous specs and add header
             record.crawled_specs = f"""
                 <div style='background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 15px;'>
                     <h2 style='color: #495057; margin: 0 0 10px 0;'>🔍 Kết quả tìm kiếm</h2>
-                    <p style='margin: 0; color: #6c757d;'>Mã sản phẩm: <b>{record.default_code or 'Chưa có mã'}</b></p>
+                    <p style='margin: 0; color: #6c757d;'>Mã sản phẩm: <b>{record.default_code}</b></p>
                     <p style='margin: 5px 0 0 0; color: #6c757d; font-size: 0.9em;'>Đang tìm kiếm trên 4 trang web...</p>
                 </div>
             """
             
             # Try all sites - no exceptions, just log results
-            record.action_crawl_ketnoitieudung()
-            record.action_crawl_visior()
-            record.action_crawl_thbvietnam()
-            record.action_crawl_mecsu()
+            try:
+                _logger.info("Crawling Ketnoitieudung...")
+                record.action_crawl_ketnoitieudung()
+            except Exception as e:
+                _logger.error(f"Error crawling Ketnoitieudung: {e}")
+                record.crawled_specs += f"<div style='color: red;'>Lỗi Ketnoitieudung: {str(e)}</div>"
+            
+            try:
+                _logger.info("Crawling Visior...")
+                record.action_crawl_visior()
+            except Exception as e:
+                _logger.error(f"Error crawling Visior: {e}")
+                record.crawled_specs += f"<div style='color: red;'>Lỗi Visior: {str(e)}</div>"
+            
+            try:
+                _logger.info("Crawling THB Vietnam...")
+                record.action_crawl_thbvietnam()
+            except Exception as e:
+                _logger.error(f"Error crawling THB Vietnam: {e}")
+                record.crawled_specs += f"<div style='color: red;'>Lỗi THB: {str(e)}</div>"
+            
+            try:
+                _logger.info("Crawling Mecsu...")
+                record.action_crawl_mecsu()
+            except Exception as e:
+                _logger.error(f"Error crawling Mecsu: {e}")
+                record.crawled_specs += f"<div style='color: red;'>Lỗi Mecsu: {str(e)}</div>"
+            
+            _logger.info(f"=== Finished crawl for product: {record.name} ===")
