@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="hlv_barcode_realtime_inventory.InventoryScanner">
+        <div class="hlv-inventory-scanner">
+            <!-- Loading State -->
+            <div t-if="state.loading" class="hlv-loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-3">Đang tải...</p>
+            </div>
+
+            <!-- Main Scanner UI -->
+            <div t-else="" class="hlv-scanner-container">
+                <!-- Header -->
+                <header class="hlv-header">
+                    <button class="hlv-btn-back" t-on-click="goBack">
+                        <i class="fa fa-arrow-left"></i>
+                    </button>
+                    <h1 class="hlv-title">Kiểm Kê Tồn Kho</h1>
+                    <div class="hlv-header-actions">
+                        <span t-if="state.syncing" class="hlv-sync-indicator">
+                            <i class="fa fa-circle-o-notch fa-spin"></i>
+                        </span>
+                    </div>
+                </header>
+
+                <!-- Scan Zone -->
+                <div class="hlv-scan-zone">
+                    <div class="hlv-scan-box">
+                        <div class="hlv-scan-icon">
+                            <i class="fa fa-barcode"></i>
+                        </div>
+                        <input 
+                            type="text"
+                            class="hlv-barcode-input"
+                            t-att-value="state.barcodeInput"
+                            t-on-input="onBarcodeInputChange"
+                            t-on-keydown="onBarcodeInputKeydown"
+                            t-att-placeholder="state.locationId ? 'Quét mã sản phẩm...' : 'Quét mã vị trí kho trước...'"
+                            autofocus="autofocus"
+                        />
+                    </div>
+                </div>
+
+                <!-- Location Bar -->
+                <div class="hlv-location-bar" t-on-click="openLocationSelector">
+                    <span class="hlv-location-icon">📍</span>
+                    <span class="hlv-location-name" t-if="state.locationName">
+                        <t t-esc="state.locationName"/>
+                    </span>
+                    <span class="hlv-location-placeholder" t-else="">
+                        Chọn vị trí kho...
+                    </span>
+                    <button class="hlv-btn-change">
+                        <i class="fa fa-exchange"></i> Đổi kho
+                    </button>
+                </div>
+
+                <!-- Product List -->
+                <div class="hlv-product-list">
+                    <div t-if="state.lines.length === 0" class="hlv-empty-state">
+                        <i class="fa fa-cubes"></i>
+                        <p>Chưa có sản phẩm nào</p>
+                        <small>Quét barcode để bắt đầu</small>
+                    </div>
+
+                    <t t-foreach="state.lines" t-as="line" t-key="line.id">
+                        <div class="hlv-product-card">
+                            <div class="hlv-product-info">
+                                <div class="hlv-product-header">
+                                    <span class="hlv-product-code" t-esc="line.product_code or '---'"/>
+                                    <span t-if="line.theoretical_qty === 0" class="hlv-badge-new">MỚI</span>
+                                </div>
+                                <div class="hlv-product-name" t-esc="line.product_name"/>
+                                <div class="hlv-product-qty">
+                                    <span class="hlv-qty-scanned" t-esc="line.scanned_qty"/>
+                                    <span class="hlv-qty-separator">/</span>
+                                    <span class="hlv-qty-theoretical" t-esc="line.theoretical_qty"/>
+                                    <span class="hlv-qty-uom" t-esc="line.uom_name"/>
+                                    <span t-if="line.difference !== 0" 
+                                          t-attf-class="hlv-qty-diff {{ line.difference > 0 ? 'positive' : 'negative' }}">
+                                        (<t t-if="line.difference > 0">+</t><t t-esc="line.difference"/>)
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="hlv-product-actions">
+                                <button class="hlv-btn-action hlv-btn-help" title="Trợ giúp">
+                                    <i class="fa fa-question"></i>
+                                </button>
+                                <button class="hlv-btn-action hlv-btn-plus" t-on-click="() => this.incrementQty(line, 1)" title="+1">
+                                    +1
+                                </button>
+                                <button class="hlv-btn-action hlv-btn-plus10" t-on-click="() => this.incrementQty(line, 10)" title="+10">
+                                    +10
+                                </button>
+                                <button class="hlv-btn-action hlv-btn-delete" t-on-click="() => this.removeLine(line)" title="Xóa">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </t>
+                </div>
+
+                <!-- Footer -->
+                <footer class="hlv-footer">
+                    <button class="hlv-btn-add" t-on-click="openAddProductDialog">
+                        <i class="fa fa-plus"></i> Thêm sản phẩm
+                    </button>
+                    <button class="hlv-btn-apply" t-on-click="confirmSession" t-att-disabled="state.lines.length === 0">
+                        Áp dụng (<t t-esc="state.lines.length"/>)
+                    </button>
+                </footer>
+            </div>
+
+            <!-- Location Selector Modal -->
+            <div t-if="state.showLocationSelector" class="hlv-modal-overlay" t-on-click="closeLocationSelector">
+                <div class="hlv-modal" t-on-click.stop="">
+                    <div class="hlv-modal-header">
+                        <h2>Chọn vị trí kho</h2>
+                        <button class="hlv-btn-close" t-on-click="closeLocationSelector">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="hlv-modal-body">
+                        <input 
+                            type="text" 
+                            class="hlv-search-input"
+                            placeholder="Tìm vị trí..."
+                            t-att-value="state.locationSearch"
+                            t-on-input="onLocationSearchChange"
+                            autofocus="autofocus"
+                        />
+                        <div class="hlv-location-list">
+                            <t t-foreach="state.locationResults" t-as="loc" t-key="loc.id">
+                                <div class="hlv-location-item" t-on-click="() => this.selectLocation(loc.id, loc.name)">
+                                    <i class="fa fa-map-marker"></i>
+                                    <span t-esc="loc.name"/>
+                                </div>
+                            </t>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Product Dialog -->
+            <div t-if="state.showAddProductDialog" class="hlv-modal-overlay" t-on-click="closeAddProductDialog">
+                <div class="hlv-modal hlv-modal-add-product" t-on-click.stop="">
+                    <div class="hlv-modal-header">
+                        <button class="hlv-btn-back" t-on-click="closeAddProductDialog">
+                            <i class="fa fa-arrow-left"></i>
+                        </button>
+                        <h2>Thêm sản phẩm</h2>
+                        <button class="hlv-btn-close" t-on-click="closeAddProductDialog">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="hlv-modal-body">
+                        <!-- Product Search -->
+                        <div class="hlv-form-group">
+                            <label>Sản phẩm</label>
+                            <input 
+                                type="text" 
+                                class="hlv-search-input"
+                                placeholder="Tìm sản phẩm..."
+                                t-att-value="state.addProduct.searchTerm"
+                                t-on-input="onProductSearchChange"
+                            />
+                            <div t-if="state.addProduct.searchResults.length > 0" class="hlv-search-results">
+                                <t t-foreach="state.addProduct.searchResults" t-as="product" t-key="product.id">
+                                    <div class="hlv-search-item" t-on-click="() => this.selectProductForAdd(product)">
+                                        <span class="hlv-item-code" t-esc="product.default_code or ''"/>
+                                        <span class="hlv-item-name" t-esc="product.display_name"/>
+                                    </div>
+                                </t>
+                            </div>
+                        </div>
+
+                        <!-- Quantity -->
+                        <div class="hlv-form-group hlv-qty-group">
+                            <div class="hlv-qty-display">
+                                <t t-esc="state.addProduct.quantity"/>
+                            </div>
+                            <div class="hlv-qty-buttons">
+                                <button class="hlv-qty-btn" t-on-click="() => this.setAddQty(0)">0</button>
+                                <button class="hlv-qty-btn" t-on-click="() => this.adjustAddQty(-1)">-1</button>
+                                <button class="hlv-qty-btn hlv-qty-btn-plus" t-on-click="() => this.adjustAddQty(1)">+1</button>
+                            </div>
+                        </div>
+
+                        <!-- Location -->
+                        <div class="hlv-form-group">
+                            <label><i class="fa fa-map-marker"></i> Vị trí</label>
+                            <div class="hlv-form-value" t-esc="state.addProduct.locationName or 'Chưa chọn'"/>
+                        </div>
+
+                        <!-- Package (optional) -->
+                        <div class="hlv-form-group">
+                            <label><i class="fa fa-archive"></i> Kiện hàng</label>
+                            <div class="hlv-form-value hlv-text-muted">Kiện hàng</div>
+                        </div>
+
+                        <!-- Lot/Serial (optional) -->
+                        <div class="hlv-form-group">
+                            <label><i class="fa fa-list-ol"></i> Số lô/sê-ri</label>
+                            <div class="hlv-form-value hlv-text-muted">Số lô/sê-ri</div>
+                        </div>
+                    </div>
+                    <div class="hlv-modal-footer">
+                        <button class="hlv-btn-cancel" t-on-click="closeAddProductDialog">
+                            Huỷ bỏ
+                        </button>
+                        <button class="hlv-btn-confirm" t-on-click="confirmAddProduct">
+                            Xác nhận
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </t>
+
+</templates>

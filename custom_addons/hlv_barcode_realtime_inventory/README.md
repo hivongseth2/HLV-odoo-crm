@@ -1,85 +1,82 @@
-# HLV Barcode Realtime Inventory Sync
+# HLV Inventory Scanner
 
 ## Mô tả
 
-Module này giải quyết các vấn đề khi sử dụng `stock_barcode` để kiểm kê:
+Module kiểm kê tồn kho độc lập sử dụng barcode với khả năng:
 
-- **Data loss**: Mất dữ liệu khi browser crash/refresh trước khi xác nhận
-- **Multi-user conflict**: Nhiều người cùng 1 account quét đồng thời bị conflict
+- **Real-time sync**: Mỗi lần quét được lưu ngay vào database
+- **Khôi phục session**: Reload trang không mất dữ liệu đã quét
+- **Hiển thị chênh lệch**: So sánh số lượng thực tế vs lý thuyết
 
-## Cách hoạt động
+## Workflow
 
-### Real-time Sync
-- Mỗi lần quét barcode → gửi ngay về server (không đợi "Xác nhận")
-- Dữ liệu được lưu trong model `inventory.scan.session`
-- Khi nhấn "Xác nhận" → merge tất cả sessions vào stock.quant
+1. **Quét mã vị trí kho** → Module nhận diện location
+2. **Quét sản phẩm** → Mỗi lần quét tự động cộng +1 và sync lên server
+3. **Xem danh sách** → Hiển thị: `scanned_qty / theoretical_qty` + chênh lệch
+4. **Áp dụng** → Cập nhật `stock.quant` với số lượng đã quét
 
-### Device Fingerprint
-- Mỗi thiết bị có ID riêng (lưu trong `localStorage`)
-- Nhiều người dùng cùng account có thể quét đồng thời
-- Sessions được merge tự động khi confirm
+## Tính năng chính
 
-### UI Indicator
-- Badge hiển thị ở góc phải trên màn hình
-- Hiển thị số lượng scans đã được sync real-time
-- Thông báo khi sync thành công/thất bại
+### Không mất dữ liệu khi reload
+- Session được lưu trên server với `device_id` unique
+- Khi mở lại → tự động khôi phục session active trước đó
+- Tất cả sản phẩm đã quét vẫn còn nguyên
+
+### Thao tác nhanh
+- **+1, +10**: Tăng nhanh số lượng
+- **Xóa**: Bỏ sản phẩm khỏi danh sách
+- **Thêm sản phẩm**: Form thêm thủ công với số lượng tùy chọn
+
+### Hiển thị trực quan
+- **Badge "MỚI"**: Sản phẩm chưa có trong kho (theoretical = 0)
+- **Chênh lệch màu**: Xanh (+) / Đỏ (-)
 
 ## Cài đặt
 
 ```bash
-# 1. Module đã được tạo trong custom_addons
-cd custom_addons/hlv_barcode_realtime_inventory
-
-# 2. Upgrade module
-python odoo-bin -c odoo.conf -u hlv_barcode_realtime_inventory -d hlv_db
-
-# 3. Hoặc upgrade qua UI
-Settings → Apps → Update Apps List → Install
+# Upgrade module
+python odoo-bin -c odoo.conf -u hlv_barcode_realtime_inventory -d <database>
 ```
 
 ## Sử dụng
 
-1. Vào **Inventory → Operations → Inventory Adjustments**
-2. Tạo hoặc mở 1 Inventory Adjustment
-3. Nhấn **Barcode Scanner** (action 364)
-4. Quét barcode sản phẩm:
-   - Thấy badge hiển thị "Real-time sync ACTIVE"
-   - Mỗi lần quét → badge update số lượng scans
-5. Nhấn **Validate** → tất cả sessions được merge
+1. Vào **Inventory → Operations → Quét Kiểm Kê**
+2. Quét barcode vị trí kho (hoặc chọn từ dropdown)
+3. Quét barcode sản phẩm (quan sát số lượng tăng lên)
+4. Nhấn **Áp dụng** để cập nhật vào kho
 
 ## Technical Details
 
 ### Models
 
 **inventory.scan.session**
-- Session ID (UUID từ frontend)
-- Device ID (fingerprint)
-- Location, User
-- State: active/confirmed/cancelled
+- `name`: Session ID tự động
+- `device_id`: Fingerprint của thiết bị/browser
+- `location_id`: Vị trí kho đang kiểm
+- `state`: active / confirmed / cancelled
+- `line_ids`: Các sản phẩm đã quét
 
 **inventory.scan.line**
-- Product, Quantity
-- Scan time
-- Belong to session
+- `product_id`: Sản phẩm
+- `scanned_qty`: Số lượng đã quét (tổng cộng)
+- `theoretical_qty`: Số lượng lý thuyết từ stock.quant
+- `difference`: Chênh lệch = scanned - theoretical
 
-### API Endpoints
+### API Methods
 
 ```python
-# Register một lần quét
-inventory.scan.session.register_scan(
-    session_id, device_id, location_id, product_id, qty
-)
+# Khôi phục hoặc tạo session mới
+session_data = env['inventory.scan.session'].get_or_create_active_session(device_id, location_id)
 
-# Lấy summary của session
-inventory.scan.session.get_session_summary(session_id)
+# Đăng ký 1 lần quét
+result = env['inventory.scan.session'].register_scan(session_id, product_id, location_id, qty)
 
-# Merge sessions vào stock.quant
-stock.quant.apply_realtime_inventory_sessions(location_id)
+# Cập nhật số lượng line
+result = session.update_line_qty(line_id, new_qty)
+
+# Xác nhận và áp dụng vào kho
+result = session.confirm_session()
 ```
-
-## Cleanup
-
-Sessions cũ hơn 24h và đã confirmed sẽ được tự động xóa (cron job).
 
 ## License
 
