@@ -38,7 +38,7 @@
                         </group>
                     </group>
                     <group string="Crawled Data">
-                        <field name="crawled_specs" nolabel="1"/>
+                        <field name="crawled_specs" widget="html" nolabel="1"/>
                     </group>
                 </page>
             </notebook>
