@@ -9,66 +9,70 @@ class ProductProduct(models.Model):
         """
         Override name_search to prioritize products WITHOUT a BOM (Single products)
         over products WITH a BOM (Combo products).
+        
+        Strategy: Do two separate searches at database level:
+        1. Search products WITHOUT BOMs first
+        2. Search products WITH BOMs second
+        3. Combine results
         """
         import logging
         _logger = logging.getLogger(__name__)
         
         if not args:
             args = []
-            
-        # 1. Get initial search results from super()
-        # We need to fetch many more results because single products might be ranked lower
-        # by Odoo's default search, and we want to bring them to the top
-        search_limit = limit * 10 if limit else None
-        res = super(ProductProduct, self).name_search(name=name, args=args, operator=operator, limit=search_limit)
         
-        if not res:
-            return []
-
-        # Log original results
-        _logger.info(f"HLV Search ORIGINAL (first 5): {[x[1] for x in res[:5]]}")
-
-        # Extract IDs from the search results (res is a list of tuples (id, display_name))
-        product_ids = [x[0] for x in res]
+        # Find all product IDs that have BOMs
+        bom_model = self.env['mrp.bom']
         
-        # 2. Find which of these products have BOMs
-        # Products that have specific BOM variants
-        boms_variant = self.env['mrp.bom'].search([('product_id', 'in', product_ids)]).mapped('product_id.id')
+        # Get product IDs with specific variant BOMs
+        products_with_bom_variant = bom_model.search([
+            ('product_id', '!=', False)
+        ]).mapped('product_id.id')
         
-        # Products whose templates have BOMs (and no specific variant BOM overrides, or applies to all)
-        products = self.browse(product_ids)
-        product_tmpls_with_boms = self.env['mrp.bom'].search([
-            ('product_tmpl_id', 'in', products.mapped('product_tmpl_id').ids),
-            ('product_id', '=', False) 
+        # Get product template IDs with template-level BOMs
+        templates_with_bom = bom_model.search([
+            ('product_id', '=', False)
         ]).mapped('product_tmpl_id.id')
         
-        # 3. Partition results
-        single_products = []
-        combo_products_with_bom = []
+        # Get all product IDs from those templates
+        if templates_with_bom:
+            products_from_templates = self.search([
+                ('product_tmpl_id', 'in', templates_with_bom)
+            ]).ids
+        else:
+            products_from_templates = []
         
-        # Create a set of IDs that are "Combo" (have a BOM)
-        combo_ids = set(boms_variant)
-        for p in products:
-            if p.product_tmpl_id.id in product_tmpls_with_boms:
-                combo_ids.add(p.id)
+        # Combine all product IDs that have BOMs
+        all_combo_product_ids = list(set(products_with_bom_variant + products_from_templates))
         
-        _logger.info(f"HLV Search: Found {len(product_ids)} products. Combo IDs count: {len(combo_ids)}, Single count: {len(product_ids) - len(combo_ids)}")
-
-        for r in res:
-            p_id = r[0]
-            if p_id in combo_ids:
-                combo_products_with_bom.append(r)
-            else:
-                single_products.append(r)
-                
-        # 4. Construct final sorted list
-        # We prioritize single products, then combo products.
-        sorted_res = single_products + combo_products_with_bom
+        # Search 1: Products WITHOUT BOMs (Single products)
+        single_args = args + [('id', 'not in', all_combo_product_ids)] if all_combo_product_ids else args
+        single_results = super(ProductProduct, self).name_search(
+            name=name, 
+            args=single_args, 
+            operator=operator, 
+            limit=limit
+        )
         
-        # Log sorted results
-        _logger.info(f"HLV Search SORTED (first 5): {[x[1] for x in sorted_res[:5]]}")
+        # Search 2: Products WITH BOMs (Combo products)
+        # Only search combos if we haven't filled the limit yet
+        combo_results = []
+        if all_combo_product_ids:
+            remaining_limit = limit - len(single_results) if limit else None
+            if remaining_limit is None or remaining_limit > 0:
+                combo_args = args + [('id', 'in', all_combo_product_ids)]
+                combo_results = super(ProductProduct, self).name_search(
+                    name=name,
+                    args=combo_args,
+                    operator=operator,
+                    limit=remaining_limit
+                )
         
-        # 5. Apply the original limit
-        if limit:
-            return sorted_res[:limit]
-        return sorted_res
+        # Combine results: Single products first, then combo products
+        final_results = single_results + combo_results
+        
+        _logger.info(f"HLV Search: Query='{name}', Single={len(single_results)}, Combo={len(combo_results)}, Total={len(final_results)}")
+        if final_results:
+            _logger.info(f"HLV Search FINAL (first 3): {[x[1] for x in final_results[:3]]}")
+        
+        return final_results
