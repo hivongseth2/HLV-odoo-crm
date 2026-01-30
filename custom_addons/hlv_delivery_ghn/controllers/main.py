@@ -123,22 +123,29 @@ class GHNWebsiteController(http.Controller):
         p_height = 0
         
         items = params.get('items', [])
+        _logger.info("WordPress GHN: Processing %s items", len(items))
         if items:
             for item in items:
                 sku = item.get('sku')
                 qty = int(item.get('qty', 1))
+                _logger.info("WordPress GHN: Looking up SKU='%s', qty=%s", sku, qty)
                 if sku:
                     product = request.env['product.product'].sudo().search([('default_code', '=', sku)], limit=1)
                     if product:
+                        _logger.info("WordPress GHN: Found product '%s' (ID=%s), weight=%s kg", product.name, product.id, product.weight)
                         # Odoo weight is in kg, convert to grams
                         weight += (product.weight or 0) * qty
                         # Aggregate dimensions (Simple logic: Sum height, max length/width)
                         p_length = max(p_length, product.product_length or 0)
                         p_width = max(p_width, product.product_width or 0)
                         p_height += (product.product_height or 0) * qty
+                    else:
+                        _logger.warning("WordPress GHN: Product NOT FOUND for SKU='%s'", sku)
             
+            _logger.info("WordPress GHN: Total weight (kg) = %s, converting to grams...", weight)
             if weight > 0:
                 weight = int(weight * 1000)
+            _logger.info("WordPress GHN: Final weight (grams) = %s", weight)
 
         # Fallback to WordPress values if Odoo lookup failed or no items
         if weight == 0:
@@ -186,9 +193,21 @@ class GHNWebsiteController(http.Controller):
 
             res_fee = client.calculate_fee(data)
             if res_fee.get('success'):
+                # Determine weight category label based on actual weight
+                weight_label = "Hàng nặng" if weight > 10000 else "Hàng nhẹ"
+                original_name = svc.get('short_name') or svc.get('name') or ""
+                
+                # If GHN returns a weight-based name, replace it entirely
+                if "hàng nhẹ" in original_name.lower() or "hàng nặng" in original_name.lower():
+                    display_name = weight_label
+                elif original_name:
+                    display_name = f"{weight_label}: {original_name}"
+                else:
+                    display_name = weight_label
+                
                 calculated_results.append({
                     'service_id': svc_id,
-                    'name': svc.get('short_name') or svc.get('name') or "Giao hàng nhanh",
+                    'name': display_name,
                     'total': res_fee['data'].get('total', 0)
                 })
 
