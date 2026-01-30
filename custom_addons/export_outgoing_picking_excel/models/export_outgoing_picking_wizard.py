@@ -198,8 +198,11 @@ class PickingExportWizard(models.TransientModel):
     def _thuoc_combo_code_for_move(self, move):
         """
         Trả về mã combo cha (default_code) cho move nếu là dòng con của combo.
-        Sử dụng logic BoM Kit (phantom) thay vì Studio fields.
+        Sử dụng logic BoM Kit (phantom) hoặc Service Combo (header).
         """
+        if not move:
+            return ''
+            
         sol = getattr(move, 'sale_line_id', False)
         if not sol:
             return ''
@@ -209,11 +212,14 @@ class PickingExportWizard(models.TransientModel):
             return ''
 
         # Nếu sản phẩm trên move trùng với sản phẩm trên SOL -> chính nó (không phải component)
-        # THường combo kit sẽ explode ra component, nên move.product != sol.product
         if sol_product.id == move.product_id.id:
             return ''
+        
+        # 1. Check Service Combo (Header là service, move là component)
+        if sol_product.type == 'service':
+            return sol_product.default_code or ''
 
-        # Kiểm tra xem SOL product có phải là Kit không
+        # 2. Check BoM Kit
         is_kit = self.env['mrp.bom'].search_count([
             ('product_tmpl_id', '=', sol_product.product_tmpl_id.id),
             ('type', '=', 'phantom'),
@@ -221,7 +227,7 @@ class PickingExportWizard(models.TransientModel):
         ])
         
         if is_kit:
-            return sol_product.default_code
+            return sol_product.default_code or ''
             
         return ''
 
@@ -365,6 +371,9 @@ class PickingExportWizard(models.TransientModel):
                         )
                         rows.append(service_row)
                         processed_sale_lines.add(sol.id)
+            else:
+                 # Nếu không tìm thấy SO thì không thể xuất service lines
+                 pass
             
             # Bước 2: Xuất stock moves (storable products)
             if picking.move_line_ids:
