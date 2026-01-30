@@ -32,19 +32,55 @@ class CrawlerUtils:
         except Exception as e:
             _logger.error(f"Unexpected error fetching {url}: {e}")
             return None, f"Lỗi: {str(e)}"
+    
+    @staticmethod
+    def extract_keywords(product_name):
+        """Extract search keywords from product name"""
+        import re
+        if not product_name:
+            return []
+        
+        keywords = []
+        # Extract brand (uppercase words with 2+ chars)
+        brands = re.findall(r'\b[A-Z]{2,}[A-Z0-9]*\b', product_name)
+        keywords.extend(brands)
+        
+        # Extract model numbers (alphanumeric with dashes)
+        models = re.findall(r'\b[A-Z0-9]+-[A-Z0-9-]+\b', product_name)
+        keywords.extend(models)
+        
+        # Get first 2-3 meaningful words (3+ chars)
+        words = re.findall(r'\b\w{3,}\b', product_name)
+        keywords.extend(words[:3])
+        
+        # Remove duplicates while preserving order
+        return list(dict.fromkeys(keywords))
 
     @staticmethod
-    def search_ketnoitieudung(sku):
+    def search_ketnoitieudung(sku, product_name=None):
         """Search for product and return (url, error_message) tuple"""
         base_url = "https://www.ketnoitieudung.vn"
         
-        # Try multiple query variations for better matching
-        queries = [
-            sku,
-            sku.replace('-', '').replace(' ', ''),
-            sku.upper(),
-            sku.lower(),
-        ]
+        # Build query variations
+        queries = [sku] if sku else []
+        
+        if sku:
+            queries.extend([
+                sku.replace('-', '').replace(' ', ''),
+                sku.upper(),
+                sku.lower(),
+            ])
+        
+        # Add product name variations
+        if product_name:
+            queries.append(product_name)  # Full name
+            keywords = CrawlerUtils.extract_keywords(product_name)
+            # Try brand + model
+            if len(keywords) >= 2:
+                queries.append(' '.join(keywords[:2]))
+            # Try just brand or first keyword
+            if keywords:
+                queries.append(keywords[0])
         
         for query in queries:
             search_url = f"{base_url}/tim-kiem?q={urllib.parse.quote(query)}"
@@ -52,7 +88,6 @@ class CrawlerUtils:
             if not html:
                 continue
             
-            # FIXED: This code MUST be inside the for loop
             soup = BeautifulSoup(html, 'html.parser')
             product_item = (soup.select_one('.product-item a') or
                            soup.select_one('a[href*="/san-pham/"]'))
@@ -80,17 +115,28 @@ class CrawlerUtils:
         return None, "Không tìm thấy thông số kỹ thuật"
 
     @staticmethod
-    def search_visior(sku):
+    def search_visior(sku, product_name=None):
         """Search for product and return (url, error_message) tuple"""
         base_url = "https://visior.vn"
         
-        # Try multiple query variations for better matching
-        queries = [
-            sku,  # Original
-            sku.replace('-', '').replace(' ', ''),  # No dashes/spaces: 48228301
-            sku.upper(),  # Uppercase
-            sku.lower(),  # Lowercase
-        ]
+        # Build query variations
+        queries = [sku] if sku else []
+        
+        if sku:
+            queries.extend([
+                sku.replace('-', '').replace(' ', ''),
+                sku.upper(),
+                sku.lower(),
+            ])
+        
+        # Add product name variations
+        if product_name:
+            queries.append(product_name)
+            keywords = CrawlerUtils.extract_keywords(product_name)
+            if len(keywords) >= 2:
+                queries.append(' '.join(keywords[:2]))
+            if keywords:
+                queries.append(keywords[0])
         
         for query in queries:
             # CORRECTED: Use /search instead of /tim-kiem
@@ -130,17 +176,28 @@ class CrawlerUtils:
         return None, "Không tìm thấy thông số kỹ thuật"
 
     @staticmethod
-    def search_thbvietnam(sku):
+    def search_thbvietnam(sku, product_name=None):
         """Search for product and return (url, error_message) tuple"""
         base_url = "https://thbvietnam.com"
         
-        # Try multiple query variations
-        queries = [
-            sku,
-            sku.replace('-', '').replace(' ', ''),
-            sku.upper(),
-            sku.lower(),
-        ]
+        # Build query variations
+        queries = [sku] if sku else []
+        
+        if sku:
+            queries.extend([
+                sku.replace('-', '').replace(' ', ''),
+                sku.upper(),
+                sku.lower(),
+            ])
+        
+        # Add product name variations
+        if product_name:
+            queries.append(product_name)
+            keywords = CrawlerUtils.extract_keywords(product_name)
+            if len(keywords) >= 2:
+                queries.append(' '.join(keywords[:2]))
+            if keywords:
+                queries.append(keywords[0])
         
         for query in queries:
             # CORRECTED: Use /tim-kiem instead of /catalogsearch/result/
@@ -176,17 +233,28 @@ class CrawlerUtils:
         return None, "Không tìm thấy thông số kỹ thuật"
 
     @staticmethod
-    def search_mecsu(sku):
+    def search_mecsu(sku, product_name=None):
         """Search for product and return (url, error_message) tuple"""
         base_url = "https://mecsu.vn"
         
-        # Try multiple query variations
-        queries = [
-            sku,
-            sku.replace('-', '').replace(' ', ''),
-            sku.upper(),
-            sku.lower(),
-        ]
+        # Build query variations
+        queries = [sku] if sku else []
+        
+        if sku:
+            queries.extend([
+                sku.replace('-', '').replace(' ', ''),
+                sku.upper(),
+                sku.lower(),
+            ])
+        
+        # Add product name variations
+        if product_name:
+            queries.append(product_name)
+            keywords = CrawlerUtils.extract_keywords(product_name)
+            if len(keywords) >= 2:
+                queries.append(' '.join(keywords[:2]))
+            if keywords:
+                queries.append(keywords[0])
         
         for query in queries:
             # Mecsu uses /site?keyword= pattern

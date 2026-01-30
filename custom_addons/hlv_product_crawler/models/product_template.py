@@ -24,8 +24,9 @@ class ProductTemplate(models.Model):
             msg_searching = f"<div style='color: #6c757d; font-size: 0.9em;'>🔍 Đang tìm kiếm <b>{self.default_code}</b> trên Ketnoitieudung.vn...</div>"
             self.crawled_specs = (self.crawled_specs or "") + msg_searching
             
-            _logger.info(f"[Ketnoitieudung] Searching for SKU: {self.default_code}")
-            url, error = CrawlerUtils.search_ketnoitieudung(self.default_code)
+            _logger.info(f"[Ketnoitieudung] Searching for SKU: {self.default_code}, Name: {self.name}")
+            # Pass both SKU and product name
+            url, error = CrawlerUtils.search_ketnoitieudung(self.default_code, self.name)
             _logger.info(f"[Ketnoitieudung] Search result - URL: {url}, Error: {error}")
             
             if url:
