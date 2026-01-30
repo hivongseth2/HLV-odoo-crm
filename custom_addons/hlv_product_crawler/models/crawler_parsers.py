@@ -348,10 +348,43 @@ class CrawlerUtils:
             if table:
                 return str(table), None
         
-        # 2. Additional info list
+        # 2. Additional info list (PRIMARY for Mecsu)
         specs_list = soup.select_one('.additional__info_list')
         if specs_list:
-            return str(specs_list), None
+            # Extract list items and format beautifully
+            items = specs_list.find_all('li')
+            if items:
+                rows_data = []
+                for item in items:
+                    label_elem = item.select_one('.info__list--item-head strong') or item.select_one('.info__list--item-head')
+                    value_elem = item.select_one('.info__list--item-content')
+                    
+                    if label_elem and value_elem:
+                        label = label_elem.get_text(strip=True)
+                        value = value_elem.get_text(strip=True)
+                        rows_data.append((label, value))
+                
+                if rows_data:
+                    site_color = "#fd7e14"
+                    html_output = f"""
+                    <div style='background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin: 15px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+                        <div style='border-bottom: 3px solid {site_color}; padding-bottom: 10px; margin-bottom: 15px;'>
+                            <h3 style='color: {site_color}; margin: 0; font-size: 18px; font-weight: 600;'>📦 Mecsu.vn</h3>
+                        </div>
+                        <table style='width: 100%; border-collapse: collapse;'>
+                    """
+                    
+                    for i, (label, value) in enumerate(rows_data):
+                        bg_color = '#f8f9fa' if i % 2 == 0 else '#ffffff'
+                        html_output += f"""
+                        <tr style='background: {bg_color};'>
+                            <td style='padding: 10px; font-weight: 500; color: #495057; width: 35%; border-bottom: 1px solid #e9ecef;'>{label}</td>
+                            <td style='padding: 10px; color: #212529; border-bottom: 1px solid #e9ecef;'>{value}</td>
+                        </tr>
+                        """
+                    
+                    html_output += """</table></div>"""
+                    return html_output, None
             
         # 3. Product details info table
         details_table = soup.select_one('.product__details--info__table')
