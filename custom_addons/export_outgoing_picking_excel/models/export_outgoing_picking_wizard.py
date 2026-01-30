@@ -322,11 +322,44 @@ class PickingExportWizard(models.TransientModel):
         product_code = prod.default_code or (prod.barcode if hasattr(prod, 'barcode') else "") or ""
         product_name = prod.display_name or prod.name or ""
         
-        # Lấy thông tin từ Sale Order Line trước
+        # Ưu tiên 1: Kiểm tra POS Order Line trước (cho đơn POS và đơn hoàn tiền)
+        pos_order = getattr(picking, 'pos_order_id', False)
+        pos_line = False
+        
+        if pos_order and prod:
+            # Tìm pos.order.line tương ứng với sản phẩm này
+            pos_lines = pos_order.lines.filtered(lambda l: l.product_id == prod)
+            if pos_lines:
+                pos_line = pos_lines[0]  # Lấy dòng đầu tiên nếu có nhiều
+        
+        # Ưu tiên 2: Sale Order Line
         sol = getattr(move, 'sale_line_id', False) if move else False
         
-        # UoM và quantity: Ưu tiên từ Sale Order Line
-        if sol:
+        # Logic lấy dữ liệu theo thứ tự ưu tiên
+        if pos_line:
+            # Lấy từ POS Order Line (số lượng đã có dấu âm cho đơn hoàn tiền)
+            uom = prod.uom_id  # POS không có product_uom field
+            qty = pos_line.qty or 0.0  # Số lượng từ POS (đã âm nếu là return)
+            don_gia = pos_line.price_unit or 0.0
+            ty_le_ck = pos_line.discount or 0.0
+            
+            # Tính tiền chiết khấu
+            tien_chiet_khau = abs(don_gia * qty * ty_le_ck / 100)
+            
+            # Thành tiền = price_subtotal từ POS Order Line (đã tính sẵn chiết khấu và dấu)
+            thanh_tien = pos_line.price_subtotal_incl or 0.0
+            
+            # Thuế GTGT từ POS
+            ty_le_thue_gtgt = 0.0
+            if pos_line.tax_ids_after_fiscal_position:
+                for tax in pos_line.tax_ids_after_fiscal_position:
+                    ty_le_thue_gtgt = tax.amount or 0.0
+                    break
+            
+            # Tiền thuế
+            tien_thue_gtgt = abs(thanh_tien * ty_le_thue_gtgt / 100)
+            
+        elif sol:
             # Lấy từ Sale Order Line
             uom = sol.product_uom or prod.uom_id
             qty = sol.product_uom_qty or 0.0
@@ -348,6 +381,7 @@ class PickingExportWizard(models.TransientModel):
             
             # Tiền thuế = (Thành tiền sau chiết khấu) * % thuế
             tien_thue_gtgt = (thanh_tien * ty_le_thue_gtgt) / 100
+            
         else:
             # Fallback: lấy từ picking/move line
             if ml:
@@ -831,10 +865,33 @@ class PickingExportWizard(models.TransientModel):
             
             if not prod: continue
 
-            # Pricing and quantity from SOL (ưu tiên)
+            # Ưu tiên 1: Kiểm tra POS Order Line trước (cho đơn POS và đơn hoàn tiền)
+            pos_order = getattr(picking, 'pos_order_id', False)
+            pos_line = False
+            
+            if pos_order and prod:
+                # Tìm pos.order.line tương ứng với sản phẩm này
+                pos_lines = pos_order.lines.filtered(lambda l: l.product_id == prod)
+                if pos_lines:
+                    pos_line = pos_lines[0]  # Lấy dòng đầu tiên nếu có nhiều
+            
+            # Ưu tiên 2: Sale Order Line
             sol = move.sale_line_id if move and hasattr(move, 'sale_line_id') else False
             
-            if sol:
+            # Logic lấy dữ liệu theo thứ tự ưu tiên
+            if pos_line:
+                # Lấy từ POS Order Line (số lượng đã có dấu âm cho đơn hoàn tiền)
+                qty = pos_line.qty or 0.0  # Số lượng từ POS (đã âm nếu là return)
+                uom = prod.uom_id  # POS không có product_uom field
+                price_unit = pos_line.price_unit or 0.0
+                discount = pos_line.discount or 0.0
+                price_subtotal = pos_line.price_subtotal_incl or 0.0
+                
+                tax_amount = 0.0
+                if pos_line.tax_ids_after_fiscal_position:
+                    tax_amount = pos_line.tax_ids_after_fiscal_position[0].amount
+                    
+            elif sol:
                 # Lấy từ Sale Order Line
                 qty = sol.product_uom_qty or 0.0
                 uom = sol.product_uom or prod.uom_id
@@ -845,6 +902,7 @@ class PickingExportWizard(models.TransientModel):
                 tax_amount = 0.0
                 if sol.tax_id:
                     tax_amount = sol.tax_id[0].amount
+                    
             else:
                 # Fallback: lấy từ picking/move line
                 if line._name == 'stock.move.line':
@@ -861,9 +919,9 @@ class PickingExportWizard(models.TransientModel):
                 tax_amount = 0.0
 
             # Computed fields
-            tien_ck = (price_unit * qty * discount / 100)
-            # Thành tiền: Ưu tiên price_subtotal từ SOL, nếu không có thì tính
-            if sol and price_subtotal:
+            tien_ck = abs(price_unit * qty * discount / 100)
+            # Thành tiền: Ưu tiên price_subtotal từ POS/SOL, nếu không có thì tính
+            if (pos_line or sol) and price_subtotal:
                 thanh_tien = price_subtotal
             else:
                 thanh_tien = (price_unit * qty) - tien_ck
