@@ -11,7 +11,7 @@
     <menuitem
         id="menu_inventory_scanner"
         name="Quét Kiểm Kê"
-        parent="stock.menu_stock_inventory"
+        parent="stock.menu_stock_root"
         action="action_inventory_scanner"
         sequence="5"
         groups="stock.group_stock_user"/>
@@ -119,7 +119,7 @@
     <menuitem
         id="menu_inventory_scan_sessions"
         name="Lịch sử Kiểm Kê"
-        parent="stock.menu_stock_inventory"
+        parent="stock.menu_stock_root"
         action="action_inventory_scan_sessions"
         sequence="6"
         groups="stock.group_stock_user"/>
