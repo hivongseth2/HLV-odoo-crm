@@ -47,7 +47,8 @@ class ProductTemplate(models.Model):
             _logger.info(f"[Ketnoitieudung] Parse result - Specs length: {len(specs) if specs else 0}, Error: {error}")
             
             if specs:
-                self.crawled_specs = (self.crawled_specs or "") + f"<h3 style='color: #007bff;'>📦 Ketnoitieudung.vn</h3><p style='font-size: 0.85em; color: #6c757d;'>{url}</p>" + specs
+                # Specs already formatted with site name and header by format_specs_table()
+                self.crawled_specs = (self.crawled_specs or "") + specs
             else:
                 msg = f"<div style='color: #fd7e14;'>⚠ <b>Ketnoitieudung.vn:</b> {error or 'Lỗi tải dữ liệu'}</div>"
                 self.crawled_specs = (self.crawled_specs or "") + msg
