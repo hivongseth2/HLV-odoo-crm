@@ -73,10 +73,19 @@ export class InventoryScanner extends Component {
     // ==========================================================================
 
     async tryStartCamera() {
-        if (!('BarcodeDetector' in window)) {
-            console.warn('BarcodeDetector not supported, falling back to keyboard');
+        if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+            const msg = 'Camera yêu cầu HTTPS hoặc localhost';
+            console.warn(msg);
+            this.state.cameraError = msg;
             this.state.scannerMode = 'keyboard';
-            this.state.cameraError = 'Camera scanning không được hỗ trợ trên thiết bị này';
+            return;
+        }
+
+        if (!('BarcodeDetector' in window)) {
+            const msg = 'Trình duyệt không hỗ trợ BarcodeDetector. Vui lòng dùng Chrome trên Android hoặc Safari trên iOS (bật Experimental Features).';
+            console.warn(msg);
+            this.state.scannerMode = 'keyboard';
+            this.state.cameraError = 'Trình duyệt chưa hỗ trợ quét';
             return;
         }
 
@@ -85,8 +94,37 @@ export class InventoryScanner extends Component {
         } catch (error) {
             console.error('Camera error:', error);
             this.state.scannerMode = 'keyboard';
-            this.state.cameraError = 'Không thể truy cập camera';
+
+            if (error.name === 'NotAllowedError') {
+                this.state.cameraError = 'Quyền truy cập Camera bị từ chối';
+            } else if (error.name === 'NotFoundError') {
+                this.state.cameraError = 'Không tìm thấy Camera';
+            } else {
+                this.state.cameraError = 'Lỗi Camera: ' + error.message;
+            }
         }
+    }
+
+    // Fix Open Location Selector
+    openLocationSelector() {
+        this.state.showLocationSelector = true;
+        this.state.locationSearch = '';
+        this.loadLocations('');
+        // Focus search input
+        setTimeout(() => {
+            const input = document.getElementById('hlv-loc-search-input');
+            if (input) input.focus();
+        }, 100);
+    }
+
+    async onLocationSearchChange(ev) {
+        const val = ev.target.value;
+        this.state.locationSearch = val;
+
+        if (this.locSearchTimeout) clearTimeout(this.locSearchTimeout);
+        this.locSearchTimeout = setTimeout(() => {
+            this.loadLocations(val);
+        }, 300);
     }
 
     async startCamera() {
@@ -421,18 +459,16 @@ export class InventoryScanner extends Component {
     // ==========================================================================
 
     goBack() {
-        this.action.doAction('menu_inventory_scanner_root'); // Hoặc logic back khác tùy ý
-        // Nếu muốn về trang chủ Odoo:
-        // window.location.href = '/web';
+        // Quay về trang chủ Odoo
+        window.location.href = '/web';
     }
 
-    toggleScannerMode(mode) {
-        // Toggle logic: nếu đang camera thì sang keyboard và ngược lại
-        const targetMode = mode || (this.state.scannerMode === 'camera' ? 'keyboard' : 'camera');
+    toggleScannerMode() {
+        // Toggle giữa camera và keyboard
+        const newMode = this.state.scannerMode === 'camera' ? 'keyboard' : 'camera';
+        this.state.scannerMode = newMode;
 
-        this.state.scannerMode = targetMode;
-
-        if (targetMode === 'camera') {
+        if (newMode === 'camera') {
             this.tryStartCamera();
         } else {
             this.stopCamera();
@@ -440,7 +476,7 @@ export class InventoryScanner extends Component {
     }
 
     // ==========================================================================
-    // Add Product Dialog
+    // Add Product Dialog - Enhanced with Search
     // ==========================================================================
 
     openAddProductDialog() {
@@ -450,16 +486,48 @@ export class InventoryScanner extends Component {
             searchResults: [],
             selectedProduct: null,
             quantity: 1,
+            showDropdown: false,
         };
+        // Auto focus input via ref or simple timeout
+        setTimeout(() => {
+            const input = document.getElementById('hlv-product-search-input');
+            if (input) input.focus();
+        }, 100);
     }
 
     closeAddProductDialog() {
         this.state.showAddProductDialog = false;
     }
 
-    onProductSearchChange(ev) {
-        this.state.addProduct.searchTerm = ev.target.value;
-        // Có thể thêm debounce search logic ở đây nếu muốn list gợi ý
+    async onProductSearchChange(ev) {
+        const val = ev.target.value;
+        this.state.addProduct.searchTerm = val;
+        this.state.addProduct.selectedProduct = null; // Reset selection
+
+        if (this.searchTimeout) clearTimeout(this.searchTimeout);
+
+        if (val.length < 2) {
+            this.state.addProduct.searchResults = [];
+            this.state.addProduct.showDropdown = false;
+            return;
+        }
+
+        this.searchTimeout = setTimeout(async () => {
+            const results = await this.orm.call(
+                "inventory.scan.session",
+                "search_product_suggestions",
+                [val]
+            );
+            this.state.addProduct.searchResults = results;
+            this.state.addProduct.showDropdown = results.length > 0;
+        }, 300);
+    }
+
+    selectProduct(product) {
+        this.state.addProduct.searchTerm = product.display_name;
+        this.state.addProduct.selectedProduct = product;
+        this.state.addProduct.showDropdown = false;
+        this.state.addProduct.searchResults = [];
     }
 
     setAddQty(qty) {
@@ -474,31 +542,64 @@ export class InventoryScanner extends Component {
     }
 
     async confirmAddProduct() {
+        const selected = this.state.addProduct.selectedProduct;
         const term = this.state.addProduct.searchTerm;
         const qty = this.state.addProduct.quantity;
-
-        if (!term) {
-            this.notification.add("Vui lòng nhập tên hoặc mã sản phẩm", { type: "warning" });
-            return;
-        }
 
         if (qty <= 0) {
             this.notification.add("Số lượng phải lớn hơn 0", { type: "warning" });
             return;
         }
 
-        // Search và add giống như scan
-        await this.processBarcode(term); // Tạm dùng logic này, sẽ cải tiến nếu cần tạo mới
+        let barcodeToScan = term;
 
-        // Nếu search ra và add thành công (dựa vào line count tăng lên hoặc notif)
-        // Hiện tại processBarcode đã handle logic tìm+add.
+        // Nếu đã chọn từ dropdown thì dùng chính xác ID hoặc Barcode của nó
+        if (selected) {
+            // Logic register_scan hỗ trợ cả product_id nhưng hiện tại đang nhận search string
+            // Tốt nhất là gọi register_scan trực tiếp với ID nếu có
+            await this.manualAddProductById(selected.id, qty, selected.display_name);
+            this.closeAddProductDialog();
+            return;
+        }
 
-        // Cần truyền qty vào processBarcode hoặc scanProduct?
-        // Hiện tại scanProduct mặc định qty=1. 
-        // Logic đúng: Search product -> lấy ID -> gọi register_scan với qty cụ thể.
+        if (!term) {
+            this.notification.add("Vui lòng chọn sản phẩm", { type: "warning" });
+            return;
+        }
 
+        // Fallback: search string manual
         await this.manualAddProduct(term, qty);
         this.closeAddProductDialog();
+    }
+
+    async manualAddProductById(productId, qty, name) {
+        try {
+            this.state.syncing = true;
+            const scanResult = await this.orm.call(
+                "inventory.scan.session",
+                "register_scan",
+                [
+                    this.state.sessionId,
+                    productId,
+                    this.state.locationId,
+                    qty,
+                    false,
+                    false,
+                ]
+            );
+
+            if (scanResult.success) {
+                this.updateOrAddLine(scanResult);
+                this.notification.add(
+                    `Đã thêm: ${name} (${qty})`,
+                    { type: "success" }
+                );
+            }
+        } catch (error) {
+            this.notification.add("Lỗi thêm sản phẩm", { type: "danger" });
+        } finally {
+            this.state.syncing = false;
+        }
     }
 
     async manualAddProduct(term, qty) {

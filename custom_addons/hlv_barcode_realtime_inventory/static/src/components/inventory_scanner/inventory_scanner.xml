@@ -18,8 +18,10 @@
                     </button>
                     <h1 class="hlv-title">Số lượng tồn kho</h1>
                     <div class="hlv-header-actions">
-                        <button class="hlv-btn-icon" t-on-click="() => this.toggleScannerMode('keyboard')" t-att-class="{active: state.scannerMode === 'keyboard'}">
-                            <i class="fa fa-keyboard-o"></i>
+                        <!-- Toggle Button: Show whatever is NOT active to switch to it -->
+                        <button class="hlv-btn-icon" t-on-click="toggleScannerMode" title="Chuyển chế độ quét">
+                            <i t-if="state.scannerMode === 'camera'" class="fa fa-keyboard-o"></i>
+                            <i t-else="" class="fa fa-camera"></i>
                         </button>
                         <button class="hlv-btn-icon">
                             <i class="fa fa-cog"></i>
@@ -45,7 +47,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="hlv-scanner-mode-switch" t-on-click="() => this.toggleScannerMode('keyboard')">
+                    <div class="hlv-scanner-mode-switch" t-on-click="toggleScannerMode">
                         <i class="fa fa-share-square-o mr-2"></i> Quét một vị trí
                     </div>
                 </div>
@@ -138,14 +140,27 @@
                     
                     <!-- Modal Body -->
                     <div class="hlv-modal-body-scroll">
-                        <div class="hlv-form-group">
+                        <div class="hlv-form-group position-relative">
                             <input type="text" 
+                                   id="hlv-product-search-input"
                                    class="hlv-input-control" 
-                                   placeholder="Sản phẩm"
+                                   placeholder="Sản phẩm (Tên, Mã hoặc Barcode)"
                                    t-att-value="state.addProduct.searchTerm"
                                    t-on-input="onProductSearchChange"
-                                   autofocus="autofocus"/>
-                             <!-- Search Results dropdown would go here -->
+                                   autocomplete="off"/>
+                            
+                            <!-- Search Suggestions -->
+                            <div t-if="state.addProduct.showDropdown" class="list-group position-absolute w-100 shadow-sm" style="z-index: 1050; top: 100%;">
+                                <t t-foreach="state.addProduct.searchResults" t-as="res" t-key="res.id">
+                                    <button class="list-group-item list-group-item-action" t-on-click="() => this.selectProduct(res)">
+                                        <div class="d-flex w-100 justify-content-between">
+                                            <strong class="mb-1" t-esc="res.default_code"/>
+                                            <small t-esc="res.barcode"/>
+                                        </div>
+                                        <div class="mb-1 small" t-esc="res.display_name"/>
+                                    </button>
+                                </t>
+                            </div>
                         </div>
 
                         <div class="hlv-qty-input-section">
@@ -185,25 +200,36 @@
                 </div>
             </div>
 
-            <!-- Location Selector Modal (reuse from full modal style if needed or keep existing) -->
-            <div t-if="state.showLocationSelector" class="hlv-modal-overlay" t-on-click="closeLocationSelector">
-                <!-- Simple list modal -->
-                <div class="hlv-modal-full" style="max-height: 80vh; margin-top: auto; border-radius: 16px 16px 0 0;" t-on-click.stop="">
-                     <header class="hlv-header">
-                        <h1 class="hlv-title">Chọn vị trí</h1>
-                        <button class="hlv-btn-icon" t-on-click="closeLocationSelector">
-                            <i class="fa fa-times"></i>
-                        </button>
-                    </header>
-                    <div class="hlv-modal-body-scroll">
-                        <t t-foreach="state.locationResults" t-as="loc" t-key="loc.id">
-                            <div class="p-3 border-bottom" t-on-click="() => this.selectLocation(loc)">
-                                <i class="fa fa-map-marker mr-2 text-primary"></i> <t t-esc="loc.name"/>
+                <!-- Location Selector Modal (reuse from full modal style if needed or keep existing) -->
+                <div t-if="state.showLocationSelector" class="hlv-modal-overlay" t-on-click="closeLocationSelector">
+                    <!-- Simple list modal -->
+                    <div class="hlv-modal-full" style="max-height: 80vh; margin-top: auto; border-radius: 16px 16px 0 0;" t-on-click.stop="">
+                         <header class="hlv-header">
+                            <h1 class="hlv-title">Chọn vị trí</h1>
+                            <button class="hlv-btn-icon" t-on-click="closeLocationSelector">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </header>
+                        <div class="p-3 bg-light border-bottom">
+                            <input type="text" id="hlv-loc-search-input" class="form-control" placeholder="Tìm vị trí..." t-on-input="onLocationSearchChange"/>
+                        </div>
+                        <div class="hlv-modal-body-scroll">
+                            <t t-foreach="state.locationResults" t-as="loc" t-key="loc.id">
+                                <div class="p-3 border-bottom d-flex align-items-center" t-on-click="() => this.selectLocation(loc)">
+                                    <i class="fa fa-map-marker mr-3 text-primary fa-lg"></i> 
+                                    <span style="font-size: 16px;" t-esc="loc.name"/>
+                                </div>
+                            </t>
+                             <div t-if="state.locationResults.length === 0" class="text-center p-4 text-muted">
+                                Không tìm thấy vị trí nào.
                             </div>
-                        </t>
+                        </div>
                     </div>
                 </div>
-            </div>
+
+                <!-- Add Product - Search Dropdown Overlay -->
+                <!-- Note: This would typically be inside the modal, handled by absolute positioning -->
+                <!-- We need to modify the Add Product modal part above -->
 
         </div>
     </t>
