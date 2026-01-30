@@ -23,6 +23,9 @@ class ProductProduct(models.Model):
         if not res:
             return []
 
+        # Log original results
+        _logger.info(f"HLV Search ORIGINAL (first 5): {[x[1] for x in res[:5]]}")
+
         # Extract IDs from the search results (res is a list of tuples (id, display_name))
         product_ids = [x[0] for x in res]
         
@@ -47,7 +50,7 @@ class ProductProduct(models.Model):
             if p.product_tmpl_id.id in product_tmpls_with_boms:
                 combo_ids.add(p.id)
         
-        _logger.info(f"HLV Search: Found {len(product_ids)} products. Combo IDs: {combo_ids}")
+        _logger.info(f"HLV Search: Found {len(product_ids)} products. Combo IDs count: {len(combo_ids)}, Single count: {len(product_ids) - len(combo_ids)}")
 
         for r in res:
             p_id = r[0]
@@ -59,6 +62,9 @@ class ProductProduct(models.Model):
         # 4. Construct final sorted list
         # We prioritize single products, then combo products.
         sorted_res = single_products + combo_products_with_bom
+        
+        # Log sorted results
+        _logger.info(f"HLV Search SORTED (first 5): {[x[1] for x in sorted_res[:5]]}")
         
         # 5. Apply the original limit
         if limit:
