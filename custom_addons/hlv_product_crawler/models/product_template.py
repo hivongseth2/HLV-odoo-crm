@@ -15,61 +15,69 @@ class ProductTemplate(models.Model):
         self.ensure_one()
         url = self.ketnoitieudung_url
         if not url and self.default_code:
-            url = CrawlerUtils.search_ketnoitieudung(self.default_code)
+            url, error = CrawlerUtils.search_ketnoitieudung(self.default_code)
             if url:
                 self.ketnoitieudung_url = url
             else:
-                raise UserError(_("Could not find product on Ketnoitieudung with code %s") % self.default_code)
+                # Don't raise error, just append message
+                msg = f"<div style='color: orange;'><b>Ketnoitieudung.vn:</b> {error or 'Không tìm thấy sản phẩm'}</div>"
+                self.crawled_specs = (self.crawled_specs or "") + msg
+                return
         
         if url:
-            specs = CrawlerUtils.parse_ketnoitieudung_details(url)
+            specs, error = CrawlerUtils.parse_ketnoitieudung_details(url)
             if specs:
                 self.crawled_specs = (self.crawled_specs or "") + f"<h3>Ketnoitieudung ({url})</h3>" + specs
+            else:
+                msg = f"<div style='color: orange;'><b>Ketnoitieudung.vn:</b> {error or 'Lỗi tải dữ liệu'}</div>"
+                self.crawled_specs = (self.crawled_specs or "") + msg
 
     def action_crawl_visior(self):
         self.ensure_one()
         url = self.visior_url
         if not url and self.default_code:
-            url = CrawlerUtils.search_visior(self.default_code)
+            url, error = CrawlerUtils.search_visior(self.default_code)
             if url:
                 self.visior_url = url
             else:
-                raise UserError(_("Could not find product on Visior with code %s") % self.default_code)
+                msg = f"<div style='color: orange;'><b>Visior.vn:</b> {error or 'Không tìm thấy sản phẩm'}</div>"
+                self.crawled_specs = (self.crawled_specs or "") + msg
+                return
         
         if url:
-            specs = CrawlerUtils.parse_visior_details(url)
+            specs, error = CrawlerUtils.parse_visior_details(url)
             if specs:
                 self.crawled_specs = (self.crawled_specs or "") + f"<h3>Visior ({url})</h3>" + specs
+            else:
+                msg = f"<div style='color: orange;'><b>Visior.vn:</b> {error or 'Lỗi tải dữ liệu'}</div>"
+                self.crawled_specs = (self.crawled_specs or "") + msg
 
     def action_crawl_thbvietnam(self):
         self.ensure_one()
         url = self.thbvietnam_url
         if not url and self.default_code:
-            url = CrawlerUtils.search_thbvietnam(self.default_code)
+            url, error = CrawlerUtils.search_thbvietnam(self.default_code)
             if url:
                 self.thbvietnam_url = url
             else:
-                 raise UserError(_("Could not find product on THB Vietnam with code %s") % self.default_code)
+                msg = f"<div style='color: orange;'><b>THB Vietnam:</b> {error or 'Không tìm thấy sản phẩm'}</div>"
+                self.crawled_specs = (self.crawled_specs or "") + msg
+                return
         
         if url:
-            specs = CrawlerUtils.parse_thbvietnam_details(url)
+            specs, error = CrawlerUtils.parse_thbvietnam_details(url)
             if specs:
                 self.crawled_specs = (self.crawled_specs or "") + f"<h3>THB Vietnam ({url})</h3>" + specs
+            else:
+                msg = f"<div style='color: orange;'><b>THB Vietnam:</b> {error or 'Lỗi tải dữ liệu'}</div>"
+                self.crawled_specs = (self.crawled_specs or "") + msg
 
     def action_crawl_all(self):
         for record in self:
-            # Clear previous specs to avoid duplication when crawling all again? 
-            # Or just append? Let's clear for fresh crawl.
+            # Clear previous specs for fresh crawl
             record.crawled_specs = ""
-            try:
-                record.action_crawl_ketnoitieudung()
-            except UserError:
-                pass
-            try:
-                record.action_crawl_visior()
-            except UserError:
-                pass
-            try:
-                record.action_crawl_thbvietnam()
-            except UserError:
-                pass
+            
+            # Try all sites - no exceptions, just log results
+            record.action_crawl_ketnoitieudung()
+            record.action_crawl_visior()
+            record.action_crawl_thbvietnam()
