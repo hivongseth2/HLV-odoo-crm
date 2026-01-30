@@ -4,6 +4,7 @@ import { Component, useState, onMounted, onWillUnmount } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { _t } from "@web/core/l10n/translation";
+import { isBarcodeScannerSupported, scanBarcode } from "@web/core/barcode/barcode_scanner";
 
 /**
  * Generate device fingerprint (persist across sessions)
@@ -33,6 +34,9 @@ export class InventoryScanner extends Component {
         this.notification = useService("notification");
         this.dialog = useService("dialog");
         this.action = useService("action");
+
+        // Check if device supports camera scanning
+        this.isMobile = isBarcodeScannerSupported();
 
         this.state = useState({
             // Session state
@@ -85,6 +89,25 @@ export class InventoryScanner extends Component {
         onWillUnmount(() => {
             document.removeEventListener('keydown', this.onKeyDown.bind(this));
         });
+    }
+
+    // ==========================================================================
+    // Camera Scanning
+    // ==========================================================================
+
+    async openCamera() {
+        try {
+            const barcode = await scanBarcode();
+            if (barcode) {
+                await this.processBarcode(barcode);
+            }
+        } catch (error) {
+            console.error("Camera scan error:", error);
+            // Don't show notification if user cancelled
+            if (error.message !== "Cancelled") {
+                this.notification.add(_t("Không thể mở camera"), { type: "warning" });
+            }
+        }
     }
 
     // ==========================================================================

@@ -29,18 +29,23 @@
                 <!-- Scan Zone -->
                 <div class="hlv-scan-zone">
                     <div class="hlv-scan-box">
-                        <div class="hlv-scan-icon">
+                        <div class="hlv-scan-icon" t-if="!isMobile">
                             <i class="fa fa-barcode"></i>
                         </div>
-                        <input 
-                            type="text"
-                            class="hlv-barcode-input"
-                            t-att-value="state.barcodeInput"
-                            t-on-input="onBarcodeInputChange"
-                            t-on-keydown="onBarcodeInputKeydown"
-                            t-att-placeholder="state.locationId ? 'Quét mã sản phẩm...' : 'Quét mã vị trí kho trước...'"
-                            autofocus="autofocus"
-                        />
+                        <div class="hlv-input-group">
+                            <input 
+                                type="text"
+                                class="hlv-barcode-input"
+                                t-att-value="state.barcodeInput"
+                                t-on-input="onBarcodeInputChange"
+                                t-on-keydown="onBarcodeInputKeydown"
+                                t-att-placeholder="state.locationId ? 'Quét hoặc nhập mã sản phẩm...' : 'Quét mã vị trí...'"
+                                autofocus="autofocus"
+                            />
+                            <button class="hlv-btn-camera" t-if="isMobile" t-on-click="openCamera">
+                                <i class="fa fa-camera"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
