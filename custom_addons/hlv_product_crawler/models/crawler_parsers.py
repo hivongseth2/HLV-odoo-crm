@@ -173,3 +173,77 @@ class CrawlerUtils:
             return str(specs_table), None
             
         return None, "Không tìm thấy thông số kỹ thuật"
+
+    @staticmethod
+    def search_mecsu(sku):
+        """Search for product and return (url, error_message) tuple"""
+        base_url = "https://mecsu.vn"
+        
+        # Try multiple query variations
+        queries = [
+            sku,
+            sku.replace('-', '').replace(' ', ''),
+            sku.upper(),
+            sku.lower(),
+        ]
+        
+        for query in queries:
+            # Mecsu uses /site?keyword= pattern
+            search_url = f"{base_url}/site?keyword={urllib.parse.quote(query)}"
+            html, error = CrawlerUtils.fetch_url(search_url)
+            if not html:
+                continue
+                
+            soup = BeautifulSoup(html, 'html.parser')
+            # Try multiple selectors for product items
+            # Grid view uses .product__items, table view uses rows
+            product_item = (soup.select_one('.mecsu-button-popup-lg') or
+                           soup.select_one('.product__items a') or
+                           soup.select_one('a[href*="/chi-tiet/"]'))
+            
+            if product_item:
+                # For mecsu-button-popup-lg, need to find detail link nearby
+                if 'mecsu-button-popup-lg' in (product_item.get('class') or []):
+                    # This is the specs popup button, find the actual product link
+                    detail_link = soup.select_one('a[href*="/chi-tiet/"]')
+                    if detail_link:
+                        href = detail_link.get('href')
+                    else:
+                        continue
+                else:
+                    href = product_item.get('href')
+                    
+                if href:
+                    if not href.startswith('http'):
+                        return f"{base_url}{href}", None
+                    return href, None
+        
+        return None, "Không tìm thấy sản phẩm (đã thử nhiều  biến thể)"
+
+    @staticmethod
+    def parse_mecsu_details(url):
+        """Parse product details and return (specs_html, error_message) tuple"""
+        html, error = CrawlerUtils.fetch_url(url)
+        if not html:
+            return None, error or "Lỗi tải trang"
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Mecsu  has multiple formats
+        # 1. Table in #information section
+        info_section = soup.select_one('#information')
+        if info_section:
+            table = info_section.select_one('table')
+            if table:
+                return str(table), None
+        
+        # 2. Additional info list
+        specs_list = soup.select_one('.additional__info_list')
+        if specs_list:
+            return str(specs_list), None
+            
+        # 3. Product details info table
+        details_table = soup.select_one('.product__details--info__table')
+        if details_table:
+            return str(details_table), None
+            
+        return None, "Không tìm thấy thông số kỹ thuật"
