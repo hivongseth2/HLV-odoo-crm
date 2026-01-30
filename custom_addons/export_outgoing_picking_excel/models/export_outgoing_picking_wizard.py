@@ -291,6 +291,9 @@ class PickingExportWizard(models.TransientModel):
                 if not prod:
                     continue
                 
+                # Kiểm tra xem sản phẩm có phải là combo (có BoM kit) không
+                bom = self.env['mrp.bom']._bom_find(prod, bom_type='phantom')
+                
                 # Tìm stock move tương ứng (nếu cần location info)
                 move = None
                 ml = None
@@ -306,23 +309,76 @@ class PickingExportWizard(models.TransientModel):
                             move = mv
                             break
                 
-                row = self._build_row_data(
-                    picking, so, prod, ml, move,
-                    scheduled_date_str, picking_name, partner_code, partner_name,
-                    partner_address, partner_vat, sale_name, sale_user_code,
-                    dien_giai, ly_do_xuat, warehouse_code,
-                    pos_line=pos_line  # Truyền pos_line vào để ưu tiên
-                )
-                rows.append(row)
+                # Nếu là combo, xuất dòng cha trước
+                if bom:
+                    parent_row = self._build_row_data(
+                        picking, so, prod, ml, move,
+                        scheduled_date_str, picking_name, partner_code, partner_name,
+                        partner_address, partner_vat, sale_name, sale_user_code,
+                        dien_giai, ly_do_xuat, warehouse_code,
+                        pos_line=pos_line  # Truyền pos_line vào để ưu tiên
+                    )
+                    rows.append(parent_row)
+                    
+                    # Xuất các dòng con của combo (từ stock moves)
+                    # Tìm tất cả stock moves có cùng sale_line_id hoặc cùng combo parent
+                    if picking.move_line_ids:
+                        for move_line in picking.move_line_ids:
+                            child_move = move_line.move_id
+                            # Kiểm tra xem move này có phải là component của combo không
+                            if child_move and getattr(child_move, 'sale_line_id', False):
+                                sol = child_move.sale_line_id
+                                # Nếu sale line product khác với move product → là component
+                                if sol.product_id == prod and child_move.product_id != prod:
+                                    child_row = self._build_row_data(
+                                        picking, so, child_move.product_id, move_line, child_move,
+                                        scheduled_date_str, picking_name, partner_code, partner_name,
+                                        partner_address, partner_vat, sale_name, sale_user_code,
+                                        dien_giai, ly_do_xuat, warehouse_code
+                                    )
+                                    rows.append(child_row)
+                else:
+                    # Không phải combo, xuất bình thường
+                    row = self._build_row_data(
+                        picking, so, prod, ml, move,
+                        scheduled_date_str, picking_name, partner_code, partner_name,
+                        partner_address, partner_vat, sale_name, sale_user_code,
+                        dien_giai, ly_do_xuat, warehouse_code,
+                        pos_line=pos_line
+                    )
+                    rows.append(row)
         else:
-            # Logic cũ: Xử lý từng move line hoặc move (cho non-POS orders)
+            # Logic cho non-POS orders: Nhóm theo sale_line_id để xuất combo cha
+            processed_sale_lines = set()  # Track đã xuất combo cha chưa
+            
             if picking.move_line_ids:
                 for ml in picking.move_line_ids:
                     move = ml.move_id
                     prod = ml.product_id
                     if not prod:
                         continue
-
+                    
+                    sol = getattr(move, 'sale_line_id', False) if move else False
+                    
+                    # Nếu có sale order line và chưa xử lý
+                    if sol and sol.id not in processed_sale_lines:
+                        processed_sale_lines.add(sol.id)
+                        
+                        # Kiểm tra combo: sale_line.product != move.product → combo
+                        if sol.product_id != prod:
+                            # Đây là component của combo, cần xuất cha trước
+                            combo_prod = sol.product_id
+                            
+                            # Xuất dòng combo cha
+                            parent_row = self._build_row_data(
+                                picking, so, combo_prod, None, move,
+                                scheduled_date_str, picking_name, partner_code, partner_name,
+                                partner_address, partner_vat, sale_name, sale_user_code,
+                                dien_giai, ly_do_xuat, warehouse_code
+                            )
+                            rows.append(parent_row)
+                    
+                    # Xuất dòng hiện tại (component hoặc sản phẩm thường)
                     row = self._build_row_data(
                         picking, so, prod, ml, move,
                         scheduled_date_str, picking_name, partner_code, partner_name,
@@ -335,7 +391,27 @@ class PickingExportWizard(models.TransientModel):
                     prod = mv.product_id
                     if not prod:
                         continue
-
+                    
+                    sol = getattr(mv, 'sale_line_id', False)
+                    
+                    # Nếu có sale order line và chưa xử lý
+                    if sol and sol.id not in processed_sale_lines:
+                        processed_sale_lines.add(sol.id)
+                        
+                        # Kiểm tra combo
+                        if sol.product_id != prod:
+                            combo_prod = sol.product_id
+                            
+                            # Xuất dòng combo cha
+                            parent_row = self._build_row_data(
+                                picking, so, combo_prod, None, mv,
+                                scheduled_date_str, picking_name, partner_code, partner_name,
+                                partner_address, partner_vat, sale_name, sale_user_code,
+                                dien_giai, ly_do_xuat, warehouse_code
+                            )
+                            rows.append(parent_row)
+                    
+                    # Xuất dòng hiện tại
                     row = self._build_row_data(
                         picking, so, prod, None, mv,
                         scheduled_date_str, picking_name, partner_code, partner_name,
@@ -435,8 +511,10 @@ class PickingExportWizard(models.TransientModel):
         # Location name (vẫn lấy từ move/move_line vì không có trong SOL)
         if ml:
             location_name = (ml.location_id and ml.location_id.complete_name) or ""
-        else:
+        elif move:
             location_name = (move.location_id and move.location_id.complete_name) or ""
+        else:
+            location_name = ""
         
         uom_name = (uom and uom.name) or ""
         
