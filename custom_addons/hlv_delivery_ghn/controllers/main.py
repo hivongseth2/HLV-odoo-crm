@@ -193,10 +193,17 @@ class GHNWebsiteController(http.Controller):
 
             res_fee = client.calculate_fee(data)
             if res_fee.get('success'):
-                # Determine weight category label
+                # Determine weight category label based on actual weight
                 weight_label = "Hàng nặng" if weight > 10000 else "Hàng nhẹ"
-                service_name = svc.get('short_name') or svc.get('name') or "Giao hàng"
-                display_name = f"{weight_label}: {service_name}" if service_name else weight_label
+                original_name = svc.get('short_name') or svc.get('name') or ""
+                
+                # If GHN returns a weight-based name, replace it entirely
+                if "hàng nhẹ" in original_name.lower() or "hàng nặng" in original_name.lower():
+                    display_name = weight_label
+                elif original_name:
+                    display_name = f"{weight_label}: {original_name}"
+                else:
+                    display_name = weight_label
                 
                 calculated_results.append({
                     'service_id': svc_id,
