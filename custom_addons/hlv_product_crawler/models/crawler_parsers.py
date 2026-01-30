@@ -51,7 +51,8 @@ class CrawlerUtils:
             html, error = CrawlerUtils.fetch_url(search_url)
             if not html:
                 continue
-        
+            
+            # FIXED: This code MUST be inside the for loop
             soup = BeautifulSoup(html, 'html.parser')
             product_item = (soup.select_one('.product-item a') or
                            soup.select_one('a[href*="/san-pham/"]'))

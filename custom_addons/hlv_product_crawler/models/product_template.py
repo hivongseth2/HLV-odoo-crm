@@ -13,13 +13,21 @@ class ProductTemplate(models.Model):
     crawled_specs = fields.Html(string="Crawled Specifications", sanitize=False)
 
     def action_crawl_ketnoitieudung(self):
+        import logging
+        _logger = logging.getLogger(__name__)
+        
         self.ensure_one()
+        _logger.info(f"[Ketnoitieudung] Starting crawl, current URL: {self.ketnoitieudung_url}")
+        
         url = self.ketnoitieudung_url
         if not url and self.default_code:
             msg_searching = f"<div style='color: #6c757d; font-size: 0.9em;'>🔍 Đang tìm kiếm <b>{self.default_code}</b> trên Ketnoitieudung.vn...</div>"
             self.crawled_specs = (self.crawled_specs or "") + msg_searching
             
+            _logger.info(f"[Ketnoitieudung] Searching for SKU: {self.default_code}")
             url, error = CrawlerUtils.search_ketnoitieudung(self.default_code)
+            _logger.info(f"[Ketnoitieudung] Search result - URL: {url}, Error: {error}")
+            
             if url:
                 self.ketnoitieudung_url = url
                 # Update the searching message with success
@@ -29,10 +37,14 @@ class ProductTemplate(models.Model):
                 # Update with failure message
                 self.crawled_specs = self.crawled_specs.replace(msg_searching,
                     f"<div style='color: #fd7e14;'>⚠ <b>Ketnoitieudung.vn:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
+                _logger.warning(f"[Ketnoitieudung] Product not found")
                 return
         
         if url:
+            _logger.info(f"[Ketnoitieudung] Parsing details from: {url}")
             specs, error = CrawlerUtils.parse_ketnoitieudung_details(url)
+            _logger.info(f"[Ketnoitieudung] Parse result - Specs length: {len(specs) if specs else 0}, Error: {error}")
+            
             if specs:
                 self.crawled_specs = (self.crawled_specs or "") + f"<h3 style='color: #007bff;'>📦 Ketnoitieudung.vn</h3><p style='font-size: 0.85em; color: #6c757d;'>{url}</p>" + specs
             else:
