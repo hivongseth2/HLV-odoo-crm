@@ -1,82 +1,118 @@
-# HLV Inventory Scanner
+# HLV Inventory Scanner - Mobile App
 
-## Mô tả
+## 🎯 Standalone Mobile App cho Kiểm Kê Kho
 
-Module kiểm kê tồn kho độc lập sử dụng barcode với khả năng:
+App quét barcode độc lập với:
+- ✅ **Camera Scanning** - Quét bằng camera điện thoại
+- ✅ **Keyboard Input** - Hỗ trợ máy quét barcode  
+- ✅ **Dark Theme** - Giao diện tối, dễ nhìn
+- ✅ **Mobile-First** - Tối ưu cho điện thoại
+- ✅ **Offline-Ready** - Không mất dữ liệu khi reload
 
-- **Real-time sync**: Mỗi lần quét được lưu ngay vào database
-- **Khôi phục session**: Reload trang không mất dữ liệu đã quét
-- **Hiển thị chênh lệch**: So sánh số lượng thực tế vs lý thuyết
+---
 
-## Workflow
+## 📱 Cách sử dụng
 
-1. **Quét mã vị trí kho** → Module nhận diện location
-2. **Quét sản phẩm** → Mỗi lần quét tự động cộng +1 và sync lên server
-3. **Xem danh sách** → Hiển thị: `scanned_qty / theoretical_qty` + chênh lệch
-4. **Áp dụng** → Cập nhật `stock.quant` với số lượng đã quét
+### Truy cập Direct URL (không cần vào menu)
 
-## Tính năng chính
+```
+https://your-odoo-domain.com/web#action=hlv_barcode_realtime_inventory.action_inventory_scanner
+```
 
-### Không mất dữ liệu khi reload
-- Session được lưu trên server với `device_id` unique
-- Khi mở lại → tự động khôi phục session active trước đó
-- Tất cả sản phẩm đã quét vẫn còn nguyên
+Hoặc shortlink:
+```
+https://your-odoo-domain.com/inventory-scan
+```
 
-### Thao tác nhanh
-- **+1, +10**: Tăng nhanh số lượng
-- **Xóa**: Bỏ sản phẩm khỏi danh sách
-- **Thêm sản phẩm**: Form thêm thủ công với số lượng tùy chọn
+### Thêm vào Home Screen (PWA)
 
-### Hiển thị trực quan
-- **Badge "MỚI"**: Sản phẩm chưa có trong kho (theoretical = 0)
-- **Chênh lệch màu**: Xanh (+) / Đỏ (-)
+**Android/iPhone:**
+1. Mở link trên
+2. Menu → "Add to Home Screen"
+3. Dùng như app native
 
-## Cài đặt
+---
+
+## 🎬 Workflow
+
+1. **Mở app** → Camera tự động bật
+2. **Quét vị trí kho** → App nhận diện location
+3. **Quét sản phẩm** → Mỗi lần quét +1, lưu ngay vào server
+4. **Xem danh sách** → Số lượng quét / Số lượng lý thuyết
+5. **Nhấn "Áp dụng"** → Cập nhật vào stock.quant
+
+---
+
+## 🎨 Tính năng
+
+### Camera Scanning
+- Sử dụng **BarcodeDetector API** (native browser)
+- Hỗ trợ: Code128, Code39, EAN13, EAN8, QR Code
+- Auto-detect trong 300ms
+
+### Keyboard Mode
+- Chuyển đổi ngay trong app
+- Dành cho máy quét barcode USB/Bluetooth
+
+### Real-time Sync
+- Mỗi lần quét → Lưu ngay database
+- Reload trang → Tự động khôi phục session
+
+### Offline-Friendly
+- Session & device fingerprint
+- Restore data khi mất mạng/reload
+
+---
+
+## 🔧 Technical
+
+### Browser Support
+
+| Browser | Camera | Keyboard |
+|---------|--------|----------|
+| Chrome Mobile (Android) | ✅ | ✅ |
+| Safari Mobile (iOS) | ⚠️ Cần enable | ✅ |
+| Chrome Desktop | ✅ | ✅ |
+| Firefox | ❌ Fallback keyboard | ✅ |
+
+### API Used
+- `navigator.mediaDevices.getUserMedia()` - Camera access
+- `BarcodeDetector` - Native barcode scanning
+- `navigator.vibrate()` - Haptic feedback
+
+---
+
+## 🚀 Installation
 
 ```bash
-# Upgrade module
 python odoo-bin -c odoo.conf -u hlv_barcode_realtime_inventory -d <database>
 ```
 
-## Sử dụng
+---
 
-1. Vào **Inventory → Operations → Quét Kiểm Kê**
-2. Quét barcode vị trí kho (hoặc chọn từ dropdown)
-3. Quét barcode sản phẩm (quan sát số lượng tăng lên)
-4. Nhấn **Áp dụng** để cập nhật vào kho
+## 🎨 Dark Theme
 
-## Technical Details
+Màu sắc đậm, tối ưu cho môi trường kho:
+- **Background**: #0A0E27 (Dark Navy)
+- **Cards**: #141B3C (Deep Blue)
+- **Accent**: #3B82F6 (Vibrant Blue)
+- **Text**: #F8FAFC (Almost White)
 
-### Models
+---
 
-**inventory.scan.session**
-- `name`: Session ID tự động
-- `device_id`: Fingerprint của thiết bị/browser
-- `location_id`: Vị trí kho đang kiểm
-- `state`: active / confirmed / cancelled
-- `line_ids`: Các sản phẩm đã quét
+## 📊 Backend Models
 
-**inventory.scan.line**
-- `product_id`: Sản phẩm
-- `scanned_qty`: Số lượng đã quét (tổng cộng)
-- `theoretical_qty`: Số lượng lý thuyết từ stock.quant
-- `difference`: Chênh lệch = scanned - theoretical
+### inventory.scan.session
+- `device_id` - Fingerprint thiết bị
+- `location_id` - Vị trí đang quét
+- `state` - active / confirmed
 
-### API Methods
+### inventory.scan.line  
+- `scanned_qty` - Số lượng đã quét
+- `theoretical_qty` - Số lượng lý thuyết
+- `difference` - Chênh lệch
 
-```python
-# Khôi phục hoặc tạo session mới
-session_data = env['inventory.scan.session'].get_or_create_active_session(device_id, location_id)
-
-# Đăng ký 1 lần quét
-result = env['inventory.scan.session'].register_scan(session_id, product_id, location_id, qty)
-
-# Cập nhật số lượng line
-result = session.update_line_qty(line_id, new_qty)
-
-# Xác nhận và áp dụng vào kho
-result = session.confirm_session()
-```
+---
 
 ## License
 

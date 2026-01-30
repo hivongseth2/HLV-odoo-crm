@@ -26,6 +26,7 @@
         ],
     },
     'installable': True,
-    'application': False,
+    'application': True,  # Hiện trên trang chủ
     'auto_install': False,
+    'sequence': 10,  # Thứ tự hiển thị
 }
