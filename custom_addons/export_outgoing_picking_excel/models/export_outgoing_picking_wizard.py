@@ -282,55 +282,89 @@ class PickingExportWizard(models.TransientModel):
         
         warehouse_code = self._get_warehouse_code(picking)
 
-        # Xử lý từng move line hoặc move
-        if picking.move_line_ids:
-            for ml in picking.move_line_ids:
-                move = ml.move_id
-                prod = ml.product_id
+        # KIỂM TRA: Nếu là đơn POS, loop qua pos.order.lines thay vì stock moves
+        pos_order = getattr(picking, 'pos_order_id', False)
+        
+        if pos_order:
+            # Loop qua từng POS order line (để đảm bảo xuất đủ số dòng)
+            for pos_line in pos_order.lines:
+                prod = pos_line.product_id
                 if not prod:
                     continue
-
+                
+                # Tìm stock move tương ứng (nếu cần location info)
+                move = None
+                ml = None
+                if picking.move_line_ids:
+                    for move_line in picking.move_line_ids:
+                        if move_line.product_id == prod:
+                            ml = move_line
+                            move = move_line.move_id
+                            break
+                else:
+                    for mv in picking.move_ids_without_package:
+                        if mv.product_id == prod:
+                            move = mv
+                            break
+                
                 row = self._build_row_data(
                     picking, so, prod, ml, move,
                     scheduled_date_str, picking_name, partner_code, partner_name,
                     partner_address, partner_vat, sale_name, sale_user_code,
-                    dien_giai, ly_do_xuat, warehouse_code
+                    dien_giai, ly_do_xuat, warehouse_code,
+                    pos_line=pos_line  # Truyền pos_line vào để ưu tiên
                 )
                 rows.append(row)
         else:
-            for mv in picking.move_ids_without_package:
-                prod = mv.product_id
-                if not prod:
-                    continue
+            # Logic cũ: Xử lý từng move line hoặc move (cho non-POS orders)
+            if picking.move_line_ids:
+                for ml in picking.move_line_ids:
+                    move = ml.move_id
+                    prod = ml.product_id
+                    if not prod:
+                        continue
 
-                row = self._build_row_data(
-                    picking, so, prod, None, mv,
-                    scheduled_date_str, picking_name, partner_code, partner_name,
-                    partner_address, partner_vat, sale_name, sale_user_code,
-                    dien_giai, ly_do_xuat, warehouse_code
-                )
-                rows.append(row)
+                    row = self._build_row_data(
+                        picking, so, prod, ml, move,
+                        scheduled_date_str, picking_name, partner_code, partner_name,
+                        partner_address, partner_vat, sale_name, sale_user_code,
+                        dien_giai, ly_do_xuat, warehouse_code
+                    )
+                    rows.append(row)
+            else:
+                for mv in picking.move_ids_without_package:
+                    prod = mv.product_id
+                    if not prod:
+                        continue
+
+                    row = self._build_row_data(
+                        picking, so, prod, None, mv,
+                        scheduled_date_str, picking_name, partner_code, partner_name,
+                        partner_address, partner_vat, sale_name, sale_user_code,
+                        dien_giai, ly_do_xuat, warehouse_code
+                    )
+                    rows.append(row)
 
         return rows
 
     def _build_row_data(self, picking, so, prod, ml, move,
                         scheduled_date_str, picking_name, partner_code, partner_name,
                         partner_address, partner_vat, sale_name, sale_user_code,
-                        dien_giai, ly_do_xuat, warehouse_code):
+                        dien_giai, ly_do_xuat, warehouse_code, pos_line=None):
         """Xây dựng dữ liệu cho 1 dòng"""
         
         product_code = prod.default_code or (prod.barcode if hasattr(prod, 'barcode') else "") or ""
         product_name = prod.display_name or prod.name or ""
         
-        # Ưu tiên 1: Kiểm tra POS Order Line trước (cho đơn POS và đơn hoàn tiền)
-        pos_order = getattr(picking, 'pos_order_id', False)
-        pos_line = False
-        
-        if pos_order and prod:
-            # Tìm pos.order.line tương ứng với sản phẩm này
-            pos_lines = pos_order.lines.filtered(lambda l: l.product_id == prod)
-            if pos_lines:
-                pos_line = pos_lines[0]  # Lấy dòng đầu tiên nếu có nhiều
+        # Ưu tiên 1: Sử dụng pos_line được truyền vào (nếu có)
+        # Nếu không có pos_line được truyền vào, tìm trong picking
+        if not pos_line:
+            pos_order = getattr(picking, 'pos_order_id', False)
+            if pos_order and prod:
+                # Tìm pos.order.line tương ứng với sản phẩm này
+                pos_lines = pos_order.lines.filtered(lambda l: l.product_id == prod)
+                if pos_lines:
+                    pos_line = pos_lines[0]  # Lấy dòng đầu tiên nếu có nhiều
         
         # Ưu tiên 2: Sale Order Line
         sol = getattr(move, 'sale_line_id', False) if move else False
@@ -851,38 +885,32 @@ class PickingExportWizard(models.TransientModel):
         dien_giai = picking.note or f"Xuất bán hàng {partner_name}"
         warehouse_code = self._get_warehouse_code(picking)
 
-        # Loop moves
-        moves = picking.move_line_ids if picking.move_line_ids else picking.move_ids_without_package
+        # KIỂM TRA: Nếu là đơn POS, loop qua pos.order.lines thay vì stock moves
+        pos_order = getattr(picking, 'pos_order_id', False)
         
-        for line in moves:
-            # Determine move first
-            if line._name == 'stock.move.line':
-                prod = line.product_id
-                move = line.move_id
-            else:
-                prod = line.product_id
-                move = line # Itself
-            
-            if not prod: continue
-
-            # Ưu tiên 1: Kiểm tra POS Order Line trước (cho đơn POS và đơn hoàn tiền)
-            pos_order = getattr(picking, 'pos_order_id', False)
-            pos_line = False
-            
-            if pos_order and prod:
-                # Tìm pos.order.line tương ứng với sản phẩm này
-                pos_lines = pos_order.lines.filtered(lambda l: l.product_id == prod)
-                if pos_lines:
-                    pos_line = pos_lines[0]  # Lấy dòng đầu tiên nếu có nhiều
-            
-            # Ưu tiên 2: Sale Order Line
-            sol = move.sale_line_id if move and hasattr(move, 'sale_line_id') else False
-            
-            # Logic lấy dữ liệu theo thứ tự ưu tiên
-            if pos_line:
-                # Lấy từ POS Order Line (số lượng đã có dấu âm cho đơn hoàn tiền)
-                qty = pos_line.qty or 0.0  # Số lượng từ POS (đã âm nếu là return)
-                uom = prod.uom_id  # POS không có product_uom field
+        if pos_order:
+            # Loop qua từng POS order line (để đảm bảo xuất đủ số dòng)
+            for pos_line in pos_order.lines:
+                prod = pos_line.product_id
+                if not prod:
+                    continue
+                
+                # Tìm stock move tương ứng (nếu cần)
+                move = None
+                if picking.move_line_ids:
+                    for move_line in picking.move_line_ids:
+                        if move_line.product_id == prod:
+                            move = move_line.move_id
+                            break
+                else:
+                    for mv in picking.move_ids_without_package:
+                        if mv.product_id == prod:
+                            move = mv
+                            break
+                
+                # Lấy dữ liệu trực tiếp từ POS line
+                qty = pos_line.qty or 0.0
+                uom = prod.uom_id
                 price_unit = pos_line.price_unit or 0.0
                 discount = pos_line.discount or 0.0
                 price_subtotal = pos_line.price_subtotal_incl or 0.0
@@ -890,41 +918,164 @@ class PickingExportWizard(models.TransientModel):
                 tax_amount = 0.0
                 if pos_line.tax_ids_after_fiscal_position:
                     tax_amount = pos_line.tax_ids_after_fiscal_position[0].amount
-                    
-            elif sol:
-                # Lấy từ Sale Order Line
-                qty = sol.product_uom_qty or 0.0
-                uom = sol.product_uom or prod.uom_id
-                price_unit = sol.price_unit or 0.0
-                discount = sol.discount or 0.0
-                price_subtotal = sol.price_subtotal or 0.0
                 
-                tax_amount = 0.0
-                if sol.tax_id:
-                    tax_amount = sol.tax_id[0].amount
-                    
-            else:
-                # Fallback: lấy từ picking/move line
-                if line._name == 'stock.move.line':
-                    qty = line.qty_done
-                    uom = line.product_uom_id
-                else:
-                    qty = line.quantity_done if hasattr(line, 'quantity_done') else line.product_uom_qty
-                    uom = line.product_uom
-                
-                # Fallback to product list price if no SOL
-                price_unit = prod.list_price
-                discount = 0.0
-                price_subtotal = 0.0
-                tax_amount = 0.0
-
-            # Computed fields
-            tien_ck = abs(price_unit * qty * discount / 100)
-            # Thành tiền: Ưu tiên price_subtotal từ POS/SOL, nếu không có thì tính
-            if (pos_line or sol) and price_subtotal:
+                # Computed fields
+                tien_ck = abs(price_unit * qty * discount / 100)
                 thanh_tien = price_subtotal
-            else:
-                thanh_tien = (price_unit * qty) - tien_ck
+                tien_thue = (thanh_tien * tax_amount / 100) if tax_amount else 0
+                
+                # Mapping logic based on warehouse and payment method
+                ma_khach_hang = partner_code
+                phuong_thuc_excel = 'Chưa thu tiền'
+                
+                # Get payment method from picking field (try both possible field names)
+                raw_payment_method = getattr(picking, 'x_studio_pos_payment_method', '') or getattr(picking, 'x_studio_payment_method', '') or ''
+                is_multiple = (',' in str(raw_payment_method)) or ("kết hợp" in str(raw_payment_method).lower())
+                payment_method_lower = str(raw_payment_method).lower()
+
+                # Mapping for KBC (BENCAM)
+                if warehouse_code in ["KBC", "BENCAM"]:
+                    if "tiền mặt" in payment_method_lower and not is_multiple:
+                        ma_khach_hang = "KH27182013179"
+                        phuong_thuc_excel = "Thu tiền ngay - Tiền mặt"
+                    elif "chuyển khoản" in payment_method_lower and not is_multiple:
+                        ma_khach_hang = "KH27182013178"
+                        phuong_thuc_excel = "Thu tiền ngay - Chuyển khoản"
+                    elif is_multiple:
+                        ma_khach_hang = "KHACHLE-BC"
+                        phuong_thuc_excel = "Chưa thu tiền"
+                
+                # Mapping for TSN (HCM)
+                elif warehouse_code in ["TSN", "HCM"]:
+                    if "tiền mặt" in payment_method_lower and not is_multiple:
+                        ma_khach_hang = "KH27182013176"
+                        phuong_thuc_excel = "Thu tiền ngay - Tiền mặt"
+                    elif "chuyển khoản" in payment_method_lower and not is_multiple:
+                        ma_khach_hang = "KH27182013177"
+                        phuong_thuc_excel = "Thu tiền ngay - Chuyển khoản"
+                    elif is_multiple:
+                        ma_khach_hang = "KHACHLE-HCM"
+                        phuong_thuc_excel = "Chưa thu tiền"
+
+                # Build row dict
+                row = {
+                    'hinh_thuc_ban_hang': 'Bán hàng hóa trong nước',
+                    'phuong_thuc_thanh_toan': phuong_thuc_excel,
+                    'kiem_phieu_xuat_kho': 'Có',
+                    'lap_kem_hoa_don': 'Không',
+                    'da_lap_hoa_don': 'Chưa lập',
+                    'ngay_hach_toan': date_str,
+                    'ngay_chung_tu': date_str,
+                    'so_chung_tu': so_chung_tu,
+                    'so_phieu_xuat': so_phieu_xuat,
+                    'mau_so_hd': '',
+                    'ky_hieu_hd': '',
+                    'so_hoa_don': '',
+                    'ngay_hoa_don': '',
+                    'ma_khach_hang': ma_khach_hang,
+                    'ten_khach_hang': partner_name,
+                    'dia_chi': partner_address,
+                    'ma_so_thue': '',
+                    'don_vi_giao_dai_ly': '',
+                    'nguoi_nop': '',
+                    'nop_vao_tk': '',
+                    'ten_ngan_hang': '',
+                    'dien_giai': dien_giai,
+                    'ly_do_xuat': dien_giai,
+                    'nhan_vien_ban_hang': sale_user_code,
+                    'kem_theo': '',
+                    'han_thanh_toan': '',
+                    
+                    'ma_hang': prod.default_code or '',
+                    'thuoc_combo': self._thuoc_combo_code_for_move(move) if move else '',
+                    'ten_hang': prod.name,
+                    'la_dong_ghi_chu': 'không',
+                    'hang_khuyen_mai': 'Không',
+                    'chiet_khau_thuong_mai': '',
+                    
+                    'tk_tien_no': '131',
+                    'tk_doanh_thu_co': '5111',
+                    'dvt': uom.name if uom else '',
+                    'so_luong': qty,
+                    'don_gia': price_unit,
+                    'thanh_tien': thanh_tien,
+                    'ty_le_ck': discount,
+                    'tien_chiet_khau': tien_ck,
+                    'tk_chiet_khau': '',
+                    
+                    'gia_tinh_thue_xk': '',
+                    'ty_le_thue_xk': '',
+                    'tien_thue_xk': '',
+                    'tk_thue_xk': '',
+                    
+                    'ty_le_thue_gtgt': tax_amount,
+                    'ty_le_thue_khac': '',
+                    'tien_thue_gtgt': tien_thue,
+                    'tk_thue_gtgt': '33311',
+                    'hh_khong_th_tren_to_khai': 'Không',
+                    
+                    'ma_kho': warehouse_code,
+                    'tk_gia_von': '632',
+                    'tk_kho': '1561',
+                    'don_gia_von': prod.standard_price,
+                    'tien_von': prod.standard_price * abs(qty),  # Use abs for cost calculation
+                    'hang_hoa_giu_ho': '',
+                }
+                rows.append(row)
+                
+        else:
+            # Loop moves (non-POS logic)
+            moves = picking.move_line_ids if picking.move_line_ids else picking.move_ids_without_package
+            
+            for line in moves:
+                # Determine move first
+                if line._name == 'stock.move.line':
+                    prod = line.product_id
+                    move = line.move_id
+                else:
+                    prod = line.product_id
+                    move = line # Itself
+                
+                if not prod: continue
+
+                # Ưu tiên: Sale Order Line
+                sol = move.sale_line_id if move and hasattr(move, 'sale_line_id') else False
+                
+                # Logic lấy dữ liệu
+                if sol:
+                    # Lấy từ Sale Order Line
+                    qty = sol.product_uom_qty or 0.0
+                    uom = sol.product_uom or prod.uom_id
+                    price_unit = sol.price_unit or 0.0
+                    discount = sol.discount or 0.0
+                    price_subtotal = sol.price_subtotal or 0.0
+                    
+                    tax_amount = 0.0
+                    if sol.tax_id:
+                        tax_amount = sol.tax_id[0].amount
+                        
+                else:
+                    # Fallback: lấy từ picking/move line
+                    if line._name == 'stock.move.line':
+                        qty = line.qty_done
+                        uom = line.product_uom_id
+                    else:
+                        qty = line.quantity_done if hasattr(line, 'quantity_done') else line.product_uom_qty
+                        uom = line.product_uom
+                    
+                    # Fallback to product list price if no SOL
+                    price_unit = prod.list_price
+                    discount = 0.0
+                    price_subtotal = 0.0
+                    tax_amount = 0.0
+
+                # Computed fields
+                tien_ck = abs(price_unit * qty * discount / 100)
+                # Thành tiền: Ưu tiên price_subtotal từ SOL, nếu không có thì tính
+                if sol and price_subtotal:
+                    thanh_tien = price_subtotal
+                else:
+                    thanh_tien = (price_unit * qty) - tien_ck
             
             # Tiền thuế = (Thành tiền sau chiết khấu) * % thuế
             tien_thue = (thanh_tien * tax_amount / 100) if tax_amount else 0
