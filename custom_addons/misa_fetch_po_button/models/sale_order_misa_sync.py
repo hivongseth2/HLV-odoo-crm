@@ -914,12 +914,37 @@ class SaleOrder(models.Model):
 
         posted_inv_exists = bool(self.invoice_ids.filtered(lambda m: m.state == 'posted'))
         
+        # ===== Build combo_codes_with_bom để skip children =====
+        # Nếu combo parent có BoM Kit, Odoo sẽ tự explode ra picking
+        # → không cần thêm children vào SO, tránh trùng lặp
+        combo_codes_with_bom = set()
+        for ln in (lines or []):
+            if ln.get("IsSetProduct"):
+                combo_code = (ln.get("ProductIDText") or "").strip()
+                if combo_code:
+                    prod = env['product.product'].search([('default_code', '=', combo_code)], limit=1)
+                    if prod and env['mrp.bom'].search_count([
+                        ('product_tmpl_id', '=', prod.product_tmpl_id.id),
+                        ('type', '=', 'phantom'),
+                        ('active', '=', True)
+                    ]) > 0:
+                        combo_codes_with_bom.add(combo_code)
+                        _logger.info("📦 Combo '%s' có BoM Kit → sẽ skip children từ MISA", combo_code)
+        
         # Tạo danh sách các SOL từ MISA (chưa tạo vào DB)
         misa_sol_data = []
         for ln in (lines or []):
             code = (ln.get("ProductIDText") or "").strip()
             if not code:
                 continue
+            
+            # 🔥 SKIP COMBO CHILDREN nếu parent có BoM Kit
+            # (Odoo sẽ tự explode BoM Kit ra picking thay vì thêm trực tiếp)
+            if ln.get("IsChildProduct"):
+                parent_code = (ln.get("ParentProductIDText") or "").strip()
+                if parent_code in combo_codes_with_bom:
+                    _logger.info("⏭️ Skip combo child '%s' (parent '%s' có BoM Kit)", code, parent_code)
+                    continue
 
             desc       = ln.get("Description") or code
             qty        = _flt(ln.get("Amount"), 0.0)
@@ -1361,154 +1386,48 @@ class SaleOrder(models.Model):
                 "• Tạo phiếu trả hàng / điều chỉnh kho để đưa 'đã giao' ≤ số trên MISA.\n"
                 "• Hoặc cập nhật lại số lượng trên MISA nếu MISA mới là số chuẩn."
             ) % details)
-        # --------- Bước 4: lấy/chuẩn bị picking mở ----------
-        open_picks = self.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel'))
-        target_pick = open_picks[:1] and open_picks[0] or False
-        _logger.info("Có %s picking đang mở; target_pick=%s",
-                    len(open_picks), target_pick and target_pick.name)
-
+        # --------- Bước 4: Để Odoo tự quản lý picking ----------
+        # KHÔNG tạo picking/move thủ công nữa.
+        # SO lines đã được đồng bộ ở bước trước → Odoo sẽ tự tạo/cập nhật picking
+        # qua cơ chế procurement rules khi thay đổi qty trên SO lines.
+        
+        # Nếu có sản phẩm cần giao thêm, thử force re-confirm để trigger picking
         nothing_to_ship = all(qty <= 0.0 for qty in needed_in_open_by_product.values())
-
-        if not target_pick and nothing_to_ship:
-            _logger.info("Không còn gì cần trong picking mở và không có picking mở")
-            self.message_post(body=_("Đồng bộ hoàn tất: Không cần picking mở thêm."))
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {'title': _("Đồng bộ thành công"), 'message': _("Không cần picking mở thêm"), 'type': 'success'},
-            }
-
-        if not target_pick and not nothing_to_ship:
-            _logger.info("Chưa có picking mở nhưng vẫn còn hàng cần giao → tạo mới")
-            if self.state in ('draft', 'sent'):
-                self.action_confirm()
-            # refresh lại open_picks sau confirm
-            open_picks = self.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel'))
-            target_pick = open_picks[:1] and open_picks[0] or False
-            if not target_pick:
-                picking_type = self.warehouse_id and self.warehouse_id.out_type_id
-                if not picking_type:
-                    raise UserError(_("Không xác định được loại phiếu giao (picking type) của kho %s")
-                                    % (self.warehouse_id.name or ''))
-                target_pick = env['stock.picking'].create({
-                    'partner_id': self.partner_id.id,
-                    'picking_type_id': picking_type.id,
-                    'origin': self.name,
-                    'location_id': picking_type.default_location_src_id.id,
-                    'location_dest_id': picking_type.default_location_dest_id.id,
-                    'sale_id': self.id,
-                })
-                _logger.info("Đã tạo picking mới: %s", target_pick.name)
-            # đồng bộ biến open_picks cho các bước sau
-            open_picks = self.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel'))
-
-        # --------- Bước 5: lập chỉ mục move mở (theo product_id và fallback theo default_code) ----------
-        open_moves_by_product = {}
-        open_moves_by_code = {}
-
-        for picking in (open_picks or [target_pick]):
-            if not picking:
-                continue
-            for mv in picking.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel')):
-                # theo product (record)
-                open_moves_by_product.setdefault(mv.product_id, []).append(mv)
-                # fallback theo mã
-                code = (mv.product_id.default_code or '').strip()
-                if code:
-                    open_moves_by_code.setdefault(code, []).append(mv)
-                _logger.debug("Open move %s: %s qty=%s state=%s",
-                            picking.name, mv.product_id.display_name, mv.product_uom_qty, mv.state)
-
-        # --------- Bước 6: cập nhật/cắt/tạo move theo needed_in_open ----------
-        StockMove = env['stock.move']
-
-        # 6.1: với các sản phẩm needed=0 → cancel/qty=0 tất cả move mở
-        for prod, mv_list in open_moves_by_product.items():
-            if needed_in_open_by_product.get(prod, 0.0) <= 0.0:
-                _logger.info("Huỷ/cắt các move của %s (needed=0)", prod.display_name)
-                for mv in mv_list:
-                    self._safe_cancel_move(mv)
-
-        # 6.2: các sản phẩm needed > 0 → cập nhật hoặc tạo move
-        for prod, needed_qty in needed_in_open_by_product.items():
-            if needed_qty <= 0.0:
-                continue
-
-            # Lấy các move mở hiện có theo product; nếu không thấy, fallback theo mã
-            existing_moves = open_moves_by_product.get(prod, [])
-            if not existing_moves:
-                code = (prod.default_code or '').strip()
-                if code:
-                    existing_moves = open_moves_by_code.get(code, []) or []
-
-            # Lọc chỉ move thật sự còn mở
-            existing_moves = [mv for mv in existing_moves if mv.state not in ('done', 'cancel')]
-
-            if existing_moves:
-                main_mv = existing_moves[0]
-                self._safe_unreserve_move(main_mv)
-                # cập nhật số lượng & UoM (về UoM mặc định của product)
-                main_mv.write({
-                    'product_uom_qty': needed_qty,
-                    'product_uom': prod.uom_id.id if prod.uom_id else main_mv.product_uom.id,
-                })
-                _logger.info("Cập nhật move %s → qty=%s", main_mv.display_name, needed_qty)
-
-                # cancel các move dư
-                for extra_mv in existing_moves[1:]:
-                    _logger.info("Cancel move thừa %s", extra_mv.display_name)
-                    self._safe_cancel_move(extra_mv)
-            else:
-                # Tạo move mới → TÌM SOL tương ứng để link
-                _logger.info("Tạo move mới cho %s với số lượng %s", prod.display_name, needed_qty)
-                
-                # Tìm sale order line có product này và còn qty chưa giao
-                sol = self.order_line.filtered(
-                    lambda l: l.product_id == prod and (l.product_uom_qty - l.qty_delivered) > 0.001
-                )[:1]
-                
-                sale_line_id = sol.id if sol else False
-                if sale_line_id:
-                    _logger.info("  → Link với SOL ID=%s", sale_line_id)
-                
-                move_vals = {
-                    'name': prod.display_name,
-                    'product_id': prod.id,
-                    'product_uom_qty': needed_qty,
-                    'product_uom': prod.uom_id.id if prod.uom_id else env.ref('uom.product_uom_unit').id,
-                    'picking_id': target_pick.id,
-                    'location_id': target_pick.location_id.id,
-                    'location_dest_id': target_pick.location_dest_id.id,
-                    'state': 'draft',
-                    'sale_line_id': sale_line_id,
-                }
-                new_mv = StockMove.create(move_vals)
-                try:
-                    if hasattr(new_mv, '_action_confirm'):
-                        new_mv._action_confirm()
-                    else:
-                        new_mv.action_confirm()
-                except Exception as exc:
-                    _logger.warning("Xác nhận move mới lỗi: %s", exc)
-
-        # --------- Bước 7: re-assign (giữ chỗ) ----------
-        if target_pick and any(qty > 0 for qty in needed_in_open_by_product.values()):
+        
+        if not nothing_to_ship:
+            # Có sản phẩm cần giao → trigger procurement
+            _logger.info("Còn sản phẩm cần giao → trigger Odoo procurement")
             try:
-                if target_pick.state == 'draft' and hasattr(target_pick, 'action_confirm'):
-                    target_pick.action_confirm()
-                if hasattr(target_pick, 'action_assign'):
-                    target_pick.action_assign()
-                _logger.info("Đã re-assign picking %s", target_pick.name)
-            except Exception as exc:
-                _logger.warning("Không thể reserve lại picking %s: %s", target_pick.name, exc)
-
-        # --------- Bước 8: thông báo kết quả ----------
+                # Nếu SO đang draft/sent thì confirm
+                if self.state in ('draft', 'sent'):
+                    self.action_confirm()
+                
+                # Trigger lại procurement cho các line chưa giao đủ
+                for line in self.order_line:
+                    if line.product_id.type != 'service':
+                        qty_to_deliver = line.product_uom_qty - line.qty_delivered
+                        if qty_to_deliver > 0.001:
+                            # Gọi _action_launch_stock_rule nếu có
+                            if hasattr(line, '_action_launch_stock_rule'):
+                                try:
+                                    line._action_launch_stock_rule()
+                                    _logger.info("Triggered stock rule for %s (qty=%s)", 
+                                               line.product_id.display_name, qty_to_deliver)
+                                except Exception as e:
+                                    _logger.warning("Trigger stock rule lỗi cho %s: %s", 
+                                                  line.product_id.display_name, e)
+            except Exception as e:
+                _logger.warning("Không thể trigger procurement: %s", e)
+        
+        # --------- Bước 5: Thông báo kết quả ----------
         summary_parts = []
         for prod, needed in needed_in_open_by_product.items():
             if needed > 0:
                 summary_parts.append(f"{prod.display_name}: {needed:g}")
 
-        summary = _("Picking mở cần: %s") % (", ".join(summary_parts) if summary_parts else _("không có gì"))
+        summary = _("Đã đồng bộ SO lines. Odoo sẽ tự tạo picking cho: %s") % (
+            ", ".join(summary_parts) if summary_parts else _("không có gì thêm")
+        )
         _logger.info("Kết quả đồng bộ SO %s: %s", self.name, summary)
         self.message_post(body=_("Đồng bộ MISA thành công. %s") % summary)
 
