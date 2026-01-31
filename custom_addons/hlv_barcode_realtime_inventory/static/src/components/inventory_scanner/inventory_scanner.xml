@@ -65,17 +65,18 @@
                     />
                 </div>
 
-                <!-- Location Bar -->
-                <div class="hlv-location-bar" t-on-click="openLocationSelector">
+                <!-- Location Bar (Read-only, Scan to change) -->
+                <div class="hlv-location-bar">
                     <span class="hlv-location-icon"><i class="fa fa-map-marker"></i></span>
                     <span class="hlv-location-name" t-if="state.locationName" t-esc="state.locationName"/>
-                    <span class="hlv-location-name text-muted" t-else="">Chọn vị trí...</span>
+                    <span class="hlv-location-name text-muted" t-else="">Quét mã vị trí để bắt đầu...</span>
                 </div>
 
                 <!-- Product List -->
                 <div class="hlv-product-list">
                     <div t-if="state.lines.length === 0" class="hlv-empty-state">
-                        <p>Chưa có sản phẩm nào</p>
+                        <i class="fa fa-barcode fa-3x mb-3 opacity-50"></i>
+                        <p>Vui lòng quét vị trí, sau đó quét sản phẩm</p>
                     </div>
 
                     <t t-foreach="state.lines" t-as="line" t-key="line.id">
@@ -150,16 +151,15 @@
                                    autocomplete="off"/>
                             
                             <!-- Search Suggestions -->
-                            <div t-if="state.addProduct.showDropdown" class="list-group position-absolute w-100 shadow-sm" style="z-index: 1050; top: 100%;">
+                            <div t-if="state.addProduct.showDropdown" class="list-group position-absolute w-100 shadow-sm" style="z-index: 1050; top: 100%; max-height: 200px; overflow-y: auto;">
                                 <t t-foreach="state.addProduct.searchResults" t-as="res" t-key="res.id">
-                                    <button class="list-group-item list-group-item-action" t-on-click="() => this.selectProduct(res)">
-                                        <div class="d-flex w-100 justify-content-between">
-                                            <strong class="mb-1" t-esc="res.default_code"/>
-                                            <small t-esc="res.barcode"/>
-                                        </div>
-                                        <div class="mb-1 small" t-esc="res.display_name"/>
+                                    <button class="list-group-item list-group-item-action py-2 px-3" t-on-click="() => this.selectProduct(res)" style="border-left: none; border-right: none; border-radius: 0;">
+                                        <span t-esc="res.display_name" style="font-size: 14px; color: #495057;"/>
                                     </button>
                                 </t>
+                                <button class="list-group-item list-group-item-action py-2 px-3 text-primary" style="border-left: none; border-right: none;">
+                                    <small><i>Tìm kiếm thêm...</i></small>
+                                </button>
                             </div>
                         </div>
 
@@ -172,9 +172,15 @@
                             </div>
                         </div>
 
-                        <div class="hlv-form-group">
+                        <!-- Location Dropdown in Add Product -->
+                        <div class="hlv-form-group position-relative">
                             <label class="hlv-form-label"><i class="fa fa-map-marker"></i> Vị trí</label>
-                            <input type="text" class="hlv-input-control" t-att-value="state.locationName" readonly="readonly"/>
+                            <input type="text" 
+                                   class="hlv-input-control" 
+                                   t-att-value="state.addProduct.locationName || state.locationName" 
+                                   t-on-click="openAddProductLocationSelector"
+                                   readonly="readonly"
+                                   style="background: white; cursor: pointer;"/>
                         </div>
 
                         <div class="hlv-form-group">
