@@ -1410,8 +1410,18 @@ class SaleOrder(models.Model):
                     _logger.info("Cancel move thừa %s", extra_mv.display_name)
                     self._safe_cancel_move(extra_mv)
             else:
-                # Tạo move mới
+                # Tạo move mới → TÌM SOL tương ứng để link
                 _logger.info("Tạo move mới cho %s với số lượng %s", prod.display_name, needed_qty)
+                
+                # Tìm sale order line có product này và còn qty chưa giao
+                sol = self.order_line.filtered(
+                    lambda l: l.product_id == prod and (l.product_uom_qty - l.qty_delivered) > 0.001
+                )[:1]
+                
+                sale_line_id = sol.id if sol else False
+                if sale_line_id:
+                    _logger.info("  → Link với SOL ID=%s", sale_line_id)
+                
                 move_vals = {
                     'name': prod.display_name,
                     'product_id': prod.id,
@@ -1421,7 +1431,7 @@ class SaleOrder(models.Model):
                     'location_id': target_pick.location_id.id,
                     'location_dest_id': target_pick.location_dest_id.id,
                     'state': 'draft',
-                    'sale_line_id': False,  # có thể map theo SOL nếu cần
+                    'sale_line_id': sale_line_id,
                 }
                 new_mv = StockMove.create(move_vals)
                 try:
