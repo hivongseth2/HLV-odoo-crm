@@ -6,28 +6,18 @@
         <field name="priority" eval="90"/>
         <field name="inherit_id" ref="base.res_config_settings_view_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//div[hasclass('settings')]" position="inside">
-                <div class="app_settings_block" data-string="Product Crawler" string="Product Crawler" data-key="hlv_product_crawler">
-                    <h2>AI Quality Control (Mr. GPT)</h2>
-                    <div class="row mt16 o_settings_container">
-                        <div class="col-12 col-lg-6 o_setting_box">
-                            <div class="o_setting_right_pane">
-                                <span class="o_form_label">OpenAI Integration</span>
-                                <div class="text-muted">
-                                    Configure OpenAI API to enable AI Verification.
-                                </div>
-                                <div class="content-group mt16">
-                                    <label for="product_crawler_openai_api_key" class="o_light_label"/>
-                                    <field name="product_crawler_openai_api_key" password="True"/>
-                                </div>
-                                <div class="content-group mt16">
-                                    <label for="product_crawler_openai_model" class="o_light_label"/>
-                                    <field name="product_crawler_openai_model"/>
-                                </div>
+            <xpath expr="//form" position="inside">
+                <app data-string="Product Crawler" string="Product Crawler" name="hlv_product_crawler">
+                    <block title="AI Quality Control (Mr. GPT)" name="ai_qc_settings">
+                        <setting string="OpenAI Integration" help="Configure OpenAI API to enable AI Verification.">
+                            <field name="product_crawler_openai_api_key" password="True"/>
+                            <div class="content-group mt16">
+                                <label for="product_crawler_openai_model" class="o_light_label"/>
+                                <field name="product_crawler_openai_model"/>
                             </div>
-                        </div>
-                    </div>
-                </div>
+                        </setting>
+                    </block>
+                </app>
             </xpath>
         </field>
     </record>
