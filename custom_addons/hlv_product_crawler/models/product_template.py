@@ -403,298 +403,128 @@ Luật:
         except Exception as e:
             raise UserError(_(f"Consolidation Failed: {str(e)}"))
 
-    def action_crawl_ketnoitieudung(self):
+    def _crawl_site_generic(self, site_key, site_name, search_func, parse_func, url_field):
+        """
+        Generic crawl logic that returns (html_content, error_msg).
+        DOES NOT write to crawled_specs_raw to avoid excessive DB writes/attachment IO.
+        """
         import logging
         _logger = logging.getLogger(__name__)
         
-        self.ensure_one()
-        _logger.info(f"[Ketnoitieudung] Starting crawl, current URL: {self.ketnoitieudung_url}")
+        current_url = getattr(self, url_field)
+        _logger.info(f"[{site_name}] Starting crawl, current URL: {current_url}")
         
-        url = self.ketnoitieudung_url
+        url = current_url
+        html_output = ""
+        
+        # 1. Search if no URL
         if not url and self.default_code:
-            msg_searching = f"<div style='color: #6c757d; font-size: 0.9em;'>🔍 Đang tìm kiếm <b>{self.default_code}</b> trên Ketnoitieudung.vn...</div>"
-            self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg_searching
+            _logger.info(f"[{site_name}] Searching for SKU: {self.default_code}, Name: {self.name}")
             
-            _logger.info(f"[Ketnoitieudung] Searching for SKU: {self.default_code}, Name: {self.name}")
-            # Pass both SKU and product name
-            url, error = CrawlerUtils.search_ketnoitieudung(self.default_code, self.name)
-            _logger.info(f"[Ketnoitieudung] Search result - URL: {url}, Error: {error}")
+            # Pass both SKU and product name to search function
+            # Note: All search functions in CrawlerUtils mostly take (sku, name)
+            # mecsu takes (sku, name)
+            # others usually take (sku) but wrappers might vary. 
+            # Let's assume standard signature (sku, name) or handle exceptions if needed.
+            # Checked parsers: they all seem to accept (sku, name) or (sku). 
+            # Python is forgiving with extra args if func definition accepts *args, but let's check.
+            # CrawlerUtils matches: 
+            # search_ketnoitieudung(sku, name)
+            # search_visior(sku, name)
+            # search_thbvietnam(sku, name)
+            # search_mecsu(sku, name)
+            # search_milwaukee(sku, name)
+            # search_bosch(sku, name)
+            # All consistent.
             
-            if url:
-                self.ketnoitieudung_url = url
-                # Update the searching message with success
-                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching, 
-                    f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên Ketnoitieudung.vn</div>")
+            found_url, error = search_func(self.default_code, self.name)
+            _logger.info(f"[{site_name}] Search result - URL: {found_url}, Error: {error}")
+            
+            if found_url:
+                # Update URL field immediately (Char field write is cheap)
+                setattr(self, url_field, found_url)
+                url = found_url
                 
                 # Verify URL matches product
                 is_valid, reason = self._verify_url_matches_product(url)
                 if is_valid == False:
-                    self.ketnoitieudung_url = False  # Clear wrong URL
-                    self.crawled_specs_raw += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>Link bị từ chối & đã xóa:</b> {reason}</div>"
-                    _logger.warning(f"[Ketnoitieudung] URL verification failed: {reason}")
-                    return
+                    setattr(self, url_field, False) # Clear wrong URL
+                    return f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>{site_name}: Link bị từ chối & đã xóa:</b> {reason}</div>", "URL rejected"
             else:
-                # Update with failure message
-                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
-                    f"<div style='color: #fd7e14;'>⚠ <b>Ketnoitieudung.vn:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
-                _logger.warning(f"[Ketnoitieudung] Product not found")
-                return
+                return f"<div style='color: #fd7e14;'>⚠ <b>{site_name}:</b> {error or 'Không tìm thấy sản phẩm'}</div>", error or "Not found"
         
+        # 2. Parse if URL exists
         if url:
-            _logger.info(f"[Ketnoitieudung] Parsing details from: {url}")
-            specs, error = CrawlerUtils.parse_ketnoitieudung_details(url)
-            _logger.info(f"[Ketnoitieudung] Parse result - Specs length: {len(specs) if specs else 0}, Error: {error}")
+            _logger.info(f"[{site_name}] Parsing details from: {url}")
+            specs, error = parse_func(url)
+            _logger.info(f"[{site_name}] Parse result - Specs length: {len(specs) if specs else 0}, Error: {error}")
             
             if specs:
-                # Specs already formatted with site name and header by format_specs_table()
-                self.crawled_specs_raw = (self.crawled_specs_raw or "") + specs
+                # Add Site Header
+                header = f"<h3 style='color: #007bff;'>📦 {site_name}</h3><p style='font-size: 0.85em; color: #6c757d;'>{url}</p>"
+                # Check if specs already has header (Ketnoitieudung format_specs_table might add one?)
+                # Based on previous code:
+                # ketnoitieudung: "Specs already formatted with site name and header"
+                # milwaukee: "Specs already formatted"
+                # Others: Manually added header.
+                
+                # We need to handle this specific formatting nuance.
+                if site_key in ['ketnoitieudung', 'milwaukee']:
+                    return specs, None
+                else:
+                    return header + specs, None
             else:
-                msg = f"<div style='color: #fd7e14;'>⚠ <b>Ketnoitieudung.vn:</b> {error or 'Lỗi tải dữ liệu'}</div>"
-                self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg
+                return f"<div style='color: #fd7e14;'>⚠ <b>{site_name}:</b> {error or 'Lỗi tải dữ liệu'}</div>", error or "Parse error"
         
-        # Auto-verify with GPT
-        self._auto_verify_after_crawl()
+        return "", "No URL"
+
+    def action_crawl_ketnoitieudung(self):
+        self.ensure_one()
+        specs, _ = self._crawl_site_generic('ketnoitieudung', 'Ketnoitieudung.vn', 
+            CrawlerUtils.search_ketnoitieudung, CrawlerUtils.parse_ketnoitieudung_details, 'ketnoitieudung_url')
+        if specs:
+            self.crawled_specs_raw = (self.crawled_specs_raw or "") + specs
+            self._auto_verify_after_crawl()
 
     def action_crawl_visior(self):
-        import logging
-        _logger = logging.getLogger(__name__)
-        
         self.ensure_one()
-        _logger.info(f"[Visior] Starting crawl, current URL: {self.visior_url}")
-        
-        url = self.visior_url
-        if not url and self.default_code:
-            msg_searching = f"<div style='color: #6c757d; font-size: 0.9em;'>🔍 Đang tìm kiếm <b>{self.default_code}</b> trên Visior.vn...</div>"
-            self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg_searching
-            
-            _logger.info(f"[Visior] Searching for SKU: {self.default_code}, Name: {self.name}")
-            url, error = CrawlerUtils.search_visior(self.default_code, self.name)
-            _logger.info(f"[Visior] Search result - URL: {url}, Error: {error}")
-            
-            if url:
-                self.visior_url = url
-                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
-                    f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên Visior.vn</div>")
-                
-                # Verify URL matches product
-                is_valid, reason = self._verify_url_matches_product(url)
-                if is_valid == False:
-                    self.visior_url = False  # Clear wrong URL
-                    self.crawled_specs_raw += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>Link bị từ chối & đã xóa:</b> {reason}</div>"
-                    _logger.warning(f"[Visior] URL verification failed: {reason}")
-                    return
-            else:
-                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
-                    f"<div style='color: #fd7e14;'>⚠ <b>Visior.vn:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
-                _logger.warning(f"[Visior] Product not found")
-                return
-        
-        if url:
-            _logger.info(f"[Visior] Parsing details from: {url}")
-            specs, error = CrawlerUtils.parse_visior_details(url)
-            _logger.info(f"[Visior] Parse result - Specs length: {len(specs) if specs else 0}, Error: {error}")
-            
-            if specs:
-                self.crawled_specs_raw = (self.crawled_specs_raw or "") + f"<h3 style='color: #007bff;'>📦 Visior.vn</h3><p style='font-size: 0.85em; color: #6c757d;'>{url}</p>" + specs
-            else:
-                msg = f"<div style='color: #fd7e14;'>⚠ <b>Visior.vn:</b> {error or 'Lỗi tải dữ liệu'}</div>"
-                self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg
-        
-        # Auto-verify with GPT
-        self._auto_verify_after_crawl()
+        specs, _ = self._crawl_site_generic('visior', 'Visior.vn', 
+            CrawlerUtils.search_visior, CrawlerUtils.parse_visior_details, 'visior_url')
+        if specs:
+            self.crawled_specs_raw = (self.crawled_specs_raw or "") + specs
+            self._auto_verify_after_crawl()
 
     def action_crawl_thbvietnam(self):
-        import logging
-        _logger = logging.getLogger(__name__)
-        
         self.ensure_one()
-        _logger.info(f"[THB Vietnam] Starting crawl, current URL: {self.thbvietnam_url}")
-        
-        url = self.thbvietnam_url
-        if not url and self.default_code:
-            msg_searching = f"<div style='color: #6c757d; font-size: 0.9em;'>🔍 Đang tìm kiếm <b>{self.default_code}</b> trên THB Vietnam...</div>"
-            self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg_searching
-            
-            _logger.info(f"[THB Vietnam] Searching for SKU: {self.default_code}, Name: {self.name}")
-            url, error = CrawlerUtils.search_thbvietnam(self.default_code, self.name)
-            _logger.info(f"[THB Vietnam] Search result - URL: {url}, Error: {error}")
-            
-            if url:
-                self.thbvietnam_url = url
-                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
-                    f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên THB Vietnam</div>")
-                
-                # Verify URL matches product
-                is_valid, reason = self._verify_url_matches_product(url)
-                if is_valid == False:
-                    self.thbvietnam_url = False  # Clear wrong URL
-                    self.crawled_specs_raw += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>Link bị từ chối & đã xóa:</b> {reason}</div>"
-                    _logger.warning(f"[THB Vietnam] URL verification failed: {reason}")
-                    return
-            else:
-                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
-                    f"<div style='color: #fd7e14;'>⚠ <b>THB Vietnam:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
-                _logger.warning(f"[THB Vietnam] Product not found")
-                return
-        
-        if url:
-            _logger.info(f"[THB Vietnam] Parsing details from: {url}")
-            specs, error = CrawlerUtils.parse_thbvietnam_details(url)
-            _logger.info(f"[THB Vietnam] Parse result - Specs length: {len(specs) if specs else 0}, Error: {error}")
-            
-            if specs:
-                self.crawled_specs_raw = (self.crawled_specs_raw or "") + f"<h3 style='color: #007bff;'>📦 THB Vietnam</h3><p style='font-size: 0.85em; color: #6c757d;'>{url}</p>" + specs
-            else:
-                msg = f"<div style='color: #fd7e14;'>⚠ <b>THB Vietnam:</b> {error or 'Lỗi tải dữ liệu'}</div>"
-                self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg
-        
-        # Auto-verify with GPT
-        self._auto_verify_after_crawl()
+        specs, _ = self._crawl_site_generic('thbvietnam', 'THB Vietnam', 
+            CrawlerUtils.search_thbvietnam, CrawlerUtils.parse_thbvietnam_details, 'thbvietnam_url')
+        if specs:
+            self.crawled_specs_raw = (self.crawled_specs_raw or "") + specs
+            self._auto_verify_after_crawl()
 
     def action_crawl_mecsu(self):
-        import logging
-        _logger = logging.getLogger(__name__)
-        
         self.ensure_one()
-        _logger.info(f"[Mecsu] Starting crawl, current URL: {self.mecsu_url}")
-        
-        url = self.mecsu_url
-        if not url and self.default_code:
-            msg_searching = f"<div style='color: #6c757d; font-size: 0.9em;'>🔍 Đang tìm kiếm <b>{self.default_code}</b> trên Mecsu.vn...</div>"
-            self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg_searching
-            
-            _logger.info(f"[Mecsu] Searching for SKU: {self.default_code}, Name: {self.name}")
-            url, error = CrawlerUtils.search_mecsu(self.default_code, self.name)
-            _logger.info(f"[Mecsu] Search result - URL: {url}, Error: {error}")
-            
-            if url:
-                self.mecsu_url = url
-                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
-                    f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên Mecsu.vn</div>")
-                
-                # Verify URL matches product
-                is_valid, reason = self._verify_url_matches_product(url)
-                if is_valid == False:
-                    self.mecsu_url = False  # Clear wrong URL
-                    self.crawled_specs_raw += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>Link bị từ chối & đã xóa:</b> {reason}</div>"
-                    _logger.warning(f"[Mecsu] URL verification failed: {reason}")
-                    return
-            else:
-                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
-                    f"<div style='color: #fd7e14;'>⚠ <b>Mecsu.vn:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
-                _logger.warning(f"[Mecsu] Product not found")
-                return
-        
-        if url:
-            _logger.info(f"[Mecsu] Parsing details from: {url}")
-            specs, error = CrawlerUtils.parse_mecsu_details(url)
-            _logger.info(f"[Mecsu] Parse result - Specs length: {len(specs) if specs else 0}, Error: {error}")
-            
-            if specs:
-                self.crawled_specs_raw = (self.crawled_specs_raw or "") + f"<h3 style='color: #007bff;'>📦 Mecsu.vn</h3><p style='font-size: 0.85em; color: #6c757d;'>{url}</p>" + specs
-            else:
-                msg = f"<div style='color: #fd7e14;'>⚠ <b>Mecsu.vn:</b> {error or 'Lỗi tải dữ liệu'}</div>"
-                self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg
-        
-        # Auto-verify with GPT
-        self._auto_verify_after_crawl()
+        specs, _ = self._crawl_site_generic('mecsu', 'Mecsu.vn', 
+            CrawlerUtils.search_mecsu, CrawlerUtils.parse_mecsu_details, 'mecsu_url')
+        if specs:
+            self.crawled_specs_raw = (self.crawled_specs_raw or "") + specs
+            self._auto_verify_after_crawl()
 
     def action_crawl_milwaukee(self):
-        import logging
-        _logger = logging.getLogger(__name__)
-        
         self.ensure_one()
-        _logger.info(f"[Milwaukee] Starting crawl, current URL: {self.milwaukee_url}")
-        
-        url = self.milwaukee_url
-        if not url and self.default_code:
-            msg_searching = f"<div style='color: #6c757d; font-size: 0.9em;'>🔍 Đang tìm kiếm <b>{self.default_code}</b> trên Milwaukee...</div>"
-            self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg_searching
-            
-            _logger.info(f"[Milwaukee] Searching for SKU: {self.default_code}, Name: {self.name}")
-            url, error = CrawlerUtils.search_milwaukee(self.default_code, self.name)
-            _logger.info(f"[Milwaukee] Search result - URL: {url}, Error: {error}")
-            
-            if url:
-                self.milwaukee_url = url
-                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
-                    f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên Milwaukee</div>")
-                
-                # Verify URL matches product
-                is_valid, reason = self._verify_url_matches_product(url)
-                if is_valid == False:
-                    self.milwaukee_url = False  # Clear wrong URL
-                    self.crawled_specs_raw += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>Link bị từ chối & đã xóa:</b> {reason}</div>"
-                    _logger.warning(f"[Milwaukee] URL verification failed: {reason}")
-                    return
-            else:
-                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
-                    f"<div style='color: #fd7e14;'>⚠ <b>Milwaukee:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
-                _logger.warning(f"[Milwaukee] Product not found")
-                return
-        
-        if url:
-            _logger.info(f"[Milwaukee] Parsing details from: {url}")
-            specs, error = CrawlerUtils.parse_milwaukee_details(url)
-            _logger.info(f"[Milwaukee] Parse result - Specs length: {len(specs) if specs else 0}, Error: {error}")
-            
-            if specs:
-                # Specs already formatted
-                self.crawled_specs_raw = (self.crawled_specs_raw or "") + specs
-            else:
-                msg = f"<div style='color: #fd7e14;'>⚠ <b>Milwaukee:</b> {error or 'Lỗi tải dữ liệu'}</div>"
-                self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg
-        
-        # Auto-verify with GPT
-        self._auto_verify_after_crawl()
+        specs, _ = self._crawl_site_generic('milwaukee', 'Milwaukee', 
+            CrawlerUtils.search_milwaukee, CrawlerUtils.parse_milwaukee_details, 'milwaukee_url')
+        if specs:
+            self.crawled_specs_raw = (self.crawled_specs_raw or "") + specs
+            self._auto_verify_after_crawl()
 
     def action_crawl_bosch(self):
-        import logging
-        _logger = logging.getLogger(__name__)
-        
         self.ensure_one()
-        _logger.info(f"[Bosch] Starting crawl, current URL: {self.bosch_url}")
-        
-        url = self.bosch_url
-        if not url and self.default_code:
-            msg_searching = f"<div style='color: #6c757d; font-size: 0.9em;'>🔍 Đang tìm kiếm <b>{self.default_code}</b> trên Bosch...</div>"
-            self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg_searching
-            
-            _logger.info(f"[Bosch] Searching for SKU: {self.default_code}, Name: {self.name}")
-            url, error = CrawlerUtils.search_bosch(self.default_code, self.name)
-            _logger.info(f"[Bosch] Search result - URL: {url}, Error: {error}")
-            
-            if url:
-                self.bosch_url = url
-                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
-                    f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên Bosch</div>")
-                
-                # Verify URL matches product
-                is_valid, reason = self._verify_url_matches_product(url)
-                if is_valid == False:
-                    self.bosch_url = False  # Clear wrong URL
-                    self.crawled_specs_raw += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>Link bị từ chối & đã xóa:</b> {reason}</div>"
-                    _logger.warning(f"[Bosch] URL verification failed: {reason}")
-                    return
-            else:
-                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
-                    f"<div style='color: #fd7e14;'>⚠ <b>Bosch:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
-                _logger.warning(f"[Bosch] Product not found")
-                return
-        
-        if url:
-            _logger.info(f"[Bosch] Parsing details from: {url}")
-            specs, error = CrawlerUtils.parse_bosch_details(url)
-            _logger.info(f"[Bosch] Parse result - Specs length: {len(specs) if specs else 0}, Error: {error}")
-            
-            if specs:
-                self.crawled_specs_raw = (self.crawled_specs_raw or "") + specs
-            else:
-                msg = f"<div style='color: #fd7e14;'>⚠ <b>Bosch:</b> {error or 'Lỗi tải dữ liệu'}</div>"
-                self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg
-        
-        # Auto-verify with GPT
-        self._auto_verify_after_crawl()
+        specs, _ = self._crawl_site_generic('bosch', 'Bosch', 
+            CrawlerUtils.search_bosch, CrawlerUtils.parse_bosch_details, 'bosch_url')
+        if specs:
+            self.crawled_specs_raw = (self.crawled_specs_raw or "") + specs
+            self._auto_verify_after_crawl()
 
     def action_crawl_all(self):
         import logging
@@ -702,51 +532,36 @@ Luật:
         
         for record in self:
             _logger.info(f"=== Starting crawl for product: {record.name} (ID: {record.id}) ===")
-            _logger.info(f"Product default_code: {record.default_code}")
             
-            # Check if product has default_code
             if not record.default_code:
                 record.crawled_specs_raw = """
                     <div style='background: #fff3cd; padding: 15px; border-radius: 5px; border-left: 4px solid #ffc107;'>
                         <h3 style='color: #856404; margin: 0 0 10px 0;'>⚠️ Không thể tìm kiếm</h3>
                         <p style='margin: 0; color: #856404;'>Sản phẩm chưa có <b>Mã nội bộ (Internal Reference)</b>.</p>
-                        <p style='margin: 5px 0 0 0; color: #856404;'>Vui lòng thêm mã sản phẩm trước khi crawl.</p>
-                    </div>
-                """
-                _logger.warning(f"Product {record.name} has no default_code, skipping crawl")
+                    </div>"""
                 continue
             
             # --- LOGIC OPTIMIZATION START ---
             name_lower = (record.name or "").lower()
             name_original = record.name or ""
             
-            # Identify Product Type/Brand
             is_milwaukee = "milwaukee" in name_lower or "m12" in name_lower or "m18" in name_lower or "mx" in name_lower
             is_bosch = "bosch" in name_lower or "gba" in name_lower or "procore" in name_lower
-            
-            # Keywords for fasteners
             keywords_fastener = ["bu lông", "ốc", "vít", "bulong", "oc vit", "đai ốc", "long đền", "tán", "rive"]
             is_fastener = any(k in name_lower for k in keywords_fastener)
 
-            # Determine which sites to crawl
             run_milwaukee = True
             run_bosch = True
-            run_resellers = True # Ketnoitieudung, Visior, THB, Mecsu
-            
-            # Brand exclusion logic
-            if is_milwaukee:
-                run_bosch = False
-                _logger.info(f"Product '{name_original}' identified as Milwaukee. Skipping Bosch.")
-                
-            if is_bosch:
-                run_milwaukee = False
-                _logger.info(f"Product '{name_original}' identified as Bosch. Skipping Milwaukee.")
-                
-            # Fastener exclusive logic (User request: "nếu là bu lông, ốc vít, thì chỉ search ở mecsu và kết nối tiêu dùng")
+            run_resellers = True
             run_mecsu = True
             run_ketnoitieudung = True
             run_visior = True
             run_thb = True
+            
+            if is_milwaukee:
+                run_bosch = False
+            if is_bosch:
+                run_milwaukee = False
 
             if is_fastener:
                 run_milwaukee = False
@@ -755,65 +570,50 @@ Luật:
                 run_thb = False
                 _logger.info(f"Product '{name_original}' identified as Fastener. Crawling ONLY Mecsu & Ketnoitieudung.")
             
-            # --- LOGIC OPTIMIZATION END ---
-
-            # Clear previous specs and add header
-            record.crawled_specs_raw = f"""
+            # --- COLLECT DATA (BUFFERING) ---
+            accumulated_html = f"""
                 <div style='background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 15px;'>
                     <h2 style='color: #495057; margin: 0 0 10px 0;'>🔍 Kết quả tìm kiếm</h2>
                     <p style='margin: 0; color: #6c757d;'>Mã sản phẩm: <b>{record.default_code}</b></p>
-                    <p style='margin: 5px 0 0 0; color: #6c757d; font-size: 0.9em;'>Đang tìm kiếm...</p>
                 </div>
             """
             
             # 1. Official Sites
             if run_milwaukee:
-                try:
-                    _logger.info("Crawling Milwaukee...")
-                    record.action_crawl_milwaukee()
-                except Exception as e:
-                    _logger.error(f"Error crawling Milwaukee: {e}")
-                    record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Milwaukee: {str(e)}</div>"
+                html, _ = record._crawl_site_generic('milwaukee', 'Milwaukee', 
+                    CrawlerUtils.search_milwaukee, CrawlerUtils.parse_milwaukee_details, 'milwaukee_url')
+                accumulated_html += html
 
             if run_bosch:
-                try:
-                    _logger.info("Crawling Bosch...")
-                    record.action_crawl_bosch()
-                except Exception as e:
-                    _logger.error(f"Error crawling Bosch: {e}")
-                    record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Bosch: {str(e)}</div>"
+                html, _ = record._crawl_site_generic('bosch', 'Bosch', 
+                    CrawlerUtils.search_bosch, CrawlerUtils.parse_bosch_details, 'bosch_url')
+                accumulated_html += html
 
             # 2. Reseller Sites
             if run_ketnoitieudung:
-                try:
-                    _logger.info("Crawling Ketnoitieudung...")
-                    record.action_crawl_ketnoitieudung()
-                except Exception as e:
-                    _logger.error(f"Error crawling Ketnoitieudung: {e}")
-                    record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Ketnoitieudung: {str(e)}</div>"
+                html, _ = record._crawl_site_generic('ketnoitieudung', 'Ketnoitieudung.vn', 
+                    CrawlerUtils.search_ketnoitieudung, CrawlerUtils.parse_ketnoitieudung_details, 'ketnoitieudung_url')
+                accumulated_html += html
             
             if run_visior:
-                try:
-                    _logger.info("Crawling Visior...")
-                    record.action_crawl_visior()
-                except Exception as e:
-                    _logger.error(f"Error crawling Visior: {e}")
-                    record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Visior: {str(e)}</div>"
+                html, _ = record._crawl_site_generic('visior', 'Visior.vn', 
+                    CrawlerUtils.search_visior, CrawlerUtils.parse_visior_details, 'visior_url')
+                accumulated_html += html
             
             if run_thb:
-                try:
-                    _logger.info("Crawling THB Vietnam...")
-                    record.action_crawl_thbvietnam()
-                except Exception as e:
-                    _logger.error(f"Error crawling THB Vietnam: {e}")
-                    record.crawled_specs_raw += f"<div style='color: red;'>Lỗi THB: {str(e)}</div>"
+                html, _ = record._crawl_site_generic('thbvietnam', 'THB Vietnam', 
+                    CrawlerUtils.search_thbvietnam, CrawlerUtils.parse_thbvietnam_details, 'thbvietnam_url')
+                accumulated_html += html
             
             if run_mecsu:
-                try:
-                    _logger.info("Crawling Mecsu...")
-                    record.action_crawl_mecsu()
-                except Exception as e:
-                    _logger.error(f"Error crawling Mecsu: {e}")
-                    record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Mecsu: {str(e)}</div>"
+                html, _ = record._crawl_site_generic('mecsu', 'Mecsu.vn', 
+                    CrawlerUtils.search_mecsu, CrawlerUtils.parse_mecsu_details, 'mecsu_url')
+                accumulated_html += html
+            
+            # --- FINAL WRITE ---
+            record.crawled_specs_raw = accumulated_html
+            
+            # Verify after all writes are done
+            record._auto_verify_after_crawl()
             
             _logger.info(f"=== Finished crawl for product: {record.name} ===")
