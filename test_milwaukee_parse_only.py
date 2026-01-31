@@ -9,6 +9,12 @@ print(f"Testing parse for: {url}")
 specs, err = CrawlerUtils.parse_milwaukee_details(url)
 if specs:
     print("✓ Parse SUCCESS")
-    print(specs[:500])
+    if "Đặc điểm nổi bật" in specs:
+        print("✓ FOUND Features section")
+    else:
+        print("✗ MISSING Features section")
+        
+    print("\n--- Preview ---")
+    print(specs[500:1500]) # Print middle part where features might be
 else:
     print(f"✗ Parse FAILED: {err}")
