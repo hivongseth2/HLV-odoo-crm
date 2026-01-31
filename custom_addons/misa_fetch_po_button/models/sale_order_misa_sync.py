@@ -1028,7 +1028,39 @@ class SaleOrder(models.Model):
                     unmatched_sols.remove(sol)
                     break
         
-        # Cập nhật các SOL đã match
+        # ===== KIỂM TRA GIẢM SỐ LƯỢNG TRƯỚC KHI CẬP NHẬT =====
+        # Nếu MISA giảm số lượng xuống dưới qty_delivered → CHẶN ĐỒNG BỘ
+        # (Không tự động tạo phiếu trả hàng vì quy trình phức tạp tùy trạng thái pick/pack/out)
+        qty_decrease_items = []
+        for misa_data, sol in matched_pairs:
+            qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
+            new_qty = float(misa_data['qty'] or 0.0)
+            
+            if new_qty < qty_delivered - 0.001:  # Cho phép sai số nhỏ
+                qty_decrease_items.append({
+                    'code': misa_data['code'],
+                    'name': misa_data['name'],
+                    'old_qty': sol.product_uom_qty,
+                    'new_qty': new_qty,
+                    'delivered': qty_delivered,
+                    'need_return': qty_delivered - new_qty,
+                })
+        
+        # Nếu có sản phẩm cần trả hàng → CHẶN ĐỒNG BỘ
+        if qty_decrease_items:
+            details = "\n".join(
+                f"- {item['code']}: Đã giao {item['delivered']:g}, MISA yêu cầu {item['new_qty']:g} → Cần trả {item['need_return']:g}"
+                for item in qty_decrease_items
+            )
+            _logger.warning("CHẶN ĐỒNG BỘ do giảm số lượng dưới mức đã giao:\n%s", details)
+            raise UserError(_(
+                "Không thể đồng bộ tự động vì MISA giảm số lượng xuống dưới mức đã giao.\n"
+                "Vui lòng TẠO PHIẾU TRẢ HÀNG THỦ CÔNG cho các sản phẩm sau:\n\n"
+                "%s\n\n"
+                "Sau khi tạo phiếu trả hàng và xử lý xong, hãy đồng bộ lại."
+            ) % details)
+        
+        # Cập nhật các SOL đã match (chỉ khi không có qty_decrease)
         for misa_data, sol in matched_pairs:
             vals_line = {
                 'name': misa_data['name'],
