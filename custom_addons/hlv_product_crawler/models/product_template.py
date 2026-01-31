@@ -85,6 +85,81 @@ Rules:
             _logger.error(f"GPT Verification failed: {str(e)}")
             return None, None
 
+    def _verify_url_matches_product(self, url):
+        """
+        Verify if URL matches the product before crawling.
+        Returns (is_valid, reason) tuple.
+        is_valid is True if URL likely correct, False if wrong product, None if verification skipped.
+        """
+        self.ensure_one()
+        
+        # Skip if no API key configured
+        api_key = self.env['ir.config_parameter'].sudo().get_param('product_crawler.openai_api_key')
+        if not api_key:
+            return None, "API key not configured"
+            
+        model = self.env['ir.config_parameter'].sudo().get_param('product_crawler.openai_model') or 'gpt-4o-mini'
+        
+        sku = self.default_code or "N/A"
+        name = self.name or "N/A"
+        
+        prompt = f"""You are Mr. GPT, a product URL verification expert.
+
+Product Info:
+- SKU: {sku}
+- Product Name: {name}
+
+Found URL: {url}
+
+Task: Analyze if this URL likely contains specs for the CORRECT product.
+Check:
+1. Domain match (e.g., Milwaukee product should be on milwaukeetool.com, not bosch-pt.com)
+2. URL path/slug contains SKU, brand, or model identifiers
+3. Product type consistency
+
+Return ONLY valid JSON: {{"is_correct": true/false, "confidence": 0-100, "reason": "brief explanation why URL matches or doesn't match"}}
+
+Examples:
+- Milwaukee M18 FPD3 + bosch-pt.com URL → is_correct: false
+- Milwaukee M18 FPD3 + milwaukeetool.com/m18-planer → is_correct: true
+"""
+
+        import requests
+        import json
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+        
+        data = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": "You are a helpful URL verification assistant returning JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            "response_format": {"type": "json_object"}
+        }
+        
+        try:
+            response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=data, timeout=30)
+            response.raise_for_status()
+            result = response.json()
+            
+            content = result['choices'][0]['message']['content']
+            parsed = json.loads(content)
+            
+            is_correct = parsed.get('is_correct', False)
+            reason = parsed.get('reason', 'No reason provided')
+            
+            return is_correct, reason
+            
+        except Exception as e:
+            import logging
+            _logger = logging.getLogger(__name__)
+            _logger.error(f"URL Verification failed: {str(e)}")
+            return None, f"Verification error: {str(e)}"
+
     def _auto_verify_after_crawl(self):
         """
         Automatically verify crawled specs with GPT after crawling.
@@ -180,6 +255,13 @@ Rules:
                 # Update the searching message with success
                 self.crawled_specs = self.crawled_specs.replace(msg_searching, 
                     f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên Ketnoitieudung.vn</div>")
+                
+                # Verify URL matches product
+                is_valid, reason = self._verify_url_matches_product(url)
+                if is_valid == False:
+                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected:</b> {reason}</div>"
+                    _logger.warning(f"[Ketnoitieudung] URL verification failed: {reason}")
+                    return
             else:
                 # Update with failure message
                 self.crawled_specs = self.crawled_specs.replace(msg_searching,
@@ -222,6 +304,13 @@ Rules:
                 self.visior_url = url
                 self.crawled_specs = self.crawled_specs.replace(msg_searching,
                     f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên Visior.vn</div>")
+                
+                # Verify URL matches product
+                is_valid, reason = self._verify_url_matches_product(url)
+                if is_valid == False:
+                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected:</b> {reason}</div>"
+                    _logger.warning(f"[Visior] URL verification failed: {reason}")
+                    return
             else:
                 self.crawled_specs = self.crawled_specs.replace(msg_searching,
                     f"<div style='color: #fd7e14;'>⚠ <b>Visior.vn:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
@@ -262,6 +351,13 @@ Rules:
                 self.thbvietnam_url = url
                 self.crawled_specs = self.crawled_specs.replace(msg_searching,
                     f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên THB Vietnam</div>")
+                
+                # Verify URL matches product
+                is_valid, reason = self._verify_url_matches_product(url)
+                if is_valid == False:
+                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected:</b> {reason}</div>"
+                    _logger.warning(f"[THB Vietnam] URL verification failed: {reason}")
+                    return
             else:
                 self.crawled_specs = self.crawled_specs.replace(msg_searching,
                     f"<div style='color: #fd7e14;'>⚠ <b>THB Vietnam:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
@@ -302,6 +398,13 @@ Rules:
                 self.mecsu_url = url
                 self.crawled_specs = self.crawled_specs.replace(msg_searching,
                     f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên Mecsu.vn</div>")
+                
+                # Verify URL matches product
+                is_valid, reason = self._verify_url_matches_product(url)
+                if is_valid == False:
+                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected:</b> {reason}</div>"
+                    _logger.warning(f"[Mecsu] URL verification failed: {reason}")
+                    return
             else:
                 self.crawled_specs = self.crawled_specs.replace(msg_searching,
                     f"<div style='color: #fd7e14;'>⚠ <b>Mecsu.vn:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
@@ -342,6 +445,13 @@ Rules:
                 self.milwaukee_url = url
                 self.crawled_specs = self.crawled_specs.replace(msg_searching,
                     f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên Milwaukee</div>")
+                
+                # Verify URL matches product
+                is_valid, reason = self._verify_url_matches_product(url)
+                if is_valid == False:
+                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected:</b> {reason}</div>"
+                    _logger.warning(f"[Milwaukee] URL verification failed: {reason}")
+                    return
             else:
                 self.crawled_specs = self.crawled_specs.replace(msg_searching,
                     f"<div style='color: #fd7e14;'>⚠ <b>Milwaukee:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
@@ -383,6 +493,13 @@ Rules:
                 self.bosch_url = url
                 self.crawled_specs = self.crawled_specs.replace(msg_searching,
                     f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên Bosch</div>")
+                
+                # Verify URL matches product
+                is_valid, reason = self._verify_url_matches_product(url)
+                if is_valid == False:
+                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected:</b> {reason}</div>"
+                    _logger.warning(f"[Bosch] URL verification failed: {reason}")
+                    return
             else:
                 self.crawled_specs = self.crawled_specs.replace(msg_searching,
                     f"<div style='color: #fd7e14;'>⚠ <b>Bosch:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
