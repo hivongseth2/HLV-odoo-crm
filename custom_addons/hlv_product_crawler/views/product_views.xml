@@ -10,13 +10,12 @@
             </header>
             <notebook position="inside">
                 <page string="Dữ liệu Crawl" name="crawler_info">
-                    <div class="mb-3 mt-2">
-                        <button name="action_crawl_and_analyze" string="🚀 Tự động Cào &amp; Phân tích" type="object" class="btn-primary oe_read_only" help="Cào dữ liệu từ tất cả các nguồn và tự động phân tích"/>
-                    </div>
-                    
                     <notebook>
                         <page string="⚙️ Thiết lập &amp; Kiểm soát" name="crawler_config">
                             <group>
+                                <div class="o_row" colspan="2" style="margin-bottom: 20px;">
+                                    <button name="action_crawl_and_analyze" string="🚀 Tự động Cào &amp; Phân tích" type="object" class="btn-primary" help="Cào dữ liệu từ tất cả các nguồn và tự động phân tích"/>
+                                </div>
                                 <group string="Nguồn dữ liệu">
                                     <label for="milwaukee_url" string="Milwaukee"/>
                                     <div class="o_row">
