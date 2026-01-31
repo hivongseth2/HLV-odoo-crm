@@ -18,6 +18,9 @@ class ProductTemplate(models.Model):
     ai_verify_score = fields.Integer(string="AI QC Score", readonly=True, help="Quality Control Score (0-100) from Mr. GPT")
     ai_verify_analysis = fields.Html(string="Mr. GPT Analysis", readonly=True)
     ai_last_verify_date = fields.Datetime(string="Last Verified", readonly=True)
+    
+    # Catalog/Document Links
+    catalog_links = fields.Text(string="Technical Documents", help="Catalog PDFs and technical documents from crawler sources")
 
     def _call_gpt_verification(self):
         """
@@ -103,7 +106,56 @@ Rules:
         sku = self.default_code or "N/A"
         name = self.name or "N/A"
         
-        prompt = f"""You are Mr. GPT, a product URL verification expert.
+        # Detect Mecsu URLs for specialized fuzzy matching
+        is_mecsu = 'mecsu.vn' in url.lower()
+        
+        if is_mecsu:
+            # Mecsu-specific fuzzy matching prompt
+            prompt = f"""You are Mr. GPT, a product matching expert for industrial fasteners and hardware.
+
+Product in System:
+- Name: {name}
+- SKU: {sku}
+
+URL Found: {url}
+
+Task: Verify if this URL likely matches the product.
+
+IMPORTANT - Mecsu Flexible Matching Rules:
+1. Material synonyms are acceptable:
+   - SS304 = Inox 304 = Stainless Steel 304 = INOX A2
+   - SS316 = Inox 316 = A4
+   - Thép = Steel
+2. Standard number formats are flexible:
+   - DIN912 = 912 = DIN 912
+   - ISO = DIN (often interchangeable for same spec)
+3. Word order doesn't matter for technical products:
+   - "Bu lông lục giác M5x15" matches "Lục giác chìm đầu M5x15"
+   - Focus on technical specs, not word order
+4. KEY identifiers that MUST match:
+   - Size (M5x15, M6x20, etc.) - EXACT match required
+   - Standard number (912, 933, 7991, etc.) - MUST match
+   - Material category compatible (inox/stainless, carbon steel)
+5. Ignore non-critical descriptive words:
+   - "Chìm đầu", "Đầu trụ", "Lục giác" are descriptors
+   - These vary by translation/style, not critical
+
+Confidence Thresholds:
+- 90-100%: Highly confident match
+- 70-89%: Probable match (usable)
+- <70%: Not a match
+
+Return JSON: {{"is_correct": true/false, "confidence": 0-100, "reason": "brief explanation"}}
+
+Examples:
+✅ "Bu lông SS304 DIN912 M5x15" + URL "luc-giac-chim-dau-tru-inox-304-din912-m5x15" → TRUE (size + standard match, material equivalent)
+✅ "Ốc lục giác 912 M6x20 Inox" + URL "din912-m6x20-inox-304" → TRUE (key specs match)
+❌ "Bu lông M5x15" + URL "m6x20" → FALSE (size mismatch)
+❌ "DIN912 M5" + URL "din933-m5" → FALSE (different standard)
+"""
+        else:
+            # Standard strict matching for other sites
+            prompt = f"""You are Mr. GPT, a product URL verification expert.
 
 Product Info:
 - SKU: {sku}
