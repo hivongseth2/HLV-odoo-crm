@@ -1002,6 +1002,7 @@ class SaleOrder(models.Model):
                 'price_unit': misa_data['price'],
                 'discount': misa_data['discount'],
                 'note': misa_data['note'],
+                'x_studio_product_status': misa_data['status'],
             }
             if not misa_data['is_default_uom'] and misa_data['product'].uom_id:
                 vals_line['product_uom'] = misa_data['product'].uom_id.id
@@ -1024,6 +1025,7 @@ class SaleOrder(models.Model):
                 'price_unit': misa_data['price'],
                 'discount': misa_data['discount'],
                 'note': misa_data['note'],
+                'x_studio_product_status': misa_data['status'],
             }
             if not misa_data['is_default_uom'] and misa_data['product'].uom_id:
                 vals_line['product_uom'] = misa_data['product'].uom_id.id
