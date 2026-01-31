@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.product.crawler</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="90"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="Product Crawler" string="Product Crawler" name="hlv_product_crawler">
+                    <block title="AI Quality Control (Mr. GPT)" name="ai_qc_settings">
+                        <setting string="OpenAI Integration" help="Configure OpenAI API to enable AI Verification.">
+                            <field name="product_crawler_openai_api_key" password="True"/>
+                            <div class="content-group mt16">
+                                <label for="product_crawler_openai_model" class="o_light_label"/>
+                                <field name="product_crawler_openai_model"/>
+                            </div>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+</odoo>
