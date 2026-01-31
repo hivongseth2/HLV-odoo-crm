@@ -446,18 +446,14 @@ class CrawlerUtils:
             return None, error or "Lỗi tải trang"
         soup = BeautifulSoup(html, 'html.parser')
         
-        # Specs are .specification-list rows
+        # 1. Specs (.specification-list rows)
         spec_rows = soup.select('.specification-list')
+        rows_data = []
         
         if spec_rows:
-            # Manually extract to format nicely
-            rows_data = []
-            
             for row in spec_rows:
                 # Direct children are columns (Label, Value)
                 cols = row.find_all('div', recursive=False)
-                # Filter out style tags or hidden elements if needed?
-                # Based on dump, first col is Label, others are values
                 
                 valid_cols = []
                 for c in cols:
@@ -468,21 +464,40 @@ class CrawlerUtils:
                 
                 if len(valid_cols) >= 2:
                     label = valid_cols[0]
-                    # Join rest as value
-                    value = " ".join(valid_cols[1:])
-                    rows_data.append((label, value))
+                    # Take only the first value column (index 1) to avoid duplication
+                    value = valid_cols[1] 
+                    if label and value:
+                        rows_data.append((label, value))
+        
+        # 2. Features (Look for "Đặc điểm")
+        features_html = ""
+        feature_header = soup.find(string=lambda text: text and "Đặc điểm" in text)
+        if feature_header:
+            header_parent = feature_header.find_parent('div')
+            if header_parent:
+                # Find the next UL after the header
+                feature_ul = header_parent.find_next('ul')
+                if feature_ul:
+                    lis = feature_ul.find_all('li')
+                    if lis:
+                        features_html = "<div style='margin-top: 25px; padding-top: 15px; border-top: 2px solid #e9ecef;'>"
+                        features_html += "<h4 style='color: #cc0000; font-size: 16px; font-weight: 600; margin-bottom: 12px;'>🌟 Đặc điểm nổi bật</h4>"
+                        features_html += "<ul style='padding-left: 20px; list-style-type: disc; color: #495057;'>"
+                        for li in lis:
+                            features_html += f"<li style='margin-bottom: 6px; line-height: 1.5;'>{li.get_text(strip=True)}</li>"
+                        features_html += "</ul></div>"
+
+        if rows_data or features_html:
+            site_color = "#ff0000" # Milwaukee Red
+            html_output = f"""
+            <div style='background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin: 15px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
+                <div style='border-bottom: 3px solid {site_color}; padding-bottom: 10px; margin-bottom: 15px;'>
+                    <h3 style='color: {site_color}; margin: 0; font-size: 18px; font-weight: 600;'>📦 Milwaukee Tool VN</h3>
+                </div>
+            """
             
             if rows_data:
-                # Custom formatting
-                site_color = "#ff0000" # Milwaukee Red
-                html_output = f"""
-                <div style='background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin: 15px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
-                    <div style='border-bottom: 3px solid {site_color}; padding-bottom: 10px; margin-bottom: 15px;'>
-                        <h3 style='color: {site_color}; margin: 0; font-size: 18px; font-weight: 600;'>📦 Milwaukee Tool VN</h3>
-                    </div>
-                    <table style='width: 100%; border-collapse: collapse;'>
-                """
-                
+                html_output += "<table style='width: 100%; border-collapse: collapse; margin-bottom: 10px;'>"
                 for i, (label, value) in enumerate(rows_data):
                     bg_color = '#f8f9fa' if i % 2 == 0 else '#ffffff'
                     html_output += f"""
@@ -491,9 +506,14 @@ class CrawlerUtils:
                         <td style='padding: 10px; color: #212529; border-bottom: 1px solid #e9ecef;'>{value}</td>
                     </tr>
                     """
+                html_output += "</table>"
+            
+            # Append features
+            if features_html:
+                html_output += features_html
                 
-                html_output += """</table></div>"""
-                return html_output, None
+            html_output += "</div>"
+            return html_output, None
 
         return None, "Không tìm thấy thông số kỹ thuật (Milwaukee)"
 
