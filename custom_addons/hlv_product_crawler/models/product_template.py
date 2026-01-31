@@ -19,11 +19,15 @@ class ProductTemplate(models.Model):
     ai_verify_analysis = fields.Html(string="Mr. GPT Analysis", readonly=True)
     ai_last_verify_date = fields.Datetime(string="Last Verified", readonly=True)
 
-    def action_ai_verify(self):
+    def _call_gpt_verification(self):
+        """
+        Core GPT verification logic. Returns (score, analysis) tuple.
+        Returns (None, None) if API key not configured or on error.
+        """
         self.ensure_one()
         api_key = self.env['ir.config_parameter'].sudo().get_param('product_crawler.openai_api_key')
         if not api_key:
-            raise UserError(_("OpenAI API Key is not configured in Settings."))
+            return None, None
             
         model = self.env['ir.config_parameter'].sudo().get_param('product_crawler.openai_model') or 'gpt-4o-mini'
         
@@ -31,9 +35,6 @@ class ProductTemplate(models.Model):
         sku = self.default_code or "N/A"
         name = self.name or "N/A"
         specs = self.crawled_specs or "No specs crawled yet."
-        
-        # Strip HTML for token efficiency? Or keep structure?
-        # Keep structure is better for tables.
         
         prompt = f"""You are Mr. GPT, a strict Quality Control expert for Industrial Tools.
 Analyze the following crawled data for product SKU: {sku}, Name: {name}.
@@ -73,24 +74,89 @@ Rules:
             content = result['choices'][0]['message']['content']
             parsed = json.loads(content)
             
-            self.ai_verify_score = parsed.get('score', 0)
-            self.ai_verify_analysis = parsed.get('reason', 'No analysis returned.')
-            self.ai_last_verify_date = fields.Datetime.now()
+            score = parsed.get('score', 0)
+            analysis = parsed.get('reason', 'No analysis returned.')
             
-            # Return notification
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': _('Mr. GPT Finished'),
-                    'message': f"Verification Score: {self.ai_verify_score}/100",
-                    'sticky': False,
-                    'type': 'success' if self.ai_verify_score >= 80 else 'warning',
-                }
-            }
+            return score, analysis
             
         except Exception as e:
-            raise UserError(_(f"AI Verification Failed: {str(e)}"))
+            import logging
+            _logger = logging.getLogger(__name__)
+            _logger.error(f"GPT Verification failed: {str(e)}")
+            return None, None
+
+    def _auto_verify_after_crawl(self):
+        """
+        Automatically verify crawled specs with GPT after crawling.
+        Modifies crawled_specs based on verification score.
+        """
+        self.ensure_one()
+        
+        # Skip if no specs were crawled
+        if not self.crawled_specs:
+            return
+        
+        score, analysis = self._call_gpt_verification()
+        
+        # Skip if GPT verification failed or not configured
+        if score is None:
+            return
+        
+        # Store verification results
+        self.ai_verify_score = score
+        self.ai_verify_analysis = analysis
+        self.ai_last_verify_date = fields.Datetime.now()
+        
+        # Add verification badge to specs based on score
+        if score >= 80:
+            badge = f"""
+            <div style='background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; padding: 10px; margin: 10px 0; color: #155724;'>
+                ✅ <strong>Mr. GPT Verified ({score}/100)</strong> - Data quality looks good!
+            </div>"""
+            self.crawled_specs += badge
+        elif score >= 50:
+            badge = f"""
+            <div style='background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 10px; margin: 10px 0; color: #856404;'>
+                ⚠️ <strong>Possible Mismatch ({score}/100)</strong> - Please verify manually. {analysis[:100]}...
+            </div>"""
+            self.crawled_specs += badge
+        else:
+            # Score < 50: Replace specs with error message
+            self.crawled_specs = f"""
+            <div style='background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 15px; margin: 10px 0; color: #721c24;'>
+                ❌ <strong>GPT Rejected: Wrong Product Detected ({score}/100)</strong>
+                <p>{analysis}</p>
+                <p><em>The crawled data does not match this product. Please check the URL or SKU.</em></p>
+            </div>"""
+
+    def action_ai_verify(self):
+        """Manual GPT verification action (for re-verification or initial check)"""
+        self.ensure_one()
+        
+        api_key = self.env['ir.config_parameter'].sudo().get_param('product_crawler.openai_api_key')
+        if not api_key:
+            raise UserError(_("OpenAI API Key is not configured in Settings."))
+        
+        score, analysis = self._call_gpt_verification()
+        
+        if score is None:
+            raise UserError(_("AI Verification Failed. Please check logs."))
+        
+        self.ai_verify_score = score
+        self.ai_verify_analysis = analysis
+        self.ai_last_verify_date = fields.Datetime.now()
+        
+        # Return notification
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Mr. GPT Finished'),
+                'message': f"Verification Score: {self.ai_verify_score}/100",
+                'sticky': False,
+                'type': 'success' if self.ai_verify_score >= 80 else 'warning',
+            }
+        }
 
     def action_crawl_ketnoitieudung(self):
         import logging
@@ -132,6 +198,9 @@ Rules:
             else:
                 msg = f"<div style='color: #fd7e14;'>⚠ <b>Ketnoitieudung.vn:</b> {error or 'Lỗi tải dữ liệu'}</div>"
                 self.crawled_specs = (self.crawled_specs or "") + msg
+        
+        # Auto-verify with GPT
+        self._auto_verify_after_crawl()
 
     def action_crawl_visior(self):
         import logging
@@ -169,6 +238,9 @@ Rules:
             else:
                 msg = f"<div style='color: #fd7e14;'>⚠ <b>Visior.vn:</b> {error or 'Lỗi tải dữ liệu'}</div>"
                 self.crawled_specs = (self.crawled_specs or "") + msg
+        
+        # Auto-verify with GPT
+        self._auto_verify_after_crawl()
 
     def action_crawl_thbvietnam(self):
         import logging
@@ -206,6 +278,9 @@ Rules:
             else:
                 msg = f"<div style='color: #fd7e14;'>⚠ <b>THB Vietnam:</b> {error or 'Lỗi tải dữ liệu'}</div>"
                 self.crawled_specs = (self.crawled_specs or "") + msg
+        
+        # Auto-verify with GPT
+        self._auto_verify_after_crawl()
 
     def action_crawl_mecsu(self):
         import logging
@@ -243,6 +318,9 @@ Rules:
             else:
                 msg = f"<div style='color: #fd7e14;'>⚠ <b>Mecsu.vn:</b> {error or 'Lỗi tải dữ liệu'}</div>"
                 self.crawled_specs = (self.crawled_specs or "") + msg
+        
+        # Auto-verify with GPT
+        self._auto_verify_after_crawl()
 
     def action_crawl_milwaukee(self):
         import logging
@@ -281,6 +359,9 @@ Rules:
             else:
                 msg = f"<div style='color: #fd7e14;'>⚠ <b>Milwaukee:</b> {error or 'Lỗi tải dữ liệu'}</div>"
                 self.crawled_specs = (self.crawled_specs or "") + msg
+        
+        # Auto-verify with GPT
+        self._auto_verify_after_crawl()
 
     def action_crawl_bosch(self):
         import logging
@@ -318,6 +399,9 @@ Rules:
             else:
                 msg = f"<div style='color: #fd7e14;'>⚠ <b>Bosch:</b> {error or 'Lỗi tải dữ liệu'}</div>"
                 self.crawled_specs = (self.crawled_specs or "") + msg
+        
+        # Auto-verify with GPT
+        self._auto_verify_after_crawl()
 
     def action_crawl_all(self):
         import logging
