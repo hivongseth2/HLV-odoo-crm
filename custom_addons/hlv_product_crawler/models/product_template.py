@@ -233,6 +233,97 @@ Examples:
             }
         }
 
+    def action_consolidate_specs(self):
+        """Consolidate all crawled specs from multiple sources into one clean document using GPT"""
+        self.ensure_one()
+        
+        api_key = self.env['ir.config_parameter'].sudo().get_param('product_crawler.openai_api_key')
+        if not api_key:
+            raise UserError(_("OpenAI API Key is not configured in Settings."))
+        
+        if not self.crawled_specs:
+            raise UserError(_("No crawled specs to consolidate. Please crawl data first."))
+        
+        model = self.env['ir.config_parameter'].sudo().get_param('product_crawler.openai_model') or 'gpt-4o-mini'
+        
+        sku = self.default_code or "N/A"
+        name = self.name or "N/A"
+        raw_data = self.crawled_specs
+        
+        prompt = f"""You are Mr. GPT, a professional technical writer for industrial tools.
+
+Product: {name} (SKU: {sku})
+
+Raw crawled data from multiple sources:
+{raw_data}
+
+Task: Consolidate this raw data into ONE clean, professional specification document.
+
+Rules:
+1. Merge duplicate information (keep most accurate values)
+2. Organize into sections: Overview, Technical Specifications, Features, Applications
+3. Remove all crawl metadata (source headers, search messages, error messages, verification badges)
+4. Keep only actual product specifications and features
+5. Format as clean HTML with proper headings and tables
+6. If conflicting data exists, use majority vote or most detailed source
+7. Return ONLY the consolidated HTML content, no extra text
+
+Output format:
+<h2>Product Overview</h2>
+<p>Brief description...</p>
+
+<h2>Technical Specifications</h2>
+<table>...</table>
+
+<h2>Key Features</h2>
+<ul>...</ul>
+"""
+
+        import requests
+        import json
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+        
+        data = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": "You are a helpful technical writing assistant."},
+                {"role": "user", "content": prompt}
+            ]
+        }
+        
+        try:
+            response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=data, timeout=60)
+            response.raise_for_status()
+            result = response.json()
+            
+            consolidated = result['choices'][0]['message']['content']
+            
+            # Replace crawled_specs with consolidated version
+            self.crawled_specs = f"""
+            <div style='background: #cfe2ff; border: 1px solid #9ec5fe; padding: 10px; margin: 10px 0; color: #052c65;'>
+                🤖 <b>Consolidated by Mr. GPT</b> - This document was auto-generated from multiple sources
+            </div>
+            {consolidated}
+            """
+            
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('Mr. GPT Consolidation Complete'),
+                    'message': "Specs have been consolidated into a single clean document.",
+                    'sticky': False,
+                    'type': 'success',
+                }
+            }
+            
+        except Exception as e:
+            raise UserError(_(f"Consolidation Failed: {str(e)}"))
+
     def action_crawl_ketnoitieudung(self):
         import logging
         _logger = logging.getLogger(__name__)
@@ -259,7 +350,8 @@ Examples:
                 # Verify URL matches product
                 is_valid, reason = self._verify_url_matches_product(url)
                 if is_valid == False:
-                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected:</b> {reason}</div>"
+                    self.ketnoitieudung_url = False  # Clear wrong URL
+                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected & cleared:</b> {reason}</div>"
                     _logger.warning(f"[Ketnoitieudung] URL verification failed: {reason}")
                     return
             else:
@@ -308,7 +400,8 @@ Examples:
                 # Verify URL matches product
                 is_valid, reason = self._verify_url_matches_product(url)
                 if is_valid == False:
-                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected:</b> {reason}</div>"
+                    self.visior_url = False  # Clear wrong URL
+                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected & cleared:</b> {reason}</div>"
                     _logger.warning(f"[Visior] URL verification failed: {reason}")
                     return
             else:
@@ -355,7 +448,8 @@ Examples:
                 # Verify URL matches product
                 is_valid, reason = self._verify_url_matches_product(url)
                 if is_valid == False:
-                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected:</b> {reason}</div>"
+                    self.thbvietnam_url = False  # Clear wrong URL
+                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected & cleared:</b> {reason}</div>"
                     _logger.warning(f"[THB Vietnam] URL verification failed: {reason}")
                     return
             else:
@@ -402,7 +496,8 @@ Examples:
                 # Verify URL matches product
                 is_valid, reason = self._verify_url_matches_product(url)
                 if is_valid == False:
-                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected:</b> {reason}</div>"
+                    self.mecsu_url = False  # Clear wrong URL
+                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected & cleared:</b> {reason}</div>"
                     _logger.warning(f"[Mecsu] URL verification failed: {reason}")
                     return
             else:
@@ -449,7 +544,8 @@ Examples:
                 # Verify URL matches product
                 is_valid, reason = self._verify_url_matches_product(url)
                 if is_valid == False:
-                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected:</b> {reason}</div>"
+                    self.milwaukee_url = False  # Clear wrong URL
+                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected & cleared:</b> {reason}</div>"
                     _logger.warning(f"[Milwaukee] URL verification failed: {reason}")
                     return
             else:
@@ -497,7 +593,8 @@ Examples:
                 # Verify URL matches product
                 is_valid, reason = self._verify_url_matches_product(url)
                 if is_valid == False:
-                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected:</b> {reason}</div>"
+                    self.bosch_url = False  # Clear wrong URL
+                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected & cleared:</b> {reason}</div>"
                     _logger.warning(f"[Bosch] URL verification failed: {reason}")
                     return
             else:

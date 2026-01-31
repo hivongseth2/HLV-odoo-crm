@@ -51,6 +51,7 @@
                         <group string="🛡️ AI Quality Control (Mr. GPT)">
                             <div class="o_row">
                                 <button name="action_ai_verify" string="🕵️‍♂️ Verify Specs" type="object" class="btn-primary"/>
+                                <button name="action_consolidate_specs" string="🤖 Consolidate Specs" type="object" class="btn-secondary"/>
                                 <span class="text-muted" invisible="not ai_last_verify_date">
                                     Last checked: <field name="ai_last_verify_date" readonly="1"/>
                                 </span>
