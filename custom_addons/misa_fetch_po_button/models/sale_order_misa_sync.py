@@ -898,6 +898,7 @@ class SaleOrder(models.Model):
     def _sync_so_lines_from_misa_no_picking(self, lines, headers):
         """
         Đưa các dòng SO về đúng như MISA (qty/price/uom) theo UoM mặc định của product.
+        KHÔNG group theo product code - mỗi dòng MISA = 1 SOL riêng biệt.
         KHÔNG đụng pickings. Nếu có hoá đơn 'posted' thì KHÔNG nên gọi hàm này.
         """
         self.ensure_one()
@@ -911,15 +912,10 @@ class SaleOrder(models.Model):
             except Exception:
                 return dv
 
-        # Map các dòng SO hiện tại theo default_code để cập nhật/gộp về 1 dòng/mã
-        so_lines_by_code = {}
-        for line in self.order_line:
-            code = (line.product_id and line.product_id.default_code) or ''
-            if code:
-                so_lines_by_code[code] = line
-
-        seen_codes = set()
-
+        posted_inv_exists = bool(self.invoice_ids.filtered(lambda m: m.state == 'posted'))
+        
+        # Tạo danh sách các SOL từ MISA (chưa tạo vào DB)
+        misa_sol_data = []
         for ln in (lines or []):
             code = (ln.get("ProductIDText") or "").strip()
             if not code:
@@ -931,11 +927,8 @@ class SaleOrder(models.Model):
             discount   = _flt(ln.get("DiscountPercent"), 0.0)
             uom_name   = (ln.get("UnitIDText") or "Cái").strip()
             misa_pid   = ln.get("ProductID") or ln.get("ProductId")
-            note_text  = (ln.get("DescriptionProduct")
-              or ln.get("Note")
-              or "")
+            note_text  = (ln.get("DescriptionProduct") or ln.get("Note") or "")
             x_studio_product_status = (ln.get("CustomField4") or "").strip()
-
 
             # Lấy / tạo product đúng theo mã
             product = odoo_utils._get_or_create_product(
@@ -958,96 +951,150 @@ class SaleOrder(models.Model):
                 headers=headers,
             )
 
-            vals_line = {
+            tax_ids = self._tax_ids_from_misa_line(ln)
+            
+            misa_sol_data.append({
+                'product': product,
+                'code': code,
                 'name': desc,
-                'product_id': product.id,
-                'product_uom_qty': qty_base,
-                'price_unit': price_base,
+                'qty': qty_base,
+                'price': price_base,
                 'discount': discount,
                 'note': note_text,
+                'tax_ids': tax_ids,
+                'is_default_uom': is_default,
+                'status': x_studio_product_status,
+            })
+
+        # Lấy danh sách SOL hiện tại
+        existing_sols = list(self.order_line)
+        
+        # Match: Tìm SOL hiện có khớp với từng dòng MISA
+        # Ưu tiên match theo: product + qty + price (tránh nhầm lẫn khi có 2 dòng cùng product)
+        matched_pairs = []  # [(misa_data, sol)]
+        unmatched_misa = list(misa_sol_data)
+        unmatched_sols = list(existing_sols)
+        
+        # Pass 1: Match chính xác (product + qty gần bằng)
+        for misa_data in list(unmatched_misa):
+            for sol in list(unmatched_sols):
+                if (sol.product_id == misa_data['product'] 
+                    and abs(sol.product_uom_qty - misa_data['qty']) < 0.01):
+                    matched_pairs.append((misa_data, sol))
+                    unmatched_misa.remove(misa_data)
+                    unmatched_sols.remove(sol)
+                    break
+        
+        # Pass 2: Match theo product (cho các dòng còn lại)
+        for misa_data in list(unmatched_misa):
+            for sol in list(unmatched_sols):
+                if sol.product_id == misa_data['product']:
+                    matched_pairs.append((misa_data, sol))
+                    unmatched_misa.remove(misa_data)
+                    unmatched_sols.remove(sol)
+                    break
+        
+        # Cập nhật các SOL đã match
+        for misa_data, sol in matched_pairs:
+            vals_line = {
+                'name': misa_data['name'],
+                'product_uom_qty': misa_data['qty'],
+                'price_unit': misa_data['price'],
+                'discount': misa_data['discount'],
+                'note': misa_data['note'],
             }
-            if not is_default and product.uom_id:
-                vals_line['product_uom'] = product.uom_id.id
+            if not misa_data['is_default_uom'] and misa_data['product'].uom_id:
+                vals_line['product_uom'] = misa_data['product'].uom_id.id
             
-            tax_ids = self._tax_ids_from_misa_line(ln)
-            if tax_ids:
-                vals_line['tax_id'] = [(6, 0, tax_ids)]
+            if misa_data['tax_ids']:
+                vals_line['tax_id'] = [(6, 0, misa_data['tax_ids'])]
             else:
-                # Xóa thuế nếu MISA không có (KCT)
                 vals_line['tax_id'] = [(5, 0, 0)]
-
-            if code in so_lines_by_code:
-                so_lines_by_code[code].write(vals_line)
+            
+            sol.write(vals_line)
+            _logger.info("✏️ Cập nhật SOL %s: qty=%.2f", misa_data['code'], misa_data['qty'])
+        
+        # Tạo mới SOL cho các dòng MISA chưa match
+        for misa_data in unmatched_misa:
+            vals_line = {
+                'order_id': self.id,
+                'product_id': misa_data['product'].id,
+                'name': misa_data['name'],
+                'product_uom_qty': misa_data['qty'],
+                'price_unit': misa_data['price'],
+                'discount': misa_data['discount'],
+                'note': misa_data['note'],
+            }
+            if not misa_data['is_default_uom'] and misa_data['product'].uom_id:
+                vals_line['product_uom'] = misa_data['product'].uom_id.id
+            
+            if misa_data['tax_ids']:
+                vals_line['tax_id'] = [(6, 0, misa_data['tax_ids'])]
             else:
-                SaleLine.create(dict(vals_line, order_id=self.id))
-
-            seen_codes.add(code)
-
-        # --- Dọn dòng không còn trong MISA: ưu tiên XOÁ nếu an toàn, nếu không thì SET 0 / CẮT RESIDUAL ---
-        posted_inv_exists = bool(self.invoice_ids.filtered(lambda m: m.state == 'posted'))
-
-        for code, line in so_lines_by_code.items():
-            if code in seen_codes:
-                continue
-
+                vals_line['tax_id'] = [(5, 0, 0)]
+            
+            SaleLine.create(vals_line)
+            _logger.info("➕ Tạo mới SOL %s: qty=%.2f", misa_data['code'], misa_data['qty'])
+        
+        # Xóa/cắt các SOL không còn trong MISA
+        for sol in unmatched_sols:
+            code = sol.product_id.default_code or sol.product_id.name
+            
             # 1) SO còn nháp -> xoá luôn
             if self.state in ('draft', 'sent'):
                 try:
-                    line.unlink()
+                    sol.unlink()
                     _logger.info("🧹 Unlink dòng %s (SO nháp) vì không còn trong MISA", code)
                 except Exception as e:
                     _logger.warning("Không thể unlink dòng %s ở nháp: %s", code, e)
                 continue
 
             # 2) SO đã xác nhận
-            qty_delivered = float(getattr(line, 'qty_delivered', 0.0) or 0.0)
-            qty_ordered  = float(getattr(line, 'product_uom_qty', 0.0) or 0.0)
+            qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
+            qty_ordered  = float(getattr(sol, 'product_uom_qty', 0.0) or 0.0)
 
-            # Huỷ các move mở trước để không treo dự trữ
-            for mv in line.move_ids.filtered(lambda m: m.state not in ('done', 'cancel')):
+            # Huỷ các move mở trước
+            for mv in sol.move_ids.filtered(lambda m: m.state not in ('done', 'cancel')):
                 try:
                     mv._action_cancel()
                 except Exception as e:
                     _logger.warning("Không cancel được move mở của dòng %s: %s", code, e)
 
-            # Nếu đã có invoice posted -> KHÔNG tự chỉnh, tránh sai kế toán
+            # Nếu đã có invoice posted -> giữ nguyên
             if posted_inv_exists:
                 _logger.warning("⚠️ Dòng %s không còn trong MISA nhưng giữ nguyên (đã có invoice posted).", code)
                 continue
 
-            # 2a) Chưa giao gì (qty_delivered ~ 0): thử XOÁ trước, nếu không được thì SET 0
+            # 2a) Chưa giao gì: thử XOÁ
             if qty_delivered <= 1e-6:
                 try:
-                    # Chỉ xóa nếu không còn ràng buộc kế toán: không có move 'done', không có invoice_lines hoạt động
-                    has_done_moves = bool(line.move_ids.filtered(lambda m: m.state == 'done'))
-                    has_active_inv_lines = bool(line.invoice_lines.filtered(lambda l: l.move_id.state != 'cancel'))
+                    has_done_moves = bool(sol.move_ids.filtered(lambda m: m.state == 'done'))
+                    has_active_inv_lines = bool(sol.invoice_lines.filtered(lambda l: l.move_id.state != 'cancel'))
                     if not has_done_moves and not has_active_inv_lines:
-                        line.unlink()
-                        _logger.info("🧹 Unlink dòng %s (đã xác nhận nhưng chưa giao gì, không ràng buộc).", code)
+                        sol.unlink()
+                        _logger.info("🧹 Unlink dòng %s (chưa giao gì).", code)
                     else:
-                        # fallback: set 0
-                        line.write({'product_uom_qty': 0.0})
-                        _logger.info("↘️ Set 0 dòng %s (không xoá được do ràng buộc).", code)
+                        sol.write({'product_uom_qty': 0.0})
+                        _logger.info("↘️ Set 0 dòng %s (không xoá được).", code)
                 except Exception as e:
-                    _logger.warning("Unlink thất bại dòng %s, fallback set 0: %s", code, e)
+                    _logger.warning("Unlink thất bại dòng %s: %s", code, e)
                     try:
-                        line.write({'product_uom_qty': 0.0})
+                        sol.write({'product_uom_qty': 0.0})
                     except Exception as e2:
                         _logger.warning("Không thể set 0 dòng %s: %s", code, e2)
                 continue
 
-            # 2b) ĐÃ GIAO MỘT PHẦN → KHÔNG xoá (để giữ lịch sử), chỉ cắt residual về 0
+            # 2b) Đã giao một phần -> cắt residual
             if qty_delivered + 1e-6 < qty_ordered:
                 try:
-                    line.write({'product_uom_qty': qty_delivered})
-                    _logger.info("✂️ Cắt residual %s: ordered %.2f -> delivered %.2f (MISA không còn dòng này).",
-                                code, qty_ordered, qty_delivered)
+                    sol.write({'product_uom_qty': qty_delivered})
+                    _logger.info("✂️ Cắt residual %s: %.2f -> %.2f", code, qty_ordered, qty_delivered)
                 except Exception as e:
                     _logger.warning("Không thể cắt residual dòng %s: %s", code, e)
                 continue
 
-            # 2c) ĐÃ GIAO ĐỦ (= ordered) → giữ nguyên (không còn residual để cắt/xoá)
-            _logger.info("✅ Dòng %s đã giao đủ (ordered=delivered), không chỉnh.", code)
+            # 2c) Đã giao đủ -> giữ nguyên
+            _logger.info("✅ Dòng %s đã giao đủ, không chỉnh.", code)
 
 
 
