@@ -932,18 +932,27 @@ class SaleOrder(models.Model):
                         _logger.info("📦 Combo '%s' có BoM Kit → sẽ skip children từ MISA", combo_code)
         
         # Tạo danh sách các SOL từ MISA (chưa tạo vào DB)
+        # Sử dụng tracking theo SortOrder để xác định parent của children
+        # (MISA không gửi ParentProductIDText - children xuất hiện ngay sau parent)
         misa_sol_data = []
+        current_parent_code = None  # Track combo parent hiện tại theo SortOrder
+        
         for ln in (lines or []):
             code = (ln.get("ProductIDText") or "").strip()
             if not code:
                 continue
             
+            # Nếu đây là combo parent → update current_parent_code
+            if ln.get("IsSetProduct"):
+                current_parent_code = code
+                _logger.info("🔵 Gặp combo parent: '%s'", current_parent_code)
+            
             # 🔥 SKIP COMBO CHILDREN nếu parent có BoM Kit
             # (Odoo sẽ tự explode BoM Kit ra picking thay vì thêm trực tiếp)
+            # Children được xác định bằng IsChildProduct=true và nằm sau parent theo SortOrder
             if ln.get("IsChildProduct"):
-                parent_code = (ln.get("ParentProductIDText") or "").strip()
-                if parent_code in combo_codes_with_bom:
-                    _logger.info("⏭️ Skip combo child '%s' (parent '%s' có BoM Kit)", code, parent_code)
+                if current_parent_code and current_parent_code in combo_codes_with_bom:
+                    _logger.info("⏭️ Skip combo child '%s' (parent '%s' có BoM Kit)", code, current_parent_code)
                     continue
 
             desc       = ln.get("Description") or code
