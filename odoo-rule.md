@@ -87,7 +87,86 @@ for line in sale_order.order_line:
 
 **Lưu ý đặc biệt**:
 - Cùng một sản phẩm có thể xuất hiện ở **nhiều dòng** trong Sale Order → Phải **cộng dồn** `qty_delivered` khi group theo `product_id`.
-- Field `qty_delivered` đã được Odoo tính toán tự động dựa trên các stock.move cuối cùng (outgoing moves), phù hợp cho mọi loại delivery flow.
+- Field `qty_delivered` đã được Odoo tính toán tự động dựa trên các stock.move cuối cùng (outgoing moves), phú hợp cho mọi loại delivery flow.
+
+9.2. MISA Sale Order Sync (`misa_fetch_po_button` module)
+**Module**: `custom_addons/misa_fetch_po_button` - Đồng bộ Sale Order và Picking từ MISA ERP
+
+**Nguyên tắc quan trọng**:
+
+**A. Sale Order Line Sync - KHÔNG GROUP theo Product Code**
+- ❌ **SAI**: Map SOL theo `default_code` → gộp nhiều dòng MISA cùng product thành 1 SOL
+- ✅ **ĐÚNG**: Mỗi dòng MISA = 1 SOL riêng biệt, kể cả khi cùng product
+
+**Lý do**: MISA có thể có nhiều dòng cùng sản phẩm với qty/giá/ghi chú khác nhau. Ví dụ:
+```
+MISA: C:100 (dòng 1) + C:100 (dòng 2) 
+→ Odoo phải có 2 SOL riêng, KHÔNG gộp thành 1 SOL với qty=200
+```
+
+**Logic sync đúng** (trong `_sync_so_lines_from_misa_no_picking`):
+```python
+# 1. Thu thập tất cả dòng MISA (KHÔNG group)
+misa_sol_data = []  # Mỗi dòng MISA = 1 item
+
+# 2. Match với SOL hiện có
+# Pass 1: Product + Qty khớp (chính xác)
+# Pass 2: Chỉ Product khớp (khi qty thay đổi)
+
+# 3. Update SOL đã match
+# 4. Tạo mới SOL cho dòng MISA chưa match
+# 5. Xóa/cắt SOL không còn trong MISA
+```
+
+**B. Stock Move Linking - Luôn link với Sale Order Line**
+Khi tạo `stock.move` mới, **BẮT BUỘC** phải link với `sale.order.line` qua field `sale_line_id`:
+
+```python
+# Tìm SOL có product này và còn qty chưa giao
+sol = self.order_line.filtered(
+    lambda l: l.product_id == prod 
+    and (l.product_uom_qty - l.qty_delivered) > 0.001
+)[:1]
+
+move_vals = {
+    'product_id': prod.id,
+    'product_uom_qty': needed_qty,
+    'sale_line_id': sol.id if sol else False,  # ← QUAN TRỌNG
+    # ... other fields
+}
+```
+
+**Tại sao quan trọng**:
+- Odoo dùng `sale_line_id` để tính `qty_delivered` cho SOL
+- Nếu không link → SOL.qty_delivered sẽ không cập nhật
+- Picking sẽ không hiển thị đúng trong Sale Order
+
+**C. Sync Fields từ MISA**
+Các field cần sync từ MISA sang Sale Order Line:
+- `ProductIDText` → `product_id` (qua `_get_or_create_product`)
+- `Description` → `name`
+- `Amount` → `product_uom_qty` (đã convert UoM)
+- `Price` → `price_unit` (đã convert UoM)
+- `DiscountPercent` → `discount`
+- `Note` / `DescriptionProduct` → `note`
+- `CustomField4` → `x_studio_product_status` ← **KHÔNG ĐƯỢC BỎ QUÁ**
+- `TaxPercentIDText` → `tax_id`
+
+**D. Partial Resync Logic**
+Khi đồng bộ SO đã có picking done (hàm `_partial_resync_open_pickings_when_done_present`):
+
+1. **Tính delivered**: Dùng `sale.order.line.qty_delivered` (KHÔNG dùng picking.move_line_ids)
+2. **Tính MISA total**: Sum qty từ MISA lines (đã convert UoM)
+3. **Tính needed**: `needed = misa_total - delivered` (cho mỗi product)
+4. **Check over-delivery**: Nếu `delivered > misa_total` → CHẶN đồng bộ (raise UserError)
+5. **Update picking mở**: Cập nhật/tạo move theo `needed_in_open_by_product`
+
+**E. Common Pitfalls**
+1. ❌ Group SOL theo product code → Mất dữ liệu khi MISA có nhiều dòng cùng product
+2. ❌ Tính delivered từ move_line.qty_done → Đếm trùng trong multi-step delivery
+3. ❌ Không link move với SOL → qty_delivered không cập nhật
+4. ❌ Quên sync `x_studio_product_status` → Mất thông tin trạng thái sản xuất
+5. ❌ Không handle case "thêm dòng mới cùng product" → SOL không được tạo
 
 10. Settings View for Odoo 18
 Cấu trúc `res.config.settings` view inheritance đã thay đổi trong Odoo 18.
