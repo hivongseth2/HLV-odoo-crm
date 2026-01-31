@@ -12,6 +12,18 @@
                 <page string="Crawler Info" name="crawler_info">
                     <group>
                         <group string="Source URLs">
+                            <label for="milwaukee_url" string="Milwaukee"/>
+                            <div class="o_row">
+                                <field name="milwaukee_url" placeholder="https://www.milwaukeetool.com.vn/..."/>
+                                <button name="action_crawl_milwaukee" string="Fetch" type="object" class="btn-secondary"/>
+                            </div>
+
+                            <label for="bosch_url" string="Bosch"/>
+                            <div class="o_row">
+                                <field name="bosch_url" placeholder="https://vn.bosch-pt.com/..."/>
+                                <button name="action_crawl_bosch" string="Fetch" type="object" class="btn-secondary"/>
+                            </div>
+                            
                             <label for="ketnoitieudung_url"/>
                             <div class="o_row">
                                 <field name="ketnoitieudung_url"/>

@@ -9,6 +9,8 @@ class ProductTemplate(models.Model):
     visior_url = fields.Char(string="Visior URL", help="URL to crawl technical specs from visior.vn")
     thbvietnam_url = fields.Char(string="THB Vietnam URL", help="URL to crawl technical specs from thbvietnam.com")
     mecsu_url = fields.Char(string="Mecsu URL", help="URL to crawl technical specs from mecsu.vn")
+    milwaukee_url = fields.Char(string="Milwaukee URL", help="URL to crawl technical specs from milwaukeetool.com.vn")
+    bosch_url = fields.Char(string="Bosch URL", help="URL to crawl technical specs from vn.bosch-pt.com")
     
     crawled_specs = fields.Text(string="Crawled Specifications")
 
@@ -164,6 +166,81 @@ class ProductTemplate(models.Model):
                 msg = f"<div style='color: #fd7e14;'>⚠ <b>Mecsu.vn:</b> {error or 'Lỗi tải dữ liệu'}</div>"
                 self.crawled_specs = (self.crawled_specs or "") + msg
 
+    def action_crawl_milwaukee(self):
+        import logging
+        _logger = logging.getLogger(__name__)
+        
+        self.ensure_one()
+        _logger.info(f"[Milwaukee] Starting crawl, current URL: {self.milwaukee_url}")
+        
+        url = self.milwaukee_url
+        if not url and self.default_code:
+            msg_searching = f"<div style='color: #6c757d; font-size: 0.9em;'>🔍 Đang tìm kiếm <b>{self.default_code}</b> trên Milwaukee...</div>"
+            self.crawled_specs = (self.crawled_specs or "") + msg_searching
+            
+            _logger.info(f"[Milwaukee] Searching for SKU: {self.default_code}, Name: {self.name}")
+            url, error = CrawlerUtils.search_milwaukee(self.default_code, self.name)
+            _logger.info(f"[Milwaukee] Search result - URL: {url}, Error: {error}")
+            
+            if url:
+                self.milwaukee_url = url
+                self.crawled_specs = self.crawled_specs.replace(msg_searching,
+                    f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên Milwaukee</div>")
+            else:
+                self.crawled_specs = self.crawled_specs.replace(msg_searching,
+                    f"<div style='color: #fd7e14;'>⚠ <b>Milwaukee:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
+                _logger.warning(f"[Milwaukee] Product not found")
+                return
+        
+        if url:
+            _logger.info(f"[Milwaukee] Parsing details from: {url}")
+            specs, error = CrawlerUtils.parse_milwaukee_details(url)
+            _logger.info(f"[Milwaukee] Parse result - Specs length: {len(specs) if specs else 0}, Error: {error}")
+            
+            if specs:
+                # Specs already formatted
+                self.crawled_specs = (self.crawled_specs or "") + specs
+            else:
+                msg = f"<div style='color: #fd7e14;'>⚠ <b>Milwaukee:</b> {error or 'Lỗi tải dữ liệu'}</div>"
+                self.crawled_specs = (self.crawled_specs or "") + msg
+
+    def action_crawl_bosch(self):
+        import logging
+        _logger = logging.getLogger(__name__)
+        
+        self.ensure_one()
+        _logger.info(f"[Bosch] Starting crawl, current URL: {self.bosch_url}")
+        
+        url = self.bosch_url
+        if not url and self.default_code:
+            msg_searching = f"<div style='color: #6c757d; font-size: 0.9em;'>🔍 Đang tìm kiếm <b>{self.default_code}</b> trên Bosch...</div>"
+            self.crawled_specs = (self.crawled_specs or "") + msg_searching
+            
+            _logger.info(f"[Bosch] Searching for SKU: {self.default_code}, Name: {self.name}")
+            url, error = CrawlerUtils.search_bosch(self.default_code, self.name)
+            _logger.info(f"[Bosch] Search result - URL: {url}, Error: {error}")
+            
+            if url:
+                self.bosch_url = url
+                self.crawled_specs = self.crawled_specs.replace(msg_searching,
+                    f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên Bosch</div>")
+            else:
+                self.crawled_specs = self.crawled_specs.replace(msg_searching,
+                    f"<div style='color: #fd7e14;'>⚠ <b>Bosch:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
+                _logger.warning(f"[Bosch] Product not found")
+                return
+        
+        if url:
+            _logger.info(f"[Bosch] Parsing details from: {url}")
+            specs, error = CrawlerUtils.parse_bosch_details(url)
+            _logger.info(f"[Bosch] Parse result - Specs length: {len(specs) if specs else 0}, Error: {error}")
+            
+            if specs:
+                self.crawled_specs = (self.crawled_specs or "") + specs
+            else:
+                msg = f"<div style='color: #fd7e14;'>⚠ <b>Bosch:</b> {error or 'Lỗi tải dữ liệu'}</div>"
+                self.crawled_specs = (self.crawled_specs or "") + msg
+
     def action_crawl_all(self):
         import logging
         _logger = logging.getLogger(__name__)
@@ -189,11 +266,26 @@ class ProductTemplate(models.Model):
                 <div style='background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 15px;'>
                     <h2 style='color: #495057; margin: 0 0 10px 0;'>🔍 Kết quả tìm kiếm</h2>
                     <p style='margin: 0; color: #6c757d;'>Mã sản phẩm: <b>{record.default_code}</b></p>
-                    <p style='margin: 5px 0 0 0; color: #6c757d; font-size: 0.9em;'>Đang tìm kiếm trên 4 trang web...</p>
+                    <p style='margin: 5px 0 0 0; color: #6c757d; font-size: 0.9em;'>Đang tìm kiếm trên 6 trang web...</p>
                 </div>
             """
             
-            # Try all sites - no exceptions, just log results
+            # 1. Official Sites (First Priority)
+            try:
+                _logger.info("Crawling Milwaukee...")
+                record.action_crawl_milwaukee()
+            except Exception as e:
+                _logger.error(f"Error crawling Milwaukee: {e}")
+                record.crawled_specs += f"<div style='color: red;'>Lỗi Milwaukee: {str(e)}</div>"
+
+            try:
+                _logger.info("Crawling Bosch...")
+                record.action_crawl_bosch()
+            except Exception as e:
+                _logger.error(f"Error crawling Bosch: {e}")
+                record.crawled_specs += f"<div style='color: red;'>Lỗi Bosch: {str(e)}</div>"
+
+            # 2. Reseller Sites
             try:
                 _logger.info("Crawling Ketnoitieudung...")
                 record.action_crawl_ketnoitieudung()
