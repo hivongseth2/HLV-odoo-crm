@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+import sys
+sys.path.insert(0, 'd:/HLV/HLV-odoo-crm/custom_addons/hlv_product_crawler/models')
+from crawler_parsers import CrawlerUtils
+
+url = "https://www.milwaukeetool.com.vn/power-tools/sawing-cutting/m18-planer"
+print(f"Testing parse for: {url}")
+
+specs, err = CrawlerUtils.parse_milwaukee_details(url)
+if specs:
+    print("✓ Parse SUCCESS")
+    print(specs[:500])
+else:
+    print(f"✗ Parse FAILED: {err}")
