@@ -6,65 +6,81 @@
         <field name="inherit_id" ref="product.product_template_only_form_view"/>
         <field name="arch" type="xml">
             <header position="inside">
-                <button name="action_crawl_all" string="Auto Crawl Specs" type="object" class="oe_highlight"/>
+                <!-- Removed button from header as per requirement -->
             </header>
             <notebook position="inside">
-                <page string="Crawler Info" name="crawler_info">
-                    <group>
-                        <group string="Source URLs">
-                            <label for="milwaukee_url" string="Milwaukee"/>
-                            <div class="o_row">
-                                <field name="milwaukee_url" placeholder="https://www.milwaukeetool.com.vn/..."/>
-                                <button name="action_crawl_milwaukee" string="Fetch" type="object" class="btn-secondary"/>
-                            </div>
-
-                            <label for="bosch_url" string="Bosch"/>
-                            <div class="o_row">
-                                <field name="bosch_url" placeholder="https://vn.bosch-pt.com/..."/>
-                                <button name="action_crawl_bosch" string="Fetch" type="object" class="btn-secondary"/>
-                            </div>
-                            
-                            <label for="ketnoitieudung_url"/>
-                            <div class="o_row">
-                                <field name="ketnoitieudung_url"/>
-                                <button name="action_crawl_ketnoitieudung" string="Fetch" type="object" class="btn-secondary"/>
-                            </div>
-                            
-                            <label for="visior_url"/>
-                            <div class="o_row">
-                                <field name="visior_url"/>
-                                <button name="action_crawl_visior" string="Fetch" type="object" class="btn-secondary"/>
-                            </div>
-
-                            <label for="thbvietnam_url"/>
-                            <div class="o_row">
-                                <field name="thbvietnam_url"/>
-                                <button name="action_crawl_thbvietnam" string="Fetch" type="object" class="btn-secondary"/>
-                            </div>
-
-                            <label for="mecsu_url"/>
-                            <div class="o_row">
-                                <field name="mecsu_url"/>
-                                <button name="action_crawl_mecsu" string="Fetch" type="object" class="btn-secondary"/>
-                            </div>
-                        </group>
-                        <group string="🛡️ AI Quality Control (Mr. GPT)">
-                            <div class="o_row">
-                                <button name="action_ai_verify" string="🕵️‍♂️ Verify Specs" type="object" class="btn-primary"/>
-                                <button name="action_consolidate_specs" string="🤖 Consolidate Specs" type="object" class="btn-secondary"/>
-                                <span class="text-muted" invisible="not ai_last_verify_date">
-                                    Last checked: <field name="ai_last_verify_date" readonly="1"/>
-                                </span>
-                            </div>
-                            <field name="ai_verify_score" widget="progressbar" options="{'current_value': 'ai_verify_score', 'max_value': 100}"/>
-                            <separator string="Mr. GPT Analysis"/>
-                            <field name="ai_verify_analysis" nolabel="1" widget="html" readonly="1" class="oe_read_only"/>
-                        </group>
-                    </group>
-                    <separator string="Crawled Specifications"/>
-                    <div class="oe_form_sheet_width">
-                        <field name="crawled_specs" widget="html" nolabel="1" options="{'style-inline': true}"/>
+                <page string="Dữ liệu Crawl" name="crawler_info">
+                    <div class="mb-3 mt-2">
+                        <button name="action_crawl_and_analyze" string="🚀 Tự động Cào &amp; Phân tích" type="object" class="btn-primary oe_read_only" help="Cào dữ liệu từ tất cả các nguồn và tự động phân tích"/>
                     </div>
+                    
+                    <notebook>
+                        <page string="⚙️ Thiết lập &amp; Kiểm soát" name="crawler_config">
+                            <group>
+                                <group string="Nguồn dữ liệu">
+                                    <label for="milwaukee_url" string="Milwaukee"/>
+                                    <div class="o_row">
+                                        <field name="milwaukee_url" placeholder="https://www.milwaukeetool.com.vn/..."/>
+                                        <button name="action_crawl_milwaukee" string="Lấy" type="object" class="btn-secondary"/>
+                                    </div>
+
+                                    <label for="bosch_url" string="Bosch"/>
+                                    <div class="o_row">
+                                        <field name="bosch_url" placeholder="https://vn.bosch-pt.com/..."/>
+                                        <button name="action_crawl_bosch" string="Lấy" type="object" class="btn-secondary"/>
+                                    </div>
+                                    
+                                    <label for="ketnoitieudung_url" string="Kết Nối Tiêu Dùng"/>
+                                    <div class="o_row">
+                                        <field name="ketnoitieudung_url"/>
+                                        <button name="action_crawl_ketnoitieudung" string="Lấy" type="object" class="btn-secondary"/>
+                                    </div>
+                                    
+                                    <label for="visior_url" string="Visior"/>
+                                    <div class="o_row">
+                                        <field name="visior_url"/>
+                                        <button name="action_crawl_visior" string="Lấy" type="object" class="btn-secondary"/>
+                                    </div>
+
+                                    <label for="thbvietnam_url" string="THB Việt Nam"/>
+                                    <div class="o_row">
+                                        <field name="thbvietnam_url"/>
+                                        <button name="action_crawl_thbvietnam" string="Lấy" type="object" class="btn-secondary"/>
+                                    </div>
+
+                                    <label for="mecsu_url" string="Mecsu"/>
+                                    <div class="o_row">
+                                        <field name="mecsu_url"/>
+                                        <button name="action_crawl_mecsu" string="Lấy" type="object" class="btn-secondary"/>
+                                    </div>
+                                </group>
+                                <group string="🛡️ Kiểm soát AI (Mr. GPT)">
+                                    <div class="o_row">
+                                        <button name="action_ai_verify" string="🕵️‍♂️ Kiểm tra" type="object" class="btn-secondary"/>
+                                        <button name="action_analyze_specs" string="🤖 Phân tích lại" type="object" class="btn-secondary"/>
+                                        <span class="text-muted" invisible="not ai_last_verify_date">
+                                            Kiểm tra: <field name="ai_last_verify_date" readonly="1"/>
+                                        </span>
+                                    </div>
+                                    <field name="ai_verify_score" widget="progressbar" options="{'current_value': 'ai_verify_score', 'max_value': 100}"/>
+                                    <separator string="Phân tích của Mr. GPT"/>
+                                    <field name="ai_verify_analysis" nolabel="1" widget="html" readonly="1" class="oe_read_only"/>
+                                </group>
+                            </group>
+                        </page>
+                        
+                        <page string="📄 Dữ liệu đã phân tích" name="crawler_analyzed">
+                            <group>
+                                <field name="crawled_specs_analyzed" widget="html" nolabel="1" options="{'style-inline': true}" placeholder="Dữ liệu sau khi được AI phân tích sẽ hiển thị ở đây..."/>
+                            </group>
+                        </page>
+
+                        <page string="📝 Dữ liệu thô" name="crawler_raw">
+                            <group>
+                                <field name="crawled_specs_raw" widget="html" nolabel="1" options="{'style-inline': true}" placeholder="Dữ liệu gốc crawl từ website..."/>
+                            </group>
+                        </page>
+                    </notebook>
                 </page>
             </notebook>
         </field>
