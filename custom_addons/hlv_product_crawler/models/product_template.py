@@ -5,22 +5,26 @@ from .crawler_parsers import CrawlerUtils
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
 
-    ketnoitieudung_url = fields.Char(string="Ketnoitieudung URL", help="URL to crawl technical specs from ketnoitieudung.vn")
-    visior_url = fields.Char(string="Visior URL", help="URL to crawl technical specs from visior.vn")
-    thbvietnam_url = fields.Char(string="THB Vietnam URL", help="URL to crawl technical specs from thbvietnam.com")
-    mecsu_url = fields.Char(string="Mecsu URL", help="URL to crawl technical specs from mecsu.vn")
-    milwaukee_url = fields.Char(string="Milwaukee URL", help="URL to crawl technical specs from milwaukeetool.com.vn")
-    bosch_url = fields.Char(string="Bosch URL", help="URL to crawl technical specs from vn.bosch-pt.com")
+    ketnoitieudung_url = fields.Char(string="Link Ketnoitieudung", help="Link crawling thông số kỹ thuật từ ketnoitieudung.vn")
+    visior_url = fields.Char(string="Link Visior", help="Link crawling thông số kỹ thuật từ visior.vn")
+    thbvietnam_url = fields.Char(string="Link THB Vietnam", help="Link crawling thông số kỹ thuật từ thbvietnam.com")
+    mecsu_url = fields.Char(string="Link Mecsu", help="Link crawling thông số kỹ thuật từ mecsu.vn")
+    milwaukee_url = fields.Char(string="Link Milwaukee", help="Link crawling thông số kỹ thuật từ milwaukeetool.com.vn")
+    bosch_url = fields.Char(string="Link Bosch", help="Link crawling thông số kỹ thuật từ vn.bosch-pt.com")
     
-    crawled_specs = fields.Text(string="Crawled Specifications")
+    crawled_specs_raw = fields.Html(string="Dữ liệu thô (Crawl)", help="Dữ liệu gốc lấy từ website")
+    crawled_specs_analyzed = fields.Html(string="Dữ liệu đã phân tích (AI)", help="Dữ liệu đã được AI tổng hợp và làm sạch")
+    
+    # Backward compatibility: related to crawled_specs_raw to prevent View Errors during upgrade
+    crawled_specs = fields.Html(related='crawled_specs_raw', string="Crawled Specifications (Legacy)", readonly=True)
 
     # AI QC Fields
-    ai_verify_score = fields.Integer(string="AI QC Score", readonly=True, help="Quality Control Score (0-100) from Mr. GPT")
-    ai_verify_analysis = fields.Html(string="Mr. GPT Analysis", readonly=True)
-    ai_last_verify_date = fields.Datetime(string="Last Verified", readonly=True)
+    ai_verify_score = fields.Integer(string="Điểm chất lượng (AI)", readonly=True, help="Điểm chất lượng (0-100) từ Mr. GPT")
+    ai_verify_analysis = fields.Html(string="Phân tích của AI", readonly=True)
+    ai_last_verify_date = fields.Datetime(string="Ngày kiểm tra", readonly=True)
     
     # Catalog/Document Links
-    catalog_links = fields.Text(string="Technical Documents", help="Catalog PDFs and technical documents from crawler sources")
+    catalog_links = fields.Text(string="Tài liệu kỹ thuật", help="Catalog PDF và tài liệu kỹ thuật từ nguồn crawl")
 
     def _call_gpt_verification(self):
         """
@@ -37,20 +41,20 @@ class ProductTemplate(models.Model):
         # Prepare content
         sku = self.default_code or "N/A"
         name = self.name or "N/A"
-        specs = self.crawled_specs or "No specs crawled yet."
+        specs = self.crawled_specs_raw or "Chưa có dữ liệu crawl."
         
-        prompt = f"""You are Mr. GPT, a strict Quality Control expert for Industrial Tools.
-Analyze the following crawled data for product SKU: {sku}, Name: {name}.
-Data:
+        prompt = f"""Bạn là Mr. GPT, chuyên gia kiểm soát chất lượng (QC) nghiêm ngặt về Dụng cụ Công nghiệp.
+Phân tích dữ liệu đã crawl cho sản phẩm SKU: {sku}, Tên: {name}.
+Dữ liệu:
 {specs}
 
-Task: Verify if this data technically matches the product.
-Rules:
-1. Ignore minor formatting issues.
-2. Focus on Specs (Voltage, RPM, Weight, Model Number).
-3. If Specs are missing or clearly belong to another product (e.g. M12 vs M18), Lower the score.
-4. If Specs are duplicated but correct, minor penalty.
-5. Return ONLY valid JSON in format: {{"score": 0-100, "reason": "HTML formatted analysis string"}}."""
+Nhiệm vụ: Xác minh xem dữ liệu này có khớp kỹ thuật với sản phẩm không.
+Luật:
+1. Bỏ qua các lỗi định dạng nhỏ.
+2. Tập trung vào Thông số kỹ thuật (Điện áp, Vòng tua, Trọng lượng, Mã model).
+3. Nếu Thông số bị thiếu hoặc rõ ràng thuộc về sản phẩm khác (ví dụ: M12 vs M18), hãy TRỪ điểm nặng.
+4. Nếu Thông số bị trùng lặp nhưng đúng, chỉ trừ điểm nhẹ.
+5. Trả về DUY NHẤT JSON theo định dạng: {{"score": 0-100, "reason": "Chuỗi phân tích định dạng HTML (tiếng Việt)"}}."""
 
         import requests
         import json
@@ -63,7 +67,7 @@ Rules:
         data = {
             "model": model,
             "messages": [
-                {"role": "system", "content": "You are a helpful QC assistant returning JSON."},
+                {"role": "system", "content": "You are a helpful QC assistant returning JSON. Reply in Vietnamese."},
                 {"role": "user", "content": prompt}
             ],
             "response_format": {"type": "json_object"}
@@ -111,67 +115,67 @@ Rules:
         
         if is_mecsu:
             # Mecsu-specific fuzzy matching prompt
-            prompt = f"""You are Mr. GPT, a product matching expert for industrial fasteners and hardware.
+            prompt = f"""Bạn là Mr. GPT, chuyên gia khớp sản phẩm cho bulong ốc vít và phần cứng công nghiệp.
 
-Product in System:
-- Name: {name}
+Sản phẩm trong hệ thống:
+- Tên: {name}
 - SKU: {sku}
 
-URL Found: {url}
+Link tìm thấy: {url}
 
-Task: Verify if this URL likely matches the product.
+Nhiệm vụ: Xác minh xem Link này có đúng là của sản phẩm trên không.
 
-IMPORTANT - Mecsu Flexible Matching Rules:
-1. Material synonyms are acceptable:
+QUAN TRỌNG - Quy tắc khớp linh hoạt cho Mecsu:
+1. Từ đồng nghĩa vật liệu được chấp nhận:
    - SS304 = Inox 304 = Stainless Steel 304 = INOX A2
    - SS316 = Inox 316 = A4
    - Thép = Steel
-2. Standard number formats are flexible:
+2. Định dạng số tiêu chuẩn linh hoạt:
    - DIN912 = 912 = DIN 912
-   - ISO = DIN (often interchangeable for same spec)
-3. Word order doesn't matter for technical products:
-   - "Bu lông lục giác M5x15" matches "Lục giác chìm đầu M5x15"
-   - Focus on technical specs, not word order
-4. KEY identifiers that MUST match:
-   - Size (M5x15, M6x20, etc.) - EXACT match required
-   - Standard number (912, 933, 7991, etc.) - MUST match
-   - Material category compatible (inox/stainless, carbon steel)
-5. Ignore non-critical descriptive words:
-   - "Chìm đầu", "Đầu trụ", "Lục giác" are descriptors
-   - These vary by translation/style, not critical
+   - ISO = DIN (thường thay thế cho nhau cùng thông số)
+3. Thứ tự từ không quan trọng:
+   - "Bu lông lục giác M5x15" khớp "Lục giác chìm đầu M5x15"
+   - Tập trung vào thông số kỹ thuật, không phải thứ tự từ
+4. CÁC ĐỊNH DANH CHÍNH BẮT BUỘC KHỚP:
+   - Kích thước (M5x15, M6x20, v.v.) - PHẢI khớp chính xác
+   - Số tiêu chuẩn (912, 933, 7991, v.v.) - PHẢI khớp
+   - Loại vật liệu tương thích (inox/thép)
+5. Bỏ qua các từ mô tả không quan trọng:
+   - "Chìm đầu", "Đầu trụ", "Lục giác" là mô tả
+   - Các từ này thay đổi tùy cách gọi, không quan trọng
 
-Confidence Thresholds:
-- 90-100%: Highly confident match
-- 70-89%: Probable match (usable)
-- <70%: Not a match
+Ngưỡng độ tin cậy:
+- 90-100%: Rất tự tin khớp
+- 70-89%: Khả năng cao khớp (dùng được)
+- <70%: Không khớp
 
-Return JSON: {{"is_correct": true/false, "confidence": 0-100, "reason": "brief explanation"}}
+Trả về JSON: {{"is_correct": true/false, "confidence": 0-100, "reason": "giải thích ngắn gọn tiếng Việt"}}
 
-Examples:
-✅ "Bu lông SS304 DIN912 M5x15" + URL "luc-giac-chim-dau-tru-inox-304-din912-m5x15" → TRUE (size + standard match, material equivalent)
-✅ "Ốc lục giác 912 M6x20 Inox" + URL "din912-m6x20-inox-304" → TRUE (key specs match)
-❌ "Bu lông M5x15" + URL "m6x20" → FALSE (size mismatch)
-❌ "DIN912 M5" + URL "din933-m5" → FALSE (different standard)
+Ví dụ:
+✅ "Bu lông SS304 DIN912 M5x15" + URL "luc-giac-chim-dau-tru-inox-304-din912-m5x15" → TRUE (size + tiêu chuẩn khớp, vật liệu tương đương)
+✅ "Ốc lục giác 912 M6x20 Inox" + URL "din912-m6x20-inox-304" → TRUE (specs chính khớp)
+❌ "Bu lông M5x15" + URL "m6x20" → FALSE (sai size)
+❌ "DIN912 M5" + URL "din933-m5" → FALSE (sai tiêu chuẩn)
 """
         else:
             # Standard strict matching for other sites
-            prompt = f"""You are Mr. GPT, a product URL verification expert.
+            prompt = f"""Bạn là Mr. GPT, chuyên gia xác minh link sản phẩm.
 
-Product Info:
+Thông tin sản phẩm:
 - SKU: {sku}
-- Product Name: {name}
+- Tên sản phẩm: {name}
 
-Found URL: {url}
+Link tìm thấy: {url}
 
-Task: Analyze if this URL likely contains specs for the CORRECT product.
-Check:
-1. Domain match (e.g., Milwaukee product should be on milwaukeetool.com, not bosch-pt.com)
-2. URL path/slug contains SKU, brand, or model identifiers
-3. Product type consistency
+Nhiệm vụ: Phân tích xem Link này có chứa thông số đúng cho sản phẩm không.
+Kiểm tra:
+1. Domain khớp (ví dụ: Sản phẩm Milwaukee phải ở milwaukeetool.com, không phải bosch-pt.com)
+2. Đường dẫn/slug chứa SKU, thương hiệu, hoặc định danh model
+3. Sự nhất quán về loại sản phẩm
 
-Return ONLY valid JSON: {{"is_correct": true/false, "confidence": 0-100, "reason": "brief explanation why URL matches or doesn't match"}}
+Trả về DUY NHẤT JSON: {{"is_correct": true/false, "confidence": 0-100, "reason": "giải thích ngắn gọn lý do tại sao khớp hoặc không khớp bằng tiếng Việt"}}
 
-Examples:
+Ví dụ:
 - Milwaukee M18 FPD3 + bosch-pt.com URL → is_correct: false
 - Milwaukee M18 FPD3 + milwaukeetool.com/m18-planer → is_correct: true
 """
@@ -187,7 +191,7 @@ Examples:
         data = {
             "model": model,
             "messages": [
-                {"role": "system", "content": "You are a helpful URL verification assistant returning JSON."},
+                {"role": "system", "content": "You are a helpful URL verification assistant returning JSON. Reply in Vietnamese."},
                 {"role": "user", "content": prompt}
             ],
             "response_format": {"type": "json_object"}
@@ -220,7 +224,7 @@ Examples:
         self.ensure_one()
         
         # Skip if no specs were crawled
-        if not self.crawled_specs:
+        if not self.crawled_specs_raw:
             return
         
         score, analysis = self._call_gpt_verification()
@@ -238,22 +242,22 @@ Examples:
         if score >= 80:
             badge = f"""
             <div style='background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; padding: 10px; margin: 10px 0; color: #155724;'>
-                ✅ <strong>Mr. GPT Verified ({score}/100)</strong> - Data quality looks good!
+                ✅ <strong>Mr. GPT Đã duyệt ({score}/100)</strong> - Dữ liệu tốt!
             </div>"""
-            self.crawled_specs += badge
+            self.crawled_specs_raw += badge
         elif score >= 50:
             badge = f"""
             <div style='background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 10px; margin: 10px 0; color: #856404;'>
-                ⚠️ <strong>Possible Mismatch ({score}/100)</strong> - Please verify manually. {analysis[:100]}...
+                ⚠️ <strong>Cần kiểm tra lại ({score}/100)</strong> - Vui lòng check thủ công. {analysis[:100]}...
             </div>"""
-            self.crawled_specs += badge
+            self.crawled_specs_raw += badge
         else:
             # Score < 50: Replace specs with error message
-            self.crawled_specs = f"""
+            self.crawled_specs_raw = f"""
             <div style='background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; padding: 15px; margin: 10px 0; color: #721c24;'>
-                ❌ <strong>GPT Rejected: Wrong Product Detected ({score}/100)</strong>
+                ❌ <strong>GPT Từ chối: Sai sản phẩm ({score}/100)</strong>
                 <p>{analysis}</p>
-                <p><em>The crawled data does not match this product. Please check the URL or SKU.</em></p>
+                <p><em>Dữ liệu crawl được không khớp với sản phẩm này. Hãy kiểm tra Link hoặc SKU.</em></p>
             </div>"""
 
     def action_ai_verify(self):
@@ -278,56 +282,79 @@ Examples:
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': _('Mr. GPT Finished'),
-                'message': f"Verification Score: {self.ai_verify_score}/100",
+                'title': _('Mr. GPT Hoàn thành'),
+                'message': f"Điểm chất lượng: {self.ai_verify_score}/100",
                 'sticky': False,
                 'type': 'success' if self.ai_verify_score >= 80 else 'warning',
             }
         }
 
-    def action_consolidate_specs(self):
-        """Consolidate all crawled specs from multiple sources into one clean document using GPT"""
+    def action_crawl_and_analyze(self):
+        """Crawl data from all sources and then analyze/consolidate"""
+        self.ensure_one()
+        
+        # 1. Crawl all data
+        self.action_crawl_all()
+        
+        # 2. Analyze if API key exists
+        api_key = self.env['ir.config_parameter'].sudo().get_param('product_crawler.openai_api_key')
+        if api_key:
+            self.action_analyze_specs()
+        else:
+             return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('Hoàn thành lấy dữ liệu'),
+                    'message': "Đã lấy dữ liệu thô. Vui lòng cấu hình API Key để tự động phân tích.",
+                    'sticky': False,
+                    'type': 'warning',
+                }
+            }
+
+    def action_analyze_specs(self):
+        """Analyze and consolidate raw specs using GPT"""
         self.ensure_one()
         
         api_key = self.env['ir.config_parameter'].sudo().get_param('product_crawler.openai_api_key')
         if not api_key:
             raise UserError(_("OpenAI API Key is not configured in Settings."))
         
-        if not self.crawled_specs:
-            raise UserError(_("No crawled specs to consolidate. Please crawl data first."))
+        if not self.crawled_specs_raw:
+            raise UserError(_("Chưa có dữ liệu thô. Vui lòng lấy dữ liệu trước."))
         
         model = self.env['ir.config_parameter'].sudo().get_param('product_crawler.openai_model') or 'gpt-4o-mini'
         
         sku = self.default_code or "N/A"
         name = self.name or "N/A"
-        raw_data = self.crawled_specs
+        raw_data = self.crawled_specs_raw
         
-        prompt = f"""You are Mr. GPT, a professional technical writer for industrial tools.
+        prompt = f"""Bạn là Mr. GPT, chuyên gia viết tài liệu kỹ thuật cho dụng cụ công nghiệp.
 
-Product: {name} (SKU: {sku})
+Sản phẩm: {name} (SKU: {sku})
 
-Raw crawled data from multiple sources:
+Dữ liệu thô từ nhiều nguồn:
 {raw_data}
 
-Task: Consolidate this raw data into ONE clean, professional specification document.
+Nhiệm vụ: Tổng hợp dữ liệu thô này thành MỘT tài liệu thông số kỹ thuật CHUYÊN NGHIỆP, SẠCH SẼ.
 
-Rules:
-1. Merge duplicate information (keep most accurate values)
-2. Organize into sections: Overview, Technical Specifications, Features, Applications
-3. Remove all crawl metadata (source headers, search messages, error messages, verification badges)
-4. Keep only actual product specifications and features
-5. Format as clean HTML with proper headings and tables
-6. If conflicting data exists, use majority vote or most detailed source
-7. Return ONLY the consolidated HTML content, no extra text
+Luật:
+1. Gộp các thông tin trùng lặp (giữ giá trị chính xác nhất).
+2. Tổ chức thành các phần: Đánh giá chung, Thông số kỹ thuật, Đặc điểm nổi bật.
+3. Loại bỏ tất cả metadata thừa (tiêu đề nguồn crawl, thông báo tìm kiếm, lỗi, badge kiểm tra).
+4. Chỉ giữ lại thông số và tính năng thực tế của sản phẩm.
+5. Định dạng HTML sạch đẹp với tiêu đề và bảng.
+6. Nếu có dữ liệu mâu thuẫn, dùng biểu quyết số đông hoặc nguồn chi tiết nhất.
+7. Trả về DUY NHẤT nội dung HTML đã tổng hợp, không kèm lời dẫn.
 
-Output format:
-<h2>Product Overview</h2>
-<p>Brief description...</p>
+Định dạng đầu ra mong muốn:
+<h2>Tổng quan sản phẩm</h2>
+<p>Mô tả ngắn...</p>
 
-<h2>Technical Specifications</h2>
+<h2>Thông số kỹ thuật</h2>
 <table>...</table>
 
-<h2>Key Features</h2>
+<h2>Đặc điểm nổi bật</h2>
 <ul>...</ul>
 """
 
@@ -342,7 +369,7 @@ Output format:
         data = {
             "model": model,
             "messages": [
-                {"role": "system", "content": "You are a helpful technical writing assistant."},
+                {"role": "system", "content": "You are a helpful technical writing assistant. Reply in Vietnamese."},
                 {"role": "user", "content": prompt}
             ]
         }
@@ -354,10 +381,10 @@ Output format:
             
             consolidated = result['choices'][0]['message']['content']
             
-            # Replace crawled_specs with consolidated version
-            self.crawled_specs = f"""
+            # Save to analyzed field
+            self.crawled_specs_analyzed = f"""
             <div style='background: #cfe2ff; border: 1px solid #9ec5fe; padding: 10px; margin: 10px 0; color: #052c65;'>
-                🤖 <b>Consolidated by Mr. GPT</b> - This document was auto-generated from multiple sources
+                🤖 <b>Đã phân tích bởi Mr. GPT</b> - Văn bản này được tổng hợp tự động từ dữ liệu thô.
             </div>
             {consolidated}
             """
@@ -366,8 +393,8 @@ Output format:
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
                 'params': {
-                    'title': _('Mr. GPT Consolidation Complete'),
-                    'message': "Specs have been consolidated into a single clean document.",
+                    'title': _('Mr. GPT Hoàn thành'),
+                    'message': "Dữ liệu đã được phân tích và tổng hợp.",
                     'sticky': False,
                     'type': 'success',
                 }
@@ -386,7 +413,7 @@ Output format:
         url = self.ketnoitieudung_url
         if not url and self.default_code:
             msg_searching = f"<div style='color: #6c757d; font-size: 0.9em;'>🔍 Đang tìm kiếm <b>{self.default_code}</b> trên Ketnoitieudung.vn...</div>"
-            self.crawled_specs = (self.crawled_specs or "") + msg_searching
+            self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg_searching
             
             _logger.info(f"[Ketnoitieudung] Searching for SKU: {self.default_code}, Name: {self.name}")
             # Pass both SKU and product name
@@ -396,19 +423,19 @@ Output format:
             if url:
                 self.ketnoitieudung_url = url
                 # Update the searching message with success
-                self.crawled_specs = self.crawled_specs.replace(msg_searching, 
+                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching, 
                     f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên Ketnoitieudung.vn</div>")
                 
                 # Verify URL matches product
                 is_valid, reason = self._verify_url_matches_product(url)
                 if is_valid == False:
                     self.ketnoitieudung_url = False  # Clear wrong URL
-                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected & cleared:</b> {reason}</div>"
+                    self.crawled_specs_raw += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>Link bị từ chối & đã xóa:</b> {reason}</div>"
                     _logger.warning(f"[Ketnoitieudung] URL verification failed: {reason}")
                     return
             else:
                 # Update with failure message
-                self.crawled_specs = self.crawled_specs.replace(msg_searching,
+                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
                     f"<div style='color: #fd7e14;'>⚠ <b>Ketnoitieudung.vn:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
                 _logger.warning(f"[Ketnoitieudung] Product not found")
                 return
@@ -420,10 +447,10 @@ Output format:
             
             if specs:
                 # Specs already formatted with site name and header by format_specs_table()
-                self.crawled_specs = (self.crawled_specs or "") + specs
+                self.crawled_specs_raw = (self.crawled_specs_raw or "") + specs
             else:
                 msg = f"<div style='color: #fd7e14;'>⚠ <b>Ketnoitieudung.vn:</b> {error or 'Lỗi tải dữ liệu'}</div>"
-                self.crawled_specs = (self.crawled_specs or "") + msg
+                self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg
         
         # Auto-verify with GPT
         self._auto_verify_after_crawl()
@@ -438,7 +465,7 @@ Output format:
         url = self.visior_url
         if not url and self.default_code:
             msg_searching = f"<div style='color: #6c757d; font-size: 0.9em;'>🔍 Đang tìm kiếm <b>{self.default_code}</b> trên Visior.vn...</div>"
-            self.crawled_specs = (self.crawled_specs or "") + msg_searching
+            self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg_searching
             
             _logger.info(f"[Visior] Searching for SKU: {self.default_code}, Name: {self.name}")
             url, error = CrawlerUtils.search_visior(self.default_code, self.name)
@@ -446,18 +473,18 @@ Output format:
             
             if url:
                 self.visior_url = url
-                self.crawled_specs = self.crawled_specs.replace(msg_searching,
+                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
                     f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên Visior.vn</div>")
                 
                 # Verify URL matches product
                 is_valid, reason = self._verify_url_matches_product(url)
                 if is_valid == False:
                     self.visior_url = False  # Clear wrong URL
-                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected & cleared:</b> {reason}</div>"
+                    self.crawled_specs_raw += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>Link bị từ chối & đã xóa:</b> {reason}</div>"
                     _logger.warning(f"[Visior] URL verification failed: {reason}")
                     return
             else:
-                self.crawled_specs = self.crawled_specs.replace(msg_searching,
+                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
                     f"<div style='color: #fd7e14;'>⚠ <b>Visior.vn:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
                 _logger.warning(f"[Visior] Product not found")
                 return
@@ -468,10 +495,10 @@ Output format:
             _logger.info(f"[Visior] Parse result - Specs length: {len(specs) if specs else 0}, Error: {error}")
             
             if specs:
-                self.crawled_specs = (self.crawled_specs or "") + f"<h3 style='color: #007bff;'>📦 Visior.vn</h3><p style='font-size: 0.85em; color: #6c757d;'>{url}</p>" + specs
+                self.crawled_specs_raw = (self.crawled_specs_raw or "") + f"<h3 style='color: #007bff;'>📦 Visior.vn</h3><p style='font-size: 0.85em; color: #6c757d;'>{url}</p>" + specs
             else:
                 msg = f"<div style='color: #fd7e14;'>⚠ <b>Visior.vn:</b> {error or 'Lỗi tải dữ liệu'}</div>"
-                self.crawled_specs = (self.crawled_specs or "") + msg
+                self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg
         
         # Auto-verify with GPT
         self._auto_verify_after_crawl()
@@ -486,7 +513,7 @@ Output format:
         url = self.thbvietnam_url
         if not url and self.default_code:
             msg_searching = f"<div style='color: #6c757d; font-size: 0.9em;'>🔍 Đang tìm kiếm <b>{self.default_code}</b> trên THB Vietnam...</div>"
-            self.crawled_specs = (self.crawled_specs or "") + msg_searching
+            self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg_searching
             
             _logger.info(f"[THB Vietnam] Searching for SKU: {self.default_code}, Name: {self.name}")
             url, error = CrawlerUtils.search_thbvietnam(self.default_code, self.name)
@@ -494,18 +521,18 @@ Output format:
             
             if url:
                 self.thbvietnam_url = url
-                self.crawled_specs = self.crawled_specs.replace(msg_searching,
+                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
                     f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên THB Vietnam</div>")
                 
                 # Verify URL matches product
                 is_valid, reason = self._verify_url_matches_product(url)
                 if is_valid == False:
                     self.thbvietnam_url = False  # Clear wrong URL
-                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected & cleared:</b> {reason}</div>"
+                    self.crawled_specs_raw += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>Link bị từ chối & đã xóa:</b> {reason}</div>"
                     _logger.warning(f"[THB Vietnam] URL verification failed: {reason}")
                     return
             else:
-                self.crawled_specs = self.crawled_specs.replace(msg_searching,
+                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
                     f"<div style='color: #fd7e14;'>⚠ <b>THB Vietnam:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
                 _logger.warning(f"[THB Vietnam] Product not found")
                 return
@@ -516,10 +543,10 @@ Output format:
             _logger.info(f"[THB Vietnam] Parse result - Specs length: {len(specs) if specs else 0}, Error: {error}")
             
             if specs:
-                self.crawled_specs = (self.crawled_specs or "") + f"<h3 style='color: #007bff;'>📦 THB Vietnam</h3><p style='font-size: 0.85em; color: #6c757d;'>{url}</p>" + specs
+                self.crawled_specs_raw = (self.crawled_specs_raw or "") + f"<h3 style='color: #007bff;'>📦 THB Vietnam</h3><p style='font-size: 0.85em; color: #6c757d;'>{url}</p>" + specs
             else:
                 msg = f"<div style='color: #fd7e14;'>⚠ <b>THB Vietnam:</b> {error or 'Lỗi tải dữ liệu'}</div>"
-                self.crawled_specs = (self.crawled_specs or "") + msg
+                self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg
         
         # Auto-verify with GPT
         self._auto_verify_after_crawl()
@@ -534,7 +561,7 @@ Output format:
         url = self.mecsu_url
         if not url and self.default_code:
             msg_searching = f"<div style='color: #6c757d; font-size: 0.9em;'>🔍 Đang tìm kiếm <b>{self.default_code}</b> trên Mecsu.vn...</div>"
-            self.crawled_specs = (self.crawled_specs or "") + msg_searching
+            self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg_searching
             
             _logger.info(f"[Mecsu] Searching for SKU: {self.default_code}, Name: {self.name}")
             url, error = CrawlerUtils.search_mecsu(self.default_code, self.name)
@@ -542,18 +569,18 @@ Output format:
             
             if url:
                 self.mecsu_url = url
-                self.crawled_specs = self.crawled_specs.replace(msg_searching,
+                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
                     f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên Mecsu.vn</div>")
                 
                 # Verify URL matches product
                 is_valid, reason = self._verify_url_matches_product(url)
                 if is_valid == False:
                     self.mecsu_url = False  # Clear wrong URL
-                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected & cleared:</b> {reason}</div>"
+                    self.crawled_specs_raw += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>Link bị từ chối & đã xóa:</b> {reason}</div>"
                     _logger.warning(f"[Mecsu] URL verification failed: {reason}")
                     return
             else:
-                self.crawled_specs = self.crawled_specs.replace(msg_searching,
+                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
                     f"<div style='color: #fd7e14;'>⚠ <b>Mecsu.vn:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
                 _logger.warning(f"[Mecsu] Product not found")
                 return
@@ -564,10 +591,10 @@ Output format:
             _logger.info(f"[Mecsu] Parse result - Specs length: {len(specs) if specs else 0}, Error: {error}")
             
             if specs:
-                self.crawled_specs = (self.crawled_specs or "") + f"<h3 style='color: #007bff;'>📦 Mecsu.vn</h3><p style='font-size: 0.85em; color: #6c757d;'>{url}</p>" + specs
+                self.crawled_specs_raw = (self.crawled_specs_raw or "") + f"<h3 style='color: #007bff;'>📦 Mecsu.vn</h3><p style='font-size: 0.85em; color: #6c757d;'>{url}</p>" + specs
             else:
                 msg = f"<div style='color: #fd7e14;'>⚠ <b>Mecsu.vn:</b> {error or 'Lỗi tải dữ liệu'}</div>"
-                self.crawled_specs = (self.crawled_specs or "") + msg
+                self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg
         
         # Auto-verify with GPT
         self._auto_verify_after_crawl()
@@ -582,7 +609,7 @@ Output format:
         url = self.milwaukee_url
         if not url and self.default_code:
             msg_searching = f"<div style='color: #6c757d; font-size: 0.9em;'>🔍 Đang tìm kiếm <b>{self.default_code}</b> trên Milwaukee...</div>"
-            self.crawled_specs = (self.crawled_specs or "") + msg_searching
+            self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg_searching
             
             _logger.info(f"[Milwaukee] Searching for SKU: {self.default_code}, Name: {self.name}")
             url, error = CrawlerUtils.search_milwaukee(self.default_code, self.name)
@@ -590,18 +617,18 @@ Output format:
             
             if url:
                 self.milwaukee_url = url
-                self.crawled_specs = self.crawled_specs.replace(msg_searching,
+                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
                     f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên Milwaukee</div>")
                 
                 # Verify URL matches product
                 is_valid, reason = self._verify_url_matches_product(url)
                 if is_valid == False:
                     self.milwaukee_url = False  # Clear wrong URL
-                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected & cleared:</b> {reason}</div>"
+                    self.crawled_specs_raw += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>Link bị từ chối & đã xóa:</b> {reason}</div>"
                     _logger.warning(f"[Milwaukee] URL verification failed: {reason}")
                     return
             else:
-                self.crawled_specs = self.crawled_specs.replace(msg_searching,
+                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
                     f"<div style='color: #fd7e14;'>⚠ <b>Milwaukee:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
                 _logger.warning(f"[Milwaukee] Product not found")
                 return
@@ -613,10 +640,10 @@ Output format:
             
             if specs:
                 # Specs already formatted
-                self.crawled_specs = (self.crawled_specs or "") + specs
+                self.crawled_specs_raw = (self.crawled_specs_raw or "") + specs
             else:
                 msg = f"<div style='color: #fd7e14;'>⚠ <b>Milwaukee:</b> {error or 'Lỗi tải dữ liệu'}</div>"
-                self.crawled_specs = (self.crawled_specs or "") + msg
+                self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg
         
         # Auto-verify with GPT
         self._auto_verify_after_crawl()
@@ -631,7 +658,7 @@ Output format:
         url = self.bosch_url
         if not url and self.default_code:
             msg_searching = f"<div style='color: #6c757d; font-size: 0.9em;'>🔍 Đang tìm kiếm <b>{self.default_code}</b> trên Bosch...</div>"
-            self.crawled_specs = (self.crawled_specs or "") + msg_searching
+            self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg_searching
             
             _logger.info(f"[Bosch] Searching for SKU: {self.default_code}, Name: {self.name}")
             url, error = CrawlerUtils.search_bosch(self.default_code, self.name)
@@ -639,18 +666,18 @@ Output format:
             
             if url:
                 self.bosch_url = url
-                self.crawled_specs = self.crawled_specs.replace(msg_searching,
+                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
                     f"<div style='color: #28a745; font-size: 0.9em;'>✓ Tìm thấy sản phẩm trên Bosch</div>")
                 
                 # Verify URL matches product
                 is_valid, reason = self._verify_url_matches_product(url)
                 if is_valid == False:
                     self.bosch_url = False  # Clear wrong URL
-                    self.crawled_specs += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>URL rejected & cleared:</b> {reason}</div>"
+                    self.crawled_specs_raw += f"<div style='background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; color: #721c24;'>❌ <b>Link bị từ chối & đã xóa:</b> {reason}</div>"
                     _logger.warning(f"[Bosch] URL verification failed: {reason}")
                     return
             else:
-                self.crawled_specs = self.crawled_specs.replace(msg_searching,
+                self.crawled_specs_raw = self.crawled_specs_raw.replace(msg_searching,
                     f"<div style='color: #fd7e14;'>⚠ <b>Bosch:</b> {error or 'Không tìm thấy sản phẩm'}</div>")
                 _logger.warning(f"[Bosch] Product not found")
                 return
@@ -661,10 +688,10 @@ Output format:
             _logger.info(f"[Bosch] Parse result - Specs length: {len(specs) if specs else 0}, Error: {error}")
             
             if specs:
-                self.crawled_specs = (self.crawled_specs or "") + specs
+                self.crawled_specs_raw = (self.crawled_specs_raw or "") + specs
             else:
                 msg = f"<div style='color: #fd7e14;'>⚠ <b>Bosch:</b> {error or 'Lỗi tải dữ liệu'}</div>"
-                self.crawled_specs = (self.crawled_specs or "") + msg
+                self.crawled_specs_raw = (self.crawled_specs_raw or "") + msg
         
         # Auto-verify with GPT
         self._auto_verify_after_crawl()
@@ -679,7 +706,7 @@ Output format:
             
             # Check if product has default_code
             if not record.default_code:
-                record.crawled_specs = """
+                record.crawled_specs_raw = """
                     <div style='background: #fff3cd; padding: 15px; border-radius: 5px; border-left: 4px solid #ffc107;'>
                         <h3 style='color: #856404; margin: 0 0 10px 0;'>⚠️ Không thể tìm kiếm</h3>
                         <p style='margin: 0; color: #856404;'>Sản phẩm chưa có <b>Mã nội bộ (Internal Reference)</b>.</p>
@@ -689,57 +716,104 @@ Output format:
                 _logger.warning(f"Product {record.name} has no default_code, skipping crawl")
                 continue
             
+            # --- LOGIC OPTIMIZATION START ---
+            name_lower = (record.name or "").lower()
+            name_original = record.name or ""
+            
+            # Identify Product Type/Brand
+            is_milwaukee = "milwaukee" in name_lower or "m12" in name_lower or "m18" in name_lower or "mx" in name_lower
+            is_bosch = "bosch" in name_lower or "gba" in name_lower or "procore" in name_lower
+            
+            # Keywords for fasteners
+            keywords_fastener = ["bu lông", "ốc", "vít", "bulong", "oc vit", "đai ốc", "long đền", "tán", "rive"]
+            is_fastener = any(k in name_lower for k in keywords_fastener)
+
+            # Determine which sites to crawl
+            run_milwaukee = True
+            run_bosch = True
+            run_resellers = True # Ketnoitieudung, Visior, THB, Mecsu
+            
+            # Brand exclusion logic
+            if is_milwaukee:
+                run_bosch = False
+                _logger.info(f"Product '{name_original}' identified as Milwaukee. Skipping Bosch.")
+                
+            if is_bosch:
+                run_milwaukee = False
+                _logger.info(f"Product '{name_original}' identified as Bosch. Skipping Milwaukee.")
+                
+            # Fastener exclusive logic (User request: "nếu là bu lông, ốc vít, thì chỉ search ở mecsu và kết nối tiêu dùng")
+            run_mecsu = True
+            run_ketnoitieudung = True
+            run_visior = True
+            run_thb = True
+
+            if is_fastener:
+                run_milwaukee = False
+                run_bosch = False
+                run_visior = False
+                run_thb = False
+                _logger.info(f"Product '{name_original}' identified as Fastener. Crawling ONLY Mecsu & Ketnoitieudung.")
+            
+            # --- LOGIC OPTIMIZATION END ---
+
             # Clear previous specs and add header
-            record.crawled_specs = f"""
+            record.crawled_specs_raw = f"""
                 <div style='background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 15px;'>
                     <h2 style='color: #495057; margin: 0 0 10px 0;'>🔍 Kết quả tìm kiếm</h2>
                     <p style='margin: 0; color: #6c757d;'>Mã sản phẩm: <b>{record.default_code}</b></p>
-                    <p style='margin: 5px 0 0 0; color: #6c757d; font-size: 0.9em;'>Đang tìm kiếm trên 6 trang web...</p>
+                    <p style='margin: 5px 0 0 0; color: #6c757d; font-size: 0.9em;'>Đang tìm kiếm...</p>
                 </div>
             """
             
-            # 1. Official Sites (First Priority)
-            try:
-                _logger.info("Crawling Milwaukee...")
-                record.action_crawl_milwaukee()
-            except Exception as e:
-                _logger.error(f"Error crawling Milwaukee: {e}")
-                record.crawled_specs += f"<div style='color: red;'>Lỗi Milwaukee: {str(e)}</div>"
+            # 1. Official Sites
+            if run_milwaukee:
+                try:
+                    _logger.info("Crawling Milwaukee...")
+                    record.action_crawl_milwaukee()
+                except Exception as e:
+                    _logger.error(f"Error crawling Milwaukee: {e}")
+                    record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Milwaukee: {str(e)}</div>"
 
-            try:
-                _logger.info("Crawling Bosch...")
-                record.action_crawl_bosch()
-            except Exception as e:
-                _logger.error(f"Error crawling Bosch: {e}")
-                record.crawled_specs += f"<div style='color: red;'>Lỗi Bosch: {str(e)}</div>"
+            if run_bosch:
+                try:
+                    _logger.info("Crawling Bosch...")
+                    record.action_crawl_bosch()
+                except Exception as e:
+                    _logger.error(f"Error crawling Bosch: {e}")
+                    record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Bosch: {str(e)}</div>"
 
             # 2. Reseller Sites
-            try:
-                _logger.info("Crawling Ketnoitieudung...")
-                record.action_crawl_ketnoitieudung()
-            except Exception as e:
-                _logger.error(f"Error crawling Ketnoitieudung: {e}")
-                record.crawled_specs += f"<div style='color: red;'>Lỗi Ketnoitieudung: {str(e)}</div>"
+            if run_ketnoitieudung:
+                try:
+                    _logger.info("Crawling Ketnoitieudung...")
+                    record.action_crawl_ketnoitieudung()
+                except Exception as e:
+                    _logger.error(f"Error crawling Ketnoitieudung: {e}")
+                    record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Ketnoitieudung: {str(e)}</div>"
             
-            try:
-                _logger.info("Crawling Visior...")
-                record.action_crawl_visior()
-            except Exception as e:
-                _logger.error(f"Error crawling Visior: {e}")
-                record.crawled_specs += f"<div style='color: red;'>Lỗi Visior: {str(e)}</div>"
+            if run_visior:
+                try:
+                    _logger.info("Crawling Visior...")
+                    record.action_crawl_visior()
+                except Exception as e:
+                    _logger.error(f"Error crawling Visior: {e}")
+                    record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Visior: {str(e)}</div>"
             
-            try:
-                _logger.info("Crawling THB Vietnam...")
-                record.action_crawl_thbvietnam()
-            except Exception as e:
-                _logger.error(f"Error crawling THB Vietnam: {e}")
-                record.crawled_specs += f"<div style='color: red;'>Lỗi THB: {str(e)}</div>"
+            if run_thb:
+                try:
+                    _logger.info("Crawling THB Vietnam...")
+                    record.action_crawl_thbvietnam()
+                except Exception as e:
+                    _logger.error(f"Error crawling THB Vietnam: {e}")
+                    record.crawled_specs_raw += f"<div style='color: red;'>Lỗi THB: {str(e)}</div>"
             
-            try:
-                _logger.info("Crawling Mecsu...")
-                record.action_crawl_mecsu()
-            except Exception as e:
-                _logger.error(f"Error crawling Mecsu: {e}")
-                record.crawled_specs += f"<div style='color: red;'>Lỗi Mecsu: {str(e)}</div>"
+            if run_mecsu:
+                try:
+                    _logger.info("Crawling Mecsu...")
+                    record.action_crawl_mecsu()
+                except Exception as e:
+                    _logger.error(f"Error crawling Mecsu: {e}")
+                    record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Mecsu: {str(e)}</div>"
             
             _logger.info(f"=== Finished crawl for product: {record.name} ===")
