@@ -15,8 +15,8 @@ class ProductTemplate(models.Model):
     crawled_specs_raw = fields.Html(string="Dữ liệu thô (Crawl)", help="Dữ liệu gốc lấy từ website")
     crawled_specs_analyzed = fields.Html(string="Dữ liệu đã phân tích (AI)", help="Dữ liệu đã được AI tổng hợp và làm sạch")
     
-    # Backward compatibility for existing code that might access crawled_specs directly (optional, but safer to just migrate)
-    # crawled_specs = fields.Text(related='crawled_specs_raw', string="Crawled Specifications (Legacy)")
+    # Backward compatibility: related to crawled_specs_raw to prevent View Errors during upgrade
+    crawled_specs = fields.Html(related='crawled_specs_raw', string="Crawled Specifications (Legacy)", readonly=True)
 
     # AI QC Fields
     ai_verify_score = fields.Integer(string="Điểm chất lượng (AI)", readonly=True, help="Điểm chất lượng (0-100) từ Mr. GPT")
@@ -716,57 +716,104 @@ Luật:
                 _logger.warning(f"Product {record.name} has no default_code, skipping crawl")
                 continue
             
+            # --- LOGIC OPTIMIZATION START ---
+            name_lower = (record.name or "").lower()
+            name_original = record.name or ""
+            
+            # Identify Product Type/Brand
+            is_milwaukee = "milwaukee" in name_lower or "m12" in name_lower or "m18" in name_lower or "mx" in name_lower
+            is_bosch = "bosch" in name_lower or "gba" in name_lower or "procore" in name_lower
+            
+            # Keywords for fasteners
+            keywords_fastener = ["bu lông", "ốc", "vít", "bulong", "oc vit", "đai ốc", "long đền", "tán", "rive"]
+            is_fastener = any(k in name_lower for k in keywords_fastener)
+
+            # Determine which sites to crawl
+            run_milwaukee = True
+            run_bosch = True
+            run_resellers = True # Ketnoitieudung, Visior, THB, Mecsu
+            
+            # Brand exclusion logic
+            if is_milwaukee:
+                run_bosch = False
+                _logger.info(f"Product '{name_original}' identified as Milwaukee. Skipping Bosch.")
+                
+            if is_bosch:
+                run_milwaukee = False
+                _logger.info(f"Product '{name_original}' identified as Bosch. Skipping Milwaukee.")
+                
+            # Fastener exclusive logic (User request: "nếu là bu lông, ốc vít, thì chỉ search ở mecsu và kết nối tiêu dùng")
+            run_mecsu = True
+            run_ketnoitieudung = True
+            run_visior = True
+            run_thb = True
+
+            if is_fastener:
+                run_milwaukee = False
+                run_bosch = False
+                run_visior = False
+                run_thb = False
+                _logger.info(f"Product '{name_original}' identified as Fastener. Crawling ONLY Mecsu & Ketnoitieudung.")
+            
+            # --- LOGIC OPTIMIZATION END ---
+
             # Clear previous specs and add header
             record.crawled_specs_raw = f"""
                 <div style='background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 15px;'>
                     <h2 style='color: #495057; margin: 0 0 10px 0;'>🔍 Kết quả tìm kiếm</h2>
                     <p style='margin: 0; color: #6c757d;'>Mã sản phẩm: <b>{record.default_code}</b></p>
-                    <p style='margin: 5px 0 0 0; color: #6c757d; font-size: 0.9em;'>Đang tìm kiếm trên 6 trang web...</p>
+                    <p style='margin: 5px 0 0 0; color: #6c757d; font-size: 0.9em;'>Đang tìm kiếm...</p>
                 </div>
             """
             
-            # 1. Official Sites (First Priority)
-            try:
-                _logger.info("Crawling Milwaukee...")
-                record.action_crawl_milwaukee()
-            except Exception as e:
-                _logger.error(f"Error crawling Milwaukee: {e}")
-                record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Milwaukee: {str(e)}</div>"
+            # 1. Official Sites
+            if run_milwaukee:
+                try:
+                    _logger.info("Crawling Milwaukee...")
+                    record.action_crawl_milwaukee()
+                except Exception as e:
+                    _logger.error(f"Error crawling Milwaukee: {e}")
+                    record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Milwaukee: {str(e)}</div>"
 
-            try:
-                _logger.info("Crawling Bosch...")
-                record.action_crawl_bosch()
-            except Exception as e:
-                _logger.error(f"Error crawling Bosch: {e}")
-                record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Bosch: {str(e)}</div>"
+            if run_bosch:
+                try:
+                    _logger.info("Crawling Bosch...")
+                    record.action_crawl_bosch()
+                except Exception as e:
+                    _logger.error(f"Error crawling Bosch: {e}")
+                    record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Bosch: {str(e)}</div>"
 
             # 2. Reseller Sites
-            try:
-                _logger.info("Crawling Ketnoitieudung...")
-                record.action_crawl_ketnoitieudung()
-            except Exception as e:
-                _logger.error(f"Error crawling Ketnoitieudung: {e}")
-                record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Ketnoitieudung: {str(e)}</div>"
+            if run_ketnoitieudung:
+                try:
+                    _logger.info("Crawling Ketnoitieudung...")
+                    record.action_crawl_ketnoitieudung()
+                except Exception as e:
+                    _logger.error(f"Error crawling Ketnoitieudung: {e}")
+                    record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Ketnoitieudung: {str(e)}</div>"
             
-            try:
-                _logger.info("Crawling Visior...")
-                record.action_crawl_visior()
-            except Exception as e:
-                _logger.error(f"Error crawling Visior: {e}")
-                record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Visior: {str(e)}</div>"
+            if run_visior:
+                try:
+                    _logger.info("Crawling Visior...")
+                    record.action_crawl_visior()
+                except Exception as e:
+                    _logger.error(f"Error crawling Visior: {e}")
+                    record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Visior: {str(e)}</div>"
             
-            try:
-                _logger.info("Crawling THB Vietnam...")
-                record.action_crawl_thbvietnam()
-            except Exception as e:
-                _logger.error(f"Error crawling THB Vietnam: {e}")
-                record.crawled_specs_raw += f"<div style='color: red;'>Lỗi THB: {str(e)}</div>"
+            if run_thb:
+                try:
+                    _logger.info("Crawling THB Vietnam...")
+                    record.action_crawl_thbvietnam()
+                except Exception as e:
+                    _logger.error(f"Error crawling THB Vietnam: {e}")
+                    record.crawled_specs_raw += f"<div style='color: red;'>Lỗi THB: {str(e)}</div>"
             
-            try:
-                _logger.info("Crawling Mecsu...")
-                record.action_crawl_mecsu()
-            except Exception as e:
-                _logger.error(f"Error crawling Mecsu: {e}")
-                record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Mecsu: {str(e)}</div>"
+            if run_mecsu:
+                try:
+                    _logger.info("Crawling Mecsu...")
+                    record.action_crawl_mecsu()
+                except Exception as e:
+                    _logger.error(f"Error crawling Mecsu: {e}")
+                    record.crawled_specs_raw += f"<div style='color: red;'>Lỗi Mecsu: {str(e)}</div>"
             
             _logger.info(f"=== Finished crawl for product: {record.name} ===")
