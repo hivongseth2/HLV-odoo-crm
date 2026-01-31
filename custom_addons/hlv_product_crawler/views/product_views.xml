@@ -48,6 +48,17 @@
                                 <button name="action_crawl_mecsu" string="Fetch" type="object" class="btn-secondary"/>
                             </div>
                         </group>
+                        <group string="🛡️ AI Quality Control (Mr. GPT)">
+                            <div class="o_row">
+                                <button name="action_ai_verify" string="🕵️‍♂️ Verify Specs" type="object" class="btn-primary"/>
+                                <span class="text-muted" invisible="not ai_last_verify_date">
+                                    Last checked: <field name="ai_last_verify_date" readonly="1"/>
+                                </span>
+                            </div>
+                            <field name="ai_verify_score" widget="progressbar" options="{'current_value': 'ai_verify_score', 'max_value': 100}"/>
+                            <separator string="Mr. GPT Analysis"/>
+                            <field name="ai_verify_analysis" nolabel="1" widget="html" readonly="1" class="oe_read_only"/>
+                        </group>
                     </group>
                     <separator string="Crawled Specifications"/>
                     <div class="oe_form_sheet_width">

@@ -14,6 +14,84 @@ class ProductTemplate(models.Model):
     
     crawled_specs = fields.Text(string="Crawled Specifications")
 
+    # AI QC Fields
+    ai_verify_score = fields.Integer(string="AI QC Score", readonly=True, help="Quality Control Score (0-100) from Mr. GPT")
+    ai_verify_analysis = fields.Html(string="Mr. GPT Analysis", readonly=True)
+    ai_last_verify_date = fields.Datetime(string="Last Verified", readonly=True)
+
+    def action_ai_verify(self):
+        self.ensure_one()
+        api_key = self.env['ir.config_parameter'].sudo().get_param('product_crawler.openai_api_key')
+        if not api_key:
+            raise UserError(_("OpenAI API Key is not configured in Settings."))
+            
+        model = self.env['ir.config_parameter'].sudo().get_param('product_crawler.openai_model') or 'gpt-4o-mini'
+        
+        # Prepare content
+        sku = self.default_code or "N/A"
+        name = self.name or "N/A"
+        specs = self.crawled_specs or "No specs crawled yet."
+        
+        # Strip HTML for token efficiency? Or keep structure?
+        # Keep structure is better for tables.
+        
+        prompt = f"""You are Mr. GPT, a strict Quality Control expert for Industrial Tools.
+Analyze the following crawled data for product SKU: {sku}, Name: {name}.
+Data:
+{specs}
+
+Task: Verify if this data technically matches the product.
+Rules:
+1. Ignore minor formatting issues.
+2. Focus on Specs (Voltage, RPM, Weight, Model Number).
+3. If Specs are missing or clearly belong to another product (e.g. M12 vs M18), Lower the score.
+4. If Specs are duplicated but correct, minor penalty.
+5. Return ONLY valid JSON in format: {{"score": 0-100, "reason": "HTML formatted analysis string"}}."""
+
+        import requests
+        import json
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+        
+        data = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": "You are a helpful QC assistant returning JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            "response_format": {"type": "json_object"}
+        }
+        
+        try:
+            response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=data, timeout=30)
+            response.raise_for_status()
+            result = response.json()
+            
+            content = result['choices'][0]['message']['content']
+            parsed = json.loads(content)
+            
+            self.ai_verify_score = parsed.get('score', 0)
+            self.ai_verify_analysis = parsed.get('reason', 'No analysis returned.')
+            self.ai_last_verify_date = fields.Datetime.now()
+            
+            # Return notification
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('Mr. GPT Finished'),
+                    'message': f"Verification Score: {self.ai_verify_score}/100",
+                    'sticky': False,
+                    'type': 'success' if self.ai_verify_score >= 80 else 'warning',
+                }
+            }
+            
+        except Exception as e:
+            raise UserError(_(f"AI Verification Failed: {str(e)}"))
+
     def action_crawl_ketnoitieudung(self):
         import logging
         _logger = logging.getLogger(__name__)
