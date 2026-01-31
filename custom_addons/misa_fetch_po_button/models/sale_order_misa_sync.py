@@ -1203,21 +1203,26 @@ class SaleOrder(models.Model):
             except Exception as exc:
                 _logger.warning("Không thể đồng bộ SO lines: %s (tiếp tục vá picking)", exc)
 
-        # --------- Bước 1: tổng đã giao theo picking DONE ----------
+        # --------- Bước 1: tổng đã giao theo sale.order.line.qty_delivered ----------
+        # LƯU Ý: Trong flow đi 3 phiếu (pick/pack/out), không thể tính tổng qty_done của các move_line
+        # vì sẽ bị đếm trùng 3 lần. Phải dùng trường qty_delivered trên sale.order.line
+        # (Odoo đã tự động tính field này từ stock.move done cuối cùng)
         delivered_by_product = {}
-        done_picks = self.picking_ids.filtered(lambda p: p.state == 'done')
-        _logger.info("Có %s picking đã DONE", len(done_picks))
+        _logger.info("Tính tổng đã giao từ sale.order.line.qty_delivered")
 
-        for picking in done_picks:
-            _logger.debug("  DONE picking: %s", picking.name)
-            for ml in picking.move_line_ids:
-                prod = ml.product_id
-                if not prod:
-                    continue
-                qty_delivered = float(getattr(ml, 'qty_done', 0.0) or 0.0)
-                delivered_by_product[prod] = delivered_by_product.get(prod, 0.0) + qty_delivered
-                _logger.debug("    Delivered %s: +%s (tổng=%s)",
-                            prod.display_name, qty_delivered, delivered_by_product[prod])
+        for line in self.order_line:
+            prod = line.product_id
+            if not prod or prod.type == 'service':
+                continue
+            
+            # Dùng qty_delivered field (đã được Odoo compute từ stock moves)
+            # Trường này đã xử lý đúng cho cả flow 1/2/3 step delivery
+            qty_delivered = float(line.qty_delivered or 0.0)
+            
+            # Group theo product: cộng dồn nếu cùng sản phẩm xuất hiện ở nhiều dòng
+            delivered_by_product[prod] = delivered_by_product.get(prod, 0.0) + qty_delivered
+            _logger.debug("    Delivered %s: +%.2f (tổng=%.2f)",
+                        prod.display_name, qty_delivered, delivered_by_product[prod])
 
         # --------- Bước 2: tổng theo MISA (quy về UoM mặc định) ----------
         def _flt(x, dv=0.0):

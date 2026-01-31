@@ -63,6 +63,32 @@ Khi gọi API MISA (đặc biệt là endpoint `get_data` hoặc `paging_filter`
 9. Tự động cập nhật quy tắc (Self-Evolution)
 Mỗi khi gặp một vấn đề mới liên quan đến sự khác biệt phiên bản (Odoo 17 vs 18), sự thay đổi hàm/biến, hoặc lỗi logic dữ liệu nghiêm trọng (ví dụ: AttributeError do kiểu dữ liệu API không đồng nhất), AI phải tiến hành cập nhật kiến thức này vào file quy tắc dự án (`.agent/rules/...`) để tránh lặp lại lỗi đó trong tương lai.
 
+9.1. Tính số lượng đã giao (Delivered Quantity Calculation)
+**QUAN TRỌNG**: Khi cần tính tổng số lượng đã giao của một Sale Order, **LUÔN SỬ DỤNG** trường `qty_delivered` từ `sale.order.line`, **KHÔNG BAO GIỜ** tính trực tiếp từ `stock.move` hoặc `stock.move.line`.
+
+**Lý do**:
+- Trong các cấu hình delivery nhiều bước (2-step hoặc 3-step: Pick → Pack → Out), mỗi sản phẩm sẽ đi qua nhiều stock.picking và tạo ra nhiều stock.move/stock.move.line tương ứng.
+- Nếu tính tổng `qty_done` từ tất cả các `stock.move.line` trong các picking đã `done`, bạn sẽ **đếm trùng** cùng một số lượng nhiều lần (ví dụ: đếm 3 lần với 3-step delivery).
+- Odoo đã cung cấp sẵn computed field `qty_delivered` trên `sale.order.line` với điều kiện:
+  - `parent.state != 'cancel'`
+  - `qty_delivered_method == 'manual'` hoặc `is_downpayment`
+  
+**Cách làm đúng**:
+```python
+delivered_by_product = {}
+for line in sale_order.order_line:
+    prod = line.product_id
+    if not prod or prod.type == 'service':
+        continue
+    qty_delivered = float(line.qty_delivered or 0.0)
+    # Group theo product nếu cùng sản phẩm xuất hiện nhiều dòng
+    delivered_by_product[prod] = delivered_by_product.get(prod, 0.0) + qty_delivered
+```
+
+**Lưu ý đặc biệt**:
+- Cùng một sản phẩm có thể xuất hiện ở **nhiều dòng** trong Sale Order → Phải **cộng dồn** `qty_delivered` khi group theo `product_id`.
+- Field `qty_delivered` đã được Odoo tính toán tự động dựa trên các stock.move cuối cùng (outgoing moves), phù hợp cho mọi loại delivery flow.
+
 10. Settings View for Odoo 18
 Cấu trúc `res.config.settings` view inheritance đã thay đổi trong Odoo 18.
 - KHÔNG sử dụng: `<xpath expr="//div[hasclass('settings')]" position="inside">` (đã bị loại bỏ trong base view).
