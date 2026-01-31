@@ -23,6 +23,18 @@ class ProductTemplate(models.Model):
     ai_verify_analysis = fields.Html(string="Phân tích của AI", readonly=True)
     ai_last_verify_date = fields.Datetime(string="Ngày kiểm tra", readonly=True)
     
+    
+    # Queue System Fields
+    crawl_status = fields.Selection([
+        ('new', 'Mới'),
+        ('pending', 'Chờ xử lý'),
+        ('done', 'Hoàn thành'),
+        ('failed', 'Lỗi'),
+        ('skipped', 'Đã bỏ qua')
+    ], string="Trạng thái Crawl", default='new', copy=False)
+    
+    last_crawl = fields.Datetime(string="Crawl lần cuối", readonly=True)
+    
     # Catalog/Document Links
     catalog_links = fields.Text(string="Tài liệu kỹ thuật", help="Catalog PDF và tài liệu kỹ thuật từ nguồn crawl")
 
@@ -526,6 +538,55 @@ Luật:
             self.crawled_specs_raw = (self.crawled_specs_raw or "") + specs
             self._auto_verify_after_crawl()
 
+    def action_add_to_crawl_queue(self):
+        """Action for Server Action to add products to queue"""
+        for record in self:
+            if record.crawl_status in ['done', 'skipped', 'failed', 'new']:
+                record.crawl_status = 'pending'
+    
+    @api.model
+    def cron_crawl_batch(self):
+        """Scheduled Action to crawl pending products"""
+        # Check global setting
+        auto_crawl = self.env['ir.config_parameter'].sudo().get_param('product_crawler.auto_crawl')
+        if not auto_crawl:
+            return
+            
+        # Get Batch Size
+        try:
+            batch_size = int(self.env['ir.config_parameter'].sudo().get_param('product_crawler.batch_size', '10'))
+        except:
+            batch_size = 10
+            
+        # Find pending products
+        products = self.search([('crawl_status', '=', 'pending')], limit=batch_size, order='write_date asc')
+        
+        if not products:
+            return
+
+        import logging
+        _logger = logging.getLogger(__name__)
+        _logger.info(f"[Crawler Cron] Processing batch of {len(products)} products...")
+        
+        for product in products:
+            try:
+                # Use the optimized generic crawl
+                # This will create ONE write to DB per product
+                product.action_crawl_and_analyze()
+                
+                product.write({
+                    'crawl_status': 'done',
+                    'last_crawl': fields.Datetime.now()
+                })
+                
+                # Commit after each product to save progress (and prevent transaction timeouts)
+                self.env.cr.commit()
+                
+            except Exception as e:
+                _logger.error(f"[Crawler Cron] Error processing ID {product.id}: {e}")
+                product.write({'crawl_status': 'failed'})
+                self.env.cr.commit()
+                
     def action_crawl_all(self):
         import logging
         _logger = logging.getLogger(__name__)
