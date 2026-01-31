@@ -129,6 +129,7 @@ class PickingExportWizard(models.TransientModel):
             {'key': 'dvt', 'name': 'ĐVT', 'width': 12},
             {'key': 'so_luong', 'name': 'Số lượng', 'width': 12},
             {'key': 'don_gia', 'name': 'Đơn giá', 'width': 15},
+            {'key': 'bao_gom_thue', 'name': 'Bao gồm thuế', 'width': 15},
             {'key': 'thanh_tien', 'name': 'Thành tiền', 'width': 15},
             {'key': 'ty_le_ck', 'name': 'Tỷ lệ CK (%)', 'width': 12},
             {'key': 'tien_chiet_khau', 'name': 'Tiền chiết khấu', 'width': 15},
@@ -230,6 +231,9 @@ class PickingExportWizard(models.TransientModel):
             return sol_product.default_code or ''
             
         return ''
+
+
+
 
     def _get_move_line_rows(self, picking):
         rows = []
@@ -505,6 +509,9 @@ class PickingExportWizard(models.TransientModel):
             # Tiền thuế
             tien_thue_gtgt = abs(thanh_tien * ty_le_thue_gtgt / 100)
             
+            # Price total (bao gồm thuế) - POS đã tính sẵn
+            price_total = pos_line.price_subtotal_incl or 0.0
+            
         elif sol:
             # Lấy từ Sale Order Line
             uom = sol.product_uom or prod.uom_id
@@ -528,6 +535,9 @@ class PickingExportWizard(models.TransientModel):
             # Tiền thuế = (Thành tiền sau chiết khấu) * % thuế
             tien_thue_gtgt = (thanh_tien * ty_le_thue_gtgt) / 100
             
+            # Price total (bao gồm thuế)
+            price_total = sol.price_total or (thanh_tien + tien_thue_gtgt)
+            
         else:
             # Fallback: lấy từ picking/move line
             if ml:
@@ -548,6 +558,7 @@ class PickingExportWizard(models.TransientModel):
             ty_le_ck = 0.0
             ty_le_thue_gtgt = 0.0
             tien_thue_gtgt = 0.0
+            price_total = thanh_tien
         
         # Location name (vẫn lấy từ move/move_line vì không có trong SOL)
         if ml:
@@ -621,6 +632,7 @@ class PickingExportWizard(models.TransientModel):
             'dvt': uom_name,
             'so_luong': qty,
             'don_gia': don_gia,
+            'bao_gom_thue': price_total,
             'thanh_tien': thanh_tien,
             'ty_le_ck': ty_le_ck,
             'tien_chiet_khau': tien_chiet_khau,
