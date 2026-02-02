@@ -5,12 +5,12 @@
         <field name="name">product.duplicate.line.tree</field>
         <field name="model">product.duplicate.line</field>
         <field name="arch" type="xml">
-            <tree create="false" delete="false" editable="bottom">
+            <list create="false" delete="false" editable="bottom">
                 <field name="score" widget="progressbar"/>
                 <field name="candidate_product_id"/>
                 <field name="reason"/>
                 <button name="action_view_product" string="Xem" type="object" icon="fa-external-link"/>
-            </tree>
+            </list>
         </field>
     </record>
 
