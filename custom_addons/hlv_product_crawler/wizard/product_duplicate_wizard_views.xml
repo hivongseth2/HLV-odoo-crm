@@ -5,7 +5,7 @@
         <field name="name">product.duplicate.line.tree</field>
         <field name="model">product.duplicate.line</field>
         <field name="arch" type="xml">
-            <list create="false" delete="false">
+            <list create="false" delete="false" edit="false">
                 <field name="score" widget="progressbar"/>
                 <field name="candidate_product_id"/>
                 <field name="reason"/>
@@ -31,7 +31,7 @@
                         <field name="product_id" readonly="1"/>
                     </group>
                     <label for="duplicate_line_ids" string="Sản phẩm có khả năng trùng lặp"/>
-                    <field name="duplicate_line_ids"/>
+                    <field name="duplicate_line_ids" readonly="1"/>
                 </sheet>
                 <footer>
                     <button string="Đóng" class="btn-secondary" special="cancel"/>
