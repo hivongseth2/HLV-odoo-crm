@@ -1046,19 +1046,25 @@ class SaleOrder(models.Model):
                     'need_return': qty_delivered - new_qty,
                 })
         
-        # Nếu có sản phẩm cần trả hàng → CHẶN ĐỒNG BỘ
+        # Nếu có sản phẩm cần trả hàng → CHẶN ĐỒNG BỘ (đã được chặn ở cấp cao hơn, đây là fallback)
         if qty_decrease_items:
-            details = "\n".join(
-                f"- {item['code']}: Đã giao {item['delivered']:g}, MISA yêu cầu {item['new_qty']:g} → Cần trả {item['need_return']:g}"
+            details_list = [
+                f"• {item['code']}: Đã giao {item['delivered']:g}, MISA yêu cầu {item['new_qty']:g} → Cần trả {item['need_return']:g}"
                 for item in qty_decrease_items
-            )
-            _logger.warning("CHẶN ĐỒNG BỘ do giảm số lượng dưới mức đã giao:\n%s", details)
-            raise UserError(_(
-                "Không thể đồng bộ tự động vì MISA giảm số lượng xuống dưới mức đã giao.\n"
-                "Vui lòng TẠO PHIẾU TRẢ HÀNG THỦ CÔNG cho các sản phẩm sau:\n\n"
-                "%s\n\n"
+            ]
+            details_html = "<br/>".join(details_list)
+            
+            error_msg = _(
+                "<div style='color: red; font-weight: bold;'>⚠️ KHÔNG THỂ ĐỒNG BỘ</div><br/>"
+                "MISA giảm số lượng xuống dưới mức đã giao.<br/><br/>"
+                "<b>Cần tạo phiếu trả hàng thủ công:</b><br/>%s<br/><br/>"
                 "Sau khi tạo phiếu trả hàng và xử lý xong, hãy đồng bộ lại."
-            ) % details)
+            ) % details_html
+            
+            _logger.warning("CHẶN ĐỒNG BỘ do giảm số lượng dưới mức đã giao")
+            self.message_post(body=error_msg, message_type='notification')
+            # Không raise, chỉ return để tiếp tục phần còn lại
+            return
         
         # Cập nhật các SOL đã match (chỉ khi không có qty_decrease)
         for misa_data, sol in matched_pairs:
@@ -1119,17 +1125,22 @@ class SaleOrder(models.Model):
                 })
         
         if removed_delivered_items:
-            details = "\n".join(
-                f"- {item['code']}: Đã giao {item['qty_delivered']:g}, MISA yêu cầu xóa"
+            details_list = [
+                f"• {item['code']}: Đã giao {item['qty_delivered']:g}, MISA yêu cầu xóa"
                 for item in removed_delivered_items
-            )
-            _logger.warning("CHẶN ĐỒNG BỘ do sản phẩm đã giao bị xóa khỏi MISA:\n%s", details)
-            raise UserError(_(
-                "Không thể đồng bộ tự động vì có sản phẩm ĐÃ GIAO bị xóa khỏi MISA.\n"
-                "Vui lòng TẠO PHIẾU TRẢ HÀNG THỦ CÔNG cho các sản phẩm sau:\n\n"
-                "%s\n\n"
+            ]
+            details_html = "<br/>".join(details_list)
+            
+            error_msg = _(
+                "<div style='color: red; font-weight: bold;'>⚠️ KHÔNG THỂ ĐỒNG BỘ</div><br/>"
+                "Có sản phẩm ĐÃ GIAO bị xóa khỏi MISA.<br/><br/>"
+                "<b>Cần tạo phiếu trả hàng thủ công:</b><br/>%s<br/><br/>"
                 "Sau khi tạo phiếu trả hàng và xử lý xong, hãy đồng bộ lại."
-            ) % details)
+            ) % details_html
+            
+            _logger.warning("CHẶN ĐỒNG BỘ do sản phẩm đã giao bị xóa khỏi MISA")
+            self.message_post(body=error_msg, message_type='notification')
+            return
         
         # Xóa/cắt các SOL không còn trong MISA (chỉ khi chưa giao)
         for sol in unmatched_sols:
@@ -1407,20 +1418,36 @@ class SaleOrder(models.Model):
                     break
             
             if has_active_moves:
-                details = "\n".join(
-                    f"- {item['code']}: SO có {item['so_qty']:g}, MISA yêu cầu {item['misa_qty']:g} (giảm {item['decrease']:g})"
+                details_list = [
+                    f"• {item['code']}: SO có {item['so_qty']:g}, MISA yêu cầu {item['misa_qty']:g} (giảm {item['decrease']:g})"
                     for item in qty_decrease_products
-                )
-                _logger.warning("CHẶN ĐỒNG BỘ do giảm số lượng khi có moves đang active:\n%s", details)
-                raise UserError(_(
-                    "⚠️ Không thể đồng bộ tự động vì MISA GIẢM SỐ LƯỢNG và đơn hàng đang có phiếu pick/pack/out.\n\n"
-                    "Các sản phẩm bị giảm:\n%s\n\n"
-                    "📋 Hướng dẫn xử lý:\n"
-                    "1. Vào đơn hàng → Tab 'Delivery' → Hủy các phiếu pick chưa hoàn tất\n"
-                    "2. Chỉnh sửa số lượng trên SO lines theo MISA\n"
-                    "3. Nếu đã giao rồi → Tạo phiếu trả hàng thủ công\n"
+                ]
+                details_html = "<br/>".join(details_list)
+                
+                error_msg = _(
+                    "<div style='color: red; font-weight: bold;'>⚠️ KHÔNG THỂ ĐỒNG BỘ TỰ ĐỘNG</div><br/>"
+                    "MISA giảm số lượng và đơn hàng đang có phiếu pick/pack/out.<br/><br/>"
+                    "<b>Các sản phẩm bị giảm:</b><br/>%s<br/><br/>"
+                    "<b>📋 Hướng dẫn xử lý:</b><br/>"
+                    "1. Vào đơn hàng → Tab 'Delivery' → Hủy các phiếu pick chưa hoàn tất<br/>"
+                    "2. Chỉnh sửa số lượng trên SO lines theo MISA<br/>"
+                    "3. Nếu đã giao rồi → Tạo phiếu trả hàng thủ công<br/>"
                     "4. Sau khi xử lý xong, đồng bộ lại"
-                ) % details)
+                ) % details_html
+                
+                _logger.warning("CHẶN ĐỒNG BỘ do giảm số lượng khi có moves đang active")
+                self.message_post(body=error_msg, message_type='notification')
+                
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': _("⚠️ Không thể đồng bộ"),
+                        'message': _("MISA giảm số lượng - xem chi tiết trong ghi chú đơn hàng"),
+                        'type': 'warning',
+                        'sticky': True,
+                    }
+                }
         
         # --------- Bước 0c: HỦY PHIẾU DOWNSTREAM NẾU CÓ THAY ĐỔI ---------
         # Logic: Nếu có thay đổi (TĂNG qty), chỉ hủy các phiếu SAU phiếu đã done (downstream)
