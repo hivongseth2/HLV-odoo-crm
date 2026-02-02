@@ -1104,7 +1104,34 @@ class SaleOrder(models.Model):
             SaleLine.create(vals_line)
             _logger.info("➕ Tạo mới SOL %s: qty=%.2f", misa_data['code'], misa_data['qty'])
         
-        # Xóa/cắt các SOL không còn trong MISA
+        # ===== KIỂM TRA SẢN PHẨM BỊ XÓA KHỎI MISA NHƯNG ĐÃ GIAO =====
+        # Nếu có SP bị xóa khỏi MISA mà đã giao (qty_delivered > 0) → CHẶN ĐỒNG BỘ
+        removed_delivered_items = []
+        for sol in unmatched_sols:
+            qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
+            if qty_delivered > 0.001:
+                code = sol.product_id.default_code or sol.product_id.name
+                removed_delivered_items.append({
+                    'code': code,
+                    'name': sol.product_id.display_name,
+                    'qty_ordered': sol.product_uom_qty,
+                    'qty_delivered': qty_delivered,
+                })
+        
+        if removed_delivered_items:
+            details = "\n".join(
+                f"- {item['code']}: Đã giao {item['qty_delivered']:g}, MISA yêu cầu xóa"
+                for item in removed_delivered_items
+            )
+            _logger.warning("CHẶN ĐỒNG BỘ do sản phẩm đã giao bị xóa khỏi MISA:\n%s", details)
+            raise UserError(_(
+                "Không thể đồng bộ tự động vì có sản phẩm ĐÃ GIAO bị xóa khỏi MISA.\n"
+                "Vui lòng TẠO PHIẾU TRẢ HÀNG THỦ CÔNG cho các sản phẩm sau:\n\n"
+                "%s\n\n"
+                "Sau khi tạo phiếu trả hàng và xử lý xong, hãy đồng bộ lại."
+            ) % details)
+        
+        # Xóa/cắt các SOL không còn trong MISA (chỉ khi chưa giao)
         for sol in unmatched_sols:
             code = sol.product_id.default_code or sol.product_id.name
             
@@ -1408,6 +1435,20 @@ class SaleOrder(models.Model):
                                            p.name, p.picking_type_id.name if p.picking_type_id else 'N/A')
                         except Exception as e:
                             _logger.warning("   ⚠️ Không thể hủy phiếu %s: %s", p.name, e)
+                    
+                    # ===== CANCEL TẤT CẢ MOVES CHƯA DONE TRÊN SO LINES =====
+                    # Để force Odoo regenerate toàn bộ picking với đầy đủ SP (cũ + mới)
+                    # thay vì chỉ tạo move cho phần delta
+                    _logger.info("🔄 Cancel tất cả moves chưa done trên SO lines...")
+                    for line in self.order_line:
+                        for mv in line.move_ids.filtered(lambda m: m.state not in ('done', 'cancel')):
+                            try:
+                                if hasattr(mv, '_do_unreserve'):
+                                    mv._do_unreserve()
+                                mv._action_cancel()
+                                _logger.info("   ✅ Cancelled move %s (product: %s)", mv.id, mv.product_id.display_name)
+                            except Exception as e:
+                                _logger.warning("   ⚠️ Không thể cancel move %s: %s", mv.id, e)
                 else:
                     _logger.info("ℹ️ Không có phiếu downstream cần hủy")
             else:
