@@ -12,7 +12,8 @@ class ImLivechatChannel(models.Model):
 
     hlv_ai_enabled = fields.Boolean(
         string='Bật ChatGPT (auto-reply)',
-        default=False,
+        # Default ON to make testing easy; can be turned off per channel later
+        default=True,
         help=(
             'Nếu bật, tin nhắn từ khách trên Live Chat (website) sẽ được chuyển sang module HLV ChatGPT '
             'và AI sẽ trả lời trực tiếp lại trong cuộc trò chuyện.'

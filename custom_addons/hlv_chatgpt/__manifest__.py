@@ -21,4 +21,7 @@
     'installable': True,
     'application': True,
     'license': 'LGPL-3',
+
+    # Auto-enable livechat AI on existing channels after upgrade/install
+    'post_init_hook': 'post_init_hook',
 }
