@@ -1029,45 +1029,21 @@ class SaleOrder(models.Model):
                     unmatched_sols.remove(sol)
                     break
         
-        # ===== KIỂM TRA GIẢM SỐ LƯỢNG TRƯỚC KHI CẬP NHẬT =====
-        # Nếu MISA giảm số lượng xuống dưới qty_delivered → CHẶN ĐỒNG BỘ
-        # (Không tự động tạo phiếu trả hàng vì quy trình phức tạp tùy trạng thái pick/pack/out)
-        qty_decrease_items = []
+        
+        # Kiểm tra warning cho SP có qty giảm dưới delivered (không chặn sync)
         for misa_data, sol in matched_pairs:
             qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
             new_qty = float(misa_data['qty'] or 0.0)
             
             if new_qty < qty_delivered - 0.001:  # Cho phép sai số nhỏ
-                qty_decrease_items.append({
-                    'code': misa_data['code'],
-                    'name': misa_data['name'],
-                    'old_qty': sol.product_uom_qty,
-                    'new_qty': new_qty,
-                    'delivered': qty_delivered,
-                    'need_return': qty_delivered - new_qty,
-                })
+                # Log cảnh báo nhưng vẫn tiếp tục sync
+                # Odoo sẽ tự xử lý tạo return khi cần thiết
+                _logger.warning(
+                    "⚠️ SP %s: Số lượng mới (%s) < đã giao (%s). Odoo sẽ tự tạo return nếu cần.",
+                    misa_data['code'], new_qty, qty_delivered
+                )
         
-        # Nếu có sản phẩm cần trả hàng → CHẶN ĐỒNG BỘ (đã được chặn ở cấp cao hơn, đây là fallback)
-        if qty_decrease_items:
-            details_list = [
-                f"• {item['code']}: Đã giao {item['delivered']:g}, MISA yêu cầu {item['new_qty']:g} → Cần trả {item['need_return']:g}"
-                for item in qty_decrease_items
-            ]
-            details_html = "<br/>".join(details_list)
-            
-            error_msg = Markup(_(
-                "<div style='color: red; font-weight: bold;'>⚠️ KHÔNG THỂ ĐỒNG BỘ</div><br/>"
-                "MISA giảm số lượng xuống dưới mức đã giao.<br/><br/>"
-                "<b>Cần tạo phiếu trả hàng thủ công:</b><br/>%s<br/><br/>"
-                "Sau khi tạo phiếu trả hàng và xử lý xong, hãy đồng bộ lại."
-            )) % details_html
-            
-            _logger.warning("CHẶN ĐỒNG BỘ do giảm số lượng dưới mức đã giao")
-            self.message_post(body=error_msg)
-            # Không raise, chỉ return để tiếp tục phần còn lại
-            return
-        
-        # Cập nhật các SOL đã match (chỉ khi không có qty_decrease)
+        # Cập nhật các SOL đã match
         for misa_data, sol in matched_pairs:
             vals_line = {
                 'name': misa_data['name'],
@@ -1111,37 +1087,9 @@ class SaleOrder(models.Model):
             SaleLine.create(vals_line)
             _logger.info("➕ Tạo mới SOL %s: qty=%.2f", misa_data['code'], misa_data['qty'])
         
-        # ===== KIỂM TRA SẢN PHẨM BỊ XÓA KHỎI MISA NHƯNG ĐÃ GIAO =====
-        # Nếu có SP bị xóa khỏi MISA mà đã giao (qty_delivered > 0) → CHẶN ĐỒNG BỘ
-        removed_delivered_items = []
-        for sol in unmatched_sols:
-            qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
-            if qty_delivered > 0.001:
-                code = sol.product_id.default_code or sol.product_id.name
-                removed_delivered_items.append({
-                    'code': code,
-                    'name': sol.product_id.display_name,
-                    'qty_ordered': sol.product_uom_qty,
-                    'qty_delivered': qty_delivered,
-                })
-        
-        if removed_delivered_items:
-            details_list = [
-                f"• {item['code']}: Đã giao {item['qty_delivered']:g}, MISA yêu cầu xóa"
-                for item in removed_delivered_items
-            ]
-            details_html = "<br/>".join(details_list)
-            
-            error_msg = Markup(_(
-                "<div style='color: red; font-weight: bold;'>⚠️ KHÔNG THỂ ĐỒNG BỘ</div><br/>"
-                "Có sản phẩm ĐÃ GIAO bị xóa khỏi MISA.<br/><br/>"
-                "<b>Cần tạo phiếu trả hàng thủ công:</b><br/>%s<br/><br/>"
-                "Sau khi tạo phiếu trả hàng và xử lý xong, hãy đồng bộ lại."
-            )) % details_html
-            
-            _logger.warning("CHẶN ĐỒNG BỘ do sản phẩm đã giao bị xóa khỏi MISA")
-            self.message_post(body=error_msg)
-            return
+        # ===== XỬ LÝ SẢN PHẨM BỊ XÓA KHỎI MISA NHƯNG ĐÃ GIAO =====
+        # Với SP đã giao nhưng không còn trong MISA, chỉ log warning
+        # và set qty = qty_delivered để Odoo tự xử lý picking
         
         # Xóa/cắt các SOL không còn trong MISA (chỉ khi chưa giao)
         for sol in unmatched_sols:
@@ -1379,55 +1327,15 @@ class SaleOrder(models.Model):
             qty = _flt_check(ln.get("Amount"), 0.0)
             misa_qty_map[code] = misa_qty_map.get(code, 0.0) + qty
         
-        # Build current SO product lines map {(code, qty, note): sol}
-        # để so sánh từng dòng chính xác
-        so_lines_map = {}  # {(code, note_short): [(sol, qty)]}
-        for sol in self.order_line:
-            code = (sol.product_id.default_code or "").strip()
-            if code:
-                # Dùng note hoặc name để phân biệt các dòng cùng SP
-                note_short = (sol.name or "")[:50].strip()
-                key = (code, note_short)
-                if key not in so_lines_map:
-                    so_lines_map[key] = []
-                so_lines_map[key].append({
-                    'sol': sol,
-                    'qty': sol.product_uom_qty,
-                    'note': note_short,
-                })
-        
-        # Build MISA lines list với thông tin chi tiết
-        misa_lines = []
-        for ln in (lines or []):
-            code = (ln.get("ProductIDText") or "").strip()
-            if not code:
-                continue
-            if ln.get("IsSetProduct"):
-                current_parent_code_check = code
-            if ln.get("IsChildProduct") and current_parent_code_check:
-                continue
-            qty = _flt_check(ln.get("Amount"), 0.0)
-            note = (ln.get("Description") or "")[:50].strip()
-            misa_lines.append({
-                'code': code,
-                'qty': qty,
-                'note': note,
-            })
-        
-        # Aggregate totals for change detection (vẫn cần để detect changes)
-        misa_qty_map = {}
-        for ml in misa_lines:
-            misa_qty_map[ml['code']] = misa_qty_map.get(ml['code'], 0.0) + ml['qty']
-        
+        # Build current SO product qty map (for change detection only)
         so_qty_map = {}
         for sol in self.order_line:
             code = (sol.product_id.default_code or "").strip()
             if code:
                 so_qty_map[code] = so_qty_map.get(code, 0.0) + sol.product_uom_qty
         
-        # Compare: detect changes AND detect decreases
+        # Compare: detect changes (for logging only)
         has_changes = False
-        qty_decrease_details = []  # Chi tiết từng dòng bị thay đổi
         all_codes = set(misa_qty_map.keys()) | set(so_qty_map.keys())
         
         for code in all_codes:
@@ -1435,181 +1343,12 @@ class SaleOrder(models.Model):
             so_qty = so_qty_map.get(code, 0.0)
             if abs(misa_qty - so_qty) > 0.001:
                 has_changes = True
-                _logger.info("📊 Phát hiện thay đổi: %s (MISA: %s, SO: %s)", code, misa_qty, so_qty)
-                
-                # DECREASE detected - collect detail per SO line
-                if misa_qty < so_qty - 0.001:
-                    # Liệt kê từng dòng SO của SP này với chi tiết
-                    for (key_code, key_note), sol_list in so_lines_map.items():
-                        if key_code == code:
-                            for item in sol_list:
-                                qty_decrease_details.append({
-                                    'code': code,
-                                    'so_qty': item['qty'],
-                                    'note': item['note'],
-                                    'sol_id': item['sol'].id,
-                                })
+                change_type = "TĂNG" if misa_qty > so_qty else "GIẢM"
+                _logger.info("📊 Phát hiện thay đổi: %s (MISA: %s, SO: %s) - %s", 
+                           code, misa_qty, so_qty, change_type)
         
-        # ===== BLOCK SYNC NẾU CÓ SẢN PHẨM GIẢM SỐ LƯỢNG =====
-        if qty_decrease_details:
-            has_active_moves = False
-            for sol in self.order_line:
-                if sol.move_ids.filtered(lambda m: m.state not in ('done', 'cancel')):
-                    has_active_moves = True
-                    break
-            
-            if has_active_moves:
-                # Hiển thị chi tiết từng dòng SO
-                details_list = []
-                for item in qty_decrease_details:
-                    line_info = f"• <b>[{item['code']}]</b> qty={item['so_qty']:g}"
-                    if item['note']:
-                        line_info += f" - {item['note']}"
-                    details_list.append(line_info)
-                details_html = Markup("<br/>".join(details_list))
-                
-                # Thông tin MISA lines để so sánh
-                misa_detail_list = []
-                for ml in misa_lines:
-                    if any(d['code'] == ml['code'] for d in qty_decrease_details):
-                        misa_info = f"• [{ml['code']}] qty={ml['qty']:g}"
-                        if ml['note']:
-                            misa_info += f" - {ml['note']}"
-                        misa_detail_list.append(misa_info)
-                misa_html = Markup("<br/>".join(misa_detail_list)) if misa_detail_list else "(không có)"
-                
-                error_msg = Markup(_(
-                    "<div style='color: red; font-weight: bold;'>⚠️ KHÔNG THỂ ĐỒNG BỘ TỰ ĐỘNG</div><br/>"
-                    "MISA giảm số lượng và đơn hàng đang có phiếu pick/pack/out.<br/><br/>"
-                    "<b>📦 Dòng SO hiện tại:</b><br/>%s<br/><br/>"
-                    "<b>📋 MISA yêu cầu:</b><br/>%s<br/><br/>"
-                    "<b>🔧 Hướng dẫn xử lý:</b><br/>"
-                    "1. Vào đơn hàng → Tab 'Delivery' → Hủy các phiếu pick chưa hoàn tất<br/>"
-                    "2. Chỉnh sửa số lượng trên SO lines theo MISA<br/>"
-                    "3. Nếu đã giao rồi → Tạo phiếu trả hàng thủ công<br/>"
-                    "4. Sau khi xử lý xong, đồng bộ lại"
-                )) % (details_html, misa_html)
-                
-                _logger.warning("CHẶN ĐỒNG BỘ do giảm số lượng khi có moves đang active")
-                self.message_post(body=error_msg)
-                
-                return {
-                    'type': 'ir.actions.client',
-                    'tag': 'display_notification',
-                    'params': {
-                        'title': _("⚠️ Không thể đồng bộ"),
-                        'message': _("MISA giảm số lượng - xem chi tiết trong ghi chú đơn hàng"),
-                        'type': 'warning',
-                        'sticky': True,
-                    }
-                }
-        
-        # --------- Bước 0c: HỦY PHIẾU DOWNSTREAM NẾU CÓ THAY ĐỔI ---------
-        # Logic: Nếu có thay đổi (TĂNG qty), chỉ hủy các phiếu SAU phiếu đã done (downstream)
-        # VD: Nếu pick done nhưng pack chưa done → hủy pack (để người đóng gói cập nhật bổ sung)
-        # VD: Nếu pack done nhưng out chưa done → hủy out
-        # KHÔNG hủy phiếu đang ở step hiện tại nếu nó chưa done
-        
-        if has_changes:
-            all_picks = self.picking_ids.sudo()
-            done_picks = all_picks.filtered(lambda p: p.state == 'done')
-            open_picks = all_picks.filtered(lambda p: p.state not in ('done', 'cancel'))
-            
-            if done_picks:
-                # Có ít nhất 1 phiếu done → tìm và hủy các phiếu DOWNSTREAM (sau phiếu done)
-                # Phiếu downstream là các phiếu mà location_id = location_dest_id của phiếu done
-                done_dest_locations = done_picks.mapped('location_dest_id')
-                
-                # Các phiếu cần hủy: phiếu chưa done có location_id nằm trong done_dest_locations
-                # (tức là phiếu tiếp nhận hàng từ phiếu done)
-                downstream_picks = open_picks.filtered(
-                    lambda p: p.location_id in done_dest_locations
-                )
-                
-                if downstream_picks:
-                    _logger.info("🔄 Hủy %s phiếu downstream do có thay đổi SO lines...", len(downstream_picks))
-                    for p in downstream_picks:
-                        try:
-                            # Reset qty_done trên move lines
-                            if p.move_line_ids:
-                                p.move_line_ids.filtered(lambda ml: getattr(ml, 'qty_done', 0)).write({'qty_done': 0})
-                            
-                            # Unreserve các moves
-                            for mv in p.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel')):
-                                try:
-                                    if hasattr(mv, '_do_unreserve'):
-                                        mv._do_unreserve()
-                                except Exception:
-                                    pass
-                                try:
-                                    mv._action_cancel()
-                                except Exception:
-                                    pass
-                            
-                            # Hủy picking
-                            if p.state not in ('cancel', 'done'):
-                                if hasattr(p, 'action_cancel'):
-                                    p.action_cancel()
-                                # Thông báo lý do hủy trên phiếu
-                                cancel_msg = Markup(_(
-                                    "<div style='color: orange; font-weight: bold;'>⚠️ PHIẾU ĐÃ BỊ HỦY TỰ ĐỘNG</div><br/>"
-                                    "<b>Lý do:</b> Đơn hàng %s được cập nhật từ MISA với thay đổi số lượng.<br/>"
-                                    "Vui lòng kiểm tra đơn hàng và thực hiện phiếu mới nếu cần."
-                                )) % self.name
-                                p.message_post(body=cancel_msg)
-                                _logger.info("   ✅ Đã hủy phiếu downstream %s (type: %s)", 
-                                           p.name, p.picking_type_id.name if p.picking_type_id else 'N/A')
-                        except Exception as e:
-                            _logger.warning("   ⚠️ Không thể hủy phiếu %s: %s", p.name, e)
-                    
-                    # ===== CANCEL TẤT CẢ MOVES CHƯA DONE TRÊN SO LINES =====
-                    # Để force Odoo regenerate toàn bộ picking với đầy đủ SP (cũ + mới)
-                    # thay vì chỉ tạo move cho phần delta
-                    _logger.info("🔄 Cancel tất cả moves chưa done trên SO lines...")
-                    for line in self.order_line:
-                        for mv in line.move_ids.filtered(lambda m: m.state not in ('done', 'cancel')):
-                            try:
-                                if hasattr(mv, '_do_unreserve'):
-                                    mv._do_unreserve()
-                                mv._action_cancel()
-                                _logger.info("   ✅ Cancelled move %s (product: %s)", mv.id, mv.product_id.display_name)
-                            except Exception as e:
-                                _logger.warning("   ⚠️ Không thể cancel move %s: %s", mv.id, e)
-                else:
-                    _logger.info("ℹ️ Không có phiếu downstream cần hủy")
-            else:
-                # Chưa có phiếu done nào → hủy tất cả phiếu open (như cũ)
-                if open_picks:
-                    _logger.info("🔄 Hủy %s phiếu pick chưa hoàn tất (chưa có done)...", len(open_picks))
-                    for p in open_picks:
-                        try:
-                            if p.move_line_ids:
-                                p.move_line_ids.filtered(lambda ml: getattr(ml, 'qty_done', 0)).write({'qty_done': 0})
-                            for mv in p.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel')):
-                                try:
-                                    if hasattr(mv, '_do_unreserve'):
-                                        mv._do_unreserve()
-                                except Exception:
-                                    pass
-                                try:
-                                    mv._action_cancel()
-                                except Exception:
-                                    pass
-                            if p.state not in ('cancel', 'done'):
-                                if hasattr(p, 'action_cancel'):
-                                    p.action_cancel()
-                                # Thông báo lý do hủy trên phiếu
-                                cancel_msg = Markup(_(
-                                    "<div style='color: orange; font-weight: bold;'>⚠️ PHIẾU ĐÃ BỊ HỦY TỰ ĐỘNG</div><br/>"
-                                    "<b>Lý do:</b> Đơn hàng %s được cập nhật từ MISA với thay đổi số lượng.<br/>"
-                                    "Vui lòng kiểm tra đơn hàng và thực hiện phiếu mới nếu cần."
-                                )) % self.name
-                                p.message_post(body=cancel_msg)
-                                _logger.info("   ✅ Đã hủy phiếu %s", p.name)
-                        except Exception as e:
-                            _logger.warning("   ⚠️ Không thể hủy phiếu %s: %s", p.name, e)
-        else:
-            _logger.info("ℹ️ Không có thay đổi SO lines → giữ nguyên các phiếu pick")
+        if not has_changes:
+            _logger.info("ℹ️ Không có thay đổi SO lines → giữ nguyên")
         
         # --------- Bước 0c: đưa dòng SO về đúng MISA (nếu không có invoice posted) ---------
         if self.invoice_ids.filtered(lambda inv: inv.state == 'posted'):
