@@ -6,57 +6,26 @@
         <field name="priority" eval="90"/>
         <field name="inherit_id" ref="base.res_config_settings_view_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//div[hasclass('settings')]" position="inside">
-                <div class="app_settings_block" data-string="Product Crawler" string="Product Crawler" data-key="hlv_product_crawler">
-                    <h2>Kết nối AI (OpenAI)</h2>
-                    <div class="row mt16 o_settings_container">
-                        <div class="col-12 col-lg-6 o_setting_box">
-                            <div class="o_setting_left_pane"/>
-                            <div class="o_setting_right_pane">
-                                <label for="product_crawler_openai_api_key"/>
-                                <field name="product_crawler_openai_api_key" password="True"/>
-                                <div class="text-muted">
-                                    API Key từ OpenAI để xác minh và phân tích dữ liệu.
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-12 col-lg-6 o_setting_box">
-                            <div class="o_setting_left_pane"/>
-                            <div class="o_setting_right_pane">
-                                <label for="product_crawler_openai_model"/>
-                                <field name="product_crawler_openai_model"/>
-                                <div class="text-muted">
-                                    Model (ví dụ: gpt-4o-mini, gpt-3.5-turbo).
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+            <xpath expr="//form" position="inside">
+                <app data-string="HLV Product Crawler" string="HLV Product Crawler" name="hlv_product_crawler">
+                    <block title="Kết nối AI (OpenAI)" name="ai_settings">
+                        <setting string="OpenAI API Key" help="API Key từ OpenAI để xác minh và phân tích dữ liệu.">
+                            <field name="product_crawler_openai_api_key" password="True"/>
+                        </setting>
+                        <setting string="OpenAI Model" help="Model (ví dụ: gpt-4o-mini, gpt-3.5-turbo).">
+                            <field name="product_crawler_openai_model"/>
+                        </setting>
+                    </block>
 
-                    <h2>Cấu hình Tự động (Cron)</h2>
-                    <div class="row mt16 o_settings_container">
-                        <div class="col-12 col-lg-6 o_setting_box">
-                            <div class="o_setting_left_pane">
-                                <field name="product_crawler_auto_crawl"/>
-                            </div>
-                            <div class="o_setting_right_pane">
-                                <label for="product_crawler_auto_crawl"/>
-                                <div class="text-muted">
-                                    Bật tính năng tự động chạy ngầm (Scheduled Action).
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-12 col-lg-6 o_setting_box">
-                            <div class="o_setting_left_pane"/>
-                            <div class="o_setting_right_pane">
-                                <label for="product_crawler_batch_size"/>
-                                <field name="product_crawler_batch_size"/>
-                                <div class="text-muted">
-                                    Số lượng sản phẩm xử lý mỗi lần chạy (Batch Size).
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                    <block title="Cấu hình Tự động (Cron)" name="cron_settings">
+                        <setting string="Tự động chạy ngầm" help="Bật tính năng tự động chạy ngầm (Scheduled Action).">
+                            <field name="product_crawler_auto_crawl"/>
+                        </setting>
+                        <setting string="Batch Size" help="Số lượng sản phẩm xử lý mỗi lần chạy.">
+                            <field name="product_crawler_batch_size"/>
+                        </setting>
+                    </block>
+                </app>
             </xpath>
         </field>
     </record>

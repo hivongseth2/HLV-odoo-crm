@@ -30,6 +30,14 @@ class ProductDuplicateWizard(models.TransientModel):
         ])
         
         lines = []
+        import re
+        
+        # Helper to extract numbers
+        def extract_numbers(text):
+            return set(re.findall(r'\d+', text))
+
+        product_numbers = extract_numbers(name)
+
         for cand in candidates:
             score = 0
             reasons = []
@@ -51,8 +59,19 @@ class ProductDuplicateWizard(models.TransientModel):
                 similarity = difflib.SequenceMatcher(None, name.lower(), cand_name.lower()).ratio()
                 if similarity > 0.8:
                     s_score = int(similarity * 100)
-                    score = max(score, s_score) # Take max to verify
-                    reasons.append(f"Tên giống nhau {s_score}%")
+                    
+                    # 3. Number Mismatch Penalty
+                    cand_numbers = extract_numbers(cand_name)
+                    # If sets of numbers are different, penalize heavily
+                    # e.g. "M5x15" (5, 15) vs "M5x10" (5, 10) -> Mismatch!
+                    if product_numbers != cand_numbers:
+                        s_score -= 60 
+                        reasons.append(f"Thông số kỹ thuật khác nhau ({product_numbers} vs {cand_numbers})")
+                    else:
+                        reasons.append(f"Tên giống nhau {s_score}%")
+                    
+                    if s_score > 0:
+                        score = max(score, s_score)
             
             if score >= 60: # Threshold
                 lines.append((0, 0, {
