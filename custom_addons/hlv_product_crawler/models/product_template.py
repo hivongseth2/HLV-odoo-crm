@@ -600,6 +600,26 @@ Luật:
                         error_cr.commit()
                 except Exception as ex:
                     _logger.error(f"[Crawler Cron] Failed to write status 'failed': {ex}")
+
+    def action_check_duplicates(self):
+        """Open duplicate wizard with pre-created record to avoid save prompt"""
+        self.ensure_one()
+        wizard = self.env['product.duplicate.wizard'].create({'product_id': self.id})
+        
+        # Calculate duplicates and write to wizard
+        # The wizard method returns (0,0,vals) tuples which works with write()
+        lines = wizard._find_duplicates(self.id)
+        if lines:
+            wizard.write({'duplicate_line_ids': lines})
+            
+        return {
+            'name': _('🔍 Kiểm tra trùng lặp'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'product.duplicate.wizard',
+            'res_id': wizard.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
                 
     def action_crawl_all(self):
         import logging
