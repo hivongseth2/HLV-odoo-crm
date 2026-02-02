@@ -142,7 +142,15 @@ class GHNWebsiteController(http.Controller):
 
         # Fallback to WordPress values if Odoo lookup failed or no items
         if weight == 0:
-            weight = int(params.get('weight', 1000))
+            # Calculate total quantity from items for default weight
+            total_qty = sum(int(item.get('qty', 1)) for item in items) if items else 1
+            wp_weight = int(params.get('weight', 0))
+            if wp_weight > 0:
+                weight = wp_weight
+            else:
+                # Default 1000g per item if no weight data available
+                weight = 1000 * total_qty
+                _logger.info("WordPress GHN: Using default weight 1000g x %s items = %s grams", total_qty, weight)
         if p_length == 0:
             p_length = int(params.get('length', 20))
         if p_width == 0:
