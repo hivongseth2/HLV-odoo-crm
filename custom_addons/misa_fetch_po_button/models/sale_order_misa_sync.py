@@ -1466,7 +1466,7 @@ class SaleOrder(models.Model):
                     if item['note']:
                         line_info += f" - {item['note']}"
                     details_list.append(line_info)
-                details_html = "<br/>".join(details_list)
+                details_html = Markup("<br/>".join(details_list))
                 
                 # Thông tin MISA lines để so sánh
                 misa_detail_list = []
@@ -1476,7 +1476,7 @@ class SaleOrder(models.Model):
                         if ml['note']:
                             misa_info += f" - {ml['note']}"
                         misa_detail_list.append(misa_info)
-                misa_html = "<br/>".join(misa_detail_list) if misa_detail_list else "(không có)"
+                misa_html = Markup("<br/>".join(misa_detail_list)) if misa_detail_list else "(không có)"
                 
                 error_msg = Markup(_(
                     "<div style='color: red; font-weight: bold;'>⚠️ KHÔNG THỂ ĐỒNG BỘ TỰ ĐỘNG</div><br/>"
@@ -1550,6 +1550,13 @@ class SaleOrder(models.Model):
                             if p.state not in ('cancel', 'done'):
                                 if hasattr(p, 'action_cancel'):
                                     p.action_cancel()
+                                # Thông báo lý do hủy trên phiếu
+                                cancel_msg = Markup(_(
+                                    "<div style='color: orange; font-weight: bold;'>⚠️ PHIẾU ĐÃ BỊ HỦY TỰ ĐỘNG</div><br/>"
+                                    "<b>Lý do:</b> Đơn hàng %s được cập nhật từ MISA với thay đổi số lượng.<br/>"
+                                    "Vui lòng kiểm tra đơn hàng và thực hiện phiếu mới nếu cần."
+                                )) % self.name
+                                p.message_post(body=cancel_msg)
                                 _logger.info("   ✅ Đã hủy phiếu downstream %s (type: %s)", 
                                            p.name, p.picking_type_id.name if p.picking_type_id else 'N/A')
                         except Exception as e:
@@ -1591,6 +1598,13 @@ class SaleOrder(models.Model):
                             if p.state not in ('cancel', 'done'):
                                 if hasattr(p, 'action_cancel'):
                                     p.action_cancel()
+                                # Thông báo lý do hủy trên phiếu
+                                cancel_msg = Markup(_(
+                                    "<div style='color: orange; font-weight: bold;'>⚠️ PHIẾU ĐÃ BỊ HỦY TỰ ĐỘNG</div><br/>"
+                                    "<b>Lý do:</b> Đơn hàng %s được cập nhật từ MISA với thay đổi số lượng.<br/>"
+                                    "Vui lòng kiểm tra đơn hàng và thực hiện phiếu mới nếu cần."
+                                )) % self.name
+                                p.message_post(body=cancel_msg)
                                 _logger.info("   ✅ Đã hủy phiếu %s", p.name)
                         except Exception as e:
                             _logger.warning("   ⚠️ Không thể hủy phiếu %s: %s", p.name, e)
