@@ -74,6 +74,29 @@
                     <div class="px-3 py-2 bg-white border-bottom">
                         <field name="tag_ids" widget="many2many_tags" options="{'color_field': 'color'}" placeholder="Tags..."/>
                     </div>
+
+                    <div class="px-3 py-2 bg-white border-bottom">
+                        <group col="2">
+                            <field name="last_customer_message" readonly="1"/>
+                            <field name="last_ai_reply" readonly="1"/>
+                        </group>
+                    </div>
+
+                    <notebook>
+                        <page string="Tóm tắt / Memory">
+                            <group col="2">
+                                <field name="customer_summary" placeholder="Khách là ai? đang hỏi gì?"/>
+                                <field name="customer_need" placeholder="Nhu cầu/tiêu chí/ràng buộc..."/>
+                                <field name="advice_log" placeholder="Đã tư vấn gì..."/>
+                                <field name="memory_notes" placeholder="Ghi chú nội bộ để AI nhớ..."/>
+                            </group>
+                        </page>
+                        <page string="Thái độ của con">
+                            <group>
+                                <field name="tone_instructions" placeholder="Ví dụ: Xưng con, nói gọn, lịch sự, bán hàng mềm..."/>
+                            </group>
+                        </page>
+                    </notebook>
                     
                     <div class="o_chat_history px-3 py-2" 
                          style="background-color: #ffffff; height: 82vh; overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth;">

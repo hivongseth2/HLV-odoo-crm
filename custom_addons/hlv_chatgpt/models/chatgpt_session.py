@@ -184,6 +184,32 @@ class HlvChatgptSession(models.Model):
         string='Tags'
     )
 
+    # --- CUSTOMER SUMMARY / MEMORY (editable by humans) ---
+    customer_summary = fields.Text(
+        string='Tóm tắt khách hàng',
+        help='Tóm tắt ngắn: khách là ai, đang hỏi gì, nhu cầu chính. Có thể chỉnh sửa thủ công.'
+    )
+    customer_need = fields.Text(
+        string='Nhu cầu / yêu cầu',
+        help='Ghi rõ nhu cầu, tiêu chí, ràng buộc (giá, tiến độ, model, số lượng...). Có thể chỉnh sửa.'
+    )
+    advice_log = fields.Text(
+        string='Con đã tư vấn gì',
+        help='Log tóm tắt các lời tư vấn/đề xuất đã đưa ra. Có thể chỉnh sửa.'
+    )
+    memory_notes = fields.Text(
+        string='Memory (ghi chú nội bộ)',
+        help='Ghi chú lâu dài để AI dùng làm ngữ cảnh. Người dùng có thể xem và chỉnh sửa.'
+    )
+    tone_instructions = fields.Text(
+        string='Thái độ / giọng điệu của con',
+        default='Xưng con, gọi papa. Trả lời gọn, rõ, lịch sự. Ưu tiên hỏi lại để chốt nhu cầu trước khi báo giá.',
+        help='Chỉ dẫn thái độ/giọng điệu. Ví dụ: "ngắn gọn", "thân mật", "kỹ thuật", "bán hàng mềm"...'
+    )
+
+    last_customer_message = fields.Text(string='Tin nhắn khách gần nhất', readonly=True)
+    last_ai_reply = fields.Text(string='Phản hồi AI gần nhất', readonly=True)
+
     # --- OPENAI STATE (Giữ lại để tránh lỗi migration, nhưng không dùng nữa) ---
     openai_thread_id = fields.Char(string="Legacy Thread ID", readonly=True)
     
@@ -218,8 +244,30 @@ class HlvChatgptSession(models.Model):
         """
         _logger.info("🚀 Start Prompt Workflow | Has Image: %s", bool(image_url))
 
-        # A. Xây dựng danh sách tin nhắn đầu vào (Conversation History + New Message)
-        input_messages = self._get_conversation_history()
+        # A. Xây dựng danh sách tin nhắn đầu vào (Session Memory + Conversation History + New Message)
+        input_messages = []
+
+        # Inject editable memory + tone as a system message (high priority)
+        mem_parts = []
+        if self.tone_instructions:
+            mem_parts.append(f"TONE / STYLE:\n{self.tone_instructions}")
+        if self.customer_summary:
+            mem_parts.append(f"CUSTOMER SUMMARY:\n{self.customer_summary}")
+        if self.customer_need:
+            mem_parts.append(f"CUSTOMER NEEDS:\n{self.customer_need}")
+        if self.advice_log:
+            mem_parts.append(f"WHAT WE ALREADY ADVISED:\n{self.advice_log}")
+        if self.memory_notes:
+            mem_parts.append(f"MEMORY NOTES (editable by humans):\n{self.memory_notes}")
+
+        if mem_parts:
+            input_messages.append({
+                "role": "system",
+                "content": "\n\n".join(mem_parts)
+            })
+
+        # Append recent chat history
+        input_messages.extend(self._get_conversation_history())
         
         # Thêm tin nhắn mới nhất của User
         current_content = []
@@ -541,6 +589,11 @@ class HlvChatgptSession(models.Model):
                 'state': 'active'
             })
 
+        # Persist last inbound message for operators
+        session.sudo().write({
+            'last_customer_message': (message_content or '[Gửi ảnh]')
+        })
+
         display_content = message_content
         if image_url:
             display_content = f"{message_content or '[Gửi ảnh]'} \n[IMG: {image_url}]"
@@ -553,6 +606,11 @@ class HlvChatgptSession(models.Model):
         })
 
         ai_reply = session._call_openai_api(message_content, image_url=image_url)
+
+        # Persist last AI reply for operators
+        session.sudo().write({
+            'last_ai_reply': ai_reply
+        })
 
         self.env['hlv.chatgpt.message'].sudo().create({
             'session_id': session.id,
