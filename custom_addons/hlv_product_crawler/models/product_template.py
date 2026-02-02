@@ -657,15 +657,17 @@ Luật:
             return {"error": str(e)}
 
     def action_check_duplicates(self):
-        """Open duplicate wizard with pre-created record to avoid save prompt"""
+        """Open duplicate wizard with pre-created record and auto-run AI verification"""
         self.ensure_one()
         wizard = self.env['product.duplicate.wizard'].create({'product_id': self.id})
         
         # Calculate duplicates and write to wizard
-        # The wizard method returns (0,0,vals) tuples which works with write()
         lines = wizard._find_duplicates(self.id)
         if lines:
             wizard.write({'duplicate_line_ids': lines})
+            
+            # Auto-run AI verification if there are candidates
+            wizard.action_batch_ai_verify()
             
         return {
             'name': _('🔍 Kiểm tra trùng lặp'),
