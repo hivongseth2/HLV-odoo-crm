@@ -1,5 +1,6 @@
 from odoo import models, fields, api, _
 import difflib
+import re
 
 class ProductDuplicateWizard(models.TransientModel):
     _name = 'product.duplicate.wizard'
@@ -29,27 +30,23 @@ class ProductDuplicateWizard(models.TransientModel):
             ('active', '=', True)
         ])
         
-        lines = []
-        import re
-        
-        # Helper to extract technical specs (M5, 5x15, 10mm)
+        # Helper to extract technical specs as complete tokens
         def extract_specs(text):
             text = text.lower()
-            # Regex for:
-            # - M followed by digits (m5, m10)
-            # - Digits x Digits (5x15)
-            # - Digits mm (50mm)
-            patterns = [
-                r'\bm\d+\b',          # M5, m10
-                r'\b\d+\s*[x]\s*\d+\b', # 5x15, 5 x 15
-                r'\b\d+mm\b'          # 50mm
-            ]
             tokens = set()
-            for p in patterns:
-                found = re.findall(p, text)
-                # Normalize (remove spaces in 5 x 15)
-                found = [t.replace(" ", "") for t in found]
-                tokens.update(found)
+            
+            # Pattern 1: Complete fastener spec (M5x15, M10x20, M5, M10)
+            # Matches: M + digits + optional(x + digits)
+            tokens.update(re.findall(r'm\d+(?:x\d+)?', text))
+            
+            # Pattern 2: Standalone dimensions (50mm, 100mm)
+            tokens.update(re.findall(r'\d+mm', text))
+            
+            # Pattern 3: Standalone NxM ONLY if NOT preceded by M
+            # Use negative lookbehind to avoid matching the "5x15" in "M5x15"
+            standalone_dims = re.findall(r'(?<!m)\b(\d+x\d+)\b', text)
+            tokens.update(standalone_dims)
+            
             return tokens
 
         product_specs = extract_specs(name)
