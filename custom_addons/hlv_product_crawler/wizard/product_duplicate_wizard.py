@@ -169,3 +169,44 @@ class ProductDuplicateLine(models.TransientModel):
                 'sticky': False,
             }
         }
+
+    def action_ai_verify_duplicate(self):
+        """Call AI to verify if this candidate is a true duplicate"""
+        self.ensure_one()
+        source = self.candidate_product_id
+        target = self.wizard_id.product_id
+        
+        result = target.compare_products_with_ai(source)
+        
+        if "error" in result:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {'title': 'Lỗi AI', 'message': result['error'], 'type': 'danger'}
+            }
+            
+        is_dup = result.get('is_duplicate', False)
+        reason = result.get('reason', '')
+        confidence = result.get('confidence', 0)
+        
+        new_reason = f"🤖 AI: {'TRÙNG' if is_dup else 'KHÁC'} ({confidence}%) - {reason}"
+        
+        # Update score/reason based on AI
+        vals = {'reason': new_reason}
+        if not is_dup and confidence > 80:
+            vals['score'] = 0 # Mark as definitely not duplicate
+        elif is_dup and confidence > 80:
+            vals['score'] = 99 # Mark as highly likely
+            
+        self.write(vals)
+        
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _("Kết quả AI"),
+                'message': reason,
+                'type': 'success' if is_dup else 'warning',
+                'sticky': False,
+            }
+        }
