@@ -35,15 +35,25 @@ class ProductDuplicateWizard(models.TransientModel):
             text = text.lower()
             tokens = set()
             
-            # Pattern 1: Complete fastener spec (M5x15, M10x20, M5, M10)
-            # Matches: M + digits + optional(x + digits)
-            tokens.update(re.findall(r'm\d+(?:x\d+)?', text))
+            # Pattern 1: Full power tool models (M18 BID, M18 FPD3, etc.)
+            # Captures M + digits + space + alphanumeric code
+            tokens.update(re.findall(r'm\d+\s+[a-z0-9\-]+', text))
             
-            # Pattern 2: Standalone dimensions (50mm, 100mm)
+            # Pattern 2: Fastener specs (M6x15, M10x20, M5, M10)
+            # Only if NOT followed by space and letters (to avoid matching M18 in "M18 BID")
+            fasteners = re.findall(r'm\d+(?:x\d+)?', text)
+            for f in fasteners:
+                # Check if this is part of a larger model code
+                if not re.search(rf'{f}\s+[a-z]', text):
+                    tokens.add(f)
+            
+            # Pattern 3: Standalone dimensions (50mm, 100mm)
             tokens.update(re.findall(r'\d+mm', text))
             
-            # Pattern 3: Standalone NxM ONLY if NOT preceded by M
-            # Use negative lookbehind to avoid matching the "5x15" in "M5x15"
+            # Pattern 4: DIN/ISO standards (DIN 912, ISO 7380)
+            tokens.update(re.findall(r'(?:din|iso)\s*\d+', text))
+            
+            # Pattern 5: Standalone NxM ONLY if NOT preceded by M
             standalone_dims = re.findall(r'(?<!m)\b(\d+x\d+)\b', text)
             tokens.update(standalone_dims)
             
@@ -66,39 +76,47 @@ class ProductDuplicateWizard(models.TransientModel):
                     score += 50
                     reasons.append(f"Mã SKU gần giống ({sku} vs {cand_sku})")
             
-            # 2. SPEC-FIRST PATH: Check if technical specs match EXACTLY
-            # This bypasses name similarity requirement for technical products
+            # 2. NAME SIMILARITY CHECK (Base Score)
             cand_name = cand.name or ""
             cand_specs = extract_specs(cand_name)
             
-            if product_specs and cand_specs and product_specs == cand_specs:
-                # Exact spec match! These are likely same product variant
-                spec_score = 85  # High confidence but not 100 (SKU is 100)
-                if spec_score > score:
-                    score = spec_score
-                    reasons.append(f"Trùng thông số kỹ thuật: {product_specs}")
-            
-            # 3. FUZZY NAME PATH: Traditional text similarity
-            # This catches duplicates with typos or slightly different naming
+            name_similarity = 0
             if name and cand_name:
-                similarity = difflib.SequenceMatcher(None, name.lower(), cand_name.lower()).ratio()
-                if similarity > 0.8:
-                    s_score = int(similarity * 100)
+                name_similarity = difflib.SequenceMatcher(None, name.lower(), cand_name.lower()).ratio()
+            
+            # 3. SPEC-ENHANCED SCORING
+            # Only use specs to BOOST score if names are already somewhat similar
+            if product_specs and cand_specs:
+                if product_specs == cand_specs:
+                    # Exact spec match
+                    if name_similarity > 0.5:
+                        # Names similar + specs match = very likely duplicate
+                        spec_score = 90
+                        if spec_score > score:
+                            score = spec_score
+                            reasons.append(f"Tên tương tự + Trùng specs: {product_specs}")
+                    elif name_similarity > 0.3:
+                        # Moderate name similarity + specs match
+                        spec_score = 70
+                        if spec_score > score:
+                            score = spec_score
+                            reasons.append(f"Tên hơi giống + Trùng specs: {product_specs}")
+                    # If names are very different (<30%), don't boost based on specs alone
+                    # (e.g., M18 BID vs M18 FPD3 would have low name similarity)
                     
-                    # Check for spec conflicts
-                    if product_specs and cand_specs:
-                        if product_specs != cand_specs:
-                            # Names similar but specs differ (e.g., M5x15 vs M5x10)
-                            if not (product_specs.issubset(cand_specs) or cand_specs.issubset(product_specs)):
-                                # Not a subset relationship → Conflicting specs
-                                s_score -= 60
-                                reasons.append(f"Thông số kỹ thuật khác ({product_specs} vs {cand_specs})")
-                        # If specs match, we already handled it in Path 2 above
-                    
-                    # Only update score if name-based score is better
-                    if s_score > score:
-                        score = s_score
-                        reasons.append(f"Tên giống nhau {s_score}%")
+                elif product_specs != cand_specs:
+                    # Specs differ - check if it's a conflict
+                    if not (product_specs.issubset(cand_specs) or cand_specs.issubset(product_specs)):
+                        # Conflicting specs (e.g., M5x15 vs M5x10, or DIN 912 vs DIN 916)
+                        if name_similarity > 0.8:
+                            # Names very similar but specs differ
+                            score = max(score, int(name_similarity * 100) - 30)
+                            reasons.append(f"Tên giống nhưng specs KHÁC ({product_specs} vs {cand_specs})")
+            
+            # 4. PURE NAME SIMILARITY (if not already scored)
+            if score == 0 and name_similarity > 0.8:
+                score = int(name_similarity * 100)
+                reasons.append(f"Tên giống nhau {score}%")
             
             if score >= 60:  # Threshold
                 lines.append((0, 0, {
