@@ -91,4 +91,25 @@
             </notebook>
         </field>
     </record>
+    <!-- Action for Crawler Queue -->
+    <record id="action_crawler_queue" model="ir.actions.act_window">
+        <field name="name">Hàng đợi Crawl</field>
+        <field name="res_model">product.template</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('crawl_status', '=', 'pending')]</field>
+        <field name="context">{'search_default_filter_crawl_status': 'pending'}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Không có sản phẩm nào đang chờ Crawl.
+            </p>
+        </field>
+    </record>
+
+    <!-- Menu Item -->
+    <menuitem id="menu_crawler_queue"
+              name="Hàng đợi Crawl"
+              parent="stock.menu_stock_inventory_control"
+              action="action_crawler_queue"
+              sequence="50"/>
+
 </odoo>

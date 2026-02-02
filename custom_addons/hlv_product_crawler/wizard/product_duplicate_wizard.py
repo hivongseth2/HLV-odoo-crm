@@ -130,3 +130,42 @@ class ProductDuplicateLine(models.TransientModel):
             'res_id': self.candidate_product_id.id,
             'target': 'current',
         }
+
+    def action_copy_specs_from_candidate(self):
+        """Copy specs from this candidate to the wizard's product"""
+        self.ensure_one()
+        source = self.candidate_product_id
+        target = self.wizard_id.product_id
+        
+        target.write({
+            'crawled_specs_raw': source.crawled_specs_raw,
+            'crawled_specs_analyzed': source.crawled_specs_analyzed,
+        })
+        
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _("Thành công"),
+                'message': _("Đã sao chép thông số từ %s sang %s") % (source.name, target.name),
+                'type': 'success',
+                'sticky': False,
+            }
+        }
+
+    def action_archive_wizard_product(self):
+        """Archive the product being checked (wizard's product) because it is a duplicate"""
+        self.ensure_one()
+        target = self.wizard_id.product_id
+        target.action_archive()
+        
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _("Đã lưu trữ"),
+                'message': _("Đã lưu trữ sản phẩm trùng lặp: %s") % target.name,
+                'type': 'warning',
+                'sticky': False,
+            }
+        }

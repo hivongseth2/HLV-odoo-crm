@@ -10,6 +10,12 @@
                 <field name="candidate_product_id"/>
                 <field name="reason"/>
                 <button name="action_view_product" string="Xem" type="object" icon="fa-external-link"/>
+                <button name="action_copy_specs_from_candidate" string="Lấy thông số" type="object" icon="fa-copy" 
+                    confirm="Bạn có chắc muốn chép đè thông số từ sản phẩm này sang sản phẩm đang mở không?"
+                    class="btn-primary"/>
+                <button name="action_archive_wizard_product" string="Lưu trữ SP gốc" type="object" icon="fa-archive" 
+                    confirm="Bạn có chắc muốn lưu trữ sản phẩm GỐC (đang mở) không?"
+                    class="btn-warning"/>
             </list>
         </field>
     </record>
