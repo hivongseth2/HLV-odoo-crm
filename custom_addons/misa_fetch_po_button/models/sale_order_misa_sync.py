@@ -1349,6 +1349,81 @@ class SaleOrder(models.Model):
         
         if not has_changes:
             _logger.info("ℹ️ Không có thay đổi SO lines → giữ nguyên")
+        else:
+            # ===== HỦY PHIẾU DOWNSTREAM NẾU CÓ THAY ĐỔI =====
+            # Chỉ hủy các phiếu SAU phiếu đã done (downstream) để Odoo tạo lại
+            all_picks = self.picking_ids.sudo()
+            done_picks = all_picks.filtered(lambda p: p.state == 'done')
+            open_picks = all_picks.filtered(lambda p: p.state not in ('done', 'cancel'))
+            
+            if done_picks:
+                # Có phiếu done → tìm và hủy các phiếu DOWNSTREAM
+                done_dest_locations = done_picks.mapped('location_dest_id')
+                downstream_picks = open_picks.filtered(
+                    lambda p: p.location_id in done_dest_locations
+                )
+                
+                if downstream_picks:
+                    _logger.info("🔄 Hủy %s phiếu downstream do có thay đổi SO lines...", len(downstream_picks))
+                    for p in downstream_picks:
+                        try:
+                            # Reset qty_done trên move lines
+                            if p.move_line_ids:
+                                p.move_line_ids.filtered(lambda ml: getattr(ml, 'qty_done', 0)).write({'qty_done': 0})
+                            
+                            # Unreserve và cancel các moves
+                            for mv in p.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel')):
+                                try:
+                                    if hasattr(mv, '_do_unreserve'):
+                                        mv._do_unreserve()
+                                    mv._action_cancel()
+                                except Exception:
+                                    pass
+                            
+                            # Hủy picking
+                            if p.state not in ('cancel', 'done'):
+                                if hasattr(p, 'action_cancel'):
+                                    p.action_cancel()
+                                # Thông báo lý do hủy
+                                cancel_msg = Markup(_(
+                                    "<div style='color: orange; font-weight: bold;'>⚠️ PHIẾU ĐÃ BỊ HỦY TỰ ĐỘNG</div><br/>"
+                                    "<b>Lý do:</b> Đơn hàng %s được cập nhật từ MISA với thay đổi số lượng.<br/>"
+                                    "Vui lòng kiểm tra đơn hàng và thực hiện phiếu mới nếu cần."
+                                )) % self.name
+                                p.message_post(body=cancel_msg)
+                                _logger.info("   ✅ Đã hủy phiếu downstream %s", p.name)
+                        except Exception as e:
+                            _logger.warning("   ⚠️ Không thể hủy phiếu %s: %s", p.name, e)
+                else:
+                    _logger.info("ℹ️ Không có phiếu downstream cần hủy")
+            else:
+                # Chưa có phiếu done nào → hủy tất cả phiếu open
+                if open_picks:
+                    _logger.info("🔄 Hủy %s phiếu pick chưa hoàn tất...", len(open_picks))
+                    for p in open_picks:
+                        try:
+                            if p.move_line_ids:
+                                p.move_line_ids.filtered(lambda ml: getattr(ml, 'qty_done', 0)).write({'qty_done': 0})
+                            for mv in p.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel')):
+                                try:
+                                    if hasattr(mv, '_do_unreserve'):
+                                        mv._do_unreserve()
+                                    mv._action_cancel()
+                                except Exception:
+                                    pass
+                            if p.state not in ('cancel', 'done'):
+                                if hasattr(p, 'action_cancel'):
+                                    p.action_cancel()
+                                # Thông báo lý do hủy
+                                cancel_msg = Markup(_(
+                                    "<div style='color: orange; font-weight: bold;'>⚠️ PHIẾU ĐÃ BỊ HỦY TỰ ĐỘNG</div><br/>"
+                                    "<b>Lý do:</b> Đơn hàng %s được cập nhật từ MISA với thay đổi số lượng.<br/>"
+                                    "Vui lòng kiểm tra đơn hàng và thực hiện phiếu mới nếu cần."
+                                )) % self.name
+                                p.message_post(body=cancel_msg)
+                                _logger.info("   ✅ Đã hủy phiếu %s", p.name)
+                        except Exception as e:
+                            _logger.warning("   ⚠️ Không thể hủy phiếu %s: %s", p.name, e)
         
         # --------- Bước 0c: đưa dòng SO về đúng MISA (nếu không có invoice posted) ---------
         if self.invoice_ids.filtered(lambda inv: inv.state == 'posted'):
