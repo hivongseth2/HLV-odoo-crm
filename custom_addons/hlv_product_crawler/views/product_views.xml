@@ -62,7 +62,7 @@
                                 <group string="🛡️ Kiểm soát AI (Mr. GPT)">
                                     <div class="o_row">
                                         <button name="action_ai_verify" string="🕵️‍♂️ Kiểm tra" type="object" class="btn-secondary"/>
-                                        <button name="%(action_check_duplicates)d" string="🔍 Tìm trùng lặp" type="action" class="btn-secondary"/>
+                                        <button name="%(action_check_duplicates_server)d" string="🔍 Tìm trùng lặp" type="action" class="btn-secondary"/>
                                         <button name="action_analyze_specs" string="🤖 Phân tích lại" type="object" class="btn-secondary"/>
                                         <span class="text-muted" invisible="not ai_last_verify_date">
                                             Kiểm tra: <field name="ai_last_verify_date" readonly="1"/>
