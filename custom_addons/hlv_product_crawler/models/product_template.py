@@ -601,6 +601,61 @@ Luật:
                 except Exception as ex:
                     _logger.error(f"[Crawler Cron] Failed to write status 'failed': {ex}")
 
+    def compare_products_with_ai(self, other_product):
+        """Compare this product with another using AI to check if they are duplicates"""
+        self.ensure_one()
+        
+        api_key = self.env['ir.config_parameter'].sudo().get_param('product_crawler.openai_api_key')
+        if not api_key:
+            return {"error": "Chưa cấu hình API Key"}
+            
+        prompt = f"""
+        So sánh 2 sản phẩm kỹ thuật sau và xác định xem chúng có phải là CÙNG MỘT SẢN PHẨM (duplicate) hay không.
+        
+        Sản phẩm A: {self.name} (Mã: {self.default_code})
+        Sản phẩm B: {other_product.name} (Mã: {other_product.default_code})
+        
+        Lưu ý quan trọng:
+        1. Các tiêu chuẩn kỹ thuật khác nhau (ví dụ: DIN 912 vs DIN 916) nghĩa là sản phẩm KHÁC NHAU.
+        2. Kích thước khác nhau (VD: M5 vs M6) là KHÁC NHAU.
+        3. Vật liệu khác nhau (Inox 304 vs Thép đen) là KHÁC NHAU.
+        4. Bỏ qua sự khác biệt nhỏ về cách viết tắt hoặc thứ tự từ.
+        
+        Trả về JSON format:
+        {{
+            "is_duplicate": boolean,
+            "confidence": int (0-100),
+            "reason": "Giải thích ngắn gọn tiếng Việt"
+        }}
+        """
+        
+        try:
+            import requests
+            import json
+            
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            
+            data = {
+                "model": "gpt-4o-mini",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.0,
+                "response_format": {"type": "json_object"}
+            }
+            
+            response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=data, timeout=20)
+            result = response.json()
+            
+            if 'choices' in result:
+                content = result['choices'][0]['message']['content']
+                return json.loads(content)
+            return {"error": "Lỗi phản hồi từ AI"}
+            
+        except Exception as e:
+            return {"error": str(e)}
+
     def action_check_duplicates(self):
         """Open duplicate wizard with pre-created record to avoid save prompt"""
         self.ensure_one()
