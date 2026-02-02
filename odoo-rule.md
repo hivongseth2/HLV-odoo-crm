@@ -167,6 +167,30 @@ Khi đồng bộ SO đã có picking done (hàm `_partial_resync_open_pickings_w
 3. ❌ Không link move với SOL → qty_delivered không cập nhật
 4. ❌ Quên sync `x_studio_product_status` → Mất thông tin trạng thái sản xuất
 5. ❌ Không handle case "thêm dòng mới cùng product" → SOL không được tạo
+   - **Incorrect**: `<setting id="my_setting">` → This ID format is rejected in Odoo 18
+   - **Correct**: Use `<record id="res_config_settings_my_setting" model="res.config.settings">` with standard record definition
+
+### 11.5. Cron Jobs with `model_id` - Odoo 18 Issue
+
+**Problem**: In Odoo 18, defining `ir.cron` records in XML with `model_id` using `ref` or `search` attributes often causes `ParseError` during module installation.
+
+**Why**: The XML parser has issues resolving the `model_id` reference at load time.
+
+**Solution**: 
+1. **Set `active="False"` by default** in the XML cron definition
+2. **Enable via Settings UI**: After module installation, users should go to Settings > Technical > Automation > Scheduled Actions and manually activate the cron job. The UI correctly handles the `model_id` field.
+3. Alternatively, enable "Auto Crawl" in Inventory Settings, which will activate the cron programmatically.
+
+**Example**:
+```xml
+<record id="ir_cron_auto_crawl" model="ir.cron">
+    <field name="name">Auto Crawl Queue</field>
+    <field name="model_id" search="[('model', '=', 'product.template')]"/>
+    <field name="state">code</field>
+    <field name="code">model.cron_crawl_batch()</field>
+    <field name="active" eval="False"/>  <!-- Disabled by default -->
+</record>
+```
 
 10. Settings View for Odoo 18
 Cấu trúc `res.config.settings` view inheritance đã thay đổi trong Odoo 18.
