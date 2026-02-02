@@ -1363,9 +1363,15 @@ class SaleOrder(models.Model):
             _logger.info("ℹ️ Không có thay đổi SO lines → giữ nguyên")
         
         # ===== LƯU DANH SÁCH PHIẾU DOWNSTREAM CẦN HỦY TRƯỚC KHI SYNC =====
-        # Phải lưu trước vì sau khi sync, Odoo có thể tạo phiếu mới
+        # Logic: 
+        # 1. Lưu danh sách downstream picks TRƯỚC sync
+        # 2. Sync SO lines → Odoo xử lý giảm qty (tạo return từ pick → stock)
+        # 3. SAU ĐÓ hủy downstream picks nếu có SP mới/tăng qty → Odoo tạo lại pickings mới
         downstream_picks_to_cancel = self.env['stock.picking']
+        
+        # Nếu có SP mới hoặc tăng qty, cần hủy downstream để Odoo regenerate
         if has_new_products or has_qty_increase:
+            _logger.info("🔄 Có SP mới/tăng qty → Chuẩn bị hủy phiếu downstream SAU sync")
             all_picks = self.picking_ids.sudo()
             done_picks = all_picks.filtered(lambda p: p.state == 'done')
             open_picks = all_picks.filtered(lambda p: p.state not in ('done', 'cancel'))
@@ -1377,16 +1383,18 @@ class SaleOrder(models.Model):
                     lambda p: p.location_id in done_dest_locations
                 )
                 if downstream_picks_to_cancel:
-                    _logger.info("📋 Sẽ hủy %s phiếu downstream: %s", 
+                    _logger.info("📋 Sẽ hủy %s phiếu downstream SAU sync: %s", 
                                len(downstream_picks_to_cancel),
                                downstream_picks_to_cancel.mapped('name'))
             else:
                 # Chưa có done → hủy tất cả open picks
                 downstream_picks_to_cancel = open_picks
                 if downstream_picks_to_cancel:
-                    _logger.info("📋 Sẽ hủy %s phiếu open: %s", 
+                    _logger.info("📋 Sẽ hủy %s phiếu open SAU sync: %s", 
                                len(downstream_picks_to_cancel),
                                downstream_picks_to_cancel.mapped('name'))
+        elif has_qty_decrease:
+            _logger.info("ℹ️ Chỉ có giảm qty (không thêm SP) → Để Odoo xử lý, không hủy phiếu")
         
         # --------- Bước 0c: đưa dòng SO về đúng MISA (nếu không có invoice posted) ---------
         # SYNC SO LINES TRƯỚC để Odoo xử lý return cho qty decrease
