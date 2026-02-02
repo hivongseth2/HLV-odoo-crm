@@ -235,6 +235,48 @@ class HlvChatgptSession(models.Model):
         # Chạy Workflow
         return self._run_gpt_prompt_workflow(client, query, prompt_id, image_url=image_url)
 
+    # =================================================================================
+    # 1.5. SUMMARY / MEMORY UPDATE (OPTIONAL)
+    # =================================================================================
+    def _update_session_summary(self, user_query, ai_reply):
+        """Cập nhật nhanh summary/need/advice_log dựa trên lượt chat mới.
+
+        Mục tiêu: giúp người dùng nhìn được "memory" ngay trong Odoo và chỉnh sửa được.
+        Ưu tiên: an toàn + đơn giản. Nếu lỗi thì bỏ qua, không làm fail luồng trả lời.
+        """
+        try:
+            # Chỉ update khi có AI trả lời
+            if not ai_reply:
+                return
+
+            # Giới hạn độ dài để tránh phình field
+            def _cap(txt, n=2000):
+                txt = (txt or '').strip()
+                return txt[:n]
+
+            # Customer summary: nếu trống thì seed bằng 1-2 dòng từ tin nhắn đầu
+            if not (self.customer_summary or '').strip():
+                seed = (user_query or '').strip()
+                if seed:
+                    self.customer_summary = _cap(seed, 500)
+
+            # Customer needs: append bullet-ish (keep compact)
+            need_line = (user_query or '').strip()
+            if need_line:
+                existing = (self.customer_need or '').strip()
+                new_block = (existing + "\n" if existing else "") + f"- {need_line}"
+                self.customer_need = _cap(new_block, 2000)
+
+            # Advice log: append the AI reply
+            reply_line = (ai_reply or '').strip()
+            if reply_line:
+                existing = (self.advice_log or '').strip()
+                new_block = (existing + "\n\n" if existing else "") + f"AI: {reply_line}"
+                self.advice_log = _cap(new_block, 4000)
+
+        except Exception as e:
+            _logger.warning("Summary update skipped due to error: %s", e)
+
     def _run_gpt_prompt_workflow(self, client, user_query, prompt_id, image_url=False):
         """
         Workflow xử lý chính với client.responses.create:
@@ -611,6 +653,9 @@ class HlvChatgptSession(models.Model):
         session.sudo().write({
             'last_ai_reply': ai_reply
         })
+
+        # Update editable summary/memory fields
+        session._update_session_summary(message_content, ai_reply)
 
         self.env['hlv.chatgpt.message'].sudo().create({
             'session_id': session.id,
