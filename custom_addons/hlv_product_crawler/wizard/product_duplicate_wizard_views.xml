@@ -1,5 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <!-- Tree view for duplicate lines -->
+    <record id="view_product_duplicate_line_tree" model="ir.ui.view">
+        <field name="name">product.duplicate.line.tree</field>
+        <field name="model">product.duplicate.line</field>
+        <field name="arch" type="xml">
+            <tree create="false" delete="false" editable="bottom">
+                <field name="score" widget="progressbar"/>
+                <field name="candidate_product_id"/>
+                <field name="reason"/>
+                <button name="action_view_product" string="Xem" type="object" icon="fa-external-link"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Form view for wizard -->
     <record id="view_product_duplicate_wizard_form" model="ir.ui.view">
         <field name="name">product.duplicate.wizard.form</field>
         <field name="model">product.duplicate.wizard</field>
@@ -10,14 +25,7 @@
                         <field name="product_id" readonly="1"/>
                     </group>
                     <label for="duplicate_line_ids" string="Sản phẩm có khả năng trùng lặp"/>
-                    <field name="duplicate_line_ids">
-                        <tree create="false" delete="false" editable="bottom">
-                            <field name="score" widget="progressbar"/>
-                            <field name="candidate_product_id"/>
-                            <field name="reason"/>
-                            <button name="action_view_product" string="Xem" type="object" icon="fa-external-link"/>
-                        </tree>
-                    </field>
+                    <field name="duplicate_line_ids"/>
                 </sheet>
                 <footer>
                     <button string="Đóng" class="btn-secondary" special="cancel"/>
