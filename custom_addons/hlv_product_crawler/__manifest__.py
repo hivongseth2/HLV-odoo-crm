@@ -17,7 +17,7 @@
     },
     'data': [
         'data/ir_actions_server.xml',
-        'data/ir_cron_data.xml',
+        # 'data/ir_cron_data.xml',  # Temporarily disabled - create manually via UI
         'wizard/product_duplicate_wizard_views.xml',
         'views/product_views.xml',
         'views/res_config_settings_views.xml',
