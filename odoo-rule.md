@@ -192,6 +192,12 @@ Khi đồng bộ SO đã có picking done (hàm `_partial_resync_open_pickings_w
 </record>
 ```
 
+**Deprecated Fields in Odoo 18**:
+- ❌ `numbercall` - No longer exists, will cause `ValueError: Invalid field 'numbercall'`
+- ❌ `doall` - No longer exists, will cause `ValueError: Invalid field 'doall'`
+- ✅ Use only: `name`, `model_id`, `state`, `code`, `user_id`, `interval_number`, `interval_type`, `active`
+
+
 10. Settings View for Odoo 18
 Cấu trúc `res.config.settings` view inheritance đã thay đổi trong Odoo 18.
 - KHÔNG sử dụng: `<xpath expr="//div[hasclass('settings')]" position="inside">` (đã bị loại bỏ trong base view).
