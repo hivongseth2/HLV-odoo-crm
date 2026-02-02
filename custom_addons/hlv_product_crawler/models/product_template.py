@@ -552,40 +552,54 @@ Luật:
         if not auto_crawl:
             return
             
-        # Get Batch Size
+        # Get Batch Size (Reduce default to 5 to be safe)
         try:
-            batch_size = int(self.env['ir.config_parameter'].sudo().get_param('product_crawler.batch_size', '10'))
+            batch_size = int(self.env['ir.config_parameter'].sudo().get_param('product_crawler.batch_size', '5'))
         except:
-            batch_size = 10
+            batch_size = 5
             
         # Find pending products
-        products = self.search([('crawl_status', '=', 'pending')], limit=batch_size, order='write_date asc')
+        # Fetch IDs only to minimize memory usage
+        product_ids = self.search([('crawl_status', '=', 'pending')], limit=batch_size, order='write_date asc').ids
         
-        if not products:
+        if not product_ids:
             return
 
         import logging
         _logger = logging.getLogger(__name__)
-        _logger.info(f"[Crawler Cron] Processing batch of {len(products)} products...")
+        _logger.info(f"[Crawler Cron] Processing batch of {len(product_ids)} products...")
         
-        for product in products:
+        # Use a new cursor for each product to release memory immediately
+        for p_id in product_ids:
             try:
-                # Use the optimized generic crawl
-                # This will create ONE write to DB per product
-                product.action_crawl_and_analyze()
-                
-                product.write({
-                    'crawl_status': 'done',
-                    'last_crawl': fields.Datetime.now()
-                })
-                
-                # Commit after each product to save progress (and prevent transaction timeouts)
-                self.env.cr.commit()
-                
+                with self.env.registry.cursor() as new_cr:
+                    env = api.Environment(new_cr, self.env.uid, self.env.context)
+                    product = env['product.template'].browse(p_id)
+                    
+                    # Crawl & Analyze
+                    product.action_crawl_and_analyze()
+                    
+                    product.write({
+                        'crawl_status': 'done',
+                        'last_crawl': fields.Datetime.now()
+                    })
+                    new_cr.commit()
+                    _logger.info(f"[Crawler Cron] Finished product ID {p_id}")
+                    
             except Exception as e:
-                _logger.error(f"[Crawler Cron] Error processing ID {product.id}: {e}")
-                product.write({'crawl_status': 'failed'})
-                self.env.cr.commit()
+                # Capture error in MAIN cursor to ensure it's logged even if inner txn fails?
+                # Actually, if we use a new cursor, we need to commit status update there.
+                # If that fails, we might want to log it using a fresh cursor again or just log to file.
+                _logger.error(f"[Crawler Cron] Error processing ID {p_id}: {e}")
+                
+                try:
+                    with self.env.registry.cursor() as error_cr:
+                        env = api.Environment(error_cr, self.env.uid, self.env.context)
+                        prod_err = env['product.template'].browse(p_id)
+                        prod_err.write({'crawl_status': 'failed'})
+                        error_cr.commit()
+                except Exception as ex:
+                    _logger.error(f"[Crawler Cron] Failed to write status 'failed': {ex}")
                 
     def action_crawl_all(self):
         import logging
