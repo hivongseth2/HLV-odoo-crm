@@ -40,12 +40,12 @@
         </field>
     </record>
 
-    <record id="action_check_duplicates" model="ir.actions.act_window">
+    <record id="action_check_duplicates" model="ir.actions.server">
         <field name="name">🔍 Kiểm tra trùng lặp</field>
-        <field name="res_model">product.duplicate.wizard</field>
-        <field name="view_mode">form</field>
-        <field name="target">new</field>
+        <field name="model_id" ref="product.model_product_template"/>
         <field name="binding_model_id" ref="product.model_product_template"/>
         <field name="binding_view_types">form</field>
+        <field name="state">code</field>
+        <field name="code">action = record.action_check_duplicates()</field>
     </record>
 </odoo>
