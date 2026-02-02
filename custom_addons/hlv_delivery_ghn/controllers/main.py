@@ -140,7 +140,8 @@ class GHNWebsiteController(http.Controller):
                         p_width = max(p_width, product.product_width or 0)
                         p_height += (product.product_height or 0) * qty
                     else:
-                        _logger.warning("WordPress GHN: Product NOT FOUND for SKU='%s'", sku)
+                        # Product not found in Odoo - use default 1kg per item
+                        weight += 1 * qty
             
             _logger.info("WordPress GHN: Total weight (kg) = %s, converting to grams...", weight)
             if weight > 0:
