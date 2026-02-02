@@ -1358,37 +1358,84 @@ class SaleOrder(models.Model):
                 _logger.info("📊 Phát hiện thay đổi: %s (MISA: %s, SO: %s)", code, misa_qty, so_qty)
                 break
         
-        # --------- Bước 0c: HỦY PHIẾU PICK NẾU CÓ THAY ĐỔI ---------
-        open_picks = self.picking_ids.sudo().filtered(lambda p: p.state not in ('done', 'cancel'))
-        if open_picks and has_changes:
-            _logger.info("🔄 Hủy %s phiếu pick chưa hoàn tất do có thay đổi SO lines...", len(open_picks))
-            for p in open_picks:
-                try:
-                    # Reset qty_done trên move lines
-                    if p.move_line_ids:
-                        p.move_line_ids.filtered(lambda ml: getattr(ml, 'qty_done', 0)).write({'qty_done': 0})
-                    
-                    # Unreserve các moves
-                    for mv in p.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel')):
+        # --------- Bước 0c: HỦY PHIẾU DOWNSTREAM NẾU CÓ THAY ĐỔI ---------
+        # Logic: Nếu có thay đổi, chỉ hủy các phiếu SAU phiếu đã done (downstream)
+        # VD: Nếu pick done nhưng pack chưa done → hủy pack (để người đóng gói cập nhật bổ sung)
+        # VD: Nếu pack done nhưng out chưa done → hủy out
+        # KHÔNG hủy phiếu đang ở step hiện tại nếu nó chưa done
+        
+        if has_changes:
+            all_picks = self.picking_ids.sudo()
+            done_picks = all_picks.filtered(lambda p: p.state == 'done')
+            open_picks = all_picks.filtered(lambda p: p.state not in ('done', 'cancel'))
+            
+            if done_picks:
+                # Có ít nhất 1 phiếu done → tìm và hủy các phiếu DOWNSTREAM (sau phiếu done)
+                # Phiếu downstream là các phiếu mà location_id = location_dest_id của phiếu done
+                done_dest_locations = done_picks.mapped('location_dest_id')
+                
+                # Các phiếu cần hủy: phiếu chưa done có location_id nằm trong done_dest_locations
+                # (tức là phiếu tiếp nhận hàng từ phiếu done)
+                downstream_picks = open_picks.filtered(
+                    lambda p: p.location_id in done_dest_locations
+                )
+                
+                if downstream_picks:
+                    _logger.info("🔄 Hủy %s phiếu downstream do có thay đổi SO lines...", len(downstream_picks))
+                    for p in downstream_picks:
                         try:
-                            if hasattr(mv, '_do_unreserve'):
-                                mv._do_unreserve()
-                        except Exception:
-                            pass
+                            # Reset qty_done trên move lines
+                            if p.move_line_ids:
+                                p.move_line_ids.filtered(lambda ml: getattr(ml, 'qty_done', 0)).write({'qty_done': 0})
+                            
+                            # Unreserve các moves
+                            for mv in p.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel')):
+                                try:
+                                    if hasattr(mv, '_do_unreserve'):
+                                        mv._do_unreserve()
+                                except Exception:
+                                    pass
+                                try:
+                                    mv._action_cancel()
+                                except Exception:
+                                    pass
+                            
+                            # Hủy picking
+                            if p.state not in ('cancel', 'done'):
+                                if hasattr(p, 'action_cancel'):
+                                    p.action_cancel()
+                                _logger.info("   ✅ Đã hủy phiếu downstream %s (type: %s)", 
+                                           p.name, p.picking_type_id.name if p.picking_type_id else 'N/A')
+                        except Exception as e:
+                            _logger.warning("   ⚠️ Không thể hủy phiếu %s: %s", p.name, e)
+                else:
+                    _logger.info("ℹ️ Không có phiếu downstream cần hủy")
+            else:
+                # Chưa có phiếu done nào → hủy tất cả phiếu open (như cũ)
+                if open_picks:
+                    _logger.info("🔄 Hủy %s phiếu pick chưa hoàn tất (chưa có done)...", len(open_picks))
+                    for p in open_picks:
                         try:
-                            mv._action_cancel()
-                        except Exception:
-                            pass
-                    
-                    # Hủy picking
-                    if p.state not in ('cancel', 'done'):
-                        if hasattr(p, 'action_cancel'):
-                            p.action_cancel()
-                        _logger.info("   ✅ Đã hủy phiếu %s (state was: %s)", p.name, p.state)
-                except Exception as e:
-                    _logger.warning("   ⚠️ Không thể hủy phiếu %s: %s", p.name, e)
-        elif open_picks and not has_changes:
-            _logger.info("ℹ️ Không có thay đổi SO lines → giữ nguyên %s phiếu pick", len(open_picks))
+                            if p.move_line_ids:
+                                p.move_line_ids.filtered(lambda ml: getattr(ml, 'qty_done', 0)).write({'qty_done': 0})
+                            for mv in p.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel')):
+                                try:
+                                    if hasattr(mv, '_do_unreserve'):
+                                        mv._do_unreserve()
+                                except Exception:
+                                    pass
+                                try:
+                                    mv._action_cancel()
+                                except Exception:
+                                    pass
+                            if p.state not in ('cancel', 'done'):
+                                if hasattr(p, 'action_cancel'):
+                                    p.action_cancel()
+                                _logger.info("   ✅ Đã hủy phiếu %s", p.name)
+                        except Exception as e:
+                            _logger.warning("   ⚠️ Không thể hủy phiếu %s: %s", p.name, e)
+        else:
+            _logger.info("ℹ️ Không có thay đổi SO lines → giữ nguyên các phiếu pick")
         
         # --------- Bước 0c: đưa dòng SO về đúng MISA (nếu không có invoice posted) ---------
         if self.invoice_ids.filtered(lambda inv: inv.state == 'posted'):
