@@ -153,6 +153,12 @@ class ProductDuplicateLine(models.TransientModel):
             }
         }
 
+    def action_archive_wizard_product(self):
+        """Archive the product being checked (wizard's product) because it is a duplicate"""
+        self.ensure_one()
+        target = self.wizard_id.product_id
+        target.action_archive()
+        
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
