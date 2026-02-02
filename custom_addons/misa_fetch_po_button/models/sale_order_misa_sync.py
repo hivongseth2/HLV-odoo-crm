@@ -2,7 +2,7 @@
 import requests
 import logging
 from odoo import models, fields, api, _
-from odoo.utils import Markup
+from markupsafe import Markup
 from dateutil.parser import parse as dtparse
 from odoo.exceptions import UserError
 
