@@ -91,17 +91,34 @@
             </notebook>
         </field>
     </record>
+    
+    <!-- Custom tree view for Crawler Queue (no delete, show status) -->
+    <record id="view_product_crawler_queue_tree" model="ir.ui.view">
+        <field name="name">product.template.crawler.queue.tree</field>
+        <field name="model">product.template</field>
+        <field name="arch" type="xml">
+            <list create="false" delete="false" edit="false">
+                <field name="default_code"/>
+                <field name="name"/>
+                <field name="crawl_status" widget="badge" decoration-warning="crawl_status == 'pending'"/>
+                <field name="last_crawl"/>
+            </list>
+        </field>
+    </record>
+
     <!-- Action for Crawler Queue -->
     <record id="action_crawler_queue" model="ir.actions.act_window">
         <field name="name">Hàng đợi Crawl</field>
         <field name="res_model">product.template</field>
         <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_product_crawler_queue_tree"/>
         <field name="domain">[('crawl_status', '=', 'pending')]</field>
         <field name="context">{'search_default_filter_crawl_status': 'pending'}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 Không có sản phẩm nào đang chờ Crawl.
             </p>
+            <p>Sử dụng action "➡️ Thêm vào hàng đợi Crawl" từ danh sách sản phẩm.</p>
         </field>
     </record>
 
