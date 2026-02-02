@@ -1309,13 +1309,97 @@ class SaleOrder(models.Model):
         if synced_count > 0:
             _logger.info("✅ Đã đồng bộ tên cho %d sản phẩm từ MISA", synced_count)
 
-        # --------- Bước 0b: đưa dòng SO về đúng MISA (nếu không có invoice posted) ---------
+        # --------- Bước 0b: KIỂM TRA CÓ THAY ĐỔI THỰC SỰ KHÔNG ---------
+        # Chỉ hủy phiếu pick nếu có thay đổi (thêm/xóa/sửa số lượng SP)
+        # Để tránh hủy phiếu vô ích khi sync mà không có thay đổi gì
+        
+        def _flt_check(x, dv=0.0):
+            try:
+                return float(x or 0.0)
+            except Exception:
+                return dv
+        
+        # Build MISA product qty map (skip combo children)
+        misa_qty_map = {}  # {product_code: total_qty}
+        current_parent_code_check = None
+        combo_codes_check = set()
+        
+        for ln in (lines or []):
+            if ln.get("IsSetProduct"):
+                combo_codes_check.add((ln.get("ProductIDText") or "").strip())
+        
+        for ln in (lines or []):
+            code = (ln.get("ProductIDText") or "").strip()
+            if not code:
+                continue
+            if ln.get("IsSetProduct"):
+                current_parent_code_check = code
+            if ln.get("IsChildProduct") and current_parent_code_check:
+                # Skip children (same logic as in _sync_so_lines_from_misa_no_picking)
+                continue
+            qty = _flt_check(ln.get("Amount"), 0.0)
+            misa_qty_map[code] = misa_qty_map.get(code, 0.0) + qty
+        
+        # Build current SO product qty map
+        so_qty_map = {}  # {product_code: total_qty}
+        for sol in self.order_line:
+            code = (sol.product_id.default_code or "").strip()
+            if code:
+                so_qty_map[code] = so_qty_map.get(code, 0.0) + sol.product_uom_qty
+        
+        # Compare: detect changes
+        has_changes = False
+        all_codes = set(misa_qty_map.keys()) | set(so_qty_map.keys())
+        for code in all_codes:
+            misa_qty = misa_qty_map.get(code, 0.0)
+            so_qty = so_qty_map.get(code, 0.0)
+            if abs(misa_qty - so_qty) > 0.001:  # Threshold for float comparison
+                has_changes = True
+                _logger.info("📊 Phát hiện thay đổi: %s (MISA: %s, SO: %s)", code, misa_qty, so_qty)
+                break
+        
+        # --------- Bước 0c: HỦY PHIẾU PICK NẾU CÓ THAY ĐỔI ---------
+        open_picks = self.picking_ids.sudo().filtered(lambda p: p.state not in ('done', 'cancel'))
+        if open_picks and has_changes:
+            _logger.info("🔄 Hủy %s phiếu pick chưa hoàn tất do có thay đổi SO lines...", len(open_picks))
+            for p in open_picks:
+                try:
+                    # Reset qty_done trên move lines
+                    if p.move_line_ids:
+                        p.move_line_ids.filtered(lambda ml: getattr(ml, 'qty_done', 0)).write({'qty_done': 0})
+                    
+                    # Unreserve các moves
+                    for mv in p.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel')):
+                        try:
+                            if hasattr(mv, '_do_unreserve'):
+                                mv._do_unreserve()
+                        except Exception:
+                            pass
+                        try:
+                            mv._action_cancel()
+                        except Exception:
+                            pass
+                    
+                    # Hủy picking
+                    if p.state not in ('cancel', 'done'):
+                        if hasattr(p, 'action_cancel'):
+                            p.action_cancel()
+                        _logger.info("   ✅ Đã hủy phiếu %s (state was: %s)", p.name, p.state)
+                except Exception as e:
+                    _logger.warning("   ⚠️ Không thể hủy phiếu %s: %s", p.name, e)
+        elif open_picks and not has_changes:
+            _logger.info("ℹ️ Không có thay đổi SO lines → giữ nguyên %s phiếu pick", len(open_picks))
+        
+        # --------- Bước 0c: đưa dòng SO về đúng MISA (nếu không có invoice posted) ---------
         if self.invoice_ids.filtered(lambda inv: inv.state == 'posted'):
             _logger.warning("Bỏ qua cập nhật SO lines vì có hoá đơn 'posted'. Sẽ chỉ vá picking mở.")
         else:
             try:
                 self._sync_so_lines_from_misa_no_picking(lines, headers)
             except Exception as exc:
+                # Re-raise UserError để hiện thông báo cho user (VD: giảm số lượng)
+                if 'UserError' in type(exc).__name__:
+                    raise
                 _logger.warning("Không thể đồng bộ SO lines: %s (tiếp tục vá picking)", exc)
 
         # --------- Bước 1: tổng đã giao theo sale.order.line.qty_delivered ----------
