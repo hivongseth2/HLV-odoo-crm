@@ -56,7 +56,7 @@ class ProductDuplicateWizard(models.TransientModel):
             score = 0
             reasons = []
             
-            # 1. SKU Check
+            # 1. SKU Check (Highest Priority)
             cand_sku = cand.default_code or ""
             if sku and cand_sku:
                 if sku == cand_sku:
@@ -66,69 +66,41 @@ class ProductDuplicateWizard(models.TransientModel):
                     score += 50
                     reasons.append(f"Mã SKU gần giống ({sku} vs {cand_sku})")
             
-            # 2. Name Fuzzy Match
+            # 2. SPEC-FIRST PATH: Check if technical specs match EXACTLY
+            # This bypasses name similarity requirement for technical products
             cand_name = cand.name or ""
+            cand_specs = extract_specs(cand_name)
+            
+            if product_specs and cand_specs and product_specs == cand_specs:
+                # Exact spec match! These are likely same product variant
+                spec_score = 85  # High confidence but not 100 (SKU is 100)
+                if spec_score > score:
+                    score = spec_score
+                    reasons.append(f"Trùng thông số kỹ thuật: {product_specs}")
+            
+            # 3. FUZZY NAME PATH: Traditional text similarity
+            # This catches duplicates with typos or slightly different naming
             if name and cand_name:
                 similarity = difflib.SequenceMatcher(None, name.lower(), cand_name.lower()).ratio()
                 if similarity > 0.8:
                     s_score = int(similarity * 100)
                     
-                    # 3. Spec Token Check
-                    cand_specs = extract_specs(cand_name)
-                    
-                    # Only penalize if BOTH have specs AND they share NO common specs
-                    # OR if they have conflicting specs?
-                    # Safer: If they have specs, and the sets are disjoint or conflicting?
-                    # Let's say: if they share common "types" (like both have an Mx token) but the values differ?
-                    # Simple approach: If sets form a mismatch?
-                    
-                    # Case 1: M5x15 (m5, 5x15) vs M5x10 (m5, 5x10). Common: m5. Diff: 5x15 vs 5x10.
-                    # If there is ANY difference in spec tokens, it's suspicious? 
-                    # No, "M5x15" vs "M5" (generic). "M5x15" has {m5, 5x15}, "M5" has {m5}.
-                    # Subset is fine.
-                    
+                    # Check for spec conflicts
                     if product_specs and cand_specs:
-                        # Check for CONFLICTS
-                        # Conflict = same pattern type but different value?
-                        # Hard to classify patterns dynamically.
-                        
-                        # Let's try: If the Intersection is Empty? No, M5 matches.
-                        # If Symmetric Difference contains "Dimension" looking things?
-                        
-                        # Let's go back to strict equality but ONLY for the extracted specs?
-                        # M5x15 (m5, 5x15) vs M5x10 (m5, 5x10).
-                        # product_specs - cand_specs = {5x15}
-                        # cand_specs - product_specs = {5x10}
-                        # Mismatch!
-                        
-                        # SS304 M5x15 (m5, 5x15) vs 912 M5x15 (m5, 5x15).
-                        # product_specs == cand_specs. Match!
-                        
                         if product_specs != cand_specs:
-                             # Check if one is subset of another?
-                             # e.g. "Bolts M5" ({m5}) vs "Bolts M5x15" ({m5, 5x15})
-                             # If we are looking for duplicates, usually we want exact spec match.
-                             # But "M5" is likely a Category name, not a Product.
-                             # If user is deduplicating Products, they should generally have full specs.
-                             
-                             if product_specs.issubset(cand_specs) or cand_specs.issubset(product_specs):
-                                 # Subset is acceptable (one is more specific) -> No penalty?
-                                 # Or maybe small penalty? Let's accept it for now.
-                                 pass 
-                             else:
-                                 # Significant mismatch
-                                 s_score -= 60
-                                 reasons.append(f"Thông số kỹ thuật khác ({product_specs} vs {cand_specs})")
-                        else:
-                             reasons.append(f"Tên giống nhau {s_score}%")
-                    else:
-                        # No specs detected in one or both -> Rely purely on text fuzzy
+                            # Names similar but specs differ (e.g., M5x15 vs M5x10)
+                            if not (product_specs.issubset(cand_specs) or cand_specs.issubset(product_specs)):
+                                # Not a subset relationship → Conflicting specs
+                                s_score -= 60
+                                reasons.append(f"Thông số kỹ thuật khác ({product_specs} vs {cand_specs})")
+                        # If specs match, we already handled it in Path 2 above
+                    
+                    # Only update score if name-based score is better
+                    if s_score > score:
+                        score = s_score
                         reasons.append(f"Tên giống nhau {s_score}%")
-
-                    if s_score > 0:
-                        score = max(score, s_score)
             
-            if score >= 60: # Threshold
+            if score >= 60:  # Threshold
                 lines.append((0, 0, {
                     'candidate_product_id': cand.id,
                     'score': score,
