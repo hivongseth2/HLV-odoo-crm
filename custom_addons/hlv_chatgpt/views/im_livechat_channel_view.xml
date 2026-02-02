@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="im_livechat_channel_view_form_inherit_hlv_chatgpt" model="ir.ui.view">
+        <field name="name">im.livechat.channel.form.inherit.hlv.chatgpt</field>
+        <field name="model">im_livechat.channel</field>
+        <field name="inherit_id" ref="im_livechat.im_livechat_channel_view_form"/>
+        <field name="arch" type="xml">
+            <!-- Put the toggle in Options tab when possible; fallback: inject into the form header area -->
+            <xpath expr="//sheet" position="inside">
+                <group string="HLV ChatGPT" name="hlv_chatgpt_group" col="2">
+                    <field name="hlv_ai_enabled"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>
