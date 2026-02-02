@@ -205,5 +205,20 @@ Cấu trúc `res.config.settings` view inheritance đã thay đổi trong Odoo 1
   3. Đảm bảo file định nghĩa server action (nếu có dùng chung `ref`) được load trước file cron trong `__manifest__.py`.
 
 11.3. Security cho Transient Models
-- **Lỗi**: `Access Error` hoặc không thể truy cập Wizard.
 - **Nguyên tắc**: Wizard (TransientModel) cũng CẦN phải có quyền truy cập trong `ir.model.access.csv`, giống như Model thường. Đừng quên thêm dòng cấp quyền (thường là cho `base.group_user`).
+
+11.4. Settings View Odoo 18 Structure
+- **Lỗi**: `Cannot locate element '<xpath expr="//div[hasclass('settings')]">'`
+- **Nguyên nhân**: Cấu trúc view `res.config.settings` đã thay đổi hoàn toàn.
+- **Giải pháp**: Xpath vào `//form` và sử dụng tag `<app>`, `<block>`, `<setting>`.
+  ```xml
+  <xpath expr="//form" position="inside">
+      <app string="My Module" name="my_module">
+          <block title="Section Name">
+              <setting string="Label" help="...">
+                  <field name="my_field"/>
+              </setting>
+          </block>
+      </app>
+  </xpath>
+  ```
