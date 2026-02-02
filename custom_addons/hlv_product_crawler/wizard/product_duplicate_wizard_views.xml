@@ -10,6 +10,7 @@
                 <field name="candidate_product_id"/>
                 <field name="reason"/>
                 <button name="action_view_product" string="Xem" type="object" icon="fa-external-link"/>
+                <button name="action_ai_verify_duplicate" string="AI Check" type="object" icon="fa-magic" class="btn-info"/>
                 <button name="action_copy_specs_from_candidate" string="Lấy thông số" type="object" icon="fa-copy" 
                     confirm="Bạn có chắc muốn chép đè thông số từ sản phẩm này sang sản phẩm đang mở không?"
                     class="btn-primary"/>
