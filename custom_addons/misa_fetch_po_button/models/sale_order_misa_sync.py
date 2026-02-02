@@ -2,6 +2,7 @@
 import requests
 import logging
 from odoo import models, fields, api, _
+from odoo.utils import Markup
 from dateutil.parser import parse as dtparse
 from odoo.exceptions import UserError
 
@@ -1054,15 +1055,15 @@ class SaleOrder(models.Model):
             ]
             details_html = "<br/>".join(details_list)
             
-            error_msg = _(
+            error_msg = Markup(_(
                 "<div style='color: red; font-weight: bold;'>⚠️ KHÔNG THỂ ĐỒNG BỘ</div><br/>"
                 "MISA giảm số lượng xuống dưới mức đã giao.<br/><br/>"
                 "<b>Cần tạo phiếu trả hàng thủ công:</b><br/>%s<br/><br/>"
                 "Sau khi tạo phiếu trả hàng và xử lý xong, hãy đồng bộ lại."
-            ) % details_html
+            )) % details_html
             
             _logger.warning("CHẶN ĐỒNG BỘ do giảm số lượng dưới mức đã giao")
-            self.message_post(body=error_msg, message_type='notification')
+            self.message_post(body=error_msg)
             # Không raise, chỉ return để tiếp tục phần còn lại
             return
         
@@ -1131,15 +1132,15 @@ class SaleOrder(models.Model):
             ]
             details_html = "<br/>".join(details_list)
             
-            error_msg = _(
+            error_msg = Markup(_(
                 "<div style='color: red; font-weight: bold;'>⚠️ KHÔNG THỂ ĐỒNG BỘ</div><br/>"
                 "Có sản phẩm ĐÃ GIAO bị xóa khỏi MISA.<br/><br/>"
                 "<b>Cần tạo phiếu trả hàng thủ công:</b><br/>%s<br/><br/>"
                 "Sau khi tạo phiếu trả hàng và xử lý xong, hãy đồng bộ lại."
-            ) % details_html
+            )) % details_html
             
             _logger.warning("CHẶN ĐỒNG BỘ do sản phẩm đã giao bị xóa khỏi MISA")
-            self.message_post(body=error_msg, message_type='notification')
+            self.message_post(body=error_msg)
             return
         
         # Xóa/cắt các SOL không còn trong MISA (chỉ khi chưa giao)
@@ -1424,7 +1425,7 @@ class SaleOrder(models.Model):
                 ]
                 details_html = "<br/>".join(details_list)
                 
-                error_msg = _(
+                error_msg = Markup(_(
                     "<div style='color: red; font-weight: bold;'>⚠️ KHÔNG THỂ ĐỒNG BỘ TỰ ĐỘNG</div><br/>"
                     "MISA giảm số lượng và đơn hàng đang có phiếu pick/pack/out.<br/><br/>"
                     "<b>Các sản phẩm bị giảm:</b><br/>%s<br/><br/>"
@@ -1433,10 +1434,10 @@ class SaleOrder(models.Model):
                     "2. Chỉnh sửa số lượng trên SO lines theo MISA<br/>"
                     "3. Nếu đã giao rồi → Tạo phiếu trả hàng thủ công<br/>"
                     "4. Sau khi xử lý xong, đồng bộ lại"
-                ) % details_html
+                )) % details_html
                 
                 _logger.warning("CHẶN ĐỒNG BỘ do giảm số lượng khi có moves đang active")
-                self.message_post(body=error_msg, message_type='notification')
+                self.message_post(body=error_msg)
                 
                 return {
                     'type': 'ir.actions.client',
