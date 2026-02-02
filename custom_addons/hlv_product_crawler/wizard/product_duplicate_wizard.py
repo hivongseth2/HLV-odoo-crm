@@ -111,6 +111,48 @@ class ProductDuplicateWizard(models.TransientModel):
         lines.sort(key=lambda x: x[2]['score'], reverse=True)
         return lines
 
+    def action_batch_ai_verify(self):
+        """Use AI to verify all duplicate candidates at once"""
+        self.ensure_one()
+        
+        if not self.duplicate_line_ids:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {'title': 'Thông báo', 'message': 'Không có sản phẩm nào để kiểm tra', 'type': 'warning'}
+            }
+        
+        checked_count = 0
+        for line in self.duplicate_line_ids:
+            result = self.product_id.compare_products_with_ai(line.candidate_product_id)
+            
+            if "error" not in result:
+                is_dup = result.get('is_duplicate', False)
+                reason = result.get('reason', '')
+                confidence = result.get('confidence', 0)
+                
+                new_reason = f"🤖 AI: {'TRÙNG' if is_dup else 'KHÁC'} ({confidence}%) - {reason}"
+                
+                vals = {'reason': new_reason}
+                if not is_dup and confidence > 80:
+                    vals['score'] = 0
+                elif is_dup and confidence > 80:
+                    vals['score'] = 99
+                    
+                line.write(vals)
+                checked_count += 1
+        
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _("Hoàn thành"),
+                'message': _("Đã kiểm tra %d sản phẩm bằng AI") % checked_count,
+                'type': 'success',
+                'sticky': False,
+            }
+        }
+
 class ProductDuplicateLine(models.TransientModel):
     _name = 'product.duplicate.line'
     _description = 'Duplicate Candidate Line'
