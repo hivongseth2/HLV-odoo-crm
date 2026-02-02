@@ -145,15 +145,14 @@ class ProductDuplicateWizard(models.TransientModel):
                 line.write(vals)
                 checked_count += 1
         
+        # Reload the wizard to show updated results
         return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': _("Hoàn thành"),
-                'message': _("Đã kiểm tra %d sản phẩm bằng AI") % checked_count,
-                'type': 'success',
-                'sticky': False,
-            }
+            'type': 'ir.actions.act_window',
+            'res_model': 'product.duplicate.wizard',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'message': f'✅ Đã kiểm tra {checked_count} sản phẩm bằng AI'}
         }
 
     def action_archive_selected(self):
