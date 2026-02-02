@@ -1363,9 +1363,18 @@ class SaleOrder(models.Model):
             _logger.info("ℹ️ Không có thay đổi SO lines → giữ nguyên")
         
         # ===== LƯU DANH SÁCH PHIẾU DOWNSTREAM CẦN HỦY TRƯỚC KHI SYNC =====
-        # Phải lưu trước vì sau khi sync, Odoo có thể tạo phiếu mới
+        # Logic: 
+        # - Nếu có GIẢM qty (dù có thêm SP mới hay không): KHÔNG hủy pack
+        #   → Để Odoo giảm qty trong pack + tạo return từ pick → stock
+        #   → Odoo sẽ tự thêm SP mới vào pack hiện tại
+        # - Nếu CHỈ có thêm SP mới/tăng qty (KHÔNG có giảm): Hủy downstream để regenerate
         downstream_picks_to_cancel = self.env['stock.picking']
-        if has_new_products or has_qty_increase:
+        
+        # CHỈ hủy khi có SP mới/tăng qty VÀ KHÔNG có giảm qty
+        should_cancel = (has_new_products or has_qty_increase) and not has_qty_decrease
+        
+        if should_cancel:
+            _logger.info("🔄 Có SP mới/tăng qty, KHÔNG có giảm → Hủy phiếu downstream")
             all_picks = self.picking_ids.sudo()
             done_picks = all_picks.filtered(lambda p: p.state == 'done')
             open_picks = all_picks.filtered(lambda p: p.state not in ('done', 'cancel'))
@@ -1387,6 +1396,8 @@ class SaleOrder(models.Model):
                     _logger.info("📋 Sẽ hủy %s phiếu open: %s", 
                                len(downstream_picks_to_cancel),
                                downstream_picks_to_cancel.mapped('name'))
+        elif has_qty_decrease:
+            _logger.info("ℹ️ Có giảm qty → KHÔNG hủy pack để Odoo xử lý đúng (giảm trong pack + return từ pick)")
         
         # --------- Bước 0c: đưa dòng SO về đúng MISA (nếu không có invoice posted) ---------
         # SYNC SO LINES TRƯỚC để Odoo xử lý return cho qty decrease
