@@ -170,6 +170,46 @@ class HlvChatgptSession(models.Model):
     last_activity = fields.Datetime(default=fields.Datetime.now)
     zalo_user_id = fields.Char(string="Zalo User ID", index=True)
 
+    # --- ROUTING / ASSIGNMENT ---
+    ai_care = fields.Boolean(
+        string='Ngân Hà chăm sóc',
+        default=False,
+        help='Nếu bật, hội thoại này sẽ được AI (Ngân Hà) trả lời tự động khi có tin nhắn Zalo OA đến.'
+    )
+    tag_ids = fields.Many2many(
+        'hlv.chatgpt.tag',
+        'hlv_chatgpt_session_tag_rel',
+        'session_id',
+        'tag_id',
+        string='Tags'
+    )
+
+    # --- CUSTOMER SUMMARY / MEMORY (editable by humans) ---
+    customer_summary = fields.Text(
+        string='Tóm tắt khách hàng',
+        help='Tóm tắt ngắn: khách là ai, đang hỏi gì, nhu cầu chính. Có thể chỉnh sửa thủ công.'
+    )
+    customer_need = fields.Text(
+        string='Nhu cầu / yêu cầu',
+        help='Ghi rõ nhu cầu, tiêu chí, ràng buộc (giá, tiến độ, model, số lượng...). Có thể chỉnh sửa.'
+    )
+    advice_log = fields.Text(
+        string='Con đã tư vấn gì',
+        help='Log tóm tắt các lời tư vấn/đề xuất đã đưa ra. Có thể chỉnh sửa.'
+    )
+    memory_notes = fields.Text(
+        string='Memory (ghi chú nội bộ)',
+        help='Ghi chú lâu dài để AI dùng làm ngữ cảnh. Người dùng có thể xem và chỉnh sửa.'
+    )
+    tone_instructions = fields.Text(
+        string='Thái độ / giọng điệu của con',
+        default='Xưng con, gọi papa. Trả lời gọn, rõ, lịch sự. Ưu tiên hỏi lại để chốt nhu cầu trước khi báo giá.',
+        help='Chỉ dẫn thái độ/giọng điệu. Ví dụ: "ngắn gọn", "thân mật", "kỹ thuật", "bán hàng mềm"...'
+    )
+
+    last_customer_message = fields.Text(string='Tin nhắn khách gần nhất', readonly=True)
+    last_ai_reply = fields.Text(string='Phản hồi AI gần nhất', readonly=True)
+
     # --- OPENAI STATE (Giữ lại để tránh lỗi migration, nhưng không dùng nữa) ---
     openai_thread_id = fields.Char(string="Legacy Thread ID", readonly=True)
     
@@ -195,6 +235,48 @@ class HlvChatgptSession(models.Model):
         # Chạy Workflow
         return self._run_gpt_prompt_workflow(client, query, prompt_id, image_url=image_url)
 
+    # =================================================================================
+    # 1.5. SUMMARY / MEMORY UPDATE (OPTIONAL)
+    # =================================================================================
+    def _update_session_summary(self, user_query, ai_reply):
+        """Cập nhật nhanh summary/need/advice_log dựa trên lượt chat mới.
+
+        Mục tiêu: giúp người dùng nhìn được "memory" ngay trong Odoo và chỉnh sửa được.
+        Ưu tiên: an toàn + đơn giản. Nếu lỗi thì bỏ qua, không làm fail luồng trả lời.
+        """
+        try:
+            # Chỉ update khi có AI trả lời
+            if not ai_reply:
+                return
+
+            # Giới hạn độ dài để tránh phình field
+            def _cap(txt, n=2000):
+                txt = (txt or '').strip()
+                return txt[:n]
+
+            # Customer summary: nếu trống thì seed bằng 1-2 dòng từ tin nhắn đầu
+            if not (self.customer_summary or '').strip():
+                seed = (user_query or '').strip()
+                if seed:
+                    self.customer_summary = _cap(seed, 500)
+
+            # Customer needs: append bullet-ish (keep compact)
+            need_line = (user_query or '').strip()
+            if need_line:
+                existing = (self.customer_need or '').strip()
+                new_block = (existing + "\n" if existing else "") + f"- {need_line}"
+                self.customer_need = _cap(new_block, 2000)
+
+            # Advice log: append the AI reply
+            reply_line = (ai_reply or '').strip()
+            if reply_line:
+                existing = (self.advice_log or '').strip()
+                new_block = (existing + "\n\n" if existing else "") + f"AI: {reply_line}"
+                self.advice_log = _cap(new_block, 4000)
+
+        except Exception as e:
+            _logger.warning("Summary update skipped due to error: %s", e)
+
     def _run_gpt_prompt_workflow(self, client, user_query, prompt_id, image_url=False):
         """
         Workflow xử lý chính với client.responses.create:
@@ -204,8 +286,30 @@ class HlvChatgptSession(models.Model):
         """
         _logger.info("🚀 Start Prompt Workflow | Has Image: %s", bool(image_url))
 
-        # A. Xây dựng danh sách tin nhắn đầu vào (Conversation History + New Message)
-        input_messages = self._get_conversation_history()
+        # A. Xây dựng danh sách tin nhắn đầu vào (Session Memory + Conversation History + New Message)
+        input_messages = []
+
+        # Inject editable memory + tone as a system message (high priority)
+        mem_parts = []
+        if self.tone_instructions:
+            mem_parts.append(f"TONE / STYLE:\n{self.tone_instructions}")
+        if self.customer_summary:
+            mem_parts.append(f"CUSTOMER SUMMARY:\n{self.customer_summary}")
+        if self.customer_need:
+            mem_parts.append(f"CUSTOMER NEEDS:\n{self.customer_need}")
+        if self.advice_log:
+            mem_parts.append(f"WHAT WE ALREADY ADVISED:\n{self.advice_log}")
+        if self.memory_notes:
+            mem_parts.append(f"MEMORY NOTES (editable by humans):\n{self.memory_notes}")
+
+        if mem_parts:
+            input_messages.append({
+                "role": "system",
+                "content": "\n\n".join(mem_parts)
+            })
+
+        # Append recent chat history
+        input_messages.extend(self._get_conversation_history())
         
         # Thêm tin nhắn mới nhất của User
         current_content = []
@@ -527,6 +631,11 @@ class HlvChatgptSession(models.Model):
                 'state': 'active'
             })
 
+        # Persist last inbound message for operators
+        session.sudo().write({
+            'last_customer_message': (message_content or '[Gửi ảnh]')
+        })
+
         display_content = message_content
         if image_url:
             display_content = f"{message_content or '[Gửi ảnh]'} \n[IMG: {image_url}]"
@@ -539,6 +648,14 @@ class HlvChatgptSession(models.Model):
         })
 
         ai_reply = session._call_openai_api(message_content, image_url=image_url)
+
+        # Persist last AI reply for operators
+        session.sudo().write({
+            'last_ai_reply': ai_reply
+        })
+
+        # Update editable summary/memory fields
+        session._update_session_summary(message_content, ai_reply)
 
         self.env['hlv.chatgpt.message'].sudo().create({
             'session_id': session.id,

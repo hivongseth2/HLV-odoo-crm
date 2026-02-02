@@ -61,10 +61,42 @@
                             <i class="fa fa-comments-o text-primary me-2"></i>
                             <field name="name" class="fw-bold text-dark mb-0" placeholder="Chủ đề..." style="border:none; font-size: 14px; width: 100%;"/>
                         </div>
+
+                        <div class="d-flex align-items-center gap-2 me-3">
+                            <field name="ai_care" widget="boolean_toggle"/>
+                        </div>
+
                         <div class="small text-muted ms-2">
                              <field name="last_activity" widget="relative_time"/>
                         </div>
                     </div>
+
+                    <div class="px-3 py-2 bg-white border-bottom">
+                        <field name="tag_ids" widget="many2many_tags" options="{'color_field': 'color'}" placeholder="Tags..."/>
+                    </div>
+
+                    <div class="px-3 py-2 bg-white border-bottom">
+                        <group col="2">
+                            <field name="last_customer_message" readonly="1"/>
+                            <field name="last_ai_reply" readonly="1"/>
+                        </group>
+                    </div>
+
+                    <notebook>
+                        <page string="Tóm tắt / Memory">
+                            <group col="2">
+                                <field name="customer_summary" placeholder="Khách là ai? đang hỏi gì?"/>
+                                <field name="customer_need" placeholder="Nhu cầu/tiêu chí/ràng buộc..."/>
+                                <field name="advice_log" placeholder="Đã tư vấn gì..."/>
+                                <field name="memory_notes" placeholder="Ghi chú nội bộ để AI nhớ..."/>
+                            </group>
+                        </page>
+                        <page string="Thái độ của con">
+                            <group>
+                                <field name="tone_instructions" placeholder="Ví dụ: Xưng con, nói gọn, lịch sự, bán hàng mềm..."/>
+                            </group>
+                        </page>
+                    </notebook>
                     
                     <div class="o_chat_history px-3 py-2" 
                          style="background-color: #ffffff; height: 82vh; overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth;">
@@ -103,6 +135,8 @@
         <field name="arch" type="xml">
             <list>
                 <field name="name" string="Chủ đề"/>
+                <field name="ai_care" string="Ngân Hà"/>
+                <field name="tag_ids" widget="many2many_tags" options="{'color_field': 'color'}"/>
                 <field name="user_id" widget="many2one_avatar_user"/>
                 <field name="last_activity" widget="remaining_days"/>
                 <field name="state" widget="badge" decoration-success="state == 'active'"/>
