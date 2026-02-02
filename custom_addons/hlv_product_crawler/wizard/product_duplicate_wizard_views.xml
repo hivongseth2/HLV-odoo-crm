@@ -5,16 +5,18 @@
         <field name="name">product.duplicate.line.tree</field>
         <field name="model">product.duplicate.line</field>
         <field name="arch" type="xml">
-            <list create="false" delete="false" edit="false">
+            <list create="false" delete="false" edit="false" 
+                  decoration-success="ai_verdict == 'different'" 
+                  decoration-danger="ai_verdict == 'duplicate'">
                 <field name="score" widget="progressbar"/>
                 <field name="candidate_product_id"/>
+                <field name="ai_verdict" widget="badge" 
+                       decoration-success="ai_verdict == 'different'"
+                       decoration-danger="ai_verdict == 'duplicate'"
+                       decoration-muted="ai_verdict == 'not_checked'"/>
                 <field name="reason"/>
                 <button name="action_view_product" string="Xem" type="object" icon="fa-external-link"/>
-                <button name="action_ai_verify_duplicate" string="AI Check" type="object" icon="fa-magic" class="btn-info"/>
-                <button name="action_copy_specs_from_candidate" string="Lấy thông số" type="object" icon="fa-copy" 
-                    confirm="Bạn có chắc muốn chép đè thông số từ sản phẩm này sang sản phẩm đang mở không?"
-                    class="btn-primary"/>
-                <button name="action_archive_wizard_product" string="Lưu trữ SP gốc" type="object" icon="fa-archive" 
+                <button name="action_archive_wizard_product" string="Lưu trữ" type="object" icon="fa-archive" 
                     confirm="Bạn có chắc muốn lưu trữ sản phẩm GỐC (đang mở) không?"
                     class="btn-warning"/>
             </list>
@@ -35,6 +37,7 @@
                     <field name="duplicate_line_ids" readonly="1"/>
                     <div class="mt-3">
                         <button name="action_batch_ai_verify" string="🤖 AI Check Tất Cả" type="object" class="btn-primary" help="Dùng AI kiểm tra tất cả sản phẩm trong danh sách"/>
+                        <button name="action_archive_selected" string="🗑️ Lưu trữ SP TRÙNG (theo AI)" type="object" class="btn-warning ml-2" help="Lưu trữ tất cả sản phẩm mà AI đánh giá là TRÙNG"/>
                     </div>
                 </sheet>
                 <footer>

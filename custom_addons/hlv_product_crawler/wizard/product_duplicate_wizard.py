@@ -131,9 +131,12 @@ class ProductDuplicateWizard(models.TransientModel):
                 reason = result.get('reason', '')
                 confidence = result.get('confidence', 0)
                 
-                new_reason = f"🤖 AI: {'TRÙNG' if is_dup else 'KHÁC'} ({confidence}%) - {reason}"
+                new_reason = f"🤖 ({confidence}%) {reason}"
                 
-                vals = {'reason': new_reason}
+                vals = {
+                    'reason': new_reason,
+                    'ai_verdict': 'duplicate' if is_dup else 'different'
+                }
                 if not is_dup and confidence > 80:
                     vals['score'] = 0
                 elif is_dup and confidence > 80:
@@ -153,6 +156,35 @@ class ProductDuplicateWizard(models.TransientModel):
             }
         }
 
+    def action_archive_selected(self):
+        """Archive all products marked as duplicates by AI"""
+        self.ensure_one()
+        
+        # Get lines marked as duplicate by AI
+        to_archive = self.duplicate_line_ids.filtered(lambda l: l.ai_verdict == 'duplicate')
+        
+        if not to_archive:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {'title': 'Thông báo', 'message': 'Không có sản phẩm nào được đánh dấu TRÙNG bởi AI', 'type': 'warning'}
+            }
+        
+        # Archive all candidate products
+        products_to_archive = to_archive.mapped('candidate_product_id')
+        products_to_archive.action_archive()
+        
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _("Hoàn thành"),
+                'message': _("Đã lưu trữ %d sản phẩm trùng lặp") % len(products_to_archive),
+                'type': 'success',
+                'sticky': False,
+            }
+        }
+
 class ProductDuplicateLine(models.TransientModel):
     _name = 'product.duplicate.line'
     _description = 'Duplicate Candidate Line'
@@ -162,6 +194,11 @@ class ProductDuplicateLine(models.TransientModel):
     candidate_product_id = fields.Many2one('product.template', string="Sản phẩm trùng tiềm năng")
     score = fields.Integer(string="Độ trùng khớp (%)")
     reason = fields.Char(string="Lý do")
+    ai_verdict = fields.Selection([
+        ('not_checked', 'Chưa kiểm tra'),
+        ('duplicate', 'AI: TRÙNG'),
+        ('different', 'AI: KHÁC'),
+    ], string="Kết quả AI", default='not_checked')
     
     def action_view_product(self):
         self.ensure_one()
