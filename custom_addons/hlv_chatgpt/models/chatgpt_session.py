@@ -170,6 +170,20 @@ class HlvChatgptSession(models.Model):
     last_activity = fields.Datetime(default=fields.Datetime.now)
     zalo_user_id = fields.Char(string="Zalo User ID", index=True)
 
+    # --- ROUTING / ASSIGNMENT ---
+    ai_care = fields.Boolean(
+        string='Ngân Hà chăm sóc',
+        default=False,
+        help='Nếu bật, hội thoại này sẽ được AI (Ngân Hà) trả lời tự động khi có tin nhắn Zalo OA đến.'
+    )
+    tag_ids = fields.Many2many(
+        'hlv.chatgpt.tag',
+        'hlv_chatgpt_session_tag_rel',
+        'session_id',
+        'tag_id',
+        string='Tags'
+    )
+
     # --- OPENAI STATE (Giữ lại để tránh lỗi migration, nhưng không dùng nữa) ---
     openai_thread_id = fields.Char(string="Legacy Thread ID", readonly=True)
     

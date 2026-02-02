@@ -8,6 +8,7 @@
         'security/ir.model.access.csv',
         'views/chatgpt_config_view.xml',
         'views/chatgpt_session_view.xml',
+        'views/chatgpt_tag_view.xml',
     ],
     'assets': {
         'web.assets_backend': [
