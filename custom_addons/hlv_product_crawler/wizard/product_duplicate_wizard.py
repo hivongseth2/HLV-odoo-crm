@@ -50,6 +50,7 @@ class ProductDuplicateWizard(models.TransientModel):
             return tokens
 
         product_specs = extract_specs(name)
+        lines = []
 
         for cand in candidates:
             score = 0
