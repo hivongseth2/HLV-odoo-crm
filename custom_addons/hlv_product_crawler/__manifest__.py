@@ -16,6 +16,7 @@
         'python': ['requests', 'bs4'],
     },
     'data': [
+        'security/ir.model.access.csv',
         'data/ir_actions_server.xml',
         # 'data/ir_cron_data.xml',  # Temporarily disabled - create manually via UI
         'wizard/product_duplicate_wizard_views.xml',
