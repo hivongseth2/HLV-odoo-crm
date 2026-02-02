@@ -1379,8 +1379,47 @@ class SaleOrder(models.Model):
             qty = _flt_check(ln.get("Amount"), 0.0)
             misa_qty_map[code] = misa_qty_map.get(code, 0.0) + qty
         
-        # Build current SO product qty map
-        so_qty_map = {}  # {product_code: total_qty}
+        # Build current SO product lines map {(code, qty, note): sol}
+        # để so sánh từng dòng chính xác
+        so_lines_map = {}  # {(code, note_short): [(sol, qty)]}
+        for sol in self.order_line:
+            code = (sol.product_id.default_code or "").strip()
+            if code:
+                # Dùng note hoặc name để phân biệt các dòng cùng SP
+                note_short = (sol.name or "")[:50].strip()
+                key = (code, note_short)
+                if key not in so_lines_map:
+                    so_lines_map[key] = []
+                so_lines_map[key].append({
+                    'sol': sol,
+                    'qty': sol.product_uom_qty,
+                    'note': note_short,
+                })
+        
+        # Build MISA lines list với thông tin chi tiết
+        misa_lines = []
+        for ln in (lines or []):
+            code = (ln.get("ProductIDText") or "").strip()
+            if not code:
+                continue
+            if ln.get("IsSetProduct"):
+                current_parent_code_check = code
+            if ln.get("IsChildProduct") and current_parent_code_check:
+                continue
+            qty = _flt_check(ln.get("Amount"), 0.0)
+            note = (ln.get("Description") or "")[:50].strip()
+            misa_lines.append({
+                'code': code,
+                'qty': qty,
+                'note': note,
+            })
+        
+        # Aggregate totals for change detection (vẫn cần để detect changes)
+        misa_qty_map = {}
+        for ml in misa_lines:
+            misa_qty_map[ml['code']] = misa_qty_map.get(ml['code'], 0.0) + ml['qty']
+        
+        so_qty_map = {}
         for sol in self.order_line:
             code = (sol.product_id.default_code or "").strip()
             if code:
@@ -1388,30 +1427,31 @@ class SaleOrder(models.Model):
         
         # Compare: detect changes AND detect decreases
         has_changes = False
-        qty_decrease_products = []  # Products with quantity decrease
+        qty_decrease_details = []  # Chi tiết từng dòng bị thay đổi
         all_codes = set(misa_qty_map.keys()) | set(so_qty_map.keys())
         
         for code in all_codes:
             misa_qty = misa_qty_map.get(code, 0.0)
             so_qty = so_qty_map.get(code, 0.0)
-            if abs(misa_qty - so_qty) > 0.001:  # Threshold for float comparison
+            if abs(misa_qty - so_qty) > 0.001:
                 has_changes = True
                 _logger.info("📊 Phát hiện thay đổi: %s (MISA: %s, SO: %s)", code, misa_qty, so_qty)
                 
-                # Check if this is a DECREASE
+                # DECREASE detected - collect detail per SO line
                 if misa_qty < so_qty - 0.001:
-                    qty_decrease_products.append({
-                        'code': code,
-                        'misa_qty': misa_qty,
-                        'so_qty': so_qty,
-                        'decrease': so_qty - misa_qty,
-                    })
+                    # Liệt kê từng dòng SO của SP này với chi tiết
+                    for (key_code, key_note), sol_list in so_lines_map.items():
+                        if key_code == code:
+                            for item in sol_list:
+                                qty_decrease_details.append({
+                                    'code': code,
+                                    'so_qty': item['qty'],
+                                    'note': item['note'],
+                                    'sol_id': item['sol'].id,
+                                })
         
         # ===== BLOCK SYNC NẾU CÓ SẢN PHẨM GIẢM SỐ LƯỢNG =====
-        # Giảm qty sẽ khiến Odoo tự tạo phiếu trả hàng - không mong muốn
-        # Yêu cầu user xử lý thủ công
-        if qty_decrease_products:
-            # Kiểm tra xem có active moves không (nếu không có thì cho phép sync)
+        if qty_decrease_details:
             has_active_moves = False
             for sol in self.order_line:
                 if sol.move_ids.filtered(lambda m: m.state not in ('done', 'cancel')):
@@ -1419,22 +1459,36 @@ class SaleOrder(models.Model):
                     break
             
             if has_active_moves:
-                details_list = [
-                    f"• {item['code']}: SO có {item['so_qty']:g}, MISA yêu cầu {item['misa_qty']:g} (giảm {item['decrease']:g})"
-                    for item in qty_decrease_products
-                ]
+                # Hiển thị chi tiết từng dòng SO
+                details_list = []
+                for item in qty_decrease_details:
+                    line_info = f"• <b>[{item['code']}]</b> qty={item['so_qty']:g}"
+                    if item['note']:
+                        line_info += f" - {item['note']}"
+                    details_list.append(line_info)
                 details_html = "<br/>".join(details_list)
+                
+                # Thông tin MISA lines để so sánh
+                misa_detail_list = []
+                for ml in misa_lines:
+                    if any(d['code'] == ml['code'] for d in qty_decrease_details):
+                        misa_info = f"• [{ml['code']}] qty={ml['qty']:g}"
+                        if ml['note']:
+                            misa_info += f" - {ml['note']}"
+                        misa_detail_list.append(misa_info)
+                misa_html = "<br/>".join(misa_detail_list) if misa_detail_list else "(không có)"
                 
                 error_msg = Markup(_(
                     "<div style='color: red; font-weight: bold;'>⚠️ KHÔNG THỂ ĐỒNG BỘ TỰ ĐỘNG</div><br/>"
                     "MISA giảm số lượng và đơn hàng đang có phiếu pick/pack/out.<br/><br/>"
-                    "<b>Các sản phẩm bị giảm:</b><br/>%s<br/><br/>"
-                    "<b>📋 Hướng dẫn xử lý:</b><br/>"
+                    "<b>📦 Dòng SO hiện tại:</b><br/>%s<br/><br/>"
+                    "<b>📋 MISA yêu cầu:</b><br/>%s<br/><br/>"
+                    "<b>🔧 Hướng dẫn xử lý:</b><br/>"
                     "1. Vào đơn hàng → Tab 'Delivery' → Hủy các phiếu pick chưa hoàn tất<br/>"
                     "2. Chỉnh sửa số lượng trên SO lines theo MISA<br/>"
                     "3. Nếu đã giao rồi → Tạo phiếu trả hàng thủ công<br/>"
                     "4. Sau khi xử lý xong, đồng bộ lại"
-                )) % details_html
+                )) % (details_html, misa_html)
                 
                 _logger.warning("CHẶN ĐỒNG BỘ do giảm số lượng khi có moves đang active")
                 self.message_post(body=error_msg)
