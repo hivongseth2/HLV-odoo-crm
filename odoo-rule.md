@@ -170,32 +170,43 @@ Khi đồng bộ SO đã có picking done (hàm `_partial_resync_open_pickings_w
    - **Incorrect**: `<setting id="my_setting">` → This ID format is rejected in Odoo 18
    - **Correct**: Use `<record id="res_config_settings_my_setting" model="res.config.settings">` with standard record definition
 
-### 11.5. Cron Jobs with `model_id` - Odoo 18 Issue
+### 11.5. Cron Jobs với `model_id` - Odoo 18 Issue
 
-**Problem**: In Odoo 18, defining `ir.cron` records in XML with `model_id` using `ref` or `search` attributes often causes `ParseError` during module installation.
+**Problem**: Trong Odoo 18, định nghĩa `ir.cron` records trong XML với `model_id` thường gây `ParseError` khi cài module.
 
-**Why**: The XML parser has issues resolving the `model_id` reference at load time.
+**Why**: XML parser gặp vấn đề khi resolve `model_id` reference lúc load time.
 
 **Solution**: 
-1. **Set `active="False"` by default** in the XML cron definition
-2. **Enable via Settings UI**: After module installation, users should go to Settings > Technical > Automation > Scheduled Actions and manually activate the cron job. The UI correctly handles the `model_id` field.
-3. Alternatively, enable "Auto Crawl" in Inventory Settings, which will activate the cron programmatically.
+1. **Set `active="False"` by default** trong XML cron definition
+2. **Enable via Settings UI**: Sau khi cài module, vào Settings > Technical > Automation > Scheduled Actions và manually activate cron job. UI sẽ handle `model_id` field đúng cách.
+3. Hoặc enable "Auto Crawl" trong Inventory Settings để activate cron programmatically.
 
-**Example**:
+**Deprecated Fields trong Odoo 18**:
+- ❌ `numbercall` - Không còn tồn tại, gây lỗi `ValueError: Invalid field 'numbercall' on model 'ir.cron'`
+- ❌ `doall` - Không còn tồn tại, gây lỗi `ValueError: Invalid field 'doall' on model 'ir.cron'`
+- ✅ **Chỉ dùng**: `name`, `model_id`, `state`, `code`, `user_id`, `interval_number`, `interval_type`, `active`
+
+**Cách định nghĩa cron đúng cho Odoo 18**:
 ```xml
 <record id="ir_cron_auto_crawl" model="ir.cron">
-    <field name="name">Auto Crawl Queue</field>
+    <field name="name">Product Crawler: Auto Crawl Queue</field>
+    <!-- Dùng search thay vì ref -->
     <field name="model_id" search="[('model', '=', 'product.template')]"/>
     <field name="state">code</field>
     <field name="code">model.cron_crawl_batch()</field>
-    <field name="active" eval="False"/>  <!-- Disabled by default -->
+    <field name="user_id" ref="base.user_root"/>
+    <field name="interval_number">30</field>
+    <field name="interval_type">minutes</field>
+    <!-- QUAN TRỌNG: Tắt mặc định để tránh ParseError -->
+    <field name="active" eval="False"/>
 </record>
 ```
 
-**Deprecated Fields in Odoo 18**:
-- ❌ `numbercall` - No longer exists, will cause `ValueError: Invalid field 'numbercall'`
-- ❌ `doall` - No longer exists, will cause `ValueError: Invalid field 'doall'`
-- ✅ Use only: `name`, `model_id`, `state`, `code`, `user_id`, `interval_number`, `interval_type`, `active`
+**Lưu ý**:
+- ⚠️ **KHÔNG dùng** `ref="product.model_product_template"` cho `model_id` - sẽ gây ParseError
+- ⚠️ **KHÔNG thêm** `numbercall` hoặc `doall` - đã bị xóa khỏi Odoo 18
+- ✅ **BẮT BUỘC** set `active="False"` để module load được, sau đó enable thủ công qua UI
+
 
 
 10. Settings View for Odoo 18
