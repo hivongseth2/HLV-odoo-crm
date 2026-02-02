@@ -244,6 +244,8 @@ class HlvChatgptSession(models.Model):
         Mục tiêu: giúp người dùng nhìn được "memory" ngay trong Odoo và chỉnh sửa được.
         Ưu tiên: an toàn + đơn giản. Nếu lỗi thì bỏ qua, không làm fail luồng trả lời.
         """
+        self.ensure_one()
+
         try:
             # Chỉ update khi có AI trả lời
             if not ai_reply:
@@ -254,25 +256,31 @@ class HlvChatgptSession(models.Model):
                 txt = (txt or '').strip()
                 return txt[:n]
 
-            # Customer summary: nếu trống thì seed bằng 1-2 dòng từ tin nhắn đầu
+            vals = {}
+
+            # Customer summary: seed 1 lần nếu đang trống
             if not (self.customer_summary or '').strip():
                 seed = (user_query or '').strip()
                 if seed:
-                    self.customer_summary = _cap(seed, 500)
+                    vals['customer_summary'] = _cap(seed, 500)
 
             # Customer needs: append bullet-ish (keep compact)
             need_line = (user_query or '').strip()
             if need_line:
                 existing = (self.customer_need or '').strip()
                 new_block = (existing + "\n" if existing else "") + f"- {need_line}"
-                self.customer_need = _cap(new_block, 2000)
+                vals['customer_need'] = _cap(new_block, 2000)
 
             # Advice log: append the AI reply
             reply_line = (ai_reply or '').strip()
             if reply_line:
                 existing = (self.advice_log or '').strip()
                 new_block = (existing + "\n\n" if existing else "") + f"AI: {reply_line}"
-                self.advice_log = _cap(new_block, 4000)
+                vals['advice_log'] = _cap(new_block, 4000)
+
+            if vals:
+                # Write once to avoid multiple implicit writes inside a background cursor
+                self.sudo().write(vals)
 
         except Exception as e:
             _logger.warning("Summary update skipped due to error: %s", e)
