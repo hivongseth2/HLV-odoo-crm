@@ -1087,69 +1087,29 @@ class SaleOrder(models.Model):
             SaleLine.create(vals_line)
             _logger.info("➕ Tạo mới SOL %s: qty=%.2f", misa_data['code'], misa_data['qty'])
         
-        # ===== XỬ LÝ SẢN PHẨM BỊ XÓA KHỎI MISA NHƯNG ĐÃ GIAO =====
-        # Với SP đã giao nhưng không còn trong MISA, chỉ log warning
-        # và set qty = qty_delivered để Odoo tự xử lý picking
+        # ===== XỬ LÝ SẢN PHẨM BỊ XÓA KHỎI MISA =====
+        # KHÔNG xóa SOL, chỉ set qty = 0 để giữ lịch sử và cho Odoo xử lý
         
-        # Xóa/cắt các SOL không còn trong MISA (chỉ khi chưa giao)
         for sol in unmatched_sols:
             code = sol.product_id.default_code or sol.product_id.name
             
-            # 1) SO còn nháp -> xoá luôn
-            if self.state in ('draft', 'sent'):
-                try:
-                    sol.unlink()
-                    _logger.info("🧹 Unlink dòng %s (SO nháp) vì không còn trong MISA", code)
-                except Exception as e:
-                    _logger.warning("Không thể unlink dòng %s ở nháp: %s", code, e)
-                continue
-
-            # 2) SO đã xác nhận
-            qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
-            qty_ordered  = float(getattr(sol, 'product_uom_qty', 0.0) or 0.0)
-
-            # Huỷ các move mở trước
-            for mv in sol.move_ids.filtered(lambda m: m.state not in ('done', 'cancel')):
-                try:
-                    mv._action_cancel()
-                except Exception as e:
-                    _logger.warning("Không cancel được move mở của dòng %s: %s", code, e)
-
             # Nếu đã có invoice posted -> giữ nguyên
             if posted_inv_exists:
                 _logger.warning("⚠️ Dòng %s không còn trong MISA nhưng giữ nguyên (đã có invoice posted).", code)
                 continue
-
-            # 2a) Chưa giao gì: thử XOÁ
-            if qty_delivered <= 1e-6:
-                try:
-                    has_done_moves = bool(sol.move_ids.filtered(lambda m: m.state == 'done'))
-                    has_active_inv_lines = bool(sol.invoice_lines.filtered(lambda l: l.move_id.state != 'cancel'))
-                    if not has_done_moves and not has_active_inv_lines:
-                        sol.unlink()
-                        _logger.info("🧹 Unlink dòng %s (chưa giao gì).", code)
-                    else:
-                        sol.write({'product_uom_qty': 0.0})
-                        _logger.info("↘️ Set 0 dòng %s (không xoá được).", code)
-                except Exception as e:
-                    _logger.warning("Unlink thất bại dòng %s: %s", code, e)
-                    try:
-                        sol.write({'product_uom_qty': 0.0})
-                    except Exception as e2:
-                        _logger.warning("Không thể set 0 dòng %s: %s", code, e2)
-                continue
-
-            # 2b) Đã giao một phần -> cắt residual
-            if qty_delivered + 1e-6 < qty_ordered:
-                try:
-                    sol.write({'product_uom_qty': qty_delivered})
-                    _logger.info("✂️ Cắt residual %s: %.2f -> %.2f", code, qty_ordered, qty_delivered)
-                except Exception as e:
-                    _logger.warning("Không thể cắt residual dòng %s: %s", code, e)
-                continue
-
-            # 2c) Đã giao đủ -> giữ nguyên
-            _logger.info("✅ Dòng %s đã giao đủ, không chỉnh.", code)
+            
+            qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
+            
+            # Set qty = 0 hoặc qty_delivered (nếu đã giao)
+            new_qty = max(qty_delivered, 0.0)
+            try:
+                sol.write({'product_uom_qty': new_qty})
+                if new_qty > 0:
+                    _logger.info("↘️ Set qty=%s cho dòng %s (đã giao %s, không xóa).", new_qty, code, qty_delivered)
+                else:
+                    _logger.info("↘️ Set qty=0 cho dòng %s (không còn trong MISA).", code)
+            except Exception as e:
+                _logger.warning("Không thể set qty cho dòng %s: %s", code, e)
 
 
 
