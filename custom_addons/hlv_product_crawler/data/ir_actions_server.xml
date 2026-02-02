@@ -8,4 +8,26 @@
         <field name="state">code</field>
         <field name="code">records.action_add_to_crawl_queue()</field>
     </record>
+
+    <!-- Action: Crawl Now (for items in queue) -->
+    <record id="action_crawl_now" model="ir.actions.server">
+        <field name="name">🚀 Crawl ngay</field>
+        <field name="model_id" ref="product.model_product_template"/>
+        <field name="binding_model_id" ref="product.model_product_template"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">records.action_crawl_and_analyze()
+records.write({'crawl_status': 'done', 'last_crawl': fields.Datetime.now()})</field>
+    </record>
+
+    <!-- Action: Remove from Queue (set status to skipped) -->
+    <record id="action_remove_from_queue" model="ir.actions.server">
+        <field name="name">❌ Xóa khỏi hàng đợi</field>
+        <field name="model_id" ref="product.model_product_template"/>
+        <field name="binding_model_id" ref="product.model_product_template"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">records.write({'crawl_status': 'skipped'})</field>
+    </record>
+
 </odoo>

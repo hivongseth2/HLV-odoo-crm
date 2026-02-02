@@ -5,7 +5,7 @@
         <field name="name">product.duplicate.line.tree</field>
         <field name="model">product.duplicate.line</field>
         <field name="arch" type="xml">
-            <list create="false" delete="false" editable="bottom">
+            <list create="false" delete="false" edit="false">
                 <field name="score" widget="progressbar"/>
                 <field name="candidate_product_id"/>
                 <field name="reason"/>
@@ -31,7 +31,7 @@
                         <field name="product_id" readonly="1"/>
                     </group>
                     <label for="duplicate_line_ids" string="Sản phẩm có khả năng trùng lặp"/>
-                    <field name="duplicate_line_ids"/>
+                    <field name="duplicate_line_ids" readonly="1"/>
                 </sheet>
                 <footer>
                     <button string="Đóng" class="btn-secondary" special="cancel"/>
@@ -40,12 +40,15 @@
         </field>
     </record>
 
-    <record id="action_check_duplicates" model="ir.actions.act_window">
+    <!-- Clean up old act_window if exists (to avoid Duplicate Action or ParseError) -->
+    <delete model="ir.actions.act_window" search="[('res_model', '=', 'product.duplicate.wizard')]"/>
+
+    <record id="action_check_duplicates_server" model="ir.actions.server">
         <field name="name">🔍 Kiểm tra trùng lặp</field>
-        <field name="res_model">product.duplicate.wizard</field>
-        <field name="view_mode">form</field>
-        <field name="target">new</field>
+        <field name="model_id" ref="product.model_product_template"/>
         <field name="binding_model_id" ref="product.model_product_template"/>
         <field name="binding_view_types">form</field>
+        <field name="state">code</field>
+        <field name="code">action = record.action_check_duplicates()</field>
     </record>
 </odoo>
