@@ -3,6 +3,8 @@ import logging
 from odoo import http, registry, SUPERUSER_ID, api
 from odoo.http import request, Response
 import threading  
+import hmac
+import hashlib
 _logger = logging.getLogger(__name__)
 
 class ZaloSheetWebhook(http.Controller):
@@ -169,6 +171,39 @@ class ZaloSheetWebhook(http.Controller):
                                 
             
             # =============================================
+
+            # === 5.5. UPSERT SESSION + OPTIONAL ROUTING (AI ONLY WHEN ASSIGNED) ===
+            ChatSessionModel = request.env['hlv.chatgpt.session'].sudo()
+            session = False
+            if user_id:
+                session = ChatSessionModel.search([('zalo_user_id', '=', user_id)], limit=1, order='last_activity desc')
+                if not session:
+                    # Create session for visibility/triage, but DO NOT auto-reply unless ai_care is enabled.
+                    session = ChatSessionModel.create({
+                        'name': f'Zalo Chat - {user_id}',
+                        'zalo_user_id': user_id,
+                        'state': 'active',
+                        'ai_care': False,
+                    })
+
+            # If not assigned to AI, still log the incoming message and return OK (no auto reply).
+            if session and not session.ai_care:
+                # Store incoming message for operators to review & decide assignment
+                display_content = message_content
+                if image_url:
+                    display_content = f"{message_content or '[Gửi ảnh]'} \n[IMG: {image_url}]"
+
+                # Only write if there is something to store
+                if msg_id or display_content:
+                    request.env['hlv.chatgpt.message'].sudo().create({
+                        'session_id': session.id,
+                        'role': 'user',
+                        'content': display_content or '',
+                        'zalo_msg_id': msg_id,
+                    })
+
+                _logger.info("🟡 AI routing: session not assigned (ai_care=false). Skipping auto-reply for user=%s", user_id)
+                return Response("OK", status=200)
 
             # === 6. XỬ LÝ LOGIC ===
             
