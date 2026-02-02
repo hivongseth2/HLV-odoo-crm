@@ -1374,19 +1374,56 @@ class SaleOrder(models.Model):
             if code:
                 so_qty_map[code] = so_qty_map.get(code, 0.0) + sol.product_uom_qty
         
-        # Compare: detect changes
+        # Compare: detect changes AND detect decreases
         has_changes = False
+        qty_decrease_products = []  # Products with quantity decrease
         all_codes = set(misa_qty_map.keys()) | set(so_qty_map.keys())
+        
         for code in all_codes:
             misa_qty = misa_qty_map.get(code, 0.0)
             so_qty = so_qty_map.get(code, 0.0)
             if abs(misa_qty - so_qty) > 0.001:  # Threshold for float comparison
                 has_changes = True
                 _logger.info("📊 Phát hiện thay đổi: %s (MISA: %s, SO: %s)", code, misa_qty, so_qty)
-                break
+                
+                # Check if this is a DECREASE
+                if misa_qty < so_qty - 0.001:
+                    qty_decrease_products.append({
+                        'code': code,
+                        'misa_qty': misa_qty,
+                        'so_qty': so_qty,
+                        'decrease': so_qty - misa_qty,
+                    })
+        
+        # ===== BLOCK SYNC NẾU CÓ SẢN PHẨM GIẢM SỐ LƯỢNG =====
+        # Giảm qty sẽ khiến Odoo tự tạo phiếu trả hàng - không mong muốn
+        # Yêu cầu user xử lý thủ công
+        if qty_decrease_products:
+            # Kiểm tra xem có active moves không (nếu không có thì cho phép sync)
+            has_active_moves = False
+            for sol in self.order_line:
+                if sol.move_ids.filtered(lambda m: m.state not in ('done', 'cancel')):
+                    has_active_moves = True
+                    break
+            
+            if has_active_moves:
+                details = "\n".join(
+                    f"- {item['code']}: SO có {item['so_qty']:g}, MISA yêu cầu {item['misa_qty']:g} (giảm {item['decrease']:g})"
+                    for item in qty_decrease_products
+                )
+                _logger.warning("CHẶN ĐỒNG BỘ do giảm số lượng khi có moves đang active:\n%s", details)
+                raise UserError(_(
+                    "⚠️ Không thể đồng bộ tự động vì MISA GIẢM SỐ LƯỢNG và đơn hàng đang có phiếu pick/pack/out.\n\n"
+                    "Các sản phẩm bị giảm:\n%s\n\n"
+                    "📋 Hướng dẫn xử lý:\n"
+                    "1. Vào đơn hàng → Tab 'Delivery' → Hủy các phiếu pick chưa hoàn tất\n"
+                    "2. Chỉnh sửa số lượng trên SO lines theo MISA\n"
+                    "3. Nếu đã giao rồi → Tạo phiếu trả hàng thủ công\n"
+                    "4. Sau khi xử lý xong, đồng bộ lại"
+                ) % details)
         
         # --------- Bước 0c: HỦY PHIẾU DOWNSTREAM NẾU CÓ THAY ĐỔI ---------
-        # Logic: Nếu có thay đổi, chỉ hủy các phiếu SAU phiếu đã done (downstream)
+        # Logic: Nếu có thay đổi (TĂNG qty), chỉ hủy các phiếu SAU phiếu đã done (downstream)
         # VD: Nếu pick done nhưng pack chưa done → hủy pack (để người đóng gói cập nhật bổ sung)
         # VD: Nếu pack done nhưng out chưa done → hủy out
         # KHÔNG hủy phiếu đang ở step hiện tại nếu nó chưa done

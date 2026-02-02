@@ -131,7 +131,7 @@ class GHNWebsiteController(http.Controller):
                     product = request.env['product.product'].sudo().search([('default_code', '=', sku)], limit=1)
                     if product:
                         # Odoo weight is in kg, convert to grams
-                        weight += (product.weight or 0) * qty
+                        weight += (product.weight or 1) * qty
                         # Aggregate dimensions (Simple logic: Sum height, max length/width)
                         p_length = max(p_length, product.product_length or 0)
                         p_width = max(p_width, product.product_width or 0)
