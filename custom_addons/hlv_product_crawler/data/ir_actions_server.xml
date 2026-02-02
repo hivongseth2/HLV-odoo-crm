@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_add_to_crawl_queue_server" model="ir.actions.server">
+        <field name="name">➡️ Thêm vào hàng đợi Crawl</field>
+        <field name="model_id" ref="product.model_product_template"/>
+        <field name="binding_model_id" ref="product.model_product_template"/>
+        <field name="binding_view_types">list,form</field>
+        <field name="state">code</field>
+        <field name="code">records.action_add_to_crawl_queue()</field>
+    </record>
+</odoo>

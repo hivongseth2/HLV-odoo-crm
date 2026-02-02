@@ -1,24 +1,78 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="res_config_settings_view_form" model="ir.ui.view">
-        <field name="name">res.config.settings.view.form.inherit.product.crawler</field>
+    <record id="res_config_settings_view_form_crawler" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.crawler</field>
         <field name="model">res.config.settings</field>
         <field name="priority" eval="90"/>
         <field name="inherit_id" ref="base.res_config_settings_view_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//form" position="inside">
-                <app data-string="Product Crawler" string="Product Crawler" name="hlv_product_crawler">
-                    <block title="AI Quality Control (Mr. GPT)" name="ai_qc_settings">
-                        <setting string="OpenAI Integration" help="Configure OpenAI API to enable AI Verification.">
-                            <field name="product_crawler_openai_api_key" password="True"/>
-                            <div class="content-group mt16">
-                                <label for="product_crawler_openai_model" class="o_light_label"/>
-                                <field name="product_crawler_openai_model"/>
+            <xpath expr="//div[hasclass('settings')]" position="inside">
+                <div class="app_settings_block" data-string="Product Crawler" string="Product Crawler" data-key="hlv_product_crawler">
+                    <h2>Kết nối AI (OpenAI)</h2>
+                    <div class="row mt16 o_settings_container">
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <label for="product_crawler_openai_api_key"/>
+                                <field name="product_crawler_openai_api_key" password="True"/>
+                                <div class="text-muted">
+                                    API Key từ OpenAI để xác minh và phân tích dữ liệu.
+                                </div>
                             </div>
-                        </setting>
-                    </block>
-                </app>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <label for="product_crawler_openai_model"/>
+                                <field name="product_crawler_openai_model"/>
+                                <div class="text-muted">
+                                    Model (ví dụ: gpt-4o-mini, gpt-3.5-turbo).
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h2>Cấu hình Tự động (Cron)</h2>
+                    <div class="row mt16 o_settings_container">
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane">
+                                <field name="product_crawler_auto_crawl"/>
+                            </div>
+                            <div class="o_setting_right_pane">
+                                <label for="product_crawler_auto_crawl"/>
+                                <div class="text-muted">
+                                    Bật tính năng tự động chạy ngầm (Scheduled Action).
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <label for="product_crawler_batch_size"/>
+                                <field name="product_crawler_batch_size"/>
+                                <div class="text-muted">
+                                    Số lượng sản phẩm xử lý mỗi lần chạy (Batch Size).
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </xpath>
         </field>
     </record>
+
+    <record id="action_crawler_config_settings" model="ir.actions.act_window">
+        <field name="name">Settings</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">res.config.settings</field>
+        <field name="view_mode">form</field>
+        <field name="target">inline</field>
+        <field name="context">{'module' : 'hlv_product_crawler'}</field>
+    </record>
+
+    <menuitem id="menu_crawler_config_settings" 
+        name="Cấu hình Crawler" 
+        parent="stock.menu_stock_config_settings" 
+        action="action_crawler_config_settings" 
+        sequence="100"/>
 </odoo>
