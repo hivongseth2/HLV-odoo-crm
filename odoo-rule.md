@@ -252,3 +252,36 @@ Cấu trúc `res.config.settings` view inheritance đã thay đổi trong Odoo 1
       </app>
   </xpath>
   ```
+
+11.5. HTML trong message_post (Chatter) - Sử dụng Markup
+- **Lỗi**: HTML bị escape và hiển thị raw như `<div style='color: red;'>` thay vì render
+- **Nguyên nhân**: Odoo mặc định escape tất cả ký tự đặc biệt trong message body để bảo mật (chống XSS)
+- **Giải pháp**: Sử dụng `Markup` từ thư viện `markupsafe` để đánh dấu chuỗi là HTML an toàn
+
+```python
+from markupsafe import Markup
+from odoo import _, models
+
+class MyModel(models.Model):
+    def my_method(self):
+        # ❌ SAI - HTML sẽ bị escape
+        error_msg = "<div style='color: red;'>Lỗi!</div>"
+        self.message_post(body=error_msg)  # Hiển thị raw HTML text
+        
+        # ✅ ĐÚNG - Wrap với Markup
+        error_msg = Markup("<div style='color: red;'>Lỗi!</div>")
+        self.message_post(body=error_msg)  # Render HTML đúng
+        
+        # ✅ Kết hợp với _() cho translation
+        error_msg = Markup(_("<b>Lỗi:</b> %s")) % details
+        self.message_post(body=error_msg)
+        
+        # ⚠️ CHÚ Ý: Khi chèn biến vào chuỗi Markup, biến đó CŨNG phải được Markup
+        details_html = Markup("<br/>".join(item_list))  # ← Markup cả biến
+        error_msg = Markup(_("<div>Chi tiết:</div>%s")) % details_html
+```
+
+**Lưu ý quan trọng**:
+- Import đúng: `from markupsafe import Markup` (KHÔNG phải `from odoo.utils`)
+- Khi dùng `%` hoặc `.format()` để chèn biến, biến đó sẽ bị escape trừ khi cũng được wrap bởi `Markup`
+- Markup chỉ được chấp nhận trong các field HTML như message body, không áp dụng cho plain text fields
