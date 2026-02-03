@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Conversation List View -->
+    <record id="view_zalo_chat_conversation_list" model="ir.ui.view">
+        <field name="name">zalo.chat.conversation.list</field>
+        <field name="model">zalo.chat.conversation</field>
+        <field name="arch" type="xml">
+            <list string="Zalo Conversations">
+                <field name="name"/>
+                <field name="zalo_user_name"/>
+                <field name="partner_id"/>
+                <field name="last_message_date"/>
+                <field name="unread_count" string="Unread"/>
+                <field name="state" decoration-success="state == 'open'" decoration-muted="state == 'closed'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Conversation Form View -->
+    <record id="view_zalo_chat_conversation_form" model="ir.ui.view">
+        <field name="name">zalo.chat.conversation.form</field>
+        <field name="model">zalo.chat.conversation</field>
+        <field name="arch" type="xml">
+            <form string="Zalo Conversation">
+                <header>
+                    <button name="action_send_message" string="Send Message" type="object" class="oe_highlight" invisible="state == 'archived'"/>
+                    <button name="action_mark_as_read" string="Mark as Read" type="object" invisible="unread_count == 0"/>
+                    <button name="action_close" string="Close" type="object" invisible="state != 'open'"/>
+                    <button name="action_reopen" string="Reopen" type="object" invisible="state == 'open'"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_mark_as_read" type="object" class="oe_stat_button" icon="fa-check-circle" invisible="unread_count == 0">
+                            <field name="unread_count" widget="statinfo" string="Unread"/>
+                        </button>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="zalo_user_id"/>
+                            <field name="zalo_user_name"/>
+                            <field name="partner_id"/>
+                        </group>
+                        <group>
+                            <field name="zalo_avatar" widget="url"/>
+                            <field name="last_message_date"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Messages" name="messages">
+                            <field name="message_ids" mode="tree">
+                                <list string="Messages" create="false" delete="false">
+                                    <field name="sent_date"/>
+                                    <field name="direction" decoration-info="direction == 'inbound'" decoration-success="direction == 'outbound'"/>
+                                    <field name="message_type"/>
+                                    <field name="content"/>
+                                    <field name="state" decoration-success="state == 'sent'" decoration-danger="state == 'failed'"/>
+                                    <field name="is_read" invisible="direction == 'outbound'"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- Conversation Kanban View -->
+    <record id="view_zalo_chat_conversation_kanban" model="ir.ui.view">
+        <field name="name">zalo.chat.conversation.kanban</field>
+        <field name="model">zalo.chat.conversation</field>
+        <field name="arch" type="xml">
+            <kanban>
+                <field name="name"/>
+                <field name="zalo_user_name"/>
+                <field name="zalo_avatar"/>
+                <field name="last_message_date"/>
+                <field name="unread_count"/>
+                <field name="state"/>
+                <templates>
+                    <t t-name="card" class="flex-row">
+                        <aside class="o_kanban_aside">
+                            <img t-att-src="record.zalo_avatar.value || '/web/static/img/placeholder.png'" class="o_kanban_image" alt="Avatar"/>
+                        </aside>
+                        <main class="ms-3">
+                            <div class="o_kanban_record_title">
+                                <strong><field name="zalo_user_name"/></strong>
+                            </div>
+                            <div>
+                                <field name="partner_id"/> 
+                                <span class="badge text-bg-info" t-if="record.unread_count.value > 0">
+                                    <i class="fa fa-envelope"/> <field name="unread_count"/>
+                                </span>
+                            </div>
+                            <div class="text-muted">
+                                <field name="last_message_date" widget="relative"/>
+                            </div>
+                        </main>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!-- Conversation Search View -->
+    <record id="view_zalo_chat_conversation_search" model="ir.ui.view">
+        <field name="name">zalo.chat.conversation.search</field>
+        <field name="model">zalo.chat.conversation</field>
+        <field name="arch" type="xml">
+            <search string="Search Conversations">
+                <field name="name"/>
+                <field name="zalo_user_name"/>
+                <field name="zalo_user_id"/>
+                <field name="partner_id"/>
+                <filter string="Open" name="open" domain="[('state', '=', 'open')]"/>
+                <filter string="Closed" name="closed" domain="[('state', '=', 'closed')]"/>
+                <filter string="Unread" name="unread" domain="[('unread_count', '>', 0)]"/>
+                <separator/>
+                <filter string="Today" name="today" domain="[('last_message_date', '>=', context_today().strftime('%Y-%m-%d'))]"/>
+                <filter string="This Week" name="this_week" domain="[('last_message_date', '>=', (context_today() - relativedelta(weeks=1)).strftime('%Y-%m-%d'))]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Status" name="group_state" context="{'group_by': 'state'}"/>
+                    <filter string="Contact" name="group_partner" context="{'group_by': 'partner_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Conversation Action -->
+    <record id="action_zalo_chat_conversation" model="ir.actions.act_window">
+        <field name="name">Conversations</field>
+        <field name="res_model">zalo.chat.conversation</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="context">{'search_default_open': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No Zalo conversations yet
+            </p>
+            <p>
+                Conversations will appear here when customers send messages to your Zalo OA.
+            </p>
+        </field>
+    </record>
+</odoo>

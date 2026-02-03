@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Cron Job: Sync Message Status (Odoo 18 compliant) -->
+        <record id="ir_cron_zalo_message_sync" model="ir.cron">
+            <field name="name">Zalo Chat: Sync Message Status</field>
+            <!-- Use search for model_id to avoid ParseError -->
+            <field name="model_id" search="[('model', '=', 'zalo.chat.message')]"/>
+            <field name="state">code</field>
+            <field name="code">model.cron_sync_message_status()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">15</field>
+            <field name="interval_type">minutes</field>
+            <!-- IMPORTANT: Set active=False by default to avoid ParseError on install -->
+            <field name="active" eval="False"/>
+        </record>
+    </data>
+</odoo>

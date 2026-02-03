@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Main Menu -->
+    <menuitem id="menu_zalo_chat_root"
+              name="Zalo Chat"
+              sequence="100"
+              web_icon="zalo_chat_integration,static/description/icon.png"/>
+
+    <!-- Conversations Menu -->
+    <menuitem id="menu_zalo_chat_conversations"
+              name="Conversations"
+              parent="menu_zalo_chat_root"
+              action="action_zalo_chat_conversation"
+              sequence="10"/>
+
+    <!-- Messages Menu (Technical) -->
+    <menuitem id="menu_zalo_chat_messages"
+              name="Messages"
+              parent="menu_zalo_chat_root"
+              action="action_zalo_chat_message"
+              sequence="20"
+              groups="base.group_no_one"/>
+
+    <!-- Configuration Menu -->
+    <menuitem id="menu_zalo_chat_config"
+              name="Configuration"
+              parent="menu_zalo_chat_root"
+              sequence="90"/>
+
+    <!-- Link to Zalo ZNS Config -->
+    <menuitem id="menu_zalo_chat_zns_config"
+              name="Zalo OA Settings"
+              parent="menu_zalo_chat_config"
+              action="zalo_zns.action_zalo_zns_config"
+              sequence="10"/>
+</odoo>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Sequence for Zalo Chat Conversation -->
+        <record id="seq_zalo_chat_conversation" model="ir.sequence">
+            <field name="name">Zalo Chat Conversation Sequence</field>
+            <field name="code">zalo.chat.conversation</field>
+            <field name="prefix">ZALO-CHAT/%(year)s/</field>
+            <field name="padding">4</field>
+            <field name="company_id" eval="False"/>
+        </record>
+    </data>
+</odoo>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Send Zalo Chat Wizard Form View -->
+    <record id="view_send_zalo_chat_wizard_form" model="ir.ui.view">
+        <field name="name">send.zalo.chat.wizard.form</field>
+        <field name="model">send.zalo.chat.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Send Zalo Message">
+                <group>
+                    <field name="conversation_id" invisible="1"/>
+                    <field name="message_type"/>
+                    <field name="message_content" invisible="message_type != 'text'" placeholder="Type your message here..."/>
+                    <field name="attachment_file" invisible="message_type == 'text'" filename="attachment_filename"/>
+                    <field name="attachment_filename" invisible="1"/>
+                </group>
+                <footer>
+                    <button name="action_send" string="Send" type="object" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>
