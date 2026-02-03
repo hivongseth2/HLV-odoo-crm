@@ -486,7 +486,7 @@ class MisaApiUtils(models.AbstractModel):
         return match.group("token")
 
     #=== Hàm lấy OwnerIDText và SaleOrderDate từ SaleOrder ===#
-    def get_saleorder_owner_and_date(self, sale_order_id: int | str, sale_headers: object) -> dict:
+    def get_saleorder_owner_and_date(self, sale_order_id: int | str, sale_headers: object, pre_fetched_data: dict = None) -> dict:
         """
         Hàm này dùng để lấy ra mã nhân viên sale (OwnerIDText, chỉ lấy phần trong ngoặc),
         ngày đơn hàng (SaleOrderDate), thông tin giao hàng từ CustomField14,
@@ -494,29 +494,32 @@ class MisaApiUtils(models.AbstractModel):
         mã vận đơn (OtherSysOrderCode, DeliveryOrderNumber),
         hình thức thanh toán (CustomField15 - httt),
         và hình thức giao hàng (CustomField16 - htgh)
-        - Gọi API: POST https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4
-        - Payload: {"ID": "<sale_order_id>", "MISAEntityState": "2"}
-        - Header: truyền vào từ biến sale_headers (đã build sẵn)
+        
+        Args:
+            pre_fetched_data: Dữ liệu (CurrentData) đã fetch trước đó (để tránh gọi API lại).
         """
-        url = "https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4"
-        payload = {"ID": str(sale_order_id), "MISAEntityState": "2"}
+        cd = {}
+        if pre_fetched_data:
+            cd = pre_fetched_data
+        else:
+            url = "https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4"
+            payload = {"ID": str(sale_order_id), "MISAEntityState": "2"}
 
-        try:
-            # Gọi API lấy thông tin chi tiết đơn hàng
-            resp = requests.post(url, headers=sale_headers, json=payload, timeout=30)
-            if resp.status_code != 200:
-                _logger.error("FormDataNew(SaleOrder) HTTP %s: %s", resp.status_code, resp.text[:300])
+            try:
+                # Gọi API lấy thông tin chi tiết đơn hàng
+                resp = requests.post(url, headers=sale_headers, json=payload, timeout=30)
+                if resp.status_code != 200:
+                    _logger.error("FormDataNew(SaleOrder) HTTP %s: %s", resp.status_code, resp.text[:300])
 
+                    return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "shipping_contact": None, "httt": None, "htgh": None, "is_crm_delivery": False}
+                
+                resp_json = resp.json() if resp.content else {}
+                cd = (resp_json or {}).get("Data", {}).get("CurrentData", {}) or {}
+            except Exception as ex:
+                _logger.exception("Lỗi gọi FormDataNew SaleOrder (ID=%s): %s", sale_order_id, ex)
                 return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "shipping_contact": None, "httt": None, "htgh": None, "is_crm_delivery": False}
-                # return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "other_sys_order_code": None, "delivery_order_number": None, "shipping_contact": None}
-            data = resp.json() if resp.content else {}
-        except Exception as ex:
-            _logger.exception("Lỗi gọi FormDataNew SaleOrder (ID=%s): %s", sale_order_id, ex)
-            return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "shipping_contact": None, "httt": None, "htgh": None, "is_crm_delivery": False}
-            # return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "other_sys_order_code": None, "delivery_order_number": None, "shipping_contact": None}
 
-        # Lấy dữ liệu chi tiết đơn hàng từ response
-        cd = (data or {}).get("Data", {}).get("CurrentData", {}) or {}
+        # Lấy dữ liệu chi tiết đơn hàng từ cd
 
         # Lấy OwnerIDText và chỉ lấy phần trong ngoặc
         raw_owner = str(cd.get("OwnerIDText") or "").strip()

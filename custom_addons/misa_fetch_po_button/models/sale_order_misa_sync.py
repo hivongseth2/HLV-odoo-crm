@@ -466,9 +466,10 @@ class SaleOrder(models.Model):
 
         # ===== 8) TẠO LẠI TỪ MISA =====
         # Fetch OwnerIDText, SaleOrderDate, ShippingContactIDText, httt, htgh từ MISA
+        # Dùng lại 'data' đã fetch ở bước 1 để NÉ gọi API FormDataNew lần nữa
         owner_date = {}
         try:
-            owner_date = env['misa.api.utils'].get_saleorder_owner_and_date(misa_order_id, headers) or {}
+            owner_date = env['misa.api.utils'].get_saleorder_owner_and_date(misa_order_id, headers, pre_fetched_data=data) or {}
         except Exception as _e:
             _logger.warning("Không lấy được thông tin chi tiết cho SO=%s: %s", misa_order_id, _e)
 
