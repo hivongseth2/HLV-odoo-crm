@@ -316,21 +316,57 @@ class PickingExportWizard(models.TransientModel):
                 )
                 rows.append(row)
         else:
-            # Logic cũ: Xử lý từng move line hoặc move (cho non-POS orders)
+            # Logic cho non-POS orders: Xuất combo headers và stock moves
+            # AGGREGATION LOGIC: Gộp các move lines cùng sản phẩm/giá/sol lại thành 1 dòng
             if picking.move_line_ids:
+                # Key: (sale_line_id, product_id, uom_id)
+                # Value: { 'qty': float, 'ml': record, 'move': record }
+                aggregated_lines = {}
+                ordered_keys = []
+                
                 for ml in picking.move_line_ids:
                     move = ml.move_id
                     prod = ml.product_id
                     if not prod:
                         continue
 
+                    # Determine Group Key
+                    sol = getattr(move, 'sale_line_id', False)
+                    sol_id = sol.id if sol else 0
+                    key = (sol_id, prod.id, ml.product_uom_id.id)
+                    
+                    if key not in aggregated_lines:
+                        aggregated_lines[key] = {
+                            'qty': 0.0,
+                            'ml': ml,
+                            'move': move,
+                            'prod': prod
+                        }
+                        ordered_keys.append(key)
+                    
+                    # Sum quantity
+                    aggregated_lines[key]['qty'] += (ml.qty_done or 0.0)
+                
+                # Render Aggregated Rows
+                for key in ordered_keys:
+                    data = aggregated_lines[key]
+                    ml_agg = data['ml']
+                    move_agg = data['move']
+                    prod_agg = data['prod']
+                    qty_agg = data['qty']
+                    
+                    if qty_agg == 0:
+                        continue
+
                     row = self._build_row_data(
-                        picking, so, prod, ml, move,
+                        picking, so, prod_agg, ml_agg, move_agg,
                         scheduled_date_str, picking_name, partner_code, partner_name,
                         partner_address, partner_vat, sale_name, sale_user_code,
-                        dien_giai, ly_do_xuat, warehouse_code
+                        dien_giai, ly_do_xuat, warehouse_code,
+                        forced_qty=qty_agg
                     )
                     rows.append(row)
+
             else:
                 for mv in picking.move_ids_without_package:
                     prod = mv.product_id
@@ -350,7 +386,7 @@ class PickingExportWizard(models.TransientModel):
     def _build_row_data(self, picking, so, prod, ml, move,
                         scheduled_date_str, picking_name, partner_code, partner_name,
                         partner_address, partner_vat, sale_name, sale_user_code,
-                        dien_giai, ly_do_xuat, warehouse_code, pos_line=None):
+                        dien_giai, ly_do_xuat, warehouse_code, pos_line=None, sale_line=None, forced_qty=None):
         """Xây dựng dữ liệu cho 1 dòng"""
         
         product_code = prod.default_code or (prod.barcode if hasattr(prod, 'barcode') else "") or ""
@@ -418,7 +454,10 @@ class PickingExportWizard(models.TransientModel):
             
         else:
             # Fallback: lấy từ picking/move line
-            if ml:
+            if forced_qty is not None:
+                uom = ml.product_uom_id if ml else (move.product_uom if move else prod.uom_id)
+                qty = forced_qty
+            elif ml:
                 uom = ml.product_uom_id or prod.uom_id
                 qty = ml.qty_done or 0.0
             else:
