@@ -1087,69 +1087,29 @@ class SaleOrder(models.Model):
             SaleLine.create(vals_line)
             _logger.info("➕ Tạo mới SOL %s: qty=%.2f", misa_data['code'], misa_data['qty'])
         
-        # ===== XỬ LÝ SẢN PHẨM BỊ XÓA KHỎI MISA NHƯNG ĐÃ GIAO =====
-        # Với SP đã giao nhưng không còn trong MISA, chỉ log warning
-        # và set qty = qty_delivered để Odoo tự xử lý picking
+        # ===== XỬ LÝ SẢN PHẨM BỊ XÓA KHỎI MISA =====
+        # KHÔNG xóa SOL, chỉ set qty = 0 để giữ lịch sử và cho Odoo xử lý
         
-        # Xóa/cắt các SOL không còn trong MISA (chỉ khi chưa giao)
         for sol in unmatched_sols:
             code = sol.product_id.default_code or sol.product_id.name
             
-            # 1) SO còn nháp -> xoá luôn
-            if self.state in ('draft', 'sent'):
-                try:
-                    sol.unlink()
-                    _logger.info("🧹 Unlink dòng %s (SO nháp) vì không còn trong MISA", code)
-                except Exception as e:
-                    _logger.warning("Không thể unlink dòng %s ở nháp: %s", code, e)
-                continue
-
-            # 2) SO đã xác nhận
-            qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
-            qty_ordered  = float(getattr(sol, 'product_uom_qty', 0.0) or 0.0)
-
-            # Huỷ các move mở trước
-            for mv in sol.move_ids.filtered(lambda m: m.state not in ('done', 'cancel')):
-                try:
-                    mv._action_cancel()
-                except Exception as e:
-                    _logger.warning("Không cancel được move mở của dòng %s: %s", code, e)
-
             # Nếu đã có invoice posted -> giữ nguyên
             if posted_inv_exists:
                 _logger.warning("⚠️ Dòng %s không còn trong MISA nhưng giữ nguyên (đã có invoice posted).", code)
                 continue
-
-            # 2a) Chưa giao gì: thử XOÁ
-            if qty_delivered <= 1e-6:
-                try:
-                    has_done_moves = bool(sol.move_ids.filtered(lambda m: m.state == 'done'))
-                    has_active_inv_lines = bool(sol.invoice_lines.filtered(lambda l: l.move_id.state != 'cancel'))
-                    if not has_done_moves and not has_active_inv_lines:
-                        sol.unlink()
-                        _logger.info("🧹 Unlink dòng %s (chưa giao gì).", code)
-                    else:
-                        sol.write({'product_uom_qty': 0.0})
-                        _logger.info("↘️ Set 0 dòng %s (không xoá được).", code)
-                except Exception as e:
-                    _logger.warning("Unlink thất bại dòng %s: %s", code, e)
-                    try:
-                        sol.write({'product_uom_qty': 0.0})
-                    except Exception as e2:
-                        _logger.warning("Không thể set 0 dòng %s: %s", code, e2)
-                continue
-
-            # 2b) Đã giao một phần -> cắt residual
-            if qty_delivered + 1e-6 < qty_ordered:
-                try:
-                    sol.write({'product_uom_qty': qty_delivered})
-                    _logger.info("✂️ Cắt residual %s: %.2f -> %.2f", code, qty_ordered, qty_delivered)
-                except Exception as e:
-                    _logger.warning("Không thể cắt residual dòng %s: %s", code, e)
-                continue
-
-            # 2c) Đã giao đủ -> giữ nguyên
-            _logger.info("✅ Dòng %s đã giao đủ, không chỉnh.", code)
+            
+            qty_delivered = float(getattr(sol, 'qty_delivered', 0.0) or 0.0)
+            
+            # Set qty = 0 hoặc qty_delivered (nếu đã giao)
+            new_qty = max(qty_delivered, 0.0)
+            try:
+                sol.write({'product_uom_qty': new_qty})
+                if new_qty > 0:
+                    _logger.info("↘️ Set qty=%s cho dòng %s (đã giao %s, không xóa).", new_qty, code, qty_delivered)
+                else:
+                    _logger.info("↘️ Set qty=0 cho dòng %s (không còn trong MISA).", code)
+            except Exception as e:
+                _logger.warning("Không thể set qty cho dòng %s: %s", code, e)
 
 
 
@@ -1362,45 +1322,31 @@ class SaleOrder(models.Model):
         if not has_changes:
             _logger.info("ℹ️ Không có thay đổi SO lines → giữ nguyên")
         
-        # ===== LƯU DANH SÁCH PHIẾU DOWNSTREAM CẦN HỦY TRƯỚC KHI SYNC =====
-        # Logic: 
-        # - Nếu có GIẢM qty (dù có thêm SP mới hay không): KHÔNG hủy pack
-        #   → Để Odoo giảm qty trong pack + tạo return từ pick → stock
-        #   → Odoo sẽ tự thêm SP mới vào pack hiện tại
-        # - Nếu CHỈ có thêm SP mới/tăng qty (KHÔNG có giảm): Hủy downstream để regenerate
-        downstream_picks_to_cancel = self.env['stock.picking']
-        
-        # CHỈ hủy khi có SP mới/tăng qty VÀ KHÔNG có giảm qty
-        should_cancel = (has_new_products or has_qty_increase) and not has_qty_decrease
-        
-        if should_cancel:
-            _logger.info("🔄 Có SP mới/tăng qty, KHÔNG có giảm → Hủy phiếu downstream")
-            all_picks = self.picking_ids.sudo()
-            done_picks = all_picks.filtered(lambda p: p.state == 'done')
-            open_picks = all_picks.filtered(lambda p: p.state not in ('done', 'cancel'))
+        # ===== KHÔNG HỦY PHIẾU - ĐỂ ODOO XỬ LÝ MẶC ĐỊNH =====
+        # Chỉ log thay đổi, để Odoo tự xử lý việc tạo/cập nhật picking
+        if has_changes:
+            _logger.info("📊 Phát hiện thay đổi: new_products=%s, qty_increase=%s, qty_decrease=%s",
+                        has_new_products, has_qty_increase, has_qty_decrease)
+            _logger.info("ℹ️ Để Odoo xử lý mặc định (KHÔNG hủy phiếu)")
             
-            if done_picks:
-                # Tìm phiếu DOWNSTREAM (sau phiếu done)
-                done_dest_locations = done_picks.mapped('location_dest_id')
-                downstream_picks_to_cancel = open_picks.filtered(
-                    lambda p: p.location_id in done_dest_locations
-                )
-                if downstream_picks_to_cancel:
-                    _logger.info("📋 Sẽ hủy %s phiếu downstream: %s", 
-                               len(downstream_picks_to_cancel),
-                               downstream_picks_to_cancel.mapped('name'))
-            else:
-                # Chưa có done → hủy tất cả open picks
-                downstream_picks_to_cancel = open_picks
-                if downstream_picks_to_cancel:
-                    _logger.info("📋 Sẽ hủy %s phiếu open: %s", 
-                               len(downstream_picks_to_cancel),
-                               downstream_picks_to_cancel.mapped('name'))
-        elif has_qty_decrease:
-            _logger.info("ℹ️ Có giảm qty → KHÔNG hủy pack để Odoo xử lý đúng (giảm trong pack + return từ pick)")
+            # Tạo thông báo cho kho biết có thay đổi từ MISA
+            change_details = []
+            if has_new_products:
+                change_details.append("• Có sản phẩm MỚI được thêm")
+            if has_qty_increase:
+                change_details.append("• Số lượng được TĂNG")
+            if has_qty_decrease:
+                change_details.append("• Số lượng được GIẢM")
+            
+            change_msg = Markup(_(
+                "<div style='color: orange; font-weight: bold;'>⚠️ THÔNG BÁO: ĐƠN HÀNG CÓ THAY ĐỔI TỪ MISA</div><br/>"
+                "<b>Chi tiết thay đổi:</b><br/>%s<br/><br/>"
+                "<i>Vui lòng kiểm tra lại các phiếu kho và thực hiện điều chỉnh nếu cần.</i>"
+            )) % Markup("<br/>".join(change_details))
+            self.message_post(body=change_msg)
         
         # --------- Bước 0c: đưa dòng SO về đúng MISA (nếu không có invoice posted) ---------
-        # SYNC SO LINES TRƯỚC để Odoo xử lý return cho qty decrease
+        # Sync SO lines và để Odoo xử lý tự động
         if self.invoice_ids.filtered(lambda inv: inv.state == 'posted'):
             _logger.warning("Bỏ qua cập nhật SO lines vì có hoá đơn 'posted'. Sẽ chỉ vá picking mở.")
         else:
@@ -1411,47 +1357,6 @@ class SaleOrder(models.Model):
                 if 'UserError' in type(exc).__name__:
                     raise
                 _logger.warning("Không thể đồng bộ SO lines: %s (tiếp tục vá picking)", exc)
-        
-        # ===== HỦY PHIẾU DOWNSTREAM ĐÃ LƯU TRƯỚC ĐÓ =====
-        if downstream_picks_to_cancel:
-            _logger.info("🔄 Hủy %s phiếu downstream đã xác định trước...", len(downstream_picks_to_cancel))
-            
-            for p in downstream_picks_to_cancel:
-                # Kiểm tra lại state vì có thể đã thay đổi sau sync
-                if p.state in ('cancel', 'done'):
-                    _logger.info("   ⏭️ Bỏ qua phiếu %s (state: %s)", p.name, p.state)
-                    continue
-                    
-                try:
-                    # Reset qty_done trên move lines
-                    if p.move_line_ids:
-                        p.move_line_ids.filtered(lambda ml: getattr(ml, 'qty_done', 0)).write({'qty_done': 0})
-                    
-                    # Unreserve và cancel các moves
-                    for mv in p.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel')):
-                        try:
-                            if hasattr(mv, '_do_unreserve'):
-                                mv._do_unreserve()
-                            mv._action_cancel()
-                        except Exception:
-                            pass
-                    
-                    # Hủy picking
-                    if p.state not in ('cancel', 'done'):
-                        if hasattr(p, 'action_cancel'):
-                            p.action_cancel()
-                        # Thông báo lý do hủy
-                        cancel_msg = Markup(_(
-                            "<div style='color: orange; font-weight: bold;'>⚠️ PHIẾU ĐÃ BỊ HỦY TỰ ĐỘNG</div><br/>"
-                            "<b>Lý do:</b> Đơn hàng %s có thêm sản phẩm mới từ MISA.<br/>"
-                            "Vui lòng xử lý phiếu mới được tạo."
-                        )) % self.name
-                        p.message_post(body=cancel_msg)
-                        _logger.info("   ✅ Đã hủy phiếu %s", p.name)
-                except Exception as e:
-                    _logger.warning("   ⚠️ Không thể hủy phiếu %s: %s", p.name, e)
-        elif has_qty_decrease:
-            _logger.info("ℹ️ Chỉ có giảm qty → Để Odoo tự xử lý return, không hủy phiếu")
 
         # --------- Bước 1: tổng đã giao theo sale.order.line.qty_delivered ----------
         # LƯU Ý: Trong flow đi 3 phiếu (pick/pack/out), không thể tính tổng qty_done của các move_line
