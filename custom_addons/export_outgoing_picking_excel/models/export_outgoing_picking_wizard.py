@@ -358,72 +358,57 @@ class PickingExportWizard(models.TransientModel):
                     )
                     rows.append(row)
         else:
-            # Logic cho non-POS orders: Xuất service combo headers và stock moves
-            processed_sale_lines = set()  # Track đã xuất combo cha chưa
-            
-            # Bước 1: Xuất tất cả combo headers từ Sale Order (Cả Service và BoM Kit)
-            if so:
-                for sol in so.order_line:
-                    is_combo = False
-                    # 1. Check Service
-                    if sol.product_id.type == 'service':
-                        is_combo = True
-                    # 2. Check BoM Kit (Phantom)
-                    else:
-                        bom = self.env['mrp.bom']._bom_find(sol.product_id, bom_type='phantom')
-                        if bom:
-                            is_combo = True
-                    
-                    if is_combo:
-                        # Xuất dòng combo header
-                        combo_row = self._build_row_data(
-                            picking, so, sol.product_id, None, None,
-                            scheduled_date_str, picking_name, partner_code, partner_name,
-                            partner_address, partner_vat, sale_name, sale_user_code,
-                            dien_giai, ly_do_xuat, warehouse_code, sale_line=sol
-                        )
-                        rows.append(combo_row)
-                        processed_sale_lines.add(sol.id)
-            else:
-                 # Nếu không tìm thấy SO thì không thể xuất service lines
-                 pass
-            
-            # Bước 2: Xuất stock moves (storable products)
+            # Logic cho non-POS orders: Xuất combo headers và stock moves
+            # AGGREGATION LOGIC: Gộp các move lines cùng sản phẩm/giá/sol lại thành 1 dòng
             if picking.move_line_ids:
+                # Key: (sale_line_id, product_id, uom_id)
+                # Value: { 'qty': float, 'ml': record, 'move': record }
+                aggregated_lines = {}
+                ordered_keys = []
+                
                 for ml in picking.move_line_ids:
                     move = ml.move_id
                     prod = ml.product_id
                     if not prod:
                         continue
+
+                    # Determine Group Key
+                    sol = getattr(move, 'sale_line_id', False)
+                    sol_id = sol.id if sol else 0
+                    key = (sol_id, prod.id, ml.product_uom_id.id)
                     
-                    sol = getattr(move, 'sale_line_id', False) if move else False
+                    if key not in aggregated_lines:
+                        aggregated_lines[key] = {
+                            'qty': 0.0,
+                            'ml': ml,
+                            'move': move,
+                            'prod': prod
+                        }
+                        ordered_keys.append(key)
                     
-                    # Nếu có sale order line và chưa xử lý
-                    if sol and sol.id not in processed_sale_lines:
-                        processed_sale_lines.add(sol.id)
-                        
-                        # Kiểm tra BoM combo: sale_line.product != move.product → combo
-                        if sol.product_id != prod:
-                            # Đây là component của BoM combo, cần xuất cha trước
-                            combo_prod = sol.product_id
-                            
-                            # Xuất dòng combo cha (BoM)
-                            parent_row = self._build_row_data(
-                                picking, so, combo_prod, None, move,
-                                scheduled_date_str, picking_name, partner_code, partner_name,
-                                partner_address, partner_vat, sale_name, sale_user_code,
-                                dien_giai, ly_do_xuat, warehouse_code
-                            )
-                            rows.append(parent_row)
+                    # Sum quantity
+                    aggregated_lines[key]['qty'] += (ml.qty_done or 0.0)
+                
+                # Render Aggregated Rows
+                for key in ordered_keys:
+                    data = aggregated_lines[key]
+                    ml_agg = data['ml']
+                    move_agg = data['move']
+                    prod_agg = data['prod']
+                    qty_agg = data['qty']
                     
-                    # Xuất dòng hiện tại (component hoặc sản phẩm thường)
+                    if qty_agg == 0:
+                        continue
+
                     row = self._build_row_data(
-                        picking, so, prod, ml, move,
+                        picking, so, prod_agg, ml_agg, move_agg,
                         scheduled_date_str, picking_name, partner_code, partner_name,
                         partner_address, partner_vat, sale_name, sale_user_code,
-                        dien_giai, ly_do_xuat, warehouse_code
+                        dien_giai, ly_do_xuat, warehouse_code,
+                        forced_qty=qty_agg
                     )
                     rows.append(row)
+
             else:
                 for mv in picking.move_ids_without_package:
                     prod = mv.product_id
@@ -463,7 +448,7 @@ class PickingExportWizard(models.TransientModel):
     def _build_row_data(self, picking, so, prod, ml, move,
                         scheduled_date_str, picking_name, partner_code, partner_name,
                         partner_address, partner_vat, sale_name, sale_user_code,
-                        dien_giai, ly_do_xuat, warehouse_code, pos_line=None, sale_line=None):
+                        dien_giai, ly_do_xuat, warehouse_code, pos_line=None, sale_line=None, forced_qty=None):
         """Xây dựng dữ liệu cho 1 dòng"""
         
         product_code = prod.default_code or (prod.barcode if hasattr(prod, 'barcode') else "") or ""
@@ -540,7 +525,10 @@ class PickingExportWizard(models.TransientModel):
             
         else:
             # Fallback: lấy từ picking/move line
-            if ml:
+            if forced_qty is not None:
+                uom = ml.product_uom_id if ml else (move.product_uom if move else prod.uom_id)
+                qty = forced_qty
+            elif ml:
                 uom = ml.product_uom_id or prod.uom_id
                 qty = ml.qty_done or 0.0
             elif move:
