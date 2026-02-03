@@ -33,6 +33,10 @@
                     <group>
                         <field name="product_id" readonly="1"/>
                     </group>
+                    <div class="alert alert-info" role="alert">
+                        <strong>💡 Gợi ý:</strong> Danh sách chỉ hiển thị tối đa 15 sản phẩm giống nhất (≥70%). 
+                        Bấm "🤖 AI Check Tất Cả" để phân biệt chính xác hơn.
+                    </div>
                     <label for="duplicate_line_ids" string="Sản phẩm có khả năng trùng lặp"/>
                     <field name="duplicate_line_ids" readonly="1"/>
                     <div class="mt-3">

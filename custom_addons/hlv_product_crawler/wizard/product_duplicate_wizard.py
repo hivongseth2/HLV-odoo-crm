@@ -53,12 +53,12 @@ class ProductDuplicateWizard(models.TransientModel):
             # 2. Name Similarity (Simple and effective)
             if name and cand_name and score < 100:
                 similarity = difflib.SequenceMatcher(None, name.lower(), cand_name.lower()).ratio()
-                if similarity > 0.6:  # Lower threshold - let AI filter
+                if similarity > 0.7:  # Increased threshold to reduce noise
                     score = max(score, int(similarity * 100))
                     reasons.append(f"Tên giống {int(similarity * 100)}%")
             
-            # Add to candidates if score >= 60
-            if score >= 60:
+            # Add to candidates if score >= 70
+            if score >= 70:
                 lines.append((0, 0, {
                     'candidate_product_id': cand.id,
                     'score': score,
@@ -67,7 +67,9 @@ class ProductDuplicateWizard(models.TransientModel):
         
         # Sort by score desc
         lines.sort(key=lambda x: x[2]['score'], reverse=True)
-        return lines
+        
+        # CRITICAL: Limit to top 15 to avoid AI overload
+        return lines[:15]
 
     def action_batch_ai_verify(self):
         """Use AI to verify all duplicate candidates at once"""
