@@ -476,7 +476,15 @@ class SaleOrder(models.Model):
         # Địa chỉ giao hàng/lập hóa đơn lấy từ ShippingContactIDText
         partner_name  = data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
         shipping_contact_name = owner_date.get('shipping_contact') or data.get("ShippingContactIDText")
-        partner       = odoo_utils._get_or_create_partner(partner_name)
+        
+        # --- NEW LOGIC: Sync from MISA Account API first ---
+        account_id = data.get("AccountID") or data.get("AccountId")
+        partner = None
+        if account_id:
+             partner = env['misa.api.utils']._sync_customer_from_misa_account_api(account_id, headers)
+
+        if not partner:
+             partner = odoo_utils._get_or_create_partner(partner_name)
 
         # Cập nhật thông tin partner chính từ MISA (địa chỉ, phone, province...)
         partner_vals = {}
