@@ -120,23 +120,21 @@ class WordPressUpdateStockWizard(models.TransientModel):
         # 1. Selling Price Projection (Sum of Components)
         # Logic: If Combo Price > 0, use it. Else use Web Price.
         
+        # 1. Selling Price Projection (Direct Assignment)
+        # Logic: Parent Price = Child Combo Price (fallback to Child Web Price)
+        # User Req: "lấy thẳng từ trường new_combo_price"
+        
         def _get_effective_price(combo_price, web_price):
              if combo_price:
                  return combo_price
              return web_price
 
-        effective_old = _get_effective_price(self.current_combo_price, self.current_web_price)
+        # Determine effective price from Child inputs
         effective_new = _get_effective_price(self.new_combo_price, self.new_web_price)
         
-        diff_selling = effective_new - effective_old
-        
-        if diff_selling != 0:
-            for line in self.line_ids:
-                line.new_parent_selling_price = line.current_parent_selling_price + (diff_selling * line.qty_in_combo)
-        else:
-             # Reset if no change
-             for line in self.line_ids:
-                line.new_parent_selling_price = line.current_parent_selling_price
+        for line in self.line_ids:
+            # Assign directly, ignoring quantity or other components
+            line.new_parent_selling_price = effective_new
 
         # 2. List Price Change -> Parent List Price (Always Sum)
         if self.current_list_price is not False:
