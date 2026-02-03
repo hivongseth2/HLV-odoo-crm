@@ -27,10 +27,10 @@
               parent="menu_zalo_chat_root"
               sequence="90"/>
 
-    <!-- Link to Zalo ZNS Config -->
-    <menuitem id="menu_zalo_chat_zns_config"
+    <!-- Zalo OA Settings -->
+    <menuitem id="menu_zalo_oa_config"
               name="Zalo OA Settings"
               parent="menu_zalo_chat_config"
-              action="zalo_zns.action_zalo_zns_config"
+              action="action_zalo_oa_config"
               sequence="10"/>
 </odoo>

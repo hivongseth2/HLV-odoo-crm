@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Zalo OA Config Form View -->
+    <record id="view_zalo_oa_config_form" model="ir.ui.view">
+        <field name="name">zalo.oa.config.form</field>
+        <field name="model">zalo.oa.config</field>
+        <field name="arch" type="xml">
+            <form string="Zalo OA Configuration">
+                <header>
+                    <button name="action_authorize" string="Authorize Zalo" type="object" class="oe_highlight" invisible="access_token != False"/>
+                    <button name="refresh_access_token" string="Refresh Token" type="object" invisible="access_token == False or refresh_token == False"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="oa_name" placeholder="e.g., My Zalo OA"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="app_id"/>
+                            <field name="secret_key" password="True"/>
+                            <field name="active"/>
+                        </group>
+                        <group>
+                            <field name="access_token" password="True"/>
+                            <field name="refresh_token" password="True"/>
+                            <field name="token_expiry"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Setup Instructions" name="instructions">
+                            <group>
+                                <div class="alert alert-info" role="alert">
+                                    <h4>Hướng dẫn cấu hình Zalo OA</h4>
+                                    <ol>
+                                        <li>Truy cập <a href="https://developers.zalo.me" target="_blank">Zalo Developer Portal</a></li>
+                                        <li>Tạo hoặc chọn app của bạn</li>
+                                        <li>Copy <b>App ID</b> và <b>Secret Key</b> vào form này</li>
+                                        <li>Click nút <b>"Authorize Zalo"</b> để kết nối</li>
+                                        <li>Sau khi authorize, access token sẽ tự động được lưu</li>
+                                    </ol>
+                                    <p><b>Lưu ý:</b> Token sẽ tự động refresh khi hết hạn.</p>
+                                </div>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Zalo OA Config List View -->
+    <record id="view_zalo_oa_config_list" model="ir.ui.view">
+        <field name="name">zalo.oa.config.list</field>
+        <field name="model">zalo.oa.config</field>
+        <field name="arch" type="xml">
+            <list string="Zalo OA Configurations">
+                <field name="oa_name"/>
+                <field name="app_id"/>
+                <field name="token_expiry"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Zalo OA Config Action -->
+    <record id="action_zalo_oa_config" model="ir.actions.act_window">
+        <field name="name">Zalo OA Settings</field>
+        <field name="res_model">zalo.oa.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No Zalo OA configuration yet
+            </p>
+            <p>
+                Click Create to add your Zalo Official Account configuration.
+            </p>
+        </field>
+    </record>
+
+    <!-- OAuth Success Template -->
+    <template id="zalo_auth_success" name="Zalo Authorization Success">
+        <t t-call="web.layout">
+            <div class="container mt-5">
+                <div class="alert alert-success text-center">
+                    <h1><i class="fa fa-check-circle"/> Authorization Successful!</h1>
+                    <p class="lead">Zalo OA has been successfully connected.</p>
+                    <p>Access token: <code t-esc="config.access_token[:20]"/>...</code></p>
+                    <p>You can close this window and return to Odoo.</p>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <!-- OAuth Error Template -->
+    <template id="zalo_auth_error" name="Zalo Authorization Error">
+        <t t-call="web.layout">
+            <div class="container mt-5">
+                <div class="alert alert-danger text-center">
+                    <h1><i class="fa fa-exclamation-triangle"/> Authorization Failed</h1>
+                    <p class="lead">Failed to authorize Zalo OA.</p>
+                    <p>Error: <code t-esc="error"/></p>
+                    <p>Please try again or contact administrator.</p>
+                </div>
+            </div>
+        </t>
+    </template>
+</odoo>

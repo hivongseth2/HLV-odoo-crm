@@ -90,13 +90,11 @@ class ZaloChatMessage(models.Model):
                 raise UserError(_('This message has already been sent!'))
             
             try:
-                # Get Zalo config from zalo_zns module
-                config = self.env['zalo.zns.config'].search([], limit=1)
-                if not config:
-                    raise UserError(_('Zalo configuration not found. Please configure Zalo ZNS first.'))
+                # Get Zalo config
+                config = self.env['zalo.oa.config'].get_active_config()
                 
-                if not config.access_token:
-                    raise UserError(_('No access token available. Please authorize Zalo first.'))
+                # Check and refresh token if needed
+                access_token = config._check_token_validity()
                 
                 # Prepare payload
                 payload = message._prepare_zalo_payload()
@@ -189,7 +187,7 @@ class ZaloChatMessage(models.Model):
         
         url = 'https://openapi.zalo.me/v3.0/oa/message/cs'
         headers = {
-            'access_token': config.access_token,
+            'access_token': config._check_token_validity(),
             'Content-Type': 'application/json',
         }
         

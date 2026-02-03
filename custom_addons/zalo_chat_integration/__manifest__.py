@@ -24,12 +24,12 @@
         'base',
         'mail',
         'contacts',
-        'zalo_zns',  # For OAuth2 authentication
     ],
     'data': [
         'security/ir.model.access.csv',
         'data/zalo_chat_sequence.xml',
         'data/zalo_chat_cron.xml',
+        'views/zalo_oa_config_views.xml',
         'views/zalo_chat_conversation_views.xml',
         'views/zalo_chat_message_views.xml',
         'views/res_partner_views.xml',
