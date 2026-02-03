@@ -120,8 +120,13 @@ class WordPressUpdateStockWizard(models.TransientModel):
         # 1. Selling Price Projection (Sum of Components)
         # Logic: If Combo Price > 0, use it. Else use Web Price.
         
-        effective_old = self.current_combo_price if self.current_combo_price else self.current_web_price
-        effective_new = self.new_combo_price if self.new_combo_price else self.new_web_price
+        def _get_effective_price(combo_price, web_price):
+             if combo_price:
+                 return combo_price
+             return web_price
+
+        effective_old = _get_effective_price(self.current_combo_price, self.current_web_price)
+        effective_new = _get_effective_price(self.new_combo_price, self.new_web_price)
         
         diff_selling = effective_new - effective_old
         
