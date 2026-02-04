@@ -10,6 +10,47 @@ _logger = logging.getLogger(__name__)
 class DiscussChannel(models.Model):
     _inherit = 'discuss.channel'
     
+    def _find_or_create_member_for_self(self):
+        """
+        Override to prevent creating new members for chat channels
+        """
+        if self.channel_type == 'chat':
+            # Check if current user is already a member
+            current_partner = self.env.user.partner_id
+            existing_member = self.env['discuss.channel.member'].search([
+                ('channel_id', '=', self.id),
+                ('partner_id', '=', current_partner.id)
+            ], limit=1)
+            
+            if existing_member:
+                return existing_member
+            else:
+                # User is not a member - don't add, just return empty
+                _logger.debug(
+                    f'User {current_partner.id} is not a member of chat channel {self.id}, '
+                    f'skipping member creation to avoid limit error'
+                )
+                return self.env['discuss.channel.member']
+        
+        return super(DiscussChannel, self)._find_or_create_member_for_self()
+    
+    def add_members(self, partner_ids=None, guest_ids=None, **kwargs):
+        """
+        Override to prevent adding new members to chat channels
+        """
+        if self.channel_type == 'chat':
+            # Check current member count
+            current_member_count = len(self.channel_partner_ids)
+            if current_member_count >= 2:
+                _logger.debug(
+                    f'Blocked add_members for chat channel {self.id} '
+                    f'(already has {current_member_count} members)'
+                )
+                # Return existing members instead of adding
+                return self.channel_member_ids
+        
+        return super(DiscussChannel, self).add_members(partner_ids=partner_ids, guest_ids=guest_ids, **kwargs)
+    
     def write(self, vals):
         """
         Override write to prevent adding members to chat channels
