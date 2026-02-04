@@ -43,6 +43,7 @@ class MailMessage(models.Model):
                 
                 try:
                     # User sent message in discuss → send to Zalo
+                    # NO member adding here - members already set on channel creation
                     zalo_message = self.env['zalo.chat.message'].sudo().create({
                         'conversation_id': conversation.id,
                         'direction': 'outbound',
