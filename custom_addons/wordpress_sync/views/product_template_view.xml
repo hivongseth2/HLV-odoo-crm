@@ -12,11 +12,37 @@
                 <header>
                     <button name="action_sync_to_wordpress"
                             type="object"
-                            string="Sync to WordPress"
+                            string="Sync Price to WP"
                             class="btn-primary"
                             title="Đồng bộ giá sản phẩm lên WordPress"/>
+                    <button name="action_sync_stock_to_wordpress"
+                            type="object"
+                            string="Sync Stock to WP"
+                            class="btn-secondary"
+                            title="Đồng bộ tình trạng kho lên WordPress"/>
                 </header>
+            </xpath>
+            
+            <!-- Add combo price field in pricing section (New Row after List Price) -->
+            <xpath expr="//div[field[@name='list_price']]" position="after">
+                <label for="x_wp_combo_price" string="Giá bán trong combo"/>
+                <div class="o_row">
+                    <field name="x_wp_combo_price" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                    <field name="computed_combo_selling_price" widget="monetary" options="{'currency_field': 'currency_id'}" class="oe_grey"/>
+                </div>
+                
+                <label for="x_wp_stock_status" string="Tình trạng WordPress"/>
+                <div class="o_row">
+                    <field name="x_wp_stock_status" readonly="1" force_save="1"/>
+                    <button name="%(wordpress_sync.action_wordpress_update_stock_wizard)d" 
+                            string="Cập nhật an toàn" 
+                            type="action" 
+                            class="btn btn-secondary btn-sm"
+                            icon="fa-shield"
+                            help="Cập nhật trạng thái và đồng bộ các Combo cha liên quan"/>
+                </div>
             </xpath>
         </field>
     </record>
 </odoo>
+

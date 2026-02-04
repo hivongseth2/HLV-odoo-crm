@@ -31,17 +31,33 @@
         <record id="view_product_template_bulk_tree" model="ir.ui.view">
             <field name="name">product.template.bulk.tree</field>
             <field name="model">product.template</field>
+            <field name="inherit_id" eval="False"/>
             <field name="arch" type="xml">
-                <list string="Sửa nhanh sản phẩm" editable="bottom" multi_edit="1" sample="1">
+                <list string="Sửa nhanh sản phẩm" editable="bottom" multi_edit="1" sample="1"
+                      default_order="is_combo_product asc, default_code asc">
+                    <field name="is_combo_product" column_invisible="True"/>
                     <field name="default_code" optional="show" width="100px" string="Mã nội bộ"/>
+                    <field name="bulk_product_type_label" string="Loại" optional="show" widget="badge"
+                           decoration-success="bulk_product_type_label == 'single'"
+                           decoration-info="bulk_product_type_label == 'combo'"/>
                     <field name="name" optional="show" string="Tên sản phẩm"/>
                     <field name="barcode" optional="show" string="Mã vạch"/>
-                    <field name="standard_price" string="Giá vốn" optional="show" widget="monetary"/>
-                    <field name="list_price" string="Giá bán lẻ" optional="show" widget="monetary"/>
-                    <field name="x_studio_ga_web" string="Giá Web" optional="show" widget="monetary"/>
-                    <field name="x_studio_ga_hng_nim_yt" string="Giá Niêm Yết" optional="show" widget="monetary"/>
-                    <field name="x_studio_gi_bn_thng_mi" string="Giá Thương Mại" optional="show" widget="monetary"/>
-                    <field name="x_studio_gia_san_tmdt" string="Giá Sàn TMĐT" optional="show" widget="monetary"/>
+                    <field name="standard_price" string="Giá vốn" optional="show" widget="monetary" readonly="1"/>
+                    <field name="list_price" string="Giá bán lẻ" optional="show" widget="monetary" readonly="1"/>
+                    <field name="x_studio_ga_web" string="Giá Web" optional="show" widget="monetary" readonly="1"/>
+                    <field name="x_studio_ga_hng_nim_yt" string="Giá Niêm Yết" optional="show" widget="monetary" readonly="1"/>
+                    <field name="x_studio_gi_bn_thng_mi" string="Giá Thương Mại" optional="show" widget="monetary" readonly="1"/>
+                    <field name="x_studio_gia_san_tmdt" string="Giá Sàn TMĐT" optional="show" widget="monetary" readonly="1"/>
+                    <field name="x_wp_stock_status" string="Tình trạng WP" optional="show"
+                           readonly="1"
+                           decoration-success="x_wp_stock_status == 'instock'"
+                           decoration-danger="x_wp_stock_status == 'outofstock'"
+                           decoration-warning="x_wp_stock_status == 'discontinued'"/>
+                    <button name="%(wordpress_sync.action_wordpress_update_stock_wizard)d"
+                            type="action"
+                            string="Cập nhật"
+                            class="btn-primary"
+                            icon="fa-shield"/>
                     <field name="uom_id" optional="hide" string="Đơn vị tính"/>
                     <field name="active" column_invisible="True"/>
                     <field name="currency_id" column_invisible="True"/>

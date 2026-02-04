@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Wizard Form View -->
+    <record id="view_wordpress_combo_stock_sync_form" model="ir.ui.view">
+        <field name="name">wordpress.combo.stock.sync.form</field>
+        <field name="model">wordpress.combo.stock.sync</field>
+        <field name="arch" type="xml">
+            <form string="Đồng bộ Stock Combo lên WordPress">
+                <group>
+                    <group>
+                        <field name="sync_mode" widget="radio"/>
+                    </group>
+                    <group>
+                        <field name="wordpress_config_id" options="{'no_create': True}"/>
+                    </group>
+                </group>
+                
+                <group invisible="sync_mode != 'selected'">
+                    <field name="product_ids" widget="many2many_tags" 
+                           options="{'no_create': True}"
+                           domain="[('default_code', '!=', False)]"/>
+                </group>
+                
+                <group>
+                    <field name="preview_info" readonly="1" widget="text"/>
+                </group>
+                
+                <footer>
+                    <button name="action_sync" 
+                            string="Đồng bộ Stock" 
+                            type="object" 
+                            class="btn-primary"/>
+                    <button name="action_update_all_parent_combos" 
+                            string="Cập nhật Combo có SP con hết hàng" 
+                            type="object" 
+                            class="btn-secondary"
+                            title="Tìm tất cả combo có sản phẩm con hết hàng và cập nhật stock status lên WordPress"/>
+                    <button string="Đóng" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action to open wizard -->
+    <record id="action_wordpress_combo_stock_sync" model="ir.actions.act_window">
+        <field name="name">Đồng bộ Stock Combo</field>
+        <field name="res_model">wordpress.combo.stock.sync</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="context">{}</field>
+    </record>
+
+    <!-- Menu item under Inventory -> Operations -->
+    <menuitem id="menu_wordpress_combo_stock_sync"
+              name="Đồng bộ Stock Combo → WordPress"
+              action="action_wordpress_combo_stock_sync"
+              parent="stock.menu_stock_warehouse_mgmt"
+              sequence="99"/>
+    <!-- Cron Job -->
+    <record id="ir_cron_auto_check_combo_stock" model="ir.cron">
+        <field name="name">WordPress: Auto Check Combo Stock</field>
+        <field name="model_id" ref="wordpress_sync.model_wordpress_combo_stock_sync"/>
+        <field name="state">code</field>
+        <field name="code">model.cron_auto_check_combo_stock()</field>
+        <field name="interval_number">10</field>
+        <field name="interval_type">minutes</field>
+    </record>
+</odoo>

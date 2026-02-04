@@ -8,8 +8,8 @@
             <!-- Add WordPress Sync settings inside Products block -->
             <xpath expr="//block[@name='product_setting_container']" position="inside">
                 <setting id="wordpress_auto_sync_setting"
-                         string="Đồng bộ giá WordPress"
-                         help="Tự động đồng bộ giá lên WordPress/WooCommerce khi giá sản phẩm thay đổi">
+                         string="Đồng bộ WordPress"
+                         help="Cấu hình đồng bộ giá và stock lên WordPress/WooCommerce">
                     <field name="wordpress_auto_sync_enabled"/>
                     <div class="content-group" invisible="not wordpress_auto_sync_enabled">
                         <div class="row mt16">
@@ -25,7 +25,43 @@
                         </div>
                     </div>
                 </setting>
+                
+                <!-- Stock Status Settings -->
+                <setting id="wordpress_stock_setting"
+                         string="Đồng bộ tình trạng kho"
+                         help="Cấu hình trường sử dụng để xác định sản phẩm còn hàng hay hết hàng">
+                    <div class="content-group">
+                        <div class="row mt16">
+                            <label for="wp_stock_status_field" class="col-4 o_light_label"/>
+                            <field name="wp_stock_status_field"/>
+                        </div>
+                        <div class="row mt8">
+                            <div class="col-12">
+                                <field name="wp_auto_sync_combo_stock"/>
+                                <label for="wp_auto_sync_combo_stock"/>
+                            </div>
+                        </div>
+                    </div>
+                </setting>
+                
+                <!-- Combo Pricing Settings -->
+                <setting id="wordpress_combo_pricing_setting"
+                         string="Giá sản phẩm Combo"
+                         help="Cấu hình phương pháp tính giá cho sản phẩm combo (dựa trên BOM)">
+                    <div class="content-group">
+                        <div class="row mt16">
+                            <label for="wp_combo_pricing_method" class="col-4 o_light_label"/>
+                            <field name="wp_combo_pricing_method" widget="radio"/>
+                        </div>
+                        <div class="row mt8" invisible="wp_combo_pricing_method != 'discount_percentage'">
+                            <label for="wp_combo_discount_percentage" class="col-4 o_light_label"/>
+                            <field name="wp_combo_discount_percentage" class="oe_inline"/>
+                            <span class="ml4">%</span>
+                        </div>
+                    </div>
+                </setting>
             </xpath>
         </field>
     </record>
 </odoo>
+

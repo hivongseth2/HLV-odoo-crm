@@ -7,13 +7,14 @@
         Features:
         - Editable list view (Excel-like)
         - Fields: Code, Name, Barcode, Prices (Public, Web, Listed, Commercial)
+        - WordPress stock status with auto-sync
         - Search and Filter support
     """,
     'author': "Antigravity",
     'website': "http://www.yourcompany.com",
     'category': 'Sales',
-    'version': '0.1',
-    'depends': ['product', 'sale', 'stock'],
+    'version': '0.2',
+    'depends': ['product', 'sale', 'stock', 'wordpress_sync', 'mrp'],
     'data': [
         'views/product_bulk_view.xml',
     ],
