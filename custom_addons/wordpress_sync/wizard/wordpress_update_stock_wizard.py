@@ -225,6 +225,11 @@ class WordPressUpdateStockWizard(models.TransientModel):
         parent_old_statuses = {p.id: p.x_wp_stock_status for p in parents_to_update}
         child_old_status = self.product_id.x_wp_stock_status
 
+        if status_changed:
+            _logger.error(f"[Wizard-SQL] Updating Child {self.product_id.id} to {self.new_status} via SQL")
+            # Use skip_wordpress_sync to prevent recursive parent updates
+            self.product_id.with_context(skip_wordpress_sync=True).write({'x_wp_stock_status': self.new_status})
+
         if parents_to_update:
             _logger.info(f"[Wizard] Updating {len(parents_to_update)} parents - Recomputing Status")
             for parent in parents_to_update:
@@ -237,12 +242,6 @@ class WordPressUpdateStockWizard(models.TransientModel):
                      parent.write({'x_wp_stock_status': new_parent_status})
                 else:
                      parent._auto_sync_stock_to_wordpress(new_value=new_parent_status)
-
-        
-        if status_changed:
-            _logger.error(f"[Wizard-SQL] Updating Child {self.product_id.id} to {self.new_status} via SQL")
-            # Use skip_wordpress_sync to prevent recursive parent updates
-            self.product_id.with_context(skip_wordpress_sync=True).write({'x_wp_stock_status': self.new_status})
 
         self.env.cr.commit() 
         
