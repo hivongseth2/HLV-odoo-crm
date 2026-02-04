@@ -27,6 +27,7 @@ class ZaloChatWebhook(http.Controller):
         - user_send_audio
         - user_send_video
         - user_send_location
+        - oa_send_text
         """
         try:
             # Handle GET request for webhook verification

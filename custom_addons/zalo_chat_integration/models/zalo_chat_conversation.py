@@ -205,29 +205,27 @@ class ZaloChatConversation(models.Model):
     @api.model
     def _find_or_create_conversation(self, zalo_user_id, user_info=None):
         """
-        Find existing conversation or create new one for a Zalo user
-        
-        :param zalo_user_id: Zalo user ID
-        :param user_info: Dict with keys: name, avatar (optional)
-        :return: zalo.chat.conversation recordset
+        Find existing conversation or create new one for Zalo user
+        Auto-fetch user info from Zalo API if not provided
         """
         conversation = self.search([('zalo_user_id', '=', zalo_user_id)], limit=1)
         
         if not conversation:
+            # Fetch user info from Zalo if not provided
+            if not user_info:
+                user_info = self._fetch_zalo_user_info(zalo_user_id)
+            
+            # Create new conversation
             vals = {
                 'zalo_user_id': zalo_user_id,
+                'zalo_user_name': user_info.get('display_name') or user_info.get('user_name') or 'Zalo User',
+                'zalo_avatar': user_info.get('avatar'),
+                'state': 'open',
             }
-            if user_info:
-                vals.update({
-                    'zalo_user_name': user_info.get('name', ''),
-                    'zalo_avatar': user_info.get('avatar', ''),
-                })
             
-            # Try to find existing partner with this Zalo ID
-            partner = self.env['res.partner'].search([
-                ('zalo_user_id', '=', zalo_user_id)
-            ], limit=1)
-            if partner:
+            # Auto-create partner if we have useful info
+            if user_info.get('display_name') or user_info.get('user_name'):
+                partner = self._get_or_create_partner(zalo_user_id, user_info)
                 vals['partner_id'] = partner.id
             
             conversation = self.create(vals)
