@@ -113,7 +113,7 @@ class ZaloOAConfig(models.Model):
                 )
             
             # Calculate expiry time
-            expires_in = result.get('expires_in', 86400)  # Default 24h
+            expires_in = int(result.get('expires_in', 86400))  # Default 24h, convert to int
             expiry_time = datetime.now() + timedelta(seconds=expires_in)
             
             self.write({
@@ -167,7 +167,7 @@ class ZaloOAConfig(models.Model):
                 )
             
             # Calculate expiry time
-            expires_in = result.get('expires_in', 86400)
+            expires_in = int(result.get('expires_in', 86400))  # Convert to int
             expiry_time = datetime.now() + timedelta(seconds=expires_in)
             
             self.write({
