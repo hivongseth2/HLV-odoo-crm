@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from odoo import models, api
+from odoo import models, api, _
 from odoo.exceptions import UserError
 import logging
 
@@ -25,7 +25,7 @@ class DiscussChannel(models.Model):
                 for cmd in commands:
                     if cmd[0] == 4:  # Link existing partner
                         if cmd[1] not in current_partner_ids:
-                            _logger.warning(
+                            _logger.debug(
                                 f'Blocked attempt to add partner {cmd[1]} to '
                                 f'chat channel {channel.id} (already has 2 members)'
                             )
@@ -33,7 +33,7 @@ class DiscussChannel(models.Model):
                     elif cmd[0] == 0:  # Create new member
                         partner_id = cmd[2].get('partner_id')
                         if partner_id and partner_id not in current_partner_ids:
-                            _logger.warning(
+                            _logger.debug(
                                 f'Blocked attempt to add partner {partner_id} to '
                                 f'chat channel {channel.id} (already has 2 members)'
                             )
@@ -43,7 +43,17 @@ class DiscussChannel(models.Model):
                 # Update vals with filtered commands
                 vals['channel_partner_ids'] = filtered_commands
         
-        return super(DiscussChannel, self).write(vals)
+        # Suppress UserError for chat channel member limit
+        try:
+            return super(DiscussChannel, self).write(vals)
+        except UserError as e:
+            error_msg = str(e)
+            if 'cannot add more members' in error_msg.lower() or 'không thể thêm nhiều thành viên' in error_msg.lower():
+                _logger.debug(f'Suppressed member limit error for chat channel: {error_msg}')
+                # Return True to indicate success without actually writing invalid data
+                return True
+            else:
+                raise
     
     def message_post(self, **kwargs):
         """
@@ -58,11 +68,10 @@ class DiscussChannel(models.Model):
                 # Check if author is already a member
                 partner_ids = self.channel_partner_ids.ids
                 if author_id not in partner_ids:
-                    # Partner not in channel - log warning but don't add
-                    _logger.warning(
-                        f'Attempting to post to chat channel {self.id} from '
-                        f'non-member partner {author_id}. Message will be posted '
-                        f'as system message to avoid member limit error.'
+                    # Partner not in channel - log debug but don't add
+                    _logger.debug(
+                        f'Posting to chat channel {self.id} from non-member '
+                        f'partner {author_id} as system message'
                     )
                     # Post as system message instead (no author)
                     kwargs['author_id'] = False
