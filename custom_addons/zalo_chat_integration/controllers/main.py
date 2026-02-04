@@ -168,8 +168,8 @@ class ZaloChatWebhook(http.Controller):
         Message = request.env['zalo.chat.message'].sudo()
         message = Message.create(message_vals)
         
-        # Sync to discuss.channel for live chat UI
-        try:
+        # Sync to discuss.channel for live chat UI (skip for oa_send_text)
+        if not skip_discuss_sync:
             channel = conversation._get_or_create_discuss_channel()
             
             # Check if partner is already a member to avoid adding error

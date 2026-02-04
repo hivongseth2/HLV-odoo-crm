@@ -206,6 +206,10 @@ class ZaloChatConversation(models.Model):
             except Exception as e:
                 _logger.warning(f'Failed to update channel avatar: {str(e)}')
         
+        # Ensure members have persona data (fix JS error)
+        # Force refresh channel member info
+        channel.invalidate_recordset(['channel_member_ids'])
+        
         _logger.info(f'Created discuss.channel {channel.id} for Zalo conversation {self.id}')
         
         return channel
