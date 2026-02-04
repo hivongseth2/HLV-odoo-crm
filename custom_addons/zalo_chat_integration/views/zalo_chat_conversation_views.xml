@@ -21,42 +21,61 @@
         <field name="name">zalo.chat.conversation.form</field>
         <field name="model">zalo.chat.conversation</field>
         <field name="arch" type="xml">
-            <form string="Zalo Conversation">
+            <form string="Hội thoại Zalo">
                 <header>
-                    <button name="action_send_message" string="Send Message" type="object" class="oe_highlight" invisible="state == 'archived'"/>
-                    <button name="action_mark_as_read" string="Mark as Read" type="object" invisible="unread_count == 0"/>
-                    <button name="action_close" string="Close" type="object" invisible="state != 'open'"/>
-                    <button name="action_reopen" string="Reopen" type="object" invisible="state == 'open'"/>
+                    <button name="action_open_chat" string="Mở Chat" type="object" 
+                            class="oe_highlight" icon="fa-comments"/>
+                    <button name="action_close" string="Đóng" type="object" 
+                            invisible="state != 'open'" icon="fa-times"/>
+                    <button name="action_reopen" string="Mở lại" type="object" 
+                            invisible="state != 'closed'" icon="fa-folder-open"/>
                     <field name="state" widget="statusbar"/>
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
-                        <button name="action_mark_as_read" type="object" class="oe_stat_button" icon="fa-check-circle" invisible="unread_count == 0">
-                            <field name="unread_count" widget="statinfo" string="Unread"/>
+                        <button name="action_open_chat" type="object" 
+                                class="oe_stat_button" icon="fa-comments">
+                            <div class="o_field_widget o_stat_info">
+                                <span class="o_stat_text">Live Chat</span>
+                            </div>
+                        </button>
+                        <button class="oe_stat_button" icon="fa-envelope" invisible="unread_count == 0">
+                            <field name="unread_count" widget="statinfo" string="Chưa đọc"/>
                         </button>
                     </div>
+                    
+                    <div class="oe_title">
+                        <h1>
+                            <field name="zalo_user_name" placeholder="Tên người dùng Zalo" 
+                                   class="o_text_overflow" style="max-width: 90%;"/>
+                        </h1>
+                        <h3>
+                            <field name="zalo_user_id" readonly="1"/>
+                        </h3>
+                    </div>
+                    
                     <group>
                         <group>
-                            <field name="name"/>
-                            <field name="zalo_user_id"/>
-                            <field name="zalo_user_name"/>
-                            <field name="partner_id"/>
+                            <field name="partner_id" options="{'no_create': True}"/>
+                            <field name="discuss_channel_id" readonly="1" 
+                                   invisible="not discuss_channel_id"/>
                         </group>
                         <group>
-                            <field name="zalo_avatar" widget="url"/>
-                            <field name="last_message_date"/>
+                            <field name="last_message_date" readonly="1"/>
+                            <field name="zalo_avatar" widget="url" readonly="1"/>
                         </group>
                     </group>
+                    
                     <notebook>
-                        <page string="Messages" name="messages">
+                        <page string="Tin nhắn" name="messages">
                             <field name="message_ids" mode="list">
-                                <list string="Messages" create="false" delete="false">
+                                <list string="Tin nhắn" create="false" delete="false">
                                     <field name="sent_date"/>
-                                    <field name="direction" decoration-info="direction == 'inbound'" decoration-success="direction == 'outbound'"/>
+                                    <field name="direction" decoration-info="direction == 'inbound'" 
+                                           decoration-success="direction == 'outbound'"/>
                                     <field name="message_type"/>
                                     <field name="content"/>
-                                    <field name="state" decoration-success="state == 'sent'" decoration-danger="state == 'failed'"/>
-                                    <field name="is_read" invisible="direction == 'outbound'"/>
+                                    <field name="state"/>
                                 </list>
                             </field>
                         </page>
@@ -68,41 +87,51 @@
     </record>
 
     <!-- Conversation Kanban View -->
-    <record id="view_zalo_chat_conversation_kanban" model="ir.ui.view">
-        <field name="name">zalo.chat.conversation.kanban</field>
-        <field name="model">zalo.chat.conversation</field>
-        <field name="arch" type="xml">
-            <kanban>
-                <field name="name"/>
-                <field name="zalo_user_name"/>
-                <field name="zalo_avatar"/>
-                <field name="last_message_date"/>
-                <field name="unread_count"/>
-                <field name="state"/>
-                <templates>
-                    <t t-name="card" class="flex-row">
-                        <aside class="o_kanban_aside">
-                            <img t-att-src="record.zalo_avatar.value || '/web/static/img/placeholder.png'" class="o_kanban_image" alt="Avatar"/>
-                        </aside>
-                        <main class="ms-3">
-                            <div class="o_kanban_record_title">
-                                <strong><field name="zalo_user_name"/></strong>
+        <record id="view_zalo_chat_conversation_kanban" model="ir.ui.view">
+            <field name="name">zalo.chat.conversation.kanban</field>
+            <field name="model">zalo.chat.conversation</field>
+            <field name="arch" type="xml">
+                <kanban class="o_kanban_mobile" sample="1">
+                    <field name="zalo_user_id"/>
+                    <field name="zalo_user_name"/>
+                    <field name="partner_id"/>
+                    <field name="last_message_date"/>
+                    <field name="state"/>
+                    <field name="unread_count"/>
+                    <field name="discuss_channel_id"/>
+                    <templates>
+                        <t t-name="kanban-box">
+                            <div class="oe_kanban_global_click" style="position: relative;">
+                                <div class="o_kanban_record_top">
+                                    <div class="o_kanban_record_headings">
+                                        <strong class="o_kanban_record_title">
+                                            <field name="zalo_user_name"/>
+                                        </strong>
+                                        <div class="o_kanban_record_subtitle text-muted">
+                                            <field name="partner_id"/>
+                                        </div>
+                                    </div>
+                                    <span t-if="record.unread_count.value > 0" 
+                                          class="badge badge-pill badge-danger" 
+                                          style="position: absolute; top: 5px; right: 5px;">
+                                        <t t-esc="record.unread_count.value"/>
+                                    </span>
+                                </div>
+                                <div class="o_kanban_record_bottom">
+                                    <div class="oe_kanban_bottom_left">
+                                        <field name="last_message_date" widget="relative"/>
+                                    </div>
+                                    <div class="oe_kanban_bottom_right">
+                                        <field name="state" widget="label_selection" 
+                                               options="{'classes': {'open': 'success', 'closed': 'default', 'archived': 'warning'}}"/>
+                                    </div>
+                                </div>
                             </div>
-                            <div>
-                                <field name="partner_id"/> 
-                                <span class="badge text-bg-info" t-if="record.unread_count.value > 0">
-                                    <i class="fa fa-envelope"/> <field name="unread_count"/>
-                                </span>
-                            </div>
-                            <div class="text-muted">
-                                <field name="last_message_date" widget="relative"/>
-                            </div>
-                        </main>
-                    </t>
-                </templates>
-            </kanban>
-        </field>
-    </record>
+                        </t>
+                    </templates>
+                </kanban>
+            </field>
+        </record>
 
     <!-- Conversation Search View -->
     <record id="view_zalo_chat_conversation_search" model="ir.ui.view">

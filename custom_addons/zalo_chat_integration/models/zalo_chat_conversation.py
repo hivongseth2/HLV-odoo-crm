@@ -62,6 +62,12 @@ class ZaloChatConversation(models.Model):
         compute='_compute_unread_count',
         help='Số tin nhắn đến chưa đọc',
     )
+    discuss_channel_id = fields.Many2one(
+        'discuss.channel',
+        string='Kênh chat',
+        help='Kênh discuss liên kết với hội thoại Zalo này',
+        ondelete='cascade',
+    )
 
     _sql_constraints = [
         ('zalo_user_id_unique', 'UNIQUE(zalo_user_id)', 
@@ -127,6 +133,52 @@ class ZaloChatConversation(models.Model):
     def action_reopen(self):
         """Reopen a closed conversation"""
         self.write({'state': 'open'})
+    
+    def _get_or_create_discuss_channel(self):
+        """
+        Tạo hoặc lấy discuss.channel cho conversation này
+        Dùng cho live chat UI
+        """
+        self.ensure_one()
+        
+        if self.discuss_channel_id:
+            return self.discuss_channel_id
+        
+        # Create private channel
+        channel_vals = {
+            'name': f"Zalo: {self.zalo_user_name or self.zalo_user_id}",
+            'channel_type': 'chat',  # 1-to-1 chat
+            'description': f'Chat với Zalo user {self.zalo_user_id}',
+        }
+        
+        # Link to partner if exists
+        if self.partner_id:
+            channel_vals['channel_partner_ids'] = [(4, self.partner_id.id)]
+        
+        channel = self.env['discuss.channel'].create(channel_vals)
+        
+        # Add current user as member
+        channel._action_add_members(self.env.user.partner_id)
+        
+        self.discuss_channel_id = channel.id
+        
+        _logger.info(f'Created discuss.channel {channel.id} for Zalo conversation {self.id}')
+        
+        return channel
+    
+    def action_open_chat(self):
+        """Open live chat window"""
+        self.ensure_one()
+        channel = self._get_or_create_discuss_channel()
+        
+        return {
+            'type': 'ir.actions.act_window',
+            'name': f'Chat: {self.zalo_user_name or "Zalo User"}',
+            'res_model': 'discuss.channel',
+            'res_id': channel.id,
+            'view_mode': 'form',
+            'target': 'current',
+        }
 
     @api.model
     def _find_or_create_conversation(self, zalo_user_id, user_info=None):
