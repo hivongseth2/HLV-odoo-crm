@@ -50,3 +50,13 @@ class DiscussChannel(models.Model):
                 return
         
         return super(DiscussChannel, self).notify_typing(is_typing)
+    
+    def _notify_thread(self, message, msg_vals=False, **kwargs):
+        """
+        Override to prevent auto-subscribing partners on notification
+        """
+        if self.channel_type == 'chat':
+            # Don't auto-subscribe - just send notifications to existing members
+            return super(DiscussChannel, self)._notify_thread(message, msg_vals=msg_vals, **kwargs)
+        
+        return super(DiscussChannel, self)._notify_thread(message, msg_vals=msg_vals, **kwargs)
