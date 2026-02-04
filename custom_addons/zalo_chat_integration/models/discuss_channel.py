@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from odoo import models, api
+from odoo.exceptions import UserError
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -60,3 +61,22 @@ class DiscussChannel(models.Model):
             return super(DiscussChannel, self)._notify_thread(message, msg_vals=msg_vals, **kwargs)
         
         return super(DiscussChannel, self)._notify_thread(message, msg_vals=msg_vals, **kwargs)
+    
+    @api.constrains('channel_partner_ids')
+    def _check_chat_channel_members(self):
+        """
+        Override constraint to allow silent failure instead of raising error
+        """
+        for channel in self:
+            if channel.channel_type == 'chat':
+                member_count = len(channel.channel_partner_ids)
+                if member_count > 2:
+                    _logger.warning(
+                        f'Chat channel {channel.id} has {member_count} members, '
+                        f'removing excess members to maintain limit of 2'
+                    )
+                    # Keep only the first 2 members
+                    excess_members = channel.channel_partner_ids[2:]
+                    channel.write({
+                        'channel_partner_ids': [(3, pid.id) for pid in excess_members]
+                    })
