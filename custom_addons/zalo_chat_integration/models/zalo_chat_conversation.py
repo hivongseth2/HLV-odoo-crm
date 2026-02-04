@@ -151,14 +151,22 @@ class ZaloChatConversation(models.Model):
             'description': f'Chat với Zalo user {self.zalo_user_id}',
         }
         
+        # Add current user as member
+        channel_vals['channel_member_ids'] = [
+            (0, 0, {
+                'partner_id': self.env.user.partner_id.id,
+            })
+        ]
+        
         # Link to partner if exists
         if self.partner_id:
-            channel_vals['channel_partner_ids'] = [(4, self.partner_id.id)]
+            channel_vals['channel_member_ids'].append(
+                (0, 0, {
+                    'partner_id': self.partner_id.id,
+                })
+            )
         
         channel = self.env['discuss.channel'].create(channel_vals)
-        
-        # Add current user as member
-        channel._action_add_members(self.env.user.partner_id)
         
         self.discuss_channel_id = channel.id
         
