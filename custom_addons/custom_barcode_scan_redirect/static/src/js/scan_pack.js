@@ -138,8 +138,10 @@ document.addEventListener("DOMContentLoaded", function () {
   };
 
   window.manualIncrement = async function (btn, amount) {
-    const wrapper = btn.closest('div'); // The parent div of input and buttons
-    const input = wrapper.querySelector('.done-input');
+    const itemEl = btn.closest('.product-item'); // Find the row container
+    if (!itemEl) return;
+
+    const input = itemEl.querySelector('.done-input');
     if (!input) return;
 
     let currentVal = parseFloat(input.value || 0);
