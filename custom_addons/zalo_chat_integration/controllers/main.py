@@ -235,8 +235,8 @@ class ZaloChatWebhook(http.Controller):
                 
                 # Render images, videos, and files as HTML
                 if message.message_type == 'image' and message.attachment_url:
+                    # Just show image, no caption
                     message_body = Markup(f'''
-                        <p>📸 Image:</p>
                         <img src="{message.attachment_url}" style="max-width: 400px; max-height: 300px; border-radius: 8px;" />
                     ''')
                 elif message.message_type == 'video' and message.attachment_url:
@@ -244,15 +244,17 @@ class ZaloChatWebhook(http.Controller):
                         <p>🎥 Video: <a href="{message.attachment_url}" target="_blank">Click to view</a></p>
                     ''')
                 elif message.message_type == 'gif' and message.attachment_url:
+                    # Just show GIF, no caption
                     message_body = Markup(f'''
-                        <p>🎬 GIF:</p>
                         <img src="{message.attachment_url}" style="max-width: 400px; max-height: 300px; border-radius: 8px;" />
                     ''')
                 elif message.message_type in ['file', 'audio'] and message.attachment_url:
+                    # Proxy file download through Odoo to avoid 403
+                    proxy_url = f'/zalo/proxy/file?url={message.attachment_url}&msg_id={message.id}'
                     file_name = message.content.replace('📎 File: ', '').replace('🎤 Voice message', 'Audio')
                     message_body = Markup(f'''
                         <p>{message.content}</p>
-                        <p><a href="{message.attachment_url}" target="_blank" class="btn btn-primary btn-sm">
+                        <p><a href="{proxy_url}" target="_blank" class="btn btn-primary btn-sm">
                             <i class="fa fa-download"></i> Download
                         </a></p>
                     ''')
