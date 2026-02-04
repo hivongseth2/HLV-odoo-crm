@@ -235,30 +235,30 @@ class ZaloChatWebhook(http.Controller):
                 
                 # Render images, videos, and files as HTML
                 if message.message_type == 'image' and message.attachment_url:
-                    message_body = f'''
+                    message_body = Markup(f'''
                         <p>📸 Image:</p>
                         <img src="{message.attachment_url}" style="max-width: 400px; max-height: 300px; border-radius: 8px;" />
-                    '''
+                    ''')
                 elif message.message_type == 'video' and message.attachment_url:
-                    message_body = f'''
+                    message_body = Markup(f'''
                         <p>🎥 Video: <a href="{message.attachment_url}" target="_blank">Click to view</a></p>
-                    '''
+                    ''')
                 elif message.message_type == 'gif' and message.attachment_url:
-                    message_body = f'''
+                    message_body = Markup(f'''
                         <p>🎬 GIF:</p>
                         <img src="{message.attachment_url}" style="max-width: 400px; max-height: 300px; border-radius: 8px;" />
-                    '''
+                    ''')
                 elif message.message_type in ['file', 'audio'] and message.attachment_url:
                     file_name = message.content.replace('📎 File: ', '').replace('🎤 Voice message', 'Audio')
-                    message_body = f'''
+                    message_body = Markup(f'''
                         <p>{message.content}</p>
                         <p><a href="{message.attachment_url}" target="_blank" class="btn btn-primary btn-sm">
                             <i class="fa fa-download"></i> Download
                         </a></p>
-                    '''
+                    ''')
                 elif message.message_type == 'link':
                     # Already formatted as text with link in content
-                    message_body = f'<p>{message.content}</p>'
+                    message_body = Markup(f'<p>{message.content}</p>')
                 
                 channel.message_post(
                     body=message_body,
