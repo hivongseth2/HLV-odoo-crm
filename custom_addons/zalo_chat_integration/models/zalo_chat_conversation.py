@@ -245,7 +245,6 @@ class ZaloChatConversation(models.Model):
             conversation = self.create(vals)
             _logger.info(f'Created new Zalo conversation for user {zalo_user_id}: {vals.get("zalo_user_name")}')
         else:
-            # Conversation already exists, no need to fetch info again
             _logger.debug(f'Found existing conversation for Zalo user {zalo_user_id}')
         
         return conversation
