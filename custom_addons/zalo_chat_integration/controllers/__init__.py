@@ -2,3 +2,4 @@
 
 from . import main
 from . import oauth
+from . import file_proxy
