@@ -23,8 +23,10 @@
             <field name="arch" type="xml">
                 <form string="Hội thoại Zalo">
                     <header>
+                        <button name="action_open_chat" string="Mở Live Chat" type="object" 
+                                class="oe_highlight" icon="fa-comments"/>
                         <button name="action_send_message" string="Gửi tin nhắn" type="object" 
-                                class="oe_highlight" icon="fa-paper-plane"
+                                icon="fa-paper-plane"
                                 invisible="state == 'archived'"/>
                         <button name="action_close" string="Đóng" type="object" 
                                 invisible="state != 'open'" icon="fa-times"/>

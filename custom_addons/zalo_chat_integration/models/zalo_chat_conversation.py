@@ -175,18 +175,18 @@ class ZaloChatConversation(models.Model):
         return channel
     
     def action_open_chat(self):
-        """Open live chat window"""
+        """Open Discuss app with this channel active"""
         self.ensure_one()
         channel = self._get_or_create_discuss_channel()
         
-        # Open in Discuss app with chat widget
+        # Redirect to Discuss app with channel selected
         return {
-            'type': 'ir.actions.act_window',
-            'name': 'Discuss',
-            'res_model': 'discuss.channel',
-            'view_mode': 'form',
-            'res_id': channel.id,
-            'target': 'current',
+            'type': 'ir.actions.client',
+            'tag': 'mail.action_discuss',
+            'params': {
+                'default_active_id': f'mail.box_inbox',
+                'active_id': channel.id,
+            },
             'context': {
                 'active_id': channel.id,
             },

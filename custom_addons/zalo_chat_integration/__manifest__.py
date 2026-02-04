@@ -24,6 +24,7 @@
         'base',
         'mail',
         'contacts',
+        'im_livechat',  # For Discuss chat UI
     ],
     'data': [
         'security/ir.model.access.csv',
