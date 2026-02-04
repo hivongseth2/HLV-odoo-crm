@@ -53,20 +53,41 @@
                   </div>
                   <div style="display: flex; align-items: center; gap: 5px;">
                     
-                    <div style="display: flex; align-items: center; background: #fff; border: 1px solid #ced4da; border-radius: 4px; padding: 0 4px;">
-                        <input type="number" 
-                               class="done-input" 
-                               t-att-value="sum(line.move_line_ids.mapped('qty_done'))"
-                               t-att-data-current-qty="sum(line.move_line_ids.mapped('qty_done'))"
-                               t-att-data-barcode="line.product_id.barcode" 
-                               t-att-data-line-id="ml.id"
-                               t-att-data-max-qty="line.product_uom_qty"
-                               t-att-readonly="'readonly' if line.product_uom_qty &lt; 10 else None"
-                               style="width: 50px; text-align: right; border: none; font-weight: 600; color: #333; outline: none; padding: 4px 0;"
-                               onkeydown="handleManualQtyKey(event, this)"
-                               onchange="handleManualQtyChange(this)"/>
-                        <span style="padding: 0 4px; color: #888;">/</span>
-                        <span style="font-weight: 600; color: #666;"><t t-esc="line.product_uom_qty"/></span>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        
+                        <!-- Input Box container -->
+                        <div style="display: flex; align-items: center; background: #fff; border: 1px solid #ced4da; border-radius: 4px; padding: 0 6px;">
+                            <input type="number" 
+                           class="done-input" 
+                                   t-att-value="sum(line.move_line_ids.mapped('qty_done'))"
+                                   t-att-data-current-qty="sum(line.move_line_ids.mapped('qty_done'))"
+                                   t-att-data-barcode="line.product_id.barcode" 
+                                   t-att-data-line-id="ml.id"
+                                   t-att-data-max-qty="line.product_uom_qty"
+                                   t-att-readonly="'readonly' if line.product_uom_qty &lt; 10 else None"
+                                   style="width: 50px; text-align: right; border: none; font-weight: 700; color: #2c3e50; outline: none; padding: 4px 0;"
+                                   onkeydown="handleManualQtyKey(event, this)"
+                                   onchange="handleManualQtyChange(this)"/>
+                            
+                            <span style="padding: 0 4px; color: #adb5bd;">/</span>
+                            <span style="font-weight: 600; color: #6c757d;"><t t-esc="line.product_uom_qty"/></span>
+                        </div>
+
+                        <!-- Decimal Buttons (Outside Input Box) -->
+                        <t t-if="line.product_uom_qty % 1 != 0">
+                            <div style="display: flex; gap: 3px;">
+                                <button onclick="manualIncrement(this, 0.1)" 
+                                        style="border: 1px solid #d0ebff; background: #e7f5ff; color: #1971c2; cursor: pointer; padding: 2px 6px; font-size: 0.75rem; border-radius: 12px; font-weight: 600; transition: all 0.2s;" 
+                                        onmouseover="this.style.background='#d0ebff'" 
+                                        onmouseout="this.style.background='#e7f5ff'"
+                                        title="+0.1">+0.1</button>
+                                <button onclick="manualIncrement(this, 0.01)" 
+                                        style="border: 1px solid #d0ebff; background: #e7f5ff; color: #1971c2; cursor: pointer; padding: 2px 6px; font-size: 0.75rem; border-radius: 12px; font-weight: 600; transition: all 0.2s;" 
+                                        onmouseover="this.style.background='#d0ebff'" 
+                                        onmouseout="this.style.background='#e7f5ff'"
+                                        title="+0.01">+0.01</button>
+                            </div>
+                        </t>
                     </div>
 
                   </div>
