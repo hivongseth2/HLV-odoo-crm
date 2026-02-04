@@ -100,6 +100,9 @@ class ZaloChatWebhook(http.Controller):
         )
         
         # Process message based on event type
+        # Initialize skip flag - only skip for outbound OA messages
+        skip_discuss_sync = False
+        
         message_vals = {
             'conversation_id': conversation.id,
             'message_id': message_data.get('msg_id'),
