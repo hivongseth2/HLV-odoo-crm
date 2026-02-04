@@ -177,7 +177,7 @@ class WordPressUpdateStockWizard(models.TransientModel):
             vals['x_studio_ga_hng_nim_yt'] = self.new_listed_price
 
         if vals:
-            self.product_id.write(vals)
+            self.product_id.with_context(skip_parent_combo_queue=True).write(vals)
             _logger.info(f"Updated Child Prices: {vals}")
 
         # 2. STOCK UPDATE (SQL Force)
@@ -196,10 +196,13 @@ class WordPressUpdateStockWizard(models.TransientModel):
         
         if status_changed:
             _logger.error(f"[Wizard-SQL] Updating Child {self.product_id.id} to {self.new_status} via SQL")
-            self.env.cr.execute(
-                "UPDATE product_template SET x_wp_stock_status = %s WHERE id = %s",
-                (self.new_status, self.product_id.id)
-            )
+            
+            # Use write instead of SQL to trigger logic but skip queue
+            # self.env.cr.execute(
+            #     "UPDATE product_template SET x_wp_stock_status = %s WHERE id = %s",
+            #     (self.new_status, self.product_id.id)
+            # )
+            self.product_id.with_context(skip_parent_combo_queue=True).write({'x_wp_stock_status': self.new_status})
 
         self.env.cr.commit() 
         

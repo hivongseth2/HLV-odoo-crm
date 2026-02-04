@@ -174,6 +174,11 @@ class ProductTemplate(models.Model):
 
     def _update_parent_combos_stock(self):
         """Find parent combos and queue stock sync"""
+        # Check context to skip queueing if needed (e.g. from wizard)
+        if self.env.context.get('skip_parent_combo_queue'):
+            _logger.info("Skipping parent combo queue update due to context flag.")
+            return
+
         # 1. Find variants
         variants = self.product_variant_ids
         
