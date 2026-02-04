@@ -12,7 +12,7 @@ class DiscussChannel(models.Model):
     
     def _find_or_create_member_for_self(self):
         """
-        Override to prevent creating new members for chat channels
+        Override to handle member creation for chat channels gracefully
         """
         if self.channel_type == 'chat':
             # Check if current user is already a member
@@ -25,12 +25,20 @@ class DiscussChannel(models.Model):
             if existing_member:
                 return existing_member
             else:
-                # User is not a member - don't add, just return empty
-                _logger.debug(
-                    f'User {current_partner.id} is not a member of chat channel {self.id}, '
-                    f'skipping member creation to avoid limit error'
-                )
-                return self.env['discuss.channel.member']
+                # Try to create member, catch the UserError about limit
+                try:
+                    return super(DiscussChannel, self)._find_or_create_member_for_self()
+                except UserError as e:
+                    error_msg = str(e)
+                    if 'cannot add more members' in error_msg.lower() or 'không thể thêm nhiều thành viên' in error_msg.lower():
+                        _logger.debug(
+                            f'Cannot add user {current_partner.id} to chat channel {self.id} '
+                            f'(member limit reached), returning first existing member'
+                        )
+                        # Return any existing member to avoid NotFound error
+                        return self.channel_member_ids[0] if self.channel_member_ids else self.env['discuss.channel.member']
+                    else:
+                        raise
         
         return super(DiscussChannel, self)._find_or_create_member_for_self()
     
@@ -42,12 +50,18 @@ class DiscussChannel(models.Model):
             # Check current member count
             current_member_count = len(self.channel_partner_ids)
             if current_member_count >= 2:
-                _logger.debug(
-                    f'Blocked add_members for chat channel {self.id} '
-                    f'(already has {current_member_count} members)'
-                )
-                # Return existing members instead of adding
-                return self.channel_member_ids
+                # Filter out partners that are not already members
+                if partner_ids:
+                    existing_partner_ids = self.channel_partner_ids.ids
+                    filtered_partner_ids = [pid for pid in partner_ids if pid in existing_partner_ids]
+                    if not filtered_partner_ids:
+                        _logger.debug(
+                            f'Blocked add_members for chat channel {self.id} '
+                            f'(already has {current_member_count} members)'
+                        )
+                        # Return existing members
+                        return self.channel_member_ids
+                    partner_ids = filtered_partner_ids
         
         return super(DiscussChannel, self).add_members(partner_ids=partner_ids, guest_ids=guest_ids, **kwargs)
     
