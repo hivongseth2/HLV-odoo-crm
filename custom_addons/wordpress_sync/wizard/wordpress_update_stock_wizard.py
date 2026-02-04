@@ -19,7 +19,7 @@ class WordPressUpdateStockWizard(models.TransientModel):
         ('instock', 'Còn hàng'),
         ('outofstock', 'Hết hàng'),
         ('discontinued', 'Ngừng kinh doanh'),
-    ], string='Trạng thái mới', required=True, default='outofstock')
+    ], string='Trạng thái mới', required=True)
 
     # Price Fields
     current_list_price = fields.Float(string='Giá bán lẻ hiện tại', readonly=True)
@@ -44,6 +44,7 @@ class WordPressUpdateStockWizard(models.TransientModel):
             product = self.env['product.template'].browse(active_id)
             res['product_id'] = product.id
             res['current_status'] = product.x_wp_stock_status
+            res['new_status'] = product.x_wp_stock_status
             
             # Price init
             res.update({
@@ -214,7 +215,7 @@ class WordPressUpdateStockWizard(models.TransientModel):
             vals['x_studio_ga_hng_nim_yt'] = self.new_listed_price
 
         if vals:
-            self.product_id.with_context(skip_parent_combo_queue=True).write(vals)
+            self.product_id.with_context(skip_wordpress_sync=True).write(vals)
             _logger.info(f"Updated Child Prices: {vals}")
 
         # 2. STOCK UPDATE (SQL Force)
@@ -232,27 +233,16 @@ class WordPressUpdateStockWizard(models.TransientModel):
                 
                 # We write the calculated status. 
                 # This triggers the auto-syc logic in product_template.write()
-                # UNLESS we passed context? 
-                # We skipped queue for child. For parents, we want them queued IF they change.
-                # So a normal write is fine.
                 if new_parent_status != parent.x_wp_stock_status:
                      parent.write({'x_wp_stock_status': new_parent_status})
                 else:
-                     # Even if status is same, we might want to ensure sync if wizard explicitly asked?
-                     # But usually wizard logic implies "Sync changes".
-                     # However, to be safe and respect "checked" box, we can force a sync job if not triggered by write
                      parent._auto_sync_stock_to_wordpress(new_value=new_parent_status)
 
         
         if status_changed:
             _logger.error(f"[Wizard-SQL] Updating Child {self.product_id.id} to {self.new_status} via SQL")
-            
-            # Use write instead of SQL to trigger logic but skip queue
-            # self.env.cr.execute(
-            #     "UPDATE product_template SET x_wp_stock_status = %s WHERE id = %s",
-            #     (self.new_status, self.product_id.id)
-            # )
-            self.product_id.with_context(skip_parent_combo_queue=True).write({'x_wp_stock_status': self.new_status})
+            # Use skip_wordpress_sync to prevent recursive parent updates
+            self.product_id.with_context(skip_wordpress_sync=True).write({'x_wp_stock_status': self.new_status})
 
         self.env.cr.commit() 
         
@@ -267,15 +257,8 @@ class WordPressUpdateStockWizard(models.TransientModel):
         
         self.product_id._auto_sync_stock_to_wordpress(old_value=child_old_status, new_value=self.new_status)
         
-        # Parents Sync
-        for p in parents_to_update:
-             old_val = parent_old_statuses.get(p.id)
-             p._auto_sync_stock_to_wordpress(old_value=old_val, new_value=self.new_status)
+        # Parents Sync (Logging Only, actual sync triggered by write above)
              
-             # Force Recompute Price for Parents
-             if vals:
-                 p._compute_combo_selling_price()
-
         # Log to Chatter
         msg_body = "<b>Cập nhật an toàn (Wizard):</b><ul>"
         if status_changed:
@@ -287,7 +270,7 @@ class WordPressUpdateStockWizard(models.TransientModel):
         self.product_id.message_post(body=msg_body)
         
         for p in parents_to_update:
-             p.message_post(body=f"Cập nhật theo linh kiện {self.product_id.name}:<br/>Status: {self.new_status}")
+             p.message_post(body=f"Cập nhật theo linh kiện {self.product_id.name}:<br/>Status Updated")
 
         return {'type': 'ir.actions.act_window_close'}
 
