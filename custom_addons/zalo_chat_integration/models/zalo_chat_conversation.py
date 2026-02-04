@@ -144,9 +144,19 @@ class ZaloChatConversation(models.Model):
         if self.discuss_channel_id:
             return self.discuss_channel_id
         
+        # Create unique channel name
+        if self.partner_id:
+            channel_name = f"Zalo: {self.partner_id.name}"
+        elif self.zalo_user_name and self.zalo_user_name != 'Zalo User':
+            channel_name = f"Zalo: {self.zalo_user_name}"
+        else:
+            # Use last 4 digits of Zalo ID for uniqueness
+            short_id = self.zalo_user_id[-4:] if len(self.zalo_user_id) > 4 else self.zalo_user_id
+            channel_name = f"Zalo User #{short_id}"
+        
         # Create private channel
         channel_vals = {
-            'name': f"Zalo: {self.zalo_user_name or self.zalo_user_id}",
+            'name': channel_name,
             'channel_type': 'chat',  # 1-to-1 chat
             'description': f'Chat với Zalo user {self.zalo_user_id}',
         }
