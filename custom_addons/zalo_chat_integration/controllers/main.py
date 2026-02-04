@@ -79,20 +79,32 @@ class ZaloChatWebhook(http.Controller):
         recipient = data.get('recipient', {})
         message_data = data.get('message', {})
         
-        zalo_user_id = sender.get('id')
+        # IMPORTANT: For oa_send_text, sender is OA and recipient is user
+        # For user_send_*, sender is user
+        if event_name == 'oa_send_text':
+            # OA sent message to user - user is in recipient
+            zalo_user_id = recipient.get('id')
+            user_info = {
+                'name': recipient.get('name', 'Zalo User'),
+                'avatar': recipient.get('avatar', ''),
+            }
+        else:
+            # User sent message to OA - user is in sender  
+            zalo_user_id = sender.get('id')
+            user_info = {
+                'name': sender.get('name', 'Zalo User'),
+                'avatar': sender.get('avatar', ''),
+            }
         
         if not zalo_user_id:
-            _logger.warning('No sender ID in webhook data')
+            _logger.warning(f'No user ID in webhook data for event {event_name}')
             return
         
         # Find or create conversation
         Conversation = request.env['zalo.chat.conversation'].sudo()
         
         # Try to get user info from Zalo if needed
-        user_info = {
-            'name': sender.get('name', 'Zalo User'),
-            'avatar': sender.get('avatar', ''),
-        }
+        # (user_info already populated above based on event type)
         
         conversation = Conversation._find_or_create_conversation(
             zalo_user_id,

@@ -68,39 +68,51 @@ class DiscussChannel(models.Model):
     def write(self, vals):
         """
         Override write to prevent adding members to chat channels
+        IMPORTANT: Only filter channel_partner_ids, NOT other fields like avatar_128
         """
-        for channel in self:
-            if channel.channel_type == 'chat' and 'channel_partner_ids' in vals:
-                # Check if trying to add new members
-                commands = vals.get('channel_partner_ids', [])
-                current_partner_ids = set(channel.channel_partner_ids.ids)
-                
-                # Filter out commands that would add new members
-                filtered_commands = []
-                for cmd in commands:
-                    if cmd[0] == 4:  # Link existing partner
-                        if cmd[1] not in current_partner_ids:
-                            _logger.debug(
-                                f'Blocked attempt to add partner {cmd[1]} to '
-                                f'chat channel {channel.id} (already has 2 members)'
-                            )
-                            continue
-                    elif cmd[0] == 0:  # Create new member
-                        partner_id = cmd[2].get('partner_id')
-                        if partner_id and partner_id not in current_partner_ids:
-                            _logger.debug(
-                                f'Blocked attempt to add partner {partner_id} to '
-                                f'chat channel {channel.id} (already has 2 members)'
-                            )
-                            continue
-                    filtered_commands.append(cmd)
-                
-                # Update vals with filtered commands
-                vals['channel_partner_ids'] = filtered_commands
+        # Only process if trying to modify members
+        if 'channel_partner_ids' in vals:
+            for channel in self:
+                if channel.channel_type == 'chat':
+                    # Check if trying to add new members
+                    commands = vals.get('channel_partner_ids', [])
+                    current_partner_ids = set(channel.channel_partner_ids.ids)
+                    
+                    # Filter out commands that would add new members
+                    filtered_commands = []
+                    for cmd in commands:
+                        if cmd[0] == 4:  # Link existing partner
+                            if cmd[1] not in current_partner_ids:
+                                _logger.debug(
+                                    f'Blocked attempt to add partner {cmd[1]} to '
+                                    f'chat channel {channel.id} (already has 2 members)'
+                                )
+                                continue
+                        elif cmd[0] == 0:  # Create new member
+                            partner_id = cmd[2].get('partner_id')
+                            if partner_id and partner_id not in current_partner_ids:
+                                _logger.debug(
+                                    f'Blocked attempt to add partner {partner_id} to '
+                                    f'chat channel {channel.id} (already has 2 members)'
+                                )
+                                continue
+                        filtered_commands.append(cmd)
+                    
+                    # Update vals with filtered commands
+                    vals['channel_partner_ids'] = filtered_commands
         
         # Suppress UserError for chat channel member limit
         try:
-            return super(DiscussChannel, self).write(vals)
+            result = super(DiscussChannel, self).write(vals)
+            
+            # Debug logging for avatar writes
+            if 'avatar_128' in vals:
+                for channel in self:
+                    _logger.info(f'[WRITE DEBUG] Channel {channel.id} - avatar_128 written: {bool(vals.get("avatar_128"))} ({len(vals.get("avatar_128", b""))} bytes)')
+                    # Verify after write
+                    _logger.info(f'[WRITE DEBUG] Channel {channel.id} - avatar_128 after write: {bool(channel.avatar_128)} ({len(channel.avatar_128) if channel.avatar_128 else 0} bytes)')
+            
+            return result
         except UserError as e:
             error_msg = str(e)
             if 'cannot add more members' in error_msg.lower() or 'không thể thêm nhiều thành viên' in error_msg.lower():
