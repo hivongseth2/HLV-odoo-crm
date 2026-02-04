@@ -12,7 +12,7 @@ _logger = logging.getLogger(__name__)
 
 class ZaloChatMessage(models.Model):
     _name = 'zalo.chat.message'
-    _description = 'Zalo Chat Message'
+    _description = 'Tin nhắn Zalo Chat'
     _order = 'sent_date desc, id desc'
 
     conversation_id = fields.Many2one(
@@ -34,51 +34,51 @@ class ZaloChatMessage(models.Model):
         index=True,
     )
     direction = fields.Selection([
-        ('inbound', 'Inbound'),
-        ('outbound', 'Outbound'),
-    ], string='Direction', required=True, default='outbound')
+        ('inbound', 'Đến'),
+        ('outbound', 'Đi'),
+    ], string='Chiều', required=True, default='outbound')
     
     message_type = fields.Selection([
-        ('text', 'Text'),
-        ('image', 'Image'),
-        ('sticker', 'Sticker'),
-        ('file', 'File'),
-        ('audio', 'Audio'),
+        ('text', 'Văn bản'),
+        ('image', 'Hình ảnh'),
+        ('sticker', 'Nhãn dán'),
+        ('file', 'Tệp đính kèm'),
+        ('audio', 'Âm thanh'),
         ('video', 'Video'),
-        ('location', 'Location'),
-    ], string='Type', required=True, default='text')
+        ('location', 'Vị trí'),
+    ], string='Loại tin nhắn', required=True, default='text')
     
     content = fields.Text(
-        string='Message Content',
-        help='Text content of the message',
+        string='Nội dung',
+        help='Nội dung văn bản của tin nhắn',
     )
     attachment_url = fields.Char(
-        string='Attachment URL',
-        help='URL of attached file/image',
+        string='URL đính kèm',
+        help='URL của tệp/hình ảnh đính kèm',
     )
     attachment_type = fields.Char(
         string='Attachment MIME Type',
     )
     sent_date = fields.Datetime(
-        string='Sent Date',
+        string='Ngày gửi',
         default=fields.Datetime.now,
         required=True,
     )
     is_read = fields.Boolean(
-        string='Read',
+        string='Đã đọc',
         default=False,
-        help='Whether this inbound message has been read',
+        help='Tin nhắn đến này đã được đọc hay chưa',
     )
     error_message = fields.Text(
-        string='Error Details',
-        help='Error message if sending failed',
+        string='Thông báo lỗi',
+        help='Thông báo lỗi nếu gửi thất bại',
     )
     state = fields.Selection([
-        ('draft', 'Draft'),
-        ('sent', 'Sent'),
-        ('delivered', 'Delivered'),
-        ('failed', 'Failed'),
-    ], string='Status', default='draft', required=True)
+        ('draft', 'Nháp'),
+        ('sent', 'Đã gửi'),
+        ('delivered', 'Đã nhận'),
+        ('failed', 'Thất bại'),
+    ], string='Trạng thái', default='draft', required=True)
 
     def action_send(self):
         """Send the message via Zalo API"""

@@ -9,12 +9,12 @@ _logger = logging.getLogger(__name__)
 
 class ZaloChatConversation(models.Model):
     _name = 'zalo.chat.conversation'
-    _description = 'Zalo Chat Conversation'
+    _description = 'Hội thoại Zalo Chat'
     _inherit = ['mail.thread', 'mail.activity.mixin']
     _order = 'last_message_date desc, id desc'
 
     name = fields.Char(
-        string='Conversation',
+        string='Hội thoại',
         required=True,
         copy=False,
         readonly=True,
@@ -22,45 +22,45 @@ class ZaloChatConversation(models.Model):
     )
     partner_id = fields.Many2one(
         'res.partner',
-        string='Contact',
+        string='Liên hệ',
         tracking=True,
-        help='Linked Odoo contact for this Zalo user',
+        help='Liên hệ Odoo được liên kết với người dùng Zalo này',
     )
     zalo_user_id = fields.Char(
-        string='Zalo User ID',
+        string='ID người dùng Zalo',
         required=True,
         index=True,
-        help='Unique Zalo user identifier from webhook',
+        help='Mã định danh duy nhất của người dùng Zalo từ webhook',
     )
     zalo_user_name = fields.Char(
-        string='Zalo User Name',
-        help='Display name of the Zalo user',
+        string='Tên người dùng',
+        help='Tên hiển thị của người dùng Zalo',
     )
     zalo_avatar = fields.Char(
-        string='Avatar URL',
-        help='Zalo user avatar image URL',
+        string='Ảnh đại diện',
+        help='URL ảnh đại diện người dùng Zalo',
     )
     message_ids = fields.One2many(
         'zalo.chat.message',
         'conversation_id',
-        string='Messages',
+        string='Tin nhắn',
     )
     last_message_date = fields.Datetime(
-        string='Last Message',
+        string='Tin nhắn cuối',
         compute='_compute_last_message_date',
         store=True,
-        help='Timestamp of the most recent message',
+        help='Thời gian của tin nhắn gần nhất',
     )
     state = fields.Selection([
-        ('open', 'Open'),
-        ('closed', 'Closed'),
-        ('archived', 'Archived'),
-    ], string='Status', default='open', required=True, tracking=True)
+        ('open', 'Đang mở'),
+        ('closed', 'Đã đóng'),
+        ('archived', 'Lưu trữ'),
+    ], string='Trạng thái', default='open', required=True, tracking=True)
     
     unread_count = fields.Integer(
-        string='Unread Messages',
+        string='Chưa đọc',
         compute='_compute_unread_count',
-        help='Number of unread inbound messages',
+        help='Số tin nhắn đến chưa đọc',
     )
 
     _sql_constraints = [
