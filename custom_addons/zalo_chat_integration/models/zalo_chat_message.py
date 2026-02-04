@@ -39,14 +39,17 @@ class ZaloChatMessage(models.Model):
     ], string='Chiều', required=True, default='outbound')
     
     message_type = fields.Selection([
-        ('text', 'Văn bản'),
-        ('image', 'Hình ảnh'),
-        ('sticker', 'Nhãn dán'),
-        ('file', 'Tệp đính kèm'),
-        ('audio', 'Âm thanh'),
+        ('text', 'Text'),
+        ('image', 'Image'),
+        ('sticker', 'Sticker'),
+        ('file', 'File'),
+        ('audio', 'Audio'),
         ('video', 'Video'),
-        ('location', 'Vị trí'),
-    ], string='Loại tin nhắn', required=True, default='text')
+        ('location', 'Location'),
+        ('gif', 'GIF'),
+        ('link', 'Link'),
+        ('business_card', 'Business Card'),
+    ], string='Message Type', required=True, default='text')
     
     content = fields.Text(
         string='Nội dung',
