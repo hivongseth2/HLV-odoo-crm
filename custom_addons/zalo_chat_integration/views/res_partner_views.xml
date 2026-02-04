@@ -19,7 +19,7 @@
                     <group>
                         <field name="zalo_user_id"/>
                     </group>
-                    <field name="zalo_conversation_ids" mode="tree">
+                    <field name="zalo_conversation_ids" mode="list">
                         <list string="Conversations" create="false">
                             <field name="name"/>
                             <field name="zalo_user_name"/>

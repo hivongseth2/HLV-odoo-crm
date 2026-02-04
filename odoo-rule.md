@@ -226,16 +226,39 @@ Cấu trúc `res.config.settings` view inheritance đã thay đổi trong Odoo 1
 
 11. Odoo 18 Troubleshooting & Fixes
 11.1. Views: Replaced `tree` with `list`
-- **Lỗi**: `Invalid view type: 'tree'`
-- **Nguyên nhân**: Trong Odoo 18 (và các phiên bản mới của OWL web client), tag `<tree>` đã bị loại bỏ hoặc không còn được hỗ trợ trong một số context nhất định (ví dụ: view nhúng).
-- **Giải pháp**: Sử dụng tag `<list>` thay thế cho `<tree>`.
+- **Lỗi**: `Invalid view type: 'tree'` hoặc `Không tìm thấy chế độ xem mặc định thuộc loại 'tree'`
+- **Nguyên nhân**: Trong Odoo 18, tag `<tree>` và mode `tree` đã bị loại bỏ hoàn toàn. Phải dùng `<list>` thay thế.
+- **Giải pháp**: 
+  1. **Thay tag XML**: Đổi `<tree>` thành `<list>`
+  2. **Thay mode attribute**: Đổi `mode="tree"` thành `mode="list"` trong One2many/Many2many fields
+  3. **Thay view_mode**: Đổi `view_mode="tree,form"` thành `view_mode="list,form"` trong actions
+  
   ```xml
   <!-- CŨ (Odoo 17 trở về trước) -->
-  <tree> ... </tree>
+  <tree>
+      <field name="name"/>
+  </tree>
+  
+  <!-- Hoặc trong One2many field -->
+  <field name="line_ids" mode="tree">
+      <tree>...</tree>
+  </field>
   
   <!-- MỚI (Odoo 18) -->
-  <list> ... </list>
+  <list>
+      <field name="name"/>
+  </list>
+  
+  <!-- Hoặc trong One2many field -->
+  <field name="line_ids" mode="list">
+      <list>...</list>
+  </field>
   ```
+  
+  **LƯU Ý QUAN TRỌNG**: Tìm kiếm toàn bộ module và thay thế TẤT CẢ các instance:
+  - Tag: `<tree>` → `<list>` và `</tree>` → `</list>`
+  - Attribute: `mode="tree"` → `mode="list"` 
+  - Parameter: `view_mode="tree"` → `view_mode="list"`
 
 11.2. Cron Job & External IDs (ParseError)
 - **Lỗi**: `ParseError: while parsing ...` tại dòng khai báo `ir.cron` với `ref="module.model_name"`.

@@ -49,7 +49,7 @@
                     </group>
                     <notebook>
                         <page string="Messages" name="messages">
-                            <field name="message_ids" mode="tree">
+                            <field name="message_ids" mode="list">
                                 <list string="Messages" create="false" delete="false">
                                     <field name="sent_date"/>
                                     <field name="direction" decoration-info="direction == 'inbound'" decoration-success="direction == 'outbound'"/>
