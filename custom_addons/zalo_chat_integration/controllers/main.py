@@ -172,8 +172,12 @@ class ZaloChatWebhook(http.Controller):
         try:
             channel = conversation._get_or_create_discuss_channel()
             
-            # Post to channel as the Zalo user (partner)
+            # Check if partner is already a member to avoid adding error
             author_id = conversation.partner_id.id if conversation.partner_id else False
+            
+            # IMPORTANT: Do NOT add partner to channel_partner_ids here
+            # It's already done in _get_or_create_discuss_channel
+            # Just post the message - Odoo will handle it
             
             channel.message_post(
                 body=message.content or f'<em>({message.message_type})</em>',
