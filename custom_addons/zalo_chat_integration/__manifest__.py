@@ -24,7 +24,6 @@
         'base',
         'mail',
         'contacts',
-        'im_livechat',  # For chat widget UI
     ],
     'data': [
         'security/ir.model.access.csv',

@@ -17,74 +17,72 @@
     </record>
 
     <!-- Conversation Form View -->
-    <record id="view_zalo_chat_conversation_form" model="ir.ui.view">
-        <field name="name">zalo.chat.conversation.form</field>
-        <field name="model">zalo.chat.conversation</field>
-        <field name="arch" type="xml">
-            <form string="Hội thoại Zalo">
-                <header>
-                    <button name="action_open_chat" string="Mở Chat" type="object" 
-                            class="oe_highlight" icon="fa-comments"/>
-                    <button name="action_close" string="Đóng" type="object" 
-                            invisible="state != 'open'" icon="fa-times"/>
-                    <button name="action_reopen" string="Mở lại" type="object" 
-                            invisible="state != 'closed'" icon="fa-folder-open"/>
-                    <field name="state" widget="statusbar"/>
-                </header>
-                <sheet>
-                    <div class="oe_button_box" name="button_box">
-                        <button name="action_open_chat" type="object" 
-                                class="oe_stat_button" icon="fa-comments">
-                            <div class="o_field_widget o_stat_info">
-                                <span class="o_stat_text">Live Chat</span>
-                            </div>
-                        </button>
-                        <button class="oe_stat_button" icon="fa-envelope" invisible="unread_count == 0">
-                            <field name="unread_count" widget="statinfo" string="Chưa đọc"/>
-                        </button>
-                    </div>
-                    
-                    <div class="oe_title">
-                        <h1>
-                            <field name="zalo_user_name" placeholder="Tên người dùng Zalo" 
-                                   class="o_text_overflow" style="max-width: 90%;"/>
-                        </h1>
-                        <h3>
-                            <field name="zalo_user_id" readonly="1"/>
-                        </h3>
-                    </div>
-                    
-                    <group>
+        <record id="view_zalo_chat_conversation_form" model="ir.ui.view">
+            <field name="name">zalo.chat.conversation.form</field>
+            <field name="model">zalo.chat.conversation</field>
+            <field name="arch" type="xml">
+                <form string="Hội thoại Zalo">
+                    <header>
+                        <button name="action_send_message" string="Gửi tin nhắn" type="object" 
+                                class="oe_highlight" icon="fa-paper-plane"
+                                invisible="state == 'archived'"/>
+                        <button name="action_close" string="Đóng" type="object" 
+                                invisible="state != 'open'" icon="fa-times"/>
+                        <button name="action_reopen" string="Mở lại" type="object" 
+                                invisible="state != 'closed'" icon="fa-folder-open"/>
+                        <field name="state" widget="statusbar"/>
+                    </header>
+                    <sheet>
+                        <div class="oe_button_box" name="button_box">
+                            <button class="oe_stat_button" icon="fa-envelope" 
+                                    invisible="unread_count == 0">
+                                <field name="unread_count" widget="statinfo" string="Chưa đọc"/>
+                            </button>
+                        </div>
+                        
+                        <div class="oe_title">
+                            <h1>
+                                <field name="zalo_user_name" placeholder="Tên người dùng Zalo" 
+                                       class="o_text_overflow" style="max-width: 90%;"/>
+                            </h1>
+                            <h3 class="text-muted">
+                                <field name="zalo_user_id" readonly="1"/>
+                            </h3>
+                        </div>
+                        
                         <group>
-                            <field name="partner_id" options="{'no_create': True}"/>
-                            <field name="discuss_channel_id" readonly="1" 
-                                   invisible="not discuss_channel_id"/>
+                            <group>
+                                <field name="partner_id" options="{'no_create': True}"/>
+                                <field name="last_message_date" readonly="1"/>
+                            </group>
+                            <group>
+                                <field name="zalo_avatar" widget="url" readonly="1"/>
+                            </group>
                         </group>
-                        <group>
-                            <field name="last_message_date" readonly="1"/>
-                            <field name="zalo_avatar" widget="url" readonly="1"/>
-                        </group>
-                    </group>
-                    
-                    <notebook>
-                        <page string="Tin nhắn" name="messages">
-                            <field name="message_ids" mode="list">
-                                <list string="Tin nhắn" create="false" delete="false">
-                                    <field name="sent_date"/>
-                                    <field name="direction" decoration-info="direction == 'inbound'" 
-                                           decoration-success="direction == 'outbound'"/>
-                                    <field name="message_type"/>
-                                    <field name="content"/>
-                                    <field name="state"/>
-                                </list>
-                            </field>
-                        </page>
-                    </notebook>
-                </sheet>
-                <chatter/>
-            </form>
-        </field>
-    </record>
+                        
+                        <separator string="Tin nhắn"/>
+                        
+                        <!-- Chat-like message display -->
+                        <field name="message_ids" mode="list" nolabel="1">
+                            <list string="Tin nhắn" create="false" delete="false" 
+                                  decoration-info="direction == 'inbound'" 
+                                  decoration-success="direction == 'outbound'">
+                                <field name="sent_date" string="Thời gian"/>
+                                <field name="direction" string="Chiều" 
+                                       decoration-bf="1"/>
+                                <field name="message_type" string="Loại"/>
+                                <field name="content" string="Nội dung" 
+                                       widget="text" class="o_field_text"/>
+                                <field name="state" string="Trạng thái"
+                                       decoration-success="state == 'delivered'" 
+                                       decoration-danger="state == 'failed'"/>
+                            </list>
+                        </field>
+                    </sheet>
+                    <chatter/>
+                </form>
+            </field>
+        </record>
 
     <!-- Conversation Kanban View -->
         <record id="view_zalo_chat_conversation_kanban" model="ir.ui.view">
