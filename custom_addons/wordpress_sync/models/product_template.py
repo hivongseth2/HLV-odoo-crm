@@ -4,6 +4,7 @@ from .wordpress_api import PriceSyncService, StockSyncService
 from datetime import datetime
 import logging
 
+
 _logger = logging.getLogger(__name__)
 
 
@@ -172,8 +173,43 @@ class ProductTemplate(models.Model):
 
         return result
 
+    def _get_computed_stock_status(self):
+        """Tính toán trạng thái kho dựa trên các thành phần (BOM)"""
+        self.ensure_one()
+        # Find active BOM for this product (phantom/kit type)
+        bom = self.env['mrp.bom'].search([
+            ('product_tmpl_id', '=', self.id),
+            ('type', '=', 'phantom'),
+            ('active', '=', True)
+        ], limit=1)
+
+        if not bom:
+            # Not a combo, return own status
+            return self.x_wp_stock_status or 'instock'
+
+        has_discontinued = False
+        has_outofstock = False
+
+        for line in bom.bom_line_ids:
+            # Check component status
+            # Note: bom line points to product.product, but x_wp_stock_status is on template
+            # For simplicity, we check the template of the component
+            comp_status = line.product_id.product_tmpl_id.x_wp_stock_status or 'instock'
+            
+            if comp_status == 'discontinued':
+                has_discontinued = True
+                break # Highest severity
+            elif comp_status == 'outofstock':
+                has_outofstock = True
+        
+        if has_discontinued:
+            return 'discontinued'
+        if has_outofstock:
+            return 'outofstock'
+        return 'instock'
+
     def _update_parent_combos_stock(self):
-        """Find parent combos and queue stock sync"""
+        """Find parent combos and update their status based on components"""
         # Check context to skip queueing if needed (e.g. from wizard)
         if self.env.context.get('skip_parent_combo_queue'):
             _logger.info("Skipping parent combo queue update due to context flag.")
@@ -196,12 +232,19 @@ class ProductTemplate(models.Model):
         if not parent_combos:
              return
 
-        # 4. Queue Sync
-        QueueModel = self.env['wordpress.sync.queue']
+        # 4. Update Status & Queue Sync
+        # Instead of blind queueing, we update the status field.
+        # The write() method on parent will trigger its own auto-sync if status changes.
         for combo in parent_combos:
-            reason = f"Cập nhật do SP con thay đổi trạng thái: {self.name}"
-            # Use lower priority than direct update but enough to process
-            QueueModel.create_job(combo, sync_type='stock', priority=30, initial_log=reason)
+            new_status = combo._get_computed_stock_status()
+            if new_status != combo.x_wp_stock_status:
+                _logger.info(f"Auto-updating combo {combo.name} status to {new_status}")
+                combo.write({'x_wp_stock_status': new_status})
+            else:
+                # If status didn't change, we might still want to sync if the child stock count changed?
+                # But here we are dealing with 'status' (instock/outofstock). 
+                # If the overall status is same, usually no need to push status update.
+                pass
 
     def _auto_sync_stock_to_wordpress(self, old_value=None, new_value=None):
         """Queue stock sync job"""

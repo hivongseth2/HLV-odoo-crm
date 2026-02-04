@@ -113,9 +113,46 @@ class WordPressUpdateStockWizard(models.TransientModel):
     def _onchange_prices(self):
         """Update projected parent prices and status with Fallback Logic"""
         
-        # 0. Status Projection (Wizard forces parents to same status)
+        # 0. Status Projection (Dynamic)
+        # We need to simulate the status of the parent if we apply self.new_status to the current product
+        current_product_id = self.product_id.id
+        
         for line in self.line_ids:
-            line.new_status = self.new_status
+            parent = line.product_id
+            
+            # Find active BOM for this parent
+            bom = self.env['mrp.bom'].search([
+                ('product_tmpl_id', '=', parent.id),
+                ('type', '=', 'phantom'),
+                ('active', '=', True)
+            ], limit=1)
+            
+            new_parent_status = 'instock'
+            has_discontinued = False
+            has_outofstock = False
+            
+            if bom:
+                for bom_line in bom.bom_line_ids:
+                    comp_tmpl = bom_line.product_id.product_tmpl_id
+                    
+                    # If this component is the product being updated, uses new_status
+                    if comp_tmpl.id == current_product_id:
+                        comp_status = self.new_status
+                    else:
+                        comp_status = comp_tmpl.x_wp_stock_status or 'instock'
+                    
+                    if comp_status == 'discontinued':
+                        has_discontinued = True
+                        break 
+                    elif comp_status == 'outofstock':
+                        has_outofstock = True
+            
+            if has_discontinued:
+                new_parent_status = 'discontinued'
+            elif has_outofstock:
+                new_parent_status = 'outofstock'
+                
+            line.new_status = new_parent_status
 
         # 1. Selling Price Projection (Sum of Components)
         # Logic: If Combo Price > 0, use it. Else use Web Price.
@@ -188,11 +225,24 @@ class WordPressUpdateStockWizard(models.TransientModel):
         child_old_status = self.product_id.x_wp_stock_status
 
         if parents_to_update:
-            _logger.error(f"[Wizard-SQL] Updating {len(parents_to_update)} parents to {self.new_status} via SQL")
-            self.env.cr.execute(
-                "UPDATE product_template SET x_wp_stock_status = %s WHERE id IN %s",
-                (self.new_status, tuple(parents_to_update.ids))
-            )
+            _logger.info(f"[Wizard] Updating {len(parents_to_update)} parents - Recomputing Status")
+            for parent in parents_to_update:
+                # Because we already wrote the child status above, new calculation will see it
+                new_parent_status = parent._get_computed_stock_status()
+                
+                # We write the calculated status. 
+                # This triggers the auto-syc logic in product_template.write()
+                # UNLESS we passed context? 
+                # We skipped queue for child. For parents, we want them queued IF they change.
+                # So a normal write is fine.
+                if new_parent_status != parent.x_wp_stock_status:
+                     parent.write({'x_wp_stock_status': new_parent_status})
+                else:
+                     # Even if status is same, we might want to ensure sync if wizard explicitly asked?
+                     # But usually wizard logic implies "Sync changes".
+                     # However, to be safe and respect "checked" box, we can force a sync job if not triggered by write
+                     parent._auto_sync_stock_to_wordpress(new_value=new_parent_status)
+
         
         if status_changed:
             _logger.error(f"[Wizard-SQL] Updating Child {self.product_id.id} to {self.new_status} via SQL")
