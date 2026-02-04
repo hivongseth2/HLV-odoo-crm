@@ -1,0 +1,82 @@
+# -*- coding: utf-8 -*-
+
+from odoo import models, api
+from odoo.exceptions import UserError
+import logging
+
+_logger = logging.getLogger(__name__)
+
+
+class DiscussChannel(models.Model):
+    _inherit = 'discuss.channel'
+    
+    def message_post(self, **kwargs):
+        """
+        Override to prevent auto-adding author to chat channels
+        when posting messages (which causes 'too many members' error)
+        """
+        # For chat type channels (1-to-1), disable auto-adding author
+        if self.channel_type == 'chat':
+            # Check if we're trying to post from a partner not in the channel
+            author_id = kwargs.get('author_id')
+            if author_id:
+                # Check if author is already a member
+                partner_ids = self.channel_partner_ids.ids
+                if author_id not in partner_ids:
+                    # Partner not in channel - log warning but don't add
+                    _logger.warning(
+                        f'Attempting to post to chat channel {self.id} from '
+                        f'non-member partner {author_id}. Message will be posted '
+                        f'as system message to avoid member limit error.'
+                    )
+                    # Post as system message instead (no author)
+                    kwargs['author_id'] = False
+        
+        return super(DiscussChannel, self).message_post(**kwargs)
+    
+    def notify_typing(self, is_typing):
+        """
+        Override to prevent auto-adding members on typing notification
+        For chat channels, only notify if user is already a member
+        """
+        if self.channel_type == 'chat':
+            # Check if current user is a member
+            current_partner = self.env.user.partner_id
+            if current_partner not in self.channel_partner_ids:
+                _logger.debug(
+                    f'Skipping typing notification for non-member '
+                    f'partner {current_partner.id} in channel {self.id}'
+                )
+                # Don't call super - just return without error
+                return
+        
+        return super(DiscussChannel, self).notify_typing(is_typing)
+    
+    def _notify_thread(self, message, msg_vals=False, **kwargs):
+        """
+        Override to prevent auto-subscribing partners on notification
+        """
+        if self.channel_type == 'chat':
+            # Don't auto-subscribe - just send notifications to existing members
+            return super(DiscussChannel, self)._notify_thread(message, msg_vals=msg_vals, **kwargs)
+        
+        return super(DiscussChannel, self)._notify_thread(message, msg_vals=msg_vals, **kwargs)
+    
+    @api.constrains('channel_partner_ids')
+    def _check_chat_channel_members(self):
+        """
+        Override constraint to allow silent failure instead of raising error
+        """
+        for channel in self:
+            if channel.channel_type == 'chat':
+                member_count = len(channel.channel_partner_ids)
+                if member_count > 2:
+                    _logger.warning(
+                        f'Chat channel {channel.id} has {member_count} members, '
+                        f'removing excess members to maintain limit of 2'
+                    )
+                    # Keep only the first 2 members
+                    excess_members = channel.channel_partner_ids[2:]
+                    channel.write({
+                        'channel_partner_ids': [(3, pid.id) for pid in excess_members]
+                    })

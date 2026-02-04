@@ -173,25 +173,42 @@ class ZaloChatConversation(models.Model):
                     self.zalo_user_name = user_info.get('display_name') or user_info.get('user_name')
                     channel_name = f"Zalo: {self.zalo_user_name}"
         
-        # Create private channel
+        # Create private channel (chat type automatically handles 2 members limit)
         channel_vals = {
             'name': channel_name,
             'channel_type': 'chat',  # 1-to-1 chat
             'description': f'Chat với Zalo user {self.zalo_user_id}',
         }
         
-        # Add members: current user + Zalo partner
-        members = [self.env.user.partner_id.id]
+        # For chat type, use channel_partner_ids instead of channel_member_ids
+        # This avoids the "too many members" error
+        partners = [self.env.user.partner_id.id]
         if self.partner_id:
-            members.append(self.partner_id.id)
+            partners.append(self.partner_id.id)
+            # Set channel avatar from partner
+            if self.partner_id.image_128:
+                channel_vals['avatar_128'] = self.partner_id.image_128
         
-        channel_vals['channel_member_ids'] = [
-            (0, 0, {'partner_id': pid}) for pid in members
-        ]
+        channel_vals['channel_partner_ids'] = [(4, pid) for pid in partners]
         
         channel = self.env['discuss.channel'].create(channel_vals)
         
         self.discuss_channel_id = channel.id
+        
+        # Update channel avatar and name if we have partner info
+        if self.partner_id and self.partner_id.image_128:
+            try:
+                channel.write({
+                    'avatar_128': self.partner_id.image_128,
+                    'name': f"Zalo: {self.partner_id.name}"
+                })
+                _logger.info(f'Updated channel {channel.id} with partner avatar and name')
+            except Exception as e:
+                _logger.warning(f'Failed to update channel avatar: {str(e)}')
+        
+        # Ensure members have persona data (fix JS error)
+        # Force refresh channel member info
+        channel.invalidate_recordset(['channel_member_ids'])
         
         _logger.info(f'Created discuss.channel {channel.id} for Zalo conversation {self.id}')
         

@@ -2,6 +2,7 @@
 
 from odoo import models, api, fields, _
 import logging
+import re
 
 _logger = logging.getLogger(__name__)
 
@@ -44,11 +45,15 @@ class MailMessage(models.Model):
                 try:
                     # User sent message in discuss → send to Zalo
                     # NO member adding here - members already set on channel creation
+                    
+                    # Strip HTML tags from message body
+                    plain_text = self._strip_html(message.body)
+                    
                     zalo_message = self.env['zalo.chat.message'].sudo().create({
                         'conversation_id': conversation.id,
                         'direction': 'outbound',
                         'message_type': 'text',
-                        'content': message.body,
+                        'content': plain_text,
                         'state': 'draft',
                     })
                     
@@ -61,3 +66,17 @@ class MailMessage(models.Model):
                     _logger.error(f'Failed to send message to Zalo: {str(e)}', exc_info=True)
         
         return messages
+    
+    def _strip_html(self, html):
+        """Strip HTML tags and decode entities"""
+        if not html:
+            return ''
+        
+        # Remove HTML tags
+        text = re.sub(r'<[^>]+>', '', html)
+        
+        # Decode HTML entities
+        import html as html_lib
+        text = html_lib.unescape(text)
+        
+        return text.strip()

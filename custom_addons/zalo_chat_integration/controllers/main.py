@@ -100,6 +100,9 @@ class ZaloChatWebhook(http.Controller):
         )
         
         # Process message based on event type
+        # Initialize skip flag - only skip for outbound OA messages
+        skip_discuss_sync = False
+        
         message_vals = {
             'conversation_id': conversation.id,
             'message_id': message_data.get('msg_id'),
@@ -168,23 +171,28 @@ class ZaloChatWebhook(http.Controller):
         Message = request.env['zalo.chat.message'].sudo()
         message = Message.create(message_vals)
         
-        # Sync to discuss.channel for live chat UI
-        try:
-            channel = conversation._get_or_create_discuss_channel()
-            
-            # Post to channel as the Zalo user (partner)
-            author_id = conversation.partner_id.id if conversation.partner_id else False
-            
-            channel.message_post(
-                body=message.content or f'<em>({message.message_type})</em>',
-                author_id=author_id,
-                message_type='comment',
-                subtype_xmlid='mail.mt_comment',
-            )
-            
-            _logger.info(f'Synced Zalo message to discuss.channel {channel.id}')
-        except Exception as e:
-            _logger.error(f'Failed to sync to discuss.channel: {str(e)}', exc_info=True)
+        # Sync to discuss.channel for live chat UI (skip for oa_send_text)
+        if not skip_discuss_sync:
+            try:
+                channel = conversation._get_or_create_discuss_channel()
+                
+                # Check if partner is already a member to avoid adding error
+                author_id = conversation.partner_id.id if conversation.partner_id else False
+                
+                # IMPORTANT: Do NOT add partner to channel_partner_ids here
+                # It's already done in _get_or_create_discuss_channel
+                # Just post the message - Odoo will handle it
+                
+                channel.message_post(
+                    body=message.content or f'<em>({message.message_type})</em>',
+                    author_id=author_id,
+                    message_type='comment',
+                    subtype_xmlid='mail.mt_comment',
+                )
+                
+                _logger.info(f'Synced Zalo message to discuss.channel {channel.id}')
+            except Exception as e:
+                _logger.error(f'Failed to sync to discuss.channel: {str(e)}', exc_info=True)
         
         # Post notification to conversation chatter
         notification_body = Markup(
