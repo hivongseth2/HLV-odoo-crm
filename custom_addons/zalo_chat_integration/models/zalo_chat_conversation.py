@@ -179,13 +179,17 @@ class ZaloChatConversation(models.Model):
         self.ensure_one()
         channel = self._get_or_create_discuss_channel()
         
+        # Open in Discuss app with chat widget
         return {
             'type': 'ir.actions.act_window',
-            'name': f'Chat: {self.zalo_user_name or "Zalo User"}',
+            'name': 'Discuss',
             'res_model': 'discuss.channel',
-            'res_id': channel.id,
             'view_mode': 'form',
+            'res_id': channel.id,
             'target': 'current',
+            'context': {
+                'active_id': channel.id,
+            },
         }
 
     @api.model
