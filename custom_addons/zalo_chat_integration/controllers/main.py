@@ -120,48 +120,95 @@ class ZaloChatWebhook(http.Controller):
             })
         
         elif event_name == 'user_send_image':
+            # Image from Zalo
+            attachments = message_data.get('attachments', [])
+            image_url = attachments[0].get('payload', {}).get('url', '') if attachments else message_data.get('url', '')
             message_vals.update({
                 'message_type': 'image',
-                'content': _('(Image)'),
-                'attachment_url': message_data.get('url', ''),
+                'content': _('📷 Image'),
+                'attachment_url': image_url,
+            })
+        
+        elif event_name == 'user_send_gif':
+            # GIF animation
+            attachments = message_data.get('attachments', [])
+            gif_url = attachments[0].get('payload', {}).get('url', '') if attachments else message_data.get('url', '')
+            message_vals.update({
+                'message_type': 'gif',
+                'content': _('🎬 GIF'),
+                'attachment_url': gif_url,
             })
         
         elif event_name == 'user_send_sticker':
+            # Sticker
+            attachments = message_data.get('attachments', [])
+            sticker_url = attachments[0].get('payload', {}).get('url', '') if attachments else message_data.get('url', '')
             message_vals.update({
                 'message_type': 'sticker',
-                'content': _('(Sticker)'),
-                'attachment_url': message_data.get('url', ''),
+                'content': _('😊 Sticker'),
+                'attachment_url': sticker_url,
+            })
+        
+        elif event_name == 'user_send_link':
+            # Link/URL
+            links = message_data.get('attachments', [{}])[0].get('payload', {}).get('elements', [])
+            link_url = links[0].get('url', '') if links else message_data.get('text', '')
+            link_title = links[0].get('title', '') if links else ''
+            message_vals.update({
+                'message_type': 'link',
+                'content': f"🔗 {link_title or 'Link'}: {link_url}",
             })
         
         elif event_name == 'user_send_file':
+            # File attachment
             attachments = message_data.get('attachments', [])
-            file_url = attachments[0].get('payload', {}).get('url', '') if attachments else ''
+            file_url = attachments[0].get('payload', {}).get('url', '') if attachments else message_data.get('url', '')
+            file_name = attachments[0].get('payload', {}).get('name', 'file') if attachments else 'file'
             message_vals.update({
                 'message_type': 'file',
-                'content': _('(File)'),
+                'content': f"📎 File: {file_name}",
                 'attachment_url': file_url,
             })
         
         elif event_name == 'user_send_audio':
+            # Audio/voice message
+            attachments = message_data.get('attachments', [])
+            audio_url = attachments[0].get('payload', {}).get('url', '') if attachments else message_data.get('url', '')
             message_vals.update({
                 'message_type': 'audio',
-                'content': _('(Audio)'),
-                'attachment_url': message_data.get('url', ''),
+                'content': _('🎤 Voice message'),
+                'attachment_url': audio_url,
             })
         
         elif event_name == 'user_send_video':
+            # Video message
+            attachments = message_data.get('attachments', [])
+            video_url = attachments[0].get('payload', {}).get('url', '') if attachments else message_data.get('url', '')
             message_vals.update({
                 'message_type': 'video',
-                'content': _('(Video)'),
-                'attachment_url': message_data.get('url', ''),
+                'content': _('🎥 Video'),
+                'attachment_url': video_url,
             })
         
         elif event_name == 'user_send_location':
+            # Location sharing
             location = message_data.get('location', {})
+            lat = location.get('latitude', '')
+            lng = location.get('longitude', '')
             message_vals.update({
                 'message_type': 'location',
-                'content': f"Location: {location.get('latitude', '')}, {location.get('longitude', '')}",
+                'content': f"📍 Location: {lat}, {lng}",
             })
+        
+        elif event_name == 'oa_send_text':
+            # OA sent message to user (outbound from OA dashboard/API)
+            message_vals.update({
+                'direction': 'outbound',
+                'message_type': 'text',
+                'content': message_data.get('text', ''),
+                'state': 'sent',
+            })
+            skip_discuss_sync = True
         
         else:
             _logger.warning(f'Unknown event type: {event_name}')

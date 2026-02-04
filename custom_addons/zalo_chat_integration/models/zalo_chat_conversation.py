@@ -185,9 +185,6 @@ class ZaloChatConversation(models.Model):
         partners = [self.env.user.partner_id.id]
         if self.partner_id:
             partners.append(self.partner_id.id)
-            # Set channel avatar from partner
-            if self.partner_id.image_128:
-                channel_vals['avatar_128'] = self.partner_id.image_128
         
         channel_vals['channel_partner_ids'] = [(4, pid) for pid in partners]
         
@@ -195,16 +192,21 @@ class ZaloChatConversation(models.Model):
         
         self.discuss_channel_id = channel.id
         
-        # Update channel avatar and name if we have partner info
-        if self.partner_id and self.partner_id.image_128:
+        # Set channel avatar from partner image AFTER creation
+        # Use sudo to bypass access rights
+        if self.partner_id:
             try:
-                channel.write({
-                    'avatar_128': self.partner_id.image_128,
-                    'name': f"Zalo: {self.partner_id.name}"
-                })
-                _logger.info(f'Updated channel {channel.id} with partner avatar and name')
+                avatar_data = self.partner_id.image_128 or self.partner_id.image_1920
+                if avatar_data:
+                    channel.sudo().write({
+                        'avatar_128': avatar_data,
+                        'name': f"Zalo: {self.partner_id.name}"
+                    })
+                    _logger.info(f'Set avatar for channel {channel.id} from partner {self.partner_id.id}')
+                else:
+                    _logger.warning(f'Partner {self.partner_id.id} has no avatar image')
             except Exception as e:
-                _logger.warning(f'Failed to update channel avatar: {str(e)}')
+                _logger.error(f'Failed to set channel avatar: {str(e)}', exc_info=True)
         
         # Ensure members have persona data (fix JS error)
         # Force refresh channel member info
