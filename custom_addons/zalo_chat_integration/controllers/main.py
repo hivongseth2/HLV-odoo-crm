@@ -163,7 +163,13 @@ class ZaloChatWebhook(http.Controller):
             # File attachment
             attachments = message_data.get('attachments', [])
             file_url = attachments[0].get('payload', {}).get('url', '') if attachments else message_data.get('url', '')
-            file_name = attachments[0].get('payload', {}).get('name', 'file') if attachments else 'file'
+            # Extract filename from attachment data or URL
+            file_name = 'file'
+            if attachments:
+                file_name = attachments[0].get('payload', {}).get('name', '')
+            if not file_name and file_url:
+                # Try to extract from URL
+                file_name = file_url.split('/')[-1].split('?')[0] or 'file'
             message_vals.update({
                 'message_type': 'file',
                 'content': f"📎 File: {file_name}",

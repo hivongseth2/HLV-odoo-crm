@@ -36,8 +36,29 @@ class ZaloFileProxyController(http.Controller):
                     status=response.status_code
                 )
             
-            # Get filename from URL or use default
-            filename = url.split('/')[-1] or 'zalo_file'
+            # Get filename - try multiple sources
+            filename = 'zalo_file'
+            
+            # 1. Try from message record if msg_id provided
+            if msg_id:
+                message = request.env['zalo.chat.message'].sudo().browse(int(msg_id))
+                if message and message.content:
+                    # Extract from "📎 File: filename.ext"
+                    content = message.content.replace('📎 File: ', '').strip()
+                    if content and content != '🎤 Voice message':
+                        filename = content
+            
+            # 2. Try from Content-Disposition header
+            if filename == 'zalo_file':
+                content_disp = response.headers.get('Content-Disposition', '')
+                if 'filename=' in content_disp:
+                    filename = content_disp.split('filename=')[-1].strip('"\'')
+            
+            # 3. Fallback to URL
+            if filename == 'zalo_file':
+                url_parts = url.split('/')[-1].split('?')[0]
+                if url_parts:
+                    filename = url_parts
             
             # Return file response
             return request.make_response(

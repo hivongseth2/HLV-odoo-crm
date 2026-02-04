@@ -196,15 +196,25 @@ class ZaloChatConversation(models.Model):
         # Use sudo to bypass access rights
         if self.partner_id:
             try:
+                _logger.info(f'Partner {self.partner_id.id} ({self.partner_id.name}) - checking avatar...')
+                _logger.info(f'  image_128: {bool(self.partner_id.image_128)} ({len(self.partner_id.image_128) if self.partner_id.image_128 else 0} bytes)')
+                _logger.info(f'  image_1920: {bool(self.partner_id.image_1920)} ({len(self.partner_id.image_1920) if self.partner_id.image_1920 else 0} bytes)')
+                
                 avatar_data = self.partner_id.image_128 or self.partner_id.image_1920
                 if avatar_data:
+                    _logger.info(f'Setting avatar for channel {channel.id} - avatar size: {len(avatar_data)} bytes')
                     channel.sudo().write({
                         'avatar_128': avatar_data,
                         'name': f"Zalo: {self.partner_id.name}"
                     })
-                    _logger.info(f'Set avatar for channel {channel.id} from partner {self.partner_id.id}')
+                    # Force invalidate cache
+                    channel.invalidate_recordset(['avatar_128', 'name'])
+                    
+                    # Verify it was set
+                    channel_check = self.env['discuss.channel'].sudo().browse(channel.id)
+                    _logger.info(f'✓ Avatar set! Channel {channel.id} avatar: {bool(channel_check.avatar_128)} ({len(channel_check.avatar_128) if channel_check.avatar_128 else 0} bytes)')
                 else:
-                    _logger.warning(f'Partner {self.partner_id.id} has no avatar image')
+                    _logger.warning(f'⚠ Partner {self.partner_id.id} has no avatar image!')
             except Exception as e:
                 _logger.error(f'Failed to set channel avatar: {str(e)}', exc_info=True)
         
