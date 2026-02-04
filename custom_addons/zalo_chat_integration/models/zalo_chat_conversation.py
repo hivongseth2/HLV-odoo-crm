@@ -195,6 +195,17 @@ class ZaloChatConversation(models.Model):
         
         self.discuss_channel_id = channel.id
         
+        # Update channel avatar and name if we have partner info
+        if self.partner_id and self.partner_id.image_128:
+            try:
+                channel.write({
+                    'avatar_128': self.partner_id.image_128,
+                    'name': f"Zalo: {self.partner_id.name}"
+                })
+                _logger.info(f'Updated channel {channel.id} with partner avatar and name')
+            except Exception as e:
+                _logger.warning(f'Failed to update channel avatar: {str(e)}')
+        
         _logger.info(f'Created discuss.channel {channel.id} for Zalo conversation {self.id}')
         
         return channel
