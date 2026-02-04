@@ -55,6 +55,22 @@
                     
                     <div style="display: flex; align-items: center; gap: 6px;">
                         
+                        <!-- Decrement Buttons (Left) -->
+                        <t t-if="line.product_uom_qty % 1 != 0">
+                            <div style="display: flex; gap: 2px;">
+                                    <button onclick="manualIncrement(this, -0.1)" 
+                                        style="border: 1px solid #ffc9c9; background: #ffe3e3; color: #e03131; cursor: pointer; padding: 2px 6px; font-size: 0.75rem; border-radius: 12px; font-weight: 600; transition: all 0.2s;" 
+                                        onmouseover="this.style.background='#ffc9c9'" 
+                                        onmouseout="this.style.background='#ffe3e3'"
+                                        title="-0.1">-0.1</button>
+                                    <button onclick="manualIncrement(this, -0.01)" 
+                                        style="border: 1px solid #ffc9c9; background: #ffe3e3; color: #e03131; cursor: pointer; padding: 2px 6px; font-size: 0.75rem; border-radius: 12px; font-weight: 600; transition: all 0.2s;" 
+                                        onmouseover="this.style.background='#ffc9c9'" 
+                                        onmouseout="this.style.background='#ffe3e3'"
+                                        title="-0.01">-0.01</button>
+                            </div>
+                        </t>
+
                         <!-- Input Box container -->
                         <div style="display: flex; align-items: center; background: #fff; border: 1px solid #ced4da; border-radius: 4px; padding: 0 6px;">
                             <input type="number" 
@@ -73,38 +89,19 @@
                             <span style="font-weight: 600; color: #6c757d;"><t t-esc="line.product_uom_qty"/></span>
                         </div>
 
-                        <!-- Decimal Buttons (Outside Input Box) -->
+                        <!-- Increment Buttons (Right) -->
                         <t t-if="line.product_uom_qty % 1 != 0">
-                            <div style="display: flex; gap: 6px; margin-left: 2px;">
-                                <!-- Decrement Group -->
-                                <div style="display: flex; gap: 2px;">
-                                     <button onclick="manualIncrement(this, -0.1)" 
-                                            style="border: 1px solid #ffc9c9; background: #ffe3e3; color: #e03131; cursor: pointer; padding: 2px 6px; font-size: 0.75rem; border-radius: 12px; font-weight: 600; transition: all 0.2s;" 
-                                            onmouseover="this.style.background='#ffc9c9'" 
-                                            onmouseout="this.style.background='#ffe3e3'"
-                                            title="-0.1">-0.1</button>
-                                     <button onclick="manualIncrement(this, -0.01)" 
-                                            style="border: 1px solid #ffc9c9; background: #ffe3e3; color: #e03131; cursor: pointer; padding: 2px 6px; font-size: 0.75rem; border-radius: 12px; font-weight: 600; transition: all 0.2s;" 
-                                            onmouseover="this.style.background='#ffc9c9'" 
-                                            onmouseout="this.style.background='#ffe3e3'"
-                                            title="-0.01">-0.01</button>
-                                </div>
-                                
-                                <span style="color: #dee2e6;">|</span>
-
-                                <!-- Increment Group -->
-                                <div style="display: flex; gap: 2px;">
-                                    <button onclick="manualIncrement(this, 0.1)" 
-                                            style="border: 1px solid #d0ebff; background: #e7f5ff; color: #1971c2; cursor: pointer; padding: 2px 6px; font-size: 0.75rem; border-radius: 12px; font-weight: 600; transition: all 0.2s;" 
-                                            onmouseover="this.style.background='#d0ebff'" 
-                                            onmouseout="this.style.background='#e7f5ff'"
-                                            title="+0.1">+0.1</button>
-                                    <button onclick="manualIncrement(this, 0.01)" 
-                                            style="border: 1px solid #d0ebff; background: #e7f5ff; color: #1971c2; cursor: pointer; padding: 2px 6px; font-size: 0.75rem; border-radius: 12px; font-weight: 600; transition: all 0.2s;" 
-                                            onmouseover="this.style.background='#d0ebff'" 
-                                            onmouseout="this.style.background='#e7f5ff'"
-                                            title="+0.01">+0.01</button>
-                                </div>
+                            <div style="display: flex; gap: 2px;">
+                                <button onclick="manualIncrement(this, 0.1)" 
+                                        style="border: 1px solid #d0ebff; background: #e7f5ff; color: #1971c2; cursor: pointer; padding: 2px 6px; font-size: 0.75rem; border-radius: 12px; font-weight: 600; transition: all 0.2s;" 
+                                        onmouseover="this.style.background='#d0ebff'" 
+                                        onmouseout="this.style.background='#e7f5ff'"
+                                        title="+0.1">+0.1</button>
+                                <button onclick="manualIncrement(this, 0.01)" 
+                                        style="border: 1px solid #d0ebff; background: #e7f5ff; color: #1971c2; cursor: pointer; padding: 2px 6px; font-size: 0.75rem; border-radius: 12px; font-weight: 600; transition: all 0.2s;" 
+                                        onmouseover="this.style.background='#d0ebff'" 
+                                        onmouseout="this.style.background='#e7f5ff'"
+                                        title="+0.01">+0.01</button>
                             </div>
                         </t>
                     </div>
