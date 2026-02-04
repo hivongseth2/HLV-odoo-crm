@@ -116,7 +116,6 @@
                 <field name="partner_id"/>
                 <filter string="Open" name="open" domain="[('state', '=', 'open')]"/>
                 <filter string="Closed" name="closed" domain="[('state', '=', 'closed')]"/>
-                <filter string="Unread" name="unread" domain="[('unread_count', '>', 0)]"/>
                 <separator/>
                 <filter string="Today" name="today" domain="[('last_message_date', '>=', context_today().strftime('%Y-%m-%d'))]"/>
                 <filter string="This Week" name="this_week" domain="[('last_message_date', '>=', (context_today() - relativedelta(weeks=1)).strftime('%Y-%m-%d'))]"/>
