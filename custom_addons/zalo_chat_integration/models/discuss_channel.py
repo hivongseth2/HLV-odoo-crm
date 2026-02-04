@@ -10,6 +10,41 @@ _logger = logging.getLogger(__name__)
 class DiscussChannel(models.Model):
     _inherit = 'discuss.channel'
     
+    def write(self, vals):
+        """
+        Override write to prevent adding members to chat channels
+        """
+        for channel in self:
+            if channel.channel_type == 'chat' and 'channel_partner_ids' in vals:
+                # Check if trying to add new members
+                commands = vals.get('channel_partner_ids', [])
+                current_partner_ids = set(channel.channel_partner_ids.ids)
+                
+                # Filter out commands that would add new members
+                filtered_commands = []
+                for cmd in commands:
+                    if cmd[0] == 4:  # Link existing partner
+                        if cmd[1] not in current_partner_ids:
+                            _logger.warning(
+                                f'Blocked attempt to add partner {cmd[1]} to '
+                                f'chat channel {channel.id} (already has 2 members)'
+                            )
+                            continue
+                    elif cmd[0] == 0:  # Create new member
+                        partner_id = cmd[2].get('partner_id')
+                        if partner_id and partner_id not in current_partner_ids:
+                            _logger.warning(
+                                f'Blocked attempt to add partner {partner_id} to '
+                                f'chat channel {channel.id} (already has 2 members)'
+                            )
+                            continue
+                    filtered_commands.append(cmd)
+                
+                # Update vals with filtered commands
+                vals['channel_partner_ids'] = filtered_commands
+        
+        return super(DiscussChannel, self).write(vals)
+    
     def message_post(self, **kwargs):
         """
         Override to prevent auto-adding author to chat channels
@@ -61,22 +96,3 @@ class DiscussChannel(models.Model):
             return super(DiscussChannel, self)._notify_thread(message, msg_vals=msg_vals, **kwargs)
         
         return super(DiscussChannel, self)._notify_thread(message, msg_vals=msg_vals, **kwargs)
-    
-    @api.constrains('channel_partner_ids')
-    def _check_chat_channel_members(self):
-        """
-        Override constraint to allow silent failure instead of raising error
-        """
-        for channel in self:
-            if channel.channel_type == 'chat':
-                member_count = len(channel.channel_partner_ids)
-                if member_count > 2:
-                    _logger.warning(
-                        f'Chat channel {channel.id} has {member_count} members, '
-                        f'removing excess members to maintain limit of 2'
-                    )
-                    # Keep only the first 2 members
-                    excess_members = channel.channel_partner_ids[2:]
-                    channel.write({
-                        'channel_partner_ids': [(3, pid.id) for pid in excess_members]
-                    })
