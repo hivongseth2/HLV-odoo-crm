@@ -32,3 +32,21 @@ class DiscussChannel(models.Model):
                     kwargs['author_id'] = False
         
         return super(DiscussChannel, self).message_post(**kwargs)
+    
+    def notify_typing(self, is_typing):
+        """
+        Override to prevent auto-adding members on typing notification
+        For chat channels, only notify if user is already a member
+        """
+        if self.channel_type == 'chat':
+            # Check if current user is a member
+            current_partner = self.env.user.partner_id
+            if current_partner not in self.channel_partner_ids:
+                _logger.debug(
+                    f'Skipping typing notification for non-member '
+                    f'partner {current_partner.id} in channel {self.id}'
+                )
+                # Don't call super - just return without error
+                return
+        
+        return super(DiscussChannel, self).notify_typing(is_typing)
