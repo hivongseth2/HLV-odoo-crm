@@ -238,7 +238,7 @@ class ZaloSheetWebhook(http.Controller):
                                 user_id, 
                                 message_content, 
                                 zalo_msg_id=msg_id,
-                                image_url=image_url  # <--- Quan trọng: Truyền link ảnh vào đây
+                                image_url=image_url  # <--- Quan trọng: Truyền link ảnh
                             )
                             
                             # 2. Gửi kết quả về Zalo
