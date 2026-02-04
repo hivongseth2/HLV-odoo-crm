@@ -137,6 +137,21 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   };
 
+  window.manualIncrement = async function (btn, amount) {
+    const wrapper = btn.closest('div'); // The parent div of input and buttons
+    const input = wrapper.querySelector('.done-input');
+    if (!input) return;
+
+    let currentVal = parseFloat(input.value || 0);
+    // Fix floating point precision issues (e.g. 0.1 + 0.2 = 0.300000004)
+    let newVal = parseFloat((currentVal + amount).toFixed(3));
+
+    input.value = newVal;
+
+    // Trigger change logic
+    await window.handleManualQtyChange(input);
+  };
+
   /* ----------------------------------------------------------- */
 
   const BARCODE_MAP_POINT_ONE = {
