@@ -42,12 +42,12 @@
                            decoration-info="bulk_product_type_label == 'combo'"/>
                     <field name="name" optional="show" string="Tên sản phẩm"/>
                     <field name="barcode" optional="show" string="Mã vạch"/>
-                    <field name="standard_price" string="Giá vốn" optional="show" widget="monetary"/>
-                    <field name="list_price" string="Giá bán lẻ" optional="show" widget="monetary"/>
-                    <field name="x_studio_ga_web" string="Giá Web" optional="show" widget="monetary"/>
-                    <field name="x_studio_ga_hng_nim_yt" string="Giá Niêm Yết" optional="show" widget="monetary"/>
-                    <field name="x_studio_gi_bn_thng_mi" string="Giá Thương Mại" optional="show" widget="monetary"/>
-                    <field name="x_studio_gia_san_tmdt" string="Giá Sàn TMĐT" optional="show" widget="monetary"/>
+                    <field name="standard_price" string="Giá vốn" optional="show" widget="monetary" readonly="1"/>
+                    <field name="list_price" string="Giá bán lẻ" optional="show" widget="monetary" readonly="1"/>
+                    <field name="x_studio_ga_web" string="Giá Web" optional="show" widget="monetary" readonly="1"/>
+                    <field name="x_studio_ga_hng_nim_yt" string="Giá Niêm Yết" optional="show" widget="monetary" readonly="1"/>
+                    <field name="x_studio_gi_bn_thng_mi" string="Giá Thương Mại" optional="show" widget="monetary" readonly="1"/>
+                    <field name="x_studio_gia_san_tmdt" string="Giá Sàn TMĐT" optional="show" widget="monetary" readonly="1"/>
                     <field name="x_wp_stock_status" string="Tình trạng WP" optional="show"
                            readonly="1"
                            decoration-success="x_wp_stock_status == 'instock'"
