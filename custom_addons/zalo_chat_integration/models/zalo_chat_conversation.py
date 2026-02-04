@@ -226,43 +226,27 @@ class ZaloChatConversation(models.Model):
         if not conversation:
             # Fetch user info from Zalo if not provided
             if not user_info:
+                _logger.info(f'Fetching user info from Zalo API for new user {zalo_user_id}')
                 user_info = self._fetch_zalo_user_info(zalo_user_id)
             
             # Create new conversation
             vals = {
                 'zalo_user_id': zalo_user_id,
-                'zalo_user_name': user_info.get('display_name') or user_info.get('user_name') or 'Zalo User',
+                'zalo_user_name': user_info.get('display_name') or user_info.get('user_alias') or 'Zalo User',
                 'zalo_avatar': user_info.get('avatar'),
                 'state': 'open',
             }
             
             # Auto-create partner if we have useful info
-            if user_info.get('display_name') or user_info.get('user_name'):
+            if user_info.get('display_name') or user_info.get('user_alias'):
                 partner = self._get_or_create_partner(zalo_user_id, user_info)
                 vals['partner_id'] = partner.id
             
             conversation = self.create(vals)
-            _logger.info(f'Created new Zalo conversation for user {zalo_user_id}')
+            _logger.info(f'Created new Zalo conversation for user {zalo_user_id}: {vals.get("zalo_user_name")}')
         else:
-            # Update existing conversation with new info if available
-            if user_info:
-                update_vals = {}
-                
-                new_name = user_info.get('display_name') or user_info.get('user_name')
-                if new_name and conversation.zalo_user_name != new_name:
-                    update_vals['zalo_user_name'] = new_name
-                
-                new_avatar = user_info.get('avatar')
-                if new_avatar and conversation.zalo_avatar != new_avatar:
-                    update_vals['zalo_avatar'] = new_avatar
-                
-                if update_vals:
-                    conversation.write(update_vals)
-                
-                # Create partner if doesn't exist
-                if not conversation.partner_id and (user_info.get('display_name') or user_info.get('user_name')):
-                    partner = self._get_or_create_partner(zalo_user_id, user_info)
-                    conversation.partner_id = partner.id
+            # Conversation already exists, no need to fetch info again
+            _logger.debug(f'Found existing conversation for Zalo user {zalo_user_id}')
         
         return conversation
     
