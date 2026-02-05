@@ -93,6 +93,10 @@ class MailMessage(models.Model):
     def _send_attachment_to_zalo(self, attachment, conversation):
         """
         Send attachment (image or file) to Zalo via API
+        
+        Zalo API Limitations:
+        - Files: max 1MB, only pdf/doc/docx/csv supported
+        - Images: max 1MB, jpg/png/gif supported
         """
         import base64
         import requests
@@ -105,37 +109,80 @@ class MailMessage(models.Model):
         file_data = base64.b64decode(attachment.datas)
         filename = attachment.name
         mimetype = attachment.mimetype or 'application/octet-stream'
+        file_size = len(file_data)
         
-        _logger.info(f'Sending attachment to Zalo: {filename} ({mimetype}, {len(file_data)} bytes)')
+        _logger.info(f'Sending attachment to Zalo: {filename} ({mimetype}, {file_size} bytes)')
         
         # Determine if image or file
         is_image = mimetype.startswith('image/')
         
+        # === VALIDATION ===
+        # Check file size (Zalo limit: 1MB = 1048576 bytes)
+        MAX_SIZE = 1048576  # 1MB
+        if file_size > MAX_SIZE:
+            error_msg = f'❌ File "{filename}" quá lớn ({file_size // 1024}KB). Zalo chỉ cho phép tối đa 1MB.'
+            _logger.warning(error_msg)
+            # Post notification to chat
+            self._post_upload_error(conversation, error_msg)
+            return
+        
+        # Check file type for non-images
+        if not is_image:
+            ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.csv']
+            file_ext = '.' + filename.split('.')[-1].lower() if '.' in filename else ''
+            
+            if file_ext not in ALLOWED_EXTENSIONS:
+                error_msg = f'❌ File "{filename}" không được hỗ trợ. Zalo chỉ cho phép: PDF, DOC, DOCX, CSV'
+                _logger.warning(error_msg)
+                self._post_upload_error(conversation, error_msg)
+                return
+        
+        # Check image type
         if is_image:
-            # Upload image
+            ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/jpg']
+            if mimetype not in ALLOWED_IMAGE_TYPES:
+                error_msg = f'❌ Ảnh "{filename}" không được hỗ trợ. Zalo chỉ cho phép: JPG, PNG, GIF'
+                _logger.warning(error_msg)
+                self._post_upload_error(conversation, error_msg)
+                return
+        
+        # === UPLOAD ===
+        if is_image:
             url = 'https://openapi.zalo.me/v2.0/oa/upload/image'
         else:
-            # Upload file  
             url = 'https://openapi.zalo.me/v2.0/oa/upload/file'
         
-        # Upload to Zalo
         files = {'file': (filename, file_data, mimetype)}
         headers = {'access_token': access_token}
         
+        _logger.info(f'Uploading to Zalo API: {url}')
         response = requests.post(url, headers=headers, files=files, timeout=60)
         
+        _logger.info(f'Zalo upload response: {response.status_code} - {response.text[:500]}')
+        
         if response.status_code != 200:
-            raise Exception(f'Zalo upload API error {response.status_code}: {response.text}')
+            error_msg = f'❌ Lỗi upload "{filename}": HTTP {response.status_code}'
+            _logger.error(error_msg)
+            self._post_upload_error(conversation, error_msg)
+            return
         
         result = response.json()
         
         if result.get('error') != 0:
-            raise Exception(f'Zalo API error {result.get("error")}: {result.get("message")}')
+            error_code = result.get('error')
+            error_message = result.get('message', 'Unknown error')
+            error_msg = f'❌ Lỗi Zalo API ({error_code}): {error_message}'
+            _logger.error(error_msg)
+            self._post_upload_error(conversation, error_msg)
+            return
         
         attachment_id = result.get('data', {}).get('attachment_id')
         
         if not attachment_id:
-            raise Exception(f'No attachment_id returned from Zalo upload')
+            error_msg = f'❌ Zalo không trả về attachment_id cho "{filename}"'
+            _logger.error(f'{error_msg}. Full response: {result}')
+            self._post_upload_error(conversation, error_msg)
+            return
         
         _logger.info(f'✓ Uploaded to Zalo, attachment_id: {attachment_id}')
         
@@ -211,3 +258,19 @@ class MailMessage(models.Model):
         text = html_lib.unescape(text)
         
         return text.strip()
+    
+    def _post_upload_error(self, conversation, error_msg):
+        """
+        Post error message to the discuss channel to notify user
+        """
+        try:
+            if conversation and conversation.discuss_channel_id:
+                # Post error as system notification
+                conversation.discuss_channel_id.sudo().message_post(
+                    body=f'<p style="color: red;">{error_msg}</p>',
+                    message_type='notification',
+                    subtype_xmlid='mail.mt_comment',
+                )
+                _logger.info(f'Posted upload error notification to channel {conversation.discuss_channel_id.id}')
+        except Exception as e:
+            _logger.error(f'Failed to post upload error: {str(e)}')
