@@ -263,24 +263,13 @@ class MailMessage(models.Model):
         """
         Post error message to the discuss channel to notify user
         """
+        from markupsafe import Markup
+        
         try:
             if conversation and conversation.discuss_channel_id:
-                # Post error as styled notification
-                error_html = f'''
-                    <div class="zalo-upload-error" style="
-                        background-color: #fff3cd;
-                        color: #856404;
-                        padding: 10px 15px;
-                        border-radius: 8px;
-                        border-left: 4px solid #ffc107;
-                        margin: 8px 0;
-                        font-size: 13px;
-                    ">
-                        {error_msg}
-                    </div>
-                '''
+                # Post error as plain text (safe, no HTML issues)
                 conversation.discuss_channel_id.sudo().message_post(
-                    body=error_html,
+                    body=Markup(f'<b>⚠️ Lỗi upload:</b> {error_msg}'),
                     message_type='notification',
                     subtype_xmlid='mail.mt_comment',
                 )

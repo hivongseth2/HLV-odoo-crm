@@ -192,42 +192,16 @@ class ZaloChatConversation(models.Model):
         
         self.discuss_channel_id = channel.id
         
-        # Set channel avatar from partner image AFTER creation
-        # Use sudo to bypass access rights
-        # IMPORTANT: Use 'image_128' not 'avatar_128' - avatar_128 is a computed field!
+        # NOTE: Odoo's discuss.channel uses partner's avatar automatically for chat channels
+        # Just update the channel name
         if self.partner_id:
             try:
-                _logger.info(f'Partner {self.partner_id.id} ({self.partner_id.name}) - checking avatar...')
-                _logger.info(f'  image_128: {bool(self.partner_id.image_128)} ({len(self.partner_id.image_128) if self.partner_id.image_128 else 0} bytes)')
-                
-                avatar_data = self.partner_id.image_128 or self.partner_id.image_1920
-                if avatar_data:
-                    _logger.info(f'Setting avatar for channel {channel.id} - avatar size: {len(avatar_data)} bytes')
-                    
-                    # Try using image_128 field (stored) instead of avatar_128 (computed)
-                    try:
-                        channel.sudo().write({
-                            'image_128': avatar_data,
-                            'name': f"Zalo: {self.partner_id.name}"
-                        })
-                        _logger.info(f'✓ Set image_128 via ORM for channel {channel.id}')
-                    except Exception as orm_error:
-                        _logger.warning(f'ORM write failed: {orm_error}, trying SQL')
-                        # Fallback: Direct SQL update
-                        self.env.cr.execute("""
-                            UPDATE discuss_channel 
-                            SET image_128 = %s, name = %s
-                            WHERE id = %s
-                        """, (avatar_data, f"Zalo: {self.partner_id.name}", channel.id))
-                        _logger.info(f'✓ Set image_128 via SQL for channel {channel.id}')
-                    
-                    # Force invalidate cache
-                    channel.invalidate_recordset()
-                    
-                else:
-                    _logger.warning(f'⚠ Partner {self.partner_id.id} has no avatar image!')
+                channel.sudo().write({
+                    'name': f"Zalo: {self.partner_id.name}"
+                })
+                _logger.info(f'Updated channel {channel.id} name to: Zalo: {self.partner_id.name}')
             except Exception as e:
-                _logger.error(f'Failed to set channel avatar: {str(e)}', exc_info=True)
+                _logger.error(f'Failed to update channel name: {str(e)}')
         
         # Ensure members have persona data (fix JS error)
         # Force refresh channel member info
