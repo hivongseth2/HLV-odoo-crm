@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Zalo Chat Integration Assets -->
-    <template id="assets_backend" inherit_id="web.assets_backend">
-        <xpath expr="." position="inside">
-            <link rel="stylesheet" href="/zalo_chat_integration/static/src/css/zalo_chat.css"/>
-        </xpath>
-    </template>
+    <!-- Zalo Chat Integration Assets for Odoo 18 -->
+    <record id="assets_backend_zalo_chat" model="ir.asset">
+        <field name="name">zalo_chat_integration.assets_backend</field>
+        <field name="bundle">web.assets_backend</field>
+        <field name="path">zalo_chat_integration/static/src/css/zalo_chat.css</field>
+    </record>
 </odoo>
