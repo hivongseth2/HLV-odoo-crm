@@ -53,8 +53,8 @@
                             <field name="current_parent_listed_price" string="Giá niêm yết cũ" widget="monetary" force_save="1" readonly="1" optional="hide"/>
                             <field name="new_parent_listed_price" string="Giá niêm yết mới" widget="monetary" decoration-bf="1" force_save="1" readonly="1" optional="hide"/>
                             
-                            <field name="current_parent_floor_ecommerce_price" string="Giá sàn TMDT cũ" widget="monetary" force_save="1" readonly="1" optional="hide"/>
-                            <field name="new_parent_floor_ecommerce_price" string="Giá sàn TMDT mới" widget="monetary" decoration-bf="1" force_save="1" readonly="1" optional="hide"/>
+                            <field name="current_parent_floor_ecommerce_price" string="Giá sàn TMDT cũ" widget="monetary" force_save="1" readonly="1" optional="show"/>
+                            <field name="new_parent_floor_ecommerce_price" string="Giá sàn TMDT mới" widget="monetary" decoration-bf="1" force_save="1" readonly="1" optional="show"/>
                         </list>
                     </field>
                 </sheet>
