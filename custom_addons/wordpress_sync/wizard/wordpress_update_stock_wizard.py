@@ -33,6 +33,9 @@ class WordPressUpdateStockWizard(models.TransientModel):
     
     current_listed_price = fields.Float(string='Giá niêm yết hiện tại', readonly=True)
     new_listed_price = fields.Float(string='Giá niêm yết mới', required=True)
+    
+    current_floor_ecommerce_price = fields.Float(string='Giá sàn TMDT hiện tại', readonly=True)
+    new_floor_ecommerce_price = fields.Float(string='Giá sàn TMDT mới', required=True)
 
     line_ids = fields.One2many('wordpress.update.stock.wizard.line', 'wizard_id', string='Sản phẩm Combo ảnh hưởng')
 
@@ -56,6 +59,8 @@ class WordPressUpdateStockWizard(models.TransientModel):
                 'new_combo_price': product.x_wp_combo_price,
                 'current_listed_price': product.x_studio_ga_hng_nim_yt,
                 'new_listed_price': product.x_studio_ga_hng_nim_yt,
+                'current_floor_ecommerce_price': product.x_studio_gia_san_tmdt,
+                'new_floor_ecommerce_price': product.x_studio_gia_san_tmdt,
             })
             
             # Compute lines
@@ -79,6 +84,8 @@ class WordPressUpdateStockWizard(models.TransientModel):
                 p_selling = combo.x_studio_ga_web or combo.list_price
                 # Parent Listed Price
                 p_listed = combo.x_studio_ga_hng_nim_yt
+                # Parent Floor Ecommerce Price
+                p_floor_ecommerce = combo.x_studio_gia_san_tmdt
                 
                 # Parent List Price (Computed from Components)
                 # Find active phantom BOM
@@ -102,6 +109,8 @@ class WordPressUpdateStockWizard(models.TransientModel):
                     'new_parent_list_price': p_list,
                     'current_parent_listed_price': p_listed,
                     'new_parent_listed_price': p_listed,
+                    'current_parent_floor_ecommerce_price': p_floor_ecommerce,
+                    'new_parent_floor_ecommerce_price': p_floor_ecommerce,
                     'qty_in_combo': qty,
                     'to_update': True 
                 }))
@@ -110,7 +119,7 @@ class WordPressUpdateStockWizard(models.TransientModel):
             
         return res
 
-    @api.onchange('new_combo_price', 'new_web_price', 'new_listed_price', 'new_status')
+    @api.onchange('new_combo_price', 'new_web_price', 'new_listed_price', 'new_floor_ecommerce_price', 'new_status')
     def _onchange_prices(self):
         """Update projected parent prices and status with Fallback Logic"""
         
@@ -193,6 +202,12 @@ class WordPressUpdateStockWizard(models.TransientModel):
             for line in self.line_ids:
                 line.new_parent_listed_price = line.current_parent_listed_price + (diff_listed * line.qty_in_combo)
 
+        # 4. Floor Ecommerce Price Change -> Parent Floor Ecommerce Price (Always Sum)
+        if self.current_floor_ecommerce_price is not False:
+            diff_floor_ecommerce = self.new_floor_ecommerce_price - self.current_floor_ecommerce_price
+            for line in self.line_ids:
+                line.new_parent_floor_ecommerce_price = line.current_parent_floor_ecommerce_price + (diff_floor_ecommerce * line.qty_in_combo)
+
     def action_confirm(self):
         self.ensure_one()
         
@@ -213,6 +228,9 @@ class WordPressUpdateStockWizard(models.TransientModel):
             
         if self.new_listed_price != self.current_listed_price:
             vals['x_studio_ga_hng_nim_yt'] = self.new_listed_price
+            
+        if self.new_floor_ecommerce_price != self.current_floor_ecommerce_price:
+            vals['x_studio_gia_san_tmdt'] = self.new_floor_ecommerce_price
 
         if vals:
             self.product_id.with_context(skip_wordpress_sync=True).write(vals)
@@ -248,8 +266,8 @@ class WordPressUpdateStockWizard(models.TransientModel):
         # 3. VERIFICATION & SYNC
         
         # Invalidate cache
-        self.product_id.invalidate_recordset(['x_wp_stock_status', 'x_studio_ga_web', 'list_price', 'x_wp_combo_price', 'x_studio_ga_hng_nim_yt'])
-        parents_to_update.invalidate_recordset(['x_wp_stock_status', 'x_studio_ga_web', 'list_price', 'x_studio_ga_hng_nim_yt'])
+        self.product_id.invalidate_recordset(['x_wp_stock_status', 'x_studio_ga_web', 'list_price', 'x_wp_combo_price', 'x_studio_ga_hng_nim_yt', 'x_studio_gia_san_tmdt'])
+        parents_to_update.invalidate_recordset(['x_wp_stock_status', 'x_studio_ga_web', 'list_price', 'x_studio_ga_hng_nim_yt', 'x_studio_gia_san_tmdt'])
         
         # Trigger Sync for STOCK (Manual)
         _logger.error(f"[Wizard-DEBUG] Triggering manual stock sync...")
@@ -303,6 +321,9 @@ class WordPressUpdateStockWizardLine(models.TransientModel):
     
     current_parent_listed_price = fields.Float(string='Giá niêm yết cũ', readonly=True, force_save=True)
     new_parent_listed_price = fields.Float(string='Giá niêm yết mới', readonly=True, force_save=True)
+    
+    current_parent_floor_ecommerce_price = fields.Float(string='Giá sàn TMDT cũ', readonly=True, force_save=True)
+    new_parent_floor_ecommerce_price = fields.Float(string='Giá sàn TMDT mới', readonly=True, force_save=True)
     
     qty_in_combo = fields.Float(string='SL trong Combo', readonly=True)
     
