@@ -34,13 +34,19 @@ class MailMessage(models.Model):
                 if message.author_id == conversation.partner_id:
                     continue
                 
-                # Skip system messages
-                if message.message_type != 'comment' or not message.body:
+                # Skip system messages - but allow attachments!
+                if message.message_type != 'comment':
+                    continue
+                    
+                # Skip if no content AND no attachments
+                if not message.body and not message.attachment_ids:
                     continue
                 
                 # Skip if this is a notification we posted ourselves
                 if 'Tin nhắn mới từ' in (message.body or ''):
                     continue
+                
+                _logger.info(f'Processing Zalo outbound message: body={bool(message.body)}, attachments={len(message.attachment_ids)}')
                 
                 try:
                     # User sent message in discuss → send to Zalo
@@ -48,6 +54,7 @@ class MailMessage(models.Model):
                     
                     # Check if message has attachments
                     if message.attachment_ids:
+                        _logger.info(f'Found {len(message.attachment_ids)} attachment(s) to send to Zalo')
                         # Process attachments (images, files)
                         for attachment in message.attachment_ids:
                             try:
