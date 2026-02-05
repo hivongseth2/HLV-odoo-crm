@@ -96,7 +96,7 @@ class ZaloChatMessage(models.Model):
                 # Get Zalo config
                 config = self.env['zalo.oa.config'].get_active_config()
                 
-                # Check and refresh token if needed
+                # Check and refresh token 
                 access_token = config._check_token_validity()
                 
                 # Prepare payload
