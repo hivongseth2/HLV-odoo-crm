@@ -48,6 +48,22 @@ class PickingExportWizard(models.TransientModel):
         if code == "TSNSR":
             return "HCM_SHOWROOM"
         return code
+    
+    def _get_warehouse_name_vietnamese(self, code):
+        """Map warehouse code to Vietnamese name for POS CRM export"""
+        mapping = {
+            "KBC": "BẾN CAM",
+            "BENCAM": "BẾN CAM",
+            "TSN": "HCM",
+            "HCM": "HCM",
+            "KHD": "HIỀN ĐỨC",
+            "HIENDUC": "HIỀN ĐỨC",
+            "TSNSR": "HCM",
+            "HCM_SHOWROOM": "HCM",
+            "DNA": "ĐÀ NẴNG",
+            "DANANG": "ĐÀ NẴNG",
+        }
+        return mapping.get(code, code)
     _name = "picking.export.wizard"
     _description = "Xuất Excel lệnh xuất kho theo template kế toán"
 
@@ -1412,8 +1428,8 @@ class PickingExportWizard(models.TransientModel):
         date_str = _to_date_str(date_done)
         scheduled_date_str = _to_date_str(picking.scheduled_date) if picking.scheduled_date else date_str
         
-        # Order reference
-        so_don_hang = (pos_order and pos_order.name) or picking.name or ''
+        # Order reference - use x_studio_pos_group
+        so_don_hang = picking.x_studio_pos_group or (pos_order and pos_order.name) or picking.name or ''
         
         # Partner info
         partner_name = (partner and partner.name) or ''
@@ -1469,7 +1485,7 @@ class PickingExportWizard(models.TransientModel):
             'han_giao_hang': date_str,
             'han_thanh_toan': date_str,
             'dien_giai': f'Bán hàng POS {partner_name}',
-            'tinh_trang_kh': '',
+            'tinh_trang_kh': 'KH mới',
             'tinh_trang': 'Đang thực hiện',
             'ngay_ghi_so': date_str,
             'thuc_thu': thuc_thu,
@@ -1512,15 +1528,12 @@ class PickingExportWizard(models.TransientModel):
         pos_order = getattr(picking, 'pos_order_id', False)
         prod = pos_line.product_id
         
-        # Order reference (FK to Sheet 1)
-        so_don_hang = (pos_order and pos_order.name) or picking.name or ''
+        # Order reference (FK to Sheet 1) - use x_studio_pos_group
+        so_don_hang = picking.x_studio_pos_group or (pos_order and pos_order.name) or picking.name or ''
         
         # Warehouse
-        warehouse_code = self._harsh_warehouse_code(self._get_warehouse_code(picking))
-        warehouse_name = ''
-        pt = picking.picking_type_id
-        if pt and pt.warehouse_id:
-            warehouse_name = pt.warehouse_id.name or ''
+        raw_warehouse_code = self._get_warehouse_code(picking)
+        warehouse_code_vietnamese = self._get_warehouse_name_vietnamese(raw_warehouse_code)
         
         # Product info
         ma_hang_hoa = prod.default_code or ''
@@ -1560,8 +1573,8 @@ class PickingExportWizard(models.TransientModel):
             'ma_hang_hoa': ma_hang_hoa,
             'dien_giai': ten_hang,
             'mo_ta': '',
-            'kho': warehouse_code,
-            'kho_odoo': warehouse_name,
+            'kho': 'HLV',
+            'kho_odoo': warehouse_code_vietnamese,
             'tinh_trang_hang': 'Bình thường',
             'don_vi_tinh': don_vi_tinh,
             'so_luong': so_luong,
