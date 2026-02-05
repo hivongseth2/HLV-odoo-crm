@@ -43,7 +43,23 @@
               action="action_picking_export_pos_wizard"
               sequence="3"/>
 
+    <!-- ✅ New Action & Menu for POS CRM Export -->
+    <record id="action_picking_export_pos_crm_wizard" model="ir.actions.act_window">
+      <field name="name">Xuất đơn hàng POS CRM (Excel)</field>
+      <field name="res_model">picking.export.wizard</field>
+      <field name="view_mode">form</field>
+      <field name="view_id" ref="export_outgoing_picking_excel.view_picking_export_pos_crm_wizard_form"/>
+      <field name="target">new</field>
+    </record>
+
+    <menuitem id="menu_export_pos_crm_excel"
+              name="Xuất đơn hàng POS CRM (Excel)"
+              parent="menu_export_excel_root"
+              action="action_picking_export_pos_crm_wizard"
+              sequence="4"/>
+
     <menuitem id="menu_inventory_report_excel"
+
               name="Báo cáo tồn kho (Excel)"
               parent="menu_export_excel_root"
               action="action_inventory_report_wizard"
