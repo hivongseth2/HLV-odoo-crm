@@ -1,0 +1,108 @@
+/* Zalo Chat Integration - Custom Styles */
+
+/* ========================================
+   MESSENGER-STYLE CHAT LAYOUT
+   - User messages on the RIGHT
+   - Customer messages on the LEFT
+   ======================================== */
+
+/* Style for outbound messages (from current user/admin) */
+.o-mail-Message:has(.o-mail-Message-author:not([data-partner-id])),
+.o-mail-Message-core:has(.o-mail-Message-author-self) {
+    flex-direction: row-reverse !important;
+}
+
+/* Messages sent by the logged-in user should be on the right */
+.o-mail-Message.o-selfAuthored {
+    flex-direction: row-reverse !important;
+    text-align: right;
+}
+
+.o-mail-Message.o-selfAuthored .o-mail-Message-content {
+    background-color: #0084ff !important;
+    color: white !important;
+    border-radius: 18px 18px 4px 18px !important;
+    margin-left: auto;
+    margin-right: 0;
+}
+
+.o-mail-Message.o-selfAuthored .o-mail-Message-header {
+    flex-direction: row-reverse !important;
+}
+
+/* Messages from others (customer) on the left */
+.o-mail-Message:not(.o-selfAuthored) .o-mail-Message-content {
+    background-color: #e4e6eb !important;
+    color: #050505 !important;
+    border-radius: 18px 18px 18px 4px !important;
+}
+
+/* ========================================
+   ERROR NOTIFICATION STYLING
+   ======================================== */
+
+/* Error messages in chat */
+.o-mail-Message-content p[style*="color: red"],
+.o-mail-Message-content .text-danger {
+    background-color: #fff3cd !important;
+    color: #856404 !important;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border-left: 4px solid #ffc107;
+    margin: 4px 0;
+}
+
+/* Zalo upload error notification */
+.zalo-upload-error {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 10px 15px;
+    border-radius: 8px;
+    border-left: 4px solid #f5c6cb;
+    margin: 8px 0;
+    font-size: 13px;
+}
+
+/* ========================================
+   ZALO CHANNEL SPECIFIC STYLES
+   ======================================== */
+
+/* Zalo channel indicator */
+.o-mail-DiscussSidebar-item[data-channel-name^="Zalo:"] {
+    border-left: 3px solid #0068ff;
+}
+
+/* Zalo avatar placeholder fix */
+.o-mail-DiscussSidebar-item .o-mail-DiscussSidebarChannel-avatar {
+    background-size: cover;
+    background-position: center;
+}
+
+/* ========================================
+   MEDIA MESSAGES
+   ======================================== */
+
+/* Images in chat */
+.o-mail-Message-content img {
+    max-width: 300px;
+    max-height: 300px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.o-mail-Message-content img:hover {
+    transform: scale(1.02);
+}
+
+/* Download buttons */
+.o-mail-Message-content .btn-primary {
+    background-color: #0068ff;
+    border-color: #0068ff;
+    border-radius: 20px;
+    padding: 6px 16px;
+}
+
+.o-mail-Message-content .btn-primary:hover {
+    background-color: #0052cc;
+}
