@@ -37,7 +37,7 @@ class ZaloChatEvaluation(models.Model):
         ('follow_up', 'Cần chăm sóc thêm'),
     ], string='Đề xuất hành động', tracking=True)
     
-    # sale_order_id removed - sale module may not be installed
+    sale_order_id = fields.Many2one('sale.order', string='Báo giá đã tạo', readonly=True)
     
     state = fields.Selection([
         ('draft', 'Mới'),

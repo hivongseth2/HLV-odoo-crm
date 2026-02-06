@@ -25,6 +25,7 @@
         'mail',
         'contacts',
         'im_livechat',  # For Discuss chat UI
+        'sale',  # For sale_order_id in evaluation
     ],
     'data': [
         'security/ir.model.access.csv',
