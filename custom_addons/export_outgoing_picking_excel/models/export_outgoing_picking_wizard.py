@@ -1483,23 +1483,23 @@ class PickingExportWizard(models.TransientModel):
         # Mapping for KBC (BENCAM)
         if warehouse_code in ["KBC", "BENCAM"]:
             if "tiền mặt" in payment_method_lower and not is_multiple:
-                partner_name = "KHÁCH CH BẾN CAM TT TIỀN MẶT"
+                partner_name = "KH27182013179"
             elif "chuyển khoản" in payment_method_lower and not is_multiple:
-                partner_name = "KHÁCH CH BẾN CAM TT CHUYỂN KHOẢN"
+                partner_name = "KH27182013178"
             elif is_multiple:
-                partner_name = "KHÁCH LẺ CỬA HÀNG BẾN CAM"
+                partner_name = "KHACHLE-BC"
         
         # Mapping for TSN (HCM)
         elif warehouse_code in ["TSN", "HCM"]:
             if "tiền mặt" in payment_method_lower and not is_multiple:
-                partner_name = "KHÁCH GHÉ VP HCM TT TIỀN MẶT"
+                partner_name = "KH27182013176"
             elif "chuyển khoản" in payment_method_lower and not is_multiple:
-                partner_name = "KHÁCH GHÉ VP HCM TT CHUYỂN KHOẢN"
+                partner_name = "KH27182013177"
             elif is_multiple:
-                partner_name = "KHÁCH LẺ VP HCM"
+                partner_name = "KHACHLE-HCM"
         
         # Status
-        tinh_trang_giao_hang = 'Đã giao' if picking.state == 'done' else 'Chưa giao'
+        tinh_trang_giao_hang = 'Đã giao hàng' if picking.state == 'done' else 'Chưa giao hàng'
         tinh_trang_thanh_toan = 'Đã thanh toán' if (pos_order and pos_order.state == 'paid') else 'Chưa thanh toán'
         
         return {
