@@ -1,5 +1,5 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_picking_export_wizard,picking.export.wizard,model_picking_export_wizard,stock.group_stock_user,1,0,1,0
 access_purchase_export_wizard,purchase.export.wizard,model_purchase_export_wizard,purchase.group_purchase_user,1,0,1,0
 access_inventory_report_wizard,inventory.report.wizard,model_inventory_report_wizard,stock.group_stock_user,1,0,1,0
 access_picking_export_shopee_wizard,picking.export.shopee.wizard,model_picking_export_shopee_wizard,stock.group_stock_user,1,0,1,0
+access_stock_export_wizard,stock.export.wizard,model_stock_export_wizard,stock.group_stock_user,1,0,1,0
