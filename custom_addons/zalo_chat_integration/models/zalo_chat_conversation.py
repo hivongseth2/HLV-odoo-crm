@@ -141,112 +141,22 @@ class ZaloChatConversation(models.Model):
             },
         }
     
-    def _get_or_create_discuss_channel(self):
-        """
-        Tạo hoặc lấy discuss.channel cho conversation này
-        Dùng cho live chat UI
-        """
-        self.ensure_one()
-        
-        if self.discuss_channel_id:
-            return self.discuss_channel_id
-        
-        # Create unique channel name
-        # NOTE: Do NOT use "Zalo:" prefix - it breaks avatar lookup in Odoo
-        # Odoo chat channels use partner name for avatar display
-        if self.partner_id:
-            channel_name = self.partner_id.name
-        elif self.zalo_user_name and self.zalo_user_name != 'Zalo User':
-            channel_name = self.zalo_user_name
-        else:
-            # Use last 4 digits of Zalo ID for uniqueness
-            short_id = self.zalo_user_id[-4:] if len(self.zalo_user_id) > 4 else self.zalo_user_id
-            channel_name = f"Zalo User #{short_id}"
-        
-        # Ensure we have a partner for the Zalo user
-        if not self.partner_id:
-            # Fetch user info and create partner
-            user_info = self._fetch_zalo_user_info(self.zalo_user_id)
-            if user_info:
-                partner = self._get_or_create_partner(self.zalo_user_id, user_info)
-                self.partner_id = partner.id
-                # Update conversation name
-                if user_info.get('display_name') or user_info.get('user_name'):
-                    self.zalo_user_name = user_info.get('display_name') or user_info.get('user_name')
-                    channel_name = self.zalo_user_name  # Use name directly, no prefix
-        
-        # Create private channel (chat type automatically handles 2 members limit)
-        channel_vals = {
-            'name': channel_name,
-            'channel_type': 'chat',  # 1-to-1 chat
-            'description': f'Chat với Zalo user {self.zalo_user_id}',
-        }
-        
-        # For chat type, use channel_partner_ids instead of channel_member_ids
-        # This avoids the "too many members" error
-        partners = [self.env.user.partner_id.id]
-        if self.partner_id:
-            partners.append(self.partner_id.id)
-        
-        channel_vals['channel_partner_ids'] = [(4, pid) for pid in partners]
-        
-        channel = self.env['discuss.channel'].create(channel_vals)
-        
-        self.discuss_channel_id = channel.id
-        
-        # Set channel avatar explicitly from partner's image
-        if self.partner_id:
-            # Try image_128 first, then image_1920
-            avatar_data = self.partner_id.image_128 or self.partner_id.image_1920
-            if avatar_data:
-                try:
-                    channel.sudo().write({
-                        'image_128': avatar_data
-                    })
-                    _logger.info(f'Set avatar for channel {channel.id} from partner {self.partner_id.id}')
-                except Exception as e:
-                    _logger.warning(f'Failed to set channel avatar: {e}')
-        
-        # Broadcast channel to make it appear in Discuss sidebar for members
-        try:
-            channel._broadcast(channel.channel_member_ids.partner_id.ids)
-            _logger.info(f'Broadcasted channel {channel.id} to members')
-        except Exception as e:
-            _logger.warning(f'Failed to broadcast channel: {e}')
-        
-        return channel
-    
     def action_open_chat(self):
-        """Open Discuss app with this channel active"""
+        """Open Discuss app with OA group channel active"""
         self.ensure_one()
-        channel = self._get_or_create_discuss_channel()
-        
-        # Redirect to Discuss app with channel selected
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'mail.action_discuss',
-            'params': {
-                'default_active_id': f'mail.box_inbox',
-                'active_id': channel.id,
-            },
-            'context': {
-                'active_id': channel.id,
-            },
-        }
+        # Get active OA config to find group channel
+        config = self.env['zalo.oa.config'].sudo().search([('active', '=', True)], limit=1)
+        if config:
+            return config.action_open_group_channel()
+        return False
     
     @api.model
     def action_open_all_zalo_chats(self):
-        """Open Discuss app showing all Zalo channels"""
-        # Ensure all conversations have discuss channels
-        conversations = self.search([])
-        for conv in conversations:
-            conv._get_or_create_discuss_channel()
-        
-        # Open Discuss app
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'mail.action_discuss',
-        }
+        """Open Discuss app showing Zalo group channel"""
+        config = self.env['zalo.oa.config'].sudo().search([('active', '=', True)], limit=1)
+        if config:
+            return config.action_open_group_channel()
+        return False
 
     @api.model
     def _find_or_create_conversation(self, zalo_user_id, user_info=None):

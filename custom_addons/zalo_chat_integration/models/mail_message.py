@@ -31,13 +31,48 @@ class MailMessage(models.Model):
             
             # Only process messages in discuss.channel
             if message.model == 'discuss.channel' and message.res_id:
-                # Find Zalo conversation linked to this channel
+                # NEW LOGIC: Check if this is a Zalo Group Channel
+                # Logic: Is this channel linked to any Zalo OA config? 
+                # Or check channel type='channel' and name starts with ZALO OA (less reliable)
+                
+                conversation = False
+                
+                # Method 1: Check if it's the old individual channel (legacy support)
                 conversation = self.env['zalo.chat.conversation'].sudo().search([
                     ('discuss_channel_id', '=', message.res_id)
                 ], limit=1)
                 
+                # Method 2: If no old channel, check if it's the OA Group Channel
                 if not conversation:
-                    _logger.debug(f'[ZALO DEBUG] No Zalo conversation for channel {message.res_id}')
+                    oa_config = self.env['zalo.oa.config'].sudo().search([('group_channel_id', '=', message.res_id)], limit=1)
+                    if oa_config:
+                        _logger.info(f'[ZALO OUTBOUND] Message in OA Group Channel {oa_config.oa_name}')
+                        
+                        # Determine recipient
+                        recipient_partner = False
+                        
+                        # Case A: Reply to a message (parent_id)
+                        if message.parent_id and message.parent_id.author_id:
+                            recipient_partner = message.parent_id.author_id
+                            _logger.info(f'[ZALO OUTBOUND] Reply to partner {recipient_partner.name} ({recipient_partner.id})')
+                        
+                        # Case B: Tag/Mention (TODO)
+                        
+                        if not recipient_partner:
+                            _logger.warning(f'[ZALO OUTBOUND] Cannot determine Zalo recipient in group channel (no parent/reply)')
+                            continue
+                            
+                        # Find conversation for this partner
+                        conversation = self.env['zalo.chat.conversation'].sudo().search([
+                            ('partner_id', '=', recipient_partner.id)
+                        ], limit=1)
+                        
+                        if not conversation:
+                             _logger.warning(f'[ZALO OUTBOUND] No Zalo conversation found for partner {recipient_partner.name}')
+                             continue
+                
+                if not conversation:
+                    # Not a Zalo channel
                     continue
                 
                 _logger.info(f'[ZALO DEBUG] Found conversation id={conversation.id}, partner={conversation.partner_id.id if conversation.partner_id else None}')
@@ -61,6 +96,11 @@ class MailMessage(models.Model):
                 if 'Tin nhắn mới từ' in (message.body or ''):
                     _logger.info(f'[ZALO DEBUG] Skipping - notification message')
                     continue
+                
+                # Handle Group Channel special case:
+                # If message is in group channel, but intended for Zalo user, 
+                # we don't need to post "Tin nhắn mới từ..." back to the channel because it's already there!
+                # Unless we want to confirm sending? No, keep it clean.
                 
                 _logger.info(f'[ZALO DEBUG] SENDING to Zalo: body={bool(message.body)}, body_preview={str(message.body)[:50] if message.body else None}, attachments={len(message.attachment_ids)}')
                 
