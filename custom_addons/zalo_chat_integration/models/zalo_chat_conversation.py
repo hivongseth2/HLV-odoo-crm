@@ -154,9 +154,10 @@ class ZaloChatConversation(models.Model):
     def action_open_all_zalo_chats(self):
         """Open Discuss app showing Zalo group channel"""
         config = self.env['zalo.oa.config'].sudo().search([('active', '=', True)], limit=1)
-        if config:
-            return config.action_open_group_channel()
-        return False
+        if not config:
+            raise UserError(_('Không tìm thấy cấu hình Zalo OA nào đang kích hoạt. Vui lòng vào Zalo Chat > Configuration và kích hoạt OA.'))
+            
+        return config.action_open_group_channel()
 
     @api.model
     def _find_or_create_conversation(self, zalo_user_id, user_info=None):
