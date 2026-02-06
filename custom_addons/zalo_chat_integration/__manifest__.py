@@ -30,7 +30,6 @@
         'security/ir.model.access.csv',
         'data/zalo_chat_sequence.xml',
         'data/zalo_chat_cron.xml',
-        'data/ir_cron_data.xml',
         'views/assets.xml',
         'views/zalo_oa_config_views.xml',
         'views/zalo_chat_conversation_views.xml',
