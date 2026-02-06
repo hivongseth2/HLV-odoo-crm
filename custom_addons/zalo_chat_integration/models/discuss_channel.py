@@ -127,7 +127,11 @@ class DiscussChannel(models.Model):
         """
         Override to prevent auto-adding author to chat channels
         when posting messages (which causes 'too many members' error)
+        
+        Also intercept outbound messages to send via Zalo API
         """
+        _logger.info(f'[ZALO DEBUG] discuss.channel.message_post called for channel {self.id}, type={self.channel_type}')
+        
         # For chat type channels (1-to-1), disable auto-adding author
         if self.channel_type == 'chat':
             # Check if we're trying to post from a partner not in the channel
@@ -144,6 +148,78 @@ class DiscussChannel(models.Model):
                     # Post as system message instead (no author)
                     kwargs['author_id'] = False
         
+        # INTERCEPT OUTBOUND MESSAGES (Re-implementation for Odoo 18)
+        try:
+            # Check context to avoid recursion
+            if not self.env.context.get('skip_zalo_sync'):
+                
+                # Check if Live Chat Channel linked to Zalo
+                if self.channel_type == 'livechat' and self.livechat_channel_id:
+                    _logger.info(f'[ZALO DEBUG] Channel {self.id} is livechat, linked to {self.livechat_channel_id.id}')
+                    
+                    oa_config = self.env['zalo.oa.config'].sudo().search([
+                        ('livechat_channel_id', '=', self.livechat_channel_id.id)
+                    ], limit=1)
+                    
+                    if oa_config:
+                        _logger.info(f'[ZALO DEBUG] Found OA Config {oa_config.name} for channel {self.id}')
+                        
+                        message_body = kwargs.get('body')
+                        # author_id might be in kwargs or from context
+                        author_id = kwargs.get('author_id') or self.env.user.partner_id.id
+                        
+                        _logger.info(f'[ZALO DEBUG] Body: {bool(message_body)}, Author: {author_id}')
+                        
+                        if message_body:
+                            # Find Zalo Conversation
+                            # We need to find the partner who is NOT the author (the customer)
+                            # But wait, in Live Chat, the customer is in channel_partner_ids
+                            
+                            target_partner = False
+                            for partner in self.channel_partner_ids:
+                                if partner.id != author_id:
+                                    target_partner = partner
+                                    break
+                            
+                            if target_partner:
+                                _logger.info(f'[ZALO DEBUG] Identified target partner: {target_partner.name} ({target_partner.id})')
+                                
+                                conv = self.env['zalo.chat.conversation'].sudo().search([
+                                    ('partner_id', '=', target_partner.id)
+                                ], limit=1)
+                                
+                                if conv:
+                                    _logger.info(f'[ZALO DEBUG] Found conversation {conv.id}. Preparing to send...')
+                                    
+                                    plain_text = tools.html2plaintext(message_body)
+                                    if plain_text and plain_text.strip():
+                                        zalo_message = self.env['zalo.chat.message'].sudo().create({
+                                            'conversation_id': conv.id,
+                                            'direction': 'outbound',
+                                            'message_type': 'text',
+                                            'content': plain_text,
+                                            'state': 'draft',
+                                        })
+                                        
+                                        _logger.info(f'[ZALO OUTBOUND] Created message {zalo_message.id}, sending...')
+                                        zalo_message.action_send()
+                                        _logger.info(f'[ZALO OUTBOUND] Sent successfully.')
+                                    else:
+                                        _logger.info(f'[ZALO DEBUG] Empty plain text, skipping.')
+                                else:
+                                    _logger.warning(f'[ZALO DEBUG] No Zalo conversation found for partner {target_partner.name}')
+                            else:
+                                _logger.warning(f'[ZALO DEBUG] Could not identify target partner in channel {self.id}')
+                    else:
+                        _logger.info(f'[ZALO DEBUG] No OA Config found for livechat_channel_id {self.livechat_channel_id.id}')
+                else:
+                    # Also support legacy 'chat' type if it matches conversation
+                    # (Optional, but good for backup)
+                    pass
+
+        except Exception as e:
+            _logger.error(f'[ZALO ERROR] Error in message_post intercept: {str(e)}', exc_info=True)
+
         return super(DiscussChannel, self).message_post(**kwargs)
     
     def notify_typing(self, is_typing):
