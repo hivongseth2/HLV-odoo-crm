@@ -19,7 +19,16 @@ class MailMessage(models.Model):
         """
         messages = super().create(vals_list)
         
+        # CRITICAL: Skip if this is a message from webhook (already synced from Zalo)
+        # This prevents infinite loop: Zalo → webhook → channel.message_post → mail.message.create → Zalo
+        if self.env.context.get('skip_zalo_sync'):
+            _logger.info(f'[ZALO DEBUG] Skipping all messages - skip_zalo_sync context is True (from webhook)')
+            return messages
+        
         for message in messages:
+            # DEBUG: Log all messages being processed
+            _logger.info(f'[ZALO DEBUG] Processing mail.message id={message.id}, model={message.model}, res_id={message.res_id}, type={message.message_type}, author_id={message.author_id.id if message.author_id else None}')
+            
             # Only process messages in discuss.channel
             if message.model == 'discuss.channel' and message.res_id:
                 # Find Zalo conversation linked to this channel
@@ -28,25 +37,32 @@ class MailMessage(models.Model):
                 ], limit=1)
                 
                 if not conversation:
+                    _logger.debug(f'[ZALO DEBUG] No Zalo conversation for channel {message.res_id}')
                     continue
+                
+                _logger.info(f'[ZALO DEBUG] Found conversation id={conversation.id}, partner={conversation.partner_id.id if conversation.partner_id else None}')
                 
                 # Skip if message is from Zalo user (inbound already processed)
                 if message.author_id == conversation.partner_id:
+                    _logger.info(f'[ZALO DEBUG] Skipping - message from Zalo user (inbound)')
                     continue
                 
                 # Skip system messages - but allow attachments!
                 if message.message_type != 'comment':
+                    _logger.info(f'[ZALO DEBUG] Skipping - not a comment type: {message.message_type}')
                     continue
                     
                 # Skip if no content AND no attachments
                 if not message.body and not message.attachment_ids:
+                    _logger.info(f'[ZALO DEBUG] Skipping - no body and no attachments')
                     continue
                 
                 # Skip if this is a notification we posted ourselves
                 if 'Tin nhắn mới từ' in (message.body or ''):
+                    _logger.info(f'[ZALO DEBUG] Skipping - notification message')
                     continue
                 
-                _logger.info(f'Processing Zalo outbound message: body={bool(message.body)}, attachments={len(message.attachment_ids)}')
+                _logger.info(f'[ZALO DEBUG] SENDING to Zalo: body={bool(message.body)}, body_preview={str(message.body)[:50] if message.body else None}, attachments={len(message.attachment_ids)}')
                 
                 try:
                     # User sent message in discuss → send to Zalo
@@ -54,7 +70,7 @@ class MailMessage(models.Model):
                     
                     # Check if message has attachments
                     if message.attachment_ids:
-                        _logger.info(f'Found {len(message.attachment_ids)} attachment(s) to send to Zalo')
+                        _logger.info(f'[ZALO DEBUG] Processing {len(message.attachment_ids)} attachment(s)')
                         # Process attachments (images, files)
                         for attachment in message.attachment_ids:
                             try:
@@ -72,6 +88,8 @@ class MailMessage(models.Model):
                         
                         # Only send if there's actual text content
                         if plain_text and plain_text.strip():
+                            _logger.info(f'[ZALO DEBUG] Creating zalo.chat.message for text: "{plain_text[:50]}"')
+                            
                             zalo_message = self.env['zalo.chat.message'].sudo().create({
                                 'conversation_id': conversation.id,
                                 'direction': 'outbound',
@@ -83,7 +101,7 @@ class MailMessage(models.Model):
                             # Send via Zalo API
                             zalo_message.action_send()
                             
-                            _logger.info(f'Sent text message from discuss.channel to Zalo: {zalo_message.id}')
+                            _logger.info(f'[ZALO DEBUG] SENT zalo.chat.message id={zalo_message.id}')
                     
                 except Exception as e:
                     _logger.error(f'Failed to send message to Zalo: {str(e)}', exc_info=True)

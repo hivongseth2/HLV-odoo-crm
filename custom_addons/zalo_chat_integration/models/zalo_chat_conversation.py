@@ -152,10 +152,12 @@ class ZaloChatConversation(models.Model):
             return self.discuss_channel_id
         
         # Create unique channel name
+        # NOTE: Do NOT use "Zalo:" prefix - it breaks avatar lookup in Odoo
+        # Odoo chat channels use partner name for avatar display
         if self.partner_id:
-            channel_name = f"Zalo: {self.partner_id.name}"
+            channel_name = self.partner_id.name
         elif self.zalo_user_name and self.zalo_user_name != 'Zalo User':
-            channel_name = f"Zalo: {self.zalo_user_name}"
+            channel_name = self.zalo_user_name
         else:
             # Use last 4 digits of Zalo ID for uniqueness
             short_id = self.zalo_user_id[-4:] if len(self.zalo_user_id) > 4 else self.zalo_user_id
@@ -171,7 +173,7 @@ class ZaloChatConversation(models.Model):
                 # Update conversation name
                 if user_info.get('display_name') or user_info.get('user_name'):
                     self.zalo_user_name = user_info.get('display_name') or user_info.get('user_name')
-                    channel_name = f"Zalo: {self.zalo_user_name}"
+                    channel_name = self.zalo_user_name  # Use name directly, no prefix
         
         # Create private channel (chat type automatically handles 2 members limit)
         channel_vals = {
@@ -192,22 +194,25 @@ class ZaloChatConversation(models.Model):
         
         self.discuss_channel_id = channel.id
         
-        # NOTE: Odoo's discuss.channel uses partner's avatar automatically for chat channels
-        # Just update the channel name
+        # Set channel avatar explicitly from partner's image
         if self.partner_id:
-            try:
-                channel.sudo().write({
-                    'name': f"Zalo: {self.partner_id.name}"
-                })
-                _logger.info(f'Updated channel {channel.id} name to: Zalo: {self.partner_id.name}')
-            except Exception as e:
-                _logger.error(f'Failed to update channel name: {str(e)}')
+            # Try image_128 first, then image_1920
+            avatar_data = self.partner_id.image_128 or self.partner_id.image_1920
+            if avatar_data:
+                try:
+                    channel.sudo().write({
+                        'image_128': avatar_data
+                    })
+                    _logger.info(f'Set avatar for channel {channel.id} from partner {self.partner_id.id}')
+                except Exception as e:
+                    _logger.warning(f'Failed to set channel avatar: {e}')
         
-        # Ensure members have persona data (fix JS error)
-        # Force refresh channel member info
-        channel.invalidate_recordset(['channel_member_ids'])
-        
-        _logger.info(f'Created discuss.channel {channel.id} for Zalo conversation {self.id}')
+        # Broadcast channel to make it appear in Discuss sidebar for members
+        try:
+            channel._broadcast(channel.channel_member_ids.partner_id.ids)
+            _logger.info(f'Broadcasted channel {channel.id} to members')
+        except Exception as e:
+            _logger.warning(f'Failed to broadcast channel: {e}')
         
         return channel
     
@@ -227,6 +232,20 @@ class ZaloChatConversation(models.Model):
             'context': {
                 'active_id': channel.id,
             },
+        }
+    
+    @api.model
+    def action_open_all_zalo_chats(self):
+        """Open Discuss app showing all Zalo channels"""
+        # Ensure all conversations have discuss channels
+        conversations = self.search([])
+        for conv in conversations:
+            conv._get_or_create_discuss_channel()
+        
+        # Open Discuss app
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'mail.action_discuss',
         }
 
     @api.model
@@ -304,48 +323,62 @@ class ZaloChatConversation(models.Model):
         Uses full API response including shared_info
         Downloads and saves avatar image
         """
+        from psycopg2.errors import UniqueViolation
+        
         Partner = self.env['res.partner']
         
         # Search existing partner
         partner = Partner.search([('zalo_user_id', '=', zalo_user_id)], limit=1)
         
-        if not partner:
-            # Create new partner
-            name = user_info.get('display_name') or user_info.get('user_alias') or f'Zalo User {zalo_user_id[-4:]}'
-            partner_vals = {
-                'name': name,
-                'zalo_user_id': zalo_user_id,
-            }
-            
-            # Get shared_info if available
-            shared_info = user_info.get('shared_info', {})
-            
-            # Add phone from shared_info or user_id_by_app
-            phone = shared_info.get('phone') or user_info.get('user_id_by_app')
-            if phone and str(phone) != '0':
-                partner_vals['phone'] = str(phone)
-            
-            # Add address info if available
-            if shared_info.get('address'):
-                partner_vals['street'] = shared_info.get('address')
-            
-            if shared_info.get('city'):
-                partner_vals['city'] = shared_info.get('city')
-            
-            # Download and save avatar
-            avatar_url = user_info.get('avatar')
-            if not avatar_url and user_info.get('avatars'):
-                # Try to get from avatars dict (prefer 240px)
-                avatars = user_info.get('avatars', {})
-                avatar_url = avatars.get('240') or avatars.get('120')
-            
-            if avatar_url:
-                avatar_data = self._download_avatar(avatar_url)
-                if avatar_data:
-                    partner_vals['image_1920'] = avatar_data
-            
+        if partner:
+            return partner
+        
+        # Prepare partner values
+        name = user_info.get('display_name') or user_info.get('user_alias') or f'Zalo User {zalo_user_id[-4:]}'
+        partner_vals = {
+            'name': name,
+            'zalo_user_id': zalo_user_id,
+        }
+        
+        # Get shared_info if available
+        shared_info = user_info.get('shared_info', {})
+        
+        # Add phone from shared_info or user_id_by_app
+        phone = shared_info.get('phone') or user_info.get('user_id_by_app')
+        if phone and str(phone) != '0':
+            partner_vals['phone'] = str(phone)
+        
+        # Add address info if available
+        if shared_info.get('address'):
+            partner_vals['street'] = shared_info.get('address')
+        
+        if shared_info.get('city'):
+            partner_vals['city'] = shared_info.get('city')
+        
+        # Download and save avatar
+        avatar_url = user_info.get('avatar')
+        if not avatar_url and user_info.get('avatars'):
+            # Try to get from avatars dict (prefer 240px)
+            avatars = user_info.get('avatars', {})
+            avatar_url = avatars.get('240') or avatars.get('120')
+        
+        if avatar_url:
+            avatar_data = self._download_avatar(avatar_url)
+            if avatar_data:
+                partner_vals['image_1920'] = avatar_data
+        
+        try:
             partner = Partner.create(partner_vals)
             _logger.info(f'Created partner for Zalo user: {name} (ID: {zalo_user_id})')
+        except Exception as e:
+            # Handle race condition - another process created the partner
+            if 'unique' in str(e).lower() or 'duplicate' in str(e).lower():
+                self.env.cr.rollback()
+                partner = Partner.search([('zalo_user_id', '=', zalo_user_id)], limit=1)
+                if partner:
+                    _logger.info(f'Found existing partner after UniqueViolation: {partner.name}')
+                    return partner
+            raise
         
         return partner
     
