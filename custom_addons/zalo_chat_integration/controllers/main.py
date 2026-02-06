@@ -291,6 +291,16 @@ class ZaloChatWebhook(http.Controller):
                         discuss_channel.add_members(partner_ids=other_operators.partner_id.ids)
                 else:
                     _logger.info(f'[ZALO WEBHOOK] Found existing session {discuss_channel.id}')
+                    
+                    # Ensure all active operators are members of the existing session
+                    # This fixes the issue where new operators don't see old chats
+                    operators = livechat_channel.user_ids
+                    if operators:
+                         current_member_partners = discuss_channel.channel_partner_ids
+                         missing_operators = operators.partner_id - current_member_partners
+                         if missing_operators:
+                             _logger.info(f'[ZALO WEBHOOK] Adding missing operators {missing_operators.ids} to existing session')
+                             discuss_channel.add_members(partner_ids=missing_operators.ids)
                 
                 # Use this channel for posting
                 group_channel = discuss_channel # Alias for compatibility with below code
