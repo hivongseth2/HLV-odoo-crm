@@ -37,7 +37,7 @@
 
   <menuitem id="menu_stock_export_wizard"
             name="Xuất Excel Kho"
-            parent="stock.menu_warehouse_report"
+            parent="menu_export_excel_root"
             action="action_stock_export_wizard"
             sequence="100"/>
 </odoo>
