@@ -29,6 +29,8 @@
                                 class="btn-secondary"/>
                         <button name="action_gpt_create_quote" string="📝 Tạo Báo Giá (GPT)" type="object" 
                                 class="btn-primary"/>
+                        <button name="action_create_evaluation" string="⭐ Tạo Đánh giá (AI)" type="object" 
+                                class="btn-warning"/>
                         <button name="action_send_message" string="Gửi tin nhắn" type="object" 
                                 icon="fa-paper-plane"
                                 invisible="state == 'archived'"/>

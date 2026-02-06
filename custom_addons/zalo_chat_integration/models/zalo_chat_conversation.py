@@ -126,6 +126,38 @@ class ZaloChatConversation(models.Model):
     def action_reopen(self):
         self.write({'state': 'open'})
     
+    def action_create_evaluation(self):
+        """Create a new evaluation record for this conversation"""
+        self.ensure_one()
+        
+        # Get chat content from stored messages
+        messages = self.message_ids.sorted(key=lambda m: m.sent_date)
+        content_lines = []
+        for msg in messages:
+            sender = "Khách" if msg.direction == 'inbound' else "NV"
+            content = msg.content or "[File/Image]"
+            content_lines.append(f"{sender} ({msg.sent_date}): {content}")
+            
+        chat_content = "\n".join(content_lines)
+        
+        channel = self._get_active_livechat_channel()
+        
+        evaluation = self.env['zalo.chat.evaluation'].create({
+            'partner_id': self.partner_id.id,
+            'conversation_id': self.id,
+            'livechat_channel_id': channel.id if channel else False,
+            'chat_content': chat_content,
+        })
+        
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Đánh giá hội thoại',
+            'res_model': 'zalo.chat.evaluation',
+            'res_id': evaluation.id,
+            'view_mode': 'form',
+            'target': 'current',
+        }
+
     def action_send_message(self):
         """Open wizard to send message"""
         self.ensure_one()
