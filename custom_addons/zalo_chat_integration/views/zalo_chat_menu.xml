@@ -6,18 +6,51 @@
               sequence="100"
               web_icon="zalo_chat_integration,static/description/icon.png"/>
 
-    <!-- Zalo Chat - Opens Discuss with all Zalo channels -->
-    <record id="action_open_zalo_discuss" model="ir.actions.server">
-        <field name="name">Zalo Chat</field>
-        <field name="model_id" ref="model_zalo_chat_conversation"/>
+    <!-- ZALO OA Channels View - Shows all Zalo discuss channels -->
+    <record id="action_zalo_oa_channels" model="ir.actions.act_window">
+        <field name="name">ZALO OA</field>
+        <field name="res_model">discuss.channel</field>
+        <field name="view_mode">kanban,tree,form</field>
+        <field name="domain">[('id', 'in', [])]</field>  <!-- Will be computed dynamically -->
+        <field name="context">{
+            'search_default_group_by_zalo': 1,
+        }</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Không có tin nhắn Zalo nào
+            </p>
+            <p>
+                Tin nhắn từ Zalo sẽ xuất hiện ở đây khi có người dùng nhắn tin đến OA của bạn.
+            </p>
+        </field>
+    </record>
+
+    <!-- Server action to open Zalo channels with proper filtering -->
+    <record id="action_open_zalo_channels" model="ir.actions.server">
+        <field name="name">Open Zalo Channels</field>
+        <field name="model_id" ref="mail.model_discuss_channel"/>
         <field name="state">code</field>
-        <field name="code">action = model.action_open_all_zalo_chats()</field>
+        <field name="code">
+# Get all Zalo conversation channel IDs
+conversations = env['zalo.chat.conversation'].sudo().search([])
+channel_ids = conversations.mapped('discuss_channel_id').ids
+
+action = {
+    'type': 'ir.actions.act_window',
+    'name': 'ZALO OA',
+    'res_model': 'discuss.channel',
+    'view_mode': 'kanban,tree,form',
+    'domain': [('id', 'in', channel_ids)],
+    'context': {},
+    'target': 'current',
+}
+        </field>
     </record>
 
     <menuitem id="menu_zalo_chat_conversations"
               name="Zalo Chat"
               parent="menu_zalo_chat_root"
-              action="action_open_zalo_discuss"
+              action="action_open_zalo_channels"
               sequence="5"/>
 
     <!-- Conversations List (for managing) -->
