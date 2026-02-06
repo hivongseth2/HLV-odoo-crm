@@ -1475,6 +1475,29 @@ class PickingExportWizard(models.TransientModel):
         # Payment method
         payment_method = getattr(picking, 'x_studio_pos_payment_method', '') or getattr(picking, 'x_studio_payment_method', '') or ''
         
+        # Update partner_name based on warehouse and payment method
+        warehouse_code = self._get_warehouse_code(picking)
+        is_multiple = (',' in str(payment_method)) or ("kết hợp" in str(payment_method).lower())
+        payment_method_lower = str(payment_method).lower()
+
+        # Mapping for KBC (BENCAM)
+        if warehouse_code in ["KBC", "BENCAM"]:
+            if "tiền mặt" in payment_method_lower and not is_multiple:
+                partner_name = "KHÁCH CH BẾN CAM TT TIỀN MẶT"
+            elif "chuyển khoản" in payment_method_lower and not is_multiple:
+                partner_name = "KHÁCH CH BẾN CAM TT CHUYỂN KHOẢN"
+            elif is_multiple:
+                partner_name = "KHÁCH LẺ CỬA HÀNG BẾN CAM"
+        
+        # Mapping for TSN (HCM)
+        elif warehouse_code in ["TSN", "HCM"]:
+            if "tiền mặt" in payment_method_lower and not is_multiple:
+                partner_name = "KHÁCH GHÉ VP HCM TT TIỀN MẶT"
+            elif "chuyển khoản" in payment_method_lower and not is_multiple:
+                partner_name = "KHÁCH GHÉ VP HCM TT CHUYỂN KHOẢN"
+            elif is_multiple:
+                partner_name = "KHÁCH LẺ VP HCM"
+        
         # Status
         tinh_trang_giao_hang = 'Đã giao' if picking.state == 'done' else 'Chưa giao'
         tinh_trang_thanh_toan = 'Đã thanh toán' if (pos_order and pos_order.state == 'paid') else 'Chưa thanh toán'
