@@ -145,9 +145,10 @@ class StockExportWizard(models.TransientModel):
                 if p: parts.append(p)
             partner_address = ", ".join(parts)
             
-        warehouse_code = self._get_warehouse_code(picking)
-        ly_do_xuat = picking.note or picking.name
-        loai_xuat = '2. Xuất bán hàng'
+        # warehouse_code = self._get_warehouse_code(picking) # requested fixed HLV
+        # ly_do_xuat = picking.note or picking.name
+        ly_do_xuat = "Xuất kho bán hàng cho " + partner_name
+        loai_xuat = 'Xuất bán hàng'
         
         # Determine moves
         moves = picking.move_line_ids if picking.move_line_ids else picking.move_ids_without_package
@@ -184,7 +185,7 @@ class StockExportWizard(models.TransientModel):
                 'ten_hang': prod.name,
                 'la_dong_ghi_chu': 'Không',
                 'hang_khuyen_mai': 'Không',
-                'ma_kho': warehouse_code,
+                'ma_kho': 'HLV',
                 'tk_no': '632',
                 'tk_co': '1561',
                 'dvt': uom.name if uom else '',
