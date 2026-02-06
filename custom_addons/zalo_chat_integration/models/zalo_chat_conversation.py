@@ -152,10 +152,12 @@ class ZaloChatConversation(models.Model):
             return self.discuss_channel_id
         
         # Create unique channel name
+        # NOTE: Do NOT use "Zalo:" prefix - it breaks avatar lookup in Odoo
+        # Odoo chat channels use partner name for avatar display
         if self.partner_id:
-            channel_name = f"Zalo: {self.partner_id.name}"
+            channel_name = self.partner_id.name
         elif self.zalo_user_name and self.zalo_user_name != 'Zalo User':
-            channel_name = f"Zalo: {self.zalo_user_name}"
+            channel_name = self.zalo_user_name
         else:
             # Use last 4 digits of Zalo ID for uniqueness
             short_id = self.zalo_user_id[-4:] if len(self.zalo_user_id) > 4 else self.zalo_user_id
@@ -171,7 +173,7 @@ class ZaloChatConversation(models.Model):
                 # Update conversation name
                 if user_info.get('display_name') or user_info.get('user_name'):
                     self.zalo_user_name = user_info.get('display_name') or user_info.get('user_name')
-                    channel_name = f"Zalo: {self.zalo_user_name}"
+                    channel_name = self.zalo_user_name  # Use name directly, no prefix
         
         # Create private channel (chat type automatically handles 2 members limit)
         channel_vals = {
@@ -193,13 +195,13 @@ class ZaloChatConversation(models.Model):
         self.discuss_channel_id = channel.id
         
         # NOTE: Odoo's discuss.channel uses partner's avatar automatically for chat channels
-        # Just update the channel name
+        # Do NOT add "Zalo:" prefix - it breaks avatar lookup
         if self.partner_id:
             try:
                 channel.sudo().write({
-                    'name': f"Zalo: {self.partner_id.name}"
+                    'name': self.partner_id.name  # Use name directly for avatar matching
                 })
-                _logger.info(f'Updated channel {channel.id} name to: Zalo: {self.partner_id.name}')
+                _logger.info(f'Updated channel {channel.id} name to: {self.partner_id.name}')
             except Exception as e:
                 _logger.error(f'Failed to update channel name: {str(e)}')
         

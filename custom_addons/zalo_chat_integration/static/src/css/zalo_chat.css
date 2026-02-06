@@ -1,9 +1,44 @@
-/* Zalo Chat Integration - Minimal Styles */
+/* Zalo Chat Integration - Styles */
 
-/* Chat layout is already handled by Odoo's .o-selfAuthored class */
-/* Only add minimal necessary styles */
+/* ========================================
+   MESSAGE ALIGNMENT
+   - User messages on RIGHT (blue)
+   - Customer messages on LEFT (gray)
+   ======================================== */
 
-/* Error notification styling */
+/* Messages sent by the logged-in user - on the right */
+.o-mail-Message.o-selfAuthored {
+    flex-direction: row-reverse !important;
+}
+
+.o-mail-Message.o-selfAuthored .o-mail-Message-content {
+    background-color: #0084ff !important;
+    color: white !important;
+    border-radius: 18px 18px 4px 18px !important;
+    margin-left: auto;
+    margin-right: 0;
+}
+
+.o-mail-Message.o-selfAuthored .o-mail-Message-header {
+    flex-direction: row-reverse !important;
+    text-align: right;
+}
+
+.o-mail-Message.o-selfAuthored .o-mail-Message-sidebar {
+    order: 1;
+}
+
+/* Messages from others (customer) - on the left */
+.o-mail-Message:not(.o-selfAuthored) .o-mail-Message-content {
+    background-color: #e4e6eb !important;
+    color: #050505 !important;
+    border-radius: 18px 18px 18px 4px !important;
+}
+
+/* ========================================
+   ERROR NOTIFICATION
+   ======================================== */
+
 .zalo-upload-error {
     background-color: #fff3cd;
     color: #856404;
