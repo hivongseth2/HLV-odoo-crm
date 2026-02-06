@@ -21,6 +21,13 @@
                             <field name="app_id"/>
                             <field name="secret_key" password="True"/>
                             <field name="active"/>
+                            <field name="livechat_channel_id" readonly="1"/>
+                            <button name="action_open_livechat_config" 
+                                    string="Configure Live Chat" 
+                                    type="object" 
+                                    class="btn-link"
+                                    icon="fa-comments"
+                                    invisible="not livechat_channel_id"/>
                         </group>
                         <group>
                             <field name="access_token" password="True"/>

@@ -49,12 +49,12 @@ class ZaloOAConfig(models.Model):
         default=True,
     )
     
-    # Group channel for all Zalo conversations
-    group_channel_id = fields.Many2one(
-        'discuss.channel',
-        string='Group Channel',
+    # Live Chat Channel for Zalo Integration
+    livechat_channel_id = fields.Many2one(
+        'im_livechat.channel',
+        string='Live Chat Channel',
         readonly=True,
-        help='Main discuss channel where all Zalo users chat',
+        help='Odoo Live Chat channel linked to this Zalo OA',
     )
     
     _sql_constraints = [
@@ -221,37 +221,35 @@ class ZaloOAConfig(models.Model):
             )
         return config
     
-    def _get_or_create_group_channel(self):
-        """Get or create the OA group discuss channel"""
+    def _get_or_create_livechat_channel(self):
+        """Get or create the Live Chat channel"""
         self.ensure_one()
         
-        if not self.group_channel_id:
-            _logger.info(f'[ZALO GROUP] Creating group channel for OA: {self.oa_name}')
+        if not self.livechat_channel_id:
+            _logger.info(f'[ZALO LIVECHAT] Creating Live Chat channel for OA: {self.oa_name}')
             
-            # Create channel type='channel' (group chat)
-            channel = self.env['discuss.channel'].create({
-                'name': f'ZALO OA - {self.oa_name or self.app_id}',
-                'channel_type': 'channel',  # Group channel, not DM
-                'description': f'Zalo Official Account: {self.oa_name}\nAll Zalo user conversations in one place',
+            # Create im_livechat.channel
+            # Add current user as operator
+            channel = self.env['im_livechat.channel'].create({
+                'name': f'Zalo OA - {self.oa_name or self.app_id}',
+                'default_message': f'Hỗ trợ khách hàng qua Zalo OA: {self.oa_name}',
+                'user_ids': [(4, self.env.user.id)],
             })
             
-            # Add current user as admin/member
-            channel.add_members(partner_ids=[self.env.user.partner_id.id])
-            
-            self.group_channel_id = channel.id
-            _logger.info(f'[ZALO GROUP] Created group channel id={channel.id}')
+            self.livechat_channel_id = channel.id
+            _logger.info(f'[ZALO LIVECHAT] Created Live Chat channel id={channel.id}')
         
-        return self.group_channel_id
+        return self.livechat_channel_id
     
-    def action_open_group_channel(self):
-        """Open the OA group channel in Discuss"""
+    def action_open_livechat_config(self):
+        """Open the Live Chat channel configuration"""
         self.ensure_one()
-        group_channel = self._get_or_create_group_channel()
-        
+        channel = self._get_or_create_livechat_channel()
         return {
-            'type': 'ir.actions.client',
-            'tag': 'mail.action_discuss',
-            'params': {
-                'active_id': group_channel.id,
-            }
+            'type': 'ir.actions.act_window',
+            'name': 'Live Chat Configuration',
+            'res_model': 'im_livechat.channel',
+            'res_id': channel.id,
+            'view_mode': 'form',
+            'target': 'current',
         }

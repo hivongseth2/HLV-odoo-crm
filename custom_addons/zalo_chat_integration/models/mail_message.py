@@ -37,39 +37,38 @@ class MailMessage(models.Model):
                 
                 conversation = False
                 
-                # Method 1: Check if it's the old individual channel (legacy support)
-                conversation = self.env['zalo.chat.conversation'].sudo().search([
-                    ('discuss_channel_id', '=', message.res_id)
-                ], limit=1)
-                
-                # Method 2: If no old channel, check if it's the OA Group Channel
-                if not conversation:
-                    oa_config = self.env['zalo.oa.config'].sudo().search([('group_channel_id', '=', message.res_id)], limit=1)
+                # Method 1: Check Live Chat Channel (New Architecture)
+                channel = self.env['discuss.channel'].sudo().browse(message.res_id)
+                if channel.channel_type == 'livechat' and channel.livechat_channel_id:
+                    # Check if this Live Chat belongs to Zalo
+                    oa_config = self.env['zalo.oa.config'].sudo().search([('livechat_channel_id', '=', channel.livechat_channel_id.id)], limit=1)
+                    
                     if oa_config:
-                        _logger.info(f'[ZALO OUTBOUND] Message in OA Group Channel {oa_config.oa_name}')
+                        _logger.info(f'[ZALO OUTBOUND] Message in Zalo Live Chat Session {channel.id}')
                         
-                        # Determine recipient
-                        recipient_partner = False
-                        
-                        # Case A: Reply to a message (parent_id)
-                        if message.parent_id and message.parent_id.author_id:
-                            recipient_partner = message.parent_id.author_id
-                            _logger.info(f'[ZALO OUTBOUND] Reply to partner {recipient_partner.name} ({recipient_partner.id})')
-                        
-                        # Case B: Tag/Mention (TODO)
-                        
-                        if not recipient_partner:
-                            _logger.warning(f'[ZALO OUTBOUND] Cannot determine Zalo recipient in group channel (no parent/reply)')
-                            continue
+                        # Find recipient (Zalo Customer)
+                        # The recipient is the member who has a Zalo Conversation linked
+                        for partner in channel.channel_partner_ids:
+                            # Skip if partner is the author (operator)
+                            if partner == message.author_id:
+                                continue
+                                
+                            conv = self.env['zalo.chat.conversation'].sudo().search([
+                                ('partner_id', '=', partner.id)
+                            ], limit=1)
                             
-                        # Find conversation for this partner
-                        conversation = self.env['zalo.chat.conversation'].sudo().search([
-                            ('partner_id', '=', recipient_partner.id)
-                        ], limit=1)
+                            if conv:
+                                conversation = conv
+                                break
                         
                         if not conversation:
-                             _logger.warning(f'[ZALO OUTBOUND] No Zalo conversation found for partner {recipient_partner.name}')
-                             continue
+                             _logger.warning(f'[ZALO OUTBOUND] Could not find Zalo Conversation for any partner in Live Chat session {channel.id}')
+
+                # Method 2: Legacy individual channel support
+                if not conversation:
+                    conversation = self.env['zalo.chat.conversation'].sudo().search([
+                        ('discuss_channel_id', '=', message.res_id)
+                    ], limit=1)
                 
                 if not conversation:
                     # Not a Zalo channel

@@ -246,25 +246,55 @@ class ZaloChatWebhook(http.Controller):
         # Sync to discuss.channel for live chat UI (skip for oa_send_text)
         if not skip_discuss_sync:
             try:
-                # Get OA config and group channel
-                _logger.info(f'[ZALO WEBHOOK] Getting OA config for group channel')
+                # Get OA config and livechat channel
+                _logger.info(f'[ZALO WEBHOOK] Getting OA config for Live Chat')
                 oa_config = request.env['zalo.oa.config'].sudo().search([('active', '=', True)], limit=1)
                 
                 if not oa_config:
                     _logger.error('[ZALO WEBHOOK] No active OA config found!')
                     return
                 
-                # Get or create the group channel for this OA
-                group_channel = oa_config._get_or_create_group_channel()
-                _logger.info(f'[ZALO WEBHOOK] Got group channel id={group_channel.id}')
+                # Get Live Chat Channel linked to this OA
+                livechat_channel = oa_config._get_or_create_livechat_channel()
+                _logger.info(f'[ZALO WEBHOOK] Using Live Chat Channel: {livechat_channel.name} ({livechat_channel.id})')
                 
-                # Ensure conversation partner is a member of the group channel
-                if conversation.partner_id:
-                    # Check if partner is already a member
-                    if conversation.partner_id not in group_channel.channel_partner_ids:
-                        _logger.info(f'[ZALO WEBHOOK] Adding partner {conversation.partner_id.id} ({conversation.partner_id.name}) to group channel')
-                        group_channel.add_members(partner_ids=[conversation.partner_id.id])
+                # Find existing session (discuss.channel type=livechat) for this user
+                discuss_channel = request.env['discuss.channel'].sudo().search([
+                    ('channel_type', '=', 'livechat'),
+                    ('livechat_channel_id', '=', livechat_channel.id),
+                    ('channel_member_ids.partner_id', '=', conversation.partner_id.id)
+                ], limit=1)
+                
+                if not discuss_channel:
+                    _logger.info(f'[ZALO WEBHOOK] Creating new Live Chat session for partner {conversation.partner_id.name}')
+                    # Create new session
+                    discuss_channel = request.env['discuss.channel'].sudo().create({
+                        'name': f"{conversation.partner_id.name} (Zalo)",
+                        'channel_type': 'livechat',
+                        'livechat_channel_id': livechat_channel.id,
+                        # Add Zalo customer as member
+                        'channel_member_ids': [
+                            (0, 0, {'partner_id': conversation.partner_id.id})
+                        ]
+                    })
                     
+                    # Add operators (employees) from the Live Chat Channel to this session
+                    operators = livechat_channel.user_ids
+                    if operators:
+                        operator_partners = operators.partner_id.ids
+                        _logger.info(f'[ZALO WEBHOOK] Adding operators {operator_partners} to session')
+                        discuss_channel.add_members(partner_ids=operator_partners)
+                else:
+                    _logger.info(f'[ZALO WEBHOOK] Found existing session {discuss_channel.id}')
+                
+                # Use this channel for posting
+                group_channel = discuss_channel # Alias for compatibility with below code
+                
+                # Ensure conversation partner is a member (double check)
+                if conversation.partner_id and conversation.partner_id not in discuss_channel.channel_partner_ids:
+                     discuss_channel.add_members(partner_ids=[conversation.partner_id.id])
+                
+                if conversation.partner_id:
                     author_id = conversation.partner_id.id
                 else:
                     _logger.warning(f'[ZALO WEBHOOK] No partner for conversation {conversation.id}')
