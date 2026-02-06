@@ -236,7 +236,7 @@ class ZaloOAConfig(models.Model):
             })
             
             # Add current user as admin/member
-            channel._action_add_members(self.env.user.partner_id)
+            channel.add_members(partner_ids=[self.env.user.partner_id.id])
             
             self.group_channel_id = channel.id
             _logger.info(f'[ZALO GROUP] Created group channel id={channel.id}')

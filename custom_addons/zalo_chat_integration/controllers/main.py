@@ -263,7 +263,7 @@ class ZaloChatWebhook(http.Controller):
                     # Check if partner is already a member
                     if conversation.partner_id not in group_channel.channel_partner_ids:
                         _logger.info(f'[ZALO WEBHOOK] Adding partner {conversation.partner_id.id} ({conversation.partner_id.name}) to group channel')
-                        group_channel._action_add_members(conversation.partner_id)
+                        group_channel.add_members(partner_ids=[conversation.partner_id.id])
                     
                     author_id = conversation.partner_id.id
                 else:
