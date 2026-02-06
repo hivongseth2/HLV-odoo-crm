@@ -165,6 +165,17 @@ class DiscussChannel(models.Model):
                         _logger.info(f'[ZALO DEBUG] Found OA Config {oa_config.oa_name} for channel {self.id}')
                         
                         message_body = kwargs.get('body')
+                        # Filtering: Only send 'comment' messages, SKIP 'notification'
+                        message_type = kwargs.get('message_type', 'comment')
+                        if message_type != 'comment':
+                            _logger.info(f'[ZALO DEBUG] Skipping outbound message type: {message_type}')
+                            return super(DiscussChannel, self).message_post(**kwargs)
+
+                        # Filtering: Block specific system keywords if any leaked as comment
+                        if message_body and 'Đã tạo báo giá' in str(message_body):
+                             _logger.info(f'[ZALO DEBUG] Skipping Quote Creation notification')
+                             return super(DiscussChannel, self).message_post(**kwargs)
+                             
                         # author_id might be in kwargs or from context
                         author_id = kwargs.get('author_id') or self.env.user.partner_id.id
                         
@@ -364,13 +375,108 @@ Nếu không có sản phẩm nào, trả về: {"products": []}
             # Zalo Livechat: channel_partner_ids contains the customer and operators
             # We assume the external partner (not user) is the customer
             customer = False
+    def _find_product_by_name_smart(self, product_name, chat_context, config):
+        """
+        Smart product search using Odoo Search + GPT Disambiguation
+        """
+        Product = self.env['product.product']
+        
+        # 1. Broad search in Odoo
+        candidates = Product.search([
+            '|', ('name', 'ilike', product_name), ('default_code', 'ilike', product_name)
+        ], limit=5)
+        
+        if not candidates:
+            return None
+            
+        if len(candidates) == 1:
+            return candidates[0]
+            
+        # 2. Too many results, use GPT to disambiguate
+        candidate_list = []
+        for p in candidates:
+            candidate_list.append(f"- ID: {p.id}, Name: {p.name}, Code: {p.default_code}, Price: {p.lst_price}")
+            
+        candidates_str = "\n".join(candidate_list)
+        
+        prompt = [
+            {"role": "system", "content": "You are a product search assistant. Select the best matching product ID from the candidates list relative to the User's request. If none match well, return 0. Return ONLY the ID number (integer)."},
+            {"role": "user", "content": f"User Request: '{product_name}'\nContext: '{chat_context}'\n\nCandidates:\n{candidates_str}\n\nSelect ID:"}
+        ]
+        
+        try:
+            response = config._get_gpt_response(prompt)
+            # Cleanup non-digit characters just in case
+            import re
+            cleaned_id = re.sub(r'\D', '', response)
+            if cleaned_id:
+                selected_id = int(cleaned_id)
+                if selected_id == 0:
+                    return None
+                return candidates.filtered(lambda p: p.id == selected_id)
+        except Exception as e:
+            _logger.warning(f"Smart search GPT error: {e}")
+            
+        # Fallback: return the first result
+        return candidates[0]
+
+    def action_gpt_create_quote(self):
+        """
+        Parse chat and create Draft Quotation (Sale Order)
+        """
+        self.ensure_one()
+        
+        config = self.env['zalo.oa.config'].sudo().search([('livechat_channel_id', '=', self.livechat_channel_id.id)], limit=1)
+        if not config or not config.gpt_api_key:
+             raise UserError(_("Vui lòng cấu hình GPT API Key."))
+             
+        # Fetch messages
+        messages = self.message_ids.sorted(key=lambda m: m.date)[-50:]
+        content_lines = []
+        for msg in messages:
+            body = tools.html2plaintext(msg.body) if msg.body else ''
+            if not body: continue
+            author_name = msg.author_id.name if msg.author_id else "Bot"
+            content_lines.append(f"{author_name}: {body}")
+            
+        chat_content = "\n".join(content_lines)
+        
+        prompt = [
+            {"role": "system", "content": """Bạn là trợ lý ảo tạo đơn hàng. Hãy trích xuất thông tin đặt hàng từ hội thoại.
+Trả về dữ liệu dạng JSON CHUẨN (không markdown, không giải thích thêm).
+Cấu trúc:
+{
+  "products": [
+    {"name": "tên sản phẩm", "quantity": 1, "note": ""}
+  ],
+  "note": "Ghi chú chung của đơn"
+}
+Nếu không có sản phẩm nào, trả về: {"products": []}
+"""},
+            {"role": "user", "content": chat_content}
+        ]
+        
+        try:
+            response_content = config._get_gpt_response(prompt)
+            # Cleanup JSON if GPT wrapped it in markdown code block
+            if "```json" in response_content:
+                response_content = response_content.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_content:
+                response_content = response_content.split("```")[1].split("```")[0].strip()
+                
+            data = json.loads(response_content)
+            products_data = data.get('products', [])
+            
+            if not products_data:
+                raise UserError(_("GPT không tìm thấy thông tin sản phẩm nào trong đoạn chat."))
+                
+            customer = False
             for partner in self.channel_partner_ids:
                 if partner.id != self.env.user.partner_id.id and not partner.user_ids: # Likely the customer
                     customer = partner
                     break
             
             if not customer:
-                 # Fallback: take any partner that is not current user
                  partners = self.channel_partner_ids.filtered(lambda p: p.id != self.env.user.partner_id.id)
                  if partners:
                      customer = partners[0]
@@ -379,7 +485,6 @@ Nếu không có sản phẩm nào, trả về: {"products": []}
             
             order_lines = []
             Product = self.env['product.product']
-            
             not_found_products = []
             
             for item in products_data:
@@ -387,8 +492,8 @@ Nếu không có sản phẩm nào, trả về: {"products": []}
                 qty = item.get('quantity', 1)
                 note = item.get('note', '')
                 
-                # Search product
-                product = Product.search([('name', 'ilike', p_name)], limit=1)
+                # Use Smart Search
+                product = self._find_product_by_name_smart(p_name, chat_content, config)
                 
                 if product:
                     order_lines.append((0, 0, {
@@ -398,9 +503,6 @@ Nếu không có sản phẩm nào, trả về: {"products": []}
                     }))
                 else:
                     not_found_products.append(p_name)
-                    # Add as a section/note or dummy? 
-                    # Let's Skip and warn, OR create a line without product if allowed (usually not for stock)
-                    # We will create a note line
                     order_lines.append((0, 0, {
                         'display_type': 'line_note',
                         'name': f"Sản phẩm chưa tìm thấy mã: {p_name} (SL: {qty})",
@@ -415,18 +517,18 @@ Nếu không có sản phẩm nào, trả về: {"products": []}
             
             sale_order = self.env['sale.order'].create(vals)
             
-            msg = f"✅ **Đã tạo Báo giá nháp:** {sale_order.name}\n"
+            # Simple message without complex CSS
+            msg = f"Đã tạo báo giá: {sale_order.name}"
             if not_found_products:
-                msg += f"⚠️ **Không tìm thấy SP:** {', '.join(not_found_products)}"
+                msg += f" (Không tìm thấy: {', '.join(not_found_products)})"
                 
-            # Post link to SO
+            # Post as plain notification
             self.message_post(
-                body=Markup(msg),
+                body=msg,  # Plain text body, Odoo will handle simple rendering
                 message_type='notification',
                 subtype_xmlid='mail.mt_note'
             )
             
-            # Open the SO
             return {
                 'type': 'ir.actions.act_window',
                 'res_model': 'sale.order',
