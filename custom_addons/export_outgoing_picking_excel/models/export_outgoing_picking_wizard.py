@@ -1530,7 +1530,7 @@ class PickingExportWizard(models.TransientModel):
             'han_san_xuat': '',
             'da_xuat_hoa_don': '',
             'khach_hang_hoa_don': partner_name,
-            'nguoi_mua_hang': partner_name,
+            'nguoi_mua_hang': '',
             'quoc_gia_hoa_don': '',
             'tinh_thanh_pho_hoa_don': '',
             'quan_huyen_hoa_don': '',
