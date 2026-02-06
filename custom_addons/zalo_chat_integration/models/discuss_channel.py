@@ -162,7 +162,7 @@ class DiscussChannel(models.Model):
                     ], limit=1)
                     
                     if oa_config:
-                        _logger.info(f'[ZALO DEBUG] Found OA Config {oa_config.name} for channel {self.id}')
+                        _logger.info(f'[ZALO DEBUG] Found OA Config {oa_config.oa_name} for channel {self.id}')
                         
                         message_body = kwargs.get('body')
                         # author_id might be in kwargs or from context
