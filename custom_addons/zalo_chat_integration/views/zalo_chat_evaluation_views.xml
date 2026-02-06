@@ -1,5 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="view_zalo_chat_evaluation_search" model="ir.ui.view">
+        <field name="name">zalo.chat.evaluation.search</field>
+        <field name="model">zalo.chat.evaluation</field>
+        <field name="arch" type="xml">
+            <search string="Tìm kiếm Đánh giá">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="conversation_id"/>
+                <field name="gpt_sentiment"/>
+                <field name="gpt_suggestion"/>
+                <field name="state"/>
+                <filter string="Tích cực" name="positive" domain="[('gpt_sentiment', '=', 'positive')]"/>
+                <filter string="Tiêu cực" name="negative" domain="[('gpt_sentiment', '=', 'negative')]"/>
+                <filter string="Cần Báo giá" name="quote" domain="[('gpt_suggestion', '=', 'create_quote')]"/>
+                <group expand="1" string="Group By">
+                    <filter string="Khách hàng" name="group_partner" context="{'group_by': 'partner_id'}"/>
+                    <filter string="Thái độ" name="group_sentiment" context="{'group_by': 'gpt_sentiment'}"/>
+                    <filter string="Đề xuất" name="group_suggestion" context="{'group_by': 'gpt_suggestion'}"/>
+                    <filter string="Ngày tạo" name="group_date" context="{'group_by': 'create_date:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
     <record id="view_zalo_chat_evaluation_form" model="ir.ui.view">
         <field name="name">zalo.chat.evaluation.form</field>
         <field name="model">zalo.chat.evaluation</field>
@@ -13,18 +37,20 @@
                 </header>
                 <sheet>
                     <div class="oe_title">
-                        <h1><field name="name"/></h1>
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
                     </div>
                     <group>
                         <group>
-                            <field name="partner_id" readonly="1"/>
-                            <field name="conversation_id" readonly="1"/>
-                            <field name="create_date" string="Ngày đánh giá" readonly="1"/>
+                            <field name="partner_id"/>
+                            <field name="create_date"/>
+                            <field name="conversation_id"/>
                         </group>
                         <group>
                             <field name="gpt_sentiment" widget="badge" decoration-success="gpt_sentiment == 'positive'" decoration-danger="gpt_sentiment == 'negative'"/>
                             <field name="gpt_suggestion" widget="badge" decoration-info="gpt_suggestion == 'create_quote'"/>
-                            <!-- <field name="sale_order_id" invisible="not sale_order_id"/> -->
+                            <field name="sale_order_id" invisible="not sale_order_id"/>
                         </group>
                     </group>
                     <notebook>

@@ -16,19 +16,19 @@ class ZaloChatEvaluation(models.Model):
     name = fields.Char(string='Mã phiếu', default='New', readonly=True, copy=False)
     partner_id = fields.Many2one('res.partner', string='Khách hàng', required=True, tracking=True)
     conversation_id = fields.Many2one('zalo.chat.conversation', string='Hội thoại nguồn', readonly=True)
-    # livechat_channel_id = fields.Many2one('discuss.channel', string='Kênh Chat', readonly=True)
+    # livechat_channel_id removed as it causes registry issues
     
     chat_content = fields.Text(string='Nội dung hội thoại', help="Nội dung chat được dùng để phân tích")
     
     # AI Analysis Result
-    gpt_summary = fields.Html(string='Tóm tắt nội dung', tracking=True)
+    gpt_summary = fields.Html(string='Tóm tắt nội dung') # Removed tracking=True (Unsupported for HTML)
     gpt_sentiment = fields.Selection([
         ('positive', '😊 Tích cực'),
         ('neutral', '😐 Trung tính'),
         ('negative', '😡 Tiêu cực'),
     ], string='Thái độ khách hàng', tracking=True)
     
-    gpt_issues = fields.Html(string='Nhu cầu / Vấn đề', tracking=True)
+    gpt_issues = fields.Html(string='Nhu cầu / Vấn đề') # Removed tracking=True
     
     gpt_suggestion = fields.Selection([
         ('none', 'Không có'),
@@ -37,7 +37,7 @@ class ZaloChatEvaluation(models.Model):
         ('follow_up', 'Cần chăm sóc thêm'),
     ], string='Đề xuất hành động', tracking=True)
     
-    # sale_order_id = fields.Many2one('sale.order', string='Báo giá đã tạo', readonly=True)
+    sale_order_id = fields.Many2one('sale.order', string='Báo giá đã tạo', readonly=True)
     
     state = fields.Selection([
         ('draft', 'Mới'),
@@ -110,17 +110,13 @@ Lưu ý logic suggestion:
     def action_create_quote(self):
         """Create Quote based on analysis"""
         self.ensure_one()
-        # This will call the existing Quote Creation logic but we might need to parse chat again 
-        # OR we can improve logic to use the analysis result.
-        # Ideally, we call action_gpt_create_quote from generic method but passing content.
-        # But action_gpt_create_quote relies on message history in 'discuss.channel'.
         
-        # If we have livechat_channel_id, we can delegate?
-        if self.livechat_channel_id:
-            # We call the channel method directly?
-            # But the channel method uses self.message_ids.
-            # Does this evaluation record update channel messages? No.
-            # So we should call the channel's method.
-            return self.livechat_channel_id.action_gpt_create_quote()
+        # Use conversation to get active channel
+        if not self.conversation_id:
+             raise UserError(_("Không tìm thấy hội thoại gốc."))
+             
+        channel = self.conversation_id._get_active_livechat_channel()
+        if channel:
+            return channel.action_gpt_create_quote()
         else:
              raise UserError(_("Không tìm thấy kênh chat gốc để tạo báo giá."))
