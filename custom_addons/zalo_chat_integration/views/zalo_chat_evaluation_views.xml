@@ -59,10 +59,33 @@
         </field>
     </record>
 
+    <record id="view_zalo_chat_evaluation_graph" model="ir.ui.view">
+        <field name="name">zalo.chat.evaluation.graph</field>
+        <field name="model">zalo.chat.evaluation</field>
+        <field name="arch" type="xml">
+            <graph string="Phân tích hội thoại" sample="1">
+                <field name="create_date" interval="day"/>
+                <field name="gpt_sentiment"/>
+                <field name="gpt_suggestion"/>
+            </graph>
+        </field>
+    </record>
+
+    <record id="view_zalo_chat_evaluation_pivot" model="ir.ui.view">
+        <field name="name">zalo.chat.evaluation.pivot</field>
+        <field name="model">zalo.chat.evaluation</field>
+        <field name="arch" type="xml">
+            <pivot string="Phân tích hội thoại" sample="1">
+                <field name="create_date" type="row" interval="day"/>
+                <field name="gpt_sentiment" type="col"/>
+            </pivot>
+        </field>
+    </record>
+
     <record id="action_zalo_chat_evaluation" model="ir.actions.act_window">
         <field name="name">Đánh giá hội thoại</field>
         <field name="res_model">zalo.chat.evaluation</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list,form,graph,pivot</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 Chưa có đánh giá nào.
