@@ -188,13 +188,47 @@ class ZaloChatConversation(models.Model):
     @api.model
     def action_open_all_zalo_chats(self):
         """
-        Open Zalo OA Configuration.
-        From there, users can configure Live Chat settings.
+        Open list of Live Chat sessions linked to active Zalo OAs.
+        If no OA config, redirect to configuration.
         """
-        # Simply redirect to Zalo OA Config action
-        action = self.env.ref('zalo_chat_integration.action_zalo_oa_config').read()[0]
-        action['target'] = 'current'
-        return action
+        configs = self.env['zalo.oa.config'].sudo().search([('active', '=', True)])
+        
+        if not configs:
+            # Check if action exists before returning
+            action = self.env.ref('zalo_chat_integration.action_zalo_oa_config', raise_if_not_found=False)
+            if action:
+                return action.read()[0]
+            return False
+        
+        livechat_ids = []
+        for config in configs:
+            # Ensure livechat channel exists
+            lc = config._get_or_create_livechat_channel()
+            livechat_ids.append(lc.id)
+            
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Hội thoại Zalo',
+            'res_model': 'discuss.channel',
+            'view_mode': 'list,form',
+            'domain': [
+                ('channel_type', '=', 'livechat'),
+                ('livechat_channel_id', 'in', livechat_ids)
+            ],
+            'context': {
+                # Try to group by OA Channel 
+                'search_default_group_by_livechat_channel_id': 1, 
+                'create': False, # Prevent creating manual channels from this view
+            },
+            'help': """
+                <p class="o_view_nocontent_smiling_face">
+                    Chưa có cuộc hội thoại nào.
+                </p>
+                <p>
+                    Tin nhắn từ khách hàng sẽ xuất hiện ở đây.
+                </p>
+            """
+        }
 
     @api.model
     def _find_or_create_conversation(self, zalo_user_id, user_info=None):
