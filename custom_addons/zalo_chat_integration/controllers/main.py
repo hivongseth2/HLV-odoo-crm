@@ -75,9 +75,16 @@ class ZaloChatWebhook(http.Controller):
         app_id = data.get('app_id')
         timestamp = data.get('timestamp')
         
+        _logger.info(f'[ZALO WEBHOOK] ========== NEW EVENT ==========')
+        _logger.info(f'[ZALO WEBHOOK] event_name={event_name}, app_id={app_id}, timestamp={timestamp}')
+        _logger.info(f'[ZALO WEBHOOK] Full data: {json.dumps(data, ensure_ascii=False)[:500]}')
+        
         sender = data.get('sender', {})
         recipient = data.get('recipient', {})
         message_data = data.get('message', {})
+        
+        _logger.info(f'[ZALO WEBHOOK] sender={sender}, recipient={recipient}')
+        _logger.info(f'[ZALO WEBHOOK] message_data={message_data}')
         
         # IMPORTANT: For oa_send_text, sender is OA and recipient is user
         # For user_send_*, sender is user
@@ -88,6 +95,7 @@ class ZaloChatWebhook(http.Controller):
                 'name': recipient.get('name', 'Zalo User'),
                 'avatar': recipient.get('avatar', ''),
             }
+            _logger.info(f'[ZALO WEBHOOK] oa_send_text - extracting recipient as zalo_user_id={zalo_user_id}')
         else:
             # User sent message to OA - user is in sender  
             zalo_user_id = sender.get('id')
@@ -95,13 +103,16 @@ class ZaloChatWebhook(http.Controller):
                 'name': sender.get('name', 'Zalo User'),
                 'avatar': sender.get('avatar', ''),
             }
+            _logger.info(f'[ZALO WEBHOOK] {event_name} - extracting sender as zalo_user_id={zalo_user_id}')
         
         if not zalo_user_id:
-            _logger.warning(f'No user ID in webhook data for event {event_name}')
+            _logger.warning(f'[ZALO WEBHOOK] No user ID in webhook data for event {event_name}')
             return
         
         # Find or create conversation
         Conversation = request.env['zalo.chat.conversation'].sudo()
+        
+        _logger.info(f'[ZALO WEBHOOK] Finding/creating conversation for zalo_user_id={zalo_user_id}')
         
         # Try to get user info from Zalo if needed
         # (user_info already populated above based on event type)
@@ -110,6 +121,8 @@ class ZaloChatWebhook(http.Controller):
             zalo_user_id,
             user_info
         )
+        
+        _logger.info(f'[ZALO WEBHOOK] Got conversation id={conversation.id}, name={conversation.zalo_user_name}')
         
         # Process message based on event type
         # Initialize skip flag - only skip for outbound OA messages
@@ -236,10 +249,14 @@ class ZaloChatWebhook(http.Controller):
         Message = request.env['zalo.chat.message'].sudo()
         message = Message.create(message_vals)
         
+        _logger.info(f'[ZALO WEBHOOK] Created zalo.chat.message id={message.id}, type={message.message_type}')
+        
         # Sync to discuss.channel for live chat UI (skip for oa_send_text)
         if not skip_discuss_sync:
             try:
+                _logger.info(f'[ZALO WEBHOOK] Getting/creating discuss channel for conversation {conversation.id}')
                 channel = conversation._get_or_create_discuss_channel()
+                _logger.info(f'[ZALO WEBHOOK] Got channel id={channel.id}')
                 
                 # Check if partner is already a member to avoid adding error
                 author_id = conversation.partner_id.id if conversation.partner_id else False
@@ -280,16 +297,19 @@ class ZaloChatWebhook(http.Controller):
                     # Already formatted as text with link in content
                     message_body = Markup(f'<p>{message.content}</p>')
                 
-                channel.message_post(
+                # IMPORTANT: Use context flag to prevent mail.message create hook from
+                # sending this message back to Zalo API (would cause infinite loop!)
+                _logger.info(f'[ZALO WEBHOOK] Posting message to channel with skip_zalo_sync=True')
+                channel.with_context(skip_zalo_sync=True).message_post(
                     body=message_body,
                     author_id=author_id,
                     message_type='comment',
                     subtype_xmlid='mail.mt_comment',
                 )
                 
-                _logger.info(f'Synced Zalo message to discuss.channel {channel.id}')
+                _logger.info(f'[ZALO WEBHOOK] Synced Zalo message to discuss.channel {channel.id}')
             except Exception as e:
-                _logger.error(f'Failed to sync to discuss.channel: {str(e)}', exc_info=True)
+                _logger.error(f'[ZALO WEBHOOK] Failed to sync to discuss.channel: {str(e)}', exc_info=True)
         
         # Post notification to conversation chatter
         notification_body = Markup(
