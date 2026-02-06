@@ -267,23 +267,28 @@ class ZaloChatWebhook(http.Controller):
                 
                 if not discuss_channel:
                     _logger.info(f'[ZALO WEBHOOK] Creating new Live Chat session for partner {conversation.partner_id.name}')
-                    # Create new session
+                    
+                    # Determine operator (required for livechat constraint)
+                    operators = livechat_channel.user_ids
+                    # Default to current user (admin/system) if no operators configured
+                    operator = operators[0] if operators else request.env.user
+                    
+                    # Create new session with operator
                     discuss_channel = request.env['discuss.channel'].sudo().create({
                         'name': f"{conversation.partner_id.name} (Zalo)",
                         'channel_type': 'livechat',
                         'livechat_channel_id': livechat_channel.id,
-                        # Add Zalo customer as member
+                        'livechat_operator_id': operator.partner_id.id,
                         'channel_member_ids': [
-                            (0, 0, {'partner_id': conversation.partner_id.id})
+                            (0, 0, {'partner_id': conversation.partner_id.id}),
+                            (0, 0, {'partner_id': operator.partner_id.id})
                         ]
                     })
                     
-                    # Add operators (employees) from the Live Chat Channel to this session
-                    operators = livechat_channel.user_ids
-                    if operators:
-                        operator_partners = operators.partner_id.ids
-                        _logger.info(f'[ZALO WEBHOOK] Adding operators {operator_partners} to session')
-                        discuss_channel.add_members(partner_ids=operator_partners)
+                    # Add other operators if any
+                    if len(operators) > 1:
+                        other_operators = operators[1:]
+                        discuss_channel.add_members(partner_ids=other_operators.partner_id.ids)
                 else:
                     _logger.info(f'[ZALO WEBHOOK] Found existing session {discuss_channel.id}')
                 
