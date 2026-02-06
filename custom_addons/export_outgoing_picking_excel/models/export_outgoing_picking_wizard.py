@@ -993,24 +993,30 @@ class PickingExportWizard(models.TransientModel):
                     if "tiền mặt" in payment_method_lower and not is_multiple:
                         ma_khach_hang = "KH27182013179"
                         phuong_thuc_excel = "Thu tiền ngay - Tiền mặt"
+                        partner_name = "KHÁCH CH BẾN CAM TT TIỀN MẶT"
                     elif "chuyển khoản" in payment_method_lower and not is_multiple:
                         ma_khach_hang = "KH27182013178"
                         phuong_thuc_excel = "Thu tiền ngay - Chuyển khoản"
+                        partner_name = "KHÁCH CH BẾN CAM TT CHUYỂN KHOẢN"
                     elif is_multiple:
                         ma_khach_hang = "KHACHLE-BC"
                         phuong_thuc_excel = "Chưa thu tiền"
+                        partner_name = "KHÁCH LẺ CỬA HÀNG BẾN CAM"
                 
                 # Mapping for TSN (HCM)
                 elif warehouse_code in ["TSN", "HCM"]:
                     if "tiền mặt" in payment_method_lower and not is_multiple:
                         ma_khach_hang = "KH27182013176"
                         phuong_thuc_excel = "Thu tiền ngay - Tiền mặt"
+                        partner_name = "KHÁCH GHÉ VP HCM TT TIỀN MẶT"
                     elif "chuyển khoản" in payment_method_lower and not is_multiple:
                         ma_khach_hang = "KH27182013177"
                         phuong_thuc_excel = "Thu tiền ngay - Chuyển khoản"
+                        partner_name = "KHÁCH GHÉ VP HCM TT CHUYỂN KHOẢN"
                     elif is_multiple:
                         ma_khach_hang = "KHACHLE-HCM"
                         phuong_thuc_excel = "Chưa thu tiền"
+                        partner_name = "KHÁCH LẺ VP HCM"
 
                 # Build row dict
                 row = {
@@ -1149,24 +1155,30 @@ class PickingExportWizard(models.TransientModel):
                 if "tiền mặt" in payment_method_lower and not is_multiple:
                     ma_khach_hang = "KH27182013179"
                     phuong_thuc_excel = "Thu tiền ngay - Tiền mặt"
+                    partner_name = "KHÁCH CH BẾN CAM TT TIỀN MẶT"
                 elif "chuyển khoản" in payment_method_lower and not is_multiple:
                     ma_khach_hang = "KH27182013178"
                     phuong_thuc_excel = "Thu tiền ngay - Chuyển khoản"
+                    partner_name = "KHÁCH CH BẾN CAM TT CHUYỂN KHOẢN"
                 elif is_multiple:
                     ma_khach_hang = "KHACHLE-BC"
                     phuong_thuc_excel = "Chưa thu tiền"
+                    partner_name = "KHÁCH LẺ CỬA HÀNG BẾN CAM"
             
             # Mapping for TSN (HCM)
             elif warehouse_code in ["TSN", "HCM"]:
                 if "tiền mặt" in payment_method_lower and not is_multiple:
                     ma_khach_hang = "KH27182013176"
                     phuong_thuc_excel = "Thu tiền ngay - Tiền mặt"
+                    partner_name = "KHÁCH GHÉ VP HCM TT TIỀN MẶT"
                 elif "chuyển khoản" in payment_method_lower and not is_multiple:
                     ma_khach_hang = "KH27182013177"
                     phuong_thuc_excel = "Thu tiền ngay - Chuyển khoản"
+                    partner_name = "KHÁCH GHÉ VP HCM TT CHUYỂN KHOẢN"
                 elif is_multiple:
                     ma_khach_hang = "KHACHLE-HCM"
                     phuong_thuc_excel = "Chưa thu tiền"
+                    partner_name = "KHÁCH LẺ VP HCM"
 
             # Start building dict based on NEW columns
             row = {
