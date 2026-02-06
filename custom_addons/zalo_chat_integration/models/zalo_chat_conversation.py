@@ -144,7 +144,7 @@ class ZaloChatConversation(models.Model):
         
         evaluation = self.env['zalo.chat.evaluation'].create({
             'partner_id': self.partner_id.id,
-            # 'conversation_id': self.id,
+            'conversation_id': self.id,
             # 'livechat_channel_id': channel.id if channel else False,
             'chat_content': chat_content,
         })
