@@ -49,12 +49,7 @@ class StockExportWizard(models.TransientModel):
         help="Để trống để lấy tất cả kho trong công ty hiện tại."
     )
     
-    picking_type_code = fields.Selection([
-        ('outgoing', 'Xuất bán hàng'),
-        ('internal', 'Nội bộ'),
-        ('all', 'Tất cả'),
-    ], string="Loại phiếu", default='all')
-    
+
     state_filter = fields.Selection([
         ('done', 'Hoàn thành'),
         ('assigned', 'Sẵn sàng'),
@@ -86,13 +81,9 @@ class StockExportWizard(models.TransientModel):
             ("date_done", "<=", fields.Date.to_date(self.date_to)),
         ]
         
-        # Picking Type Filter
-        if self.picking_type_code == 'outgoing':
-             domain.append(("picking_type_code", "=", "outgoing"))
-        elif self.picking_type_code == 'internal':
-             domain.append(("picking_type_code", "=", "internal"))
-        else:
-             domain.append(("picking_type_code", "in", ["outgoing", "internal"]))
+        # Picking Type Filter by Sequence Code (OUT only)
+        # Only export "Xuất bán hàng"
+        domain.append(("picking_type_id.sequence_code", "=", "OUT"))
 
         # State Filter
         if self.state_filter and self.state_filter != 'all':
@@ -156,12 +147,7 @@ class StockExportWizard(models.TransientModel):
             
         warehouse_code = self._get_warehouse_code(picking)
         ly_do_xuat = picking.note or picking.name
-        if picking.picking_type_code == 'outgoing':
-             loai_xuat = '2. Xuất bán hàng'
-        elif picking.picking_type_code == 'internal':
-             loai_xuat = '4. Xuất khác'
-        else:
-             loai_xuat = '2. Xuất bán hàng'
+        loai_xuat = '2. Xuất bán hàng'
         
         # Determine moves
         moves = picking.move_line_ids if picking.move_line_ids else picking.move_ids_without_package
