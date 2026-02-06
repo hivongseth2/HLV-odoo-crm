@@ -323,13 +323,29 @@ class MailMessage(models.Model):
         from markupsafe import Markup
         
         try:
-            if conversation and conversation.discuss_channel_id:
+            # Find the active livechat session for this conversation's partner
+            # Logic matches action_open_chat
+            if not conversation.partner_id:
+                _logger.warning('No partner linked to conversation, cannot post error.')
+                return
+
+            domain = [
+                ('channel_type', '=', 'livechat'),
+                ('channel_member_ids.partner_id', '=', conversation.partner_id.id)
+            ]
+            # Get latest session
+            channel = self.env['discuss.channel'].sudo().search(domain, order='write_date desc', limit=1)
+            
+            if channel:
                 # Post error as plain text (safe, no HTML issues)
-                conversation.discuss_channel_id.sudo().message_post(
-                    body=Markup(f'<b>⚠️ Lỗi upload:</b> {error_msg}'),
+                channel.sudo().message_post(
+                    body=Markup(f'<p style="color: red; font-weight: bold;">⚠️ {error_msg}</p>'),
                     message_type='notification',
-                    subtype_xmlid='mail.mt_comment',
+                    subtype_xmlid='mail.mt_note',
+                    author_id=self.env.ref('base.partner_root').id
                 )
-                _logger.info(f'Posted upload error notification to channel {conversation.discuss_channel_id.id}')
+                _logger.info(f'Posted upload error notification to channel {channel.id}')
+            else:
+                 _logger.warning(f'Could not find active Live Chat session to post error for partner {conversation.partner_id.name}')
         except Exception as e:
             _logger.error(f'Failed to post upload error: {str(e)}')
