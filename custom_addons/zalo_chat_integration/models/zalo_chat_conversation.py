@@ -152,12 +152,50 @@ class ZaloChatConversation(models.Model):
     
     @api.model
     def action_open_all_zalo_chats(self):
-        """Open Discuss app showing Zalo group channel"""
-        config = self.env['zalo.oa.config'].sudo().search([('active', '=', True)], limit=1)
-        if not config:
-            raise UserError(_('Không tìm thấy cấu hình Zalo OA nào đang kích hoạt. Vui lòng vào Zalo Chat > Configuration và kích hoạt OA.'))
+        """
+        Open Discuss app showing Zalo group channel(s).
+        - If no config: Open Config view to create one.
+        - If 1 config: Open that specific group channel.
+        - If multiple configs: Open Kanban view of all OA group channels.
+        """
+        configs = self.env['zalo.oa.config'].sudo().search([('active', '=', True)])
+        
+        # Scenario 1: No active config -> Redirect to Config
+        if not configs:
+            action = self.env.ref('zalo_chat_integration.action_zalo_oa_config').read()[0]
+            # Optional: Show a notification via client action usually requires more complex setup
+            # Just opening the config view is self-explanatory enough if empty
+            return action
             
-        return config.action_open_group_channel()
+        # Scenario 2: Single config -> Open Chat directly
+        if len(configs) == 1:
+            return configs[0].action_open_group_channel()
+            
+        # Scenario 3: Multiple configs -> Show Kanban of all Group Channels
+        channel_ids = []
+        for config in configs:
+            channel = config._get_or_create_group_channel()
+            if channel:
+                channel_ids.append(channel.id)
+                
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'ZALO OA Chats',
+            'res_model': 'discuss.channel',
+            'view_mode': 'kanban,form',
+            'domain': [('id', 'in', channel_ids)],
+            'context': {
+                'search_default_group_by_zalo': 1, # Optional grouping if needed
+            },
+            'help': """
+                <p class="o_view_nocontent_smiling_face">
+                    Danh sách các kênh chat Zalo OA
+                </p>
+                <p>
+                    Chọn một OA để bắt đầu chat.
+                </p>
+            """
+        }
 
     @api.model
     def _find_or_create_conversation(self, zalo_user_id, user_info=None):
