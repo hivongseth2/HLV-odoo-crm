@@ -142,13 +142,48 @@ class ZaloChatConversation(models.Model):
         }
     
     def action_open_chat(self):
-        """Open Discuss app with OA group channel active"""
+        """Open Live Chat session for this conversation"""
         self.ensure_one()
-        # Get active OA config to find group channel
-        config = self.env['zalo.oa.config'].sudo().search([('active', '=', True)], limit=1)
-        if config:
-            return config.action_open_group_channel()
-        return False
+        
+        if not self.partner_id:
+             return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Lỗi',
+                    'message': 'Không tìm thấy Partner liên kết với hội thoại này. Vui lòng chờ tin nhắn đầu tiên để hệ thống tự tạo.',
+                    'type': 'danger',
+                }
+            }
+            
+        # Search for existing Live Chat session
+        # Logic: discuss.channel type='livechat', member=self.partner_id
+        domain = [
+            ('channel_type', '=', 'livechat'),
+            ('channel_member_ids.partner_id', '=', self.partner_id.id)
+        ]
+        # Sort by updated desc to get latest session
+        channel = self.env['discuss.channel'].sudo().search(domain, order='write_date desc', limit=1)
+        
+        if channel:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'mail.action_discuss',
+                'params': {
+                    'active_id': channel.id,
+                }
+            }
+            
+        # If no session found
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Chưa có phiên chat',
+                'message': 'Chưa có phiên Live Chat nào cho khách hàng này. Phiên chat sẽ tự động tạo khi có tin nhắn mới từ khách hàng.',
+                'type': 'warning',
+            }
+        }
     
     @api.model
     def action_open_all_zalo_chats(self):
