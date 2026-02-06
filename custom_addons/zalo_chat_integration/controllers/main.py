@@ -91,18 +91,10 @@ class ZaloChatWebhook(http.Controller):
         if event_name == 'oa_send_text':
             # OA sent message to user - user is in recipient
             zalo_user_id = recipient.get('id')
-            user_info = {
-                'name': recipient.get('name', 'Zalo User'),
-                'avatar': recipient.get('avatar', ''),
-            }
             _logger.info(f'[ZALO WEBHOOK] oa_send_text - extracting recipient as zalo_user_id={zalo_user_id}')
         else:
             # User sent message to OA - user is in sender  
             zalo_user_id = sender.get('id')
-            user_info = {
-                'name': sender.get('name', 'Zalo User'),
-                'avatar': sender.get('avatar', ''),
-            }
             _logger.info(f'[ZALO WEBHOOK] {event_name} - extracting sender as zalo_user_id={zalo_user_id}')
         
         if not zalo_user_id:
@@ -114,15 +106,15 @@ class ZaloChatWebhook(http.Controller):
         
         _logger.info(f'[ZALO WEBHOOK] Finding/creating conversation for zalo_user_id={zalo_user_id}')
         
-        # Try to get user info from Zalo if needed
-        # (user_info already populated above based on event type)
-        
+        # CRITICAL: Pass None for user_info to force fetching from Zalo API
+        # Webhook data only has minimal info (id), we need full profile
+        # This fixes "Public user" issue by getting real display_name, avatar, etc.
         conversation = Conversation._find_or_create_conversation(
             zalo_user_id,
-            user_info
+            user_info=None  # Force API fetch
         )
         
-        _logger.info(f'[ZALO WEBHOOK] Got conversation id={conversation.id}, name={conversation.zalo_user_name}')
+        _logger.info(f'[ZALO WEBHOOK] Got conversation id={conversation.id}, name={conversation.zalo_user_name}, partner={conversation.partner_id.id if conversation.partner_id else None}')
         
         # Process message based on event type
         # Initialize skip flag - only skip for outbound OA messages
