@@ -222,6 +222,34 @@ class ZaloChatConversation(models.Model):
             """
         }
 
+
+    def _get_active_livechat_channel(self):
+        """Helper to find the associated livechat channel"""
+        self.ensure_one()
+        if not self.partner_id:
+            return None
+            
+        domain = [
+            ('channel_type', '=', 'livechat'),
+            ('channel_member_ids.partner_id', '=', self.partner_id.id)
+        ]
+        # Sort by updated desc to get latest session
+        return self.env['discuss.channel'].sudo().search(domain, order='write_date desc', limit=1)
+
+    def action_gpt_summarize(self):
+        """Proxy to channel action"""
+        channel = self._get_active_livechat_channel()
+        if not channel:
+             raise UserError(_("Chưa tìm thấy phiên Live Chat nào."))
+        return channel.action_gpt_summarize()
+        
+    def action_gpt_create_quote(self):
+        """Proxy to channel action"""
+        channel = self._get_active_livechat_channel()
+        if not channel:
+             raise UserError(_("Chưa tìm thấy phiên Live Chat nào."))
+        return channel.action_gpt_create_quote()
+
     @api.model
     def _find_or_create_conversation(self, zalo_user_id, user_info=None):
         """

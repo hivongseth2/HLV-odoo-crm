@@ -25,6 +25,10 @@
                     <header>
                         <button name="action_open_chat" string="Mở Live Chat" type="object" 
                                 class="oe_highlight" icon="fa-comments"/>
+                        <button name="action_gpt_summarize" string="✨ Tóm tắt (GPT)" type="object" 
+                                class="btn-secondary"/>
+                        <button name="action_gpt_create_quote" string="📝 Tạo Báo Giá (GPT)" type="object" 
+                                class="btn-primary"/>
                         <button name="action_send_message" string="Gửi tin nhắn" type="object" 
                                 icon="fa-paper-plane"
                                 invisible="state == 'archived'"/>
