@@ -6,8 +6,22 @@
               sequence="100"
               web_icon="zalo_chat_integration,static/description/icon.png"/>
 
-    <!-- Conversations Menu -->
+    <!-- Zalo Chat - Opens Discuss with all Zalo channels -->
+    <record id="action_open_zalo_discuss" model="ir.actions.server">
+        <field name="name">Zalo Chat</field>
+        <field name="model_id" ref="model_zalo_chat_conversation"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_open_all_zalo_chats()</field>
+    </record>
+
     <menuitem id="menu_zalo_chat_conversations"
+              name="Zalo Chat"
+              parent="menu_zalo_chat_root"
+              action="action_open_zalo_discuss"
+              sequence="5"/>
+
+    <!-- Conversations List (for managing) -->
+    <menuitem id="menu_zalo_chat_conversations_list"
               name="Conversations"
               parent="menu_zalo_chat_root"
               action="action_zalo_chat_conversation"

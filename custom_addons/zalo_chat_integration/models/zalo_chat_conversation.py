@@ -194,22 +194,15 @@ class ZaloChatConversation(models.Model):
         
         self.discuss_channel_id = channel.id
         
-        # NOTE: Odoo's discuss.channel uses partner's avatar automatically for chat channels
-        # Do NOT add "Zalo:" prefix - it breaks avatar lookup
-        if self.partner_id:
+        # Set channel avatar explicitly from partner
+        if self.partner_id and self.partner_id.image_128:
             try:
                 channel.sudo().write({
-                    'name': self.partner_id.name  # Use name directly for avatar matching
+                    'image_128': self.partner_id.image_128
                 })
-                _logger.info(f'Updated channel {channel.id} name to: {self.partner_id.name}')
+                _logger.info(f'Set avatar for channel {channel.id} from partner {self.partner_id.id}')
             except Exception as e:
-                _logger.error(f'Failed to update channel name: {str(e)}')
-        
-        # Ensure members have persona data (fix JS error)
-        # Force refresh channel member info
-        channel.invalidate_recordset(['channel_member_ids'])
-        
-        _logger.info(f'Created discuss.channel {channel.id} for Zalo conversation {self.id}')
+                _logger.warning(f'Failed to set channel avatar: {e}')
         
         return channel
     
@@ -229,6 +222,20 @@ class ZaloChatConversation(models.Model):
             'context': {
                 'active_id': channel.id,
             },
+        }
+    
+    @api.model
+    def action_open_all_zalo_chats(self):
+        """Open Discuss app showing all Zalo channels"""
+        # Ensure all conversations have discuss channels
+        conversations = self.search([])
+        for conv in conversations:
+            conv._get_or_create_discuss_channel()
+        
+        # Open Discuss app
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'mail.action_discuss',
         }
 
     @api.model

@@ -1,22 +1,8 @@
-/* Zalo Chat Integration - Styles */
+/* Zalo Chat Integration - Minimal Styles */
 
-/* ========================================
-   MESSAGE ALIGNMENT
-   - User messages on RIGHT (blue)
-   - Customer messages on LEFT (gray)
-   ======================================== */
-
-/* Messages sent by the logged-in user - on the right */
+/* Only move user messages to the right, keep default Odoo styling for everything else */
 .o-mail-Message.o-selfAuthored {
     flex-direction: row-reverse !important;
-}
-
-.o-mail-Message.o-selfAuthored .o-mail-Message-content {
-    background-color: #0084ff !important;
-    color: white !important;
-    border-radius: 18px 18px 4px 18px !important;
-    margin-left: auto;
-    margin-right: 0;
 }
 
 .o-mail-Message.o-selfAuthored .o-mail-Message-header {
@@ -26,25 +12,4 @@
 
 .o-mail-Message.o-selfAuthored .o-mail-Message-sidebar {
     order: 1;
-}
-
-/* Messages from others (customer) - on the left */
-.o-mail-Message:not(.o-selfAuthored) .o-mail-Message-content {
-    background-color: #e4e6eb !important;
-    color: #050505 !important;
-    border-radius: 18px 18px 18px 4px !important;
-}
-
-/* ========================================
-   ERROR NOTIFICATION
-   ======================================== */
-
-.zalo-upload-error {
-    background-color: #fff3cd;
-    color: #856404;
-    padding: 10px 15px;
-    border-radius: 8px;
-    border-left: 4px solid #ffc107;
-    margin: 8px 0;
-    font-size: 13px;
 }
