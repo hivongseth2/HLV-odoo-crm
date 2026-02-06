@@ -322,14 +322,14 @@ class DiscussChannel(models.Model):
 
     def _find_product_by_name_smart(self, product_name, chat_context, config):
         """
-        Smart product search using Odoo Search + GPT Disambiguation
+        Smart product search using Odoo Search + GPT Disambiguation (Enhanced)
         """
         Product = self.env['product.product']
         
-        # 1. Broad search in Odoo
+        # 1. Broad search in Odoo (Increased limit to capture variants/combos)
         candidates = Product.search([
             '|', ('name', 'ilike', product_name), ('default_code', 'ilike', product_name)
-        ], limit=5)
+        ], limit=20)
         
         if not candidates:
             return None
@@ -338,15 +338,43 @@ class DiscussChannel(models.Model):
             return candidates[0]
             
         # 2. Too many results, use GPT to disambiguate
+        # Prepare rich candidate list
         candidate_list = []
         for p in candidates:
-            candidate_list.append(f"- ID: {p.id}, Name: {p.name}, Code: {p.default_code}, Price: {p.lst_price}")
+            info = (
+                f"- ID: {p.id}\n"
+                f"  Name: {p.name}\n"
+                f"  Code: {p.default_code or 'N/A'}\n"
+                f"  Category: {p.categ_id.name}\n"
+                f"  Price: {p.lst_price:,.0f}\n"
+                f"  Type: {p.detailed_type}\n"
+                f"  Stock: {p.qty_available}"
+            )
+            candidate_list.append(info)
             
         candidates_str = "\n".join(candidate_list)
         
         prompt = [
-            {"role": "system", "content": "You are a product search assistant. Select the best matching product ID from the candidates list relative to the User's request. If none match well, return 0. Return ONLY the ID number (integer)."},
-            {"role": "user", "content": f"User Request: '{product_name}'\nContext: '{chat_context}'\n\nCandidates:\n{candidates_str}\n\nSelect ID:"}
+            {"role": "system", "content": """You are an expert Sales Assistant. Your job is to select the EXACT product ID from a list of candidates that matches the user's intent.
+Rules:
+1. Analyze the 'Chat Context' to understand what the user wants (e.g., specific variant, combo, or accessory).
+   - If user asks for "Combo", select the product with Category 'Combo' or similar name.
+   - If user asks for specific model (e.g. FPD3), prefer the main product over accessories, unless context implies otherwise.
+2. Check 'Code' and 'Name' closely.
+3. If multiple similar products exist, prefer the one with positive Stock if context is ambiguous.
+4. Return ONLY the ID number (integer). If uncertain/none match, return 0.
+"""},
+            {"role": "user", "content": f"""
+User Request Item: '{product_name}'
+Chat Context:
+'''
+{chat_context}
+'''
+
+Candidates:
+{candidates_str}
+
+Select ID:"""}
         ]
         
         try:
