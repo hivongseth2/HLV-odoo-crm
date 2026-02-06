@@ -275,7 +275,7 @@ class ZaloChatWebhook(http.Controller):
                     
                     # Create new session with operator
                     discuss_channel = request.env['discuss.channel'].sudo().create({
-                        'name': f"{conversation.partner_id.name} (Zalo)",
+                        'name': f"Zalo {oa_config.oa_name} - {conversation.partner_id.name}",
                         'channel_type': 'livechat',
                         'livechat_channel_id': livechat_channel.id,
                         'livechat_operator_id': operator.partner_id.id,
@@ -356,6 +356,17 @@ class ZaloChatWebhook(http.Controller):
                     message_type='comment',
                     subtype_xmlid='mail.mt_comment',
                 )
+                
+                # Auto-open/pin the channel for operators
+                if livechat_channel.user_ids:
+                    operator_partners = livechat_channel.user_ids.partner_id
+                    # Find members who are operators and not 'open'
+                    members_to_notify = group_channel.channel_member_ids.filtered(
+                        lambda m: m.partner_id in operator_partners and m.fold_state != 'open'
+                    )
+                    if members_to_notify:
+                        _logger.info(f'[ZALO WEBHOOK] Auto-opening session for operators: {members_to_notify.partner_id.mapped("name")}')
+                        members_to_notify.sudo().write({'fold_state': 'open'})
                 
                 _logger.info(f'[ZALO WEBHOOK] Synced Zalo message to group channel {group_channel.id}')
             except Exception as e:
