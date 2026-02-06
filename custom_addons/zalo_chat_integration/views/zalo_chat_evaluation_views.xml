@@ -46,7 +46,6 @@
                             <field name="partner_id"/>
                             <field name="create_date"/>
                             <field name="conversation_id"/>
-                            <!-- <field name="livechat_channel_id"/> -->
                         </group>
                         <group>
                             <field name="gpt_sentiment" widget="badge" decoration-success="gpt_sentiment == 'positive'" decoration-danger="gpt_sentiment == 'negative'"/>
