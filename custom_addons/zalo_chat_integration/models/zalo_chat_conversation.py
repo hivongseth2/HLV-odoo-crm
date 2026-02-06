@@ -208,24 +208,16 @@ class ZaloChatConversation(models.Model):
             
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Hội thoại Zalo',
-            'res_model': 'discuss.channel',
-            'view_mode': 'list,form',
-            'domain': [
-                ('channel_type', '=', 'livechat'),
-                ('livechat_channel_id', 'in', livechat_ids)
-            ],
-            'context': {
-                # Try to group by OA Channel 
-                'search_default_group_by_livechat_channel_id': 1, 
-                'create': False, # Prevent creating manual channels from this view
-            },
+            'name': 'Kênh Zalo OA',
+            'res_model': 'im_livechat.channel',
+            'view_mode': 'kanban,form',
+            'domain': [('id', 'in', livechat_ids)],
             'help': """
                 <p class="o_view_nocontent_smiling_face">
-                    Chưa có cuộc hội thoại nào.
+                    Chưa có kênh Zalo OA nào được cấu hình Live Chat.
                 </p>
                 <p>
-                    Tin nhắn từ khách hàng sẽ xuất hiện ở đây.
+                    Vui lòng vào Cấu hình Zalo OA để thiết lập.
                 </p>
             """
         }

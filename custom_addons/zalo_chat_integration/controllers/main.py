@@ -347,6 +347,18 @@ class ZaloChatWebhook(http.Controller):
                     # Already formatted as text with link in content
                     message_body = Markup(f'<p>{message.content}</p>')
                 
+                # Auto-open/pin the channel for operators
+                # Perform this BEFORE posting message to ensure bus notification finds the channel open
+                if livechat_channel.user_ids:
+                    operator_partners = livechat_channel.user_ids.partner_id
+                    # Find members who are operators and not 'open'
+                    members_to_notify = group_channel.channel_member_ids.filtered(
+                        lambda m: m.partner_id in operator_partners and m.fold_state != 'open'
+                    )
+                    if members_to_notify:
+                        _logger.info(f'[ZALO WEBHOOK] Auto-opening session prior to message for operators: {members_to_notify.partner_id.mapped("name")}')
+                        members_to_notify.sudo().write({'fold_state': 'open'})
+
                 # IMPORTANT: Use context flag to prevent mail.message create hook from
                 # sending this message back to Zalo API (would cause infinite loop!)
                 _logger.info(f'[ZALO WEBHOOK] Posting message to group channel with skip_zalo_sync=True, author={author_id}')
@@ -356,17 +368,6 @@ class ZaloChatWebhook(http.Controller):
                     message_type='comment',
                     subtype_xmlid='mail.mt_comment',
                 )
-                
-                # Auto-open/pin the channel for operators
-                if livechat_channel.user_ids:
-                    operator_partners = livechat_channel.user_ids.partner_id
-                    # Find members who are operators and not 'open'
-                    members_to_notify = group_channel.channel_member_ids.filtered(
-                        lambda m: m.partner_id in operator_partners and m.fold_state != 'open'
-                    )
-                    if members_to_notify:
-                        _logger.info(f'[ZALO WEBHOOK] Auto-opening session for operators: {members_to_notify.partner_id.mapped("name")}')
-                        members_to_notify.sudo().write({'fold_state': 'open'})
                 
                 _logger.info(f'[ZALO WEBHOOK] Synced Zalo message to group channel {group_channel.id}')
             except Exception as e:
