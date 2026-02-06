@@ -147,7 +147,7 @@ class StockExportWizard(models.TransientModel):
             
         # warehouse_code = self._get_warehouse_code(picking) # requested fixed HLV
         # ly_do_xuat = picking.note or picking.name
-        ly_do_xuat = ""
+        ly_do_xuat = "Xuất kho bán hàng cho " + partner_name
         loai_xuat = 'Xuất bán hàng'
         
         # Determine moves
