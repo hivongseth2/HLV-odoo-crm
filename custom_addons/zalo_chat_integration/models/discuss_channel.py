@@ -206,7 +206,7 @@ class DiscussChannel(models.Model):
         content_lines = []
         for msg in messages:
             # Simple sanitization
-            body = config.env['mail.message']._strip_html(msg.body) if msg.body else ''
+            body = tools.html2plaintext(msg.body) if msg.body else ''
             if not body: continue
             
             author_name = msg.author_id.name if msg.author_id else "Bot"
