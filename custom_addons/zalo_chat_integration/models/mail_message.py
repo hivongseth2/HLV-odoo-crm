@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from odoo import models, api, fields, _
+from odoo import models, api, fields, _, tools
 import logging
 import re
 
@@ -122,8 +122,8 @@ class MailMessage(models.Model):
                     
                     # Process text content if any
                     if message.body and message.body.strip():
-                        # Strip HTML tags from message body
-                        plain_text = self._strip_html(message.body)
+                        # Strip HTML tags from message body using Odoo tools
+                        plain_text = tools.html2plaintext(message.body)
                         
                         # Only send if there's actual text content
                         if plain_text and plain_text.strip():
@@ -312,19 +312,7 @@ class MailMessage(models.Model):
             'state': 'sent',
         })
     
-    def _strip_html(self, html):
-        """Strip HTML tags and decode entities"""
-        if not html:
-            return ''
-        
-        # Remove HTML tags
-        text = re.sub(r'<[^>]+>', '', html)
-        
-        # Decode HTML entities
-        import html as html_lib
-        text = html_lib.unescape(text)
-        
-        return text.strip()
+    # _strip_html removed - using tools.html2plaintext() for Odoo 18 compatibility
     
     def _post_upload_error(self, conversation, error_msg):
         """
