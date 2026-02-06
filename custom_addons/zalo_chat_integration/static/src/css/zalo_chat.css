@@ -1,15 +1,38 @@
-/* Zalo Chat Integration - Minimal Styles */
+/* Zalo Chat Integration - Message Alignment Styles for Odoo 18 */
 
-/* Only move user messages to the right, keep default Odoo styling for everything else */
+/* 
+ * Move self-authored messages to the right side (like Messenger)
+ * Odoo 18 uses .o-mail-Message with .o-selfAuthored for user's own messages
+ */
+
+/* Make the message row flex-direction reverse for self messages */
 .o-mail-Message.o-selfAuthored {
     flex-direction: row-reverse !important;
 }
 
-.o-mail-Message.o-selfAuthored .o-mail-Message-header {
-    flex-direction: row-reverse !important;
-    text-align: right;
+/* Align the message content to the right */
+.o-mail-Message.o-selfAuthored .o-mail-Message-core {
+    align-items: flex-end !important;
 }
 
+/* Move message body to right */
+.o-mail-Message.o-selfAuthored .o-mail-Message-body {
+    text-align: right !important;
+}
+
+/* Move header (name, time) to right for self messages */
+.o-mail-Message.o-selfAuthored .o-mail-Message-header {
+    flex-direction: row-reverse !important;
+    justify-content: flex-start !important;
+}
+
+/* Position sidebar (avatar) on the right for self messages */
 .o-mail-Message.o-selfAuthored .o-mail-Message-sidebar {
     order: 1;
+}
+
+/* Ensure proper margin for self-authored messages */
+.o-mail-Message.o-selfAuthored .o-mail-Message-content {
+    margin-left: auto;
+    margin-right: 0;
 }

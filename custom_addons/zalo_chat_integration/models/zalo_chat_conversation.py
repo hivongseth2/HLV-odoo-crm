@@ -194,15 +194,25 @@ class ZaloChatConversation(models.Model):
         
         self.discuss_channel_id = channel.id
         
-        # Set channel avatar explicitly from partner
-        if self.partner_id and self.partner_id.image_128:
-            try:
-                channel.sudo().write({
-                    'image_128': self.partner_id.image_128
-                })
-                _logger.info(f'Set avatar for channel {channel.id} from partner {self.partner_id.id}')
-            except Exception as e:
-                _logger.warning(f'Failed to set channel avatar: {e}')
+        # Set channel avatar explicitly from partner's image
+        if self.partner_id:
+            # Try image_128 first, then image_1920
+            avatar_data = self.partner_id.image_128 or self.partner_id.image_1920
+            if avatar_data:
+                try:
+                    channel.sudo().write({
+                        'image_128': avatar_data
+                    })
+                    _logger.info(f'Set avatar for channel {channel.id} from partner {self.partner_id.id}')
+                except Exception as e:
+                    _logger.warning(f'Failed to set channel avatar: {e}')
+        
+        # Broadcast channel to make it appear in Discuss sidebar for members
+        try:
+            channel._broadcast(channel.channel_member_ids.partner_id.ids)
+            _logger.info(f'Broadcasted channel {channel.id} to members')
+        except Exception as e:
+            _logger.warning(f'Failed to broadcast channel: {e}')
         
         return channel
     
