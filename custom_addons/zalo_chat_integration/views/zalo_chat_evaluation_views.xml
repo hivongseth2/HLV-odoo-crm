@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_zalo_chat_evaluation_form" model="ir.ui.view">
+        <field name="name">zalo.chat.evaluation.form</field>
+        <field name="model">zalo.chat.evaluation</field>
+        <field name="arch" type="xml">
+            <form string="Đánh giá hội thoại">
+                <header>
+                    <button name="action_analyze_gpt" string="🔎 Phân tích ngay (AI)" type="object" class="btn-primary" invisible="state == 'analyzed'"/>
+                    <button name="action_analyze_gpt" string="Phân tích lại" type="object" invisible="state == 'draft'"/>
+                    <button name="action_create_quote" string="📝 Tạo Báo Giá" type="object" class="btn-success" invisible="gpt_suggestion != 'create_quote'"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="partner_id" readonly="1"/>
+                            <field name="conversation_id" readonly="1"/>
+                            <field name="create_date" string="Ngày đánh giá" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="gpt_sentiment" widget="badge" decoration-success="gpt_sentiment == 'positive'" decoration-danger="gpt_sentiment == 'negative'"/>
+                            <field name="gpt_suggestion" widget="badge" decoration-info="gpt_suggestion == 'create_quote'"/>
+                            <field name="sale_order_id" invisible="not sale_order_id"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Kết quả phân tích (AI)">
+                            <group>
+                                <field name="gpt_summary"/>
+                                <field name="gpt_issues"/>
+                            </group>
+                        </page>
+                        <page string="Nội dung hội thoại">
+                            <field name="chat_content"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_zalo_chat_evaluation_tree" model="ir.ui.view">
+        <field name="name">zalo.chat.evaluation.tree</field>
+        <field name="model">zalo.chat.evaluation</field>
+        <field name="arch" type="xml">
+            <list string="Đánh giá hội thoại">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="create_date"/>
+                <field name="gpt_sentiment" widget="badge" decoration-success="gpt_sentiment == 'positive'" decoration-danger="gpt_sentiment == 'negative'"/>
+                <field name="gpt_suggestion" widget="badge" decoration-info="gpt_suggestion == 'create_quote'"/>
+                <field name="state" widget="badge" decoration-success="state == 'analyzed'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_zalo_chat_evaluation" model="ir.actions.act_window">
+        <field name="name">Đánh giá hội thoại</field>
+        <field name="res_model">zalo.chat.evaluation</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Chưa có đánh giá nào.
+            </p>
+            <p>
+                Sử dụng tính năng này để phân tích chất lượng cuộc gọi và tự động đề xuất hành động.
+            </p>
+        </field>
+    </record>
+</odoo>

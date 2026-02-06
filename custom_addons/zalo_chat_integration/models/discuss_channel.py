@@ -1,11 +1,9 @@
-# -*- coding: utf-8 -*-
-
-from odoo import models, api, _
 from odoo import models, api, _
 from odoo.exceptions import UserError
 import logging
 import json
 import re
+from markupsafe import Markup
 
 _logger = logging.getLogger(__name__)
 
