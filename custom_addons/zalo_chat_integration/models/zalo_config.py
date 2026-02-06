@@ -49,6 +49,14 @@ class ZaloOAConfig(models.Model):
         default=True,
     )
     
+    # Group channel for all Zalo conversations
+    group_channel_id = fields.Many2one(
+        'discuss.channel',
+        string='Group Channel',
+        readonly=True,
+        help='Main discuss channel where all Zalo users chat',
+    )
+    
     _sql_constraints = [
         ('app_id_unique', 'UNIQUE(app_id)', 'An app with this ID already exists!'),
     ]
@@ -212,3 +220,38 @@ class ZaloOAConfig(models.Model):
                 _('No active Zalo OA configuration found. Please configure Zalo OA first.')
             )
         return config
+    
+    def _get_or_create_group_channel(self):
+        """Get or create the OA group discuss channel"""
+        self.ensure_one()
+        
+        if not self.group_channel_id:
+            _logger.info(f'[ZALO GROUP] Creating group channel for OA: {self.oa_name}')
+            
+            # Create channel type='channel' (group chat)
+            channel = self.env['discuss.channel'].create({
+                'name': f'ZALO OA - {self.oa_name or self.app_id}',
+                'channel_type': 'channel',  # Group channel, not DM
+                'description': f'Zalo Official Account: {self.oa_name}\nAll Zalo user conversations in one place',
+            })
+            
+            # Add current user as admin/member
+            channel.add_members(partner_ids=[self.env.user.partner_id.id])
+            
+            self.group_channel_id = channel.id
+            _logger.info(f'[ZALO GROUP] Created group channel id={channel.id}')
+        
+        return self.group_channel_id
+    
+    def action_open_group_channel(self):
+        """Open the OA group channel in Discuss"""
+        self.ensure_one()
+        group_channel = self._get_or_create_group_channel()
+        
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'mail.action_discuss',
+            'params': {
+                'active_id': group_channel.id,
+            }
+        }

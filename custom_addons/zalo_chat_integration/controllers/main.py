@@ -246,16 +246,29 @@ class ZaloChatWebhook(http.Controller):
         # Sync to discuss.channel for live chat UI (skip for oa_send_text)
         if not skip_discuss_sync:
             try:
-                _logger.info(f'[ZALO WEBHOOK] Getting/creating discuss channel for conversation {conversation.id}')
-                channel = conversation._get_or_create_discuss_channel()
-                _logger.info(f'[ZALO WEBHOOK] Got channel id={channel.id}')
+                # Get OA config and group channel
+                _logger.info(f'[ZALO WEBHOOK] Getting OA config for group channel')
+                oa_config = request.env['zalo.oa.config'].sudo().search([('active', '=', True)], limit=1)
                 
-                # Check if partner is already a member to avoid adding error
-                author_id = conversation.partner_id.id if conversation.partner_id else False
+                if not oa_config:
+                    _logger.error('[ZALO WEBHOOK] No active OA config found!')
+                    return
                 
-                # IMPORTANT: Do NOT add partner to channel_partner_ids here
-                # It's already done in _get_or_create_discuss_channel
-                # Just post the message - Odoo will handle it
+                # Get or create the group channel for this OA
+                group_channel = oa_config._get_or_create_group_channel()
+                _logger.info(f'[ZALO WEBHOOK] Got group channel id={group_channel.id}')
+                
+                # Ensure conversation partner is a member of the group channel
+                if conversation.partner_id:
+                    # Check if partner is already a member
+                    if conversation.partner_id not in group_channel.channel_partner_ids:
+                        _logger.info(f'[ZALO WEBHOOK] Adding partner {conversation.partner_id.id} ({conversation.partner_id.name}) to group channel')
+                        group_channel.add_members(partner_ids=[conversation.partner_id.id])
+                    
+                    author_id = conversation.partner_id.id
+                else:
+                    _logger.warning(f'[ZALO WEBHOOK] No partner for conversation {conversation.id}')
+                    author_id = False
                 
                 # Prepare message body with proper HTML rendering
                 message_body = message.content or ''
@@ -291,17 +304,17 @@ class ZaloChatWebhook(http.Controller):
                 
                 # IMPORTANT: Use context flag to prevent mail.message create hook from
                 # sending this message back to Zalo API (would cause infinite loop!)
-                _logger.info(f'[ZALO WEBHOOK] Posting message to channel with skip_zalo_sync=True')
-                channel.with_context(skip_zalo_sync=True).message_post(
+                _logger.info(f'[ZALO WEBHOOK] Posting message to group channel with skip_zalo_sync=True, author={author_id}')
+                group_channel.with_context(skip_zalo_sync=True).message_post(
                     body=message_body,
                     author_id=author_id,
                     message_type='comment',
                     subtype_xmlid='mail.mt_comment',
                 )
                 
-                _logger.info(f'[ZALO WEBHOOK] Synced Zalo message to discuss.channel {channel.id}')
+                _logger.info(f'[ZALO WEBHOOK] Synced Zalo message to group channel {group_channel.id}')
             except Exception as e:
-                _logger.error(f'[ZALO WEBHOOK] Failed to sync to discuss.channel: {str(e)}', exc_info=True)
+                _logger.error(f'[ZALO WEBHOOK] Failed to sync to group channel: {str(e)}', exc_info=True)
         
         # Post notification to conversation chatter
         notification_body = Markup(
