@@ -51,6 +51,15 @@
                                 </div>
                             </group>
                         </page>
+                        <page string="Tính năng mở rộng" name="features">
+                            <group string="Tích hợp GPT (OpenAI)">
+                                <div class="alert alert-warning" role="alert" invisible="gpt_api_key != False">
+                                    Vui lòng nhập API Key để sử dụng tính năng Tóm tắt &amp; Tạo báo giá tự động.
+                                </div>
+                                <field name="gpt_api_key" password="True"/>
+                                <field name="gpt_model"/>
+                            </group>
+                        </page>
                     </notebook>
                 </sheet>
             </form>

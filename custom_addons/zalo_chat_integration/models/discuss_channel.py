@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 
 from odoo import models, api, _
+from odoo import models, api, _
 from odoo.exceptions import UserError
 import logging
+import json
+import re
 
 _logger = logging.getLogger(__name__)
 
@@ -172,3 +175,194 @@ class DiscussChannel(models.Model):
             return super(DiscussChannel, self)._notify_thread(message, msg_vals=msg_vals, **kwargs)
         
         return super(DiscussChannel, self)._notify_thread(message, msg_vals=msg_vals, **kwargs)
+
+    # -------------------------------------------------------------------------
+    # GPT INTEGRATION (ZALO LIVECHAT)
+    # -------------------------------------------------------------------------
+
+    def action_gpt_summarize(self):
+        """
+        Summarize the livechat conversation using GPT
+        """
+        self.ensure_one()
+        
+        # Only applicable for livechat channels linked to Zalo OA
+        if self.channel_type != 'livechat' or not self.livechat_channel_id:
+             return
+             
+        # Find Zalo Config linked to this livechat channel
+        # We need config to get API Key through helper
+        config = self.env['zalo.oa.config'].sudo().search([('livechat_channel_id', '=', self.livechat_channel_id.id)], limit=1)
+        
+        if not config:
+             raise UserError(_("Không tìm thấy cấu hình Zalo OA liên kết với kênh này."))
+             
+        if not config.gpt_api_key:
+             raise UserError(_("Vui lòng cấu hình GPT API Key trong cài đặt Zalo OA."))
+             
+        # Fetch last 50 messages
+        messages = self.message_ids.sorted(key=lambda m: m.date)[-50:]
+        if not messages:
+            raise UserError(_("Hội thoại chưa có tin nhắn nào để tóm tắt."))
+            
+        content_lines = []
+        for msg in messages:
+            # Simple sanitization
+            body = config.env['mail.message']._strip_html(msg.body) if msg.body else ''
+            if not body: continue
+            
+            author_name = msg.author_id.name if msg.author_id else "Bot"
+            content_lines.append(f"{author_name}: {body}")
+        
+        chat_content = "\n".join(content_lines)
+        
+        prompt = [
+            {"role": "system", "content": "Bạn là trợ lý AI quản lý khách hàng (CRM). Hãy đọc đoạn hội thoại sau và tóm tắt ngắn gọn các ý chính:\n1. Nhu cầu/Vấn đề của khách hàng\n2. Thái độ khách hàng (Tích cực/Tiêu cực)\n3. Trạng thái hiện tại (Đã chốt/Đang tư vấn/Khiếu nại)\nTrả lời bằng tiếng Việt, ngắn gọn súc tích."},
+            {"role": "user", "content": chat_content}
+        ]
+        
+        try:
+            summary = config._get_gpt_response(prompt)
+            
+            # Post summary as internal note
+            from markupsafe import Markup
+            self.message_post(
+                body=Markup(f"📝 **Tóm tắt nội dung (GPT):**\n{summary.replace(chr(10), '<br/>')}"),
+                message_type='notification',
+                subtype_xmlid='mail.mt_note'
+            )
+        except Exception as e:
+            raise UserError(_(f"Lỗi khi gọi GPT: {str(e)}"))
+
+    def action_gpt_create_quote(self):
+        """
+        Parse chat and create Draft Quotation (Sale Order)
+        """
+        self.ensure_one()
+        
+        config = self.env['zalo.oa.config'].sudo().search([('livechat_channel_id', '=', self.livechat_channel_id.id)], limit=1)
+        if not config or not config.gpt_api_key:
+             raise UserError(_("Vui lòng cấu hình GPT API Key."))
+             
+        # Fetch messages
+        messages = self.message_ids.sorted(key=lambda m: m.date)[-50:]
+        content_lines = []
+        for msg in messages:
+            body = config.env['mail.message']._strip_html(msg.body) if msg.body else ''
+            if not body: continue
+            author_name = msg.author_id.name if msg.author_id else "Bot"
+            content_lines.append(f"{author_name}: {body}")
+            
+        chat_content = "\n".join(content_lines)
+        
+        prompt = [
+            {"role": "system", "content": """Bạn là trợ lý ảo tạo đơn hàng. Hãy trích xuất thông tin đặt hàng từ hội thoại.
+Trả về dữ liệu dạng JSON CHUẨN (không markdown, không giải thích thêm).
+Cấu trúc:
+{
+  "products": [
+    {"name": "tên sản phẩm", "quantity": 1, "note": ""}
+  ],
+  "note": "Ghi chú chung của đơn"
+}
+Nếu không có sản phẩm nào, trả về: {"products": []}
+"""},
+            {"role": "user", "content": chat_content}
+        ]
+        
+        try:
+            response_content = config._get_gpt_response(prompt)
+            # Cleanup JSON if GPT wrapped it in markdown code block
+            if "```json" in response_content:
+                response_content = response_content.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_content:
+                response_content = response_content.split("```")[1].split("```")[0].strip()
+                
+            data = json.loads(response_content)
+            products_data = data.get('products', [])
+            
+            if not products_data:
+                raise UserError(_("GPT không tìm thấy thông tin sản phẩm nào trong đoạn chat."))
+                
+            # Create Sale Order
+            # Use the partner from the conversation
+            # For 1-on-1 chat, the partner is the 'other' member
+            # Zalo Livechat: channel_partner_ids contains the customer and operators
+            # We assume the external partner (not user) is the customer
+            customer = False
+            for partner in self.channel_partner_ids:
+                if partner.id != self.env.user.partner_id.id and not partner.user_ids: # Likely the customer
+                    customer = partner
+                    break
+            
+            if not customer:
+                 # Fallback: take any partner that is not current user
+                 partners = self.channel_partner_ids.filtered(lambda p: p.id != self.env.user.partner_id.id)
+                 if partners:
+                     customer = partners[0]
+                 else:
+                     raise UserError(_("Không xác định được khách hàng trong kênh chat."))
+            
+            order_lines = []
+            Product = self.env['product.product']
+            
+            not_found_products = []
+            
+            for item in products_data:
+                p_name = item.get('name')
+                qty = item.get('quantity', 1)
+                note = item.get('note', '')
+                
+                # Search product
+                product = Product.search([('name', 'ilike', p_name)], limit=1)
+                
+                if product:
+                    order_lines.append((0, 0, {
+                        'product_id': product.id,
+                        'product_uom_qty': qty,
+                        'name': product.name + (f" ({note})" if note else ""),
+                    }))
+                else:
+                    not_found_products.append(p_name)
+                    # Add as a section/note or dummy? 
+                    # Let's Skip and warn, OR create a line without product if allowed (usually not for stock)
+                    # We will create a note line
+                    order_lines.append((0, 0, {
+                        'display_type': 'line_note',
+                        'name': f"Sản phẩm chưa tìm thấy mã: {p_name} (SL: {qty})",
+                    }))
+
+            vals = {
+                'partner_id': customer.id,
+                'order_line': order_lines,
+                'note': f"Được tạo tự động từ Zalo Chat. Ghi chú: {data.get('note', '')}",
+                'origin': f"Zalo Chat {self.name}",
+            }
+            
+            sale_order = self.env['sale.order'].create(vals)
+            
+            msg = f"✅ **Đã tạo Báo giá nháp:** {sale_order.name}\n"
+            if not_found_products:
+                msg += f"⚠️ **Không tìm thấy SP:** {', '.join(not_found_products)}"
+                
+            # Post link to SO
+            self.message_post(
+                body=Markup(msg),
+                message_type='notification',
+                subtype_xmlid='mail.mt_note'
+            )
+            
+            # Open the SO
+            return {
+                'type': 'ir.actions.act_window',
+                'res_model': 'sale.order',
+                'res_id': sale_order.id,
+                'view_mode': 'form',
+                'target': 'current',
+            }
+            
+        except json.JSONDecodeError:
+            raise UserError(_("Lỗi phân tích dữ liệu từ GPT. (Invalid JSON)"))
+        except Exception as e:
+            _logger.exception("GPT Create Quote Failed")
+            raise UserError(_(f"Lỗi tạo báo giá: {str(e)}"))

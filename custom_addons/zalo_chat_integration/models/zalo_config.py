@@ -57,6 +57,44 @@ class ZaloOAConfig(models.Model):
         help='Odoo Live Chat channel linked to this Zalo OA',
     )
     
+    # GPT Configuration
+    gpt_api_key = fields.Char(string='GPT API Key', help='OpenAI API Key provided by user')
+    gpt_model = fields.Selection([
+        ('gpt-4o', 'GPT-4o'),
+        ('gpt-4-turbo', 'GPT-4 Turbo'),
+        ('gpt-4', 'GPT-4'),
+        ('gpt-3.5-turbo', 'GPT-3.5 Turbo'),
+    ], string='GPT Model', default='gpt-4o')
+
+    def _get_gpt_response(self, messages):
+        """Helper to call OpenAI API"""
+        self.ensure_one()
+        if not self.gpt_api_key:
+            raise UserError(_("Vui lòng cấu hình GPT API Key trong cài đặt Zalo OA."))
+            
+        headers = {
+            'Authorization': f'Bearer {self.gpt_api_key}',
+            'Content-Type': 'application/json',
+        }
+        data = {
+            'model': self.gpt_model or 'gpt-4o',
+            'messages': messages,
+            'temperature': 0.7,
+        }
+        
+        try:
+            response = requests.post('https://api.openai.com/v1/chat/completions', headers=headers, json=data, timeout=30)
+            if response.status_code != 200:
+                error_detail = response.text
+                _logger.error(f"GPT API Error: {error_detail}")
+                raise UserError(_(f"Lỗi kết nối GPT: {response.status_code} - {error_detail}"))
+                
+            result = response.json()
+            return result['choices'][0]['message']['content']
+        except Exception as e:
+            _logger.error(f"GPT Call Failed: {str(e)}")
+            raise UserError(_(f"Không thể gọi GPT: {str(e)}"))
+
     _sql_constraints = [
         ('app_id_unique', 'UNIQUE(app_id)', 'An app with this ID already exists!'),
     ]

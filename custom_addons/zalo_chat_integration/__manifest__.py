@@ -35,6 +35,7 @@
         'views/zalo_chat_conversation_views.xml',
         'views/zalo_chat_message_views.xml',
         'views/res_partner_views.xml',
+        'views/discuss_channel_views.xml',
         'views/zalo_chat_menu.xml',
         'wizards/send_zalo_chat_wizard_views.xml',
     ],

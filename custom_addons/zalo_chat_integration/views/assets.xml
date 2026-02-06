@@ -6,4 +6,10 @@
         <field name="bundle">web.assets_backend</field>
         <field name="path">zalo_chat_integration/static/src/css/zalo_chat.css</field>
     </record>
+    
+    <record id="assets_backend_zalo_custom" model="ir.asset">
+        <field name="name">zalo_chat_integration.assets_backend_custom</field>
+        <field name="bundle">web.assets_backend</field>
+        <field name="path">zalo_chat_integration/static/src/css/zalo_custom.css</field>
+    </record>
 </odoo>

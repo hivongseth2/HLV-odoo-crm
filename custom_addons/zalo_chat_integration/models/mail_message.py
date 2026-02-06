@@ -333,21 +333,24 @@ class MailMessage(models.Model):
         from markupsafe import Markup
         
         try:
-            # Find the active livechat session for this conversation's partner
-            # Logic matches action_open_chat
-            if not conversation.partner_id:
-                _logger.warning('No partner linked to conversation, cannot post error.')
-                return
-
-            domain = [
-                ('channel_type', '=', 'livechat'),
-                ('channel_member_ids.partner_id', '=', conversation.partner_id.id)
-            ]
-            # Get latest session
-            channel = self.env['discuss.channel'].sudo().search(domain, order='write_date desc', limit=1)
+            channel = None
+            
+            # METHOD 1: Use context/self if valid
+            # If we are in the context of creating a message for a channel, self.res_id should be the channel id
+            if self and self.model == 'discuss.channel' and self.res_id:
+                channel = self.env['discuss.channel'].sudo().browse(self.res_id)
+            
+            # METHOD 2: Fallback to searching by partner
+            if not channel and conversation and conversation.partner_id:
+                domain = [
+                    ('channel_type', '=', 'livechat'),
+                    ('channel_member_ids.partner_id', '=', conversation.partner_id.id)
+                ]
+                channel = self.env['discuss.channel'].sudo().search(domain, order='write_date desc', limit=1)
             
             if channel:
                 # Post error as plain text (safe, no HTML issues)
+                # Use notification type to be distinct
                 channel.sudo().message_post(
                     body=Markup(f'<p style="color: red; font-weight: bold;">⚠️ {error_msg}</p>'),
                     message_type='notification',
@@ -356,6 +359,6 @@ class MailMessage(models.Model):
                 )
                 _logger.info(f'Posted upload error notification to channel {channel.id}')
             else:
-                 _logger.warning(f'Could not find active Live Chat session to post error for partner {conversation.partner_id.name}')
+                 _logger.warning(f'Could not find active Live Chat session to post error for partner {conversation.partner_id.name if conversation else "Unknown"}')
         except Exception as e:
             _logger.error(f'Failed to post upload error: {str(e)}')
