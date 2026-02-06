@@ -1,4 +1,4 @@
-from odoo import models, api, _
+from odoo import models, api, _, tools
 from odoo.exceptions import UserError
 import logging
 import json
@@ -246,7 +246,7 @@ class DiscussChannel(models.Model):
         messages = self.message_ids.sorted(key=lambda m: m.date)[-50:]
         content_lines = []
         for msg in messages:
-            body = config.env['mail.message']._strip_html(msg.body) if msg.body else ''
+            body = tools.html2plaintext(msg.body) if msg.body else ''
             if not body: continue
             author_name = msg.author_id.name if msg.author_id else "Bot"
             content_lines.append(f"{author_name}: {body}")
