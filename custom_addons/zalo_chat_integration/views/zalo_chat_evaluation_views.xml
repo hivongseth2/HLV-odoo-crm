@@ -24,7 +24,7 @@
                         <group>
                             <field name="gpt_sentiment" widget="badge" decoration-success="gpt_sentiment == 'positive'" decoration-danger="gpt_sentiment == 'negative'"/>
                             <field name="gpt_suggestion" widget="badge" decoration-info="gpt_suggestion == 'create_quote'"/>
-                            <!-- <field name="sale_order_id" invisible="not sale_order_id"/> -->
+                            <field name="sale_order_id" invisible="not sale_order_id"/>
                         </group>
                     </group>
                     <notebook>
