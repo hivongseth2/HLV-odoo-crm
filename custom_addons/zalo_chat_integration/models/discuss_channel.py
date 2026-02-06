@@ -319,62 +319,7 @@ class DiscussChannel(models.Model):
         except Exception as e:
             raise UserError(_(f"Lỗi khi gọi GPT: {str(e)}"))
 
-    def action_gpt_create_quote(self):
-        """
-        Parse chat and create Draft Quotation (Sale Order)
-        """
-        self.ensure_one()
-        
-        config = self.env['zalo.oa.config'].sudo().search([('livechat_channel_id', '=', self.livechat_channel_id.id)], limit=1)
-        if not config or not config.gpt_api_key:
-             raise UserError(_("Vui lòng cấu hình GPT API Key."))
-             
-        # Fetch messages
-        messages = self.message_ids.sorted(key=lambda m: m.date)[-50:]
-        content_lines = []
-        for msg in messages:
-            body = tools.html2plaintext(msg.body) if msg.body else ''
-            if not body: continue
-            author_name = msg.author_id.name if msg.author_id else "Bot"
-            content_lines.append(f"{author_name}: {body}")
-            
-        chat_content = "\n".join(content_lines)
-        
-        prompt = [
-            {"role": "system", "content": """Bạn là trợ lý ảo tạo đơn hàng. Hãy trích xuất thông tin đặt hàng từ hội thoại.
-Trả về dữ liệu dạng JSON CHUẨN (không markdown, không giải thích thêm).
-Cấu trúc:
-{
-  "products": [
-    {"name": "tên sản phẩm", "quantity": 1, "note": ""}
-  ],
-  "note": "Ghi chú chung của đơn"
-}
-Nếu không có sản phẩm nào, trả về: {"products": []}
-"""},
-            {"role": "user", "content": chat_content}
-        ]
-        
-        try:
-            response_content = config._get_gpt_response(prompt)
-            # Cleanup JSON if GPT wrapped it in markdown code block
-            if "```json" in response_content:
-                response_content = response_content.split("```json")[1].split("```")[0].strip()
-            elif "```" in response_content:
-                response_content = response_content.split("```")[1].split("```")[0].strip()
-                
-            data = json.loads(response_content)
-            products_data = data.get('products', [])
-            
-            if not products_data:
-                raise UserError(_("GPT không tìm thấy thông tin sản phẩm nào trong đoạn chat."))
-                
-            # Create Sale Order
-            # Use the partner from the conversation
-            # For 1-on-1 chat, the partner is the 'other' member
-            # Zalo Livechat: channel_partner_ids contains the customer and operators
-            # We assume the external partner (not user) is the customer
-            customer = False
+
     def _find_product_by_name_smart(self, product_name, chat_context, config):
         """
         Smart product search using Odoo Search + GPT Disambiguation
