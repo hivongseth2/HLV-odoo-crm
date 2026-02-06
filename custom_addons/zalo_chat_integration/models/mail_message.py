@@ -233,15 +233,24 @@ class MailMessage(models.Model):
             self._post_upload_error(conversation, error_msg)
             return
         
-        attachment_id = result.get('data', {}).get('attachment_id')
+        data = result.get('data', {})
+        attachment_id = data.get('attachment_id')
+        token = data.get('token')
         
-        if not attachment_id:
-            error_msg = f'❌ Zalo không trả về attachment_id cho "{filename}"'
+        # Validation based on type
+        if is_image and not attachment_id:
+            error_msg = f'❌ Zalo không trả về attachment_id cho ảnh "{filename}"'
+            _logger.error(f'{error_msg}. Full response: {result}')
+            self._post_upload_error(conversation, error_msg)
+            return
+            
+        if not is_image and not token:
+            error_msg = f'❌ Zalo không trả về token cho file "{filename}"'
             _logger.error(f'{error_msg}. Full response: {result}')
             self._post_upload_error(conversation, error_msg)
             return
         
-        _logger.info(f'✓ Uploaded to Zalo, attachment_id: {attachment_id}')
+        _logger.info(f'✓ Uploaded to Zalo. ID/Token: {attachment_id or token}')
         
         # Now send message with attachment
         send_url = 'https://openapi.zalo.me/v3.0/oa/message/cs'
@@ -263,13 +272,14 @@ class MailMessage(models.Model):
                 },
             }
         else:
+            # File sending uses token
             payload = {
                 'recipient': {'user_id': conversation.zalo_user_id},
                 'message': {
                     'attachment': {
                         'type': 'file',
                         'payload': {
-                            'attachment_id': attachment_id,
+                            'token': token,
                         },
                     },
                 },
