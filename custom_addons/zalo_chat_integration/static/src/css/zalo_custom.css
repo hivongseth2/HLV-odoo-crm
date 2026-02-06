@@ -1,3 +1,2 @@
-.o-mail-Message-actions.invisible {
-    display: none !important;
-}
+/* CSS reverted due to hover jump issue */
+/* .o-mail-Message-actions.invisible { display: none !important; } */
