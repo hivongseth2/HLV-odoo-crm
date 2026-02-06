@@ -15,7 +15,7 @@ class ZaloChatEvaluation(models.Model):
 
     name = fields.Char(string='Mã phiếu', default='New', readonly=True, copy=False)
     partner_id = fields.Many2one('res.partner', string='Khách hàng', required=True, tracking=True)
-    conversation_id = fields.Many2one('zalo.chat.conversation', string='Hội thoại nguồn', readonly=True)
+    # conversation_id = fields.Many2one('zalo.chat.conversation', string='Hội thoại nguồn', readonly=True)
     livechat_channel_id = fields.Many2one('discuss.channel', string='Kênh Chat', readonly=True)
     
     chat_content = fields.Text(string='Nội dung hội thoại', help="Nội dung chat được dùng để phân tích")
