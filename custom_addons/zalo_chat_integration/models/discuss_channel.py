@@ -127,8 +127,6 @@ class DiscussChannel(models.Model):
         """
         Override to prevent auto-adding author to chat channels
         when posting messages (which causes 'too many members' error)
-        
-        Also intercept outbound messages to send via Zalo API
         """
         # For chat type channels (1-to-1), disable auto-adding author
         if self.channel_type == 'chat':
@@ -145,54 +143,6 @@ class DiscussChannel(models.Model):
                     )
                     # Post as system message instead (no author)
                     kwargs['author_id'] = False
-        
-        # NEW: Intercept outbound messages to Zalo
-        # Check if this is a Zalo livechat channel
-        if self.channel_type == 'livechat' and self.livechat_channel_id:
-            # Skip if this is from webhook (already synced from Zalo)
-            if not self.env.context.get('skip_zalo_sync'):
-                oa_config = self.env['zalo.oa.config'].sudo().search([
-                    ('livechat_channel_id', '=', self.livechat_channel_id.id)
-                ], limit=1)
-                
-                if oa_config:
-                    # This is a Zalo chat - send message to Zalo after posting
-                    message_body = kwargs.get('body')
-                    author_id = kwargs.get('author_id')
-                    
-                    # Only process messages with content from operators (not system/customer)
-                    if message_body and author_id:
-                        # Find Zalo conversation
-                        for partner in self.channel_partner_ids:
-                            if partner.id == author_id:
-                                continue  # Skip the author (operator)
-                            
-                            conv = self.env['zalo.chat.conversation'].sudo().search([
-                                ('partner_id', '=', partner.id)
-                            ], limit=1)
-                            
-                            if conv:
-                                # Strip HTML and send to Zalo
-                                plain_text = tools.html2plaintext(message_body)
-                                if plain_text and plain_text.strip():
-                                    try:
-                                        _logger.info(f'[ZALO OUTBOUND] Sending from discuss.channel {self.id}: "{plain_text[:50]}"')
-                                        
-                                        zalo_message = self.env['zalo.chat.message'].sudo().create({
-                                            'conversation_id': conv.id,
-                                            'direction': 'outbound',
-                                            'message_type': 'text',
-                                            'content': plain_text,
-                                            'state': 'draft',
-                                        })
-                                        
-                                        # Send via Zalo API
-                                        zalo_message.action_send()
-                                        
-                                        _logger.info(f'[ZALO OUTBOUND] Sent successfully via zalo.chat.message id={zalo_message.id}')
-                                    except Exception as e:
-                                        _logger.error(f'[ZALO OUTBOUND] Failed to send: {str(e)}', exc_info=True)
-                                break
         
         return super(DiscussChannel, self).message_post(**kwargs)
     
