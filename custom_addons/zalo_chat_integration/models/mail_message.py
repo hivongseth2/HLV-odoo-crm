@@ -17,6 +17,8 @@ class MailMessage(models.Model):
         
         Khi user gửi tin nhắn trong discuss widget → gửi qua Zalo API
         """
+        _logger.info(f'[ZALO DEBUG] mail.message.create called with {len(vals_list)} values')
+        
         messages = super().create(vals_list)
         
         # CRITICAL: Skip if this is a message from webhook (already synced from Zalo)

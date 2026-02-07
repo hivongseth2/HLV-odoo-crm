@@ -319,3 +319,42 @@ class MyModel(models.Model):
 - Import đúng: `from markupsafe import Markup` (KHÔNG phải `from odoo.utils`)
 - Khi dùng `%` hoặc `.format()` để chèn biến, biến đó sẽ bị escape trừ khi cũng được wrap bởi `Markup`
 - Markup chỉ được chấp nhận trong các field HTML như message body, không áp dụng cho plain text fields
+
+12. Odoo 18 Migration & Compatibility Rules
+12.1. Deprecated Methods Replacement
+- **Lỗi**: `AttributeError: type object 'mail.message' has no attribute '_strip_html'`
+- **Nguyên nhân**: Method `_strip_html` đã bị loại bỏ khỏi model `mail.message` trong Odoo 18.
+- **Giải pháp**: Sử dụng `odoo.tools.html2plaintext`.
+  ```python
+  from odoo import tools
+  # ...
+  plain_text = tools.html2plaintext(html_content)
+  ```
+
+12.2. Message Posting Hooks (Discuss App)
+- **Vấn đề**: Hook `create` của `mail.message` có thể không được kích hoạt khi gửi tin từ giao diện Discuss (do Odoo 18 dùng cơ chế Bus/Controller trực tiếp hoặc override sâu hơn).
+- **Giải pháp**: Để intercept tin nhắn outbound từ Discuss chính xác nhất, hãy override `message_post` trên model `discuss.channel`.
+  ```python
+  class DiscussChannel(models.Model):
+      _inherit = 'discuss.channel'
+
+      def message_post(self, **kwargs):
+          # Logic intercept trước khi tạo tin nhắn
+          # ...
+          return super().message_post(**kwargs)
+  ```
+
+12.3. Dependency Declaration Strictness
+- **Lỗi**: `AttributeError: '_unknown' object has no attribute 'id'`
+- **Nguyên nhân**: Truy cập vào model khác (ví dụ `sale.order`) nhưng quên khai báo trong `depends` của manifest. Odoo 18 load model strict hơn, nếu chưa load module `sale`, object `sale.order` sẽ là `_unknown`.
+- **Giải pháp**: Luôn kiểm tra kỹ `depends` trong `__manifest__.py`.
+  ```python
+  'depends': ['base', 'mail', 'sale'], # Thêm 'sale' nếu dùng sale.order
+  ```
+
+12.4. Concurrent Update Errors
+- **Lỗi**: `TransactionRollbackError: could not serialize access due to concurrent update`
+- **Nguyên nhân**: Cập nhật cùng một bản ghi cha (Parent Record) nhiều lần từ các bản ghi con (Child Records) trong cùng một transaction song song (ví dụ: tính toán `last_message_date` trên Conversation khi gửi 2 tin nhắn cùng lúc).
+- **Giải pháp**: 
+  - Hạn chế tối đa việc write ngược lại Parent trong vòng lặp create của Child. 
+  - Sử dụng computed fields `store=True` cẩn thận với trigger phù hợp.

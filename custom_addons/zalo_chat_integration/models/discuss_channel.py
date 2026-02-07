@@ -127,7 +127,11 @@ class DiscussChannel(models.Model):
         """
         Override to prevent auto-adding author to chat channels
         when posting messages (which causes 'too many members' error)
+        
+        Also intercept outbound messages to send via Zalo API
         """
+        _logger.info(f'[ZALO DEBUG] discuss.channel.message_post called for channel {self.id}, type={self.channel_type}')
+        
         # For chat type channels (1-to-1), disable auto-adding author
         if self.channel_type == 'chat':
             # Check if we're trying to post from a partner not in the channel
@@ -144,6 +148,89 @@ class DiscussChannel(models.Model):
                     # Post as system message instead (no author)
                     kwargs['author_id'] = False
         
+        # INTERCEPT OUTBOUND MESSAGES (Re-implementation for Odoo 18)
+        try:
+            # Check context to avoid recursion
+            if not self.env.context.get('skip_zalo_sync'):
+                
+                # Check if Live Chat Channel linked to Zalo
+                if self.channel_type == 'livechat' and self.livechat_channel_id:
+                    _logger.info(f'[ZALO DEBUG] Channel {self.id} is livechat, linked to {self.livechat_channel_id.id}')
+                    
+                    oa_config = self.env['zalo.oa.config'].sudo().search([
+                        ('livechat_channel_id', '=', self.livechat_channel_id.id)
+                    ], limit=1)
+                    
+                    if oa_config:
+                        _logger.info(f'[ZALO DEBUG] Found OA Config {oa_config.oa_name} for channel {self.id}')
+                        
+                        message_body = kwargs.get('body')
+                        # Filtering: Only send 'comment' messages, SKIP 'notification'
+                        message_type = kwargs.get('message_type', 'comment')
+                        if message_type != 'comment':
+                            _logger.info(f'[ZALO DEBUG] Skipping outbound message type: {message_type}')
+                            return super(DiscussChannel, self).message_post(**kwargs)
+
+                        # Filtering: Block specific system keywords if any leaked as comment
+                        if message_body and 'Đã tạo báo giá' in str(message_body):
+                             _logger.info(f'[ZALO DEBUG] Skipping Quote Creation notification')
+                             return super(DiscussChannel, self).message_post(**kwargs)
+                             
+                        # author_id might be in kwargs or from context
+                        author_id = kwargs.get('author_id') or self.env.user.partner_id.id
+                        
+                        _logger.info(f'[ZALO DEBUG] Body: {bool(message_body)}, Author: {author_id}')
+                        
+                        if message_body:
+                            # Find Zalo Conversation
+                            # We need to find the partner who is NOT the author (the customer)
+                            # But wait, in Live Chat, the customer is in channel_partner_ids
+                            
+                            target_partner = False
+                            for partner in self.channel_partner_ids:
+                                if partner.id != author_id:
+                                    target_partner = partner
+                                    break
+                            
+                            if target_partner:
+                                _logger.info(f'[ZALO DEBUG] Identified target partner: {target_partner.name} ({target_partner.id})')
+                                
+                                conv = self.env['zalo.chat.conversation'].sudo().search([
+                                    ('partner_id', '=', target_partner.id)
+                                ], limit=1)
+                                
+                                if conv:
+                                    _logger.info(f'[ZALO DEBUG] Found conversation {conv.id}. Preparing to send...')
+                                    
+                                    plain_text = tools.html2plaintext(message_body)
+                                    if plain_text and plain_text.strip():
+                                        zalo_message = self.env['zalo.chat.message'].sudo().create({
+                                            'conversation_id': conv.id,
+                                            'direction': 'outbound',
+                                            'message_type': 'text',
+                                            'content': plain_text,
+                                            'state': 'draft',
+                                        })
+                                        
+                                        _logger.info(f'[ZALO OUTBOUND] Created message {zalo_message.id}, sending...')
+                                        zalo_message.action_send()
+                                        _logger.info(f'[ZALO OUTBOUND] Sent successfully.')
+                                    else:
+                                        _logger.info(f'[ZALO DEBUG] Empty plain text, skipping.')
+                                else:
+                                    _logger.warning(f'[ZALO DEBUG] No Zalo conversation found for partner {target_partner.name}')
+                            else:
+                                _logger.warning(f'[ZALO DEBUG] Could not identify target partner in channel {self.id}')
+                    else:
+                        _logger.info(f'[ZALO DEBUG] No OA Config found for livechat_channel_id {self.livechat_channel_id.id}')
+                else:
+                    # Also support legacy 'chat' type if it matches conversation
+                    # (Optional, but good for backup)
+                    pass
+
+        except Exception as e:
+            _logger.error(f'[ZALO ERROR] Error in message_post intercept: {str(e)}', exc_info=True)
+
         return super(DiscussChannel, self).message_post(**kwargs)
     
     def notify_typing(self, is_typing):
@@ -232,6 +319,80 @@ class DiscussChannel(models.Model):
         except Exception as e:
             raise UserError(_(f"Lỗi khi gọi GPT: {str(e)}"))
 
+
+    def _find_product_by_name_smart(self, product_name, chat_context, config):
+        """
+        Smart product search using Odoo Search + GPT Disambiguation (Enhanced)
+        """
+        Product = self.env['product.product']
+        
+        # 1. Broad search in Odoo (Increased limit to capture variants/combos)
+        candidates = Product.search([
+            '|', ('name', 'ilike', product_name), ('default_code', 'ilike', product_name)
+        ], limit=20)
+        
+        if not candidates:
+            return None
+            
+        if len(candidates) == 1:
+            return candidates[0]
+            
+        # 2. Too many results, use GPT to disambiguate
+        # Prepare rich candidate list
+        candidate_list = []
+        for p in candidates:
+            info = (
+                f"- ID: {p.id}\n"
+                f"  Name: {p.name}\n"
+                f"  Code: {p.default_code or 'N/A'}\n"
+                f"  Category: {p.categ_id.name}\n"
+                f"  Price: {p.lst_price:,.0f}\n"
+                f"  Type: {p.detailed_type}\n"
+                f"  Stock: {p.qty_available}"
+            )
+            candidate_list.append(info)
+            
+        candidates_str = "\n".join(candidate_list)
+        
+        prompt = [
+            {"role": "system", "content": """You are an expert Sales Assistant. Your job is to select the EXACT product ID from a list of candidates that matches the user's intent.
+Rules:
+1. Analyze the 'Chat Context' to understand what the user wants (e.g., specific variant, combo, or accessory).
+   - If user asks for "Combo", select the product with Category 'Combo' or similar name.
+   - If user asks for specific model (e.g. FPD3), prefer the main product over accessories, unless context implies otherwise.
+2. Check 'Code' and 'Name' closely.
+3. If multiple similar products exist, prefer the one with positive Stock if context is ambiguous.
+4. Return ONLY the ID number (integer). If uncertain/none match, return 0.
+"""},
+            {"role": "user", "content": f"""
+User Request Item: '{product_name}'
+Chat Context:
+'''
+{chat_context}
+'''
+
+Candidates:
+{candidates_str}
+
+Select ID:"""}
+        ]
+        
+        try:
+            response = config._get_gpt_response(prompt)
+            # Cleanup non-digit characters just in case
+            import re
+            cleaned_id = re.sub(r'\D', '', response)
+            if cleaned_id:
+                selected_id = int(cleaned_id)
+                if selected_id == 0:
+                    return None
+                return candidates.filtered(lambda p: p.id == selected_id)
+        except Exception as e:
+            _logger.warning(f"Smart search GPT error: {e}")
+            
+        # Fallback: return the first result
+        return candidates[0]
+
     def action_gpt_create_quote(self):
         """
         Parse chat and create Draft Quotation (Sale Order)
@@ -282,11 +443,6 @@ Nếu không có sản phẩm nào, trả về: {"products": []}
             if not products_data:
                 raise UserError(_("GPT không tìm thấy thông tin sản phẩm nào trong đoạn chat."))
                 
-            # Create Sale Order
-            # Use the partner from the conversation
-            # For 1-on-1 chat, the partner is the 'other' member
-            # Zalo Livechat: channel_partner_ids contains the customer and operators
-            # We assume the external partner (not user) is the customer
             customer = False
             for partner in self.channel_partner_ids:
                 if partner.id != self.env.user.partner_id.id and not partner.user_ids: # Likely the customer
@@ -294,7 +450,6 @@ Nếu không có sản phẩm nào, trả về: {"products": []}
                     break
             
             if not customer:
-                 # Fallback: take any partner that is not current user
                  partners = self.channel_partner_ids.filtered(lambda p: p.id != self.env.user.partner_id.id)
                  if partners:
                      customer = partners[0]
@@ -303,7 +458,6 @@ Nếu không có sản phẩm nào, trả về: {"products": []}
             
             order_lines = []
             Product = self.env['product.product']
-            
             not_found_products = []
             
             for item in products_data:
@@ -311,8 +465,8 @@ Nếu không có sản phẩm nào, trả về: {"products": []}
                 qty = item.get('quantity', 1)
                 note = item.get('note', '')
                 
-                # Search product
-                product = Product.search([('name', 'ilike', p_name)], limit=1)
+                # Use Smart Search
+                product = self._find_product_by_name_smart(p_name, chat_content, config)
                 
                 if product:
                     order_lines.append((0, 0, {
@@ -322,9 +476,6 @@ Nếu không có sản phẩm nào, trả về: {"products": []}
                     }))
                 else:
                     not_found_products.append(p_name)
-                    # Add as a section/note or dummy? 
-                    # Let's Skip and warn, OR create a line without product if allowed (usually not for stock)
-                    # We will create a note line
                     order_lines.append((0, 0, {
                         'display_type': 'line_note',
                         'name': f"Sản phẩm chưa tìm thấy mã: {p_name} (SL: {qty})",
@@ -339,18 +490,18 @@ Nếu không có sản phẩm nào, trả về: {"products": []}
             
             sale_order = self.env['sale.order'].create(vals)
             
-            msg = f"✅ **Đã tạo Báo giá nháp:** {sale_order.name}\n"
+            # Simple message without complex CSS
+            msg = f"Đã tạo báo giá: {sale_order.name}"
             if not_found_products:
-                msg += f"⚠️ **Không tìm thấy SP:** {', '.join(not_found_products)}"
+                msg += f" (Không tìm thấy: {', '.join(not_found_products)})"
                 
-            # Post link to SO
+            # Post as plain notification
             self.message_post(
-                body=Markup(msg),
+                body=msg,  # Plain text body, Odoo will handle simple rendering
                 message_type='notification',
                 subtype_xmlid='mail.mt_note'
             )
             
-            # Open the SO
             return {
                 'type': 'ir.actions.act_window',
                 'res_model': 'sale.order',
