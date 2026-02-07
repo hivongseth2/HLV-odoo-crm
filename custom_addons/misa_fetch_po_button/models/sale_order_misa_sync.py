@@ -617,7 +617,7 @@ class SaleOrder(models.Model):
             'name': order_no,
             'partner_id': partner.id,
             'origin': origin,
-            'warehouse_id': old_wh.id or False,
+            'warehouse_id': old_wh.id if old_wh else False,
             'misa_id': str(misa_order_id) if misa_order_id else False,
             'partner_shipping_id': shipping_id,
             'partner_invoice_id': shipping_id,
