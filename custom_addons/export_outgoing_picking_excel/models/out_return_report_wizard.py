@@ -195,19 +195,7 @@ class OutReturnReportWizard(models.TransientModel):
                             'out_qty': out_qty,
                             'return_qty': return_qty,
                         })
-            else:
-                # Không có trả hàng - chỉ tạo 1 dòng tổng hợp
-                lines_data.append({
-                    'wizard_id': self.id,
-                    'out_picking_id': out_picking.id,
-                    'out_picking_name': out_picking.name,
-                    'out_picking_date': out_picking.date_done,
-                    'partner_id': out_picking.partner_id.id if out_picking.partner_id else False,
-                    'partner_name': out_picking.partner_id.name if out_picking.partner_id else '',
-                    'out_qty_total': out_qty_total,
-                    'has_return': False,
-                    'return_qty_total': 0,
-                })
+
         
         # Tạo các dòng báo cáo
         self.env["out.return.report.line"].create(lines_data)
