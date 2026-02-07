@@ -223,86 +223,90 @@ class OutReturnReportWizard(models.TransientModel):
         
         wb = Workbook()
         
-        # ===== SHEET 1: TỔNG HỢP =====
-        ws1 = wb.active
-        ws1.title = "Tổng hợp"
-        
-        columns1 = [
-            {'key': 'stt', 'name': 'STT', 'width': 8},
-            {'key': 'out_picking_name', 'name': 'Mã phiếu xuất', 'width': 18},
-            {'key': 'out_picking_date', 'name': 'Ngày xuất', 'width': 18},
-            {'key': 'partner_name', 'name': 'Khách hàng', 'width': 30},
-            {'key': 'out_qty_total', 'name': 'Tổng SL xuất', 'width': 15},
-            {'key': 'has_return', 'name': 'Có trả hàng', 'width': 12},
-            {'key': 'return_count', 'name': 'Số phiếu trả', 'width': 12},
-            {'key': 'return_qty_total', 'name': 'Tổng SL trả', 'width': 15},
-        ]
-        
-        # Styles
-        header_font = Font(name='Arial', size=10, bold=True, color='FFFFFF')
-        header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+        # Styles đơn giản (không màu nền)
+        header_font = Font(name='Arial', size=10, bold=True)
         header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        date_alignment = Alignment(horizontal='center', vertical='center')
         border_side = Side(style='thin', color='000000')
         border = Border(left=border_side, right=border_side, top=border_side, bottom=border_side)
+        
+        # ===== SHEET 1: CHI TIẾT PHIẾU XUẤT (OUT) =====
+        ws1 = wb.active
+        ws1.title = "Chi tiết phiếu xuất"
+        
+        columns1 = [
+            {'key': 'stt', 'name': 'STT', 'width': 5},
+            {'key': 'out_picking_name', 'name': 'Mã phiếu xuất', 'width': 15},
+            {'key': 'out_picking_date', 'name': 'Ngày xuất', 'width': 15},
+            {'key': 'partner_name', 'name': 'Khách hàng', 'width': 25},
+            {'key': 'product_code', 'name': 'Mã SP', 'width': 15},
+            {'key': 'product_name', 'name': 'Tên SP', 'width': 40},
+            {'key': 'product_uom', 'name': 'ĐVT', 'width': 8},
+            {'key': 'out_qty', 'name': 'SL xuất', 'width': 10},
+            {'key': 'has_return', 'name': 'Có trả lại', 'width': 10},
+        ]
         
         # Header Sheet 1
         for col_idx, col_def in enumerate(columns1, start=1):
             cell = ws1.cell(row=1, column=col_idx)
             cell.value = col_def['name']
             cell.font = header_font
-            cell.fill = header_fill
             cell.alignment = header_alignment
             cell.border = border
             ws1.column_dimensions[get_column_letter(col_idx)].width = col_def['width']
         
-        # Data Sheet 1 - Group by OUT picking
-        out_pickings_seen = {}
-        for line in self.line_ids:
-            if line.out_picking_id.id not in out_pickings_seen:
-                out_pickings_seen[line.out_picking_id.id] = {
-                    'out_picking_name': line.out_picking_name,
-                    'out_picking_date': line.out_picking_date,
-                    'partner_name': line.partner_name,
-                    'out_qty_total': line.out_qty_total,
-                    'has_return': line.has_return,
-                    'return_pickings': set(),
-                    'return_qty_total': 0,
-                }
-            if line.return_picking_id:
-                out_pickings_seen[line.out_picking_id.id]['return_pickings'].add(line.return_picking_name)
-                out_pickings_seen[line.out_picking_id.id]['return_qty_total'] += line.return_qty
+        # Data Sheet 1: Liệt kê chi tiết từng dòng sản phẩm của phiếu OUT
+        # Vì line_ids hiện tại lưu trữ theo cặp (OUT + Return), ta cần lấy unique các dòng OUT
+        # Tuy nhiên, cấu trúc line_ids hiện tại là:
+        # - Nếu có return: 1 dòng cho mỗi sản phẩm trả (kèm thông tin OUT)
+        # - Nếu logic cũ (đã bỏ): 1 dòng tổng hợp nếu không có return
+        
+        # LOGIC MỚI CHO SHEET 1: Cần liệt kê TẤT CẢ sản phẩm trong các phiếu OUT tìm được
+        # Nhưng report_line hiện tại chỉ lưu các dòng CÓ return (do filter ở step trước)
+        # Để chính xác, ta nên query lại các phiếu OUT trong self.line_ids để lấy full chi tiết sản phẩm của nó
+        
+        # Lấy danh sách các phiếu OUT có trong báo cáo (đã lọc có return)
+        out_picking_ids = self.line_ids.mapped('out_picking_id')
         
         row_idx = 2
         stt = 1
-        for data in out_pickings_seen.values():
-            ws1.cell(row=row_idx, column=1).value = stt
-            ws1.cell(row=row_idx, column=2).value = data['out_picking_name']
-            ws1.cell(row=row_idx, column=3).value = data['out_picking_date'].strftime('%d/%m/%Y %H:%M') if data['out_picking_date'] else ''
-            ws1.cell(row=row_idx, column=4).value = data['partner_name']
-            ws1.cell(row=row_idx, column=5).value = data['out_qty_total']
-            ws1.cell(row=row_idx, column=6).value = 'Có' if data['has_return'] else 'Không'
-            ws1.cell(row=row_idx, column=7).value = len(data['return_pickings'])
-            ws1.cell(row=row_idx, column=8).value = data['return_qty_total']
-            
-            for col in range(1, 9):
-                ws1.cell(row=row_idx, column=col).border = border
-            
-            row_idx += 1
-            stt += 1
         
-        # ===== SHEET 2: CHI TIẾT TRẢ HÀNG =====
-        ws2 = wb.create_sheet("Chi tiết trả hàng")
+        # Duyệt qua từng phiếu OUT để lấy chi tiết move_ids (lines sản phẩm)
+        for out_picking in out_picking_ids:
+            for move in out_picking.move_ids:
+                 # Check xem phiếu này có trả hàng không (theo dữ liệu báo cáo)
+                has_return = any(l.out_picking_id.id == out_picking.id and l.has_return for l in self.line_ids)
+                
+                ws1.cell(row=row_idx, column=1).value = stt
+                ws1.cell(row=row_idx, column=2).value = out_picking.name
+                ws1.cell(row=row_idx, column=3).value = out_picking.date_done.strftime('%d/%m/%Y') if out_picking.date_done else ''
+                ws1.cell(row=row_idx, column=3).alignment = date_alignment
+                ws1.cell(row=row_idx, column=4).value = out_picking.partner_id.name or ''
+                ws1.cell(row=row_idx, column=5).value = move.product_id.default_code or ''
+                ws1.cell(row=row_idx, column=6).value = move.product_id.name
+                ws1.cell(row=row_idx, column=7).value = move.product_uom.name
+                ws1.cell(row=row_idx, column=8).value = move.quantity_done if hasattr(move, 'quantity_done') else move.product_uom_qty
+                ws1.cell(row=row_idx, column=9).value = 'Có' if has_return else 'Không'
+                
+                for col in range(1, 10):
+                    ws1.cell(row=row_idx, column=col).border = border
+                
+                row_idx += 1
+                stt += 1
+
+        # ===== SHEET 2: CHI TIẾT PHIẾU TRẢ (RETURN) =====
+        ws2 = wb.create_sheet("Chi tiết phiếu trả")
         
         columns2 = [
-            {'key': 'stt', 'name': 'STT', 'width': 8},
-            {'key': 'out_picking_name', 'name': 'Mã phiếu xuất', 'width': 18},
-            {'key': 'return_picking_name', 'name': 'Mã phiếu trả', 'width': 18},
-            {'key': 'return_picking_date', 'name': 'Ngày trả', 'width': 18},
+            {'key': 'stt', 'name': 'STT', 'width': 5},
+            {'key': 'out_picking_name', 'name': 'Mã phiếu xuất gốc', 'width': 15},
+            {'key': 'return_picking_name', 'name': 'Mã phiếu trả', 'width': 15},
+            {'key': 'return_picking_date', 'name': 'Ngày trả', 'width': 15},
+            {'key': 'partner_name', 'name': 'Khách hàng', 'width': 25},
             {'key': 'product_code', 'name': 'Mã SP', 'width': 15},
-            {'key': 'product_name', 'name': 'Tên SP', 'width': 35},
-            {'key': 'product_uom', 'name': 'ĐVT', 'width': 10},
-            {'key': 'out_qty', 'name': 'SL xuất', 'width': 12},
-            {'key': 'return_qty', 'name': 'SL trả', 'width': 12},
+            {'key': 'product_name', 'name': 'Tên SP', 'width': 40},
+            {'key': 'product_uom', 'name': 'ĐVT', 'width': 8},
+            {'key': 'return_qty', 'name': 'SL trả', 'width': 10},
         ]
         
         # Header Sheet 2
@@ -310,23 +314,30 @@ class OutReturnReportWizard(models.TransientModel):
             cell = ws2.cell(row=1, column=col_idx)
             cell.value = col_def['name']
             cell.font = header_font
-            cell.fill = header_fill
             cell.alignment = header_alignment
             cell.border = border
             ws2.column_dimensions[get_column_letter(col_idx)].width = col_def['width']
         
-        # Data Sheet 2 - Chỉ các dòng có trả hàng
+        # Data Sheet 2: Dùng trực tiếp dữ liệu từ self.line_ids (đã chứa chi tiết product trả)
         row_idx = 2
         stt = 1
-        for line in self.line_ids.filtered(lambda l: l.has_return):
+        
+        # Sắp xếp lại cho đẹp: theo ngày trả giảm dần
+        sorted_lines = self.line_ids.sorted(key=lambda r: r.return_picking_date, reverse=True)
+        
+        for line in sorted_lines:
+            if not line.has_return:
+                continue
+                
             ws2.cell(row=row_idx, column=1).value = stt
             ws2.cell(row=row_idx, column=2).value = line.out_picking_name
             ws2.cell(row=row_idx, column=3).value = line.return_picking_name
-            ws2.cell(row=row_idx, column=4).value = line.return_picking_date.strftime('%d/%m/%Y %H:%M') if line.return_picking_date else ''
-            ws2.cell(row=row_idx, column=5).value = line.product_code
-            ws2.cell(row=row_idx, column=6).value = line.product_name
-            ws2.cell(row=row_idx, column=7).value = line.product_uom
-            ws2.cell(row=row_idx, column=8).value = line.out_qty
+            ws2.cell(row=row_idx, column=4).value = line.return_picking_date.strftime('%d/%m/%Y') if line.return_picking_date else ''
+            ws2.cell(row=row_idx, column=4).alignment = date_alignment
+            ws2.cell(row=row_idx, column=5).value = line.partner_name
+            ws2.cell(row=row_idx, column=6).value = line.product_code
+            ws2.cell(row=row_idx, column=7).value = line.product_name
+            ws2.cell(row=row_idx, column=8).value = line.product_uom
             ws2.cell(row=row_idx, column=9).value = line.return_qty
             
             for col in range(1, 10):
