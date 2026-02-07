@@ -237,6 +237,7 @@ class OutReturnReportWizard(models.TransientModel):
         columns1 = [
             {'key': 'stt', 'name': 'STT', 'width': 5},
             {'key': 'out_picking_name', 'name': 'Mã phiếu xuất', 'width': 15},
+            {'key': 'origin', 'name': 'Mã báo giá', 'width': 15},
             {'key': 'out_picking_date', 'name': 'Ngày xuất', 'width': 15},
             {'key': 'partner_name', 'name': 'Khách hàng', 'width': 25},
             {'key': 'product_code', 'name': 'Mã SP', 'width': 15},
@@ -279,16 +280,17 @@ class OutReturnReportWizard(models.TransientModel):
                 
                 ws1.cell(row=row_idx, column=1).value = stt
                 ws1.cell(row=row_idx, column=2).value = out_picking.name
-                ws1.cell(row=row_idx, column=3).value = out_picking.date_done.strftime('%d/%m/%Y') if out_picking.date_done else ''
-                ws1.cell(row=row_idx, column=3).alignment = date_alignment
-                ws1.cell(row=row_idx, column=4).value = out_picking.partner_id.name or ''
-                ws1.cell(row=row_idx, column=5).value = move.product_id.default_code or ''
-                ws1.cell(row=row_idx, column=6).value = move.product_id.name
-                ws1.cell(row=row_idx, column=7).value = move.product_uom.name
-                ws1.cell(row=row_idx, column=8).value = move.quantity_done if hasattr(move, 'quantity_done') else move.product_uom_qty
-                ws1.cell(row=row_idx, column=9).value = 'Có' if has_return else 'Không'
+                ws1.cell(row=row_idx, column=3).value = out_picking.origin or ''
+                ws1.cell(row=row_idx, column=4).value = out_picking.date_done.strftime('%d/%m/%Y') if out_picking.date_done else ''
+                ws1.cell(row=row_idx, column=4).alignment = date_alignment
+                ws1.cell(row=row_idx, column=5).value = out_picking.partner_id.name or ''
+                ws1.cell(row=row_idx, column=6).value = move.product_id.default_code or ''
+                ws1.cell(row=row_idx, column=7).value = move.product_id.name
+                ws1.cell(row=row_idx, column=8).value = move.product_uom.name
+                ws1.cell(row=row_idx, column=9).value = move.quantity_done if hasattr(move, 'quantity_done') else move.product_uom_qty
+                ws1.cell(row=row_idx, column=10).value = 'Có' if has_return else 'Không'
                 
-                for col in range(1, 10):
+                for col in range(1, 11):
                     ws1.cell(row=row_idx, column=col).border = border
                 
                 row_idx += 1
