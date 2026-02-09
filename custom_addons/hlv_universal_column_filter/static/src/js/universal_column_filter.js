@@ -14,6 +14,7 @@ const ENABLED_MODELS = [
     'sale.order',
     'hlv.undelivered.report',
     'purchase.request',
+    'out.return.report.line',
 ];
 
 // Config cho product search - model -> order line field và product field path
