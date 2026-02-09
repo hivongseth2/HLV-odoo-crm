@@ -12,7 +12,8 @@ const ENABLED_MODELS = [
     'purchase.order',
     'stock.picking',
     'sale.order',
-    'hlv.undelivered.report'
+    'hlv.undelivered.report',
+    'out.return.report.line',
 ];
 
 function toUTCDateTime(dateStr, timeStr) {

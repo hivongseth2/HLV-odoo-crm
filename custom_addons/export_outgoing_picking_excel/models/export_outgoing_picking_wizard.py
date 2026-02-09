@@ -48,6 +48,22 @@ class PickingExportWizard(models.TransientModel):
         if code == "TSNSR":
             return "HCM_SHOWROOM"
         return code
+    
+    def _get_warehouse_name_vietnamese(self, code):
+        """Map warehouse code to Vietnamese name for POS CRM export"""
+        mapping = {
+            "KBC": "BẾN CAM",
+            "BENCAM": "BẾN CAM",
+            "TSN": "HCM",
+            "HCM": "HCM",
+            "KHD": "HIỀN ĐỨC",
+            "HIENDUC": "HIỀN ĐỨC",
+            "TSNSR": "HCM",
+            "HCM_SHOWROOM": "HCM",
+            "DNA": "ĐÀ NẴNG",
+            "DANANG": "ĐÀ NẴNG",
+        }
+        return mapping.get(code, code)
     _name = "picking.export.wizard"
     _description = "Xuất Excel lệnh xuất kho theo template kế toán"
 
@@ -231,9 +247,6 @@ class PickingExportWizard(models.TransientModel):
             return sol_product.default_code or ''
             
         return ''
-
-
-
 
     def _get_move_line_rows(self, picking):
         rows = []
@@ -1056,24 +1069,30 @@ class PickingExportWizard(models.TransientModel):
                     if "tiền mặt" in payment_method_lower and not is_multiple:
                         ma_khach_hang = "KH27182013179"
                         phuong_thuc_excel = "Thu tiền ngay - Tiền mặt"
+                        partner_name = "KHÁCH CH BẾN CAM TT TIỀN MẶT"
                     elif "chuyển khoản" in payment_method_lower and not is_multiple:
                         ma_khach_hang = "KH27182013178"
                         phuong_thuc_excel = "Thu tiền ngay - Chuyển khoản"
+                        partner_name = "KHÁCH CH BẾN CAM TT CHUYỂN KHOẢN"
                     elif is_multiple:
                         ma_khach_hang = "KHACHLE-BC"
                         phuong_thuc_excel = "Chưa thu tiền"
+                        partner_name = "KHÁCH LẺ CỬA HÀNG BẾN CAM"
                 
                 # Mapping for TSN (HCM)
                 elif warehouse_code in ["TSN", "HCM"]:
                     if "tiền mặt" in payment_method_lower and not is_multiple:
                         ma_khach_hang = "KH27182013176"
                         phuong_thuc_excel = "Thu tiền ngay - Tiền mặt"
+                        partner_name = "KHÁCH GHÉ VP HCM TT TIỀN MẶT"
                     elif "chuyển khoản" in payment_method_lower and not is_multiple:
                         ma_khach_hang = "KH27182013177"
                         phuong_thuc_excel = "Thu tiền ngay - Chuyển khoản"
+                        partner_name = "KHÁCH GHÉ VP HCM TT CHUYỂN KHOẢN"
                     elif is_multiple:
                         ma_khach_hang = "KHACHLE-HCM"
                         phuong_thuc_excel = "Chưa thu tiền"
+                        partner_name = "KHÁCH LẺ VP HCM"
 
                 # Build row dict
                 row = {
@@ -1212,24 +1231,30 @@ class PickingExportWizard(models.TransientModel):
                 if "tiền mặt" in payment_method_lower and not is_multiple:
                     ma_khach_hang = "KH27182013179"
                     phuong_thuc_excel = "Thu tiền ngay - Tiền mặt"
+                    partner_name = "KHÁCH CH BẾN CAM TT TIỀN MẶT"
                 elif "chuyển khoản" in payment_method_lower and not is_multiple:
                     ma_khach_hang = "KH27182013178"
                     phuong_thuc_excel = "Thu tiền ngay - Chuyển khoản"
+                    partner_name = "KHÁCH CH BẾN CAM TT CHUYỂN KHOẢN"
                 elif is_multiple:
                     ma_khach_hang = "KHACHLE-BC"
                     phuong_thuc_excel = "Chưa thu tiền"
+                    partner_name = "KHÁCH LẺ CỬA HÀNG BẾN CAM"
             
             # Mapping for TSN (HCM)
             elif warehouse_code in ["TSN", "HCM"]:
                 if "tiền mặt" in payment_method_lower and not is_multiple:
                     ma_khach_hang = "KH27182013176"
                     phuong_thuc_excel = "Thu tiền ngay - Tiền mặt"
+                    partner_name = "KHÁCH GHÉ VP HCM TT TIỀN MẶT"
                 elif "chuyển khoản" in payment_method_lower and not is_multiple:
                     ma_khach_hang = "KH27182013177"
                     phuong_thuc_excel = "Thu tiền ngay - Chuyển khoản"
+                    partner_name = "KHÁCH GHÉ VP HCM TT CHUYỂN KHOẢN"
                 elif is_multiple:
                     ma_khach_hang = "KHACHLE-HCM"
                     phuong_thuc_excel = "Chưa thu tiền"
+                    partner_name = "KHÁCH LẺ VP HCM"
 
             # Start building dict based on NEW columns
             row = {
@@ -1393,6 +1418,423 @@ class PickingExportWizard(models.TransientModel):
             "res_id": self.id,
         })
 
+        return {
+            "type": "ir.actions.act_url",
+            "url": f"/web/content/{attachment.id}?download=true",
+            "target": "self",
+        }
+
+    # ====== POS CRM EXPORT METHODS ======
+    
+    def _get_pos_crm_columns_sheet1(self):
+        """Định nghĩa 49 cột cho Sheet 1: Nhập khẩu Đơn hàng"""
+        return [
+            {'key': 'su_dung_ngoai_te', 'name': 'Sử dụng ngoại tệ', 'width': 18},
+            {'key': 'loai_tien', 'name': 'Loại tiền', 'width': 12},
+            {'key': 'ty_gia', 'name': 'Tỷ giá', 'width': 12},
+            {'key': 'so_don_hang', 'name': 'Số đơn hàng (*)', 'width': 20},
+            {'key': 'ngay_dat_hang', 'name': 'Ngày đặt hàng (*)', 'width': 20},
+            {'key': 'khach_hang', 'name': 'Khách hàng', 'width': 30},
+            {'key': 'lien_he', 'name': 'Liên hệ', 'width': 25},
+            {'key': 'don_hang_cha', 'name': 'Đơn hàng cha', 'width': 20},
+            {'key': 'co_hoi', 'name': 'Cơ hội', 'width': 20},
+            {'key': 'gia_tri_don_hang', 'name': 'Giá trị đơn hàng (*)', 'width': 18},
+            {'key': 'bao_gia', 'name': 'Báo giá', 'width': 20},
+            {'key': 'khach_tt_truoc', 'name': 'Khách TT trước', 'width': 18},
+            {'key': 'loai_don_hang', 'name': 'Loại đơn hàng', 'width': 20},
+            {'key': 'so_ngay_duoc_no', 'name': 'Số ngày được nợ', 'width': 18},
+            {'key': 'han_giao_hang', 'name': 'Hạn giao hàng (*)', 'width': 20},
+            {'key': 'han_thanh_toan', 'name': 'Hạn thanh toán (*)', 'width': 20},
+            {'key': 'dien_giai', 'name': 'Diễn giải', 'width': 40},
+            {'key': 'tinh_trang_kh', 'name': 'Tình trạng KH (*)', 'width': 20},
+            {'key': 'tinh_trang', 'name': 'Tình trạng (*)', 'width': 20},
+            {'key': 'ngay_ghi_so', 'name': 'Ngày ghi sổ', 'width': 20},
+            {'key': 'thuc_thu', 'name': 'Thực thu', 'width': 15},
+            {'key': 'tinh_trang_giao_hang', 'name': 'Tình trạng giao hàng', 'width': 22},
+            {'key': 'du_kien_chi', 'name': 'Dự kiến chi', 'width': 15},
+            {'key': 'tinh_trang_thanh_toan', 'name': 'Tình trạng thanh toán', 'width': 22},
+            {'key': 'han_san_xuat', 'name': 'Hạn sản xuất', 'width': 18},
+            {'key': 'da_xuat_hoa_don', 'name': 'Đã xuất hóa đơn', 'width': 18},
+            {'key': 'khach_hang_hoa_don', 'name': 'Khách hàng (Hóa đơn)', 'width': 30},
+            {'key': 'nguoi_mua_hang', 'name': 'Người mua hàng', 'width': 30},
+            {'key': 'quoc_gia_hoa_don', 'name': 'Quốc gia (Hóa đơn)', 'width': 20},
+            {'key': 'tinh_thanh_pho_hoa_don', 'name': 'Tỉnh/Thành phố (Hóa đơn)', 'width': 25},
+            {'key': 'quan_huyen_hoa_don', 'name': 'Quận/Huyện (Hóa đơn)', 'width': 25},
+            {'key': 'phuong_xa_hoa_don', 'name': 'Phường/Xã (Hóa đơn)', 'width': 25},
+            {'key': 'so_nha_duong_pho_hoa_don', 'name': 'Số nhà, Đường phố (Hóa đơn)', 'width': 35},
+            {'key': 'ma_vung_hoa_don', 'name': 'Mã vùng (Hóa đơn)', 'width': 18},
+            {'key': 'dia_chi_hoa_don', 'name': 'Địa chỉ (Hóa đơn)', 'width': 50},
+            {'key': 'nguoi_nhan_hang', 'name': 'Người nhận hàng', 'width': 30},
+            {'key': 'dien_thoai', 'name': 'Điện thoại', 'width': 18},
+            {'key': 'dia_chi_giao_hang', 'name': 'Địa chỉ (Giao hàng)', 'width': 50},
+            {'key': 'nhan_vien_kho', 'name': 'Nhân viên kho', 'width': 25},
+            {'key': 'hinh_thuc_giao_hang', 'name': 'Hình thức giao hàng', 'width': 22},
+            {'key': 'ngay_giao_du_kien', 'name': 'Ngày giao dự kiến', 'width': 20},
+            {'key': 'ben_tra_phi_van_chuyen', 'name': 'Bên trả phí vận chuyển', 'width': 25},
+            {'key': 'hinh_thuc_thanh_toan', 'name': 'Hình thức thanh toán', 'width': 22},
+            {'key': 'mo_ta', 'name': 'Mô tả', 'width': 40},
+            {'key': 'nguoi_thuc_hien', 'name': 'Người thực hiện', 'width': 25},
+            {'key': 'dung_chung', 'name': 'Dùng chung', 'width': 15},
+            {'key': 'ngung_theo_doi', 'name': 'Ngừng theo dõi', 'width': 18},
+            {'key': 'doi_tac_ctv_gioi_thieu', 'name': 'Đối tác/CTV giới thiệu', 'width': 30},
+            {'key': 'dong_bo_don_gia_sau_ck', 'name': 'Đồng bộ đơn giá sau CK', 'width': 25},
+        ]
+
+    def _get_pos_crm_columns_sheet2(self):
+        """Định nghĩa 18 cột cho Sheet 2: nhập khẩu hàng hóa"""
+        return [
+            {'key': 'ma_hang_hoa', 'name': 'Mã hàng hóa', 'width': 18},
+            {'key': 'dien_giai', 'name': 'Diễn giải', 'width': 40},
+            {'key': 'mo_ta', 'name': 'Mô tả', 'width': 40},
+            {'key': 'kho', 'name': 'Kho (*)', 'width': 15},
+            {'key': 'kho_odoo', 'name': 'Kho Odoo (*)', 'width': 20},
+            {'key': 'tinh_trang_hang', 'name': 'Tình trạng hàng (*)', 'width': 20},
+            {'key': 'don_vi_tinh', 'name': 'Đơn vị tính', 'width': 12},
+            {'key': 'so_luong', 'name': 'Số lượng', 'width': 12},
+            {'key': 'don_gia_sau_thue', 'name': 'Đơn giá sau thuế', 'width': 15},
+            {'key': 'don_gia', 'name': 'Đơn giá', 'width': 15},
+            {'key': 'thanh_tien', 'name': 'Thành tiền', 'width': 15},
+            {'key': 'ty_le_chiet_khau', 'name': 'Tỷ lệ chiết khấu', 'width': 18},
+            {'key': 'tien_chiet_khau', 'name': 'Tiền chiết khấu', 'width': 15},
+            {'key': 'thue_suat', 'name': 'Thuế suất', 'width': 12},
+            {'key': 'tien_thue', 'name': 'Tiền thuế', 'width': 15},
+            {'key': 'tong_tien', 'name': 'Tổng tiền', 'width': 15},
+            {'key': 'don_gia_mua_bat_buoc', 'name': 'Đơn giá mua bắt buộc', 'width': 22},
+            {'key': 'don_hang', 'name': 'Đơn hàng (*)', 'width': 20},
+        ]
+
+    def _get_pos_crm_order_data(self, picking):
+        """
+        Mapping dữ liệu từ picking/POS order sang row Sheet 1 (49 cột)
+        Trả về dict với key tương ứng columns sheet 1
+        """
+        pos_order = getattr(picking, 'pos_order_id', False)
+        partner = picking.partner_id
+        
+        # Dates
+        date_done = picking.date_done or picking.scheduled_date or fields.Datetime.now()
+        date_str = _to_date_str(date_done)
+        scheduled_date_str = _to_date_str(picking.scheduled_date) if picking.scheduled_date else date_str
+        
+        # Order reference - use x_studio_pos_group
+        so_don_hang = picking.x_studio_pos_group or (pos_order and pos_order.name) or picking.name or ''
+        
+        # Partner info
+        partner_name = (partner and partner.name) or ''
+        partner_phone = ''
+        if partner:
+            partner_phone = partner.phone or partner.mobile or ''
+        
+        # Address
+        import unicodedata
+        def normalize_addr(s):
+            s = s.strip().lower()
+            s = unicodedata.normalize('NFD', s)
+            s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')
+            return s
+        
+        dia_chi_giao_hang = ''
+        if partner:
+            parts = []
+            for p in [partner.street, partner.city, partner.state_id.name if partner.state_id else '']:
+                if p:
+                    parts.append(p)
+            dia_chi_giao_hang = ', '.join(parts)
+        
+        # Order amount
+        gia_tri_don_hang = 0.0
+        thuc_thu = 0.0
+        if pos_order:
+            gia_tri_don_hang = pos_order.amount_total or 0.0
+            thuc_thu = pos_order.amount_paid or 0.0
+        
+        # Payment method
+        payment_method = getattr(picking, 'x_studio_pos_payment_method', '') or getattr(picking, 'x_studio_payment_method', '') or ''
+        
+        # Update partner_name based on warehouse and payment method
+        warehouse_code = self._get_warehouse_code(picking)
+        is_multiple = (',' in str(payment_method)) or ("kết hợp" in str(payment_method).lower())
+        payment_method_lower = str(payment_method).lower()
+
+        # Mapping for KBC (BENCAM)
+        if warehouse_code in ["KBC", "BENCAM"]:
+            if "tiền mặt" in payment_method_lower and not is_multiple:
+                partner_name = "KH27182013179"
+            elif "chuyển khoản" in payment_method_lower and not is_multiple:
+                partner_name = "KH27182013178"
+            elif is_multiple:
+                partner_name = "KHACHLE-BC"
+        
+        # Mapping for TSN (HCM)
+        elif warehouse_code in ["TSN", "HCM"]:
+            if "tiền mặt" in payment_method_lower and not is_multiple:
+                partner_name = "KH27182013176"
+            elif "chuyển khoản" in payment_method_lower and not is_multiple:
+                partner_name = "KH27182013177"
+            elif is_multiple:
+                partner_name = "KHACHLE-HCM"
+        
+        # Status
+        tinh_trang_giao_hang = 'Đã giao hàng' if picking.state == 'done' else 'Chưa giao hàng'
+        tinh_trang_thanh_toan = 'Đã thanh toán' if (pos_order and pos_order.state == 'paid') else 'Chưa thanh toán'
+        
+        return {
+            'su_dung_ngoai_te': 'Không',
+            'loai_tien': 'VND',
+            'ty_gia': 1,
+            'so_don_hang': so_don_hang,
+            'ngay_dat_hang': date_str,
+            'khach_hang': partner_name,
+            'lien_he': '',
+            'don_hang_cha': '',
+            'co_hoi': '',
+            'gia_tri_don_hang': gia_tri_don_hang,
+            'bao_gia': '',
+            'khach_tt_truoc': '',
+            'loai_don_hang': '',
+            'so_ngay_duoc_no': 0,
+            'han_giao_hang': date_str,
+            'han_thanh_toan': date_str,
+            'dien_giai': f'Bán hàng POS {partner_name}',
+            'tinh_trang_kh': 'KH mới',
+            'tinh_trang': 'Đang thực hiện',
+            'ngay_ghi_so': date_str,
+            'thuc_thu': thuc_thu,
+            'tinh_trang_giao_hang': tinh_trang_giao_hang,
+            'du_kien_chi': '',
+            'tinh_trang_thanh_toan': tinh_trang_thanh_toan,
+            'han_san_xuat': '',
+            'da_xuat_hoa_don': '',
+            'khach_hang_hoa_don': partner_name,
+            'nguoi_mua_hang': '',
+            'quoc_gia_hoa_don': '',
+            'tinh_thanh_pho_hoa_don': '',
+            'quan_huyen_hoa_don': '',
+            'phuong_xa_hoa_don': '',
+            'so_nha_duong_pho_hoa_don': '',
+            'ma_vung_hoa_don': '',
+            'dia_chi_hoa_don': dia_chi_giao_hang,
+            'nguoi_nhan_hang': partner_name,
+            'dien_thoai': partner_phone,
+            'dia_chi_giao_hang': dia_chi_giao_hang,
+            'nhan_vien_kho': '',
+            'hinh_thuc_giao_hang': '',
+            'ngay_giao_du_kien': scheduled_date_str,
+            'ben_tra_phi_van_chuyen': '',
+            'hinh_thuc_thanh_toan': payment_method,
+            'mo_ta': '',
+            'nguoi_thuc_hien': '',
+            'dung_chung': '',
+            'ngung_theo_doi': '',
+            'doi_tac_ctv_gioi_thieu': '',
+            'dong_bo_don_gia_sau_ck': '',
+        }
+
+    def _get_pos_crm_line_data(self, picking, pos_line):
+        """
+        Mapping dữ liệu từ pos.order.line sang row Sheet 2 (18 cột)
+        pos_line: pos.order.line record
+        Trả về dict với key tương ứng columns sheet 2
+        """
+        pos_order = getattr(picking, 'pos_order_id', False)
+        prod = pos_line.product_id
+        
+        # Order reference (FK to Sheet 1) - use x_studio_pos_group
+        so_don_hang = picking.x_studio_pos_group or (pos_order and pos_order.name) or picking.name or ''
+        
+        # Warehouse
+        raw_warehouse_code = self._get_warehouse_code(picking)
+        warehouse_code_vietnamese = self._get_warehouse_name_vietnamese(raw_warehouse_code)
+        
+        # Product info
+        ma_hang_hoa = prod.default_code or ''
+        ten_hang = prod.display_name or prod.name or ''
+        don_vi_tinh = (prod.uom_id and prod.uom_id.name) or ''
+        
+        # Quantity and prices
+        so_luong = pos_line.qty or 0.0
+        don_gia_sau_thue = pos_line.price_unit or 0.0
+        discount = pos_line.discount or 0.0
+        
+        # Tax
+        thue_suat = 0.0
+        if pos_line.tax_ids_after_fiscal_position:
+            thue_suat = pos_line.tax_ids_after_fiscal_position[0].amount or 0.0
+        
+        # Calculations
+        # Đơn giá (trước thuế) = Đơn giá sau thuế / (1 + thuế suất%)
+        don_gia = don_gia_sau_thue / (1 + thue_suat / 100) if thue_suat else don_gia_sau_thue
+        
+        # Thành tiền (chưa thuế, chưa chiết khấu)
+        thanh_tien_truoc_ck = don_gia * so_luong
+        
+        # Tiền chiết khấu
+        tien_chiet_khau = thanh_tien_truoc_ck * discount / 100
+        
+        # Thành tiền (sau chiết khấu, chưa thuế)
+        thanh_tien = thanh_tien_truoc_ck - tien_chiet_khau
+        
+        # Tiền thuế
+        tien_thue = thanh_tien * thue_suat / 100
+        
+        # Tổng tiền (sau thuế)
+        tong_tien = thanh_tien + tien_thue
+        
+        return {
+            'ma_hang_hoa': ma_hang_hoa,
+            'dien_giai': ten_hang,
+            'mo_ta': '',
+            'kho': 'HLV',
+            'kho_odoo': warehouse_code_vietnamese,
+            'tinh_trang_hang': 'Bình thường',
+            'don_vi_tinh': don_vi_tinh,
+            'so_luong': so_luong,
+            'don_gia_sau_thue': don_gia_sau_thue,
+            'don_gia': don_gia,
+            'thanh_tien': thanh_tien,
+            'ty_le_chiet_khau': discount,
+            'tien_chiet_khau': tien_chiet_khau,
+            'thue_suat': thue_suat,
+            'tien_thue': tien_thue,
+            'tong_tien': tong_tien,
+            'don_gia_mua_bat_buoc': '',
+            'don_hang': so_don_hang,
+        }
+
+    def _create_pos_crm_excel_workbook(self, pickings):
+        """
+        Tạo workbook Excel với 2 sheets theo template SaleOrder_Template_Short.xlsx
+        Sheet 1: Nhập khẩu Đơn hàng (49 cột - 1 row per order)
+        Sheet 2: nhập khẩu hàng hóa (18 cột - multiple rows per order)
+        """
+        wb = Workbook()
+        
+        # Styles
+        header_font = Font(name='Arial', size=10, bold=True)
+        header_fill = PatternFill(start_color='D3D3D3', end_color='D3D3D3', fill_type='solid')
+        header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        border_side = Side(style='thin', color='000000')
+        border = Border(left=border_side, right=border_side, top=border_side, bottom=border_side)
+        cell_alignment = Alignment(horizontal='left', vertical='center', wrap_text=False)
+        number_alignment = Alignment(horizontal='right', vertical='center')
+        
+        # ===== SHEET 1 =====
+        ws1 = wb.active
+        ws1.title = "Nhập khẩu Đơn hàng"
+        columns_s1 = self._get_pos_crm_columns_sheet1()
+        
+        # Header row
+        for col_idx, col_def in enumerate(columns_s1, start=1):
+            cell = ws1.cell(row=1, column=col_idx)
+            cell.value = col_def['name']
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = border
+            ws1.column_dimensions[get_column_letter(col_idx)].width = col_def.get('width', 15)
+        
+        # Data rows - 1 row per picking/POS order
+        current_row = 2
+        for picking in pickings:
+            row_data = self._get_pos_crm_order_data(picking)
+            for col_idx, col_def in enumerate(columns_s1, start=1):
+                cell = ws1.cell(row=current_row, column=col_idx)
+                value = row_data.get(col_def['key'], '')
+                if value is None:
+                    value = ''
+                cell.value = value
+                cell.border = border
+                if isinstance(value, (int, float)) and value != '':
+                    cell.alignment = number_alignment
+                    if 'gia' in col_def['key'] or 'tien' in col_def['key'] or 'thu' in col_def['key']:
+                        cell.number_format = '#,##0'
+                else:
+                    cell.alignment = cell_alignment
+            current_row += 1
+        
+        ws1.row_dimensions[1].height = 30
+        
+        # ===== SHEET 2 =====
+        ws2 = wb.create_sheet(title="nhập khẩu hàng hóa")
+        columns_s2 = self._get_pos_crm_columns_sheet2()
+        
+        # Header row
+        for col_idx, col_def in enumerate(columns_s2, start=1):
+            cell = ws2.cell(row=1, column=col_idx)
+            cell.value = col_def['name']
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = border
+            ws2.column_dimensions[get_column_letter(col_idx)].width = col_def.get('width', 15)
+        
+        # Data rows - multiple rows per picking (1 per pos_line)
+        current_row = 2
+        for picking in pickings:
+            pos_order = getattr(picking, 'pos_order_id', False)
+            if not pos_order:
+                continue
+            
+            for pos_line in pos_order.lines:
+                if not pos_line.product_id:
+                    continue
+                
+                row_data = self._get_pos_crm_line_data(picking, pos_line)
+                for col_idx, col_def in enumerate(columns_s2, start=1):
+                    cell = ws2.cell(row=current_row, column=col_idx)
+                    value = row_data.get(col_def['key'], '')
+                    if value is None:
+                        value = ''
+                    cell.value = value
+                    cell.border = border
+                    if isinstance(value, (int, float)) and value != '':
+                        cell.alignment = number_alignment
+                        if 'so_luong' in col_def['key'] or 'ty_le' in col_def['key'] or 'thue_suat' in col_def['key']:
+                            cell.number_format = '#,##0.00'
+                        elif 'gia' in col_def['key'] or 'tien' in col_def['key']:
+                            cell.number_format = '#,##0'
+                    else:
+                        cell.alignment = cell_alignment
+                current_row += 1
+        
+        ws2.row_dimensions[1].height = 30
+        
+        return wb
+
+    def action_export_pos_crm(self):
+        """Xuất file Excel POS CRM với 2 sheets theo template"""
+        self.ensure_one()
+        if Workbook is None:
+            raise UserError(_("Thiếu thư viện openpyxl. Vui lòng cài đặt 'openpyxl' cho Python."))
+        
+        # Domain tương tự POS export: lọc POS orders
+        domain = self._domain()
+        domain.append('|')
+        domain.append(('x_studio_pos_group', '!=', False))
+        domain.append(('pos_session_id', '!=', False))
+        
+        pickings = self.env["stock.picking"].sudo().search(domain, order="scheduled_date asc, id asc")
+        if not pickings:
+            raise UserError(_("Không tìm thấy phiếu xuất POS nào trong khoảng ngày đã chọn."))
+        
+        # Create workbook
+        wb = self._create_pos_crm_excel_workbook(pickings)
+        
+        # Save to BytesIO
+        out = BytesIO()
+        wb.save(out)
+        out.seek(0)
+        
+        filename = f"POS_CRM_{self.date_from}_{self.date_to}.xlsx"
+        attachment = self.env["ir.attachment"].sudo().create({
+            "name": filename,
+            "type": "binary",
+            "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "datas": base64.b64encode(out.getvalue()),
+            "res_model": "picking.export.wizard",
+            "res_id": self.id,
+        })
+        
         return {
             "type": "ir.actions.act_url",
             "url": f"/web/content/{attachment.id}?download=true",
