@@ -13,6 +13,13 @@ try:
 except ImportError:
     Workbook = None
 
+import logging
+_logger = logging.getLogger(__name__)
+
+import logging
+_logger = logging.getLogger(__name__)
+
+
 
 def _to_date_str(val):
     if not val:
@@ -69,7 +76,11 @@ class StockExportWizard(models.TransientModel):
     def _partner_code(self, partner):
         if not partner:
             return ""
-        return partner.commercial_partner_id.ref or partner.ref or ""
+        # Prioritize Commercial Partner Ref, then Partner Ref
+        ref = partner.commercial_partner_id.ref or partner.ref
+        if ref:
+            return ref
+        return ""
 
     def _find_sale_order(self, move, picking):
         # 1) Từ sale_line_id trực tiếp
@@ -185,8 +196,29 @@ class StockExportWizard(models.TransientModel):
         if so and so.partner_id:
             khach_hang = so.partner_id.name
             # Use SO Partner REF for 'Ma doi tuong' as requested
-            # Use commercial_partner_id because ref usually on parent company
-            partner_code = so.partner_id.commercial_partner_id.ref or so.partner_id.ref or partner_code
+            # Robust check: Commercial Partner -> Parent -> Partner -> Current Value
+            p_ref = False
+            
+            # DEBUG LOG
+            _logger.info(f"DEBUG EXPORT: SO {so.name} - Partner {so.partner_id.name} (ID: {so.partner_id.id})")
+            _logger.info(f"--- Commercial Partner: {so.partner_id.commercial_partner_id.name} (Ref: {so.partner_id.commercial_partner_id.ref})")
+            _logger.info(f"--- Parent: {so.partner_id.parent_id.name if so.partner_id.parent_id else 'None'} (Ref: {so.partner_id.parent_id.ref if so.partner_id.parent_id else 'None'})")
+            _logger.info(f"--- Self Ref: {so.partner_id.ref}")
+
+            # Check Commercial Partner (Company)
+            if so.partner_id.commercial_partner_id and so.partner_id.commercial_partner_id.ref:
+                p_ref = so.partner_id.commercial_partner_id.ref
+            # Check Parent Company directly
+            elif so.partner_id.parent_id and so.partner_id.parent_id.ref:
+                p_ref = so.partner_id.parent_id.ref
+            # Check Partner itself
+            elif so.partner_id.ref:
+                p_ref = so.partner_id.ref
+            
+            if p_ref:
+                partner_code = p_ref
+            else:
+                _logger.info("--- NO REF FOUND!")
         elif partner:
              khach_hang = partner.commercial_partner_id.name or partner.name
 
