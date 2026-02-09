@@ -7,6 +7,7 @@ import logging
 from odoo import http, fields, _
 from odoo.http import request
 from markupsafe import Markup
+import datetime
 
 _logger = logging.getLogger(__name__)
 
@@ -130,11 +131,30 @@ class ZaloChatWebhook(http.Controller):
         }
         
         # Parse message content based on type
+        content_to_check = ''
         if event_name == 'user_send_text':
+            content_to_check = message_data.get('text', '')
             message_vals.update({
                 'message_type': 'text',
-                'content': message_data.get('text', ''),
+                'content': content_to_check,
             })
+        
+        # DEDUPLICATION CHECK
+        # Check if a message with same content and type was received in last 5 seconds
+        # (Zalo sometimes sends retries or double hooks with different msg_ids)
+        if content_to_check:
+             last_msg = request.env['zalo.chat.message'].sudo().search([
+                 ('conversation_id', '=', conversation.id),
+                 ('direction', '=', 'inbound'),
+                 ('message_type', '=', 'text'),
+                 ('content', '=', content_to_check),
+                 ('create_date', '>=', fields.Datetime.now() - datetime.timedelta(seconds=5))
+             ], limit=1)
+             
+             if last_msg:
+                 _logger.warning(f'[ZALO WEBHOOK] Duplicate message detected (content={content_to_check[:20]}...), skipping.')
+                 return
+
         
         elif event_name == 'user_send_image':
             # Image from Zalo

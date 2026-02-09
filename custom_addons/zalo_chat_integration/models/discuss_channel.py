@@ -480,7 +480,12 @@ Select ID:"""}
             ts = msg.date.strftime('%Y-%m-%d %H:%M:%S')
             
             # Distinguish System/Bot messages vs User messages
-            if msg.author_id:
+            # IMPORTANT: Detect "Quote Created" messages even if they have an author
+            is_quote_notification = 'Đã tạo báo giá' in body or 'AI Tạo Báo Giá' in body
+            
+            if is_quote_notification:
+                 prefix = "SYSTEM_LOG"
+            elif msg.author_id:
                 prefix = f"User ({msg.author_id.name})"
             else:
                 prefix = "SYSTEM_LOG"
