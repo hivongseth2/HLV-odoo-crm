@@ -273,12 +273,17 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
         }
 
     def _fetch_detail(self, misa_id, headers):
-        """Fetch chi tiết đề nghị trả hàng từ FormDataNew API (POST)"""
+        """Fetch chi tiết đề nghị trả hàng từ FormDataNew API (POST)
+        
+        URL pattern: FormDataNew/{EntityName}/{layout_id}/{form_type}
+        - ReturnSale layout_id = 122 (từ URL gốc)
+        - form_type = 4 (giống SaleOrder)
+        """
         try:
-            # Change to POST based on user feedback
-            detail_url = "https://amisapp.misa.vn/crm/g2/api/business/ReturnSale/FormDataNew"
+            # URL pattern như SaleOrder: POST với layout_id và form_type trong path
+            detail_url = f"https://amisapp.misa.vn/crm/g2/api/business/ReturnSale/FormDataNew/ReturnSale/122/4"
             
-            # Payload from user: {"ID":"7041","MISAEntityState":2,"ActiveLayoutCode":null,"CustomDicData":null}
+            # Payload giống SaleOrder 
             payload = {
                 "ID": str(misa_id),
                 "MISAEntityState": 2,
@@ -286,13 +291,17 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                 "CustomDicData": None
             }
             
+            _logger.info("📡 Fetching detail for ID %s: URL=%s, Payload=%s", misa_id, detail_url, payload)
             response = requests.post(detail_url, headers=headers, json=payload, timeout=60)
 
             if response.status_code != 200:
-                _logger.warning("Detail API failed for ID %s: %s", misa_id, response.status_code)
+                _logger.warning("Detail API failed for ID %s: HTTP %s", misa_id, response.status_code)
                 return None
 
             result = response.json()
+            _logger.info("📥 Detail response for ID %s: Success=%s, Keys=%s", 
+                        misa_id, result.get("Success"), list(result.get("Data", {}).keys()) if result.get("Data") else "None")
+            
             if not result.get("Success"):
                 _logger.warning("Detail API Success=False for ID %s: %s", misa_id, result)
                 return None

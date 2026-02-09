@@ -394,8 +394,8 @@ class ReturnSaleRequest(models.Model):
         import requests
         from dateutil.parser import parse
         
-        # Fetch detail - Change to POST based on user feedback to fix product lines
-        detail_url = "https://amisapp.misa.vn/crm/g2/api/business/ReturnSale/FormDataNew"
+        # Fetch detail - Use correct URL pattern like SaleOrder: FormDataNew/{Entity}/{layout_id}/{form_type}
+        detail_url = "https://amisapp.misa.vn/crm/g2/api/business/ReturnSale/FormDataNew/ReturnSale/122/4"
         payload = {
             "ID": str(misa_id),
             "MISAEntityState": 2,
