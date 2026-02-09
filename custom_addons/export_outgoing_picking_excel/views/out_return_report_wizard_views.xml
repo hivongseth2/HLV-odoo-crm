@@ -122,6 +122,22 @@ action = {
 }
         </field>
     </record>
+    
+    <!-- Server Action for Manual Update - Always visible in Action menu -->
+    <record id="action_server_update_report_data" model="ir.actions.server">
+        <field name="name">Cập nhật dữ liệu ngay</field>
+        <field name="model_id" ref="model_out_return_report_line"/>
+        <field name="binding_model_id" ref="model_out_return_report_line"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">
+model._cron_update_report_data()
+action = {
+    'type': 'ir.actions.client',
+    'tag': 'reload',
+}
+        </field>
+    </record>
 
     <!-- Menu under Sale > Reporting - Now links to List View -->
     <menuitem id="menu_out_return_report"
