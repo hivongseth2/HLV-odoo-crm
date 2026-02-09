@@ -1,14 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- List View for Report Lines -->
+    <!-- List View for Report Lines - No header button, use Action menu instead -->
     <record id="view_out_return_report_line_list" model="ir.ui.view">
         <field name="name">out.return.report.line.list</field>
         <field name="model">out.return.report.line</field>
         <field name="arch" type="xml">
             <list string="Báo cáo xuất kho và trả hàng" create="false" edit="false">
-                <header>
-                    <button name="%(action_out_return_report_wizard)d" type="action" string="Xuất Excel" class="btn-primary"/>
-                </header>
                 <!-- Nhóm 1: Thông tin phiếu xuất -->
                 <field name="out_picking_name" string="Phiếu xuất"/>
                 <field name="out_picking_origin" string="Báo giá"/>
@@ -46,11 +43,15 @@
                     <filter name="group_product" string="Sản phẩm" context="{'group_by': 'product_id'}"/>
                     <filter name="group_out_date" string="Ngày xuất" context="{'group_by': 'out_picking_date:month'}"/>
                 </group>
+                <!-- Searchpanel với nút Export -->
+                <searchpanel>
+                    <field name="partner_id" icon="fa-users" enable_counters="1"/>
+                </searchpanel>
             </search>
         </field>
     </record>
 
-    <!-- Action for List View (Main menu action) -->
+    <!-- Action for List View (Main menu action) with embedded export button -->
     <record id="action_out_return_report_line_list" model="ir.actions.act_window">
         <field name="name">Báo cáo xuất kho và trả hàng</field>
         <field name="res_model">out.return.report.line</field>
@@ -64,6 +65,27 @@
             <p>
                 Dữ liệu sẽ được tự động cập nhật hàng ngày hoặc bạn có thể chạy thủ công qua Scheduled Actions.
             </p>
+            <p>
+                <a type="action" name="%(action_out_return_report_wizard)d">Xuất Excel báo cáo</a>
+            </p>
+        </field>
+    </record>
+
+    <!-- Server Action for Export Excel - Always visible in Action menu -->
+    <record id="action_server_export_excel" model="ir.actions.server">
+        <field name="name">Xuất Excel báo cáo</field>
+        <field name="model_id" ref="model_out_return_report_line"/>
+        <field name="binding_model_id" ref="model_out_return_report_line"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">
+action = {
+    'type': 'ir.actions.act_window',
+    'name': 'Xuất Excel báo cáo',
+    'res_model': 'out.return.report.wizard',
+    'view_mode': 'form',
+    'target': 'new',
+}
         </field>
     </record>
 
