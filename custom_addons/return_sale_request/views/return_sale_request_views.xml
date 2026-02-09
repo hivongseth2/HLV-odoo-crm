@@ -126,7 +126,6 @@
                             </group>
                             <group string="Thông tin MISA" invisible="not misa_id">
                                 <field name="misa_id" readonly="1" />
-                                <field name="misa_return_sale_no" readonly="1" />
                                 <field name="misa_owner_text" readonly="1" />
                             </group>
                         </page>
@@ -148,7 +147,6 @@
                 decoration-success="state == 'done'"
             >
                 <field name="name" />
-                <field name="misa_return_sale_no" optional="show" />
                 <field name="date" />
                 <field name="partner_id" />
                 <field name="sale_order_id" optional="show" />
@@ -174,7 +172,6 @@
         <field name="arch" type="xml">
             <search string="Tìm kiếm đề nghị trả hàng">
                 <field name="name" />
-                <field name="misa_return_sale_no" />
                 <field name="partner_id" />
                 <field name="sale_order_id" />
                 <field name="vendor_id" />

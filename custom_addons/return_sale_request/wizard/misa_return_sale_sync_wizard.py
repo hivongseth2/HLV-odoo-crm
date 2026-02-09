@@ -173,6 +173,9 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
 
                     # Fetch detail để lấy thêm thông tin
                     detail_data = self._fetch_detail(misa_id, headers)
+                    
+                    # Log detail_data để debug
+                    _logger.info("📦 Detail data for %s: %s", return_sale_no, detail_data)
 
                     # Parse detail
                     return_reason = ""
@@ -185,6 +188,10 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                         billing_address = (
                             detail_data.get("BillingAddress") or billing_address
                         )
+                        _logger.info("📦 Product codes for %s: %s", return_sale_no, product_codes_text)
+                        logs.append(f"   📦 Sản phẩm: {product_codes_text or 'Không có'}")
+                    else:
+                        logs.append(f"   ⚠️ Không lấy được chi tiết từ MISA")
 
                     # Find or create partner
                     partner = False
@@ -199,15 +206,14 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                             [("name", "=", sale_order_text)], limit=1
                         )
 
-                    # Check existing
+                    # Check existing by name (which is MISA code now)
                     existing = ReturnSaleRequest.search(
-                        [("misa_return_sale_no", "=", return_sale_no)], limit=1
+                        [("name", "=", return_sale_no)], limit=1
                     )
 
                     vals = {
                         "name": return_sale_no, # Use MISA code as name
                         "misa_id": misa_id,
-                        "misa_return_sale_no": return_sale_no,
                         "date": request_date or fields.Date.today(),
                         "partner_id": partner.id if partner else False,
                         "sale_order_id": sale_order.id if sale_order else False,

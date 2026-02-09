@@ -49,7 +49,7 @@ class ReturnSaleRequest(models.Model):
 
     # ==================== MISA Fields ====================
     misa_id = fields.Integer(string="MISA ID", copy=False, index=True)
-    misa_return_sale_no = fields.Char(string="Mã MISA", copy=False, index=True)
+    # misa_return_sale_no removed - using name field for MISA code
     
     # ==================== Relations ====================
     partner_id = fields.Many2one(
@@ -450,12 +450,12 @@ class ReturnSaleRequest(models.Model):
         if sale_order_text:
             sale_order = self.env["sale.order"].search([("name", "=", sale_order_text)], limit=1)
         
-        # Check existing
-        existing = self.search([("misa_return_sale_no", "=", return_sale_no)], limit=1)
+        # Check existing by name (which is MISA code now)
+        existing = self.search([("name", "=", return_sale_no)], limit=1)
         
         vals = {
+            "name": return_sale_no,  # Use MISA code as name
             "misa_id": misa_id,
-            "misa_return_sale_no": return_sale_no,
             "date": request_date or fields.Date.today(),
             "partner_id": partner.id if partner else False,
             "sale_order_id": sale_order.id if sale_order else False,
