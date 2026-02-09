@@ -55,9 +55,12 @@ class ZaloCustomerProfile(models.Model):
 Nhiệm vụ của bạn là cập nhật "Tóm tắt tổng hợp" và "Thẻ phân loại" cho khách hàng dựa trên phiên hội thoại mới nhất.
 
 QUY TẮC CẬP NHẬT TÓM TẮT:
-1. Giữ lại các thông tin quan trọng trong quá khứ (lịch sử mua hàng, thói quen, vấn đề chưa giải quyết).
+1. Giữ lại các thông tin quan trọng trong quá khứ.
 2. Bổ sung thông tin mới từ phiên hội thoại hiện tại.
-3. Viết ngắn gọn, súc tích, tập trung vào đặc điểm khách hàng và nhu cầu.
+3. QUAN TRỌNG: Phải trích xuất THỜI GIAN và TRẠNG THÁI xử lý.
+   - Ví dụ: "Ngày 10/10 14:00: Khách hỏi giá FPD3 -> 14:15: Nhân viên đã báo giá -> Chờ khách chốt."
+   - Ghi rõ những việc ĐANG CHỜ (Pending) để nhân viên follow.
+4. Viết ngắn gọn, súc tích, trình bày theo dạng Timeline nếu có nhiều sự kiện.
 
 QUY TẮC CẬP NHẬT THẺ (TAGS):
 1. Xác định VAI TRÒ: [Khách lẻ, NCC, Đại lý, CTV].
