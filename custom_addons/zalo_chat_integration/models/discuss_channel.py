@@ -326,10 +326,10 @@ class DiscussChannel(models.Model):
         """
         Product = self.env['product.product']
         
-        # 1. Broad search in Odoo (Increased limit to capture variants/combos)
+        # 1. Broad search in Odoo (NO LIMIT - send all to AI for disambiguation)
         candidates = Product.search([
             '|', ('name', 'ilike', product_name), ('default_code', 'ilike', product_name)
-        ], limit=20)
+        ])
         
         if not candidates:
             return None
