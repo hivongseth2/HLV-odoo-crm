@@ -393,6 +393,15 @@ Select ID:"""}
         # Fallback: return the first result
         return candidates[0]
 
+    def _execute_command_baogia(self, **kwargs):
+        """
+        Slash command /baogia to trigger GPT Quote Creation
+        """
+        partner_id = self.env.user.partner_id.id
+        self.action_gpt_create_quote()
+        # Return True to indicate command was handled (stop propagation if needed, though Odoo void returns usually fine)
+        return True
+
     def action_gpt_create_quote(self):
         """
         Parse chat and create Draft Quotation (Sale Order)
@@ -409,22 +418,38 @@ Select ID:"""}
         for msg in messages:
             body = tools.html2plaintext(msg.body) if msg.body else ''
             if not body: continue
-            author_name = msg.author_id.name if msg.author_id else "Bot"
-            content_lines.append(f"{author_name}: {body}")
+            
+            # Timestamp (Local time approx or UTC, GPT handles relative)
+            ts = msg.date.strftime('%Y-%m-%d %H:%M:%S')
+            
+            # Distinguish System/Bot messages vs User messages
+            if msg.author_id:
+                prefix = f"User ({msg.author_id.name})"
+            else:
+                prefix = "SYSTEM_LOG"
+                
+            content_lines.append(f"[{ts}] {prefix}: {body}")
             
         chat_content = "\n".join(content_lines)
         
         prompt = [
-            {"role": "system", "content": """Bạn là trợ lý ảo tạo đơn hàng. Hãy trích xuất thông tin đặt hàng từ hội thoại.
-Trả về dữ liệu dạng JSON CHUẨN (không markdown, không giải thích thêm).
-Cấu trúc:
+            {"role": "system", "content": """Bạn là trợ lý ảo tạo đơn hàng (Sale Order Creator). 
+Nhiệm vụ: Trích xuất sản phẩm khách muốn mua TỪ CÁC TIN NHẮN MỚI NHẤT chưa được xử lý.
+
+QUY TẮC XỬ LÝ LỊCH SỬ (QUAN TRỌNG):
+1. Dựa vào thời gian (Timestamp) của các dòng.
+2. Tìm mốc thời gian của dòng "SYSTEM_LOG" gần nhất có chứa chữ "Đã tạo báo giá".
+3. CHỈ trích xuất các yêu cầu mua hàng của User xảy ra SAU mốc thời gian đó.
+4. Nếu Không có user request nào sau mốc đó -> Trả về danh sách rỗng (Đừng tạo lại đơn cũ).
+
+CẤU TRÚC JSON TRẢ VỀ:
 {
   "products": [
     {"name": "tên sản phẩm", "quantity": 1, "note": ""}
   ],
-  "note": "Ghi chú chung của đơn"
+  "note": "Ghi chú chung"
 }
-Nếu không có sản phẩm nào, trả về: {"products": []}
+Nếu không có yêu cầu mới hợp lệ: {"products": []}
 """},
             {"role": "user", "content": chat_content}
         ]
@@ -441,7 +466,9 @@ Nếu không có sản phẩm nào, trả về: {"products": []}
             products_data = data.get('products', [])
             
             if not products_data:
-                raise UserError(_("GPT không tìm thấy thông tin sản phẩm nào trong đoạn chat."))
+                # Post a ephemeral notification or just log
+                self.message_post(body="🤖 AI: Không tìm thấy yêu cầu mua hàng mới nào cần tạo báo giá (Các yêu cầu cũ đã được xử lý).", message_type='notification', subtype_xmlid='mail.mt_note')
+                return
                 
             customer = False
             for partner in self.channel_partner_ids:
