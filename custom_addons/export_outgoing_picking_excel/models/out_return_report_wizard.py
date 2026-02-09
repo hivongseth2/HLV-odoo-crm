@@ -2,28 +2,29 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 import base64
-import datetime
 from io import BytesIO
 from dateutil.relativedelta import relativedelta
 
 try:
     from openpyxl import Workbook
-    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.styles import Font, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
 except ImportError:
     Workbook = None
 
 
-class OutReturnReportView(models.Model):
-    """Báo cáo OUT + Trả hàng (Lưu trữ) - Cho phép xem danh sách trực tiếp"""
-    _name = "out.return.report.view"
-    _description = "Dữ liệu báo cáo xuất kho và trả hàng"
+class OutReturnReportLine(models.Model):
+    """Dòng báo cáo OUT + Trả hàng - Lưu trữ lâu dài"""
+    _name = "out.return.report.line"
+    _description = "Dòng báo cáo xuất kho và trả hàng"
     _order = "out_picking_date desc, id"
-    
+    _rec_name = "out_picking_name"
+
     # Phiếu OUT
-    out_picking_id = fields.Many2one("stock.picking", string="Phiếu xuất kho", required=True, ondelete='cascade')
-    out_picking_name = fields.Char(string="Mã phiếu xuất")
-    out_picking_date = fields.Datetime(string="Ngày xuất")
+    out_picking_id = fields.Many2one("stock.picking", string="Phiếu xuất kho", index=True)
+    out_picking_name = fields.Char(string="Mã phiếu xuất", index=True)
+    out_picking_origin = fields.Char(string="Mã báo giá")
+    out_picking_date = fields.Datetime(string="Ngày xuất", index=True)
     partner_id = fields.Many2one("res.partner", string="Khách hàng")
     partner_name = fields.Char(string="Tên khách hàng")
     out_qty_total = fields.Float(string="Tổng SL xuất")
@@ -32,10 +33,10 @@ class OutReturnReportView(models.Model):
     return_picking_id = fields.Many2one("stock.picking", string="Phiếu trả hàng")
     return_picking_name = fields.Char(string="Mã phiếu trả")
     return_picking_date = fields.Datetime(string="Ngày trả")
-    has_return = fields.Boolean(string="Có trả hàng", default=False)
+    has_return = fields.Boolean(string="Có trả hàng", default=True)
     return_qty_total = fields.Float(string="Tổng SL trả")
     
-    # Chi tiết sản phẩm (nếu có trả)
+    # Chi tiết sản phẩm
     product_id = fields.Many2one("product.product", string="Sản phẩm")
     product_code = fields.Char(string="Mã SP")
     product_name = fields.Char(string="Tên SP")
@@ -45,6 +46,137 @@ class OutReturnReportView(models.Model):
     
     note = fields.Char(string="Ghi chú")
 
+    @api.model
+    def action_open_export_wizard(self):
+        """Mở wizard xuất Excel"""
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Xuất Excel báo cáo',
+            'res_model': 'out.return.report.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
+    @api.model
+    def _cron_update_report_data(self):
+        """Cron job: Cập nhật dữ liệu báo cáo hàng ngày"""
+        # Lấy ngày 3 tháng trước để quét
+        date_from = fields.Date.today() - relativedelta(months=3)
+        self._generate_report_data(date_from, fields.Date.today())
+
+    @api.model
+    def _generate_report_data(self, date_from, date_to, warehouse_ids=None):
+        """Tạo/cập nhật dữ liệu báo cáo cho khoảng thời gian"""
+        domain = [
+            ("date_done", ">=", date_from),
+            ("date_done", "<=", date_to),
+            ("picking_type_id.sequence_code", "=", "OUT"),
+            ("state", "=", "done"),
+        ]
+        
+        if warehouse_ids:
+            domain.append(("picking_type_id.warehouse_id", "in", warehouse_ids))
+        
+        out_pickings = self.env["stock.picking"].sudo().search(domain, order="date_done desc")
+        
+        for out_picking in out_pickings:
+            # Tính max_date = ngày OUT + 1 tháng
+            max_date = out_picking.date_done + relativedelta(months=1)
+            
+            # Tìm phiếu trả hàng
+            return_pickings = self._find_return_pickings(out_picking, max_date)
+            
+            if not return_pickings:
+                continue  # Chỉ lưu các phiếu có return
+            
+            # Tính tổng SL xuất
+            out_qty_total = sum(out_picking.move_ids.mapped(
+                lambda m: m.quantity_done if hasattr(m, 'quantity_done') else m.product_uom_qty
+            ))
+            
+            for return_picking in return_pickings:
+                return_qty_total = sum(return_picking.move_ids.mapped(
+                    lambda m: m.quantity_done if hasattr(m, 'quantity_done') else m.product_uom_qty
+                ))
+                
+                for move in return_picking.move_ids:
+                    product = move.product_id
+                    return_qty = move.quantity_done if hasattr(move, 'quantity_done') else move.product_uom_qty
+                    out_qty = self._get_product_qty_in_picking(out_picking, product.id)
+                    
+                    # Kiểm tra xem đã có record chưa
+                    existing = self.search([
+                        ('out_picking_id', '=', out_picking.id),
+                        ('return_picking_id', '=', return_picking.id),
+                        ('product_id', '=', product.id),
+                    ], limit=1)
+                    
+                    vals = {
+                        'out_picking_id': out_picking.id,
+                        'out_picking_name': out_picking.name,
+                        'out_picking_origin': out_picking.origin or '',
+                        'out_picking_date': out_picking.date_done,
+                        'partner_id': out_picking.partner_id.id if out_picking.partner_id else False,
+                        'partner_name': out_picking.partner_id.name if out_picking.partner_id else '',
+                        'out_qty_total': out_qty_total,
+                        'return_picking_id': return_picking.id,
+                        'return_picking_name': return_picking.name,
+                        'return_picking_date': return_picking.date_done,
+                        'has_return': True,
+                        'return_qty_total': return_qty_total,
+                        'product_id': product.id,
+                        'product_code': product.default_code or '',
+                        'product_name': product.name,
+                        'product_uom': move.product_uom.name if move.product_uom else '',
+                        'out_qty': out_qty,
+                        'return_qty': return_qty,
+                    }
+                    
+                    if existing:
+                        existing.write(vals)
+                    else:
+                        self.create(vals)
+
+    @api.model
+    def _find_return_pickings(self, out_picking, max_date):
+        """Tìm các phiếu trả hàng liên kết với phiếu OUT"""
+        return_pickings = self.env["stock.picking"]
+        
+        # Phương pháp 1: Qua move_dest_ids
+        for move in out_picking.move_ids:
+            for dest_move in move.move_dest_ids:
+                if dest_move.picking_id and dest_move.picking_id.state == 'done':
+                    picking = dest_move.picking_id
+                    if picking.picking_type_id.code == 'incoming':
+                        if picking.date_done and picking.date_done <= max_date:
+                            return_pickings |= picking
+        
+        # Phương pháp 2: Tìm theo origin
+        origin_returns = self.env["stock.picking"].search([
+            ("origin", "ilike", out_picking.name),
+            ("picking_type_id.code", "=", "incoming"),
+            ("state", "=", "done"),
+            ("date_done", "<=", max_date),
+        ])
+        return_pickings |= origin_returns
+        
+        # Phương pháp 3: Tìm theo partner và sản phẩm
+        if out_picking.partner_id:
+            product_ids = out_picking.move_ids.mapped('product_id').ids
+            if product_ids:
+                related_returns = self.env["stock.picking"].search([
+                    ("partner_id", "=", out_picking.partner_id.id),
+                    ("picking_type_id.code", "=", "incoming"),
+                    ("state", "=", "done"),
+                    ("date_done", ">", out_picking.date_done),
+                    ("date_done", "<=", max_date),
+                    ("move_ids.product_id", "in", product_ids),
+                ])
+                return_pickings |= related_returns
+        
+        return return_pickings
+
+    @api.model
     def _get_product_qty_in_picking(self, picking, product_id):
         """Lấy số lượng của 1 sản phẩm trong picking"""
         qty = 0.0
@@ -54,144 +186,42 @@ class OutReturnReportView(models.Model):
         return qty
 
 
-import logging
-_logger = logging.getLogger(__name__)
+class OutReturnReportWizard(models.TransientModel):
+    """Wizard xuất Excel báo cáo OUT và trả hàng"""
+    _name = "out.return.report.wizard"
+    _description = "Xuất Excel báo cáo xuất kho và trả hàng"
 
-# ... (existing imports)
-
-# ... (OutReturnReportView class)
-
-class OutReturnReportRefreshWizard(models.TransientModel):
-    """Wizard cập nhật dữ liệu báo cáo"""
-    _name = "out.return.report.refresh.wizard"
-    _description = "Cập nhật dữ liệu báo cáo"
-
-    date_from = fields.Date(string="Từ ngày", required=True)
-    date_to = fields.Date(string="Đến ngày", required=True)
-    warehouse_ids = fields.Many2many("stock.warehouse", string="Kho")
-
-    def _get_out_pickings_domain(self):
-        # Convert date to datetime to cover full day range
-        start_date = fields.Datetime.to_datetime(self.date_from)
-        end_date = fields.Datetime.to_datetime(self.date_to) + datetime.timedelta(days=1)
-        
-        domain = [
-            ("date_done", ">=", start_date),
-            ("date_done", "<", end_date),
-            ("picking_type_id.sequence_code", "=", "OUT"),
-            ("state", "=", "done"),
-        ]
-        if self.warehouse_ids:
-            domain.append(("picking_type_id.warehouse_id", "in", self.warehouse_ids.ids))
-        
-        _logger.info("Out Pickings Domain: %s", domain)
-        return domain
-
-    # ... (_find_return_pickings)
-
-    def action_refresh_data(self):
-        """Tính toán lại dữ liệu và lưu vào Model out.return.report.view"""
-        self.ensure_one()
-        ReportView = self.env["out.return.report.view"]
-        
-        _logger.info("ACTION REFRESH DATA: From %s To %s, Warehouses: %s", self.date_from, self.date_to, self.warehouse_ids.mapped('name'))
-        
-        # 1. Xóa dữ liệu cũ
-        existing_domain = [
-            ("out_picking_date", ">=", fields.Datetime.to_datetime(self.date_from)),
-            ("out_picking_date", "<=", fields.Datetime.to_datetime(self.date_to) + datetime.timedelta(days=1)),
-        ]
-        deleted_count = ReportView.search(existing_domain).unlink()
-        _logger.info("Deleted %s existing report lines", len(deleted_count) if isinstance(deleted_count, list) else 'records')
-        
-        # 2. Tính toán mới
-        domain = self._get_out_pickings_domain()
-        out_pickings = self.env["stock.picking"].sudo().search(domain, order="date_done desc")
-        
-        _logger.info("Found %s OUT pickings", len(out_pickings))
-        
-        lines_data = []
-        for out_picking in out_pickings:
-            max_date = out_picking.date_done + relativedelta(months=1)
-            return_pickings = self._find_return_pickings(out_picking, max_date)
-            
-            if return_pickings:
-                _logger.info(">> Found Returns for OUT %s: %s", out_picking.name, return_pickings.mapped('name'))
-                # ... (logic cũ)
-                for return_picking in return_pickings:
-                    return_qty_total = sum(return_picking.move_ids.mapped(
-                        lambda m: m.quantity_done if hasattr(m, 'quantity_done') else m.product_uom_qty
-                    ))
-                    
-                    for move in return_picking.move_ids:
-                        product = move.product_id
-                        return_qty = move.quantity_done if hasattr(move, 'quantity_done') else move.product_uom_qty
-                        # Helper từ ReportView class cần được gọi thông qua instance hoặc copy logic
-                        # Ở đây copy logic cho nhanh
-                        out_qty = 0.0
-                        for out_move in out_picking.move_ids:
-                            if out_move.product_id.id == product.id:
-                                out_qty += out_move.quantity_done if hasattr(out_move, 'quantity_done') else out_move.product_uom_qty
-
-                        lines_data.append({
-                            'out_picking_id': out_picking.id,
-                            'out_picking_name': out_picking.name,
-                            'out_picking_date': out_picking.date_done,
-                            'partner_id': out_picking.partner_id.id if out_picking.partner_id else False,
-                            'partner_name': out_picking.partner_id.name if out_picking.partner_id else '',
-                            'out_qty_total': out_qty_total,
-                            'return_picking_id': return_picking.id,
-                            'return_picking_name': return_picking.name,
-                            'return_picking_date': return_picking.date_done,
-                            'has_return': True,
-                            'return_qty_total': return_qty_total,
-                            'product_id': product.id,
-                            'product_code': product.default_code or '',
-                            'product_name': product.name,
-                            'product_uom': move.product_uom.name if move.product_uom else '',
-                            'out_qty': out_qty,
-                            'return_qty': return_qty,
-                        })
-        
-        if lines_data:
-            ReportView.create(lines_data)
-            
-        # Quay về view Report
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Báo cáo xuất kho và trả hàng',
-            'res_model': 'out.return.report.view',
-            'view_mode': 'list', # Odoo 18 dùng list view xml tag, nhưng view_mode vẫn là 'tree' hoặc 'list'?? Thực tế action thường dùng 'tree'
-            'view_mode': 'tree,form',
-            'target': 'current',
-        }
-
-
-class OutReturnReportExportWizard(models.TransientModel):
-    """Wizard xuất Excel từ dữ liệu đã có"""
-    _name = "out.return.report.export.wizard"
-    _description = "Xuất Excel báo cáo"
-
-    date_from = fields.Date(string="Từ ngày", required=True)
-    date_to = fields.Date(string="Đến ngày", required=True)
+    date_from = fields.Date(string="Từ ngày", required=True, default=lambda self: fields.Date.today() - relativedelta(months=1))
+    date_to = fields.Date(string="Đến ngày", required=True, default=fields.Date.today)
+    
+    warehouse_ids = fields.Many2many(
+        "stock.warehouse", string="Kho",
+        help="Để trống để lấy tất cả kho"
+    )
 
     def action_export_excel(self):
+        """Xuất báo cáo ra file Excel"""
         self.ensure_one()
+        
         if Workbook is None:
             raise UserError(_("Thiếu thư viện openpyxl."))
-
-        # Lấy dữ liệu từ Model ReportView theo ngày chọn
-        # Lưu ý: Lọc theo out_picking_date
-        domain = [
-            ("out_picking_date", ">=", fields.Datetime.to_datetime(self.date_from)),
-            ("out_picking_date", "<=", fields.Datetime.to_datetime(self.date_to) + datetime.timedelta(days=1)),
-            ("has_return", "=", True) # Chỉ lấy dòng có return như yêu cầu
-        ]
-        report_lines = self.env["out.return.report.view"].search(domain)
         
-        if not report_lines:
-            raise UserError(_("Không có dữ liệu trong khoảng thời gian này. Vui lòng chạy 'Cập nhật dữ liệu' trước."))
-
+        if self.date_from > self.date_to:
+            raise UserError(_("Khoảng ngày không hợp lệ."))
+        
+        # Lấy dữ liệu từ out.return.report.line
+        domain = [
+            ("out_picking_date", ">=", self.date_from),
+            ("out_picking_date", "<=", self.date_to),
+        ]
+        if self.warehouse_ids:
+            domain.append(("out_picking_id.picking_type_id.warehouse_id", "in", self.warehouse_ids.ids))
+        
+        lines = self.env["out.return.report.line"].search(domain, order="out_picking_date desc")
+        
+        if not lines:
+            raise UserError(_("Không tìm thấy dữ liệu trong khoảng thời gian này."))
+        
         wb = Workbook()
         
         # Styles
@@ -206,18 +236,19 @@ class OutReturnReportExportWizard(models.TransientModel):
         ws1.title = "Chi tiết phiếu xuất"
         
         columns1 = [
-            {'key': 'stt', 'name': 'STT', 'width': 5},
-            {'key': 'out_picking_name', 'name': 'Mã phiếu xuất', 'width': 15},
-            {'key': 'origin', 'name': 'Mã báo giá', 'width': 15},
-            {'key': 'out_picking_date', 'name': 'Ngày xuất', 'width': 15},
-            {'key': 'partner_name', 'name': 'Khách hàng', 'width': 25},
-            {'key': 'product_code', 'name': 'Mã SP', 'width': 15},
-            {'key': 'product_name', 'name': 'Tên SP', 'width': 40},
-            {'key': 'product_uom', 'name': 'ĐVT', 'width': 8},
-            {'key': 'out_qty', 'name': 'SL xuất', 'width': 10},
-            {'key': 'has_return', 'name': 'Có trả lại', 'width': 10},
+            {'name': 'STT', 'width': 5},
+            {'name': 'Mã phiếu xuất', 'width': 15},
+            {'name': 'Mã báo giá', 'width': 15},
+            {'name': 'Ngày xuất', 'width': 15},
+            {'name': 'Khách hàng', 'width': 25},
+            {'name': 'Mã SP', 'width': 15},
+            {'name': 'Tên SP', 'width': 40},
+            {'name': 'ĐVT', 'width': 8},
+            {'name': 'SL xuất', 'width': 10},
+            {'name': 'Có trả lại', 'width': 10},
         ]
         
+        # Header Sheet 1
         for col_idx, col_def in enumerate(columns1, start=1):
             cell = ws1.cell(row=1, column=col_idx)
             cell.value = col_def['name']
@@ -225,19 +256,15 @@ class OutReturnReportExportWizard(models.TransientModel):
             cell.alignment = header_alignment
             cell.border = border
             ws1.column_dimensions[get_column_letter(col_idx)].width = col_def['width']
-            
-        # Get unique OUT picking IDs from report lines
-        out_picking_ids = report_lines.mapped('out_picking_id')
         
+        # Data Sheet 1
+        out_picking_ids = lines.mapped('out_picking_id')
         row_idx = 2
         stt = 1
         
         for out_picking in out_picking_ids:
             for move in out_picking.move_ids:
-                # Check has_return logic again just to be safe (though report lines ensure it exists)
-                # But we need to write "Có" or "Không"
-                # Since we filtered report_lines with has_return=True, all these out_pickings HAVE returns
-                has_return = True 
+                has_return = any(l.out_picking_id.id == out_picking.id and l.has_return for l in lines)
                 
                 ws1.cell(row=row_idx, column=1).value = stt
                 ws1.cell(row=row_idx, column=2).value = out_picking.name
@@ -249,7 +276,7 @@ class OutReturnReportExportWizard(models.TransientModel):
                 ws1.cell(row=row_idx, column=7).value = move.product_id.name
                 ws1.cell(row=row_idx, column=8).value = move.product_uom.name
                 ws1.cell(row=row_idx, column=9).value = move.quantity_done if hasattr(move, 'quantity_done') else move.product_uom_qty
-                ws1.cell(row=row_idx, column=10).value = 'Có'
+                ws1.cell(row=row_idx, column=10).value = 'Có' if has_return else 'Không'
                 
                 for col in range(1, 11):
                     ws1.cell(row=row_idx, column=col).border = border
@@ -261,17 +288,18 @@ class OutReturnReportExportWizard(models.TransientModel):
         ws2 = wb.create_sheet("Chi tiết phiếu trả")
         
         columns2 = [
-            {'key': 'stt', 'name': 'STT', 'width': 5},
-            {'key': 'out_picking_name', 'name': 'Mã phiếu xuất gốc', 'width': 15},
-            {'key': 'return_picking_name', 'name': 'Mã phiếu trả', 'width': 15},
-            {'key': 'return_picking_date', 'name': 'Ngày trả', 'width': 15},
-            {'key': 'partner_name', 'name': 'Khách hàng', 'width': 25},
-            {'key': 'product_code', 'name': 'Mã SP', 'width': 15},
-            {'key': 'product_name', 'name': 'Tên SP', 'width': 40},
-            {'key': 'product_uom', 'name': 'ĐVT', 'width': 8},
-            {'key': 'return_qty', 'name': 'SL trả', 'width': 10},
+            {'name': 'STT', 'width': 5},
+            {'name': 'Mã phiếu xuất gốc', 'width': 15},
+            {'name': 'Mã phiếu trả', 'width': 15},
+            {'name': 'Ngày trả', 'width': 15},
+            {'name': 'Khách hàng', 'width': 25},
+            {'name': 'Mã SP', 'width': 15},
+            {'name': 'Tên SP', 'width': 40},
+            {'name': 'ĐVT', 'width': 8},
+            {'name': 'SL trả', 'width': 10},
         ]
         
+        # Header Sheet 2
         for col_idx, col_def in enumerate(columns2, start=1):
             cell = ws2.cell(row=1, column=col_idx)
             cell.value = col_def['name']
@@ -279,14 +307,16 @@ class OutReturnReportExportWizard(models.TransientModel):
             cell.alignment = header_alignment
             cell.border = border
             ws2.column_dimensions[get_column_letter(col_idx)].width = col_def['width']
-            
+        
+        # Data Sheet 2
         row_idx = 2
         stt = 1
-        
-        # Sort lines by return date
-        sorted_lines = report_lines.sorted(key=lambda r: r.return_picking_date, reverse=True)
+        sorted_lines = lines.sorted(key=lambda r: r.return_picking_date or fields.Datetime.now(), reverse=True)
         
         for line in sorted_lines:
+            if not line.has_return:
+                continue
+                
             ws2.cell(row=row_idx, column=1).value = stt
             ws2.cell(row=row_idx, column=2).value = line.out_picking_name
             ws2.cell(row=row_idx, column=3).value = line.return_picking_name
@@ -303,7 +333,8 @@ class OutReturnReportExportWizard(models.TransientModel):
             
             row_idx += 1
             stt += 1
-            
+        
+        # Xuất file
         out = BytesIO()
         wb.save(out)
         out.seek(0)
@@ -314,7 +345,7 @@ class OutReturnReportExportWizard(models.TransientModel):
             "type": "binary",
             "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "datas": base64.b64encode(out.getvalue()),
-            "res_model": "out.return.report.export.wizard",
+            "res_model": "out.return.report.wizard",
             "res_id": self.id,
         })
         
@@ -323,4 +354,3 @@ class OutReturnReportExportWizard(models.TransientModel):
             "url": f"/web/content/{attachment.id}?download=true",
             "target": "self",
         }
-
