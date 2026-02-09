@@ -97,16 +97,6 @@ THÔNG TIN MỚI (Vừa chat xong):
 Hãy cập nhật timeline và tags.
 """}
         ]
-            {"role": "user", "content": f"""
-HỒ SƠ HIỆN TẠI:
-- Tóm tắt cũ: {existing_summary}
-- Thẻ cũ: [{existing_tags}]
-
-THÔNG TIN MỚI (Phiên đánh giá vừa xong):
-"{new_evaluation_content}"
-
-Hãy cập nhật hồ sơ khách hàng này."""}
-        ]
 
         try:
             response = config._get_gpt_response(prompt, json_mode=True)
