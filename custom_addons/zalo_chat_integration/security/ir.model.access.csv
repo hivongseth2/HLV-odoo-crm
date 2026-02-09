@@ -4,3 +4,5 @@ access_zalo_chat_conversation_user,zalo.chat.conversation.user,model_zalo_chat_c
 access_zalo_chat_message_user,zalo.chat.message.user,model_zalo_chat_message,base.group_user,1,1,1,1
 access_zalo_chat_evaluation_user,zalo.chat.evaluation.user,model_zalo_chat_evaluation,base.group_user,1,1,1,1
 access_send_zalo_chat_wizard_user,send.zalo.chat.wizard.user,model_send_zalo_chat_wizard,base.group_user,1,1,1,1
+access_zalo_customer_profile_user,zalo.customer.profile.user,model_zalo_customer_profile,base.group_user,1,1,1,1
+access_zalo_customer_tag_user,zalo.customer.tag.user,model_zalo_customer_tag,base.group_user,1,1,1,1
