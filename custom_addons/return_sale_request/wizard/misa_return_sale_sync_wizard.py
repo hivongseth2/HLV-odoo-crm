@@ -49,7 +49,7 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
             "DefaultTotal": True,
             "IsMappingData": False,
             "MappingValueObject": {},
-            # IsApproved removed
+            "IsApproved": False,
             "CustomPagingData": {},
             "IsUsedELTS": True,
             "ListGmailPage": [],
@@ -58,7 +58,8 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
             "IsGetCache": True,
             "IsCheckInactive": False,
             "IsConverted": False,
-            "SessionID": "return-sale-sync-wizard",
+            "SessionID": "b6b92537-e93f-bde9-0b6a-fb56601c5e19",
+            "LayoutCodeCheckPermission": "ReturnSale",
             "AISearchKeyword": "",
         }
 
@@ -86,8 +87,8 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
             # Log khoảng thời gian
             logs.append(f"\n📆 Khoảng thời gian: {self.from_date} đến {self.to_date}")
 
-            # API URL - Use g1 instead of g2
-            api_url = "https://amisapp.misa.vn/crm/g1/api/business/ReturnSale/Grid"
+            # API URL - Revert to g2 with user provided payload structure
+            api_url = "https://amisapp.misa.vn/crm/g2/api/business/ReturnSale/Grid"
 
             # Thống kê
             total_fetched = 0
