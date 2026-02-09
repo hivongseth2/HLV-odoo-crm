@@ -228,6 +228,24 @@ class DiscussChannel(models.Model):
                     # (Optional, but good for backup)
                     pass
 
+                # SLASH COMMAND INTERCEPTION (Backend Workaround)
+                # If body is exactly '/baogia', trigger the action
+                if message_body and message_body.strip().lower() == '/baogia':
+                     _logger.info(f'[ZALO SLASH] Detected /baogia command from {author_id}')
+                     # Run async or directly? Directly for now.
+                     # We might want to post the message first so it appears in chat history?
+                     # Let's call super first to post it, then run action.
+                     res = super(DiscussChannel, self).message_post(**kwargs)
+                     
+                     try:
+                         self.action_gpt_create_quote()
+                     except Exception as e:
+                         # Log error but don't crash the message post
+                         _logger.error(f"Error executing /baogia: {e}")
+                         self.message_post(body=f"⚠️ Lỗi tạo báo giá: {str(e)}", message_type='notification', subtype_xmlid='mail.mt_note')
+                     
+                     return res
+
         except Exception as e:
             _logger.error(f'[ZALO ERROR] Error in message_post intercept: {str(e)}', exc_info=True)
 
