@@ -327,20 +327,19 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
         try:
             url = "https://amisapp.misa.vn/crm/g2/api/business/ReturnSale/DataSubPaging"
             
-            # Payload adapted from SaleOrder pattern (misa_config.get_crm_sale_order_detail_payload)
-            # TableName & MasterKey adjusted for ReturnSale
+            # Payload chính xác từ user - TableName là "return_sale_product" 
             payload = {
-                "Columns": "SUQsU29ydE9yZGVyLFByb2R1Y3RJRCxQcm9kdWN0SURUZXh0LFN0b2NrSUQsU3RvY2tJRFRleHQsRGVzY3JpcHRpb24sVW5pdElELFVuaXRJRFRleHQsQW1vdW50LFByaWNlQWZ0ZXJUYXgsUHJpY2UsVG9DdXJyZW5jeSxEaXNjb3VudFBlcmNlbnQsRGlzY291bnQsVGF4UGVyY2VudElELFRheFBlcmNlbnRJRFRleHQsVGF4LFRvdGFsLElzU2V0UHJvZHVjdCxJc0NoaWxkUHJvZHVjdCxTYWxlT3JkZXJJRCxTYWxlT3JkZXJJRFRleHQ=",
+                "Columns": "SUQsU29ydE9yZGVyLFByb2R1Y3RJRCxQcm9kdWN0SURUZXh0LERlc2NyaXB0aW9uLFVuaXRJRCxVbml0SURUZXh0LFN0b2NrSUQsU3RvY2tJRFRleHQsQW1vdW50LEN1c3RvbUZpZWxkMSxQcmljZUFmdGVyVGF4LFByaWNlLFRvQ3VycmVuY3ksRGlzY291bnRQZXJjZW50LERpc2NvdW50LFRheFBlcmNlbnRJRCxUYXhQZXJjZW50SURUZXh0LFRheCxUb3RhbCxTYWxlT3JkZXJJRCxTYWxlT3JkZXJJRFRleHQsSXNQcm9tb3Rpb24sUHJvbW90aW9uSUQsUHJvbW90aW9uSURUZXh0LElzU2V0UHJvZHVjdCxJc0NoaWxkUHJvZHVjdA==",
                 "Sorts": [],
                 "Start": 0,
                 "Page": 1,
                 "PageSize": 100,
                 "Filters": [],
-                "DefaultTotal": True,
+                "DefaultTotal": False,
                 "IsMappingData": False,
                 "MappingValueObject": {
                     "MasterID": str(misa_id),
-                    "TableName": "return_sale_detail",
+                    "TableName": "return_sale_product",
                     "MasterKey": "CustomID",
                     "SumColumn": ""
                 },
@@ -348,8 +347,8 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                 "CustomPagingData": {
                     "SubFormConfig": {
                         "ColumnFieldSubForm": "",
-                        "ColumnAggregateSubForm": "TotalSummary,TaxSummary,DiscountAfterTaxSummary,DiscountSummary,ToCurrencySummary,AmountSummary,DiscountOverall,DiscountOverallOC,TaxOverall,TaxOverallOC,TotalOverall,TotalOverallOC,IsDiscountDirectlyOverall,DiscountPercentOverall,TaxPercentOverallID,ToCurrencyAfterDiscountSummary,ToCurrencyOCAfterDiscountSummary,TotalSummaryOC,TaxSummaryOC,DiscountSummaryOC,ToCurrencySummaryOC,UsageUnitAmountSummary,PromotionOverAllID,IsPromotionDiscountOverAll",
-                        "TableName": "return_sale_detail",
+                        "ColumnAggregateSubForm": "AmountSummary,ToCurrencySummary,DiscountSummary,TaxSummary,TotalSummary,DiscountOverall,DiscountOverallOC,TaxOverall,TaxOverallOC,TotalOverall,TotalOverallOC,IsDiscountDirectlyOverall,DiscountPercentOverall,TaxPercentOverallID,ToCurrencyAfterDiscountSummary,DiscountAfterTaxSummary,ToCurrencyOCAfterDiscountSummary,TotalSummaryOC,TaxSummaryOC,DiscountSummaryOC,ToCurrencySummaryOC,UsageUnitAmountSummary,PromotionOverAllID,IsPromotionDiscountOverAll",
+                        "TableName": "return_sale_product",
                         "IsSystem": True,
                         "ParentIDKey": "CustomID",
                         "IsBringSerialType": False,
