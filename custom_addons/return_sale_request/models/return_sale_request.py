@@ -477,8 +477,13 @@ class ReturnSaleRequest(models.Model):
             new_record._sync_lines_from_misa(product_codes_text)
             return {"ok": True, "action": "created", "res_id": new_record.id, "name": new_record.name}
 
-    def _sync_lines_from_misa(self, product_codes_text):
-        """Sync lines từ danh sách mã sản phẩm MISA"""
+    def _sync_lines_from_misa(self, product_codes_text, detail_data=None):
+        """Sync lines từ danh sách mã sản phẩm MISA (fallback khi Lines API thất bại)
+        
+        Args:
+            product_codes_text: comma-separated product codes from ListProductIDText
+            detail_data: optional dict containing TotalSummary, AmountSummary for price calc
+        """
         self.ensure_one()
         if not product_codes_text:
             return
@@ -490,6 +495,21 @@ class ReturnSaleRequest(models.Model):
         Product = self.env["product.product"].sudo()
         OdooUtils = self.env["odoo.utils"].sudo()
         
+        # Calculate unit price from detail_data if available
+        unit_price = 0.0
+        total_qty = 1.0
+        if detail_data:
+            total_summary = float(detail_data.get("ToCurrencySummary") or detail_data.get("TotalSummary") or 0)
+            amount_summary = float(detail_data.get("AmountSummary") or 1)
+            num_products = len(codes)
+            if num_products > 0 and amount_summary > 0:
+                # Phân bổ tổng tiền cho các sản phẩm, chia đều số lượng
+                total_qty = amount_summary / num_products
+                unit_price = total_summary / amount_summary if amount_summary > 0 else 0
+        
+        import logging
+        _logger = logging.getLogger(__name__)
+        
         for code in codes:
             product = Product.search([("default_code", "=", code)], limit=1)
             if not product:
@@ -499,12 +519,17 @@ class ReturnSaleRequest(models.Model):
                 )
             
             if product:
+                qty = total_qty if detail_data else 1.0
+                price = unit_price if detail_data else product.lst_price
+                
                 self.env["return.sale.request.line"].create({
                     "request_id": self.id,
                     "product_id": product.id,
-                    "product_qty": 1.0,  # Mặc định, user sẽ cập nhật
+                    "product_qty": qty,
                     "product_uom_id": product.uom_id.id,
+                    "unit_price": price,
                 })
+                _logger.info("📦 Fallback line: %s x%.2f @ %.2f", code, qty, price)
 
     def _sync_lines_from_misa_data(self, line_data):
         """Sync lines từ dữ liệu chi tiết MISA (DataSubPaging) với qty và price

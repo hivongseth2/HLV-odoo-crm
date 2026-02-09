@@ -232,7 +232,8 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                         if line_data:
                             existing._sync_lines_from_misa_data(line_data)
                         elif product_codes_text:
-                            existing._sync_lines_from_misa(product_codes_text)
+                            # Fallback: use detail data for price calculation
+                            existing._sync_lines_from_misa(product_codes_text, detail_data)
                         updated_count += 1
                         logs.append(f"   🔄 Cập nhật: {return_sale_no}")
                     else:
@@ -241,7 +242,8 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                         if line_data:
                             new_record._sync_lines_from_misa_data(line_data)
                         elif product_codes_text:
-                            new_record._sync_lines_from_misa(product_codes_text)
+                            # Fallback: use detail data for price calculation
+                            new_record._sync_lines_from_misa(product_codes_text, detail_data)
                         created_count += 1
                         logs.append(f"   ✅ Tạo mới: {return_sale_no}")
 
