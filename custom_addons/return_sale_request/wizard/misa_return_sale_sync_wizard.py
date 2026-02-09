@@ -327,29 +327,31 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
         try:
             url = "https://amisapp.misa.vn/crm/g2/api/business/ReturnSale/DataSubPaging"
             
-            # Payload tương tự SaleOrder DataSubPaging
+            # Payload adapted from SaleOrder pattern (misa_config.get_crm_sale_order_detail_payload)
+            # TableName & MasterKey adjusted for ReturnSale
             payload = {
-                "Columns": "SUQsUHJvZHVjdElELFByb2R1Y3RJRFRleHQsQW1vdW50LFByaWNlLFRvdGFsQW1vdW50LFVuaXRJRCxVbml0SURUZXh0LERpc2NvdW50UGVyY2VudCxEZXNjcmlwdGlvbg==",
+                "Columns": "SUQsU29ydE9yZGVyLFByb2R1Y3RJRCxQcm9kdWN0SURUZXh0LFN0b2NrSUQsU3RvY2tJRFRleHQsRGVzY3JpcHRpb24sVW5pdElELFVuaXRJRFRleHQsQW1vdW50LFByaWNlQWZ0ZXJUYXgsUHJpY2UsVG9DdXJyZW5jeSxEaXNjb3VudFBlcmNlbnQsRGlzY291bnQsVGF4UGVyY2VudElELFRheFBlcmNlbnRJRFRleHQsVGF4LFRvdGFsLElzU2V0UHJvZHVjdCxJc0NoaWxkUHJvZHVjdCxTYWxlT3JkZXJJRCxTYWxlT3JkZXJJRFRleHQ=",
                 "Sorts": [],
                 "Start": 0,
                 "Page": 1,
                 "PageSize": 100,
                 "Filters": [],
-                "DefaultTotal": False,
+                "DefaultTotal": True,
                 "IsMappingData": False,
                 "MappingValueObject": {
                     "MasterID": str(misa_id),
                     "TableName": "return_sale_detail",
-                    "MasterKey": "ReturnSaleID",
+                    "MasterKey": "CustomID",
                     "SumColumn": ""
                 },
                 "IsApproved": False,
                 "CustomPagingData": {
                     "SubFormConfig": {
                         "ColumnFieldSubForm": "",
-                        "ColumnAggregateSubForm": "",
+                        "ColumnAggregateSubForm": "TotalSummary,TaxSummary,DiscountAfterTaxSummary,DiscountSummary,ToCurrencySummary,AmountSummary,DiscountOverall,DiscountOverallOC,TaxOverall,TaxOverallOC,TotalOverall,TotalOverallOC,IsDiscountDirectlyOverall,DiscountPercentOverall,TaxPercentOverallID,ToCurrencyAfterDiscountSummary,ToCurrencyOCAfterDiscountSummary,TotalSummaryOC,TaxSummaryOC,DiscountSummaryOC,ToCurrencySummaryOC,UsageUnitAmountSummary,PromotionOverAllID,IsPromotionDiscountOverAll",
                         "TableName": "return_sale_detail",
-                        "ParentIDKey": "ReturnSaleID",
+                        "IsSystem": True,
+                        "ParentIDKey": "CustomID",
                         "IsBringSerialType": False,
                         "AggregateField": []
                     }
@@ -373,6 +375,9 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                 return []
             
             result = response.json()
+            _logger.info("📥 Lines response: Code=%s, Success=%s, Total=%s", 
+                        result.get("Code"), result.get("Success"), result.get("Total"))
+            
             if not result.get("Success"):
                 _logger.warning("Lines API Success=False for ID %s: %s", misa_id, result)
                 return []
