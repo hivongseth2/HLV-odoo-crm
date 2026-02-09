@@ -83,7 +83,7 @@ class ZaloOAConfig(models.Model):
         ('gpt-3.5-turbo', 'GPT-3.5 Turbo'),
     ], string='GPT Model', default='gpt-4o')
 
-    def _get_gpt_response(self, messages):
+    def _get_gpt_response(self, messages, temperature=0.7, json_mode=False):
         """Helper to call OpenAI API"""
         self.ensure_one()
         if not self.gpt_api_key:
@@ -96,8 +96,11 @@ class ZaloOAConfig(models.Model):
         data = {
             'model': self.gpt_model or 'gpt-4o',
             'messages': messages,
-            'temperature': 0.7,
+            'temperature': temperature,
         }
+        
+        if json_mode:
+            data['response_format'] = {'type': 'json_object'}
         
         try:
             response = requests.post('https://api.openai.com/v1/chat/completions', headers=headers, json=data, timeout=30)
