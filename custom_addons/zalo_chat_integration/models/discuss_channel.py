@@ -419,13 +419,16 @@ Select ID:"""}
             body = tools.html2plaintext(msg.body) if msg.body else ''
             if not body: continue
             
+            # Timestamp (Local time approx or UTC, GPT handles relative)
+            ts = msg.date.strftime('%Y-%m-%d %H:%M:%S')
+            
             # Distinguish System/Bot messages vs User messages
             if msg.author_id:
                 prefix = f"User ({msg.author_id.name})"
             else:
                 prefix = "SYSTEM_LOG"
                 
-            content_lines.append(f"{prefix}: {body}")
+            content_lines.append(f"[{ts}] {prefix}: {body}")
             
         chat_content = "\n".join(content_lines)
         
@@ -433,11 +436,11 @@ Select ID:"""}
             {"role": "system", "content": """Bạn là trợ lý ảo tạo đơn hàng (Sale Order Creator). 
 Nhiệm vụ: Trích xuất sản phẩm khách muốn mua TỪ CÁC TIN NHẮN MỚI NHẤT chưa được xử lý.
 
-QUY TẮC QUAN TRỌNG VỀ LỊCH SỬ:
-1. Đọc kỹ dòng "SYSTEM_LOG". Nếu thấy dòng bắt đầu bằng "SYSTEM_LOG: Đã tạo báo giá...", nghĩa là các yêu cầu TRƯỚC ĐÓ đã được xử lý -> HÃY BỎ QUA, KHÔNG TẠO LẠI.
-2. Chỉ trích xuất các yêu cầu mua hàng MỚI xuất hiện sau dòng "Đã tạo báo giá" gần nhất.
-3. Nếu khách hàng yêu cầu "đặt thêm", chỉ lấy phần thêm.
-4. Nếu khách hàng yêu cầu "đặt lại đơn cũ", mới được lấy lại thông tin cũ.
+QUY TẮC XỬ LÝ LỊCH SỬ (QUAN TRỌNG):
+1. Dựa vào thời gian (Timestamp) của các dòng.
+2. Tìm mốc thời gian của dòng "SYSTEM_LOG" gần nhất có chứa chữ "Đã tạo báo giá".
+3. CHỈ trích xuất các yêu cầu mua hàng của User xảy ra SAU mốc thời gian đó.
+4. Nếu Không có user request nào sau mốc đó -> Trả về danh sách rỗng (Đừng tạo lại đơn cũ).
 
 CẤU TRÚC JSON TRẢ VỀ:
 {
@@ -446,7 +449,7 @@ CẤU TRÚC JSON TRẢ VỀ:
   ],
   "note": "Ghi chú chung"
 }
-Nếu không có yêu cầu mới (hoặc đã xử lý hết), trả về: {"products": []}
+Nếu không có yêu cầu mới hợp lệ: {"products": []}
 """},
             {"role": "user", "content": chat_content}
         ]
@@ -464,7 +467,7 @@ Nếu không có yêu cầu mới (hoặc đã xử lý hết), trả về: {"pr
             
             if not products_data:
                 # Post a ephemeral notification or just log
-                self.message_post(body="🤖 AI: Không tìm thấy yêu cầu mua hàng mới nào cần tạo báo giá.", message_type='notification', subtype_xmlid='mail.mt_note')
+                self.message_post(body="🤖 AI: Không tìm thấy yêu cầu mua hàng mới nào cần tạo báo giá (Các yêu cầu cũ đã được xử lý).", message_type='notification', subtype_xmlid='mail.mt_note')
                 return
                 
             customer = False
