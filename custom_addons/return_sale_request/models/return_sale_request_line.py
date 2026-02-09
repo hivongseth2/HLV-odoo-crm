@@ -39,8 +39,12 @@ class ReturnSaleRequestLine(models.Model):
         digits="Product Price",
     )
     subtotal = fields.Monetary(
-        string="Thành tiền",
-        compute="_compute_subtotal",
+        string="Thành tiền (trước thuế)",
+        store=True,
+        currency_field="currency_id",
+    )
+    line_total = fields.Monetary(
+        string="Tổng tiền (sau thuế)",
         store=True,
         currency_field="currency_id",
     )
@@ -56,13 +60,16 @@ class ReturnSaleRequestLine(models.Model):
         store=True,
     )
 
-    @api.depends("product_qty", "unit_price")
-    def _compute_subtotal(self):
-        for line in self:
-            line.subtotal = line.product_qty * line.unit_price
+    @api.onchange("product_qty", "unit_price")
+    def _onchange_qty_price(self):
+        """Recalculate subtotal and line_total when qty/price changes in UI"""
+        if not self.subtotal and self.product_qty and self.unit_price:
+            self.subtotal = self.product_qty * self.unit_price
+            self.line_total = self.subtotal
 
     @api.onchange("product_id")
     def _onchange_product_id(self):
         if self.product_id:
             self.product_uom_id = self.product_id.uom_id
-            self.unit_price = self.product_id.lst_price or 0.0
+            if not self.unit_price:
+                self.unit_price = self.product_id.lst_price or 0.0
