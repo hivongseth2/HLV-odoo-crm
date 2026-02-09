@@ -51,6 +51,21 @@ class ZaloChatEvaluation(models.Model):
                 vals['name'] = self.env['ir.sequence'].next_by_code('zalo.chat.evaluation') or 'New'
         return super(ZaloChatEvaluation, self).create(vals_list)
 
+    profile_id = fields.Many2one('zalo.customer.profile', string='Hồ sơ khách hàng', 
+                                 compute='_compute_profile_id', store=True, readonly=False)
+    
+    @api.depends('partner_id')
+    def _compute_profile_id(self):
+        for record in self:
+            if record.partner_id:
+                # Find or Create Profile
+                profile = self.env['zalo.customer.profile'].search([('partner_id', '=', record.partner_id.id)], limit=1)
+                if not profile:
+                    profile = self.env['zalo.customer.profile'].create({'partner_id': record.partner_id.id})
+                record.profile_id = profile
+            else:
+                record.profile_id = False
+
     def action_analyze_gpt(self):
         """Analyze chat content using GPT"""
         self.ensure_one()
@@ -102,6 +117,10 @@ Lưu ý logic suggestion:
             
             # Post log
             self.message_post(body="✅ Đã hoàn thành phân tích bởi GPT.")
+            
+            # TRIGGER PROFILE UPDATE
+            if self.profile_id:
+                self.profile_id.action_update_summary_ai(self.chat_content, config)
             
         except Exception as e:
             _logger.exception("GPT Analysis Failed")

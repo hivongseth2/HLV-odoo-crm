@@ -13,11 +13,15 @@
                 <sheet>
                     <div class="oe_title">
                         <h1>
-                            <field name="oa_name" placeholder="e.g., My Zalo OA"/>
+                            <field name="oa_name" placeholder="Official OA Name (from Zalo)"/>
                         </h1>
+                        <h3>
+                            <field name="alias" placeholder="Alias (e.g. Sales Team 1)"/>
+                        </h3>
                     </div>
                     <group>
                         <group>
+                            <field name="unique_room_id"/>
                             <field name="app_id"/>
                             <field name="secret_key" password="True"/>
                             <field name="active"/>

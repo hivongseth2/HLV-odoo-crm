@@ -7,6 +7,7 @@
             <search string="Tìm kiếm Đánh giá">
                 <field name="name"/>
                 <field name="partner_id"/>
+                <field name="profile_id"/>
                 <field name="conversation_id"/>
                 <field name="gpt_sentiment"/>
                 <field name="gpt_suggestion"/>
@@ -15,6 +16,7 @@
                 <filter string="Tiêu cực" name="negative" domain="[('gpt_sentiment', '=', 'negative')]"/>
                 <filter string="Cần Báo giá" name="quote" domain="[('gpt_suggestion', '=', 'create_quote')]"/>
                 <group expand="1" string="Group By">
+                    <filter string="Hồ sơ khách hàng" name="group_profile" context="{'group_by': 'profile_id'}"/>
                     <filter string="Khách hàng" name="group_partner" context="{'group_by': 'partner_id'}"/>
                     <filter string="Thái độ" name="group_sentiment" context="{'group_by': 'gpt_sentiment'}"/>
                     <filter string="Đề xuất" name="group_suggestion" context="{'group_by': 'gpt_suggestion'}"/>
@@ -44,6 +46,7 @@
                     <group>
                         <group>
                             <field name="partner_id"/>
+                            <field name="profile_id"/>
                             <field name="create_date"/>
                             <field name="conversation_id"/>
                         </group>
@@ -76,7 +79,8 @@
         <field name="arch" type="xml">
             <list string="Đánh giá hội thoại">
                 <field name="name"/>
-                <field name="partner_id"/>
+                <field name="profile_id"/>
+                <field name="partner_id" optional="hide"/>
                 <field name="create_date"/>
                 <field name="gpt_sentiment" widget="badge" decoration-success="gpt_sentiment == 'positive'" decoration-danger="gpt_sentiment == 'negative'"/>
                 <field name="gpt_suggestion" widget="badge" decoration-info="gpt_suggestion == 'create_quote'"/>
