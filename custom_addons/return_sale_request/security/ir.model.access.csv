@@ -1,0 +1,6 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_return_sale_request_user,return.sale.request user,model_return_sale_request,group_return_sale_request_user,1,1,1,0
+access_return_sale_request_manager,return.sale.request manager,model_return_sale_request,group_return_sale_request_manager,1,1,1,1
+access_return_sale_request_line_user,return.sale.request.line user,model_return_sale_request_line,group_return_sale_request_user,1,1,1,0
+access_return_sale_request_line_manager,return.sale.request.line manager,model_return_sale_request_line,group_return_sale_request_manager,1,1,1,1
+access_misa_return_sale_sync_wizard,misa.return.sale.sync.wizard,model_misa_return_sale_sync_wizard,group_return_sale_request_manager,1,1,1,1

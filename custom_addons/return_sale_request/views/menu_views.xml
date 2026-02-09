@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!-- Parent Menu -->
+    <menuitem
+        id="menu_return_sale_request_root"
+        name="Trả hàng bán"
+        sequence="25"
+        web_icon="return_sale_request,static/description/icon.png"
+        groups="group_return_sale_request_user,group_return_sale_request_manager"
+    />
+
+    <!-- Sub Menu -->
+    <menuitem
+        id="menu_return_sale_request_main"
+        name="Đề nghị trả hàng"
+        parent="menu_return_sale_request_root"
+        sequence="10"
+    />
+
+    <!-- Request List -->
+    <menuitem
+        id="menu_return_sale_request_list"
+        name="Danh sách đề nghị"
+        parent="menu_return_sale_request_main"
+        action="action_return_sale_request"
+        sequence="10"
+    />
+
+    <!-- Sync Wizard -->
+    <menuitem
+        id="menu_return_sale_sync_wizard"
+        name="Đồng bộ từ MISA"
+        parent="menu_return_sale_request_main"
+        action="action_misa_return_sale_sync_wizard"
+        sequence="20"
+        groups="group_return_sale_request_manager"
+    />
+</odoo>
