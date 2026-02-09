@@ -244,79 +244,6 @@ class DiscussChannel(models.Model):
             _logger.error(f'[ZALO ERROR] Error in message_post intercept: {str(e)}', exc_info=True)
 
         return super(DiscussChannel, self).message_post(**kwargs)
-    
-    def notify_typing(self, is_typing):
-        """
-        Override to prevent auto-adding members on typing notification
-        For chat channels, only notify if user is already a member
-        """
-        if self.channel_type == 'chat':
-            # Check if current user is a member
-            current_partner = self.env.user.partner_id
-            if current_partner not in self.channel_partner_ids:
-                _logger.debug(
-                    f'Skipping typing notification for non-member '
-                    f'partner {current_partner.id} in channel {self.id}'
-                )
-                # Don't call super - just return without error
-                return
-        
-        return super(DiscussChannel, self).notify_typing(is_typing)
-    
-    def _notify_thread(self, message, msg_vals=False, **kwargs):
-        """
-        Override to prevent auto-subscribing partners on notification
-        """
-        if self.channel_type == 'chat':
-            # Don't auto-subscribe - just send notifications to existing members
-            return super(DiscussChannel, self)._notify_thread(message, msg_vals=msg_vals, **kwargs)
-        
-        return super(DiscussChannel, self)._notify_thread(message, msg_vals=msg_vals, **kwargs)
-
-    def action_gpt_update_customer_profile(self):
-        """
-        Trigger Customer Profile AI Update (Summary + Tags) based on recent chat
-        """
-        self.ensure_one()
-        # Find Customer
-        customer = False
-        for partner in self.channel_partner_ids:
-            if partner.id != self.env.user.partner_id.id and not partner.user_ids:
-                customer = partner
-                break
-        
-        if not customer:
-            return
-            
-        # Find Profile
-        profile = self.env['zalo.customer.profile'].search([('partner_id', '=', customer.id)], limit=1)
-        if not profile:
-            # Auto create profile if missing?
-            profile = self.env['zalo.customer.profile'].create({'partner_id': customer.id})
-            
-        # Get Config
-        config = self.env['zalo.oa.config'].sudo().search([('livechat_channel_id', '=', self.livechat_channel_id.id)], limit=1)
-        if not config or not config.gpt_api_key:
-            return
-
-        # Prepare Content (Last 20 messages for summary context)
-        messages = self.message_ids.sorted(key=lambda m: m.date)[-20:]
-        content_lines = []
-        for msg in messages:
-            body = tools.html2plaintext(msg.body) if msg.body else ''
-            if not body: continue
-            
-            ts = msg.date.strftime('%H:%M')
-            prefix = "Khách" if msg.author_id == customer else "NV"
-            content_lines.append(f"{ts} {prefix}: {body}")
-            
-        new_content = "\n".join(content_lines)
-        
-        # Call Profile Update
-        profile.action_update_summary_ai(new_content, config)
-        
-        # Notify
-        self.message_post(body="📝 Đã cập nhật hồ sơ khách hàng (AI).", message_type='notification', subtype_xmlid='mail.mt_note')
 
     # -------------------------------------------------------------------------
     # GPT INTEGRATION (ZALO LIVECHAT)
@@ -454,9 +381,8 @@ Select ID:"""}
         """
         Slash command /baogia to trigger GPT Quote Creation
         """
-        partner_id = self.env.user.partner_id.id
         self.action_gpt_create_quote()
-        # Return True to indicate command was handled (stop propagation if needed, though Odoo void returns usually fine)
+        self.action_gpt_update_customer_profile()
         return True
 
     def action_gpt_create_quote(self):
@@ -499,19 +425,22 @@ Select ID:"""}
 Nhiệm vụ: Trích xuất sản phẩm khách muốn mua TỪ CÁC TIN NHẮN MỚI NHẤT chưa được xử lý.
 
 QUY TẮC XỬ LÝ LỊCH SỬ (QUAN TRỌNG):
-1. Dựa vào thời gian (Timestamp) của các dòng.
-2. Tìm mốc thời gian của dòng "SYSTEM_LOG" gần nhất có chứa chữ "Đã tạo báo giá".
-3. CHỈ trích xuất các yêu cầu mua hàng của User xảy ra SAU mốc thời gian đó.
-4. Nếu Không có user request nào sau mốc đó -> Trả về danh sách rỗng (Đừng tạo lại đơn cũ).
+1. Dựa vào thời gian (Timestamp). Tìm mốc "SYSTEM_LOG: Đã tạo báo giá..." gần nhất.
+2. CHỈ TRÍCH XUẤT yêu cầu MỚI sau mốc đó.
+
+QUY TẮC GIÁ & SẢN PHẨM:
+1. Trích xuất Tên, Số lượng.
+2. NẾU CÓ GIÁ ĐƯỢC CHỐT trong chat (VD: "bán e 3 triệu nhé", "ok giá 50k"), hãy trích xuất giá đó vào `price_unit`.
+3. Nếu không nhắc giá -> để `price_unit` = 0 (Odoo sẽ tự lấy bảng giá).
 
 CẤU TRÚC JSON TRẢ VỀ:
 {
   "products": [
-    {"name": "tên sản phẩm", "quantity": 1, "note": ""}
+    {"name": "tên sản phẩm", "quantity": 1, "price_unit": 0, "note": ""}
   ],
   "note": "Ghi chú chung"
 }
-Nếu không có yêu cầu mới hợp lệ: {"products": []}
+Nếu không có yêu cầu mới: {"products": []}
 """},
             {"role": "user", "content": chat_content}
         ]
@@ -553,21 +482,27 @@ Nếu không có yêu cầu mới hợp lệ: {"products": []}
                 p_name = item.get('name')
                 qty = item.get('quantity', 1)
                 note = item.get('note', '')
+                price_unit = item.get('price_unit', 0)
                 
                 # Use Smart Search
                 product = self._find_product_by_name_smart(p_name, chat_content, config)
                 
                 if product:
-                    order_lines.append((0, 0, {
+                    line_vals = {
                         'product_id': product.id,
                         'product_uom_qty': qty,
                         'name': product.name + (f" ({note})" if note else ""),
-                    }))
+                    }
+                    # Apply custom price if detected
+                    if price_unit > 0:
+                        line_vals['price_unit'] = price_unit
+                        
+                    order_lines.append((0, 0, line_vals))
                 else:
                     not_found_products.append(p_name)
                     order_lines.append((0, 0, {
                         'display_type': 'line_note',
-                        'name': f"Sản phẩm chưa tìm thấy mã: {p_name} (SL: {qty})",
+                        'name': f"Sản phẩm chưa tìm thấy mã: {p_name} (SL: {qty}) - Giá: {price_unit if price_unit > 0 else 'Theo bảng giá'}",
                     }))
 
             vals = {
@@ -579,12 +514,6 @@ Nếu không có yêu cầu mới hợp lệ: {"products": []}
             
             sale_order = self.env['sale.order'].create(vals)
             
-            # Simple message without complex CSS
-            msg = f"Đã tạo báo giá: {sale_order.name}"
-            if not_found_products:
-                msg += f" (Không tìm thấy: {', '.join(not_found_products)})"
-                
-            # Post as plain notification
             # Post as plain notification
             link = Markup(f'<a href="#" data-oe-model="sale.order" data-oe-id="{sale_order.id}">{sale_order.name}</a>')
             self.message_post(
