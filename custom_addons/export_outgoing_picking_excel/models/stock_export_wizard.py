@@ -185,7 +185,8 @@ class StockExportWizard(models.TransientModel):
         if so and so.partner_id:
             khach_hang = so.partner_id.name
             # Use SO Partner REF for 'Ma doi tuong' as requested
-            partner_code = so.partner_id.ref or partner_code
+            # Use commercial_partner_id because ref usually on parent company
+            partner_code = so.partner_id.commercial_partner_id.ref or so.partner_id.ref or partner_code
         elif partner:
              khach_hang = partner.commercial_partner_id.name or partner.name
 
