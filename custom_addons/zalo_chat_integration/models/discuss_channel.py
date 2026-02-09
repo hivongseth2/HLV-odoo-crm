@@ -130,8 +130,33 @@ class DiscussChannel(models.Model):
         
         Also intercept outbound messages to send via Zalo API
         """
-        _logger.info(f'[ZALO DEBUG] discuss.channel.message_post called for channel {self.id}, type={self.channel_type}')
+        # _logger.info(f'[ZALO DEBUG] discuss.channel.message_post called for channel {self.id}, type={self.channel_type}')
         
+        # SLASH COMMAND INTERCEPTION (Check FIRST to prevent sending to customer)
+        message_body = kwargs.get('body', '')
+        if message_body and message_body.strip().lower() == '/baogia':
+             _logger.info(f'[ZALO SLASH] Detected /baogia command. Executing Logic...')
+             
+             # 1. Post command to Odoo Chat (Internal Note or Comment? Keep as comment so user sees it)
+             # But explicitly SKIP Zalo Sync for this message
+             ctx = dict(self.env.context)
+             ctx['skip_zalo_sync'] = True
+             res = super(DiscussChannel, self.with_context(ctx)).message_post(**kwargs)
+             
+             # 2. Trigger AI Actions
+             try:
+                 # Create Quote
+                 self.action_gpt_create_quote()
+                 
+                 # UPDATE SUMMARY (New Request)
+                 self.action_gpt_update_customer_profile()
+                 
+             except Exception as e:
+                 _logger.error(f"Error executing /baogia: {e}")
+                 self.message_post(body=f"⚠️ Lỗi: {str(e)}", message_type='notification', subtype_xmlid='mail.mt_note')
+             
+             return res
+
         # For chat type channels (1-to-1), disable auto-adding author
         if self.channel_type == 'chat':
             # Check if we're trying to post from a partner not in the channel
@@ -141,10 +166,7 @@ class DiscussChannel(models.Model):
                 partner_ids = self.channel_partner_ids.ids
                 if author_id not in partner_ids:
                     # Partner not in channel - log debug but don't add
-                    _logger.debug(
-                        f'Posting to chat channel {self.id} from non-member '
-                        f'partner {author_id} as system message'
-                    )
+                    # _logger.debug(f'Posting to chat channel {self.id} from non-member {author_id} as system message')
                     # Post as system message instead (no author)
                     kwargs['author_id'] = False
         
@@ -155,37 +177,31 @@ class DiscussChannel(models.Model):
                 
                 # Check if Live Chat Channel linked to Zalo
                 if self.channel_type == 'livechat' and self.livechat_channel_id:
-                    _logger.info(f'[ZALO DEBUG] Channel {self.id} is livechat, linked to {self.livechat_channel_id.id}')
+                    # _logger.info(f'[ZALO DEBUG] Channel {self.id} is livechat, linked to {self.livechat_channel_id.id}')
                     
                     oa_config = self.env['zalo.oa.config'].sudo().search([
                         ('livechat_channel_id', '=', self.livechat_channel_id.id)
                     ], limit=1)
                     
                     if oa_config:
-                        _logger.info(f'[ZALO DEBUG] Found OA Config {oa_config.oa_name} for channel {self.id}')
+                        # _logger.info(f'[ZALO DEBUG] Found OA Config {oa_config.oa_name} for channel {self.id}')
                         
-                        message_body = kwargs.get('body')
                         # Filtering: Only send 'comment' messages, SKIP 'notification'
                         message_type = kwargs.get('message_type', 'comment')
                         if message_type != 'comment':
-                            _logger.info(f'[ZALO DEBUG] Skipping outbound message type: {message_type}')
+                            # _logger.info(f'[ZALO DEBUG] Skipping outbound message type: {message_type}')
                             return super(DiscussChannel, self).message_post(**kwargs)
 
                         # Filtering: Block specific system keywords if any leaked as comment
-                        if message_body and 'Đã tạo báo giá' in str(message_body):
-                             _logger.info(f'[ZALO DEBUG] Skipping Quote Creation notification')
+                        if message_body and ('Đã tạo báo giá' in str(message_body) or '🤖 AI:' in str(message_body)):
+                             _logger.info(f'[ZALO DEBUG] Skipping System/AI notification')
                              return super(DiscussChannel, self).message_post(**kwargs)
                              
                         # author_id might be in kwargs or from context
                         author_id = kwargs.get('author_id') or self.env.user.partner_id.id
                         
-                        _logger.info(f'[ZALO DEBUG] Body: {bool(message_body)}, Author: {author_id}')
-                        
                         if message_body:
                             # Find Zalo Conversation
-                            # We need to find the partner who is NOT the author (the customer)
-                            # But wait, in Live Chat, the customer is in channel_partner_ids
-                            
                             target_partner = False
                             for partner in self.channel_partner_ids:
                                 if partner.id != author_id:
@@ -193,15 +209,11 @@ class DiscussChannel(models.Model):
                                     break
                             
                             if target_partner:
-                                _logger.info(f'[ZALO DEBUG] Identified target partner: {target_partner.name} ({target_partner.id})')
-                                
                                 conv = self.env['zalo.chat.conversation'].sudo().search([
                                     ('partner_id', '=', target_partner.id)
                                 ], limit=1)
                                 
                                 if conv:
-                                    _logger.info(f'[ZALO DEBUG] Found conversation {conv.id}. Preparing to send...')
-                                    
                                     plain_text = tools.html2plaintext(message_body)
                                     if plain_text and plain_text.strip():
                                         zalo_message = self.env['zalo.chat.message'].sudo().create({
@@ -212,39 +224,21 @@ class DiscussChannel(models.Model):
                                             'state': 'draft',
                                         })
                                         
-                                        _logger.info(f'[ZALO OUTBOUND] Created message {zalo_message.id}, sending...')
+                                        _logger.info(f'[ZALO OUTBOUND] Sending message {zalo_message.id} to {target_partner.name}')
                                         zalo_message.action_send()
-                                        _logger.info(f'[ZALO OUTBOUND] Sent successfully.')
+                                        
+                                        # IMPORTANT: Prevent double-sending if super check isn't enough?
+                                        # Currently we just call action_send() which calls API.
+                                        # We do NOT return here, we let super() create the Odoo message.
                                     else:
-                                        _logger.info(f'[ZALO DEBUG] Empty plain text, skipping.')
+                                        pass
                                 else:
                                     _logger.warning(f'[ZALO DEBUG] No Zalo conversation found for partner {target_partner.name}')
                             else:
                                 _logger.warning(f'[ZALO DEBUG] Could not identify target partner in channel {self.id}')
                     else:
-                        _logger.info(f'[ZALO DEBUG] No OA Config found for livechat_channel_id {self.livechat_channel_id.id}')
-                else:
-                    # Also support legacy 'chat' type if it matches conversation
-                    # (Optional, but good for backup)
-                    pass
-
-                # SLASH COMMAND INTERCEPTION (Backend Workaround)
-                # If body is exactly '/baogia', trigger the action
-                if message_body and message_body.strip().lower() == '/baogia':
-                     _logger.info(f'[ZALO SLASH] Detected /baogia command from {author_id}')
-                     # Run async or directly? Directly for now.
-                     # We might want to post the message first so it appears in chat history?
-                     # Let's call super first to post it, then run action.
-                     res = super(DiscussChannel, self).message_post(**kwargs)
-                     
-                     try:
-                         self.action_gpt_create_quote()
-                     except Exception as e:
-                         # Log error but don't crash the message post
-                         _logger.error(f"Error executing /baogia: {e}")
-                         self.message_post(body=f"⚠️ Lỗi tạo báo giá: {str(e)}", message_type='notification', subtype_xmlid='mail.mt_note')
-                     
-                     return res
+                        pass
+                        # No OA Config
 
         except Exception as e:
             _logger.error(f'[ZALO ERROR] Error in message_post intercept: {str(e)}', exc_info=True)
@@ -278,6 +272,51 @@ class DiscussChannel(models.Model):
             return super(DiscussChannel, self)._notify_thread(message, msg_vals=msg_vals, **kwargs)
         
         return super(DiscussChannel, self)._notify_thread(message, msg_vals=msg_vals, **kwargs)
+
+    def action_gpt_update_customer_profile(self):
+        """
+        Trigger Customer Profile AI Update (Summary + Tags) based on recent chat
+        """
+        self.ensure_one()
+        # Find Customer
+        customer = False
+        for partner in self.channel_partner_ids:
+            if partner.id != self.env.user.partner_id.id and not partner.user_ids:
+                customer = partner
+                break
+        
+        if not customer:
+            return
+            
+        # Find Profile
+        profile = self.env['zalo.customer.profile'].search([('partner_id', '=', customer.id)], limit=1)
+        if not profile:
+            # Auto create profile if missing?
+            profile = self.env['zalo.customer.profile'].create({'partner_id': customer.id})
+            
+        # Get Config
+        config = self.env['zalo.oa.config'].sudo().search([('livechat_channel_id', '=', self.livechat_channel_id.id)], limit=1)
+        if not config or not config.gpt_api_key:
+            return
+
+        # Prepare Content (Last 20 messages for summary context)
+        messages = self.message_ids.sorted(key=lambda m: m.date)[-20:]
+        content_lines = []
+        for msg in messages:
+            body = tools.html2plaintext(msg.body) if msg.body else ''
+            if not body: continue
+            
+            ts = msg.date.strftime('%H:%M')
+            prefix = "Khách" if msg.author_id == customer else "NV"
+            content_lines.append(f"{ts} {prefix}: {body}")
+            
+        new_content = "\n".join(content_lines)
+        
+        # Call Profile Update
+        profile.action_update_summary_ai(new_content, config)
+        
+        # Notify
+        self.message_post(body="📝 Đã cập nhật hồ sơ khách hàng (AI).", message_type='notification', subtype_xmlid='mail.mt_note')
 
     # -------------------------------------------------------------------------
     # GPT INTEGRATION (ZALO LIVECHAT)
