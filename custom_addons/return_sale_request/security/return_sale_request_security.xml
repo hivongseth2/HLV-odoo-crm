@@ -3,12 +3,12 @@
     <!-- Security Groups -->
     <record id="group_return_sale_request_user" model="res.groups">
         <field name="name">Đề nghị trả hàng: User</field>
-        <field name="category_id" ref="stock.module_category_inventory" />
+        <field name="category_id" ref="base.module_category_inventory_inventory" />
     </record>
 
     <record id="group_return_sale_request_manager" model="res.groups">
         <field name="name">Đề nghị trả hàng: Manager</field>
-        <field name="category_id" ref="stock.module_category_inventory" />
+        <field name="category_id" ref="base.module_category_inventory_inventory" />
         <field name="implied_ids" eval="[(4, ref('group_return_sale_request_user'))]" />
     </record>
 
