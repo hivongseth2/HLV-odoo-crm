@@ -71,6 +71,19 @@ class StockExportWizard(models.TransientModel):
             return ""
         return partner.ref or ""
 
+    def _find_sale_order(self, move, picking):
+        # 1) Từ sale_line_id trực tiếp
+        if getattr(move, 'sale_line_id', False) and move.sale_line_id.order_id:
+            return move.sale_line_id.order_id
+        # 2) Từ procurement group
+        grp = getattr(move, 'group_id', False)
+        if grp and getattr(grp, 'sale_id', False):
+            return grp.sale_id
+        # 3) Từ picking
+        if getattr(picking, 'sale_id', False):
+            return picking.sale_id
+        return False
+
     def _domain(self):
         self.ensure_one()
         if self.date_from > self.date_to:
@@ -105,6 +118,7 @@ class StockExportWizard(models.TransientModel):
             {'key': 'ngay_hach_toan', 'name': 'Ngày hạch toán (*)', 'width': 18},
             {'key': 'ngay_chung_tu', 'name': 'Ngày chứng từ (*)', 'width': 18},
             {'key': 'so_chung_tu', 'name': 'Số chứng từ (*)', 'width': 20},
+            {'key': 'don_hang_goc', 'name': 'Đơn hàng gốc', 'width': 20},
             {'key': 'ma_doi_tuong', 'name': 'Mã đối tượng', 'width': 15},
             {'key': 'ten_doi_tuong', 'name': 'Tên đối tượng', 'width': 30},
             {'key': 'dia_chi', 'name': 'Địa chỉ/Bộ phận', 'width': 40},
@@ -119,7 +133,9 @@ class StockExportWizard(models.TransientModel):
             {'key': 'dvt', 'name': 'ĐVT', 'width': 10},
             {'key': 'so_luong', 'name': 'Số lượng', 'width': 12},
             {'key': 'don_gia', 'name': 'Đơn giá', 'width': 15},
+            {'key': 'thue_suat', 'name': 'Thuế suất (%)', 'width': 12},
             {'key': 'thanh_tien', 'name': 'Thành tiền', 'width': 15},
+            {'key': 'thanh_tien_sau_thue', 'name': 'Thành tiền sau thuế', 'width': 18},
             {'key': 'so_lenh_sx', 'name': 'Số lệnh sản xuất', 'width': 15},
             {'key': 'ma_khoan_muc_cp', 'name': 'Mã khoản mục chi phí', 'width': 18},
             {'key': 'ma_doi_tuong_thcp', 'name': 'Mã đối tượng THCP', 'width': 18},
@@ -153,6 +169,16 @@ class StockExportWizard(models.TransientModel):
         # Determine moves
         moves = picking.move_line_ids if picking.move_line_ids else picking.move_ids_without_package
         
+        # Determine move & product (to find SO)
+        first_move = moves[0] if moves else None
+        if hasattr(first_move, '_name') and first_move._name == 'stock.move.line':
+            first_move_id = first_move.move_id
+        else:
+            first_move_id = first_move 
+        
+        so = self._find_sale_order(first_move_id, picking)
+        don_hang_goc = so.name if so else (picking.origin or "")
+
         for line in moves:
             # Determine move & product
             if line._name == 'stock.move.line':
@@ -169,14 +195,58 @@ class StockExportWizard(models.TransientModel):
             if not prod: continue
 
             # Values
-            standard_price = prod.standard_price or 0.0
-            cost_value = standard_price * qty
+            # standard_price = prod.standard_price or 0.0
+            # cost_value = standard_price * qty
+            
+            # --- Price Logic from Sale Order ---
+            price_unit = 0.0
+            tax_rate = 0.0
+            price_subtotal = 0.0
+            price_total = 0.0
+            
+            sol = getattr(move, 'sale_line_id', False)
+            if sol:
+                # Use Sale Order Price
+                price_unit = sol.price_unit
+                
+                # Get Tax Rate
+                if sol.tax_id:
+                     # Taking the first tax as representative (common for single VAT rate)
+                     tax = sol.tax_id[0]
+                     tax_rate = tax.amount
+                
+                # Calculate Subtotal (Thành tiền) based on Exported Qty
+                # Formula: Unit Price * Qty * (1 - Discount/100)
+                discount_factor = 1.0 - (sol.discount or 0.0) / 100.0
+                price_subtotal = price_unit * qty * discount_factor
+                
+                # Calculate Total After Tax
+                # Taxes are calculated on price_subtotal
+                price_total = price_subtotal * (1.0 + tax_rate / 100.0)
+            else:
+                # Fallback if no SO line (e.g. manual move)
+                # Keep 0 or use Product List Price? 
+                # Request says "không được lấy ở sản phẩm". 
+                # Yet if no SO, we have no choice but 0 or product price.
+                # Let's default to standard logic if absolutely necessary, but prompt implies SO focus.
+                # We will check if we can fallback to picking Valuation if needed, 
+                # but "price_unit" usually implies Sales Price.
+                # Let's try to get from move price_unit if it exists and is relevant?
+                # For outgoing stock moves, price_unit might be cost. 
+                # So best to leave 0 if no SO to avoid "wrong product price".
+                # But to be safe for display, maybe list_price as last resort?
+                # "Unit price taken from sale order (not from product)".
+                # Implies strictly SO. So 0.0 if no SO.
+                price_unit = 0.0
+                price_subtotal = 0.0
+                price_total = 0.0
             
             row = {
                 'loai_xuat_kho': loai_xuat,
                 'ngay_hach_toan': date_str,
                 'ngay_chung_tu': date_str,
                 'so_chung_tu': picking.name,
+                'don_hang_goc': don_hang_goc,
                 'ma_doi_tuong': partner_code,
                 'ten_doi_tuong': partner_name,
                 'dia_chi': partner_address,
@@ -190,8 +260,10 @@ class StockExportWizard(models.TransientModel):
                 'tk_co': '1561',
                 'dvt': uom.name if uom else '',
                 'so_luong': qty,
-                'don_gia': standard_price,
-                'thanh_tien': cost_value,
+                'don_gia': price_unit,
+                'thue_suat': tax_rate,
+                'thanh_tien': price_subtotal,
+                'thanh_tien_sau_thue': price_total,
                 'so_lenh_sx': '',
                 'ma_khoan_muc_cp': '',
                 'ma_doi_tuong_thcp': '',
@@ -246,6 +318,8 @@ class StockExportWizard(models.TransientModel):
                              cell.number_format = '#,##0.00'
                          elif 'tien' in col_def['key'] or 'gia' in col_def['key']:
                              cell.number_format = '#,##0'
+                         elif col_def['key'] == 'thue_suat':
+                             cell.number_format = '0.00'
                      else:
                          cell.alignment = cell_alignment
                  current_row += 1
