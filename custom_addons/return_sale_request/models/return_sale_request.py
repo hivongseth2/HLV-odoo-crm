@@ -505,3 +505,61 @@ class ReturnSaleRequest(models.Model):
                     "product_qty": 1.0,  # Mặc định, user sẽ cập nhật
                     "product_uom_id": product.uom_id.id,
                 })
+
+    def _sync_lines_from_misa_data(self, line_data):
+        """Sync lines từ dữ liệu chi tiết MISA (DataSubPaging) với qty và price
+        
+        Args:
+            line_data: list of dicts từ DataSubPaging API, mỗi dict chứa:
+                - ProductIDText: mã sản phẩm
+                - Amount: số lượng
+                - Price: đơn giá
+                - TotalAmount: thành tiền
+                - UnitIDText: tên đơn vị
+                - Description: mô tả
+        """
+        self.ensure_one()
+        if not line_data:
+            return
+        
+        # Xóa lines cũ
+        self.line_ids.unlink()
+        
+        Product = self.env["product.product"].sudo()
+        OdooUtils = self.env["odoo.utils"].sudo()
+        
+        def _flt(x, dv=0.0):
+            try:
+                return float(x or 0.0)
+            except Exception:
+                return dv
+        
+        import logging
+        _logger = logging.getLogger(__name__)
+        
+        for line in line_data:
+            code = (line.get("ProductIDText") or "").strip()
+            if not code:
+                continue
+                
+            # Parse data
+            qty = _flt(line.get("Amount"), 1.0)
+            price = _flt(line.get("Price"), 0.0)
+            uom_name = (line.get("UnitIDText") or "Cái").strip()
+            
+            product = Product.search([("default_code", "=", code)], limit=1)
+            if not product:
+                product = OdooUtils._get_or_create_product(
+                    code=code, name=code, unit_name=uom_name,
+                    purchase_ok=True, sale_ok=True
+                )
+            
+            if product:
+                self.env["return.sale.request.line"].create({
+                    "request_id": self.id,
+                    "product_id": product.id,
+                    "product_qty": qty,
+                    "product_uom_id": product.uom_id.id,
+                    "unit_price": price,
+                })
+                _logger.info("📦 Created line: %s x%.2f @ %.2f", code, qty, price)

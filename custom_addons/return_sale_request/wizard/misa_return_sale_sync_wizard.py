@@ -224,16 +224,23 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                         "misa_owner_text": owner_text,
                     }
 
+                    # Fetch detailed lines with qty and price
+                    line_data = self._fetch_lines(misa_id, headers)
+                    
                     if existing:
                         existing.write(vals)
-                        if product_codes_text:
+                        if line_data:
+                            existing._sync_lines_from_misa_data(line_data)
+                        elif product_codes_text:
                             existing._sync_lines_from_misa(product_codes_text)
                         updated_count += 1
                         logs.append(f"   🔄 Cập nhật: {return_sale_no}")
                     else:
                         vals["state"] = "to_approve"
                         new_record = ReturnSaleRequest.create(vals)
-                        if product_codes_text:
+                        if line_data:
+                            new_record._sync_lines_from_misa_data(line_data)
+                        elif product_codes_text:
                             new_record._sync_lines_from_misa(product_codes_text)
                         created_count += 1
                         logs.append(f"   ✅ Tạo mới: {return_sale_no}")
@@ -311,6 +318,72 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
         except Exception as e:
             _logger.warning("Error fetching detail for ID %s: %s", misa_id, e)
             return None
+
+    def _fetch_lines(self, misa_id, headers):
+        """Fetch chi tiết sản phẩm từ DataSubPaging API
+        
+        Returns list of dicts: [{ProductIDText, Amount, Price, UnitIDText, ...}, ...]
+        """
+        try:
+            url = "https://amisapp.misa.vn/crm/g2/api/business/ReturnSale/DataSubPaging"
+            
+            # Payload tương tự SaleOrder DataSubPaging
+            payload = {
+                "Columns": "SUQsUHJvZHVjdElELFByb2R1Y3RJRFRleHQsQW1vdW50LFByaWNlLFRvdGFsQW1vdW50LFVuaXRJRCxVbml0SURUZXh0LERpc2NvdW50UGVyY2VudCxEZXNjcmlwdGlvbg==",
+                "Sorts": [],
+                "Start": 0,
+                "Page": 1,
+                "PageSize": 100,
+                "Filters": [],
+                "DefaultTotal": False,
+                "IsMappingData": False,
+                "MappingValueObject": {
+                    "MasterID": str(misa_id),
+                    "TableName": "return_sale_detail",
+                    "MasterKey": "ReturnSaleID",
+                    "SumColumn": ""
+                },
+                "IsApproved": False,
+                "CustomPagingData": {
+                    "SubFormConfig": {
+                        "ColumnFieldSubForm": "",
+                        "ColumnAggregateSubForm": "",
+                        "TableName": "return_sale_detail",
+                        "ParentIDKey": "ReturnSaleID",
+                        "IsBringSerialType": False,
+                        "AggregateField": []
+                    }
+                },
+                "IsUsedELTS": True,
+                "ListGmailPage": [],
+                "ListFacebookPage": {},
+                "IsListPaging": True,
+                "IsGetCache": True,
+                "IsCheckInactive": False,
+                "IsConverted": False,
+                "SessionID": "return-sale-sync-lines",
+                "AISearchKeyword": ""
+            }
+            
+            _logger.info("📡 Fetching lines for ID %s", misa_id)
+            response = requests.post(url, headers=headers, json=payload, timeout=60)
+            
+            if response.status_code != 200:
+                _logger.warning("Lines API failed for ID %s: HTTP %s", misa_id, response.status_code)
+                return []
+            
+            result = response.json()
+            if not result.get("Success"):
+                _logger.warning("Lines API Success=False for ID %s: %s", misa_id, result)
+                return []
+            
+            lines = result.get("Data", []) or []
+            _logger.info("📥 Found %d lines for ID %s", len(lines), misa_id)
+            return lines
+            
+        except Exception as e:
+            _logger.warning("Error fetching lines for ID %s: %s", misa_id, e)
+            return []
 
     def action_reset(self):
         """Reset wizard để chạy lại"""
