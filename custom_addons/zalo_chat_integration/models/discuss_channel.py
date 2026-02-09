@@ -149,7 +149,7 @@ class DiscussChannel(models.Model):
                  self.action_gpt_create_quote()
                  
                  # UPDATE SUMMARY (New Request)
-                 self.action_gpt_update_customer_profile()
+
                  
              except Exception as e:
                  _logger.error(f"Error executing /baogia: {e}")

@@ -130,31 +130,6 @@ class ZaloChatWebhook(http.Controller):
             'is_read': False,
         }
         
-        # Parse message content based on type
-        content_to_check = ''
-        if event_name == 'user_send_text':
-            content_to_check = message_data.get('text', '')
-            message_vals.update({
-                'message_type': 'text',
-                'content': content_to_check,
-            })
-        
-        # DEDUPLICATION CHECK
-        # Check if a message with same content and type was received in last 5 seconds
-        # (Zalo sometimes sends retries or double hooks with different msg_ids)
-        if content_to_check:
-             last_msg = request.env['zalo.chat.message'].sudo().search([
-                 ('conversation_id', '=', conversation.id),
-                 ('direction', '=', 'inbound'),
-                 ('message_type', '=', 'text'),
-                 ('content', '=', content_to_check),
-                 ('create_date', '>=', fields.Datetime.now() - datetime.timedelta(seconds=5))
-             ], limit=1)
-             
-             if last_msg:
-                 _logger.warning(f'[ZALO WEBHOOK] Duplicate message detected (content={content_to_check[:20]}...), skipping.')
-                 return
-
         # DEDUPLICATION BY MESSAGE ID (for outbound echo or retries)
         msg_id = message_data.get('msg_id')
         if msg_id:
@@ -165,6 +140,29 @@ class ZaloChatWebhook(http.Controller):
                 _logger.warning(f'[ZALO WEBHOOK] Message {msg_id} already exists (id={existing_msg.id}), skipping.')
                 return
 
+        # Parse message content based on type
+        if event_name == 'user_send_text':
+            content_to_check = message_data.get('text', '')
+            
+            # DEDUPLICATION CHECK (Content-based for text)
+            # Check if a message with same content and type was received in last 5 seconds
+            if content_to_check:
+                 last_msg = request.env['zalo.chat.message'].sudo().search([
+                     ('conversation_id', '=', conversation.id),
+                     ('direction', '=', 'inbound'),
+                     ('message_type', '=', 'text'),
+                     ('content', '=', content_to_check),
+                     ('create_date', '>=', fields.Datetime.now() - datetime.timedelta(seconds=5))
+                 ], limit=1)
+                 
+                 if last_msg:
+                     _logger.warning(f'[ZALO WEBHOOK] Duplicate message detected (content={content_to_check[:20]}...), skipping.')
+                     return
+
+            message_vals.update({
+                'message_type': 'text',
+                'content': content_to_check,
+            })
         
         elif event_name == 'user_send_image':
             # Image from Zalo
