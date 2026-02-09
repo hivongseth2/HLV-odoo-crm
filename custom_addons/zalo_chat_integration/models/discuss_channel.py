@@ -393,6 +393,15 @@ Select ID:"""}
         # Fallback: return the first result
         return candidates[0]
 
+    def _execute_command_baogia(self, **kwargs):
+        """
+        Slash command /baogia to trigger GPT Quote Creation
+        """
+        partner_id = self.env.user.partner_id.id
+        self.action_gpt_create_quote()
+        # Return True to indicate command was handled (stop propagation if needed, though Odoo void returns usually fine)
+        return True
+
     def action_gpt_create_quote(self):
         """
         Parse chat and create Draft Quotation (Sale Order)
@@ -409,22 +418,35 @@ Select ID:"""}
         for msg in messages:
             body = tools.html2plaintext(msg.body) if msg.body else ''
             if not body: continue
-            author_name = msg.author_id.name if msg.author_id else "Bot"
-            content_lines.append(f"{author_name}: {body}")
+            
+            # Distinguish System/Bot messages vs User messages
+            if msg.author_id:
+                prefix = f"User ({msg.author_id.name})"
+            else:
+                prefix = "SYSTEM_LOG"
+                
+            content_lines.append(f"{prefix}: {body}")
             
         chat_content = "\n".join(content_lines)
         
         prompt = [
-            {"role": "system", "content": """Bạn là trợ lý ảo tạo đơn hàng. Hãy trích xuất thông tin đặt hàng từ hội thoại.
-Trả về dữ liệu dạng JSON CHUẨN (không markdown, không giải thích thêm).
-Cấu trúc:
+            {"role": "system", "content": """Bạn là trợ lý ảo tạo đơn hàng (Sale Order Creator). 
+Nhiệm vụ: Trích xuất sản phẩm khách muốn mua TỪ CÁC TIN NHẮN MỚI NHẤT chưa được xử lý.
+
+QUY TẮC QUAN TRỌNG VỀ LỊCH SỬ:
+1. Đọc kỹ dòng "SYSTEM_LOG". Nếu thấy dòng bắt đầu bằng "SYSTEM_LOG: Đã tạo báo giá...", nghĩa là các yêu cầu TRƯỚC ĐÓ đã được xử lý -> HÃY BỎ QUA, KHÔNG TẠO LẠI.
+2. Chỉ trích xuất các yêu cầu mua hàng MỚI xuất hiện sau dòng "Đã tạo báo giá" gần nhất.
+3. Nếu khách hàng yêu cầu "đặt thêm", chỉ lấy phần thêm.
+4. Nếu khách hàng yêu cầu "đặt lại đơn cũ", mới được lấy lại thông tin cũ.
+
+CẤU TRÚC JSON TRẢ VỀ:
 {
   "products": [
     {"name": "tên sản phẩm", "quantity": 1, "note": ""}
   ],
-  "note": "Ghi chú chung của đơn"
+  "note": "Ghi chú chung"
 }
-Nếu không có sản phẩm nào, trả về: {"products": []}
+Nếu không có yêu cầu mới (hoặc đã xử lý hết), trả về: {"products": []}
 """},
             {"role": "user", "content": chat_content}
         ]
@@ -441,7 +463,9 @@ Nếu không có sản phẩm nào, trả về: {"products": []}
             products_data = data.get('products', [])
             
             if not products_data:
-                raise UserError(_("GPT không tìm thấy thông tin sản phẩm nào trong đoạn chat."))
+                # Post a ephemeral notification or just log
+                self.message_post(body="🤖 AI: Không tìm thấy yêu cầu mua hàng mới nào cần tạo báo giá.", message_type='notification', subtype_xmlid='mail.mt_note')
+                return
                 
             customer = False
             for partner in self.channel_partner_ids:
