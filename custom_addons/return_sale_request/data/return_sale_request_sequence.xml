@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!-- Sequence -->
+    <record id="seq_return_sale_request" model="ir.sequence">
+        <field name="name">Đề nghị trả hàng bán</field>
+        <field name="code">return.sale.request</field>
+        <field name="prefix">DNTH</field>
+        <field name="padding">7</field>
+        <field name="company_id" eval="False" />
+    </record>
+</odoo>
