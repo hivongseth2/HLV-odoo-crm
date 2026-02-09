@@ -35,4 +35,13 @@
         sequence="20"
         groups="group_return_sale_request_manager"
     />
+
+    <!-- Add to Sales App -->
+    <menuitem
+        id="menu_return_sale_request_sale_app"
+        name="Đề nghị trả hàng"
+        parent="sale.sale_order_menu"
+        action="action_return_sale_request"
+        sequence="30"
+    />
 </odoo>
