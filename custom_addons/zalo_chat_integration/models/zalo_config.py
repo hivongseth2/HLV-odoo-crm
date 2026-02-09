@@ -44,6 +44,23 @@ class ZaloOAConfig(models.Model):
         string='Token Expiry',
         readonly=True,
     )
+    
+    # New Fields
+    alias = fields.Char(string='Alias (Display Name)', help="User-friendly name for this Zalo OA")
+    unique_room_id = fields.Char(string='Unique Room ID', compute='_compute_unique_room_id', store=True, readonly=True)
+    
+    _sql_constraints = [
+        ('unique_room_id_uniq', 'unique(unique_room_id)', 'This Zalo OA Room (App ID + OA Name) already exists!'),
+    ]
+
+    @api.depends('app_id', 'oa_name')
+    def _compute_unique_room_id(self):
+        for record in self:
+            if record.app_id and record.oa_name:
+                record.unique_room_id = f"{record.app_id}_{record.oa_name.replace(' ', '_')}"
+            else:
+                record.unique_room_id = False
+
     active = fields.Boolean(
         string='Active',
         default=True,
