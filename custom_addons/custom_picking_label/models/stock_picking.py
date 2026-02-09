@@ -9,7 +9,8 @@ class StockPicking(models.Model):
         wizard_lines = []
         for line in self.move_ids:
             # Mặc định lấy số lượng hoàn tất (quantity), nếu = 0 thì lấy nhu cầu
-            qty = line.quantity if line.quantity > 0 else line.product_uom_qty
+            # qty = line.quantity if line.quantity > 0 else line.product_uom_qty
+            qty = 1
             if qty > 0:
                 wizard_lines.append((0, 0, {
                     'product_id': line.product_id.id,
