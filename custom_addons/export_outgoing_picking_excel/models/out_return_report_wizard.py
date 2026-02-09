@@ -54,6 +54,13 @@ class OutReturnReportView(models.Model):
         return qty
 
 
+import logging
+_logger = logging.getLogger(__name__)
+
+# ... (existing imports)
+
+# ... (OutReturnReportView class)
+
 class OutReturnReportRefreshWizard(models.TransientModel):
     """Wizard cập nhật dữ liệu báo cáo"""
     _name = "out.return.report.refresh.wizard"
@@ -64,78 +71,53 @@ class OutReturnReportRefreshWizard(models.TransientModel):
     warehouse_ids = fields.Many2many("stock.warehouse", string="Kho")
 
     def _get_out_pickings_domain(self):
+        # Convert date to datetime to cover full day range
+        start_date = fields.Datetime.to_datetime(self.date_from)
+        end_date = fields.Datetime.to_datetime(self.date_to) + datetime.timedelta(days=1)
+        
         domain = [
-            ("date_done", ">=", fields.Date.to_date(self.date_from)),
-            ("date_done", "<=", fields.Date.to_date(self.date_to)),
+            ("date_done", ">=", start_date),
+            ("date_done", "<", end_date),
             ("picking_type_id.sequence_code", "=", "OUT"),
             ("state", "=", "done"),
         ]
         if self.warehouse_ids:
             domain.append(("picking_type_id.warehouse_id", "in", self.warehouse_ids.ids))
+        
+        _logger.info("Out Pickings Domain: %s", domain)
         return domain
 
-    def _find_return_pickings(self, out_picking, max_date):
-        return_pickings = self.env["stock.picking"]
-        
-        # 1. move_dest_ids
-        for move in out_picking.move_ids:
-            for dest_move in move.move_dest_ids:
-                if dest_move.picking_id and dest_move.picking_id.state == 'done':
-                    picking = dest_move.picking_id
-                    if picking.picking_type_id.code == 'incoming' and picking.date_done and picking.date_done <= max_date:
-                        return_pickings |= picking
-        
-        # 2. origin
-        return_pickings |= self.env["stock.picking"].search([
-            ("origin", "ilike", out_picking.name),
-            ("picking_type_id.code", "=", "incoming"),
-            ("state", "=", "done"),
-            ("date_done", "<=", max_date),
-        ])
-        
-        # 3. partner + product
-        if out_picking.partner_id:
-            product_ids = out_picking.move_ids.mapped('product_id').ids
-            if product_ids:
-                return_pickings |= self.env["stock.picking"].search([
-                    ("partner_id", "=", out_picking.partner_id.id),
-                    ("picking_type_id.code", "=", "incoming"),
-                    ("state", "=", "done"),
-                    ("date_done", ">", out_picking.date_done),
-                    ("date_done", "<=", max_date),
-                    ("move_ids.product_id", "in", product_ids),
-                ])
-        
-        return return_pickings
+    # ... (_find_return_pickings)
 
     def action_refresh_data(self):
         """Tính toán lại dữ liệu và lưu vào Model out.return.report.view"""
         self.ensure_one()
         ReportView = self.env["out.return.report.view"]
         
-        # 1. Xóa dữ liệu cũ trong khoảng thời gian có liên quan
-        # (Xóa các dòng có out_picking_date trong khoảng chọn)
-        # Để an toàn, xóa các dòng liên quan OUT date range
+        _logger.info("ACTION REFRESH DATA: From %s To %s, Warehouses: %s", self.date_from, self.date_to, self.warehouse_ids.mapped('name'))
+        
+        # 1. Xóa dữ liệu cũ
         existing_domain = [
             ("out_picking_date", ">=", fields.Datetime.to_datetime(self.date_from)),
             ("out_picking_date", "<=", fields.Datetime.to_datetime(self.date_to) + datetime.timedelta(days=1)),
         ]
-        ReportView.search(existing_domain).unlink()
+        deleted_count = ReportView.search(existing_domain).unlink()
+        _logger.info("Deleted %s existing report lines", len(deleted_count) if isinstance(deleted_count, list) else 'records')
         
         # 2. Tính toán mới
         domain = self._get_out_pickings_domain()
         out_pickings = self.env["stock.picking"].sudo().search(domain, order="date_done desc")
+        
+        _logger.info("Found %s OUT pickings", len(out_pickings))
         
         lines_data = []
         for out_picking in out_pickings:
             max_date = out_picking.date_done + relativedelta(months=1)
             return_pickings = self._find_return_pickings(out_picking, max_date)
             
-            out_qty_total = sum(out_picking.move_ids.mapped(
-                lambda m: m.quantity_done if hasattr(m, 'quantity_done') else m.product_uom_qty
-            ))
-
             if return_pickings:
+                _logger.info(">> Found Returns for OUT %s: %s", out_picking.name, return_pickings.mapped('name'))
+                # ... (logic cũ)
                 for return_picking in return_pickings:
                     return_qty_total = sum(return_picking.move_ids.mapped(
                         lambda m: m.quantity_done if hasattr(m, 'quantity_done') else m.product_uom_qty
