@@ -7,18 +7,20 @@
         <field name="arch" type="xml">
             <list string="Báo cáo xuất kho và trả hàng" create="false" edit="false">
                 <header>
-                    <button name="action_open_export_wizard" type="object" string="Xuất Excel" class="btn-primary"/>
+                    <button name="%(action_out_return_report_wizard)d" type="action" string="Xuất Excel" class="btn-primary"/>
                 </header>
-                <field name="out_picking_name" string="Mã phiếu xuất"/>
-                <field name="out_picking_origin" string="Mã báo giá"/>
-                <field name="out_picking_date" string="Ngày xuất"/>
+                <!-- Nhóm 1: Thông tin phiếu xuất -->
+                <field name="out_picking_name" string="Phiếu xuất"/>
+                <field name="out_picking_origin" string="Báo giá"/>
+                <field name="out_picking_date" string="Ngày xuất" widget="date"/>
                 <field name="partner_name" string="Khách hàng"/>
-                <field name="return_picking_name" string="Mã phiếu trả"/>
-                <field name="return_picking_date" string="Ngày trả"/>
+                <!-- Nhóm 2: Thông tin phiếu trả -->
+                <field name="return_picking_name" string="Phiếu trả"/>
+                <field name="return_picking_date" string="Ngày trả" widget="date"/>
+                <!-- Nhóm 3: Thông tin sản phẩm -->
                 <field name="product_code" string="Mã SP"/>
                 <field name="product_name" string="Tên SP"/>
                 <field name="product_uom" string="ĐVT"/>
-                <field name="out_qty" string="SL xuất"/>
                 <field name="return_qty" string="SL trả" sum="Tổng"/>
             </list>
         </field>
