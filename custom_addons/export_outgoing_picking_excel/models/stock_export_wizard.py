@@ -69,7 +69,7 @@ class StockExportWizard(models.TransientModel):
     def _partner_code(self, partner):
         if not partner:
             return ""
-        return partner.ref or ""
+        return partner.commercial_partner_id.ref or partner.ref or ""
 
     def _find_sale_order(self, move, picking):
         # 1) Từ sale_line_id trực tiếp
