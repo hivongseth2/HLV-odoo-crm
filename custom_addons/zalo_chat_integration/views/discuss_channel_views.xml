@@ -7,7 +7,10 @@
         <field name="inherit_id" ref="im_livechat.discuss_channel_view_form"/>
         <field name="arch" type="xml">
             <xpath expr="//sheet" position="before">
-                <!-- GPT buttons removed as per request (moved to Evaluation) -->
+                <header>
+                    <button name="action_gpt_create_quote" string="🤖 AI Tạo Báo Giá" type="object" class="btn-primary"/>
+                    <button name="action_gpt_summarize" string="📝 Tóm tắt hội thoại" type="object" class="btn-secondary"/>
+                </header>
             </xpath>
         </field>
     </record>

@@ -1,38 +1,64 @@
-/* Zalo Chat Integration - Message Alignment Styles for Odoo 18 */
+/* Zalo Chat Integration CSS */
 
-/* 
- * Move self-authored messages to the right side (like Messenger)
- * Odoo 18 uses .o-mail-Message with .o-selfAuthored for user's own messages
- */
-
-/* Make the message row flex-direction reverse for self messages */
-.o-mail-Message.o-selfAuthored {
-    flex-direction: row-reverse !important;
+/* Timeline Styles */
+.zalo-timeline {
+    list-style: none;
+    padding: 0;
+    position: relative;
+    border-left: 2px solid #e9ecef;
+    margin-left: 10px;
 }
 
-/* Align the message content to the right */
-.o-mail-Message.o-selfAuthored .o-mail-Message-core {
-    align-items: flex-end !important;
+.zalo-timeline-item {
+    margin-bottom: 15px;
+    position: relative;
+    padding-left: 20px;
 }
 
-/* Move message body to right */
-.o-mail-Message.o-selfAuthored .o-mail-Message-body {
-    text-align: right !important;
+.zalo-timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -6px;
+    top: 5px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: #007bff;
+    /* Primary Blue */
+    border: 2px solid #fff;
 }
 
-/* Move header (name, time) to right for self messages */
-.o-mail-Message.o-selfAuthored .o-mail-Message-header {
-    flex-direction: row-reverse !important;
-    justify-content: flex-start !important;
+.zalo-timeline-item .time {
+    display: block;
+    font-size: 0.85em;
+    color: #6c757d;
+    font-weight: bold;
+    margin-bottom: 2px;
 }
 
-/* Position sidebar (avatar) on the right for self messages */
-.o-mail-Message.o-selfAuthored .o-mail-Message-sidebar {
-    order: 1;
+.zalo-timeline-item .content {
+    display: block;
+    color: #212529;
 }
 
-/* Ensure proper margin for self-authored messages */
-.o-mail-Message.o-selfAuthored .o-mail-Message-content {
-    margin-left: auto;
-    margin-right: 0;
+.zalo-timeline-item .status {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 0.75em;
+}
+
+/* Smart Badge Colors */
+.zalo-timeline-item .badge-warning {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+.zalo-timeline-item .badge-success {
+    background-color: #28a745;
+    color: #fff;
+}
+
+.zalo-timeline-item .badge-danger {
+    background-color: #dc3545;
+    color: #fff;
 }

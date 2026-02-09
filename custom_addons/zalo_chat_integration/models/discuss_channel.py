@@ -496,8 +496,10 @@ Nếu không có sản phẩm nào, trả về: {"products": []}
                 msg += f" (Không tìm thấy: {', '.join(not_found_products)})"
                 
             # Post as plain notification
+            # Post as plain notification
+            link = Markup(f'<a href="#" data-oe-model="sale.order" data-oe-id="{sale_order.id}">{sale_order.name}</a>')
             self.message_post(
-                body=msg,  # Plain text body, Odoo will handle simple rendering
+                body=Markup(f"✅ Đã tạo báo giá: {link}<br/>(Ghi chú: {data.get('note', 'Không')})"),
                 message_type='notification',
                 subtype_xmlid='mail.mt_note'
             )

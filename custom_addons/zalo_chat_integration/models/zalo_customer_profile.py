@@ -12,8 +12,9 @@ class ZaloCustomerProfile(models.Model):
     partner_id = fields.Many2one('res.partner', string='Khách hàng', required=True, index=True)
     
     # Smart Summaries
-    summary_cumulative = fields.Text(string='Tóm tắt tổng hợp (AI)', 
-        help="AI sẽ tự động cập nhật nội dung này dựa trên các phiên đánh giá mới nhất.")
+    summary_cumulative = fields.Html(string='Tóm tắt tổng hợp (AI)', 
+        help="AI sẽ tự động cập nhật nội dung này dựa trên các phiên đánh giá mới nhất.",
+        sanitize=False) # Disable sanitize to allow custom classes/styles if needed
     
     tag_ids = fields.Many2many('zalo.customer.tag', string='Thẻ phân loại',
         help="Thẻ tự động được gắn bởi AI hoặc thủ công.")
@@ -51,29 +52,51 @@ class ZaloCustomerProfile(models.Model):
         existing_tags = ", ".join(self.tag_ids.mapped('name'))
         
         prompt = [
-            {"role": "system", "content": """Bạn là trợ lý AI quản lý hồ sơ khách hàng (Customer Profile Manager). 
-Nhiệm vụ của bạn là cập nhật "Tóm tắt tổng hợp" và "Thẻ phân loại" cho khách hàng dựa trên phiên hội thoại mới nhất.
+            {"role": "system", "content": """Bạn là trợ lý AI quản lý hồ sơ khách hàng (CRM). 
+Nhiệm vụ: Cập nhật "Tóm tắt tổng hợp" và "Thẻ phân loại" cho khách hàng.
 
-QUY TẮC CẬP NHẬT TÓM TẮT:
-1. Giữ lại các thông tin quan trọng trong quá khứ.
-2. Bổ sung thông tin mới từ phiên hội thoại hiện tại.
-3. QUAN TRỌNG: Phải trích xuất THỜI GIAN và TRẠNG THÁI xử lý.
-   - Ví dụ: "Ngày 10/10 14:00: Khách hỏi giá FPD3 -> 14:15: Nhân viên đã báo giá -> Chờ khách chốt."
-   - Ghi rõ những việc ĐANG CHỜ (Pending) để nhân viên follow.
-4. Viết ngắn gọn, súc tích, trình bày theo dạng Timeline nếu có nhiều sự kiện.
-
-QUY TẮC CẬP NHẬT THẺ (TAGS):
-1. Xác định VAI TRÒ: [Khách lẻ, NCC, Đại lý, CTV].
-2. Xác định THƯƠNG HIỆU quan tâm: [Bosch, Makita, Milwaukee, ...].
-3. Xác định NHU CẦU hiện tại: [Mua hàng, Bảo hành, Hỏi giá, Khiếu nại].
-4. Trả về danh sách thẻ, bao gồm cả thẻ cũ (nếu còn đúng) và thẻ mới.
-
-OUTPUT FORMAT (JSON):
+OUTPUT FORMAT: JSON
 {
-    "updated_summary": "...",
-    "tags": ["Khách lẻ", "Bosch", "Mua hàng"]
+    "updated_summary_html": "HTML Code",
+    "tags": ["Tag1", "Tag2"]
 }
+
+YÊU CẦU VỀ HTML TIMELINE:
+- Trả về 1 danh sách `ul` với class="zalo-timeline".
+- Mỗi sự kiện là 1 `li` với class="zalo-timeline-item".
+- Bên trong `li` có:
+  - `span.time`: Thời gian (VD: 10/10 14:00)
+  - `span.content`: Nội dung tóm tắt
+  - `span.status`: Trạng thái (VD: Chờ xử lý, Đã xong) - dùng class badge nếu cần.
+- Sắp xếp thời gian từ MỚI NHẤT lên đầu.
+- Giữ lại các sự kiện cũ quan trọng, merge với sự kiện mới.
+
+VÍ DỤ HTML:
+<ul class="zalo-timeline">
+  <li class="zalo-timeline-item">
+    <span class="time">Hôm nay 10:00</span>
+    <span class="content">Khách hỏi mua FPD3</span>
+    <span class="status badge badge-warning">Đang chờ</span>
+  </li>
+  <li class="zalo-timeline-item">
+    <span class="time">Hôm qua 15:30</span>
+    <span class="content">Đã chốt đơn hàng cũ</span>
+    <span class="status badge badge-success">Hoàn thành</span>
+  </li>
+</ul>
 """},
+            {"role": "user", "content": f"""
+HỒ SƠ HIỆN TẠI (HTML cũ):
+{existing_summary}
+
+TAGS CŨ: [{existing_tags}]
+
+THÔNG TIN MỚI (Vừa chat xong):
+"{new_evaluation_content}"
+
+Hãy cập nhật timeline và tags.
+"""}
+        ]
             {"role": "user", "content": f"""
 HỒ SƠ HIỆN TẠI:
 - Tóm tắt cũ: {existing_summary}
@@ -90,7 +113,7 @@ Hãy cập nhật hồ sơ khách hàng này."""}
             import json
             data = json.loads(response)
             
-            updated_summary = data.get('updated_summary')
+            updated_summary = data.get('updated_summary_html') or data.get('updated_summary')
             new_tags_list = data.get('tags', [])
             
             # Update Summary
