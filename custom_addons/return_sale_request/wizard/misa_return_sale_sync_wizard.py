@@ -205,6 +205,7 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                     )
 
                     vals = {
+                        "name": return_sale_no, # Use MISA code as name
                         "misa_id": misa_id,
                         "misa_return_sale_no": return_sale_no,
                         "date": request_date or fields.Date.today(),
@@ -266,10 +267,20 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
         }
 
     def _fetch_detail(self, misa_id, headers):
-        """Fetch chi tiết đề nghị trả hàng từ FormDataNew API"""
+        """Fetch chi tiết đề nghị trả hàng từ FormDataNew API (POST)"""
         try:
-            detail_url = f"https://amisapp.misa.vn/crm/g2/api/business/ReturnSale/FormDataNew/ReturnSale/122/{misa_id}"
-            response = requests.get(detail_url, headers=headers, timeout=60)
+            # Change to POST based on user feedback
+            detail_url = "https://amisapp.misa.vn/crm/g2/api/business/ReturnSale/FormDataNew"
+            
+            # Payload from user: {"ID":"7041","MISAEntityState":2,"ActiveLayoutCode":null,"CustomDicData":null}
+            payload = {
+                "ID": str(misa_id),
+                "MISAEntityState": 2,
+                "ActiveLayoutCode": None,
+                "CustomDicData": None
+            }
+            
+            response = requests.post(detail_url, headers=headers, json=payload, timeout=60)
 
             if response.status_code != 200:
                 _logger.warning("Detail API failed for ID %s: %s", misa_id, response.status_code)
@@ -277,6 +288,7 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
 
             result = response.json()
             if not result.get("Success"):
+                _logger.warning("Detail API Success=False for ID %s: %s", misa_id, result)
                 return None
 
             return result.get("Data", {}).get("CurrentData", {})

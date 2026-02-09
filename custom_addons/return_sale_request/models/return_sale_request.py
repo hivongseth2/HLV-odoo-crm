@@ -394,21 +394,33 @@ class ReturnSaleRequest(models.Model):
         import requests
         from dateutil.parser import parse
         
-        # Fetch detail
-        detail_url = f"https://amisapp.misa.vn/crm/g2/api/business/ReturnSale/FormDataNew/ReturnSale/122/{misa_id}"
-        response = requests.get(detail_url, headers=headers, timeout=60)
+        # Fetch detail - Change to POST based on user feedback to fix product lines
+        detail_url = "https://amisapp.misa.vn/crm/g2/api/business/ReturnSale/FormDataNew"
+        payload = {
+            "ID": str(misa_id),
+            "MISAEntityState": 2,
+            "ActiveLayoutCode": None,
+            "CustomDicData": None
+        }
+        
+        response = requests.post(detail_url, headers=headers, json=payload, timeout=60)
         
         if response.status_code != 200:
-            return {"ok": False, "error": "detail_error"}
+            return {"ok": False, "error": "detail_error", "message": f"HTTP {response.status_code}"}
         
         result = response.json()
         if not result.get("Success"):
-            return {"ok": False, "error": "detail_failed"}
+            return {"ok": False, "error": "detail_failed", "message": str(result)}
         
         detail_data = result.get("Data", {}).get("CurrentData", {})
+        # Note: If CurrentData is null, detail_data will be {}
+        if not detail_data and result.get("Data"):
+             # Fallback if structure is different
+             detail_data = result.get("Data")
+
         if not detail_data:
-            return {"ok": False, "error": "no_detail_data"}
-        
+             return {"ok": False, "error": "no_detail_data"}
+
         # Parse data
         return_sale_no = detail_data.get("ReturnSaleNo", "")
         sale_order_text = detail_data.get("SaleOrderIDText", "")
