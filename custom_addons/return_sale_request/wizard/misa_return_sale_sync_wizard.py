@@ -49,7 +49,7 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
             "DefaultTotal": True,
             "IsMappingData": False,
             "MappingValueObject": {},
-            "IsApproved": False,
+            "IsApproved": None,
             "CustomPagingData": {},
             "IsUsedELTS": True,
             "ListGmailPage": [],
@@ -59,7 +59,7 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
             "IsCheckInactive": False,
             "IsConverted": False,
             "SessionID": "return-sale-sync-wizard",
-            "LayoutCodeCheckPermission": "ReturnSale",
+            # "LayoutCodeCheckPermission": "ReturnSale",
             "AISearchKeyword": "",
         }
 
