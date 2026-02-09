@@ -68,7 +68,7 @@ class CapProductGenerateBarcodeManually(models.TransientModel):
 class cap_generate_product_barcode(models.TransientModel):
     _name = "cap.product.generate.barcode"
 
-    overwrite = fields.Boolean(String="Ghi đè mã EAN13 đã có")
+    overwrite = fields.Boolean(string="Ghi đè mã EAN13 đã có")
     type_generate = fields.Selection(
         [
             ("date", "Tạo mã EAN13 (theo ngày hiện tại)"),
