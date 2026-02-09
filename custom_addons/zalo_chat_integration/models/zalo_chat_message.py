@@ -109,6 +109,7 @@ class ZaloChatMessage(models.Model):
                 message.write({
                     'state': 'sent',
                     'sent_date': fields.Datetime.now(),
+                    'message_id': result.get('data', {}).get('message_id'),
                 })
                 
                 # Post to conversation chatter

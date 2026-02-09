@@ -155,6 +155,16 @@ class ZaloChatWebhook(http.Controller):
                  _logger.warning(f'[ZALO WEBHOOK] Duplicate message detected (content={content_to_check[:20]}...), skipping.')
                  return
 
+        # DEDUPLICATION BY MESSAGE ID (for outbound echo or retries)
+        msg_id = message_data.get('msg_id')
+        if msg_id:
+            existing_msg = request.env['zalo.chat.message'].sudo().search([
+                ('message_id', '=', msg_id)
+            ], limit=1)
+            if existing_msg:
+                _logger.warning(f'[ZALO WEBHOOK] Message {msg_id} already exists (id={existing_msg.id}), skipping.')
+                return
+
         
         elif event_name == 'user_send_image':
             # Image from Zalo
