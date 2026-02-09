@@ -121,6 +121,7 @@ class StockExportWizard(models.TransientModel):
             {'key': 'don_hang_goc', 'name': 'Đơn hàng gốc', 'width': 20},
             {'key': 'ma_doi_tuong', 'name': 'Mã đối tượng', 'width': 15},
             {'key': 'ten_doi_tuong', 'name': 'Tên đối tượng', 'width': 30},
+            {'key': 'khach_hang', 'name': 'Khách hàng', 'width': 30},
             {'key': 'dia_chi', 'name': 'Địa chỉ/Bộ phận', 'width': 40},
             {'key': 'ly_do_xuat', 'name': 'Lý do xuất', 'width': 30},
             {'key': 'ma_hang', 'name': 'Mã hàng (*)', 'width': 18},
@@ -178,6 +179,13 @@ class StockExportWizard(models.TransientModel):
         
         so = self._find_sale_order(first_move_id, picking)
         don_hang_goc = so.name if so else (picking.origin or "")
+        
+        # Customer Name (Khách hàng) - Priority: SO Partner -> Picking Commercial Partner -> Picking Partner
+        khach_hang = ""
+        if so and so.partner_id:
+            khach_hang = so.partner_id.name
+        elif partner:
+             khach_hang = partner.commercial_partner_id.name or partner.name
 
         for line in moves:
             # Determine move & product
@@ -249,6 +257,8 @@ class StockExportWizard(models.TransientModel):
                 'don_hang_goc': don_hang_goc,
                 'ma_doi_tuong': partner_code,
                 'ten_doi_tuong': partner_name,
+                'khach_hang': khach_hang,
+                'dia_chi': partner_address,
                 'dia_chi': partner_address,
                 'ly_do_xuat': ly_do_xuat,
                 'ma_hang': prod.default_code or '',
