@@ -49,7 +49,7 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
             "DefaultTotal": True,
             "IsMappingData": False,
             "MappingValueObject": {},
-            "IsApproved": False,
+            # IsApproved removed
             "CustomPagingData": {},
             "IsUsedELTS": True,
             "ListGmailPage": [],
@@ -59,7 +59,6 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
             "IsCheckInactive": False,
             "IsConverted": False,
             "SessionID": "return-sale-sync-wizard",
-            "LayoutCodeCheckPermission": "ReturnSale",
             "AISearchKeyword": "",
         }
 
@@ -87,8 +86,8 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
             # Log khoảng thời gian
             logs.append(f"\n📆 Khoảng thời gian: {self.from_date} đến {self.to_date}")
 
-            # API URL
-            api_url = "https://amisapp.misa.vn/crm/g2/api/business/ReturnSale/Grid"
+            # API URL - Use g1 instead of g2
+            api_url = "https://amisapp.misa.vn/crm/g1/api/business/ReturnSale/Grid"
 
             # Thống kê
             total_fetched = 0
@@ -101,22 +100,34 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
 
             while True:
                 payload = self._get_grid_payload(page)
+                
+                # Log payload để debug
+                _logger.info("📤 Request Payload Page %s: %s", page, payload)
+                logs.append(f"\n📤 Đang gọi API trang {page}...")
 
                 try:
                     response = requests.post(
                         api_url, headers=headers, json=payload, timeout=60
                     )
-                    logs.append(f"\n📡 API Response Status: {response.status_code}")
-                    response.raise_for_status()
-                    data = response.json()
+                    logs.append(f"📡 API Response Status: {response.status_code}")
+                    
+                    if response.status_code != 200:
+                        logs.append(f"❌ API trả về lỗi: {response.text}")
+                        _logger.error("API Error: %s", response.text)
+                        break
 
+                    data = response.json()
                     total = data.get("Total", 0)
                     page_count_api = data.get("PageCount", 0)
-                    logs.append(f"📊 Total: {total}, PageCount: {page_count_api}")
+                    success = data.get("Success")
+                    logs.append(f"📊 Success: {success}, Total: {total}, PageCount: {page_count_api}")
+                    
+                    if not success:
+                         logs.append(f"⚠️ API báo Success=False. Data: {data}")
 
                 except Exception as e:
-                    logs.append(f"❌ Lỗi khi gọi API: {e}")
-                    _logger.exception("API Error: %s", e)
+                    logs.append(f"❌ Exception khi gọi API: {e}")
+                    _logger.exception("API Exception: %s", e)
                     break
 
                 requests_data = data.get("Data", [])
