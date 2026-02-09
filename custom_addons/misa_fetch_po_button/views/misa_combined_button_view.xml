@@ -148,11 +148,11 @@
               sequence="100"/>
 
     <!-- Menu con cho Internal Transfer -->
-    <menuitem id="menu_import_misa_transfer"
+    <!-- <menuitem id="menu_import_misa_transfer"
               name="Lấy Internal Transfer từ MISA"
               parent="menu_misa_import_root"
               action="action_misa_transfer_fetch_main"
-              sequence="101"/>
+              sequence="101"/> -->
 
     <!-- Menu con cho Return Order -->
     <menuitem id="menu_import_misa_return"
@@ -163,14 +163,14 @@
 
     <!-- Menu con cho Sale Order -->
     <menuitem id="menu_import_sale_api"
-              name="Lấy Sale Order từ MISA API"
+              name="Lấy SO từ MISA"
               parent="menu_misa_import_root"
               action="action_sale_api_import_wizard_main"
               sequence="103"/>
     <!-- Menu con cho Login -->
-    <menuitem id="menu_login_misa_api"
+    <!-- <menuitem id="menu_login_misa_api"
           name="Login MISA"
           parent="menu_misa_import_root"
           action="action_login_misa_api"
-          sequence="104"/>
+          sequence="104"/> -->
 </odoo>
