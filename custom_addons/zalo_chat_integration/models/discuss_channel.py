@@ -347,7 +347,7 @@ class DiscussChannel(models.Model):
                 f"  Code: {p.default_code or 'N/A'}\n"
                 f"  Category: {p.categ_id.name}\n"
                 f"  Price: {p.lst_price:,.0f}\n"
-                f"  Type: {p.detailed_type}\n"
+                f"  Type: {p.type}\n"
                 f"  Stock: {p.qty_available}"
             )
             candidate_list.append(info)
