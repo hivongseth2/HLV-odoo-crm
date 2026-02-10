@@ -25,6 +25,7 @@
         "data/return_sale_request_sequence.xml",
         "views/return_sale_request_views.xml",
         "views/return_sale_request_actions.xml",
+        "views/sale_purchase_link_views.xml",
         "wizard/misa_return_sale_sync_wizard_views.xml",
         "views/menu_views.xml",
     ],

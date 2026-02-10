@@ -274,10 +274,14 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                             existing._set_total_from_summary({"Total": total_amount})
                         else:
                             existing._set_total_from_summary({"Total": total_amount})
+                        if existing.state in ("draft", "return_sale"):
+                            existing._auto_start_processing()
+                        existing._process_after_incoming_done(check_done=False)
+                        existing._process_after_outgoing_done(check_done=False)
                         updated_count += 1
                         logs.append(f"   🔄 Cập nhật: {return_sale_no}")
                     else:
-                        vals["state"] = "draft"
+                        vals["state"] = "return_sale"
                         new_record = ReturnSaleRequest.create(vals)
                         if line_data:
                             new_record._sync_lines_from_misa_data(line_data, summary_data)
@@ -287,6 +291,9 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                             new_record._set_total_from_summary({"Total": total_amount})
                         else:
                             new_record._set_total_from_summary({"Total": total_amount})
+                        new_record._auto_start_processing()
+                        new_record._process_after_incoming_done(check_done=False)
+                        new_record._process_after_outgoing_done(check_done=False)
                         created_count += 1
                         logs.append(f"   ✅ Tạo mới: {return_sale_no}")
 

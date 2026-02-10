@@ -215,11 +215,7 @@ class ReturnSaleRequest(models.Model):
     # ==================== Workflow Actions ====================
     def button_submit(self):
         """Gửi duyệt (Start processing)"""
-        for rec in self:
-            if not rec.line_ids:
-                raise UserError(_("Vui lòng thêm ít nhất một dòng sản phẩm."))
-            rec._create_incoming_picking()
-        self.write({"state": "return_sale"})
+        self._auto_start_processing(force=True)
 
     def button_approve(self):
         """Deprecated - Same as button_submit now"""
@@ -230,24 +226,11 @@ class ReturnSaleRequest(models.Model):
         - Nếu có NCC: tạo phiếu xuất NCC -> chuyển sang 'return_purchase'
         - Nếu không có NCC: hoàn thành luôn -> chuyển sang 'done'
         """
-        for rec in self:
-            if rec.picking_in_id and rec.picking_in_id.state != "done":
-                raise UserError(_("Phiếu nhập kho chưa hoàn thành."))
-            
-            if rec.vendor_id:
-                # Có nhà cung cấp -> Tạo phiếu xuất trả hàng
-                rec._create_outgoing_picking()
-                rec.state = "return_purchase"
-            else:
-                # Không có nhà cung cấp -> Kết thúc
-                rec.state = "done"
+        self._process_after_incoming_done(check_done=True)
 
     def button_done(self):
         """Hoàn thành (sau khi xuất trả NCC)"""
-        for rec in self:
-            if rec.picking_out_id and rec.picking_out_id.state != "done":
-                raise UserError(_("Phiếu xuất NCC chưa hoàn thành."))
-        self.write({"state": "done"})
+        self._process_after_outgoing_done(check_done=True)
 
     def button_reject(self):
         """Từ chối"""
@@ -260,10 +243,54 @@ class ReturnSaleRequest(models.Model):
                 raise UserError(_("Không thể đặt về nháp khi đã có phiếu kho."))
         self.write({"state": "draft"})
 
+    def _auto_start_processing(self, force=False):
+        """Auto start workflow: draft -> return_sale and create incoming picking."""
+        for rec in self:
+            if rec.state in ("done", "rejected"):
+                continue
+            if rec.state == "draft":
+                rec.state = "return_sale"
+            if not rec.line_ids:
+                if force:
+                    raise UserError(_("Vui lòng thêm ít nhất một dòng sản phẩm."))
+                continue
+            if rec.state == "return_sale" and not rec.picking_in_id:
+                rec._create_incoming_picking()
+
+    def _process_after_incoming_done(self, check_done=False):
+        """Move workflow after incoming picking is done."""
+        for rec in self:
+            if check_done and (not rec.picking_in_id or rec.picking_in_id.state != "done"):
+                raise UserError(_("Phiếu nhập kho chưa hoàn thành."))
+            if not rec.picking_in_id or rec.picking_in_id.state != "done":
+                continue
+            if rec.state not in ("draft", "return_sale", "return_purchase"):
+                continue
+            if rec.vendor_id:
+                if not rec.picking_out_id:
+                    rec._create_outgoing_picking()
+                rec.state = "return_purchase"
+            else:
+                rec.state = "done"
+
+    def _process_after_outgoing_done(self, check_done=False):
+        """Move workflow to done after outgoing picking is done."""
+        for rec in self:
+            if check_done and (not rec.picking_out_id or rec.picking_out_id.state != "done"):
+                raise UserError(_("Phiếu xuất NCC chưa hoàn thành."))
+            if not rec.picking_out_id or rec.picking_out_id.state != "done":
+                continue
+            if rec.state != "done":
+                rec.state = "done"
+
     # ==================== Stock Picking Creation ====================
     def _create_incoming_picking(self):
         """Tạo phiếu nhập kho từ Customer về Warehouse"""
         self.ensure_one()
+        if self.picking_in_id:
+            return self.picking_in_id
+        if not self.line_ids:
+            raise UserError(_("Không có dòng sản phẩm để tạo phiếu nhập kho."))
         if not self.warehouse_id:
             raise UserError(_("Không xác định được kho."))
         
@@ -298,10 +325,15 @@ class ReturnSaleRequest(models.Model):
         picking.action_confirm()
         self.picking_in_id = picking
         _logger.info("Đã tạo phiếu nhập kho %s cho đề nghị %s", picking.name, self.name)
+        return picking
 
     def _create_outgoing_picking(self):
         """Tạo phiếu xuất kho về NCC"""
         self.ensure_one()
+        if self.picking_out_id:
+            return self.picking_out_id
+        if not self.line_ids:
+            raise UserError(_("Không có dòng sản phẩm để tạo phiếu xuất kho."))
         if not self.warehouse_id or not self.vendor_id:
             return # Skip if no vendor or warehouse
         
@@ -336,6 +368,7 @@ class ReturnSaleRequest(models.Model):
         picking.action_confirm()
         self.picking_out_id = picking
         _logger.info("Đã tạo phiếu xuất NCC %s cho đề nghị %s", picking.name, self.name)
+        return picking
 
     # ==================== View Actions ====================
     def action_view_picking_in(self):
@@ -531,10 +564,15 @@ class ReturnSaleRequest(models.Model):
                 _logger.warning("⚠️ No priced line data for ID %s, fallback by product_codes_text", misa_id)
                 existing._sync_lines_from_misa(product_codes_text, detail_data)
                 existing._set_total_from_summary({"Total": total_amount})
+
+            if existing.state in ("draft", "return_sale"):
+                existing._auto_start_processing()
+            existing._process_after_incoming_done(check_done=False)
+            existing._process_after_outgoing_done(check_done=False)
                 
             return {"ok": True, "action": "updated", "res_id": existing.id, "name": existing.name}
         else:
-            vals["state"] = "draft"
+            vals["state"] = "return_sale"
             new_record = self.create(vals)
             
             if line_data:
@@ -544,6 +582,10 @@ class ReturnSaleRequest(models.Model):
                 _logger.warning("⚠️ No priced line data for ID %s, fallback by product_codes_text", misa_id)
                 new_record._sync_lines_from_misa(product_codes_text, detail_data)
                 new_record._set_total_from_summary({"Total": total_amount})
+
+            new_record._auto_start_processing()
+            new_record._process_after_incoming_done(check_done=False)
+            new_record._process_after_outgoing_done(check_done=False)
                 
             return {"ok": True, "action": "created", "res_id": new_record.id, "name": new_record.name}
 
