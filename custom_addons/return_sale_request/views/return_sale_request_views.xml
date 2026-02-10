@@ -68,8 +68,8 @@
                             <field name="date" readonly="state != 'draft'" />
                             <field name="partner_id" readonly="state != 'draft'" />
                             <field name="sale_order_id" readonly="state != 'draft'" />
-                            <field name="purchase_order_id" readonly="1" />
-                            <field name="vendor_id" readonly="1" />
+                            <field name="purchase_order_id" readonly="state != 'draft'" />
+                            <field name="vendor_id" readonly="state != 'draft'" />
                         </group>
                         <group>
                             <field name="warehouse_id" readonly="1" />
