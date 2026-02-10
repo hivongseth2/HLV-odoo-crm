@@ -261,6 +261,26 @@ class WordPressUpdateStockWizard(models.TransientModel):
                 else:
                      parent._auto_sync_stock_to_wordpress(new_value=new_parent_status)
 
+        # 2.5. PARENT PRICE UPDATE
+        if vals and parents_to_update:
+            _logger.info(f"[Wizard] Updating prices for {len(parents_to_update)} parent combos")
+            for line in self.line_ids.filtered(lambda l: l.to_update):
+                parent = line.product_id
+                parent_vals = {}
+                
+                if line.new_parent_selling_price != line.current_parent_selling_price:
+                    parent_vals['x_studio_ga_web'] = line.new_parent_selling_price
+                if line.new_parent_list_price != line.current_parent_list_price:
+                    parent_vals['list_price'] = line.new_parent_list_price
+                if line.new_parent_listed_price != line.current_parent_listed_price:
+                    parent_vals['x_studio_ga_hng_nim_yt'] = line.new_parent_listed_price
+                if line.new_parent_floor_ecommerce_price != line.current_parent_floor_ecommerce_price:
+                    parent_vals['x_studio_gia_san_tmdt'] = line.new_parent_floor_ecommerce_price
+                
+                if parent_vals:
+                    parent.with_context(skip_wordpress_sync=True).write(parent_vals)
+                    _logger.info(f"[Wizard] Updated parent {parent.name} prices: {parent_vals}")
+
         self.env.cr.commit() 
         
         # 3. VERIFICATION & SYNC
@@ -269,17 +289,26 @@ class WordPressUpdateStockWizard(models.TransientModel):
         self.product_id.invalidate_recordset(['x_wp_stock_status', 'x_studio_ga_web', 'list_price', 'x_wp_combo_price', 'x_studio_ga_hng_nim_yt', 'x_studio_gia_san_tmdt'])
         parents_to_update.invalidate_recordset(['x_wp_stock_status', 'x_studio_ga_web', 'list_price', 'x_studio_ga_hng_nim_yt', 'x_studio_gia_san_tmdt'])
         
-        # Trigger Sync for STOCK (Manual)
-        _logger.error(f"[Wizard-DEBUG] Triggering manual stock sync...")
-        
+        # Trigger Sync for STOCK
+        _logger.info(f"[Wizard] Triggering stock sync for {self.product_id.name}...")
         self.product_id._auto_sync_stock_to_wordpress(old_value=child_old_status, new_value=self.new_status)
         
-        # Parents Sync (Logging Only, actual sync triggered by write above)
+        # Trigger Sync for PRICE (child)
+        if vals:
+            _logger.info(f"[Wizard] Triggering price sync for {self.product_id.name}...")
+            self.product_id._auto_sync_to_wordpress()
+        
+        # Trigger Sync for PARENTS (both stock and price)
+        for line in self.line_ids.filtered(lambda l: l.to_update):
+            parent = line.product_id
+            # Price sync for parent
+            parent._auto_sync_to_wordpress()
+            _logger.info(f"[Wizard] Queued price sync for parent {parent.name}")
              
         # Log to Chatter
         msg_body = "<b>Cập nhật an toàn (Wizard):</b><ul>"
         if status_changed:
-             msg_body += f"<li>Status: {self.new_status} (SQL Force)</li>"
+             msg_body += f"<li>Status: {self.new_status}</li>"
         if vals:
              msg_body += f"<li>Prices Updated: {vals}</li>"
         msg_body += "</ul>"
@@ -287,7 +316,7 @@ class WordPressUpdateStockWizard(models.TransientModel):
         self.product_id.message_post(body=msg_body)
         
         for p in parents_to_update:
-             p.message_post(body=f"Cập nhật theo linh kiện {self.product_id.name}:<br/>Status Updated")
+             p.message_post(body=f"Cập nhật theo linh kiện {self.product_id.name}:<br/>Status & Price Updated")
 
         return {'type': 'ir.actions.act_window_close'}
 
