@@ -666,9 +666,11 @@ class ReturnSaleRequest(models.Model):
             import requests
             url = "https://amisapp.misa.vn/crm/g2/api/business/ReturnSale/DataSubPaging"
             
-            # Payload chính xác từ user - TableName là "return_sale_product" 
+            # Payload chính xác từ user - TableName là "return_sale_product"
+            # Updated Columns: ID,ProductID,ProductIDText,Amount,Price,ToCurrency,Total,UnitID,UnitIDText,Description
+            # Base64: SUQsUHJvZHVjdElELFByb2R1Y3RJRFRleHQsQW1vdW50LFByaWNlLFRvQ3VycmVuY3ksVG90YWwsVW5pdElELFVuaXRJRFRleHQsRGVzY3JpcHRpb24=
             payload = {
-                "Columns": "SUQsU29ydE9yZGVyLFByb2R1Y3RJRCxQcm9kdWN0SURUZXh0LERlc2NyaXB0aW9uLFVuaXRJRCxVbml0SURUZXh0LFN0b2NrSUQsU3RvY2tJRFRleHQsQW1vdW50LEN1c3RvbUZpZWxkMSxQcmljZUFmdGVyVGF4LFByaWNlLFRvQ3VycmVuY3ksRGlzY291bnRQZXJjZW50LERpc2NvdW50LFRheFBlcmNlbnRJRCxUYXhQZXJjZW50SURUZXh0LFRheCxUb3RhbCxTYWxlT3JkZXJJRCxTYWxlT3JkZXJJRFRleHQsSXNQcm9tb3Rpb24sUHJvbW90aW9uSUQsUHJvbW90aW9uSURUZXh0LElzU2V0UHJvZHVjdCxJc0NoaWxkUHJvZHVjdA==",
+                "Columns": "SUQsUHJvZHVjdElELFByb2R1Y3RJRFRleHQsQW1vdW50LFByaWNlLFRvQ3VycmVuY3ksVG90YWwsVW5pdElELFVuaXRJRFRleHQsRGVzY3JpcHRpb24=",
                 "Sorts": [],
                 "Start": 0,
                 "Page": 1,
