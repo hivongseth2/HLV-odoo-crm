@@ -157,6 +157,24 @@ class DiscussChannel(models.Model):
              
              return res
 
+        # SLASH COMMAND /baogialai
+        if message_body and message_body.strip().lower() == '/baogialai':
+             _logger.info(f'[ZALO SLASH] Detected /baogialai command. Executing Logic...')
+             
+             # 1. Post command to Odoo Chat (SKIP Zalo Sync)
+             ctx = dict(self.env.context)
+             ctx['skip_zalo_sync'] = True
+             res = super(DiscussChannel, self.with_context(ctx)).message_post(**kwargs)
+             
+             # 2. Trigger AI Update Quote
+             try:
+                 self.action_gpt_update_quote()
+             except Exception as e:
+                 _logger.error(f"Error executing /baogialai: {e}")
+                 self.message_post(body=f"⚠️ Lỗi: {str(e)}", message_type='notification', subtype_xmlid='mail.mt_note')
+             
+             return res
+
         # SLASH COMMAND /checkton
         if message_body and message_body.strip().lower() == '/checkton':
              _logger.info(f'[ZALO SLASH] Detected /checkton command. Executing Logic...')

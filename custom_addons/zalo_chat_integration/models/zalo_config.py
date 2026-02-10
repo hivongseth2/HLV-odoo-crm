@@ -103,7 +103,8 @@ class ZaloOAConfig(models.Model):
             data['response_format'] = {'type': 'json_object'}
         
         try:
-            response = requests.post('https://api.openai.com/v1/chat/completions', headers=headers, json=data, timeout=30)
+            # Increased timeout for image analysis which takes longer
+            response = requests.post('https://api.openai.com/v1/chat/completions', headers=headers, json=data, timeout=60)
             if response.status_code != 200:
                 error_detail = response.text
                 _logger.error(f"GPT API Error: {error_detail}")
