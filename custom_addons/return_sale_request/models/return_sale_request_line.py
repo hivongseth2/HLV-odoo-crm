@@ -28,6 +28,12 @@ class ReturnSaleRequestLine(models.Model):
         default=1.0,
         digits="Product Unit of Measure",
     )
+    return_to_vendor_qty = fields.Float(
+        string="Số SL trả lại NCC",
+        default=0.0,
+        digits="Product Unit of Measure",
+        help="Nếu > 0 thì hệ thống sẽ tạo phiếu xuất trả NCC với số lượng này.",
+    )
     product_uom_id = fields.Many2one(
         comodel_name="uom.uom",
         string="Đơn vị",

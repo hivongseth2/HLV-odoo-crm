@@ -266,7 +266,7 @@ class ReturnSaleRequest(models.Model):
                 continue
             if rec.state not in ("draft", "return_sale", "return_purchase"):
                 continue
-            if rec.vendor_id:
+            if rec.vendor_id and rec._has_vendor_return_lines():
                 if not rec.picking_out_id:
                     rec._create_outgoing_picking()
                 rec.state = "return_purchase"
@@ -336,6 +336,8 @@ class ReturnSaleRequest(models.Model):
             raise UserError(_("Không có dòng sản phẩm để tạo phiếu xuất kho."))
         if not self.warehouse_id or not self.vendor_id:
             return # Skip if no vendor or warehouse
+        if not self._has_vendor_return_lines():
+            return False
         
         picking_type = self.warehouse_id.out_type_id
         if not picking_type:
@@ -353,12 +355,13 @@ class ReturnSaleRequest(models.Model):
         }
         picking = self.env["stock.picking"].create(picking_vals)
         
-        # Tạo stock moves từ lines
-        for line in self.line_ids:
+        # Tạo stock moves từ lines có số lượng trả NCC
+        return_lines = self.line_ids.filtered(lambda l: (l.return_to_vendor_qty or 0.0) > 0)
+        for line in return_lines:
             self.env["stock.move"].create({
                 "name": line.product_id.name,
                 "product_id": line.product_id.id,
-                "product_uom_qty": line.product_qty,
+                "product_uom_qty": line.return_to_vendor_qty,
                 "product_uom": line.product_uom_id.id,
                 "picking_id": picking.id,
                 "location_id": self.warehouse_id.lot_stock_id.id,
@@ -369,6 +372,10 @@ class ReturnSaleRequest(models.Model):
         self.picking_out_id = picking
         _logger.info("Đã tạo phiếu xuất NCC %s cho đề nghị %s", picking.name, self.name)
         return picking
+
+    def _has_vendor_return_lines(self):
+        self.ensure_one()
+        return any((line.return_to_vendor_qty or 0.0) > 0 for line in self.line_ids)
 
     # ==================== View Actions ====================
     def action_view_picking_in(self):
@@ -658,6 +665,7 @@ class ReturnSaleRequest(models.Model):
                     "request_id": self.id,
                     "product_id": product.id,
                     "product_qty": qty,
+                    "return_to_vendor_qty": 0.0,
                     "unit_price": price,
                     "subtotal": qty * price,
                     "line_total": qty * price,
@@ -671,6 +679,7 @@ class ReturnSaleRequest(models.Model):
             line_data: list of dicts từ DataSubPaging API, mỗi dict chứa:
                 - ProductIDText: mã sản phẩm
                 - Amount: số lượng
+                - CustomField1: số lượng trả NCC
                 - Price: đơn giá (trước thuế)
                 - ToCurrency: thành tiền (trước thuế)
                 - Total: tổng tiền (sau thuế)
@@ -711,6 +720,7 @@ class ReturnSaleRequest(models.Model):
                 
             # Parse data from API
             qty = _flt(line.get("Quantity") or line.get("Amount"), 1.0)
+            return_to_vendor_qty = _flt(line.get("CustomField1"), 0.0)
             unit_price = _flt(line.get("Price") or line.get("UnitPrice"), 0.0)
             subtotal = _flt(line.get("ToCurrency") or line.get("AmountOC"), 0.0)
             line_total = _flt(line.get("Total") or line.get("TotalAmount"), 0.0)
@@ -737,6 +747,7 @@ class ReturnSaleRequest(models.Model):
                     "request_id": self.id,
                     "product_id": product.id,
                     "product_qty": qty,
+                    "return_to_vendor_qty": max(return_to_vendor_qty, 0.0),
                     "unit_price": unit_price,
                     "subtotal": subtotal,
                     "line_total": line_total,
