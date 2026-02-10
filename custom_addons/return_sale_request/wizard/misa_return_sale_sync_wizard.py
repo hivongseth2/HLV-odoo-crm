@@ -173,7 +173,7 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
 
                     # Fetch detail để lấy thêm thông tin (returns full Data object now)
                     raw_detail_data = self._fetch_detail(misa_id, headers) or {}
-                    detail_data = raw_data.get("CurrentData", {})
+                    detail_data = raw_detail_data.get("CurrentData", {})
                     # Fallback if structure is different
                     if not detail_data and raw_detail_data:
                          detail_data = raw_detail_data
