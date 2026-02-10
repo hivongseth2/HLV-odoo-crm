@@ -419,11 +419,21 @@ class ReturnSaleRequest(models.Model):
         if not result.get("Success"):
             return {"ok": False, "error": "detail_failed", "message": str(result)}
         
-        detail_data = result.get("Data", {}).get("CurrentData", {})
+        raw_data = result.get("Data", {})
+        detail_data = raw_data.get("CurrentData", {})
         # Note: If CurrentData is null, detail_data will be {}
-        if not detail_data and result.get("Data"):
+        if not detail_data and raw_data:
              # Fallback if structure is different
-             detail_data = result.get("Data")
+             detail_data = raw_data
+        
+        # Try to get lines from DetailData (FormDataNew)
+        detail_lines = []
+        full_detail = raw_data.get("DetailData", [])
+        if full_detail:
+            for d in full_detail:
+                if d.get("TableName") == "return_sale_product":
+                    detail_lines = d.get("Data", [])
+                    break
 
         if not detail_data:
              return {"ok": False, "error": "no_detail_data"}
@@ -473,12 +483,23 @@ class ReturnSaleRequest(models.Model):
             "misa_owner_text": owner_text,
         }
         
-        if existing:
-            existing.write(vals)
-            # Try DataSubPaging first
-            lines_result = existing._fetch_lines_datasubpaging(misa_id, headers)
+        line_data = []
+        summary_data = None
+        
+        # 1. Try DetailData lines first (fetched with FormDataNew)
+        if detail_lines:
+             line_data = detail_lines
+             # Use header total as summary
+             summary_data = {"Total": total_amount}
+        
+        # 2. If no lines, Try DataSubPaging
+        if not line_data:
+            lines_result = (existing or self)._fetch_lines_datasubpaging(misa_id, headers)
             line_data = lines_result.get("lines", [])
             summary_data = lines_result.get("summary")
+
+        if existing:
+            existing.write(vals)
             
             if line_data:
                 existing._sync_lines_from_misa_data(line_data, summary_data)
@@ -490,11 +511,6 @@ class ReturnSaleRequest(models.Model):
         else:
             vals["state"] = "draft"
             new_record = self.create(vals)
-            
-            # Try DataSubPaging first
-            lines_result = new_record._fetch_lines_datasubpaging(misa_id, headers)
-            line_data = lines_result.get("lines", [])
-            summary_data = lines_result.get("summary")
             
             if line_data:
                 new_record._sync_lines_from_misa_data(line_data, summary_data)
@@ -597,10 +613,10 @@ class ReturnSaleRequest(models.Model):
                 continue
                 
             # Parse data from API
-            qty = _flt(line.get("Amount"), 1.0)
-            unit_price = _flt(line.get("Price"), 0.0)  # Đơn giá trước thuế
-            subtotal = _flt(line.get("ToCurrency"), 0.0)  # Thành tiền trước thuế
-            line_total = _flt(line.get("Total"), 0.0)  # Tổng tiền sau thuế
+            qty = _flt(line.get("Quantity") or line.get("Amount"), 1.0)
+            unit_price = _flt(line.get("Price") or line.get("UnitPrice"), 0.0)
+            subtotal = _flt(line.get("ToCurrency") or line.get("AmountOC"), 0.0)
+            line_total = _flt(line.get("Total") or line.get("TotalAmount"), 0.0)
             uom_name = (line.get("UnitIDText") or "Cái").strip()
             
             # Fallback subtotal if not provided
