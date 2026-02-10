@@ -715,9 +715,13 @@ class ReturnSaleRequest(models.Model):
         """
         try:
             import requests
+            import uuid
             url = "https://amisapp.misa.vn/crm/g2/api/business/ReturnSale/DataSubPaging"
             
             # Dùng payload theo cấu trúc thực tế đang hoạt động trên MISA.
+            # SessionID cần định dạng GUID, nếu không MISA có thể trả 500.
+            session_id = str(uuid.uuid4())
+
             base_payload = {
                 "Columns": "SUQsU29ydE9yZGVyLFByb2R1Y3RJRCxQcm9kdWN0SURUZXh0LERlc2NyaXB0aW9uLFVuaXRJRCxVbml0SURUZXh0LFN0b2NrSUQsU3RvY2tJRFRleHQsQW1vdW50LEN1c3RvbUZpZWxkMSxQcmljZUFmdGVyVGF4LFByaWNlLFRvQ3VycmVuY3ksRGlzY291bnRQZXJjZW50LERpc2NvdW50LFRheFBlcmNlbnRJRCxUYXhQZXJjZW50SURUZXh0LFRheCxUb3RhbCxTYWxlT3JkZXJJRCxTYWxlT3JkZXJJRFRleHQsSXNQcm9tb3Rpb24sUHJvbW90aW9uSUQsUHJvbW90aW9uSURUZXh0LElzU2V0UHJvZHVjdCxJc0NoaWxkUHJvZHVjdA==",
                 "Sorts": [],
@@ -752,7 +756,7 @@ class ReturnSaleRequest(models.Model):
                 "IsGetCache": True,
                 "IsCheckInactive": False,
                 "IsConverted": False,
-                "SessionID": "return-sale-sync-lines",
+                "SessionID": session_id,
                 "AISearchKeyword": ""
             }
 
@@ -784,13 +788,39 @@ class ReturnSaleRequest(models.Model):
                 result = response.json()
 
                 if not result.get("Success"):
-                    _logger.warning(
-                        "Lines API Success=False for ID %s page %s: %s",
-                        misa_id,
-                        page,
-                        result,
-                    )
-                    return {"lines": [], "summary": None}
+                    # Retry 1 lần với cấu hình cache khác để giảm khả năng lỗi nội bộ phía MISA.
+                    error_code = result.get("Code")
+                    if page == 1 and error_code == 500:
+                        retry_payload = dict(payload)
+                        retry_payload["IsGetCache"] = False
+                        retry_payload["SessionID"] = str(uuid.uuid4())
+                        retry_resp = requests.post(url, headers=headers, json=retry_payload, timeout=60)
+                        if retry_resp.status_code == 200:
+                            retry_result = retry_resp.json()
+                            if retry_result.get("Success"):
+                                result = retry_result
+                            else:
+                                _logger.warning(
+                                    "Lines API retry still failed for ID %s: %s",
+                                    misa_id,
+                                    retry_result,
+                                )
+                                return {"lines": [], "summary": None}
+                        else:
+                            _logger.warning(
+                                "Lines API retry HTTP failed for ID %s: %s",
+                                misa_id,
+                                retry_resp.status_code,
+                            )
+                            return {"lines": [], "summary": None}
+                    else:
+                        _logger.warning(
+                            "Lines API Success=False for ID %s page %s: %s",
+                            misa_id,
+                            page,
+                            result,
+                        )
+                        return {"lines": [], "summary": None}
 
                 page_lines = result.get("Data", []) or []
                 all_lines.extend(page_lines)
