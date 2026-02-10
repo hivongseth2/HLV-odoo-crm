@@ -239,8 +239,18 @@ class ReturnSaleRequest(models.Model):
     def button_draft(self):
         """Đặt về nháp"""
         for rec in self:
-            if rec.picking_in_id or rec.picking_out_id:
-                raise UserError(_("Không thể đặt về nháp khi đã có phiếu kho."))
+            # Xử lý xóa phiếu nhập/xuất nếu có thể
+            pickings = rec.picking_in_id | rec.picking_out_id
+            for picking in pickings:
+                if picking.state not in ('done', 'cancel'):
+                    picking.action_cancel()
+                if picking.state == 'cancel':
+                    picking.unlink()
+            
+            # Kiểm tra lại xem còn phiếu không
+            if rec.picking_in_id.exists() or rec.picking_out_id.exists():
+                raise UserError(_("Không thể đặt về nháp khi đã có phiếu kho (đã hoàn thành hoặc không thể xóa)."))
+                 
         self.write({"state": "draft"})
 
     def _auto_start_processing(self, force=False):
