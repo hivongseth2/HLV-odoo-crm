@@ -688,7 +688,7 @@ class ReturnSaleRequest(models.Model):
                 "CustomPagingData": {
                     "SubFormConfig": {
                         "ColumnFieldSubForm": "",
-                        "ColumnAggregateSubForm": "AmountSummary,ToCurrencySummary,DiscountSummary,TaxSummary,TotalSummary,DiscountOverall,DiscountOverallOC,TaxOverall,TaxOverallOC,TotalOverall,TotalOverallOC,IsDiscountDirectlyOverall,DiscountPercentOverall,TaxPercentOverallID,ToCurrencyAfterDiscountSummary,DiscountAfterTaxSummary,ToCurrencyOCAfterDiscountSummary,TotalSummaryOC,TaxSummaryOC,DiscountSummaryOC,ToCurrencySummaryOC,UsageUnitAmountSummary,PromotionOverAllID,IsPromotionDiscountOverAll",
+                        "ColumnAggregateSubForm": "AmountSummary,ToCurrencySummary,TotalSummary",
                         "TableName": "return_sale_product",
                         "IsSystem": True,
                         "ParentIDKey": "CustomID",
