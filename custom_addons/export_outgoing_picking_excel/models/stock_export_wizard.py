@@ -219,6 +219,42 @@ class StockExportWizard(models.TransientModel):
                 partner_code = p_ref
             else:
                 _logger.info("--- NO REF FOUND!")
+                
+            # --- SHOPEE OVERRIDE LOGIC ---
+            if hasattr(so, 'shopee_shop_id') and so.shopee_shop_id:
+                shop = so.shopee_shop_id
+                # Check Account Name contains 2014645
+                account = getattr(shop, 'account_id', False)
+                if account and '2014645' in getattr(account, 'name', ''):
+                    shop_id = getattr(shop, 'shop_identifier', 0)
+                    target_pid = False
+                    
+                    if shop_id == 796817584:
+                        target_pid = 9715 # MILWAUKEE
+                    elif shop_id == 1357810112:
+                        target_pid = 9720 # DEWALT
+                    elif shop_id == 326259406:
+                        target_pid = 9701 # HLV
+                    
+                    if target_pid:
+                        target_partner = self.env['res.partner'].browse(target_pid)
+                        if target_partner.exists():
+                            khach_hang = target_partner.name
+                            
+                            # Recalculate Partner Code for this new Customer
+                            s_ref = False
+                            if target_partner.commercial_partner_id and target_partner.commercial_partner_id.ref:
+                                s_ref = target_partner.commercial_partner_id.ref
+                            elif target_partner.parent_id and target_partner.parent_id.ref:
+                                s_ref = target_partner.parent_id.ref
+                            elif target_partner.ref:
+                                s_ref = target_partner.ref
+                            
+                            if s_ref:
+                                partner_code = s_ref
+                            
+                            _logger.info(f"SHOPEE OVERRIDE: Shop {shop_id} -> Partner {target_partner.name} (Code: {partner_code})")
+
         elif partner:
              khach_hang = partner.commercial_partner_id.name or partner.name
 
