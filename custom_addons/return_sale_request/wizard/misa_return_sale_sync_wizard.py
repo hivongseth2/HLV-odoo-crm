@@ -171,8 +171,12 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                     filtered_count += 1
                     total_fetched += 1
 
-                    # Fetch detail để lấy thêm thông tin
-                    detail_data = self._fetch_detail(misa_id, headers)
+                    # Fetch detail để lấy thêm thông tin (returns full Data object now)
+                    raw_detail_data = self._fetch_detail(misa_id, headers) or {}
+                    detail_data = raw_detail_data.get("CurrentData", {})
+                    # Fallback if structure is different
+                    if not detail_data and raw_detail_data:
+                         detail_data = raw_detail_data
                     
                     # Log detail_data để debug
                     _logger.info("📦 Detail data for %s: %s", return_sale_no, detail_data)
@@ -181,6 +185,9 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                     return_reason = ""
                     handling_method = ""
                     product_codes_text = ""
+                    billing_address = ""
+                    detail_lines = []
+                    
                     if detail_data:
                         return_reason = detail_data.get("CustomField13") or ""
                         handling_method = detail_data.get("CustomField14") or ""
@@ -189,7 +196,17 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                             detail_data.get("BillingAddress") or billing_address
                         )
                         _logger.info("📦 Product codes for %s: %s", return_sale_no, product_codes_text)
-                        logs.append(f"   📦 Sản phẩm: {product_codes_text or 'Không có'}")
+                        
+                        # Try to get lines from DetailData (FormDataNew)
+                        full_detail = raw_detail_data.get("DetailData", [])
+                        if full_detail:
+                            for d in full_detail:
+                                if d.get("TableName") == "return_sale_product":
+                                    # Normalize keys if needed or rely on _sync_lines_from_misa_data robust parsing
+                                    detail_lines = d.get("Data", [])
+                                    break
+                                    
+                        logs.append(f"   📦 Sản phẩm: {product_codes_text or 'Không có'} | DetailLines: {len(detail_lines)}")
                     else:
                         logs.append(f"   ⚠️ Không lấy được chi tiết từ MISA")
 
@@ -217,17 +234,35 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                         "date": request_date or fields.Date.today(),
                         "partner_id": partner.id if partner else False,
                         "sale_order_id": sale_order.id if sale_order else False,
-                        "total_amount": total_amount,
                         "return_reason": return_reason,
                         "handling_method": handling_method,
                         "delivery_address": billing_address,
                         "misa_owner_text": owner_text,
                     }
 
-                    # Fetch detailed lines with qty and price
+                    # Prepare line data
+                    line_data = []
+                    summary_data = None
+                    
+                    # 1. Preferred source: DataSubPaging (has Price/ToCurrency/Total)
                     lines_result = self._fetch_lines(misa_id, headers)
                     line_data = lines_result.get("lines", [])
                     summary_data = lines_result.get("summary")
+
+                    # 2. Fallback: DetailData lines
+                    if not line_data and detail_lines:
+                        has_line_price = any(
+                            (x.get("Price") is not None)
+                            or (x.get("UnitPrice") is not None)
+                            or (x.get("ToCurrency") is not None)
+                            or (x.get("AmountOC") is not None)
+                            or (x.get("Total") is not None)
+                            or (x.get("TotalAmount") is not None)
+                            for x in detail_lines
+                        )
+                        if has_line_price:
+                            line_data = detail_lines
+                            summary_data = {"Total": total_amount}
                     
                     if existing:
                         existing.write(vals)
@@ -236,16 +271,22 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                         elif product_codes_text:
                             # Fallback: use detail data for price calculation
                             existing._sync_lines_from_misa(product_codes_text, detail_data)
+                            existing._set_total_from_summary({"Total": total_amount})
+                        else:
+                            existing._set_total_from_summary({"Total": total_amount})
                         updated_count += 1
                         logs.append(f"   🔄 Cập nhật: {return_sale_no}")
                     else:
-                        vals["state"] = "to_approve"
+                        vals["state"] = "draft"
                         new_record = ReturnSaleRequest.create(vals)
                         if line_data:
                             new_record._sync_lines_from_misa_data(line_data, summary_data)
                         elif product_codes_text:
                             # Fallback: use detail data for price calculation
                             new_record._sync_lines_from_misa(product_codes_text, detail_data)
+                            new_record._set_total_from_summary({"Total": total_amount})
+                        else:
+                            new_record._set_total_from_summary({"Total": total_amount})
                         created_count += 1
                         logs.append(f"   ✅ Tạo mới: {return_sale_no}")
 
@@ -317,7 +358,8 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                 _logger.warning("Detail API Success=False for ID %s: %s", misa_id, result)
                 return None
 
-            return result.get("Data", {}).get("CurrentData", {})
+            # Return full Data object to access DetailData
+            return result.get("Data", {})
 
         except Exception as e:
             _logger.warning("Error fetching detail for ID %s: %s", misa_id, e)
