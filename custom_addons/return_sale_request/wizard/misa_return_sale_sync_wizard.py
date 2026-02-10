@@ -239,7 +239,7 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                         updated_count += 1
                         logs.append(f"   🔄 Cập nhật: {return_sale_no}")
                     else:
-                        vals["state"] = "to_approve"
+                        vals["state"] = "draft"
                         new_record = ReturnSaleRequest.create(vals)
                         if line_data:
                             new_record._sync_lines_from_misa_data(line_data, summary_data)

@@ -488,7 +488,7 @@ class ReturnSaleRequest(models.Model):
                 
             return {"ok": True, "action": "updated", "res_id": existing.id, "name": existing.name}
         else:
-            vals["state"] = "to_approve"
+            vals["state"] = "draft"
             new_record = self.create(vals)
             
             # Try DataSubPaging first
