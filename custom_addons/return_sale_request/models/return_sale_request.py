@@ -502,11 +502,24 @@ class ReturnSaleRequest(models.Model):
         lines_result = (existing or self)._fetch_lines_datasubpaging(misa_id, headers)
         line_data = lines_result.get("lines", [])
         summary_data = lines_result.get("summary")
+        if line_data:
+            _logger.info("✅ Using DataSubPaging lines for ReturnSale ID %s: %s lines", misa_id, len(line_data))
 
         # 2. Fallback to DetailData lines when DataSubPaging has no data
         if not line_data and detail_lines:
-            line_data = detail_lines
-            summary_data = {"Total": total_amount}
+            has_line_price = any(
+                (x.get("Price") is not None)
+                or (x.get("UnitPrice") is not None)
+                or (x.get("ToCurrency") is not None)
+                or (x.get("AmountOC") is not None)
+                or (x.get("Total") is not None)
+                or (x.get("TotalAmount") is not None)
+                for x in detail_lines
+            )
+            if has_line_price:
+                line_data = detail_lines
+                summary_data = {"Total": total_amount}
+                _logger.info("⚠️ DataSubPaging empty, fallback to DetailData lines for ID %s: %s lines", misa_id, len(line_data))
 
         if existing:
             existing.write(vals)
@@ -515,6 +528,7 @@ class ReturnSaleRequest(models.Model):
                 existing._sync_lines_from_misa_data(line_data, summary_data)
             else:
                 # Fallback
+                _logger.warning("⚠️ No priced line data for ID %s, fallback by product_codes_text", misa_id)
                 existing._sync_lines_from_misa(product_codes_text, detail_data)
                 existing._set_total_from_summary({"Total": total_amount})
                 
@@ -527,6 +541,7 @@ class ReturnSaleRequest(models.Model):
                 new_record._sync_lines_from_misa_data(line_data, summary_data)
             else:
                 # Fallback
+                _logger.warning("⚠️ No priced line data for ID %s, fallback by product_codes_text", misa_id)
                 new_record._sync_lines_from_misa(product_codes_text, detail_data)
                 new_record._set_total_from_summary({"Total": total_amount})
                 
@@ -581,18 +596,6 @@ class ReturnSaleRequest(models.Model):
         Product = self.env["product.product"].sudo()
         OdooUtils = self.env["odoo.utils"].sudo()
         
-        # Calculate unit price from detail_data if available
-        unit_price = 0.0
-        total_qty = 1.0
-        if detail_data:
-            total_summary = float(detail_data.get("ToCurrencySummary") or detail_data.get("TotalSummary") or 0)
-            amount_summary = float(detail_data.get("AmountSummary") or 1)
-            num_products = len(codes)
-            if num_products > 0 and amount_summary > 0:
-                # Phân bổ tổng tiền cho các sản phẩm, chia đều số lượng
-                total_qty = amount_summary / num_products
-                unit_price = total_summary / amount_summary if amount_summary > 0 else 0
-        
         import logging
         _logger = logging.getLogger(__name__)
         
@@ -605,14 +608,17 @@ class ReturnSaleRequest(models.Model):
                 )
             
             if product:
-                qty = total_qty if detail_data else 1.0
-                price = unit_price if detail_data else product.lst_price
+                # Fallback không còn chia đều giá từ tổng đơn để tránh sai dữ liệu line.
+                qty = 1.0
+                price = product.lst_price or 0.0
                 
                 self.env["return.sale.request.line"].create({
                     "request_id": self.id,
                     "product_id": product.id,
                     "product_qty": qty,
                     "unit_price": price,
+                    "subtotal": qty * price,
+                    "line_total": qty * price,
                 })
                 _logger.info("📦 Fallback line: %s x%.2f @ %.2f", code, qty, price)
 
@@ -642,7 +648,14 @@ class ReturnSaleRequest(models.Model):
         
         def _flt(x, dv=0.0):
             try:
-                return float(x or 0.0)
+                if x is None:
+                    return dv
+                if isinstance(x, str):
+                    val = x.replace(",", "").strip()
+                    if val == "":
+                        return dv
+                    return float(val)
+                return float(x)
             except Exception:
                 return dv
         
@@ -659,6 +672,7 @@ class ReturnSaleRequest(models.Model):
             unit_price = _flt(line.get("Price") or line.get("UnitPrice"), 0.0)
             subtotal = _flt(line.get("ToCurrency") or line.get("AmountOC"), 0.0)
             line_total = _flt(line.get("Total") or line.get("TotalAmount"), 0.0)
+            tax_amount = _flt(line.get("Tax"), 0.0)
             uom_name = (line.get("UnitIDText") or "Cái").strip()
             
             # Fallback subtotal if not provided
@@ -667,7 +681,7 @@ class ReturnSaleRequest(models.Model):
             
             # Fallback line_total if not provided
             if not line_total:
-                line_total = subtotal
+                line_total = subtotal + tax_amount if tax_amount else subtotal
             
             product = Product.search([("default_code", "=", code)], limit=1)
             if not product:
@@ -703,15 +717,13 @@ class ReturnSaleRequest(models.Model):
             import requests
             url = "https://amisapp.misa.vn/crm/g2/api/business/ReturnSale/DataSubPaging"
             
-            # Payload chính xác từ user - TableName là "return_sale_product"
-            # Updated Columns: ID,ProductID,ProductIDText,Amount,Price,ToCurrency,Total,UnitID,UnitIDText,Description
-            # Base64: SUQsUHJvZHVjdElELFByb2R1Y3RJRFRleHQsQW1vdW50LFByaWNlLFRvQ3VycmVuY3ksVG90YWwsVW5pdElELFVuaXRJRFRleHQsRGVzY3JpcHRpb24=
-            payload = {
-                "Columns": "SUQsUHJvZHVjdElELFByb2R1Y3RJRFRleHQsQW1vdW50LFByaWNlLFRvQ3VycmVuY3ksVG90YWwsVW5pdElELFVuaXRJRFRleHQsRGVzY3JpcHRpb24=",
+            # Dùng payload theo cấu trúc thực tế đang hoạt động trên MISA.
+            base_payload = {
+                "Columns": "SUQsU29ydE9yZGVyLFByb2R1Y3RJRCxQcm9kdWN0SURUZXh0LERlc2NyaXB0aW9uLFVuaXRJRCxVbml0SURUZXh0LFN0b2NrSUQsU3RvY2tJRFRleHQsQW1vdW50LEN1c3RvbUZpZWxkMSxQcmljZUFmdGVyVGF4LFByaWNlLFRvQ3VycmVuY3ksRGlzY291bnRQZXJjZW50LERpc2NvdW50LFRheFBlcmNlbnRJRCxUYXhQZXJjZW50SURUZXh0LFRheCxUb3RhbCxTYWxlT3JkZXJJRCxTYWxlT3JkZXJJRFRleHQsSXNQcm9tb3Rpb24sUHJvbW90aW9uSUQsUHJvbW90aW9uSURUZXh0LElzU2V0UHJvZHVjdCxJc0NoaWxkUHJvZHVjdA==",
                 "Sorts": [],
                 "Start": 0,
                 "Page": 1,
-                "PageSize": 100,
+                "PageSize": 20,
                 "Filters": [],
                 "DefaultTotal": False,
                 "IsMappingData": False,
@@ -725,7 +737,7 @@ class ReturnSaleRequest(models.Model):
                 "CustomPagingData": {
                     "SubFormConfig": {
                         "ColumnFieldSubForm": "",
-                        "ColumnAggregateSubForm": "AmountSummary,ToCurrencySummary,TotalSummary",
+                        "ColumnAggregateSubForm": "AmountSummary,ToCurrencySummary,DiscountSummary,TaxSummary,TotalSummary,DiscountOverall,DiscountOverallOC,TaxOverall,TaxOverallOC,TotalOverall,TotalOverallOC,IsDiscountDirectlyOverall,DiscountPercentOverall,TaxPercentOverallID,ToCurrencyAfterDiscountSummary,DiscountAfterTaxSummary,ToCurrencyOCAfterDiscountSummary,TotalSummaryOC,TaxSummaryOC,DiscountSummaryOC,ToCurrencySummaryOC,UsageUnitAmountSummary,PromotionOverAllID,IsPromotionDiscountOverAll",
                         "TableName": "return_sale_product",
                         "IsSystem": True,
                         "ParentIDKey": "CustomID",
@@ -743,26 +755,62 @@ class ReturnSaleRequest(models.Model):
                 "SessionID": "return-sale-sync-lines",
                 "AISearchKeyword": ""
             }
-            
+
             _logger.info("📡 Fetching lines (Model) for ID %s", misa_id)
-            response = requests.post(url, headers=headers, json=payload, timeout=60)
-            
-            if response.status_code != 200:
-                _logger.warning("Lines API failed for ID %s: HTTP %s", misa_id, response.status_code)
-                return {"lines": [], "summary": None}
-            
-            result = response.json()
-            
-            if not result.get("Success"):
-                _logger.warning("Lines API Success=False for ID %s: %s", misa_id, result)
-                return {"lines": [], "summary": None}
-            
-            lines = result.get("Data", []) or []
-            summary_data = result.get("SummaryData", [])
-            summary = summary_data[0] if summary_data else None
-            
-            _logger.info("📥 Found %d lines for ID %s", len(lines), misa_id)
-            return {"lines": lines, "summary": summary}
+
+            all_lines = []
+            summary = None
+            page = 1
+            page_size = int(base_payload["PageSize"])
+
+            while True:
+                payload = dict(base_payload)
+                payload["Page"] = page
+                payload["Start"] = (page - 1) * page_size
+
+                response = requests.post(url, headers=headers, json=payload, timeout=60)
+
+                if response.status_code != 200:
+                    body = (response.text or "")[:500]
+                    _logger.warning(
+                        "Lines API failed for ID %s page %s: HTTP %s | body=%s",
+                        misa_id,
+                        page,
+                        response.status_code,
+                        body,
+                    )
+                    return {"lines": [], "summary": None}
+
+                result = response.json()
+
+                if not result.get("Success"):
+                    _logger.warning(
+                        "Lines API Success=False for ID %s page %s: %s",
+                        misa_id,
+                        page,
+                        result,
+                    )
+                    return {"lines": [], "summary": None}
+
+                page_lines = result.get("Data", []) or []
+                all_lines.extend(page_lines)
+
+                summary_data = result.get("SummaryData", [])
+                if summary_data and summary is None:
+                    summary = summary_data[0]
+
+                total_rows = int(result.get("Total") or 0)
+                if not page_lines:
+                    break
+                if len(page_lines) < page_size:
+                    break
+                if total_rows and len(all_lines) >= total_rows:
+                    break
+
+                page += 1
+
+            _logger.info("📥 Found %d lines for ID %s", len(all_lines), misa_id)
+            return {"lines": all_lines, "summary": summary}
             
         except Exception as e:
             _logger.warning("Error fetching lines for ID %s: %s", misa_id, e)

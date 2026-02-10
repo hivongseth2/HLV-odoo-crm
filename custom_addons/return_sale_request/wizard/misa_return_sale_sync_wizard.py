@@ -251,8 +251,18 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
 
                     # 2. Fallback: DetailData lines
                     if not line_data and detail_lines:
-                        line_data = detail_lines
-                        summary_data = {"Total": total_amount}
+                        has_line_price = any(
+                            (x.get("Price") is not None)
+                            or (x.get("UnitPrice") is not None)
+                            or (x.get("ToCurrency") is not None)
+                            or (x.get("AmountOC") is not None)
+                            or (x.get("Total") is not None)
+                            or (x.get("TotalAmount") is not None)
+                            for x in detail_lines
+                        )
+                        if has_line_price:
+                            line_data = detail_lines
+                            summary_data = {"Total": total_amount}
                     
                     if existing:
                         existing.write(vals)
