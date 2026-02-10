@@ -9,51 +9,43 @@
                 <header>
                     <button
                         name="button_submit"
-                        string="Gửi duyệt"
+                        string="Xử lý trả đơn bán"
                         type="object"
                         class="oe_highlight"
                         invisible="state != 'draft'"
-                    />
-                    <button
-                        name="button_approve"
-                        string="Phê duyệt"
-                        type="object"
-                        class="oe_highlight"
-                        invisible="state != 'to_approve'"
-                        groups="return_sale_request.group_return_sale_request_manager"
                     />
                     <button
                         name="button_confirm_incoming"
                         string="Xác nhận nhập kho"
                         type="object"
                         class="oe_highlight"
-                        invisible="state != 'approved'"
+                        invisible="state != 'return_sale'"
                     />
                     <button
                         name="button_done"
                         string="Hoàn thành"
                         type="object"
                         class="oe_highlight"
-                        invisible="state != 'in_progress'"
+                        invisible="state != 'return_purchase'"
                     />
                     <button
                         name="button_reject"
                         string="Từ chối"
                         type="object"
-                        invisible="state not in ('to_approve', 'approved')"
+                        invisible="state not in ('return_sale')"
                         groups="return_sale_request.group_return_sale_request_manager"
                     />
                     <button
                         name="button_draft"
                         string="Đặt về nháp"
                         type="object"
-                        invisible="state not in ('to_approve', 'rejected')"
+                        invisible="state not in ('return_sale', 'rejected', 'return_purchase')"
                         groups="return_sale_request.group_return_sale_request_manager"
                     />
                     <field
                         name="state"
                         widget="statusbar"
-                        statusbar_visible="draft,to_approve,approved,in_progress,done"
+                        statusbar_visible="draft,return_sale,return_purchase,done"
                     />
                 </header>
                 <sheet>
@@ -108,6 +100,7 @@
                                     <field name="product_uom_id" />
                                     <field name="unit_price" />
                                     <field name="subtotal" />
+                                    <field name="line_total" />
                                     <field name="note" />
                                     <field name="currency_id" column_invisible="1" />
                                 </list>
@@ -142,7 +135,7 @@
         <field name="model">return.sale.request</field>
         <field name="arch" type="xml">
             <list
-                decoration-info="state in ('draft', 'to_approve')"
+                decoration-info="state == 'draft'"
                 decoration-muted="state == 'rejected'"
                 decoration-success="state == 'done'"
             >
@@ -156,8 +149,8 @@
                 <field
                     name="state"
                     widget="badge"
-                    decoration-info="state in ('draft', 'to_approve')"
-                    decoration-warning="state in ('approved', 'in_progress')"
+                    decoration-info="state == 'draft'"
+                    decoration-warning="state in ('return_sale', 'return_purchase')"
                     decoration-success="state == 'done'"
                     decoration-danger="state == 'rejected'"
                 />
@@ -178,19 +171,14 @@
                 <separator />
                 <filter name="state_draft" string="Nháp" domain="[('state', '=', 'draft')]" />
                 <filter
-                    name="state_to_approve"
-                    string="Chờ duyệt"
-                    domain="[('state', '=', 'to_approve')]"
+                    name="state_return_sale"
+                    string="Xử lý trả đơn bán"
+                    domain="[('state', '=', 'return_sale')]"
                 />
                 <filter
-                    name="state_approved"
-                    string="Đã duyệt"
-                    domain="[('state', '=', 'approved')]"
-                />
-                <filter
-                    name="state_in_progress"
-                    string="Đang thực hiện"
-                    domain="[('state', '=', 'in_progress')]"
+                    name="state_return_purchase"
+                    string="Xử lý trả hàng mua"
+                    domain="[('state', '=', 'return_purchase')]"
                 />
                 <filter name="state_done" string="Hoàn thành" domain="[('state', '=', 'done')]" />
                 <separator />

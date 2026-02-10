@@ -11,9 +11,8 @@ _logger = logging.getLogger(__name__)
 
 _STATES = [
     ("draft", "Nháp"),
-    ("to_approve", "Chờ phê duyệt"),
-    ("approved", "Đã phê duyệt"),
-    ("in_progress", "Đang thực hiện"),
+    ("return_sale", "Xử lý trả đơn bán"),
+    ("return_purchase", "Xử lý trả hàng mua"),
     ("done", "Hoàn thành"),
     ("rejected", "Từ chối"),
 ]
@@ -141,10 +140,10 @@ class ReturnSaleRequest(models.Model):
         for rec in self:
             rec.is_editable = rec.state == "draft"
 
-    @api.depends("line_ids.subtotal")
+    @api.depends("line_ids.line_total")
     def _compute_total_amount(self):
         for rec in self:
-            rec.total_amount = sum(rec.line_ids.mapped("subtotal"))
+            rec.total_amount = sum(rec.line_ids.mapped("line_total"))
 
     @api.depends("sale_order_id")
     def _compute_purchase_order(self):
@@ -202,28 +201,36 @@ class ReturnSaleRequest(models.Model):
 
     # ==================== Workflow Actions ====================
     def button_submit(self):
-        """Gửi duyệt"""
+        """Gửi duyệt (Start processing)"""
         for rec in self:
             if not rec.line_ids:
                 raise UserError(_("Vui lòng thêm ít nhất một dòng sản phẩm."))
-        self.write({"state": "to_approve"})
+            rec._create_incoming_picking()
+        self.write({"state": "return_sale"})
 
     def button_approve(self):
-        """Phê duyệt và tạo phiếu nhập kho"""
-        for rec in self:
-            rec._create_incoming_picking()
-        self.write({"state": "approved"})
+        """Deprecated - Same as button_submit now"""
+        self.button_submit()
 
     def button_confirm_incoming(self):
-        """Xác nhận hoàn thành nhập kho và tạo phiếu xuất NCC"""
+        """Xác nhận hoàn thành nhập kho và chuyển bước tiếp theo
+        - Nếu có NCC: tạo phiếu xuất NCC -> chuyển sang 'return_purchase'
+        - Nếu không có NCC: hoàn thành luôn -> chuyển sang 'done'
+        """
         for rec in self:
             if rec.picking_in_id and rec.picking_in_id.state != "done":
                 raise UserError(_("Phiếu nhập kho chưa hoàn thành."))
-            rec._create_outgoing_picking()
-        self.write({"state": "in_progress"})
+            
+            if rec.vendor_id:
+                # Có nhà cung cấp -> Tạo phiếu xuất trả hàng
+                rec._create_outgoing_picking()
+                rec.state = "return_purchase"
+            else:
+                # Không có nhà cung cấp -> Kết thúc
+                rec.state = "done"
 
     def button_done(self):
-        """Hoàn thành"""
+        """Hoàn thành (sau khi xuất trả NCC)"""
         for rec in self:
             if rec.picking_out_id and rec.picking_out_id.state != "done":
                 raise UserError(_("Phiếu xuất NCC chưa hoàn thành."))
@@ -283,7 +290,7 @@ class ReturnSaleRequest(models.Model):
         """Tạo phiếu xuất kho về NCC"""
         self.ensure_one()
         if not self.warehouse_id or not self.vendor_id:
-            raise UserError(_("Không xác định được kho hoặc nhà cung cấp."))
+            return # Skip if no vendor or warehouse
         
         picking_type = self.warehouse_id.out_type_id
         if not picking_type:
@@ -468,13 +475,33 @@ class ReturnSaleRequest(models.Model):
         
         if existing:
             existing.write(vals)
-            # Update lines
-            existing._sync_lines_from_misa(product_codes_text)
+            # Try DataSubPaging first
+            lines_result = existing._fetch_lines_datasubpaging(misa_id, headers)
+            line_data = lines_result.get("lines", [])
+            summary_data = lines_result.get("summary")
+            
+            if line_data:
+                existing._sync_lines_from_misa_data(line_data, summary_data)
+            else:
+                # Fallback
+                existing._sync_lines_from_misa(product_codes_text, detail_data)
+                
             return {"ok": True, "action": "updated", "res_id": existing.id, "name": existing.name}
         else:
             vals["state"] = "to_approve"
             new_record = self.create(vals)
-            new_record._sync_lines_from_misa(product_codes_text)
+            
+            # Try DataSubPaging first
+            lines_result = new_record._fetch_lines_datasubpaging(misa_id, headers)
+            line_data = lines_result.get("lines", [])
+            summary_data = lines_result.get("summary")
+            
+            if line_data:
+                new_record._sync_lines_from_misa_data(line_data, summary_data)
+            else:
+                # Fallback
+                new_record._sync_lines_from_misa(product_codes_text, detail_data)
+                
             return {"ok": True, "action": "created", "res_id": new_record.id, "name": new_record.name}
 
     def _sync_lines_from_misa(self, product_codes_text, detail_data=None):
@@ -531,17 +558,19 @@ class ReturnSaleRequest(models.Model):
                 })
                 _logger.info("📦 Fallback line: %s x%.2f @ %.2f", code, qty, price)
 
-    def _sync_lines_from_misa_data(self, line_data):
+    def _sync_lines_from_misa_data(self, line_data, summary_data=None):
         """Sync lines từ dữ liệu chi tiết MISA (DataSubPaging) với qty và price
         
         Args:
             line_data: list of dicts từ DataSubPaging API, mỗi dict chứa:
                 - ProductIDText: mã sản phẩm
                 - Amount: số lượng
-                - Price: đơn giá
-                - TotalAmount: thành tiền
+                - Price: đơn giá (trước thuế)
+                - ToCurrency: thành tiền (trước thuế)
+                - Total: tổng tiền (sau thuế)
                 - UnitIDText: tên đơn vị
                 - Description: mô tả
+            summary_data: dict từ SummaryData[0] chứa Total cho tổng đơn
         """
         self.ensure_one()
         if not line_data:
@@ -567,10 +596,20 @@ class ReturnSaleRequest(models.Model):
             if not code:
                 continue
                 
-            # Parse data
+            # Parse data from API
             qty = _flt(line.get("Amount"), 1.0)
-            price = _flt(line.get("Price"), 0.0)
+            unit_price = _flt(line.get("Price"), 0.0)  # Đơn giá trước thuế
+            subtotal = _flt(line.get("ToCurrency"), 0.0)  # Thành tiền trước thuế
+            line_total = _flt(line.get("Total"), 0.0)  # Tổng tiền sau thuế
             uom_name = (line.get("UnitIDText") or "Cái").strip()
+            
+            # Fallback subtotal if not provided
+            if not subtotal and unit_price and qty:
+                subtotal = qty * unit_price
+            
+            # Fallback line_total if not provided
+            if not line_total:
+                line_total = subtotal
             
             product = Product.search([("default_code", "=", code)], limit=1)
             if not product:
@@ -585,6 +624,91 @@ class ReturnSaleRequest(models.Model):
                     "product_id": product.id,
                     "product_qty": qty,
                     "product_uom_id": product.uom_id.id,
-                    "unit_price": price,
+                    "unit_price": unit_price,
+                    "subtotal": subtotal,
+                    "line_total": line_total,
                 })
-                _logger.info("📦 Created line: %s x%.2f @ %.2f", code, qty, price)
+                _logger.info("📦 Created line: %s x%.2f @ %.2f | subtotal=%.2f | line_total=%.2f", 
+                            code, qty, unit_price, subtotal, line_total)
+        
+        # Cập nhật total_amount từ SummaryData nếu có
+        if summary_data:
+            summary_total = _flt(summary_data.get("Total"), 0.0)
+            if summary_total:
+                self.total_amount = summary_total
+                _logger.info("📊 Updated total_amount from SummaryData: %.2f", summary_total)
+
+    def _fetch_lines_datasubpaging(self, misa_id, headers):
+        """Fetch chi tiết sản phẩm từ DataSubPaging API
+        
+        Returns dict: {
+            "lines": [{ProductIDText, Amount, Price, ToCurrency, Total, UnitIDText, ...}, ...],
+            "summary": {Total, TotalSummary, ...} or None
+        }
+        """
+        try:
+            import requests
+            url = "https://amisapp.misa.vn/crm/g2/api/business/ReturnSale/DataSubPaging"
+            
+            # Payload chính xác từ user - TableName là "return_sale_product" 
+            payload = {
+                "Columns": "SUQsU29ydE9yZGVyLFByb2R1Y3RJRCxQcm9kdWN0SURUZXh0LERlc2NyaXB0aW9uLFVuaXRJRCxVbml0SURUZXh0LFN0b2NrSUQsU3RvY2tJRFRleHQsQW1vdW50LEN1c3RvbUZpZWxkMSxQcmljZUFmdGVyVGF4LFByaWNlLFRvQ3VycmVuY3ksRGlzY291bnRQZXJjZW50LERpc2NvdW50LFRheFBlcmNlbnRJRCxUYXhQZXJjZW50SURUZXh0LFRheCxUb3RhbCxTYWxlT3JkZXJJRCxTYWxlT3JkZXJJRFRleHQsSXNQcm9tb3Rpb24sUHJvbW90aW9uSUQsUHJvbW90aW9uSURUZXh0LElzU2V0UHJvZHVjdCxJc0NoaWxkUHJvZHVjdA==",
+                "Sorts": [],
+                "Start": 0,
+                "Page": 1,
+                "PageSize": 100,
+                "Filters": [],
+                "DefaultTotal": False,
+                "IsMappingData": False,
+                "MappingValueObject": {
+                    "MasterID": str(misa_id),
+                    "TableName": "return_sale_product",
+                    "MasterKey": "CustomID",
+                    "SumColumn": ""
+                },
+                "IsApproved": False,
+                "CustomPagingData": {
+                    "SubFormConfig": {
+                        "ColumnFieldSubForm": "",
+                        "ColumnAggregateSubForm": "AmountSummary,ToCurrencySummary,DiscountSummary,TaxSummary,TotalSummary,DiscountOverall,DiscountOverallOC,TaxOverall,TaxOverallOC,TotalOverall,TotalOverallOC,IsDiscountDirectlyOverall,DiscountPercentOverall,TaxPercentOverallID,ToCurrencyAfterDiscountSummary,DiscountAfterTaxSummary,ToCurrencyOCAfterDiscountSummary,TotalSummaryOC,TaxSummaryOC,DiscountSummaryOC,ToCurrencySummaryOC,UsageUnitAmountSummary,PromotionOverAllID,IsPromotionDiscountOverAll",
+                        "TableName": "return_sale_product",
+                        "IsSystem": True,
+                        "ParentIDKey": "CustomID",
+                        "IsBringSerialType": False,
+                        "AggregateField": []
+                    }
+                },
+                "IsUsedELTS": True,
+                "ListGmailPage": [],
+                "ListFacebookPage": {},
+                "IsListPaging": True,
+                "IsGetCache": True,
+                "IsCheckInactive": False,
+                "IsConverted": False,
+                "SessionID": "return-sale-sync-lines",
+                "AISearchKeyword": ""
+            }
+            
+            _logger.info("📡 Fetching lines (Model) for ID %s", misa_id)
+            response = requests.post(url, headers=headers, json=payload, timeout=60)
+            
+            if response.status_code != 200:
+                _logger.warning("Lines API failed for ID %s: HTTP %s", misa_id, response.status_code)
+                return {"lines": [], "summary": None}
+            
+            result = response.json()
+            
+            if not result.get("Success"):
+                _logger.warning("Lines API Success=False for ID %s: %s", misa_id, result)
+                return {"lines": [], "summary": None}
+            
+            lines = result.get("Data", []) or []
+            summary_data = result.get("SummaryData", [])
+            summary = summary_data[0] if summary_data else None
+            
+            _logger.info("📥 Found %d lines for ID %s", len(lines), misa_id)
+            return {"lines": lines, "summary": summary}
+            
+        except Exception as e:
+            _logger.warning("Error fetching lines for ID %s: %s", misa_id, e)
+            return {"lines": [], "summary": None}

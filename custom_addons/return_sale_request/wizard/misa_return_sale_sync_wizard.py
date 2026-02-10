@@ -225,12 +225,14 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                     }
 
                     # Fetch detailed lines with qty and price
-                    line_data = self._fetch_lines(misa_id, headers)
+                    lines_result = self._fetch_lines(misa_id, headers)
+                    line_data = lines_result.get("lines", [])
+                    summary_data = lines_result.get("summary")
                     
                     if existing:
                         existing.write(vals)
                         if line_data:
-                            existing._sync_lines_from_misa_data(line_data)
+                            existing._sync_lines_from_misa_data(line_data, summary_data)
                         elif product_codes_text:
                             # Fallback: use detail data for price calculation
                             existing._sync_lines_from_misa(product_codes_text, detail_data)
@@ -240,7 +242,7 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                         vals["state"] = "to_approve"
                         new_record = ReturnSaleRequest.create(vals)
                         if line_data:
-                            new_record._sync_lines_from_misa_data(line_data)
+                            new_record._sync_lines_from_misa_data(line_data, summary_data)
                         elif product_codes_text:
                             # Fallback: use detail data for price calculation
                             new_record._sync_lines_from_misa(product_codes_text, detail_data)
@@ -324,72 +326,12 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
     def _fetch_lines(self, misa_id, headers):
         """Fetch chi tiết sản phẩm từ DataSubPaging API
         
-        Returns list of dicts: [{ProductIDText, Amount, Price, UnitIDText, ...}, ...]
+        Returns dict: {
+            "lines": [{ProductIDText, Amount, Price, ToCurrency, Total, UnitIDText, ...}, ...],
+            "summary": {Total, TotalSummary, ...} or None
+        }
         """
-        try:
-            url = "https://amisapp.misa.vn/crm/g2/api/business/ReturnSale/DataSubPaging"
-            
-            # Payload chính xác từ user - TableName là "return_sale_product" 
-            payload = {
-                "Columns": "SUQsU29ydE9yZGVyLFByb2R1Y3RJRCxQcm9kdWN0SURUZXh0LERlc2NyaXB0aW9uLFVuaXRJRCxVbml0SURUZXh0LFN0b2NrSUQsU3RvY2tJRFRleHQsQW1vdW50LEN1c3RvbUZpZWxkMSxQcmljZUFmdGVyVGF4LFByaWNlLFRvQ3VycmVuY3ksRGlzY291bnRQZXJjZW50LERpc2NvdW50LFRheFBlcmNlbnRJRCxUYXhQZXJjZW50SURUZXh0LFRheCxUb3RhbCxTYWxlT3JkZXJJRCxTYWxlT3JkZXJJRFRleHQsSXNQcm9tb3Rpb24sUHJvbW90aW9uSUQsUHJvbW90aW9uSURUZXh0LElzU2V0UHJvZHVjdCxJc0NoaWxkUHJvZHVjdA==",
-                "Sorts": [],
-                "Start": 0,
-                "Page": 1,
-                "PageSize": 100,
-                "Filters": [],
-                "DefaultTotal": False,
-                "IsMappingData": False,
-                "MappingValueObject": {
-                    "MasterID": str(misa_id),
-                    "TableName": "return_sale_product",
-                    "MasterKey": "CustomID",
-                    "SumColumn": ""
-                },
-                "IsApproved": False,
-                "CustomPagingData": {
-                    "SubFormConfig": {
-                        "ColumnFieldSubForm": "",
-                        "ColumnAggregateSubForm": "AmountSummary,ToCurrencySummary,DiscountSummary,TaxSummary,TotalSummary,DiscountOverall,DiscountOverallOC,TaxOverall,TaxOverallOC,TotalOverall,TotalOverallOC,IsDiscountDirectlyOverall,DiscountPercentOverall,TaxPercentOverallID,ToCurrencyAfterDiscountSummary,DiscountAfterTaxSummary,ToCurrencyOCAfterDiscountSummary,TotalSummaryOC,TaxSummaryOC,DiscountSummaryOC,ToCurrencySummaryOC,UsageUnitAmountSummary,PromotionOverAllID,IsPromotionDiscountOverAll",
-                        "TableName": "return_sale_product",
-                        "IsSystem": True,
-                        "ParentIDKey": "CustomID",
-                        "IsBringSerialType": False,
-                        "AggregateField": []
-                    }
-                },
-                "IsUsedELTS": True,
-                "ListGmailPage": [],
-                "ListFacebookPage": {},
-                "IsListPaging": True,
-                "IsGetCache": True,
-                "IsCheckInactive": False,
-                "IsConverted": False,
-                "SessionID": "return-sale-sync-lines",
-                "AISearchKeyword": ""
-            }
-            
-            _logger.info("📡 Fetching lines for ID %s", misa_id)
-            response = requests.post(url, headers=headers, json=payload, timeout=60)
-            
-            if response.status_code != 200:
-                _logger.warning("Lines API failed for ID %s: HTTP %s", misa_id, response.status_code)
-                return []
-            
-            result = response.json()
-            _logger.info("📥 Lines response: Code=%s, Success=%s, Total=%s", 
-                        result.get("Code"), result.get("Success"), result.get("Total"))
-            
-            if not result.get("Success"):
-                _logger.warning("Lines API Success=False for ID %s: %s", misa_id, result)
-                return []
-            
-            lines = result.get("Data", []) or []
-            _logger.info("📥 Found %d lines for ID %s", len(lines), misa_id)
-            return lines
-            
-        except Exception as e:
-            _logger.warning("Error fetching lines for ID %s: %s", misa_id, e)
-            return []
+        return self.env["return.sale.request"].sudo()._fetch_lines_datasubpaging(misa_id, headers)
 
     def action_reset(self):
         """Reset wizard để chạy lại"""
