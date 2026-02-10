@@ -104,6 +104,16 @@ class ReturnSaleRequest(models.Model):
         compute="_compute_total_amount",
         store=True,
     )
+    misa_summary_total = fields.Monetary(
+        string="Tổng tiền MISA (SummaryData)",
+        currency_field="currency_id",
+        copy=False,
+    )
+    use_misa_summary_total = fields.Boolean(
+        string="Dùng tổng tiền MISA",
+        copy=False,
+        default=False,
+    )
     currency_id = fields.Many2one(
         related="company_id.currency_id",
         readonly=True,
@@ -140,10 +150,13 @@ class ReturnSaleRequest(models.Model):
         for rec in self:
             rec.is_editable = rec.state == "draft"
 
-    @api.depends("line_ids.line_total")
+    @api.depends("line_ids.line_total", "use_misa_summary_total", "misa_summary_total")
     def _compute_total_amount(self):
         for rec in self:
-            rec.total_amount = sum(rec.line_ids.mapped("line_total"))
+            if rec.use_misa_summary_total:
+                rec.total_amount = rec.misa_summary_total or 0.0
+            else:
+                rec.total_amount = sum(rec.line_ids.mapped("line_total"))
 
     @api.depends("sale_order_id")
     def _compute_purchase_order(self):
@@ -476,7 +489,6 @@ class ReturnSaleRequest(models.Model):
             "date": request_date or fields.Date.today(),
             "partner_id": partner.id if partner else False,
             "sale_order_id": sale_order.id if sale_order else False,
-            "total_amount": total_amount,
             "return_reason": return_reason,
             "handling_method": handling_method,
             "delivery_address": billing_address,
@@ -486,17 +498,15 @@ class ReturnSaleRequest(models.Model):
         line_data = []
         summary_data = None
         
-        # 1. Try DetailData lines first (fetched with FormDataNew)
-        if detail_lines:
-             line_data = detail_lines
-             # Use header total as summary
-             summary_data = {"Total": total_amount}
-        
-        # 2. If no lines, Try DataSubPaging
-        if not line_data:
-            lines_result = (existing or self)._fetch_lines_datasubpaging(misa_id, headers)
-            line_data = lines_result.get("lines", [])
-            summary_data = lines_result.get("summary")
+        # 1. Preferred source: DataSubPaging (contains Price/ToCurrency/Total)
+        lines_result = (existing or self)._fetch_lines_datasubpaging(misa_id, headers)
+        line_data = lines_result.get("lines", [])
+        summary_data = lines_result.get("summary")
+
+        # 2. Fallback to DetailData lines when DataSubPaging has no data
+        if not line_data and detail_lines:
+            line_data = detail_lines
+            summary_data = {"Total": total_amount}
 
         if existing:
             existing.write(vals)
@@ -506,6 +516,7 @@ class ReturnSaleRequest(models.Model):
             else:
                 # Fallback
                 existing._sync_lines_from_misa(product_codes_text, detail_data)
+                existing._set_total_from_summary({"Total": total_amount})
                 
             return {"ok": True, "action": "updated", "res_id": existing.id, "name": existing.name}
         else:
@@ -517,8 +528,40 @@ class ReturnSaleRequest(models.Model):
             else:
                 # Fallback
                 new_record._sync_lines_from_misa(product_codes_text, detail_data)
+                new_record._set_total_from_summary({"Total": total_amount})
                 
             return {"ok": True, "action": "created", "res_id": new_record.id, "name": new_record.name}
+
+    def _set_total_from_summary(self, summary_data):
+        """Store SummaryData total as source for total_amount compute."""
+        self.ensure_one()
+        if not summary_data:
+            self.write({
+                "use_misa_summary_total": False,
+                "misa_summary_total": 0.0,
+            })
+            return
+
+        raw_total = summary_data.get("Total")
+        if raw_total is None:
+            raw_total = summary_data.get("TotalSummary")
+
+        if raw_total is None:
+            self.write({
+                "use_misa_summary_total": False,
+                "misa_summary_total": 0.0,
+            })
+            return
+
+        try:
+            summary_total = float(raw_total or 0.0)
+        except Exception:
+            summary_total = 0.0
+
+        self.write({
+            "use_misa_summary_total": True,
+            "misa_summary_total": summary_total,
+        })
 
     def _sync_lines_from_misa(self, product_codes_text, detail_data=None):
         """Sync lines từ danh sách mã sản phẩm MISA (fallback khi Lines API thất bại)
@@ -569,7 +612,6 @@ class ReturnSaleRequest(models.Model):
                     "request_id": self.id,
                     "product_id": product.id,
                     "product_qty": qty,
-                    "product_uom_id": product.uom_id.id,
                     "unit_price": price,
                 })
                 _logger.info("📦 Fallback line: %s x%.2f @ %.2f", code, qty, price)
@@ -608,7 +650,7 @@ class ReturnSaleRequest(models.Model):
         _logger = logging.getLogger(__name__)
         
         for line in line_data:
-            code = (line.get("ProductIDText") or "").strip()
+            code = str(line.get("ProductIDText") or "").strip()
             if not code:
                 continue
                 
@@ -639,20 +681,15 @@ class ReturnSaleRequest(models.Model):
                     "request_id": self.id,
                     "product_id": product.id,
                     "product_qty": qty,
-                    "product_uom_id": product.uom_id.id,
                     "unit_price": unit_price,
                     "subtotal": subtotal,
                     "line_total": line_total,
                 })
                 _logger.info("📦 Created line: %s x%.2f @ %.2f | subtotal=%.2f | line_total=%.2f", 
                             code, qty, unit_price, subtotal, line_total)
-        
-        # Cập nhật total_amount từ SummaryData nếu có
-        if summary_data:
-            summary_total = _flt(summary_data.get("Total"), 0.0)
-            if summary_total:
-                self.total_amount = summary_total
-                _logger.info("📊 Updated total_amount from SummaryData: %.2f", summary_total)
+
+        # Cập nhật tổng đơn từ SummaryData
+        self._set_total_from_summary(summary_data)
 
     def _fetch_lines_datasubpaging(self, misa_id, headers):
         """Fetch chi tiết sản phẩm từ DataSubPaging API

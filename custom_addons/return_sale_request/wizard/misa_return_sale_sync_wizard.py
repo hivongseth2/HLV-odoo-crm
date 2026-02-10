@@ -186,6 +186,7 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                     handling_method = ""
                     product_codes_text = ""
                     billing_address = ""
+                    detail_lines = []
                     
                     if detail_data:
                         return_reason = detail_data.get("CustomField13") or ""
@@ -197,7 +198,6 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                         _logger.info("📦 Product codes for %s: %s", return_sale_no, product_codes_text)
                         
                         # Try to get lines from DetailData (FormDataNew)
-                        detail_lines = []
                         full_detail = raw_detail_data.get("DetailData", [])
                         if full_detail:
                             for d in full_detail:
@@ -234,7 +234,6 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                         "date": request_date or fields.Date.today(),
                         "partner_id": partner.id if partner else False,
                         "sale_order_id": sale_order.id if sale_order else False,
-                        "total_amount": total_amount,
                         "return_reason": return_reason,
                         "handling_method": handling_method,
                         "delivery_address": billing_address,
@@ -245,16 +244,15 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                     line_data = []
                     summary_data = None
                     
-                    # 1. Try DetailData lines first
-                    if detail_lines:
-                         line_data = detail_lines
-                         summary_data = {"Total": total_amount}
+                    # 1. Preferred source: DataSubPaging (has Price/ToCurrency/Total)
+                    lines_result = self._fetch_lines(misa_id, headers)
+                    line_data = lines_result.get("lines", [])
+                    summary_data = lines_result.get("summary")
 
-                    # 2. If no lines, Try DataSubPaging
-                    if not line_data:
-                        lines_result = self._fetch_lines(misa_id, headers)
-                        line_data = lines_result.get("lines", [])
-                        summary_data = lines_result.get("summary")
+                    # 2. Fallback: DetailData lines
+                    if not line_data and detail_lines:
+                        line_data = detail_lines
+                        summary_data = {"Total": total_amount}
                     
                     if existing:
                         existing.write(vals)
@@ -263,6 +261,9 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                         elif product_codes_text:
                             # Fallback: use detail data for price calculation
                             existing._sync_lines_from_misa(product_codes_text, detail_data)
+                            existing._set_total_from_summary({"Total": total_amount})
+                        else:
+                            existing._set_total_from_summary({"Total": total_amount})
                         updated_count += 1
                         logs.append(f"   🔄 Cập nhật: {return_sale_no}")
                     else:
@@ -273,6 +274,9 @@ class MisaReturnSaleSyncWizard(models.TransientModel):
                         elif product_codes_text:
                             # Fallback: use detail data for price calculation
                             new_record._sync_lines_from_misa(product_codes_text, detail_data)
+                            new_record._set_total_from_summary({"Total": total_amount})
+                        else:
+                            new_record._set_total_from_summary({"Total": total_amount})
                         created_count += 1
                         logs.append(f"   ✅ Tạo mới: {return_sale_no}")
 
