@@ -1657,10 +1657,29 @@ class PickingExportWizard(models.TransientModel):
             cell.border = border
             ws1.column_dimensions[get_column_letter(col_idx)].width = col_def.get('width', 15)
         
-        # Data rows - 1 row per picking/POS order
-        current_row = 2
+        # Data rows - Grouped by so_don_hang (Sheet 1)
+        # Gộp tất cả các dòng có cùng số đơn hàng lại thành 1 dòng duy nhất
+        grouped_orders = {}
+        order_keys = [] # To keep order
+        
         for picking in pickings:
             row_data = self._get_pos_crm_order_data(picking)
+            so_don_hang = row_data.get('so_don_hang')
+            
+            if not so_don_hang:
+                continue
+                
+            if so_don_hang not in grouped_orders:
+                grouped_orders[so_don_hang] = row_data
+                order_keys.append(so_don_hang)
+            else:
+                # Sum values
+                grouped_orders[so_don_hang]['gia_tri_don_hang'] += row_data.get('gia_tri_don_hang', 0.0)
+                grouped_orders[so_don_hang]['thuc_thu'] += row_data.get('thuc_thu', 0.0)
+                
+        current_row = 2
+        for so_don_hang in order_keys:
+            row_data = grouped_orders[so_don_hang]
             for col_idx, col_def in enumerate(columns_s1, start=1):
                 cell = ws1.cell(row=current_row, column=col_idx)
                 value = row_data.get(col_def['key'], '')
