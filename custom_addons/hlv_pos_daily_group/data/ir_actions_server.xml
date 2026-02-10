@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_update_pos_group_backfill_server" model="ir.actions.server">
+        <field name="name">Update POS Group (Backfill)</field>
+        <field name="model_id" ref="point_of_sale.model_pos_order"/>
+        <field name="binding_model_id" ref="point_of_sale.model_pos_order"/>
+        <field name="state">code</field>
+        <field name="code">
+            if records:
+                records.action_update_pos_group_backfill()
+        </field>
+    </record>
+</odoo>

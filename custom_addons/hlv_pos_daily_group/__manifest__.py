@@ -10,7 +10,9 @@
     """,
     'author': 'Antigravity',
     'depends': ['point_of_sale'],
-    'data': [],
+    'data': [
+        'data/ir_actions_server.xml',
+    ],
     'installable': True,
     'auto_install': False,
     'license': 'LGPL-3',
