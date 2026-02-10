@@ -240,6 +240,7 @@ class StockExportWizard(models.TransientModel):
                         target_partner = self.env['res.partner'].browse(target_pid)
                         if target_partner.exists():
                             khach_hang = target_partner.name
+                            ly_do_xuat = "Xuất kho bán hàng cho " + target_partner.name
                             
                             # Recalculate Partner Code for this new Customer
                             s_ref = False
