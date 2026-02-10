@@ -1,6 +1,7 @@
 from odoo import models, api, _, tools
 from odoo.exceptions import UserError
 import logging
+import json
 from markupsafe import Markup
 
 _logger = logging.getLogger(__name__)
@@ -74,59 +75,62 @@ class DiscussChannel(models.Model):
         if not config or not config.gpt_api_key:
              raise UserError(_("Vui lòng cấu hình GPT API Key."))
              
-        # Fetch last 30 messages
-        messages = self.message_ids.sorted(key=lambda m: m.date)[-30:]
-        content_lines = []
-        for msg in messages:
-            body = tools.html2plaintext(msg.body) if msg.body else ''
-            if not body: continue
-            
-            # Skip system commands
-            if body.startswith('/'): continue
-            
-            prefix = "Me" if msg.author_id == self.env.user.partner_id else "Customer"
-            content_lines.append(f"{prefix}: {body}")
-            
-        chat_content = "\n".join(content_lines)
+        # Fetch messages (Text + Images)
+        gpt_messages = self._extract_chat_content_with_images(limit=30)
         
-        prompt = [
-            {"role": "system", "content": """Bạn là trợ lý kho hàng. Đọc đoạn hội thoại và xác định sản phẩm khách hàng đang hỏi tồn kho GẦN NHẤT.
+        system_prompt = {
+            "role": "system", 
+            "content": """Bạn là trợ lý kho hàng. Đọc đoạn hội thoại và xem hình ảnh (nếu có) để xác định DANH SÁCH sản phẩm khách hàng đang hỏi tồn kho.
 Quy tắc:
-1. Chỉ trả về TÊN SẢN PHẨM (hoặc Mã) mà khách đang quan tâm nhất.
-2. Nếu khách hỏi nhiều món, ưu tiên món hỏi sau cùng.
-3. Nếu không tìm thấy thông tin sản phẩm nào, trả về "NULL".
-4. Không giải thích, chỉ trả về tên sản phẩm."""},
-            {"role": "user", "content": chat_content}
-        ]
+1. Trả về danh sách JSON các tên sản phẩm (hoặc Mã) mà khách quan tâm.
+2. Nếu khách hỏi nhiều món hoặc gửi ẢNH danh sách, hãy trích xuất TẤT CẢ các sản phẩm trong đó.
+3. OUTPUT FORMAT JSON: {"products": ["Tên SP 1", "Tên SP 2", "Mã SP 3"]}
+4. Nếu không tìm thấy thông tin sản phẩm nào, trả về list rỗng: {"products": []}"""
+        }
+        
+        # Combine system prompt with chat history
+        prompt = [system_prompt] + gpt_messages
         
         try:
-            product_query = config._get_gpt_response(prompt)
-            product_query = product_query.strip().strip('"').strip("'")
+            response_content = config._get_gpt_response(prompt, json_mode=True)
+            data = json.loads(response_content)
+            product_queries = data.get('products', [])
             
-            if product_query == "NULL" or not product_query:
-                self.message_post(body="🤖 AI: Không tìm thấy tên sản phẩm nào trong đoạn chat gần đây để kiểm tra tồn kho.", message_type='notification', subtype_xmlid='mail.mt_note')
+            if not product_queries:
+                self.message_post(body="🤖 AI: Không tìm thấy sản phẩm nào trong đoạn chat gần đây để kiểm tra tồn kho.", message_type='notification', subtype_xmlid='mail.mt_note')
                 return
-                
-            # Smart search using explicit method
-            product = self._find_product_by_name_smart(product_query, chat_content, config)
+
+            # Context string for disambiguation
+            chat_context_str = ""
+            for m in gpt_messages:
+                 if m['role'] == 'system': continue
+                 content = m['content']
+                 if isinstance(content, list):
+                     text_parts = [c['text'] for c in content if c['type'] == 'text']
+                     chat_context_str += f"{m['role']}: {' '.join(text_parts)}\n"
+                 else:
+                     chat_context_str += f"{m['role']}: {content}\n"
             
-            if product:
-                # Get Stock Info
-                qty_available = product.qty_available
-                virtual_available = product.virtual_available
+            result_lines = []
+            result_lines.append(f"📦 **Kiểm tra tồn kho ({len(product_queries)} SP):**")
+            
+            for query in product_queries:
+                # Smart search using explicit method
+                product = self._find_product_by_name_smart(query, chat_context_str, config)
                 
-                # Format currency
-                price = "{:,.0f}".format(product.lst_price)
-                
-                msg = f"""📦 **Kiểm tra tồn kho: {product.name}**
-- Mã: {product.default_code}
-- Giá niêm yết: {price} đ
-- Tồn thực tế: **{qty_available}**
-- Dự kiến (sau khi giữ hàng): {virtual_available}
-"""
-                self.message_post(body=Markup(msg), message_type='notification', subtype_xmlid='mail.mt_note')
-            else:
-                 self.message_post(body=f"🤖 AI: Đã tìm kiếm '{product_query}' nhưng không thấy sản phẩm nào khớp trong hệ thống.", message_type='notification', subtype_xmlid='mail.mt_note')
+                if product:
+                    # Get Stock Info
+                    qty_available = product.qty_available
+                    virtual_available = product.virtual_available
+                    price = "{:,.0f}".format(product.lst_price)
+                    
+                    line_info = f"- **{product.name}**\n  + Mã: `{product.default_code}` | Giá: {price}\n  + Tồn: **{qty_available}** | Dự kiến: {virtual_available}"
+                    result_lines.append(line_info)
+                else:
+                    result_lines.append(f"- ⚠️ Không tìm thấy: '{query}'")
+            
+            full_msg = "\n".join(result_lines)
+            self.message_post(body=Markup(full_msg.replace('\n', '<br/>')), message_type='notification', subtype_xmlid='mail.mt_note')
 
         except Exception as e:
             _logger.error(f"Stock Check Error: {e}")

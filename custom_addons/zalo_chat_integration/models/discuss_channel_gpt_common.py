@@ -70,7 +70,6 @@ Select ID:"""}
         try:
             response = config._get_gpt_response(prompt)
             # Cleanup non-digit characters just in case
-            import re
             cleaned_id = re.sub(r'\D', '', response)
             if cleaned_id:
                 selected_id = int(cleaned_id)
@@ -124,7 +123,6 @@ Select ID:"""}
             # Check for Zalo image URLs embedded in body (from our webhook handler)
             # Our webhook handler adds: <img src="..." ... />
             if msg.body and '<img' in msg.body:
-                import re
                 img_urls = re.findall(r'src="([^"]+)"', msg.body)
                 for url in img_urls:
                     if url.startswith('http'):
