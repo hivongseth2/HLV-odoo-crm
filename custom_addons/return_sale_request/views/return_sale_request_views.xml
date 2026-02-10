@@ -14,20 +14,8 @@
                         class="oe_highlight"
                         invisible="state != 'draft'"
                     />
-                    <button
-                        name="button_confirm_incoming"
-                        string="Xác nhận nhập kho"
-                        type="object"
-                        class="oe_highlight"
-                        invisible="state != 'return_sale'"
-                    />
-                    <button
-                        name="button_done"
-                        string="Hoàn thành"
-                        type="object"
-                        class="oe_highlight"
-                        invisible="state != 'return_purchase'"
-                    />
+
+
                     <button
                         name="button_reject"
                         string="Từ chối"
