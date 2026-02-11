@@ -86,24 +86,15 @@
                         </field>
 
                         <separator string="Trợ lý nội bộ"/>
-                        <notebook>
-                            <page string="Tóm tắt (AI)">
-                                <group>
-                                    <field name="assistant_summary_html" nolabel="1"/>
-                                </group>
-                            </page>
-                            <page string="Gợi ý sản phẩm &amp; tồn kho">
-                                <group>
-                                    <field name="assistant_product_suggestions_html" nolabel="1"/>
-                                </group>
-                            </page>
-                            <page string="Hồ sơ &amp; Tags">
-                                <group>
-                                    <field name="profile_id"/>
-                                    <field name="assistant_last_run" readonly="1"/>
-                                </group>
-                            </page>
-                        </notebook>
+                        <group>
+                            <group>
+                                <field name="assistant_product_suggestions_html" nolabel="1"/>
+                            </group>
+                            <group>
+                                <field name="profile_id"/>
+                                <field name="assistant_last_run" readonly="1"/>
+                            </group>
+                        </group>
                     </sheet>
                     <chatter/>
                 </form>

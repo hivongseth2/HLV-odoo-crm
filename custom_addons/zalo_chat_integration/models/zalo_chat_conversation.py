@@ -239,17 +239,9 @@ YÊU CẦU:
         key_info = data.get('key_info') or {}
         product_queries = key_info.get('products') or []
 
-        # Update summary field
-        if summary_html:
-            self.assistant_summary_html = summary_html
-
         # Update profile tags/summary (if profile exists)
         if self.profile_id:
             self.profile_id.action_update_summary_ai(chat_content, config)
-
-        # Also update assistant summary field if GPT returned summary
-        if summary_html:
-            self.assistant_summary_html = summary_html
 
         # 2) Product suggestions via MISA + stock by warehouse
         suggestions_html = self._build_product_suggestions_html(product_queries, chat_content)
