@@ -105,48 +105,7 @@ class MailMessage(models.Model):
                 
                 _logger.info(f'[ZALO DEBUG] SENDING to Zalo: body={bool(message.body)}, body_preview={str(message.body)[:50] if message.body else None}, attachments={len(message.attachment_ids)}')
                 
-                # try:
-                #     # User sent message in discuss → send to Zalo
-                #     # NO member adding here - members already set on channel creation
-                    
-                #     # Check if message has attachments
-                #     if message.attachment_ids:
-                #         _logger.info(f'[ZALO DEBUG] Processing {len(message.attachment_ids)} attachment(s)')
-                #         # Process attachments (images, files)
-                #         for attachment in message.attachment_ids:
-                #             try:
-                #                 self._send_attachment_to_zalo(attachment, conversation)
-                #             except Exception as e:
-                #                 _logger.error(
-                #                     f'Failed to send attachment {attachment.id} to Zalo: {str(e)}',
-                #                     exc_info=True
-                #                 )
-                    
-                #     # Process text content if any
-                #     if message.body and message.body.strip():
-                #         # Strip HTML tags from message body using Odoo tools
-                #         plain_text = tools.html2plaintext(message.body)
-                        
-                #         # Only send if there's actual text content
-                #         if plain_text and plain_text.strip():
-                #             _logger.info(f'[ZALO DEBUG] Creating zalo.chat.message for text: "{plain_text[:50]}"')
-                            
-                #             zalo_message = self.env['zalo.chat.message'].sudo().create({
-                #                 'conversation_id': conversation.id,
-                #                 'direction': 'outbound',
-                #                 'message_type': 'text',
-                #                 'content': plain_text,
-                #                 'state': 'draft',
-                #             })
-                            
-                #             # Send via Zalo API
-                #             zalo_message.action_send()
-                            
-                #             _logger.info(f'[ZALO DEBUG] SENT zalo.chat.message id={zalo_message.id}')
-                    
-                # except Exception as e:
-                #     _logger.error(f'Failed to send message to Zalo: {str(e)}', exc_info=True)
-        
+            
         return messages
     
     def _send_attachment_to_zalo(self, attachment, conversation):
