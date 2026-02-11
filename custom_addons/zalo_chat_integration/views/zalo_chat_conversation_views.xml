@@ -92,7 +92,7 @@
                                     <field name="assistant_summary_html" nolabel="1"/>
                                 </group>
                             </page>
-                            <page string="Gợi ý sản phẩm & tồn kho">
+                            <page string="Gợi ý sản phẩm &amp; tồn kho">
                                 <group>
                                     <field name="assistant_product_suggestions_html" nolabel="1"/>
                                 </group>
