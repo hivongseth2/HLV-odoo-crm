@@ -62,3 +62,54 @@
     background-color: #dc3545;
     color: #fff;
 }
+
+/* Multi-select Styles */
+.zalo-assistant-card {
+    transition: all 0.2s ease;
+    border: 1px solid #e0e0e0;
+    cursor: pointer;
+}
+
+.zalo-assistant-card.selected {
+    border-color: #007bff;
+    background-color: #f0f8ff;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+.zalo-assistant-card-container {
+    position: relative;
+    padding-bottom: 40px; /* Space for button */
+}
+
+.zalo-assistant-actions {
+    margin-top: 10px;
+    text-align: right;
+    border-top: 1px solid #eee;
+    padding-top: 8px;
+}
+
+.zalo-btn-check-stock {
+    display: inline-block;
+    padding: 6px 12px;
+    background-color: #007bff;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 500;
+    transition: background-color 0.2s;
+    border: none;
+}
+
+.zalo-btn-check-stock:hover {
+    background-color: #0056b3;
+}
+
+.zalo-btn-check-stock:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.zalo-btn-check-stock i {
+    margin-right: 4px;
+}

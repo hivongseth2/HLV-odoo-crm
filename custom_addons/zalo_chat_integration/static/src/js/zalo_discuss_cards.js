@@ -46,22 +46,59 @@ function renderCard(el) {
         container.appendChild(p);
     }
 
+    // STATE: Track selected items
+    const selectedQueries = new Set();
+    const actionArea = document.createElement('div');
+    actionArea.className = 'zalo-assistant-actions';
+    actionArea.style.display = 'none';
+
+    const btnCheck = document.createElement('button');
+    btnCheck.className = 'zalo-btn-check-stock';
+    btnCheck.innerHTML = '<i class="fa fa-cubes"></i> Kiểm tra tồn';
+    btnCheck.onclick = (e) => {
+        e.stopPropagation();
+        if (selectedQueries.size === 0) return;
+
+        const queries = Array.from(selectedQueries);
+        const event = new CustomEvent('zalo-card-check-batch', {
+            bubbles: true,
+            detail: { queries: queries }
+        });
+        container.dispatchEvent(event);
+        console.log("Zalo Batch Check clicked:", queries);
+    };
+    actionArea.appendChild(btnCheck);
+
+    const updateUI = () => {
+        if (selectedQueries.size > 0) {
+            actionArea.style.display = 'block';
+            btnCheck.innerHTML = `<i class="fa fa-cubes"></i> Kiểm tra tồn (${selectedQueries.size})`;
+        } else {
+            actionArea.style.display = 'none';
+        }
+    };
+
     items.forEach((it) => {
         const card = document.createElement('div');
         card.className = 'zalo-assistant-card';
-
         card.style.cursor = 'pointer';
-        card.title = 'Click để kiểm tra tồn kho';
+        card.title = 'Click để chọn kiểm tra tồn kho';
+
+        const query = it.name || it.code || '';
+
         card.onclick = (e) => {
             e.stopPropagation();
-            // Prefer name for query as it's more natural for the search method
-            const query = it.name || it.code || '';
-            const event = new CustomEvent('zalo-card-click', {
-                bubbles: true,
-                detail: { query: query }
-            });
-            card.dispatchEvent(event);
-            console.log("Zalo Card clicked, dispatching event:", query);
+
+            // Toggle selection
+            if (selectedQueries.has(query)) {
+                selectedQueries.delete(query);
+                card.classList.remove('selected');
+            } else {
+                selectedQueries.add(query);
+                card.classList.add('selected');
+            }
+
+            updateUI();
         };
 
         const title = document.createElement('div');
@@ -73,12 +110,14 @@ function renderCard(el) {
         const stock = document.createElement('div');
         stock.className = 'stock';
         stock.innerHTML = it.stock || ''; // Allow HTML for stock (e.g. <b> or span)
+
         card.appendChild(title);
         card.appendChild(meta);
         card.appendChild(stock);
         container.appendChild(card);
     });
 
+    container.appendChild(actionArea);
     el.replaceWith(container);
 }
 
@@ -117,28 +156,29 @@ patch(Message.prototype, {
             const root = this.el;
             if (!root) return;
 
-            // Listen for custom event from cards
-            root.addEventListener('zalo-card-click', async (ev) => {
-                const productQuery = ev.detail ? ev.detail.query : null;
-                if (!productQuery) return;
+            // Listen for card click (Legacy single click - deprecated or kept for compat?)
+            // We replaced click with selection toggle, so only listen for batch event now.
 
-                console.log("Caught zalo-card-click event:", productQuery);
+            // Listen for BATCH check event
+            root.addEventListener('zalo-card-check-batch', async (ev) => {
+                const queries = ev.detail ? ev.detail.queries : [];
+                if (!queries || queries.length === 0) return;
+
+                console.log("Caught zalo-card-check-batch event:", queries);
 
                 // Get thread from message props
                 const message = this.props.message;
-                // Support both Odoo 17/18 structures where thread might be direct or originThread
                 const thread = message.thread || message.originThread;
 
                 if (!thread || (thread.model !== 'discuss.channel')) {
-                    // Only work in discuss channels
                     return;
                 }
 
                 try {
-                    notification.add("Đang kiểm tra tồn kho: " + productQuery, { type: "info" });
-                    await orm.call("discuss.channel", "action_check_stock_item", [[thread.id], productQuery]);
+                    notification.add(`Đang kiểm tra tồn kho ${queries.length} sản phẩm...`, { type: "info" });
+                    await orm.call("discuss.channel", "action_check_stock_items", [[thread.id], queries]);
                 } catch (e) {
-                    console.error("Stock check error invoked from specific card:", e);
+                    console.error("Batch stock check error:", e);
                     notification.add("Lỗi kiểm tra tồn: " + e.message, { type: "danger" });
                 }
             });
