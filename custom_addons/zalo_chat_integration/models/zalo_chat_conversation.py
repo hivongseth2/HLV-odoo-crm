@@ -283,7 +283,7 @@ YÊU CẦU:
                 note_html += "</div>"
                 channel.with_context(skip_zalo_sync=True).message_post(
                     body=Markup(note_html),
-                    message_type='notification',
+                    message_type='comment',
                     subtype_xmlid='mail.mt_note'
                 )
         except Exception as e:
