@@ -275,7 +275,9 @@ YÊU CẦU:
                     }
                     payload_json = tools.html_escape(json.dumps(payload, ensure_ascii=False))
                     note_html += (
-                        "<div class='zalo-assistant-card' data-json=\"" + payload_json + "\"></div>"
+                        "<div class='zalo-assistant-card'>"
+                        "<script type='application/json' class='zalo-assistant-data'>" + payload_json + "</script>"
+                        "</div>"
                     )
                 elif suggestions_html:
                     note_html += f"<p><b>📦 Gợi ý sản phẩm &amp; tồn kho</b></p>{suggestions_html}"

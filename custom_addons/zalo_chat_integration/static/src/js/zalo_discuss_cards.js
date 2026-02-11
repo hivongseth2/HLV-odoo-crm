@@ -11,8 +11,9 @@ function decodeHtml(str) {
 }
 
 function renderCard(el) {
-    let json = el.getAttribute('data-json');
-    if (!json) return;
+    const script = el.querySelector('.zalo-assistant-data');
+    if (!script) return;
+    let json = script.textContent || '';
     json = decodeHtml(json);
     // Handle escaped quotes inside attribute
     json = json.replace(/\\"/g, '"').replace(/\"/g, '"');
@@ -68,7 +69,7 @@ function unwrapRawHtml(root) {
 
 function processCards(root) {
     unwrapRawHtml(root);
-    const nodes = root.querySelectorAll('.zalo-assistant-card[data-json]');
+    const nodes = root.querySelectorAll('.zalo-assistant-card');
     nodes.forEach((el) => renderCard(el));
 }
 
