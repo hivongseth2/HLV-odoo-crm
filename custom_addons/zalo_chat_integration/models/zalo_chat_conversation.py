@@ -257,6 +257,24 @@ YÊU CẦU:
             self.assistant_product_suggestions_html = suggestions_html
 
         self.assistant_last_run = fields.Datetime.now()
+
+        # Post internal note to Discuss (sale-facing, NOT sent to customer)
+        try:
+            channel = self._get_active_livechat_channel()
+            if channel:
+                note_html = "<div>"
+                if summary_html:
+                    note_html += f"<p><b>📝 Tóm tắt (AI)</b></p>{summary_html}"
+                if suggestions_html:
+                    note_html += f"<p><b>📦 Gợi ý sản phẩm &amp; tồn kho</b></p>{suggestions_html}"
+                note_html += "</div>"
+                channel.with_context(skip_zalo_sync=True).message_post(
+                    body=note_html,
+                    message_type='notification',
+                    subtype_xmlid='mail.mt_note'
+                )
+        except Exception as e:
+            _logger.error(f"Failed to post assistant note to Discuss: {e}")
         return True
 
     def _build_product_suggestions_html(self, product_queries, chat_content):
@@ -520,4 +538,3 @@ YÊU CẦU:
         if not channel:
              raise UserError(_("Chưa tìm thấy phiên Live Chat nào."))
         return channel.action_gpt_create_quote()
-
