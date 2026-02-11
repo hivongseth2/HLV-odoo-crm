@@ -2,6 +2,7 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 import base64
+import datetime
 from io import BytesIO
 
 try:
@@ -138,16 +139,107 @@ class PickingExportShopeeWizard(models.TransientModel):
 
         # 2. Hardcode Ma kho
         row['ma_kho'] = 'HLV'
+        row['tk_kho'] = '1561'
+        row['la_dong_ghi_chu'] = row.get('la_dong_ghi_chu') or 'không'
+        row['hang_khuyen_mai'] = row.get('hang_khuyen_mai') or 'Không'
+        row['hh_khong_th_tren_to_khai'] = row.get('hh_khong_th_tren_to_khai') or 'Không'
+
+        # 3. Chuẩn hóa ngày theo dd/mm/YYYY
+        posting_date = picking.date_done or picking.scheduled_date or fields.Datetime.now()
+        posting_date_str = self._to_template_date(posting_date)
+        row['ngay_hach_toan'] = posting_date_str
+        row['ngay_chung_tu'] = posting_date_str
+        row['ngay_hoa_don'] = posting_date_str
+        if not row.get('so_phieu_xuat'):
+            row['so_phieu_xuat'] = picking_name or sale_name or ''
         
         return row
 
+    def _to_template_date(self, value):
+        if not value:
+            return ''
+
+        date_value = False
+        if isinstance(value, datetime.datetime):
+            date_value = value.date()
+        elif isinstance(value, datetime.date):
+            date_value = value
+        elif isinstance(value, str):
+            try:
+                dt_value = fields.Datetime.from_string(value)
+                if dt_value:
+                    date_value = dt_value.date() if hasattr(dt_value, 'date') else dt_value
+            except Exception:
+                date_value = False
+            if not date_value:
+                try:
+                    date_value = fields.Date.from_string(value)
+                except Exception:
+                    date_value = False
+
+        if not date_value:
+            return ''
+        return date_value.strftime("%d/%m/%Y")
+
     def _get_columns_definition(self):
         """
-        Override to match 'Copy of mau_ban_hang (1).xlsx' exactly (52 columns).
-        Remove 'vi_tri' and 'misa_sync' which exist in parent but not in template.
+        Giữ đúng 52 cột cho file Shopee (không phụ thuộc template gốc).
+        Width để số nguyên cho dễ đọc/duy trì.
         """
-        columns = super()._get_columns_definition()
-        return [c for c in columns if c['key'] not in ['vi_tri', 'misa_sync']]
+        return [
+            {'key': 'hinh_thuc_ban_hang', 'name': 'Hình thức bán hàng', 'width': 20},
+            {'key': 'phuong_thuc_thanh_toan', 'name': 'Phương thức thanh toán', 'width': 22},
+            {'key': 'kiem_phieu_xuat_kho', 'name': 'Kiêm phiếu xuất kho', 'width': 21},
+            {'key': 'lap_kem_hoa_don', 'name': 'Lập kèm hóa đơn', 'width': 18},
+            {'key': 'da_lap_hoa_don', 'name': 'Đã lập hóa đơn', 'width': 16},
+            {'key': 'ngay_hach_toan', 'name': 'Ngày hạch toán (*)', 'width': 19},
+            {'key': 'ngay_chung_tu', 'name': 'Ngày chứng từ (*)', 'width': 19},
+            {'key': 'so_chung_tu', 'name': 'Số chứng từ (*)', 'width': 17},
+            {'key': 'so_phieu_xuat', 'name': 'Số phiếu xuất', 'width': 17},
+            {'key': 'mau_so_hd', 'name': 'Mẫu số HĐ', 'width': 13},
+            {'key': 'ky_hieu_hd', 'name': 'Ký hiệu HĐ', 'width': 16},
+            {'key': 'so_hoa_don', 'name': 'Số hóa đơn', 'width': 17},
+            {'key': 'ngay_hoa_don', 'name': 'Ngày hóa đơn', 'width': 16},
+            {'key': 'ma_khach_hang', 'name': 'Mã khách hàng', 'width': 18},
+            {'key': 'ten_khach_hang', 'name': 'Tên khách hàng', 'width': 24},
+            {'key': 'dia_chi', 'name': 'Địa chỉ', 'width': 25},
+            {'key': 'ma_so_thue', 'name': 'Mã số thuế', 'width': 16},
+            {'key': 'don_vi_giao_dai_ly', 'name': 'Đơn vị giao đại lý', 'width': 17},
+            {'key': 'nguoi_nop', 'name': 'Người nộp', 'width': 17},
+            {'key': 'nop_vao_tk', 'name': 'Nộp vào TK', 'width': 13},
+            {'key': 'ten_ngan_hang', 'name': 'Tên ngân hàng', 'width': 13},
+            {'key': 'dien_giai', 'name': 'Diễn giải/Lý do nộp', 'width': 20},
+            {'key': 'ly_do_xuat', 'name': 'Lý do xuất', 'width': 22},
+            {'key': 'ma_hang', 'name': 'Mã hàng (*)', 'width': 17},
+            {'key': 'ten_hang', 'name': 'Tên hàng', 'width': 18},
+            {'key': 'la_dong_ghi_chu', 'name': 'Là dòng ghi chú', 'width': 17},
+            {'key': 'hang_khuyen_mai', 'name': 'Hàng khuyến mại', 'width': 14},
+            {'key': 'chiet_khau_thuong_mai', 'name': 'Chiết khấu thương mại', 'width': 13},
+            {'key': 'tk_tien_no', 'name': 'TK Tiền/Chi phí/Nợ (*)', 'width': 16},
+            {'key': 'tk_doanh_thu_co', 'name': 'TK Doanh thu/Có (*)', 'width': 16},
+            {'key': 'dvt', 'name': 'ĐVT', 'width': 12},
+            {'key': 'so_luong', 'name': 'Số lượng', 'width': 13},
+            {'key': 'don_gia', 'name': 'Đơn giá', 'width': 14},
+            {'key': 'thanh_tien', 'name': 'Thành tiền', 'width': 13},
+            {'key': 'ty_le_ck', 'name': 'Tỷ lệ CK (%)', 'width': 13},
+            {'key': 'tien_chiet_khau', 'name': 'Tiền chiết khấu', 'width': 16},
+            {'key': 'tk_chiet_khau', 'name': 'TK chiết khấu', 'width': 15},
+            {'key': 'gia_tinh_thue_xk', 'name': 'Giá tính thuế XK', 'width': 17},
+            {'key': 'ty_le_thue_xk', 'name': '% thuế xuất khẩu', 'width': 18},
+            {'key': 'tien_thue_xk', 'name': 'Tiền thuế xuất khẩu', 'width': 21},
+            {'key': 'tk_thue_xk', 'name': 'TK thuế xuất khẩu', 'width': 19},
+            {'key': 'ty_le_thue_gtgt', 'name': '% thuế GTGT', 'width': 16},
+            {'key': 'ty_le_thue_khac', 'name': '% thuế suất KHAC', 'width': 13},
+            {'key': 'tien_thue_gtgt', 'name': 'Tiền thuế GTGT', 'width': 13},
+            {'key': 'tk_thue_gtgt', 'name': 'TK thuế GTGT', 'width': 16},
+            {'key': 'hh_khong_th_tren_to_khai', 'name': 'HH không TH trên tờ khai thuế GTGT', 'width': 19},
+            {'key': 'ma_kho', 'name': 'Mã kho', 'width': 11},
+            {'key': 'tk_gia_von', 'name': 'TK giá vốn', 'width': 12},
+            {'key': 'tk_kho', 'name': 'TK Kho', 'width': 12},
+            {'key': 'don_gia_von', 'name': 'Đơn giá vốn', 'width': 12},
+            {'key': 'tien_von', 'name': 'Tiền vốn', 'width': 12},
+            {'key': 'hang_hoa_giu_ho', 'name': 'Hàng hóa giữ hộ/bán hộ', 'width': 13},
+        ]
 
     def action_export(self):
         self.ensure_one()
