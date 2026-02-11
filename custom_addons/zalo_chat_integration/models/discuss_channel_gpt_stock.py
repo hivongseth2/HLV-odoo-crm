@@ -135,3 +135,45 @@ Quy tắc:
         except Exception as e:
             _logger.error(f"Stock Check Error: {e}")
             self.message_post(body=f"⚠️ Lỗi kiểm tra tồn: {str(e)}", message_type='notification', subtype_xmlid='mail.mt_note')
+
+    def action_check_stock_item(self, query):
+        """
+        Specific stock check for a quoted item (triggered from UI)
+        """
+        self.ensure_one()
+        if not query: return
+        
+        try:
+            # Smart search
+            config = self.env['zalo.oa.config'].sudo().search([('livechat_channel_id', '=', self.livechat_channel_id.id)], limit=1)
+            
+            # Simple context for this single item check
+            chat_context_str = f"User is asking to check stock for specific item: {query}"
+            
+            product = self._find_product_by_name_smart(query, chat_context_str, config)
+            
+            if product:
+                # Get Stock Info
+                qty_available = product.qty_available
+                virtual_available = product.virtual_available
+                price = "{:,.0f}".format(product.lst_price)
+                
+                msg = (
+                    f"📦 **Kết quả kiểm tra tồn kho:**\n"
+                    f"- **{product.name}**\n"
+                    f"  + Mã: `{product.default_code}` | Giá: {price}\n"
+                    f"  + Tồn: **{qty_available}** | Dự kiến: {virtual_available}"
+                )
+                
+                # Also check breakdown by warehouse if possible
+                wh_stock = self.env['zalo.chat.conversation'].sudo()._get_stock_by_warehouse(product.default_code)
+                if wh_stock:
+                     msg += f"\n  + Chi tiết: {wh_stock}"
+
+                self.message_post(body=Markup(msg.replace('\n', '<br/>')), message_type='notification', subtype_xmlid='mail.mt_note')
+            else:
+                self.message_post(body=f"⚠️ Không tìm thấy sản phẩm: '{query}' trong hệ thống Odoo.", message_type='notification', subtype_xmlid='mail.mt_note')
+                
+        except Exception as e:
+            _logger.error(f"Stock Check Error: {e}")
+            self.message_post(body=f"⚠️ Lỗi: {str(e)}", message_type='notification', subtype_xmlid='mail.mt_note')

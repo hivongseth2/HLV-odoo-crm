@@ -3,6 +3,7 @@
 import { onMounted } from "@odoo/owl";
 import { patch } from "@web/core/utils/patch";
 import { Message } from "@mail/core/common/message";
+import { useService } from "@web/core/utils/hooks";
 
 function decodeHtml(str) {
     const txt = document.createElement('textarea');
@@ -10,7 +11,7 @@ function decodeHtml(str) {
     return txt.value;
 }
 
-function renderCard(el) {
+function renderCard(el, onClickHandler) {
     const dataEl = el.querySelector('.zalo-assistant-data');
     if (!dataEl) return;
 
@@ -51,6 +52,18 @@ function renderCard(el) {
     items.forEach((it) => {
         const card = document.createElement('div');
         card.className = 'zalo-assistant-card';
+
+        if (onClickHandler && typeof onClickHandler === 'function') {
+            card.style.cursor = 'pointer';
+            card.title = 'Click để kiểm tra tồn kho';
+            card.onclick = (e) => {
+                e.stopPropagation();
+                // Prefer name for query as it's more natural for the search method
+                const query = it.name || it.code || '';
+                onClickHandler(query);
+            };
+        }
+
         const title = document.createElement('div');
         title.className = 'title';
         title.innerText = it.name || '';
@@ -86,21 +99,47 @@ function unwrapRawHtml(root) {
     });
 }
 
-function processCards(root) {
+function processCards(root, onClickHandler) {
     // First try to unwrap any escaped HTML
     unwrapRawHtml(root);
     // Then find any cards (now rendered as HTML nodes)
     const nodes = root.querySelectorAll('.zalo-assistant-card');
-    nodes.forEach((el) => renderCard(el));
+    nodes.forEach((el) => renderCard(el, onClickHandler));
 }
 
 patch(Message.prototype, {
     setup() {
         super.setup();
+        const orm = useService("orm");
+        const notification = useService("notification");
+
         onMounted(() => {
             const root = this.el;
             if (!root) return;
-            processCards(root);
+
+            const onCardClick = async (productQuery) => {
+                if (!productQuery) return;
+
+                // Get thread from message props
+                const message = this.props.message;
+                // Support both Odoo 17/18 structures where thread might be direct or originThread
+                const thread = message.thread || message.originThread;
+
+                if (!thread || (thread.model !== 'discuss.channel')) {
+                    // Only work in discuss channels
+                    return;
+                }
+
+                try {
+                    await orm.call("discuss.channel", "action_check_stock_item", [[thread.id], productQuery]);
+                    notification.add("Đang kiểm tra tồn kho: " + productQuery, { type: "info" });
+                } catch (e) {
+                    console.error("Stock check error invoked from specific card:", e);
+                    notification.add("Lỗi kiểm tra tồn: " + e.message, { type: "danger" });
+                }
+            };
+
+            processCards(root, onCardClick);
         });
     },
 });
