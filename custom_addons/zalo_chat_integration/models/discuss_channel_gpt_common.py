@@ -16,10 +16,26 @@ class DiscussChannel(models.Model):
         """
         Product = self.env['product.product']
         
-        # 1. Broad search in Odoo (NO LIMIT - send all to AI for disambiguation)
-        candidates = Product.search([
+        # 1. Hybrid Search: Vector + Text
+        candidates = Product.browse()
+        
+        # A. Vector Search
+        try:
+            vector_results = config.search_vector(product_name, 'product.product', limit=10, min_score=0.4)
+            vector_ids = [r[0] for r in vector_results]
+            candidates += Product.browse(vector_ids)
+        except Exception as e:
+             _logger.warning(f"Vector search failed: {e}")
+        
+        # B. Text Search (Fallback/Supplement)
+        text_candidates = Product.search([
             '|', ('name', 'ilike', product_name), ('default_code', 'ilike', product_name)
-        ])
+        ], limit=5)
+        candidates += text_candidates
+        
+        # Remove duplicates
+        candidates = candidates.exists()
+
         
         if not candidates:
             return None
