@@ -13,6 +13,13 @@ try:
 except ImportError:
     Workbook = None
 
+import logging
+_logger = logging.getLogger(__name__)
+
+import logging
+_logger = logging.getLogger(__name__)
+
+
 
 def _to_date_str(val):
     if not val:
@@ -69,7 +76,11 @@ class StockExportWizard(models.TransientModel):
     def _partner_code(self, partner):
         if not partner:
             return ""
-        return partner.ref or ""
+        # Prioritize Commercial Partner Ref, then Partner Ref
+        ref = partner.commercial_partner_id.ref or partner.ref
+        if ref:
+            return ref
+        return ""
 
     def _find_sale_order(self, move, picking):
         # 1) Từ sale_line_id trực tiếp
@@ -121,6 +132,7 @@ class StockExportWizard(models.TransientModel):
             {'key': 'don_hang_goc', 'name': 'Đơn hàng gốc', 'width': 20},
             {'key': 'ma_doi_tuong', 'name': 'Mã đối tượng', 'width': 15},
             {'key': 'ten_doi_tuong', 'name': 'Tên đối tượng', 'width': 30},
+            {'key': 'khach_hang', 'name': 'Khách hàng', 'width': 30},
             {'key': 'dia_chi', 'name': 'Địa chỉ/Bộ phận', 'width': 40},
             {'key': 'ly_do_xuat', 'name': 'Lý do xuất', 'width': 30},
             {'key': 'ma_hang', 'name': 'Mã hàng (*)', 'width': 18},
@@ -178,6 +190,74 @@ class StockExportWizard(models.TransientModel):
         
         so = self._find_sale_order(first_move_id, picking)
         don_hang_goc = so.name if so else (picking.origin or "")
+        
+        # Customer Name (Khách hàng) - Priority: SO Partner -> Picking Commercial Partner -> Picking Partner
+        khach_hang = ""
+        if so and so.partner_id:
+            khach_hang = so.partner_id.name
+            # Use SO Partner REF for 'Ma doi tuong' as requested
+            # Robust check: Commercial Partner -> Parent -> Partner -> Current Value
+            p_ref = False
+            
+            # DEBUG LOG
+            _logger.info(f"DEBUG EXPORT: SO {so.name} - Partner {so.partner_id.name} (ID: {so.partner_id.id})")
+            _logger.info(f"--- Commercial Partner: {so.partner_id.commercial_partner_id.name} (Ref: {so.partner_id.commercial_partner_id.ref})")
+            _logger.info(f"--- Parent: {so.partner_id.parent_id.name if so.partner_id.parent_id else 'None'} (Ref: {so.partner_id.parent_id.ref if so.partner_id.parent_id else 'None'})")
+            _logger.info(f"--- Self Ref: {so.partner_id.ref}")
+
+            # Check Commercial Partner (Company)
+            if so.partner_id.commercial_partner_id and so.partner_id.commercial_partner_id.ref:
+                p_ref = so.partner_id.commercial_partner_id.ref
+            # Check Parent Company directly
+            elif so.partner_id.parent_id and so.partner_id.parent_id.ref:
+                p_ref = so.partner_id.parent_id.ref
+            # Check Partner itself
+            elif so.partner_id.ref:
+                p_ref = so.partner_id.ref
+            
+            if p_ref:
+                partner_code = p_ref
+            else:
+                _logger.info("--- NO REF FOUND!")
+                
+            # --- SHOPEE OVERRIDE LOGIC ---
+            if hasattr(so, 'shopee_shop_id') and so.shopee_shop_id:
+                shop = so.shopee_shop_id
+                # Check Account Name contains 2014645
+                account = getattr(shop, 'account_id', False)
+                if account and '2014645' in getattr(account, 'name', ''):
+                    shop_id = getattr(shop, 'shop_identifier', 0)
+                    target_pid = False
+                    
+                    if shop_id == 796817584:
+                        target_pid = 9715 # MILWAUKEE
+                    elif shop_id == 1357810112:
+                        target_pid = 9720 # DEWALT
+                    elif shop_id == 326259406:
+                        target_pid = 9701 # HLV
+                    
+                    if target_pid:
+                        target_partner = self.env['res.partner'].browse(target_pid)
+                        if target_partner.exists():
+                            khach_hang = target_partner.name
+                            ly_do_xuat = "Xuất kho bán hàng cho " + target_partner.name
+                            
+                            # Recalculate Partner Code for this new Customer
+                            s_ref = False
+                            if target_partner.commercial_partner_id and target_partner.commercial_partner_id.ref:
+                                s_ref = target_partner.commercial_partner_id.ref
+                            elif target_partner.parent_id and target_partner.parent_id.ref:
+                                s_ref = target_partner.parent_id.ref
+                            elif target_partner.ref:
+                                s_ref = target_partner.ref
+                            
+                            if s_ref:
+                                partner_code = s_ref
+                            
+                            _logger.info(f"SHOPEE OVERRIDE: Shop {shop_id} -> Partner {target_partner.name} (Code: {partner_code})")
+
+        elif partner:
+             khach_hang = partner.commercial_partner_id.name or partner.name
 
         for line in moves:
             # Determine move & product
@@ -249,6 +329,8 @@ class StockExportWizard(models.TransientModel):
                 'don_hang_goc': don_hang_goc,
                 'ma_doi_tuong': partner_code,
                 'ten_doi_tuong': partner_name,
+                'khach_hang': khach_hang,
+                'dia_chi': partner_address,
                 'dia_chi': partner_address,
                 'ly_do_xuat': ly_do_xuat,
                 'ma_hang': prod.default_code or '',

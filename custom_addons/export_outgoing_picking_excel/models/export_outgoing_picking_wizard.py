@@ -146,6 +146,7 @@ class PickingExportWizard(models.TransientModel):
             {'key': 'so_luong', 'name': 'Số lượng', 'width': 12},
             {'key': 'don_gia', 'name': 'Đơn giá', 'width': 15},
             {'key': 'thanh_tien', 'name': 'Thành tiền', 'width': 15},
+            {'key': 'bao_gom_thue', 'name': 'Bao gồm thuế', 'width': 15},
             {'key': 'ty_le_ck', 'name': 'Tỷ lệ CK (%)', 'width': 12},
             {'key': 'tien_chiet_khau', 'name': 'Tiền chiết khấu', 'width': 15},
             {'key': 'tk_chiet_khau', 'name': 'TK chiết khấu', 'width': 15},
@@ -214,32 +215,37 @@ class PickingExportWizard(models.TransientModel):
     def _thuoc_combo_code_for_move(self, move):
         """
         Trả về mã combo cha (default_code) cho move nếu là dòng con của combo.
-        Sử dụng Studio fields x_studio_is_combo_child và x_studio_combo_parent_code
-        để xác định chính xác thay vì dựa vào giá = 0.
+        Sử dụng logic BoM Kit (phantom) hoặc Service Combo (header).
         """
+        if not move:
+            return ''
+            
         sol = getattr(move, 'sale_line_id', False)
         if not sol:
             return ''
         
-        # 🆕 Đọc từ Studio fields
-        try:
-            # 1. Logic cho BoM Kit (Standard Odoo)
-            # Nếu move từ Sale Line mà sản phẩm khác nhau -> Là thành phần của Kit
-            if sol.product_id and sol.product_id != move.product_id:
-                # Đây là thành phần combo (children)
-                # Trả về Mã của Parent (sol.product_id)
-                return sol.product_id.default_code or ''
+        sol_product = sol.product_id
+        if not sol_product:
+            return ''
 
-            # 2. Logic cũ (Studio fields)
-            is_combo_child = getattr(sol, 'x_studio_is_combo_child', False)
-            combo_parent_code = getattr(sol, 'x_studio_combo_parent_code', False)
-            
-            if is_combo_child and combo_parent_code:
-                return combo_parent_code
-        except Exception as e:
-            # Fallback nếu Studio fields không tồn tại
-            pass
+        # Nếu sản phẩm trên move trùng với sản phẩm trên SOL -> chính nó (không phải component)
+        if sol_product.id == move.product_id.id:
+            return ''
         
+        # 1. Check Service Combo (Header là service, move là component)
+        if sol_product.type == 'service':
+            return sol_product.default_code or ''
+
+        # 2. Check BoM Kit
+        is_kit = self.env['mrp.bom'].search_count([
+            ('product_tmpl_id', '=', sol_product.product_tmpl_id.id),
+            ('type', '=', 'phantom'),
+            ('active', '=', True)
+        ])
+        
+        if is_kit:
+            return sol_product.default_code or ''
+            
         return ''
 
     def _get_move_line_rows(self, picking):
@@ -308,6 +314,9 @@ class PickingExportWizard(models.TransientModel):
                 if not prod:
                     continue
                 
+                # Kiểm tra xem sản phẩm có phải là combo (có BoM kit) không
+                bom = self.env['mrp.bom']._bom_find(prod, bom_type='phantom')
+                
                 # Tìm stock move tương ứng (nếu cần location info)
                 move = None
                 ml = None
@@ -323,14 +332,44 @@ class PickingExportWizard(models.TransientModel):
                             move = mv
                             break
                 
-                row = self._build_row_data(
-                    picking, so, prod, ml, move,
-                    scheduled_date_str, picking_name, partner_code, partner_name,
-                    partner_address, partner_vat, sale_name, sale_user_code,
-                    dien_giai, ly_do_xuat, warehouse_code,
-                    pos_line=pos_line  # Truyền pos_line vào để ưu tiên
-                )
-                rows.append(row)
+                # Nếu là combo, xuất dòng cha trước
+                if bom:
+                    parent_row = self._build_row_data(
+                        picking, so, prod, ml, move,
+                        scheduled_date_str, picking_name, partner_code, partner_name,
+                        partner_address, partner_vat, sale_name, sale_user_code,
+                        dien_giai, ly_do_xuat, warehouse_code,
+                        pos_line=pos_line  # Truyền pos_line vào để ưu tiên
+                    )
+                    rows.append(parent_row)
+                    
+                    # Xuất các dòng con của combo (từ stock moves)
+                    # Tìm tất cả stock moves có cùng sale_line_id hoặc cùng combo parent
+                    if picking.move_line_ids:
+                        for move_line in picking.move_line_ids:
+                            child_move = move_line.move_id
+                            # Kiểm tra xem move này có phải là component của combo không
+                            if child_move and getattr(child_move, 'sale_line_id', False):
+                                sol = child_move.sale_line_id
+                                # Nếu sale line product khác với move product → là component
+                                if sol.product_id == prod and child_move.product_id != prod:
+                                    child_row = self._build_row_data(
+                                        picking, so, child_move.product_id, move_line, child_move,
+                                        scheduled_date_str, picking_name, partner_code, partner_name,
+                                        partner_address, partner_vat, sale_name, sale_user_code,
+                                        dien_giai, ly_do_xuat, warehouse_code
+                                    )
+                                    rows.append(child_row)
+                else:
+                    # Không phải combo, xuất bình thường
+                    row = self._build_row_data(
+                        picking, so, prod, ml, move,
+                        scheduled_date_str, picking_name, partner_code, partner_name,
+                        partner_address, partner_vat, sale_name, sale_user_code,
+                        dien_giai, ly_do_xuat, warehouse_code,
+                        pos_line=pos_line
+                    )
+                    rows.append(row)
         else:
             # Logic cho non-POS orders: Xuất combo headers và stock moves
             # AGGREGATION LOGIC: Gộp các move lines cùng sản phẩm/giá/sol lại thành 1 dòng
@@ -388,7 +427,27 @@ class PickingExportWizard(models.TransientModel):
                     prod = mv.product_id
                     if not prod:
                         continue
-
+                    
+                    sol = getattr(mv, 'sale_line_id', False)
+                    
+                    # Nếu có sale order line và chưa xử lý
+                    if sol and sol.id not in processed_sale_lines:
+                        processed_sale_lines.add(sol.id)
+                        
+                        # Kiểm tra BoM combo
+                        if sol.product_id != prod:
+                            combo_prod = sol.product_id
+                            
+                            # Xuất dòng combo cha (BoM)
+                            parent_row = self._build_row_data(
+                                picking, so, combo_prod, None, mv,
+                                scheduled_date_str, picking_name, partner_code, partner_name,
+                                partner_address, partner_vat, sale_name, sale_user_code,
+                                dien_giai, ly_do_xuat, warehouse_code
+                            )
+                            rows.append(parent_row)
+                    
+                    # Xuất dòng hiện tại
                     row = self._build_row_data(
                         picking, so, prod, None, mv,
                         scheduled_date_str, picking_name, partner_code, partner_name,
@@ -418,8 +477,11 @@ class PickingExportWizard(models.TransientModel):
                 if pos_lines:
                     pos_line = pos_lines[0]  # Lấy dòng đầu tiên nếu có nhiều
         
-        # Ưu tiên 2: Sale Order Line
-        sol = getattr(move, 'sale_line_id', False) if move else False
+        # Ưu tiên 2: Sale Order Line (truyền vào hoặc tìm từ move)
+        if sale_line:
+            sol = sale_line
+        else:
+            sol = getattr(move, 'sale_line_id', False) if move else False
         
         # Logic lấy dữ liệu theo thứ tự ưu tiên
         if pos_line:
@@ -445,6 +507,9 @@ class PickingExportWizard(models.TransientModel):
             # Tiền thuế
             tien_thue_gtgt = abs(thanh_tien * ty_le_thue_gtgt / 100)
             
+            # Price total (bao gồm thuế) - POS đã tính sẵn
+            price_total = pos_line.price_subtotal_incl or 0.0
+            
         elif sol:
             # Lấy từ Sale Order Line
             uom = sol.product_uom or prod.uom_id
@@ -468,6 +533,9 @@ class PickingExportWizard(models.TransientModel):
             # Tiền thuế = (Thành tiền sau chiết khấu) * % thuế
             tien_thue_gtgt = (thanh_tien * ty_le_thue_gtgt) / 100
             
+            # Price total (bao gồm thuế)
+            price_total = sol.price_total or (thanh_tien + tien_thue_gtgt)
+            
         else:
             # Fallback: lấy từ picking/move line
             if forced_qty is not None:
@@ -476,9 +544,13 @@ class PickingExportWizard(models.TransientModel):
             elif ml:
                 uom = ml.product_uom_id or prod.uom_id
                 qty = ml.qty_done or 0.0
-            else:
+            elif move:
                 uom = move.product_uom or prod.uom_id
                 qty = move.qty_done if hasattr(move, 'qty_done') else (move.product_uom_qty or 0.0)
+            else:
+                # Trường hợp không có move/ml (VD: service product không thông qua sale_line)
+                uom = prod.uom_id
+                qty = 1.0 # Default value
             
             # Fallback: lấy giá từ product
             don_gia = prod.list_price or 0.0
@@ -487,12 +559,15 @@ class PickingExportWizard(models.TransientModel):
             ty_le_ck = 0.0
             ty_le_thue_gtgt = 0.0
             tien_thue_gtgt = 0.0
+            price_total = thanh_tien
         
         # Location name (vẫn lấy từ move/move_line vì không có trong SOL)
         if ml:
             location_name = (ml.location_id and ml.location_id.complete_name) or ""
-        else:
+        elif move:
             location_name = (move.location_id and move.location_id.complete_name) or ""
+        else:
+            location_name = ""
         
         uom_name = (uom and uom.name) or ""
         
@@ -559,6 +634,7 @@ class PickingExportWizard(models.TransientModel):
             'so_luong': qty,
             'don_gia': don_gia,
             'thanh_tien': thanh_tien,
+           'bao_gom_thue': f"{price_total:,.2f}",
             'ty_le_ck': ty_le_ck,
             'tien_chiet_khau': tien_chiet_khau,
             'tk_chiet_khau': '',
