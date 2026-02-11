@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <record id="view_sale_order_form_return_sale_request_link" model="ir.ui.view">
+        <field name="name">sale.order.form.return.sale.request.link</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button
+                    name="action_view_return_sale_requests"
+                    type="object"
+                    class="oe_stat_button"
+                    icon="fa-undo"
+                    invisible="return_sale_request_count == 0"
+                >
+                    <field
+                        name="return_sale_request_count"
+                        widget="statinfo"
+                        string="YC trả hàng"
+                    />
+                </button>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_purchase_order_form_return_sale_request_link" model="ir.ui.view">
+        <field name="name">purchase.order.form.return.sale.request.link</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button
+                    name="action_view_return_sale_requests"
+                    type="object"
+                    class="oe_stat_button"
+                    icon="fa-undo"
+                    invisible="return_sale_request_count == 0"
+                >
+                    <field
+                        name="return_sale_request_count"
+                        widget="statinfo"
+                        string="YC trả hàng"
+                    />
+                </button>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!-- Form View -->
+    <record id="view_return_sale_request_form" model="ir.ui.view">
+        <field name="name">return.sale.request.form</field>
+        <field name="model">return.sale.request</field>
+        <field name="arch" type="xml">
+            <form string="Đề nghị trả hàng bán">
+                <header>
+                    <button
+                        name="button_submit"
+                        string="Xử lý trả đơn bán"
+                        type="object"
+                        class="oe_highlight"
+                        invisible="state != 'draft'"
+                    />
+
+
+                    <button
+                        name="button_reject"
+                        string="Từ chối"
+                        type="object"
+                        invisible="state not in ('return_sale')"
+                        groups="return_sale_request.group_return_sale_request_manager"
+                    />
+                    <button
+                        name="button_draft"
+                        string="Đặt về nháp"
+                        type="object"
+                        invisible="state not in ('return_sale', 'rejected', 'return_purchase')"
+                        groups="return_sale_request.group_return_sale_request_manager"
+                    />
+                    <field
+                        name="state"
+                        widget="statusbar"
+                        statusbar_visible="draft,return_sale,return_purchase,done"
+                    />
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button
+                            type="object"
+                            name="action_view_picking_in"
+                            class="oe_stat_button"
+                            icon="fa-truck"
+                            invisible="picking_in_count == 0"
+                        >
+                            <field name="picking_in_count" widget="statinfo" string="Nhập kho" />
+                        </button>
+                        <button
+                            type="object"
+                            name="action_view_picking_out"
+                            class="oe_stat_button"
+                            icon="fa-truck"
+                            invisible="picking_out_count == 0"
+                        >
+                            <field name="picking_out_count" widget="statinfo" string="Xuất NCC" />
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <label for="name" string="Mã đề nghị" />
+                        <h1>
+                            <field name="name" readonly="1" />
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="date" readonly="state != 'draft'" />
+                            <field name="partner_id" readonly="state != 'draft'" />
+                            <field name="sale_order_id" readonly="state != 'draft'" />
+                            <field name="purchase_order_id" readonly="state != 'draft'" />
+                            <field name="vendor_id" readonly="state != 'draft'" />
+                        </group>
+                        <group>
+                            <field name="warehouse_id" readonly="1" />
+                            <field name="requested_by" readonly="state != 'draft'" />
+                            <field name="total_amount" readonly="1" />
+                            <field name="currency_id" invisible="1" />
+                            <field name="company_id" invisible="1" />
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Sản phẩm">
+                            <field name="line_ids" readonly="state != 'draft'">
+                                <list editable="bottom">
+                                    <field name="product_id" />
+                                    <field name="product_qty" />
+                                    <field name="return_to_vendor_qty" />
+                                    <field name="product_uom_id" />
+                                    <field name="unit_price" />
+                                    <field name="subtotal" />
+                                    <field name="line_total" />
+                                    <field name="note" />
+                                    <field name="currency_id" column_invisible="1" />
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Thông tin khác">
+                            <group>
+                                <group>
+                                    <field name="return_reason" readonly="state != 'draft'" />
+                                    <field name="handling_method" readonly="state != 'draft'" />
+                                </group>
+                                <group>
+                                    <field name="delivery_address" readonly="state != 'draft'" />
+                                    <field name="description" readonly="state != 'draft'" />
+                                </group>
+                            </group>
+                            <group string="Thông tin MISA" invisible="not misa_id">
+                                <field name="misa_id" readonly="1" />
+                                <field name="misa_owner_text" readonly="1" />
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter />
+            </form>
+        </field>
+    </record>
+
+    <!-- List View -->
+    <record id="view_return_sale_request_list" model="ir.ui.view">
+        <field name="name">return.sale.request.list</field>
+        <field name="model">return.sale.request</field>
+        <field name="arch" type="xml">
+            <list
+                decoration-info="state == 'draft'"
+                decoration-muted="state == 'rejected'"
+                decoration-success="state == 'done'"
+            >
+                <field name="name" />
+                <field name="date" />
+                <field name="partner_id" />
+                <field name="sale_order_id" optional="show" />
+                <field name="vendor_id" optional="show" />
+                <field name="total_amount" />
+                <field name="return_reason" optional="hide" />
+                <field
+                    name="state"
+                    widget="badge"
+                    decoration-info="state == 'draft'"
+                    decoration-warning="state in ('return_sale', 'return_purchase')"
+                    decoration-success="state == 'done'"
+                    decoration-danger="state == 'rejected'"
+                />
+            </list>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_return_sale_request_search" model="ir.ui.view">
+        <field name="name">return.sale.request.search</field>
+        <field name="model">return.sale.request</field>
+        <field name="arch" type="xml">
+            <search string="Tìm kiếm đề nghị trả hàng">
+                <field name="name" />
+                <field name="partner_id" />
+                <field name="sale_order_id" />
+                <field name="vendor_id" />
+                <separator />
+                <filter name="state_draft" string="Nháp" domain="[('state', '=', 'draft')]" />
+                <filter
+                    name="state_return_sale"
+                    string="Xử lý trả đơn bán"
+                    domain="[('state', '=', 'return_sale')]"
+                />
+                <filter
+                    name="state_return_purchase"
+                    string="Xử lý trả hàng mua"
+                    domain="[('state', '=', 'return_purchase')]"
+                />
+                <filter name="state_done" string="Hoàn thành" domain="[('state', '=', 'done')]" />
+                <separator />
+                <group expand="0" string="Nhóm theo">
+                    <filter
+                        name="group_state"
+                        string="Trạng thái"
+                        context="{'group_by': 'state'}"
+                    />
+                    <filter
+                        name="group_partner"
+                        string="Khách hàng"
+                        context="{'group_by': 'partner_id'}"
+                    />
+                    <filter
+                        name="group_vendor"
+                        string="Nhà cung cấp"
+                        context="{'group_by': 'vendor_id'}"
+                    />
+                    <filter name="group_date" string="Ngày" context="{'group_by': 'date'}" />
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_return_sale_request" model="ir.actions.act_window">
+        <field name="name">Đề nghị trả hàng bán</field>
+        <field name="res_model">return.sale.request</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_return_sale_request_search" />
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Tạo đề nghị trả hàng bán đầu tiên</p>
+            <p>Quản lý quy trình trả hàng từ khách hàng về nhà cung cấp.</p>
+        </field>
+    </record>
+</odoo>
