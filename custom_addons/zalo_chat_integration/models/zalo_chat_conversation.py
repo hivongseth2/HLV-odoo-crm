@@ -276,7 +276,7 @@ YÊU CẦU:
                     payload_json = tools.html_escape(json.dumps(payload, ensure_ascii=False))
                     note_html += (
                         "<div class='zalo-assistant-card'>"
-                        "<script type='application/json' class='zalo-assistant-data'>" + payload_json + "</script>"
+                        "<div class='zalo-assistant-data d-none' hidden='hidden' style='display:none'>" + payload_json + "</div>"
                         "</div>"
                     )
                 elif suggestions_html:

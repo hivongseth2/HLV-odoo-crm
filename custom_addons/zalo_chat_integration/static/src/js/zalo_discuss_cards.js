@@ -11,16 +11,28 @@ function decodeHtml(str) {
 }
 
 function renderCard(el) {
-    const script = el.querySelector('.zalo-assistant-data');
-    if (!script) return;
-    let json = script.textContent || '';
+    const dataEl = el.querySelector('.zalo-assistant-data');
+    if (!dataEl) return;
+
+    // Get text content (which should be the escaped JSON string)
+    let json = dataEl.textContent || '';
+
+    // Decode HTML entities if needed (e.g. &quot; -> ")
     json = decodeHtml(json);
-    // Handle escaped quotes inside attribute
+
+    // Handle escaped quotes inside attribute if double encoded
     json = json.replace(/\\"/g, '"').replace(/\"/g, '"');
+
+    // If it's wrapped in quotes, remove them
+    if (json.startsWith('"') && json.endsWith('"')) {
+        json = json.substring(1, json.length - 1);
+    }
+
     let data;
     try {
         data = JSON.parse(json);
     } catch (e) {
+        console.error("Zalo Card JSON Parse Error", e, json);
         return;
     }
     const items = data.items || [];
@@ -28,6 +40,7 @@ function renderCard(el) {
 
     const container = document.createElement('div');
     container.className = 'zalo-assistant-card-container';
+
     if (phase) {
         const p = document.createElement('div');
         p.className = 'zalo-assistant-phase';
@@ -46,7 +59,7 @@ function renderCard(el) {
         meta.innerText = `${it.code || ''} | Giá: ${it.price || '-'} | ĐVT: ${it.unit || ''}`;
         const stock = document.createElement('div');
         stock.className = 'stock';
-        stock.innerText = it.stock || '';
+        stock.innerHTML = it.stock || ''; // Allow HTML for stock (e.g. <b> or span)
         card.appendChild(title);
         card.appendChild(meta);
         card.appendChild(stock);
@@ -58,17 +71,25 @@ function renderCard(el) {
 
 function unwrapRawHtml(root) {
     // If message body is escaped and shown as raw text, convert it back to HTML
-    const candidates = root.querySelectorAll('.o-mail-Message-body, .o_mail_thread_message_content, .o_mail_message_content, .o-mail-Message-bodyText, p');
+    // Selectors for message body in Odoo 17/18
+    const candidates = root.querySelectorAll('.o-mail-Message-body, .o-mail-Message-content, .o_mail_message_body');
     candidates.forEach((el) => {
         const text = el.textContent || '';
-        if (text.includes("zalo-assistant-card") && text.includes("<div")) {
-            el.innerHTML = text;
+        // Check if it looks like our card HTML was escaped
+        if (text.includes("zalo-assistant-card") && (text.includes("<div") || text.includes("&lt;div"))) {
+            // Check if it really is escaped (contains tag-like text)
+            // If text content has '<', render it as HTML
+            if (text.indexOf('<') !== -1) {
+                el.innerHTML = text;
+            }
         }
     });
 }
 
 function processCards(root) {
+    // First try to unwrap any escaped HTML
     unwrapRawHtml(root);
+    // Then find any cards (now rendered as HTML nodes)
     const nodes = root.querySelectorAll('.zalo-assistant-card');
     nodes.forEach((el) => renderCard(el));
 }
