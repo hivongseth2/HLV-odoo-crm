@@ -8,7 +8,6 @@ import os
 import re
 from datetime import datetime
 import unicodedata
-import base64
 from markupsafe import Markup
 
 _logger = logging.getLogger(__name__)
@@ -274,11 +273,9 @@ YÊU CẦU:
                         'phase': fields.Datetime.to_string(last_inbound) if last_inbound else '',
                         'items': card_items,
                     }
-                    payload_b64 = base64.b64encode(
-                        json.dumps(payload, ensure_ascii=False).encode('utf-8')
-                    ).decode('utf-8')
+                    payload_json = tools.html_escape(json.dumps(payload, ensure_ascii=False))
                     note_html += (
-                        "<div class='zalo-assistant-card' data-json-b64='" + payload_b64 + "'></div>"
+                        "<div class='zalo-assistant-card' data-json=\"" + payload_json + "\"></div>"
                     )
                 elif suggestions_html:
                     note_html += f"<p><b>📦 Gợi ý sản phẩm &amp; tồn kho</b></p>{suggestions_html}"

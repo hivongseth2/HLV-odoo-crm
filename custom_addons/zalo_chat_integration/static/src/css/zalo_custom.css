@@ -15,14 +15,15 @@
 .zalo-assistant-card {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  padding: 8px 10px;
-  margin: 6px 0;
+  padding: 10px 12px;
+  margin: 0;
   background: #f9fafb;
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
 .zalo-assistant-card .title {
   font-weight: 600;
   margin-bottom: 2px;
+  font-size: 14px;
 }
 .zalo-assistant-card .meta {
   font-size: 12px;
