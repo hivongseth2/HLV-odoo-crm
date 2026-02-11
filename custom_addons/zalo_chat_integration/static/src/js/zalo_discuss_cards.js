@@ -21,9 +21,6 @@ function renderCard(el) {
     // Decode HTML entities if needed (e.g. &quot; -> ")
     json = decodeHtml(json);
 
-    // Handle escaped quotes inside attribute if double encoded
-    json = json.replace(/\\"/g, '"').replace(/\"/g, '"');
-
     // If it's wrapped in quotes, remove them
     if (json.startsWith('"') && json.endsWith('"')) {
         json = json.substring(1, json.length - 1);
