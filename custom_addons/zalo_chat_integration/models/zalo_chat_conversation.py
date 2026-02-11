@@ -4,6 +4,7 @@ from odoo.exceptions import UserError
 import logging
 import json
 import subprocess
+import os
 import re
 from datetime import datetime
 
@@ -321,10 +322,12 @@ YÊU CẦU:
         if not keyword:
             return []
         try:
-            # Allow override via system parameter
+            # Default: use bundled script inside module (can be overridden by system param)
+            module_dir = os.path.dirname(os.path.dirname(__file__))
+            default_script = os.path.join(module_dir, 'scripts', 'misa_search.py')
             script_path = self.env['ir.config_parameter'].sudo().get_param(
                 'zalo_chat_integration.misa_search_path',
-                '/home/luan/clawd/skills/misa_search.py'
+                default_script
             )
             python_bin = self.env['ir.config_parameter'].sudo().get_param(
                 'zalo_chat_integration.python_bin',
