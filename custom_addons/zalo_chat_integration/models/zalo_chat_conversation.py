@@ -8,6 +8,7 @@ import os
 import re
 from datetime import datetime
 import unicodedata
+import base64
 from markupsafe import Markup
 
 _logger = logging.getLogger(__name__)
@@ -273,9 +274,11 @@ YÊU CẦU:
                         'phase': fields.Datetime.to_string(last_inbound) if last_inbound else '',
                         'items': card_items,
                     }
-                    payload_json = tools.html_escape(json.dumps(payload, ensure_ascii=False))
+                    payload_b64 = base64.b64encode(
+                        json.dumps(payload, ensure_ascii=False).encode('utf-8')
+                    ).decode('utf-8')
                     note_html += (
-                        "<div class='zalo-assistant-card' data-json=\"" + payload_json + "\"></div>"
+                        "<div class='zalo-assistant-card' data-json-b64='" + payload_b64 + "'></div>"
                     )
                 elif suggestions_html:
                     note_html += f"<p><b>📦 Gợi ý sản phẩm &amp; tồn kho</b></p>{suggestions_html}"
@@ -368,6 +371,33 @@ YÊU CẦU:
             return []
 
     def _pick_best_misa_candidate(self, query, candidates, chat_context):
+        """Pick best MISA candidate using GPT (fallback to heuristic)."""
+        # Try GPT selection first
+        try:
+            config = self.env['zalo.oa.config'].sudo().search([('active', '=', True)], limit=1)
+            if config and config.gpt_api_key:
+                prompt = [
+                    {"role": "system", "content": """Bạn là trợ lý sales. Chọn sản phẩm phù hợp nhất với yêu cầu khách.
+Trả về JSON: {"index": <0-based index>, "reason": "..."}
+"""},
+                    {"role": "user", "content": f"""
+YÊU CẦU KHÁCH: {query}
+
+NGỮ CẢNH HỘI THOẠI:
+{chat_context}
+
+DANH SÁCH SẢN PHẨM:
+{json.dumps(candidates, ensure_ascii=False)}
+"""}
+                ]
+                resp = config._get_gpt_response(prompt, json_mode=True)
+                data = json.loads(resp)
+                idx = int(data.get('index', 0))
+                if 0 <= idx < len(candidates):
+                    return candidates[idx]
+        except Exception:
+            pass
+
         """Heuristic: exact code match > name contains query > first."""
         q = (query or '').strip().lower()
         if not q:

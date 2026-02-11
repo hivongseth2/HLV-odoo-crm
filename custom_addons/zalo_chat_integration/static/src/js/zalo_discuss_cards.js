@@ -5,10 +5,11 @@ import { patch } from "@web/core/utils/patch";
 import { Message } from "@mail/core/common/message";
 
 function renderCard(el) {
-    const json = el.getAttribute('data-json');
-    if (!json) return;
+    const b64 = el.getAttribute('data-json-b64');
+    if (!b64) return;
     let data;
     try {
+        const json = atob(b64);
         data = JSON.parse(json);
     } catch (e) {
         return;
@@ -48,10 +49,10 @@ function renderCard(el) {
 
 function unwrapRawHtml(root) {
     // If message body is escaped and shown as raw text, convert it back to HTML
-    const candidates = root.querySelectorAll('.o-mail-Message-body, .o_mail_thread_message_content, .o_mail_message_content');
+    const candidates = root.querySelectorAll('.o-mail-Message-body, .o_mail_thread_message_content, .o_mail_message_content, .o-mail-Message-bodyText');
     candidates.forEach((el) => {
         const text = el.textContent || '';
-        if (text.includes("zalo-assistant-card") && text.includes("<div")) {
+        if (text.includes("zalo-assistant-card") && text.includes("data-json-b64")) {
             el.innerHTML = text;
         }
     });
@@ -59,7 +60,7 @@ function unwrapRawHtml(root) {
 
 function processCards(root) {
     unwrapRawHtml(root);
-    const nodes = root.querySelectorAll('.zalo-assistant-card[data-json]');
+    const nodes = root.querySelectorAll('.zalo-assistant-card[data-json-b64]');
     nodes.forEach((el) => renderCard(el));
 }
 
