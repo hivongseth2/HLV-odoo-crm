@@ -72,29 +72,82 @@ class PickingExportShopeeWizard(models.TransientModel):
     def _build_row_data(self, picking, so, prod, ml, move,
                         scheduled_date_str, picking_name, partner_code, partner_name,
                         partner_address, partner_vat, sale_name, sale_user_code,
-                        dien_giai, ly_do_xuat, warehouse_code):
+                        dien_giai, ly_do_xuat, warehouse_code, pos_line=None, sale_line=None, forced_qty=None):
         """
-        Override to fix fields showing FALSE and hardcode warehouse code
+        Override to fix fields showing FALSE and hardcode warehouse code, 
+        plus apply SHOPEE OVERRIDE LOGIC from stock_export_wizard.
         """
         row = super()._build_row_data(
             picking, so, prod, ml, move,
             scheduled_date_str, picking_name, partner_code, partner_name,
             partner_address, partner_vat, sale_name, sale_user_code,
-            dien_giai, ly_do_xuat, warehouse_code
+            dien_giai, ly_do_xuat, warehouse_code, pos_line=pos_line, sale_line=sale_line, forced_qty=forced_qty
         )
         
+        # --- SHOPEE OVERRIDE LOGIC (Ported from stock_export_wizard.py) ---
+        if so and hasattr(so, 'shopee_shop_id') and so.shopee_shop_id:
+            shop = so.shopee_shop_id
+            # Check Account Name contains 2014645
+            account = getattr(shop, 'account_id', False)
+            if account and '2014645' in getattr(account, 'name', ''):
+                shop_id = getattr(shop, 'shop_identifier', 0)
+                target_pid = False
+                
+                if shop_id == 796817584:
+                    target_pid = 9715 # MILWAUKEE
+                elif shop_id == 1357810112:
+                    target_pid = 9720 # DEWALT
+                elif shop_id == 326259406:
+                    target_pid = 9701 # HLV
+                
+                if target_pid:
+                    target_partner = self.env['res.partner'].browse(target_pid)
+                    if target_partner.exists():
+                        # Recalculate partner code
+                        s_ref = False
+                        if target_partner.commercial_partner_id and target_partner.commercial_partner_id.ref:
+                            s_ref = target_partner.commercial_partner_id.ref
+                        elif target_partner.parent_id and target_partner.parent_id.ref:
+                            s_ref = target_partner.parent_id.ref
+                        elif target_partner.ref:
+                            s_ref = target_partner.ref
+                        
+                        new_partner_code = s_ref or ''
+                        new_partner_name = target_partner.name
+                        
+                        # Override Row Data
+                        row['ten_khach_hang'] = new_partner_name
+                        row['ma_khach_hang'] = new_partner_code
+                        row['nguoi_nop'] = new_partner_name
+                        
+                        # Fix ly_do_xuat / dien_giai
+                        new_reason = "Xuất kho bán hàng cho " + new_partner_name
+                        row['ly_do_xuat'] = new_reason
+                        row['dien_giai'] = new_reason
+                        
+                        # Update address if needed? Stock wizard doesn't explicitly do it but it's good practice
+                        # For now sticking to what stock wizard did (mostly name/code/reason)
+
         # 1. Fix FALSE issue for 3 fields
         if not row.get('hinh_thuc_giao_hang'):
-            row['hinh_thuc_giao_hang'] = ''
+             row['hinh_thuc_giao_hang'] = ''
         if not row.get('hinh_thuc_thanh_toan_so'):
-            row['hinh_thuc_thanh_toan_so'] = ''
+             row['hinh_thuc_thanh_toan_so'] = ''
         if not row.get('ben_tra_phi_van_chuyen'):
-            row['ben_tra_phi_van_chuyen'] = ''
+             row['ben_tra_phi_van_chuyen'] = ''
 
         # 2. Hardcode Ma kho
         row['ma_kho'] = 'HLV'
         
         return row
+
+    def _get_columns_definition(self):
+        """
+        Override to match 'Copy of mau_ban_hang (1).xlsx' exactly (52 columns).
+        Remove 'vi_tri' and 'misa_sync' which exist in parent but not in template.
+        """
+        columns = super()._get_columns_definition()
+        return [c for c in columns if c['key'] not in ['vi_tri', 'misa_sync']]
 
     def action_export(self):
         self.ensure_one()

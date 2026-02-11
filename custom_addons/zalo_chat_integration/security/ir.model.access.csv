@@ -7,3 +7,4 @@ access_send_zalo_chat_wizard_user,send.zalo.chat.wizard.user,model_send_zalo_cha
 access_zalo_customer_profile_user,zalo.customer.profile.user,model_zalo_customer_profile,base.group_user,1,1,1,1
 access_zalo_customer_tag_user,zalo.customer.tag.user,model_zalo_customer_tag,base.group_user,1,1,1,1
 access_product_alias_user,product.alias.user,model_product_alias,base.group_user,1,1,1,1
+access_zalo_vector_store_user,zalo.vector.store.user,model_zalo_vector_store,base.group_user,1,1,1,1

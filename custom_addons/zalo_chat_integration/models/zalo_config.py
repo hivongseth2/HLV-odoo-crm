@@ -116,6 +116,117 @@ class ZaloOAConfig(models.Model):
             _logger.error(f"GPT Call Failed: {str(e)}")
             raise UserError(_(f"Không thể gọi GPT: {str(e)}"))
 
+    def _get_embedding(self, text):
+        """Generate embedding for text using OpenAI"""
+        self.ensure_one()
+        if not self.gpt_api_key:
+            raise UserError(_("Vui lòng cấu hình GPT API Key."))
+            
+        headers = {
+            'Authorization': f'Bearer {self.gpt_api_key}',
+            'Content-Type': 'application/json',
+        }
+        data = {
+            'input': text,
+            'model': 'text-embedding-3-small', 
+        }
+        
+        try:
+            response = requests.post('https://api.openai.com/v1/embeddings', headers=headers, json=data, timeout=30)
+            if response.status_code != 200:
+                 raise UserError(f"Embedding API Error: {response.text}")
+            
+            result = response.json()
+            return result['data'][0]['embedding']
+        except Exception as e:
+            _logger.error(f"Embedding Failed: {e}")
+            raise UserError(f"Lỗi tạo Embedding: {str(e)}")
+
+    def search_vector(self, query_text, model_name, limit=10, min_score=0.4):
+        """
+        Search for records by semantic similarity.
+        Returns list of tuples: (res_id, score)
+        """
+        import numpy as np
+        
+        # 1. Generate query embedding
+        query_vec = np.array(self._get_embedding(query_text))
+        
+        # 2. Fetch target embeddings
+        # TODO: Optimize by caching or using a real vector DB if data grows large.
+        # For now, fetching all embeddings for the model is acceptable for small-medium datasets (<10k products).
+        vectors = self.env['zalo.vector.store'].sudo().search([('res_model', '=', model_name)])
+        
+        if not vectors:
+            return []
+            
+        results = []
+        for v in vectors:
+            if not v.embedding: continue
+            
+            doc_vec = v.get_embedding_numpy()
+            if doc_vec is None: continue
+            
+            # cosine similarity
+            # dot product of normalized vectors (assuming OpenAI embeddings are normalized, which they usually are)
+            # If unsure, we can normalize: 
+            # score = np.dot(query_vec, doc_vec) / (np.linalg.norm(query_vec) * np.linalg.norm(doc_vec))
+            # OpenAI 'text-embedding-3-small' are normalized, so dot product is sufficient.
+            score = np.dot(query_vec, doc_vec)
+            
+            if score >= min_score:
+                results.append((v.res_id, score))
+                
+        # Sort by score desc
+        results.sort(key=lambda x: x[1], reverse=True)
+        
+        return results[:limit]
+
+    def action_update_all_vectors(self):
+        """Manually trigger vector update for all products"""
+        self.ensure_one()
+        # This can be slow, so ideally it should be a background job.
+        products = self.env['product.product'].search([])
+        count = 0
+        skipped = 0
+        for p in products:
+            # Check if vector already exists to avoid re-embedding everything (costly)
+            # Or trust _update_vector to handle logic? 
+            # _update_vector currently unconditionally calls OpenAI. 
+            # Let's check if vector exists first to save money/time, 
+            # or maybe we WANT to force update. 
+            # Let's assume this button is "Force Update All" or "Sync Missing".
+            # For now, let's just do it. 
+            try:
+                # Optimized: only update if missing or content changed?
+                # For simplicity, we just call _update_vector.
+                # But to avoid timeout, maybe we should use queue_job if available, which it isn't standard.
+                # Let's limit to 100 for safety in foreground.
+                if count >= 100:
+                     self.env.user.notify_warning(message="Đã đạt giới hạn 100 sản phẩm test. Vui lòng chạy lại nếu muốn tiếp tục.")
+                     break
+                
+                # Check if exists
+                exists = self.env['zalo.vector.store'].sudo().search_count([('res_model', '=', 'product.product'), ('res_id', '=', p.id)])
+                if not exists:
+                    p._update_vector()
+                    count += 1
+                else:
+                    skipped += 1
+            except Exception as e:
+                _logger.error(f"Failed to update vector for {p.name}: {e}")
+        
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _("Cập nhật Vector"),
+                'message': f"Đã cập nhật mới {count} sản phẩm. (Bỏ qua {skipped} đã có)",
+                'type': 'success',
+                'sticky': False,
+            }
+        }
+
     _sql_constraints = [
         ('app_id_unique', 'UNIQUE(app_id)', 'An app with this ID already exists!'),
     ]

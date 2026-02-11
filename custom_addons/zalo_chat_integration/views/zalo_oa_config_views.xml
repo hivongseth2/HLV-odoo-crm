@@ -62,6 +62,11 @@
                                 </div>
                                 <field name="gpt_api_key" password="True"/>
                                 <field name="gpt_model"/>
+                                <button name="action_update_all_vectors" 
+                                        string="Cập nhật Vector Sản phẩm (Embeddings)" 
+                                        type="object" 
+                                        class="btn-primary"
+                                        confirm="Hành động này sẽ tạo vector cho các sản phẩm CHƯA CÓ. Giới hạn test: 100 sản phẩm/lần chạy. Bạn có chắc chắn không?"/>
                             </group>
                         </page>
                     </notebook>

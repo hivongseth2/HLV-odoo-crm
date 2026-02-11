@@ -70,7 +70,7 @@ class OutReturnReportLine(models.Model):
         domain = [
             ("date_done", ">=", date_from),
             ("date_done", "<=", date_to),
-            ("picking_type_id.sequence_code", "=", "OUT"),
+            ("picking_type_id.code", "=", "outgoing"),
             ("state", "=", "done"),
         ]
         

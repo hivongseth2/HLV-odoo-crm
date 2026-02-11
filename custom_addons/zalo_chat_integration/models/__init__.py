@@ -16,3 +16,6 @@ from . import zalo_chat_conversation
 from . import zalo_chat_conversation_user
 from . import zalo_chat_message
 from . import zalo_chat_evaluation
+from . import zalo_vector_store
+from . import zalo_vector_mixin
+from . import product_product
