@@ -8,6 +8,7 @@ import os
 import re
 from datetime import datetime
 import unicodedata
+from markupsafe import Markup
 
 _logger = logging.getLogger(__name__)
 
@@ -281,7 +282,7 @@ YÊU CẦU:
 
                 note_html += "</div>"
                 channel.with_context(skip_zalo_sync=True).message_post(
-                    body=note_html,
+                    body=Markup(note_html),
                     message_type='notification',
                     subtype_xmlid='mail.mt_note'
                 )
