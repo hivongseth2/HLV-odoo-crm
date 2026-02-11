@@ -244,6 +244,14 @@ YÊU CẦU:
             self.profile_id.action_update_summary_ai(chat_content, config)
 
         # 2) Product suggestions via MISA + stock by warehouse
+        # Use last inbound timestamp as a hint for timeline
+        last_inbound = None
+        try:
+            last_inbound_msg = next((m for m in reversed(messages) if m.direction == 'inbound'), None)
+            last_inbound = last_inbound_msg.sent_date if last_inbound_msg else None
+        except Exception:
+            last_inbound = None
+
         suggestions_html = self._build_product_suggestions_html(product_queries, chat_content)
         if suggestions_html:
             self.assistant_product_suggestions_html = suggestions_html
@@ -255,6 +263,8 @@ YÊU CẦU:
             channel = self._get_active_livechat_channel()
             if channel:
                 note_html = "<div>"
+                if last_inbound:
+                    note_html += f"<p><b>⏱ Giai đoạn</b>: {fields.Datetime.to_string(last_inbound)}</p>"
                 if summary_html:
                     note_html += f"<p><b>📝 Tóm tắt (AI)</b></p>{summary_html}"
                 if suggestions_html:
@@ -311,11 +321,16 @@ YÊU CẦU:
         if not keyword:
             return []
         try:
-            cmd = [
-                '/usr/bin/python3',
-                '/home/luan/clawd/skills/misa_search.py',
-                str(keyword),
-            ]
+            # Allow override via system parameter
+            script_path = self.env['ir.config_parameter'].sudo().get_param(
+                'zalo_chat_integration.misa_search_path',
+                '/home/luan/clawd/skills/misa_search.py'
+            )
+            python_bin = self.env['ir.config_parameter'].sudo().get_param(
+                'zalo_chat_integration.python_bin',
+                '/usr/bin/python3'
+            )
+            cmd = [python_bin, script_path, str(keyword)]
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             if res.returncode != 0:
                 _logger.error(f"MISA search failed: {res.stderr}")
