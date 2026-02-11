@@ -53,7 +53,7 @@ class ZaloCustomerProfile(models.Model):
         
         prompt = [
             {"role": "system", "content": """Bạn là trợ lý AI quản lý hồ sơ khách hàng (CRM). 
-Nhiệm vụ: Cập nhật "Tóm tắt tổng hợp" và "Thẻ phân loại" cho khách hàng.
+Nhiệm vụ: Cập nhật \"Tóm tắt tổng hợp\" và \"Thẻ phân loại\" cho khách hàng.
 
 OUTPUT FORMAT: JSON
 {
@@ -61,9 +61,15 @@ OUTPUT FORMAT: JSON
     "tags": ["Tag1", "Tag2"]
 }
 
+QUY TẮC GẮN TAG:
+- Luôn xác định vai trò: \"Khách hàng\" hoặc \"NCC\" (nhà cung cấp).
+- Nếu khách đang chào bán/đề xuất cung ứng/hỏi mua vào từ phía mình → gắn tag \"NCC\".
+- Nếu khách hỏi giá/mua hàng/đặt hàng → gắn tag \"Khách hàng\".
+- Có thể gắn thêm tag theo hãng (Bosch/Makita/Milwaukee...) và nhu cầu (Hỏi giá/Mua hàng/...)
+
 YÊU CẦU VỀ HTML TIMELINE:
-- Trả về 1 danh sách `ul` với class="zalo-timeline".
-- Mỗi sự kiện là 1 `li` với class="zalo-timeline-item".
+- Trả về 1 danh sách `ul` với class=\"zalo-timeline\".
+- Mỗi sự kiện là 1 `li` với class=\"zalo-timeline-item\".
 - Bên trong `li` có:
   - `span.time`: Thời gian (VD: 10/10 14:00)
   - `span.content`: Nội dung tóm tắt
@@ -72,16 +78,16 @@ YÊU CẦU VỀ HTML TIMELINE:
 - Giữ lại các sự kiện cũ quan trọng, merge với sự kiện mới.
 
 VÍ DỤ HTML:
-<ul class="zalo-timeline">
-  <li class="zalo-timeline-item">
-    <span class="time">Hôm nay 10:00</span>
-    <span class="content">Khách hỏi mua FPD3</span>
-    <span class="status badge badge-warning">Đang chờ</span>
+<ul class=\"zalo-timeline\">
+  <li class=\"zalo-timeline-item\">
+    <span class=\"time\">Hôm nay 10:00</span>
+    <span class=\"content\">Khách hỏi mua FPD3</span>
+    <span class=\"status badge badge-warning\">Đang chờ</span>
   </li>
-  <li class="zalo-timeline-item">
-    <span class="time">Hôm qua 15:30</span>
-    <span class="content">Đã chốt đơn hàng cũ</span>
-    <span class="status badge badge-success">Hoàn thành</span>
+  <li class=\"zalo-timeline-item\">
+    <span class=\"time\">Hôm qua 15:30</span>
+    <span class=\"content\">Đã chốt đơn hàng cũ</span>
+    <span class=\"status badge badge-success\">Hoàn thành</span>
   </li>
 </ul>
 """},
@@ -114,19 +120,29 @@ Hãy cập nhật timeline và tags.
             TagModel = self.env['zalo.customer.tag']
             tag_ids = []
             for tag_name in new_tags_list:
+                if not tag_name:
+                    continue
+
+                # Normalize role tags
+                tag_name_norm = tag_name.strip()
+                if tag_name_norm.lower() in ['nhà cung cấp', 'ncc']:
+                    tag_name_norm = 'NCC'
+                elif tag_name_norm.lower() in ['khách lẻ', 'khách hàng']:
+                    tag_name_norm = 'Khách hàng'
+
                 # Find or Create Tag (Case insensitive search)
-                tag = TagModel.search([('name', '=ilike', tag_name)], limit=1)
+                tag = TagModel.search([('name', '=ilike', tag_name_norm)], limit=1)
                 if not tag:
                     # AI might infer category, but for now default to 'other' or simple logic
                     category = 'other'
-                    if tag_name in ['Khách lẻ', 'NCC', 'Đại lý', 'CTV']:
+                    if tag_name_norm in ['Khách lẻ', 'Khách hàng', 'NCC', 'Nhà cung cấp', 'Đại lý', 'CTV']:
                         category = 'role'
-                    elif any(brand in tag_name for brand in ['Bosch', 'Makita', 'Milwaukee']):
+                    elif any(brand in tag_name_norm for brand in ['Bosch', 'Makita', 'Milwaukee']):
                         category = 'brand'
-                    elif tag_name in ['Mua hàng', 'Bảo hành', 'Hỏi giá', 'Khiếu nại']:
+                    elif tag_name_norm in ['Mua hàng', 'Bảo hành', 'Hỏi giá', 'Khiếu nại']:
                         category = 'need'
                         
-                    tag = TagModel.create({'name': tag_name, 'category': category})
+                    tag = TagModel.create({'name': tag_name_norm, 'category': category})
                 tag_ids.append(tag.id)
             
             if tag_ids:

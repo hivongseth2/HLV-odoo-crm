@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
-from odoo import models, fields, api, _
+from odoo import models, fields, api, _, tools
 from odoo.exceptions import UserError
 import logging
+import json
+import subprocess
+import re
+from datetime import datetime
 
 _logger = logging.getLogger(__name__)
 
@@ -44,6 +48,31 @@ class ZaloChatConversation(models.Model):
         string='Liên hệ',
         tracking=True,
         help='Liên hệ Odoo được liên kết với người dùng Zalo này',
+    )
+
+    profile_id = fields.Many2one(
+        'zalo.customer.profile',
+        string='Hồ sơ khách hàng',
+        compute='_compute_profile_id',
+        store=True,
+        readonly=False,
+    )
+
+    assistant_summary_html = fields.Html(
+        string='Tóm tắt hội thoại (AI)',
+        sanitize=False,
+        help='Tóm tắt ngắn gọn cho sale, KHÔNG gửi cho khách.',
+    )
+
+    assistant_product_suggestions_html = fields.Html(
+        string='Gợi ý sản phẩm & tồn kho (AI)',
+        sanitize=False,
+        help='Gợi ý top 3 sản phẩm (MISA) + tồn kho theo kho Odoo.',
+    )
+
+    assistant_last_run = fields.Datetime(
+        string='Lần cập nhật gần nhất',
+        readonly=True,
     )
     
     message_ids = fields.One2many(
@@ -119,12 +148,223 @@ class ZaloChatConversation(models.Model):
                     conversation.partner_id = partner
         
         return conversations
+
+    @api.depends('partner_id')
+    def _compute_profile_id(self):
+        for record in self:
+            if record.partner_id:
+                profile = self.env['zalo.customer.profile'].search([
+                    ('partner_id', '=', record.partner_id.id)
+                ], limit=1)
+                if not profile:
+                    profile = self.env['zalo.customer.profile'].create({
+                        'partner_id': record.partner_id.id
+                    })
+                record.profile_id = profile
+            else:
+                record.profile_id = False
     
     def action_close(self):
         self.write({'state': 'closed'})
     
     def action_reopen(self):
         self.write({'state': 'open'})
+
+    def action_update_assistant(self):
+        """Run AI assistant: summarize + tag + suggest products + check stock.
+        Output is stored in conversation fields (internal only).
+        """
+        self.ensure_one()
+
+        # Ensure profile exists if partner linked
+        if self.partner_id and not self.profile_id:
+            profile = self.env['zalo.customer.profile'].search([
+                ('partner_id', '=', self.partner_id.id)
+            ], limit=1)
+            if not profile:
+                profile = self.env['zalo.customer.profile'].create({
+                    'partner_id': self.partner_id.id
+                })
+            self.profile_id = profile
+
+        # Find config with GPT API key
+        config = self.env['zalo.oa.config'].sudo().search([('active', '=', True)], limit=1)
+        if not config or not config.gpt_api_key:
+            raise UserError(_('Vui lòng cấu hình GPT API Key trong Zalo OA.'))
+
+        # Build chat content (last 50 messages)
+        messages = self.message_ids.sorted(key=lambda m: m.sent_date)[-50:]
+        if not messages:
+            raise UserError(_('Không có tin nhắn để phân tích.'))
+
+        content_lines = []
+        for msg in messages:
+            sender = "Khách" if msg.direction == 'inbound' else "NV"
+            content = msg.content or "[File/Image]"
+            content_lines.append(f"{sender}: {content}")
+        chat_content = "\n".join(content_lines)
+
+        # 1) Summarize + Extract products + Tag suggestions
+        prompt = [
+            {"role": "system", "content": """Bạn là trợ lý sales nội bộ. Hãy đọc hội thoại và trả về JSON theo format:
+{
+  \"summary_html\": \"<ul>...</ul>\",
+  \"key_info\": {
+    \"products\": [\"tên/mã\"],
+    \"brands\": [\"Bosch\"],
+    \"needs\": [\"Hỏi giá\", \"Mua hàng\"],
+    \"role\": \"Khách hàng\" | \"NCC\"
+  },
+  \"tags\": [\"Khách hàng\", \"Bosch\", \"Hỏi giá\"]
+}
+
+YÊU CẦU:
+- summary_html: HTML bullet list ngắn gọn (3-6 dòng).
+- role: suy luận theo nội dung (nếu họ chào hàng/đề xuất cung ứng → NCC; nếu hỏi giá/mua hàng → Khách hàng).
+- products: trích xuất tên/mã sản phẩm khách đề cập (tối đa 5).
+- Chỉ trả JSON, không kèm markdown.
+"""},
+            {"role": "user", "content": chat_content}
+        ]
+
+        try:
+            ai_raw = config._get_gpt_response(prompt, json_mode=True)
+            data = json.loads(ai_raw)
+        except Exception as e:
+            _logger.error(f"Assistant summarize error: {e}")
+            raise UserError(_(f"Lỗi phân tích hội thoại: {str(e)}"))
+
+        summary_html = data.get('summary_html') or ''
+        tags = data.get('tags') or []
+        key_info = data.get('key_info') or {}
+        product_queries = key_info.get('products') or []
+
+        # Update summary field
+        if summary_html:
+            self.assistant_summary_html = summary_html
+
+        # Update profile tags/summary (if profile exists)
+        if self.profile_id:
+            self.profile_id.action_update_summary_ai(chat_content, config)
+
+        # Also update assistant summary field if GPT returned summary
+        if summary_html:
+            self.assistant_summary_html = summary_html
+
+        # 2) Product suggestions via MISA + stock by warehouse
+        suggestions_html = self._build_product_suggestions_html(product_queries, chat_content)
+        if suggestions_html:
+            self.assistant_product_suggestions_html = suggestions_html
+
+        self.assistant_last_run = fields.Datetime.now()
+        return True
+
+    def _build_product_suggestions_html(self, product_queries, chat_content):
+        """Return HTML with top 3 suggestions from MISA + stock per warehouse."""
+        if not product_queries:
+            return "<p>⚠️ Không tìm thấy sản phẩm trong hội thoại.</p>"
+
+        # Use only top 3 queries to reduce noise
+        queries = product_queries[:3]
+
+        html_lines = ["<div>", "<p><b>Gợi ý sản phẩm (Top 3)</b></p>"]
+
+        for q in queries:
+            misa_candidates = self._misa_search_products(q)
+            if not misa_candidates:
+                html_lines.append(f"<p>⚠️ Không tìm thấy trong MISA: <b>{q}</b></p>")
+                continue
+
+            # Pick best candidate (simple heuristic): prefer code match or name contains query
+            best = self._pick_best_misa_candidate(q, misa_candidates, chat_content)
+            if not best:
+                best = misa_candidates[0]
+
+            # Stock by warehouse from Odoo
+            stock_lines = self._get_stock_by_warehouse(best.get('code') or best.get('name'))
+            price = best.get('price')
+            price_str = f"{price:,.0f}" if isinstance(price, (int, float)) else str(price or '-')
+
+            html_lines.append(
+                "<div style='margin-bottom:8px;'>"
+                f"<div><b>{best.get('name','')}</b> — <code>{best.get('code','')}</code></div>"
+                f"<div>Giá: <b>{price_str}</b> | ĐVT: {best.get('unit','')}</div>"
+                f"<div>Tồn kho: {stock_lines}</div>"
+                "</div>"
+            )
+
+        html_lines.append("</div>")
+        return "".join(html_lines)
+
+    def _misa_search_products(self, keyword):
+        """Call local misa_search.py and return product list."""
+        if not keyword:
+            return []
+        try:
+            cmd = [
+                '/usr/bin/python3',
+                '/home/luan/clawd/skills/misa_search.py',
+                str(keyword),
+            ]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            if res.returncode != 0:
+                _logger.error(f"MISA search failed: {res.stderr}")
+                return []
+            data = json.loads(res.stdout)
+            if data.get('status') != 'success':
+                return []
+            return data.get('data', {}).get('products', [])
+        except Exception as e:
+            _logger.error(f"MISA search error: {e}")
+            return []
+
+    def _pick_best_misa_candidate(self, query, candidates, chat_context):
+        """Heuristic: exact code match > name contains query > first."""
+        q = (query or '').strip().lower()
+        if not q:
+            return candidates[0] if candidates else None
+
+        # Exact code match
+        for c in candidates:
+            code = (c.get('code') or '').lower()
+            if code == q:
+                return c
+
+        # Name contains query
+        for c in candidates:
+            name = (c.get('name') or '').lower()
+            if q in name:
+                return c
+
+        return candidates[0] if candidates else None
+
+    def _get_stock_by_warehouse(self, code_or_name):
+        """Return stock string by warehouse for a product.
+        Match by default_code first, fallback by name ilike.
+        """
+        Product = self.env['product.product'].sudo()
+        product = Product.search([
+            ('default_code', '=', code_or_name)
+        ], limit=1)
+        if not product:
+            product = Product.search([
+                ('name', 'ilike', code_or_name)
+            ], limit=1)
+
+        if not product:
+            return '<span class="text-muted">Không có trong Odoo</span>'
+
+        whs = self.env['stock.warehouse'].sudo().search([])
+        if not whs:
+            return '<span class="text-muted">Không có kho</span>'
+
+        parts = []
+        for wh in whs:
+            # Compute available qty in each warehouse by context
+            qty = product.with_context(warehouse=wh.id).qty_available
+            parts.append(f"{wh.code or wh.name}: <b>{qty}</b>")
+
+        return ' | '.join(parts)
     
     def action_create_evaluation(self):
         """Create a new evaluation record for this conversation"""
@@ -280,6 +520,4 @@ class ZaloChatConversation(models.Model):
         if not channel:
              raise UserError(_("Chưa tìm thấy phiên Live Chat nào."))
         return channel.action_gpt_create_quote()
-
-
 

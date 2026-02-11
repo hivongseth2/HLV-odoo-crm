@@ -27,6 +27,8 @@
                                 class="oe_highlight" icon="fa-comments"/>
                         <button name="action_create_evaluation" string="⭐ Tạo Đánh giá (AI)" type="object" 
                                 class="btn-warning"/>
+                        <button name="action_update_assistant" string="🤖 Cập nhật trợ lý" type="object" 
+                                class="btn-primary"/>
                         <button name="action_send_message" string="Gửi tin nhắn" type="object" 
                                 icon="fa-paper-plane"
                                 invisible="state == 'archived'"/>
@@ -82,6 +84,26 @@
                                        decoration-danger="state == 'failed'"/>
                             </list>
                         </field>
+
+                        <separator string="Trợ lý nội bộ"/>
+                        <notebook>
+                            <page string="Tóm tắt (AI)">
+                                <group>
+                                    <field name="assistant_summary_html" nolabel="1"/>
+                                </group>
+                            </page>
+                            <page string="Gợi ý sản phẩm &amp; tồn kho">
+                                <group>
+                                    <field name="assistant_product_suggestions_html" nolabel="1"/>
+                                </group>
+                            </page>
+                            <page string="Hồ sơ &amp; Tags">
+                                <group>
+                                    <field name="profile_id"/>
+                                    <field name="assistant_last_run" readonly="1"/>
+                                </group>
+                            </page>
+                        </notebook>
                     </sheet>
                     <chatter/>
                 </form>
