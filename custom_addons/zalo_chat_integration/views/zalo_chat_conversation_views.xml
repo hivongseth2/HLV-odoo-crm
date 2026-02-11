@@ -97,7 +97,7 @@
                                     <field name="assistant_product_suggestions_html" nolabel="1"/>
                                 </group>
                             </page>
-                            <page string="Hồ sơ & Tags">
+                            <page string="Hồ sơ &amp; Tags">
                                 <group>
                                     <field name="profile_id"/>
                                     <field name="assistant_last_run" readonly="1"/>
