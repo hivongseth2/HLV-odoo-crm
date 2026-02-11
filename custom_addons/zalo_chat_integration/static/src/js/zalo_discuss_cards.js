@@ -11,7 +11,7 @@ function decodeHtml(str) {
     return txt.value;
 }
 
-function renderCard(el, onClickHandler) {
+function renderCard(el) {
     const dataEl = el.querySelector('.zalo-assistant-data');
     if (!dataEl) return;
 
@@ -53,16 +53,19 @@ function renderCard(el, onClickHandler) {
         const card = document.createElement('div');
         card.className = 'zalo-assistant-card';
 
-        if (onClickHandler && typeof onClickHandler === 'function') {
-            card.style.cursor = 'pointer';
-            card.title = 'Click để kiểm tra tồn kho';
-            card.onclick = (e) => {
-                e.stopPropagation();
-                // Prefer name for query as it's more natural for the search method
-                const query = it.name || it.code || '';
-                onClickHandler(query);
-            };
-        }
+        card.style.cursor = 'pointer';
+        card.title = 'Click để kiểm tra tồn kho';
+        card.onclick = (e) => {
+            e.stopPropagation();
+            // Prefer name for query as it's more natural for the search method
+            const query = it.name || it.code || '';
+            const event = new CustomEvent('zalo-card-click', {
+                bubbles: true,
+                detail: { query: query }
+            });
+            card.dispatchEvent(event);
+            console.log("Zalo Card clicked, dispatching event:", query);
+        };
 
         const title = document.createElement('div');
         title.className = 'title';
@@ -99,12 +102,12 @@ function unwrapRawHtml(root) {
     });
 }
 
-function processCards(root, onClickHandler) {
+function processCards(root) {
     // First try to unwrap any escaped HTML
     unwrapRawHtml(root);
     // Then find any cards (now rendered as HTML nodes)
     const nodes = root.querySelectorAll('.zalo-assistant-card');
-    nodes.forEach((el) => renderCard(el, onClickHandler));
+    nodes.forEach((el) => renderCard(el));
 }
 
 patch(Message.prototype, {
@@ -117,8 +120,12 @@ patch(Message.prototype, {
             const root = this.el;
             if (!root) return;
 
-            const onCardClick = async (productQuery) => {
+            // Listen for custom event from cards
+            root.addEventListener('zalo-card-click', async (ev) => {
+                const productQuery = ev.detail ? ev.detail.query : null;
                 if (!productQuery) return;
+
+                console.log("Caught zalo-card-click event:", productQuery);
 
                 // Get thread from message props
                 const message = this.props.message;
@@ -131,15 +138,15 @@ patch(Message.prototype, {
                 }
 
                 try {
-                    await orm.call("discuss.channel", "action_check_stock_item", [[thread.id], productQuery]);
                     notification.add("Đang kiểm tra tồn kho: " + productQuery, { type: "info" });
+                    await orm.call("discuss.channel", "action_check_stock_item", [[thread.id], productQuery]);
                 } catch (e) {
                     console.error("Stock check error invoked from specific card:", e);
                     notification.add("Lỗi kiểm tra tồn: " + e.message, { type: "danger" });
                 }
-            };
+            });
 
-            processCards(root, onCardClick);
+            processCards(root);
         });
     },
 });
@@ -155,6 +162,8 @@ const observer = new MutationObserver((mutations) => {
     });
 });
 
-window.addEventListener('DOMContentLoaded', () => {
+// Ensure observer runs on document body
+window.addEventListener('load', () => {
+    // Use a slight delay or just observe body
     observer.observe(document.body, { childList: true, subtree: true });
 });
