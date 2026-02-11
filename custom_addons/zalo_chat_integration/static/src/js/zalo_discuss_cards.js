@@ -46,7 +46,19 @@ function renderCard(el) {
     el.replaceWith(container);
 }
 
+function unwrapRawHtml(root) {
+    // If message body is escaped and shown as raw text, convert it back to HTML
+    const candidates = root.querySelectorAll('.o-mail-Message-body, .o_mail_thread_message_content, .o_mail_message_content');
+    candidates.forEach((el) => {
+        const text = el.textContent || '';
+        if (text.includes("zalo-assistant-card") && text.includes("<div")) {
+            el.innerHTML = text;
+        }
+    });
+}
+
 function processCards(root) {
+    unwrapRawHtml(root);
     const nodes = root.querySelectorAll('.zalo-assistant-card[data-json]');
     nodes.forEach((el) => renderCard(el));
 }
