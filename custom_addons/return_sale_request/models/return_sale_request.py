@@ -438,6 +438,15 @@ class ReturnSaleRequest(models.Model):
                 return {"ok": True, "action": "not_found"}
             
             record_data = data[0]
+            
+            # --- SAFETY CHECK: Ensure we got the correct record ---
+            found_code = record_data.get("ReturnSaleNo")
+            if found_code != return_sale_code:
+                msg = f"MISA API Filter failed: Requested '{return_sale_code}' but got '{found_code}'. Aborting sync."
+                _logger.error(msg)
+                return {"ok": False, "error": "api_filter_failed", "message": msg}
+            # -----------------------------------------------------
+
             misa_id = record_data.get("ID")
             
             # Fetch detail
@@ -448,15 +457,33 @@ class ReturnSaleRequest(models.Model):
             return {"ok": False, "error": "exception", "message": str(e)}
 
     def _get_grid_payload_by_code(self, code):
-        """Payload để tìm theo mã"""
+        """Payload để tìm theo mã - Structure V2 Grid API"""
         return {
             "Columns": "SUQsUmV0dXJuU2FsZU5vLFJldHVyblNhbGVOYW1lLFJldHVyblNhbGVEYXRlLEFjY291bnRJRCxBY2NvdW50SURUZXh0LFNhbGVPcmRlcklELFNhbGVPcmRlcklEVGV4dCxUb3RhbFN1bW1hcnksU3VnZ2VzdFN0YXR1c0lELFN1Z2dlc3RTdGF0dXNJRFRleHQsT3duZXJJRCxPd25lcklEVGV4dA==",
-            "Filters": [
-                {"Field": "ReturnSaleNo", "Operator": "=", "Value": code}
-            ],
+            "Sorts": [],
             "Start": 0,
             "Page": 1,
             "PageSize": 1,
+            "Filters": [
+                {
+                    "Group": None,
+                    "Addition": 1,
+                    "InputType": 1,
+                    "IsFromFormula": True,
+                    "Operator": 1,  # Equal / Contains
+                    "Property": "ReturnSaleNo",
+                    "Text": code,
+                    "Value": code
+                }
+            ],
+            "Formula": "( 1 )",  # Use the first filter
+            "LayoutCode": "ReturnSale",
+            "DefaultTotal": False,
+            "IsMappingData": False,
+            "MappingValueObject": {},
+            "SessionID": "864e2811-5edd-5ccc-6b85-178b59007e93",  # Random/Static SessionID
+            "LayoutCodeCheckPermission": "ReturnSale",
+            "AISearchKeyword": ""
         }
 
     def _sync_from_misa_detail(self, misa_id, headers, grid_data):
