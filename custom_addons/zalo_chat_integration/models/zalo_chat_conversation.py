@@ -7,6 +7,7 @@ import subprocess
 import os
 import re
 from datetime import datetime
+import unicodedata
 
 _logger = logging.getLogger(__name__)
 
@@ -268,8 +269,45 @@ YÊU CẦU:
                     note_html += f"<p><b>⏱ Giai đoạn</b>: {fields.Datetime.to_string(last_inbound)}</p>"
                 if summary_html:
                     note_html += f"<p><b>📝 Tóm tắt (AI)</b></p>{summary_html}"
-                if suggestions_html:
+
+                # Build card payload for Discuss UI
+                card_items = []
+                # Use product_queries for list, rebuild display from alias/MISA quickly
+                for q in (product_queries or [])[:3]:
+                    prod = self._find_product_by_alias(q)
+                    if prod:
+                        stock_lines = self._get_stock_by_warehouse(prod.default_code or prod.name)
+                        card_items.append({
+                            'name': prod.name,
+                            'code': prod.default_code or '',
+                            'price': f"{prod.list_price:,.0f}",
+                            'unit': prod.uom_id.name,
+                            'stock': stock_lines,
+                        })
+                        continue
+                    misa_candidates = self._misa_search_products(q)
+                    if misa_candidates:
+                        best = self._pick_best_misa_candidate(q, misa_candidates, chat_content) or misa_candidates[0]
+                        card_items.append({
+                            'name': best.get('name',''),
+                            'code': best.get('code',''),
+                            'price': f"{best.get('price', '-')}",
+                            'unit': best.get('unit',''),
+                            'stock': self._get_stock_by_warehouse(best.get('code') or best.get('name')),
+                        })
+
+                if card_items:
+                    payload = {
+                        'phase': fields.Datetime.to_string(last_inbound) if last_inbound else '',
+                        'items': card_items,
+                    }
+                    payload_json = tools.html_escape(json.dumps(payload, ensure_ascii=False))
+                    note_html += (
+                        "<div class='zalo-assistant-card' data-json=\"" + payload_json + "\"></div>"
+                    )
+                elif suggestions_html:
                     note_html += f"<p><b>📦 Gợi ý sản phẩm &amp; tồn kho</b></p>{suggestions_html}"
+
                 note_html += "</div>"
                 channel.with_context(skip_zalo_sync=True).message_post(
                     body=note_html,
@@ -291,17 +329,28 @@ YÊU CẦU:
         html_lines = ["<div>", "<p><b>Gợi ý sản phẩm (Top 3)</b></p>"]
 
         for q in queries:
+            # 1) Alias match in Odoo
+            alias_product = self._find_product_by_alias(q)
+            if alias_product:
+                stock_lines = self._get_stock_by_warehouse(alias_product.default_code or alias_product.name)
+                price = alias_product.list_price
+                price_str = f"{price:,.0f}" if isinstance(price, (int, float)) else str(price or '-')
+                html_lines.append(
+                    "<div style='margin-bottom:8px;'>"
+                    f"<div><b>{alias_product.name}</b> — <code>{alias_product.default_code or ''}</code></div>"
+                    f"<div>Giá: <b>{price_str}</b> | ĐVT: {alias_product.uom_id.name}</div>"
+                    f"<div>Tồn kho: {stock_lines}</div>"
+                    "</div>"
+                )
+                continue
+
+            # 2) Fallback to MISA
             misa_candidates = self._misa_search_products(q)
             if not misa_candidates:
                 html_lines.append(f"<p>⚠️ Không tìm thấy trong MISA: <b>{q}</b></p>")
                 continue
 
-            # Pick best candidate (simple heuristic): prefer code match or name contains query
-            best = self._pick_best_misa_candidate(q, misa_candidates, chat_content)
-            if not best:
-                best = misa_candidates[0]
-
-            # Stock by warehouse from Odoo
+            best = self._pick_best_misa_candidate(q, misa_candidates, chat_content) or misa_candidates[0]
             stock_lines = self._get_stock_by_warehouse(best.get('code') or best.get('name'))
             price = best.get('price')
             price_str = f"{price:,.0f}" if isinstance(price, (int, float)) else str(price or '-')
@@ -365,6 +414,26 @@ YÊU CẦU:
                 return c
 
         return candidates[0] if candidates else None
+
+    def _find_product_by_alias(self, query):
+        """Find product.template by alias table (normalized)."""
+        if not query:
+            return None
+        normalized = self._normalize_text(query)
+        Alias = self.env['product.alias'].sudo()
+        alias = Alias.search([
+            ('normalized_alias', '=', normalized),
+            ('active', '=', True)
+        ], limit=1)
+        if alias and alias.product_id:
+            return alias.product_id
+        return None
+
+    def _normalize_text(self, text):
+        text = (text or '').strip().lower()
+        text = unicodedata.normalize('NFKD', text)
+        text = ''.join([c for c in text if not unicodedata.combining(c)])
+        return text
 
     def _get_stock_by_warehouse(self, code_or_name):
         """Return stock string by warehouse for a product.

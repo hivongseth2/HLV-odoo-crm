@@ -12,4 +12,10 @@
         <field name="bundle">web.assets_backend</field>
         <field name="path">zalo_chat_integration/static/src/css/zalo_custom.css</field>
     </record>
+
+    <record id="assets_backend_zalo_js" model="ir.asset">
+        <field name="name">zalo_chat_integration.assets_backend_js</field>
+        <field name="bundle">web.assets_backend</field>
+        <field name="path">zalo_chat_integration/static/src/js/zalo_discuss_cards.js</field>
+    </record>
 </odoo>

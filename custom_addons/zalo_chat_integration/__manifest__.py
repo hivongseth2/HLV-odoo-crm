@@ -32,6 +32,7 @@
         'data/zalo_chat_sequence.xml',
         'data/zalo_chat_cron.xml',
         'views/assets.xml',
+        'views/product_alias_views.xml',
         'views/zalo_oa_config_views.xml',
         'views/zalo_chat_conversation_views.xml',
         'views/zalo_chat_message_views.xml',
