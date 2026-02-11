@@ -5,6 +5,12 @@ from odoo import models, fields
 class ResPartner(models.Model):
     _inherit = 'res.partner'
 
+    zalo_user_id = fields.Char(
+        string='Zalo User ID',
+        index=True,
+        help='ID người dùng Zalo liên kết với liên hệ này.'
+    )
+
     zalo_summary_html = fields.Html(
         string='Zalo Assistant Summary',
         sanitize=False,
