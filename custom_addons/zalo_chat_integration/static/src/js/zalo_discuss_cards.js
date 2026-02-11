@@ -4,9 +4,18 @@ import { onMounted } from "@odoo/owl";
 import { patch } from "@web/core/utils/patch";
 import { Message } from "@mail/core/common/message";
 
+function decodeHtml(str) {
+    const txt = document.createElement('textarea');
+    txt.innerHTML = str;
+    return txt.value;
+}
+
 function renderCard(el) {
-    const json = el.getAttribute('data-json');
+    let json = el.getAttribute('data-json');
     if (!json) return;
+    json = decodeHtml(json);
+    // Handle escaped quotes inside attribute
+    json = json.replace(/\\"/g, '"').replace(/\"/g, '"');
     let data;
     try {
         data = JSON.parse(json);
@@ -48,7 +57,7 @@ function renderCard(el) {
 
 function unwrapRawHtml(root) {
     // If message body is escaped and shown as raw text, convert it back to HTML
-    const candidates = root.querySelectorAll('.o-mail-Message-body, .o_mail_thread_message_content, .o_mail_message_content, .o-mail-Message-bodyText');
+    const candidates = root.querySelectorAll('.o-mail-Message-body, .o_mail_thread_message_content, .o_mail_message_content, .o-mail-Message-bodyText, p');
     candidates.forEach((el) => {
         const text = el.textContent || '';
         if (text.includes("zalo-assistant-card") && text.includes("<div")) {
