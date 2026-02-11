@@ -120,7 +120,6 @@ Select ID:"""}
                         # Construct public URL if possible, or use internal
                         pass
             
-            # Check for Zalo image URLs embedded in body (from our webhook handler)
             # Our webhook handler adds: <img src="..." ... />
             if msg.body and '<img' in msg.body:
                 img_urls = re.findall(r'src="([^"]+)"', msg.body)
