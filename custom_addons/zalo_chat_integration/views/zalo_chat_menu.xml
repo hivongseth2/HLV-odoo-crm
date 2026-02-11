@@ -29,11 +29,7 @@
               action="action_zalo_chat_conversation"
               sequence="10"/>
 
-    <menuitem id="menu_zalo_customer_profile"
-              name="Hồ sơ khách hàng"
-              parent="menu_zalo_chat_root"
-              action="action_zalo_customer_profile"
-              sequence="15"/>
+    <!-- Hồ sơ khách hàng removed; use res.partner instead -->
 
     <menuitem id="menu_zalo_chat_evaluation"
               name="Đánh giá hội thoại"

@@ -9,6 +9,9 @@ from . import mail_message
 from . import res_partner
 from . import zalo_customer_tag
 from . import zalo_customer_profile
+from . import res_partner
+from . import product_template
+from . import product_alias
 from . import zalo_chat_conversation
 from . import zalo_chat_conversation_user
 from . import zalo_chat_message

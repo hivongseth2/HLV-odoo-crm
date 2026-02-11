@@ -1,35 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Extend Partner Form View -->
-    <record id="view_partner_form_zalo" model="ir.ui.view">
-        <field name="name">res.partner.form.zalo</field>
+    <record id="view_partner_form_zalo_assistant" model="ir.ui.view">
+        <field name="name">res.partner.form.zalo.assistant</field>
         <field name="model">res.partner</field>
         <field name="inherit_id" ref="base.view_partner_form"/>
         <field name="arch" type="xml">
-            <!-- Add Smart Button -->
-            <xpath expr="//div[@name='button_box']" position="inside">
-                <button name="action_view_zalo_conversations" type="object" class="oe_stat_button" icon="fa-comments" invisible="zalo_conversation_count == 0">
-                    <field name="zalo_conversation_count" widget="statinfo" string="Zalo Chats"/>
-                </button>
-            </xpath>
-            
-            <!-- Add Zalo Tab -->
-            <xpath expr="//notebook" position="inside">
-                <page string="Zalo Chat" name="zalo_chat">
+            <notebook position="inside">
+                <page string="Zalo Assistant">
                     <group>
-                        <field name="zalo_user_id"/>
+                        <field name="zalo_summary_html" nolabel="1"/>
+                        <field name="zalo_last_assistant_run" readonly="1"/>
                     </group>
-                    <field name="zalo_conversation_ids" mode="list">
-                        <list string="Conversations" create="false">
-                            <field name="name"/>
-                            <field name="zalo_user_name"/>
-                            <field name="last_message_date"/>
-                            <field name="unread_count"/>
-                            <field name="state"/>
-                        </list>
-                    </field>
                 </page>
-            </xpath>
+            </notebook>
         </field>
     </record>
 </odoo>

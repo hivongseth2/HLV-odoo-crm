@@ -52,13 +52,6 @@ class ZaloChatConversation(models.Model):
         help='Liên hệ Odoo được liên kết với người dùng Zalo này',
     )
 
-    profile_id = fields.Many2one(
-        'zalo.customer.profile',
-        string='Hồ sơ khách hàng',
-        compute='_compute_profile_id',
-        store=True,
-        readonly=False,
-    )
 
     assistant_summary_html = fields.Html(
         string='Tóm tắt hội thoại (AI)',
@@ -151,20 +144,6 @@ class ZaloChatConversation(models.Model):
         
         return conversations
 
-    @api.depends('partner_id')
-    def _compute_profile_id(self):
-        for record in self:
-            if record.partner_id:
-                profile = self.env['zalo.customer.profile'].search([
-                    ('partner_id', '=', record.partner_id.id)
-                ], limit=1)
-                if not profile:
-                    profile = self.env['zalo.customer.profile'].create({
-                        'partner_id': record.partner_id.id
-                    })
-                record.profile_id = profile
-            else:
-                record.profile_id = False
     
     def action_close(self):
         self.write({'state': 'closed'})
@@ -177,17 +156,6 @@ class ZaloChatConversation(models.Model):
         Output is stored in conversation fields (internal only).
         """
         self.ensure_one()
-
-        # Ensure profile exists if partner linked
-        if self.partner_id and not self.profile_id:
-            profile = self.env['zalo.customer.profile'].search([
-                ('partner_id', '=', self.partner_id.id)
-            ], limit=1)
-            if not profile:
-                profile = self.env['zalo.customer.profile'].create({
-                    'partner_id': self.partner_id.id
-                })
-            self.profile_id = profile
 
         # Find config with GPT API key
         config = self.env['zalo.oa.config'].sudo().search([('active', '=', True)], limit=1)
@@ -241,9 +209,12 @@ YÊU CẦU:
         key_info = data.get('key_info') or {}
         product_queries = key_info.get('products') or []
 
-        # Update profile tags/summary (if profile exists)
-        if self.profile_id:
-            self.profile_id.action_update_summary_ai(chat_content, config)
+        # Update partner summary/tags
+        if self.partner_id:
+            # Update partner summary field directly
+            if summary_html:
+                self.partner_id.zalo_summary_html = summary_html
+            self.partner_id.zalo_last_assistant_run = fields.Datetime.now()
 
         # 2) Product suggestions via MISA + stock by warehouse
         # Use last inbound timestamp as a hint for timeline

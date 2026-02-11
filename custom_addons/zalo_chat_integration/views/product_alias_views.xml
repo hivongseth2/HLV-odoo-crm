@@ -36,5 +36,5 @@
         <field name="view_mode">list,form</field>
     </record>
 
-    <menuitem id="menu_product_alias" name="Product Aliases" parent="zalo_chat_integration.menu_zalo_chat_root" action="action_product_alias" sequence="25"/>
+    <!-- Dedicated menu can be removed if aliases are managed in product form -->
 </odoo>

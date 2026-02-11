@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_product_template_form_alias" model="ir.ui.view">
+        <field name="name">product.template.form.alias</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <notebook position="inside">
+                <page string="Aliases">
+                    <field name="alias_ids">
+                        <list editable="bottom">
+                            <field name="alias"/>
+                            <field name="weight"/>
+                            <field name="active"/>
+                        </list>
+                    </field>
+                </page>
+            </notebook>
+        </field>
+    </record>
+</odoo>
