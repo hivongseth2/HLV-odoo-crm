@@ -70,6 +70,102 @@ class PickingExportShopeeWizard(models.TransientModel):
             
         return ''
 
+    def _get_move_line_rows(self, picking):
+        """
+        Ensure BoM kit exports include both:
+        - parent combo line (sale.order.line product)
+        - exploded component lines (stock moves)
+        """
+        rows = super()._get_move_line_rows(picking)
+        if not rows:
+            return rows
+
+        move_lines = picking.move_line_ids
+        source_moves = move_lines.mapped('move_id') if move_lines else picking.move_ids_without_package
+        if not source_moves:
+            return rows
+
+        # Keep first move line per move for context (location/uom fallback in _build_row_data)
+        first_ml_by_move_id = {}
+        if move_lines:
+            for ml in move_lines:
+                mv = ml.move_id
+                if mv and mv.id not in first_ml_by_move_id:
+                    first_ml_by_move_id[mv.id] = ml
+
+        # Collect combo sale lines from component moves:
+        # component move => move.product_id != sale_line.product_id
+        combo_source_by_sol_id = {}
+        for move in source_moves:
+            sol = getattr(move, 'sale_line_id', False)
+            if not sol or not sol.product_id:
+                continue
+            if sol.product_id.id == move.product_id.id:
+                continue
+            if sol.id not in combo_source_by_sol_id:
+                combo_source_by_sol_id[sol.id] = {
+                    'sol': sol,
+                    'move': move,
+                    'ml': first_ml_by_move_id.get(move.id),
+                }
+
+        if not combo_source_by_sol_id:
+            return rows
+
+        so = self._find_sale_order(source_moves[0], picking)
+
+        # Existing parent rows (if already present, do not add duplicates)
+        existing_parent_sol_ids = {
+            row.get('_sale_line_id')
+            for row in rows
+            if row.get('_sale_line_id') and row.get('_product_id') == row.get('_parent_product_id')
+        }
+
+        # First position of each SOL in current rows (for insertion before components)
+        first_index_by_sol = {}
+        for idx, row in enumerate(rows):
+            sol_id = row.get('_sale_line_id')
+            if sol_id and sol_id not in first_index_by_sol:
+                first_index_by_sol[sol_id] = idx
+
+        default_ref_row = rows[0]
+        pending_inserts = []
+
+        for sol_id, payload in combo_source_by_sol_id.items():
+            if sol_id in existing_parent_sol_ids:
+                continue
+
+            sol = payload['sol']
+            move = payload['move']
+            ml = payload['ml']
+
+            ref_row = rows[first_index_by_sol.get(sol_id)] if sol_id in first_index_by_sol else default_ref_row
+
+            parent_row = self._build_row_data(
+                picking, so, sol.product_id, ml, move,
+                ref_row.get('ngay_hoa_don', ''),
+                ref_row.get('so_chung_tu', picking.name or ''),
+                ref_row.get('ma_khach_hang', ''),
+                ref_row.get('ten_khach_hang', ''),
+                ref_row.get('dia_chi', ''),
+                ref_row.get('ma_so_thue', ''),
+                ref_row.get('so_phieu_xuat', (so.name if so else (picking.origin or ''))),
+                ref_row.get('ma_nhan_vien', ''),
+                ref_row.get('dien_giai', ''),
+                ref_row.get('ly_do_xuat', ''),
+                ref_row.get('ma_kho', ''),
+                sale_line=sol,
+            )
+
+            insert_idx = first_index_by_sol.get(sol_id, len(rows))
+            pending_inserts.append((insert_idx, parent_row))
+
+        # Insert from back to front so indices remain stable
+        for insert_idx, row_data in sorted(pending_inserts, key=lambda item: item[0], reverse=True):
+            rows.insert(insert_idx, row_data)
+
+        return rows
+
     def _build_row_data(self, picking, so, prod, ml, move,
                         scheduled_date_str, picking_name, partner_code, partner_name,
                         partner_address, partner_vat, sale_name, sale_user_code,
@@ -152,6 +248,15 @@ class PickingExportShopeeWizard(models.TransientModel):
         row['ngay_hoa_don'] = posting_date_str
         if not row.get('so_phieu_xuat'):
             row['so_phieu_xuat'] = picking_name or sale_name or ''
+
+        # Internal metadata for row post-processing (not exported as columns)
+        sol = sale_line or (getattr(move, 'sale_line_id', False) if move else False)
+        row['_sale_line_id'] = sol.id if sol else False
+        row['_product_id'] = prod.id if prod else False
+        row['_parent_product_id'] = sol.product_id.id if sol and sol.product_id else False
+        row['_is_component_of_kit'] = bool(
+            sol and sol.product_id and prod and sol.product_id.id != prod.id
+        )
         
         return row
 
