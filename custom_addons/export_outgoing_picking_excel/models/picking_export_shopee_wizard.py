@@ -348,6 +348,33 @@ class PickingExportShopeeWizard(models.TransientModel):
         row['_is_parent_combo'] = bool(
             sol and sol.product_id and prod and sol.product_id.id == prod.id and row['_description_bom_line']
         )
+
+        # For BoM kit exports: only parent combo line keeps price.
+        # Component lines must be zero to avoid over-valued import.
+        is_component_line = bool(
+            row.get('_is_component_of_kit') or
+            (row.get('_description_bom_line') and not row.get('_is_parent_combo'))
+        )
+        if is_component_line:
+            zero_number_fields = [
+                'don_gia',
+                'thanh_tien',
+                'ty_le_ck',
+                'tien_chiet_khau',
+                'gia_tinh_thue_xk',
+                'ty_le_thue_xk',
+                'tien_thue_xk',
+                'ty_le_thue_gtgt',
+                'ty_le_thue_khac',
+                'tien_thue_gtgt',
+                'don_gia_von',
+                'tien_von',
+            ]
+            for key in zero_number_fields:
+                row[key] = 0
+
+            # Keep VAT account empty when there is no VAT amount.
+            row['tk_thue_gtgt'] = ''
         
         return row
 
