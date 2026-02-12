@@ -84,8 +84,8 @@ class ShopeeWebhookController(http.Controller):
 
             for order in orders:
                 if status:
-                    old_status = order.shopee_delivery_status
-                    order.write({'shopee_delivery_status': status})
+                    old_status = order.shopee_order_status
+                    order.write({'shopee_order_status': status})
                     _logger.info("Shopee Webhook: Updated Order %s status from '%s' to '%s'", order.name, old_status, status)
                 else:
                     _logger.info("Shopee Webhook: No status update found in payload for Order %s", order.name)
