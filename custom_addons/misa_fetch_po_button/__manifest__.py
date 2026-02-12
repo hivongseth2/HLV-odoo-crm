@@ -16,6 +16,7 @@
         'views/crm_tag_views.xml',
         'wizard/misa_pos_sync_wizard_views.xml',
         'wizard/misa_tag_update_wizard_views.xml',
+        'wizard/misa_tax_update_wizard_views.xml',
     ],
     'python': [
         'models/sale_api_import_wizard.py',  # Thêm file này

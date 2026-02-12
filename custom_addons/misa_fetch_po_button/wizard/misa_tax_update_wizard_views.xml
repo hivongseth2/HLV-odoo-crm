@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_misa_tax_update_wizard_form" model="ir.ui.view">
+        <field name="name">misa.tax.update.wizard.form</field>
+        <field name="model">misa.tax.update.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Cập nhật thuế MISA">
+                <sheet>
+                    <div class="alert alert-info" role="alert" invisible="state == 'done'">
+                        <strong>Lưu ý:</strong> Chức năng này sẽ cập nhật "Thuế khách hàng" (Customer Taxes) cho TẤT CẢ sản phẩm trong Odoo có mã khớp với MISA.
+                    </div>
+                    
+                    <group invisible="state == 'done'">
+                        <field name="state" invisible="1"/>
+                        <div class="text-muted">
+                            Hệ thống sẽ:
+                            <ul>
+                                <li>Lấy danh sách sản phẩm từ MISA</li>
+                                <li>Tìm sản phẩm tương ứng trong Odoo theo Mã sản phẩm</li>
+                                <li>Cập nhật thuế Odoo theo thuế MISA (vd: 8% -> Thuế 8%)</li>
+                            </ul>
+                        </div>
+                    </group>
+                    
+                    <group invisible="state != 'done'">
+                        <field name="log_text" widget="text" readonly="1" nolabel="1"
+                               style="font-family: monospace; white-space: pre-wrap; min-height: 400px;"/>
+                    </group>
+                </sheet>
+                
+                <footer>
+                    <button name="action_update_tax" string="🚀 Bắt đầu cập nhật" 
+                            type="object" class="btn-primary"
+                            invisible="state == 'done'"
+                            confirm="Bạn có chắc chắn muốn cập nhật thuế cho toàn bộ sản phẩm?"/>
+                    <button name="action_reset" string="↩️ Làm lại" 
+                            type="object" class="btn-secondary"
+                            invisible="state != 'done'"/>
+                    <button string="Đóng" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_misa_tax_update_wizard" model="ir.actions.act_window">
+        <field name="name">Cập nhật thuế MISA</field>
+        <field name="res_model">misa.tax.update.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Menu item trong Inventory > Operations (Hoạt động) -->
+    <menuitem id="menu_misa_tax_update_stock"
+              name="Cập nhật thuế MISA"
+              parent="stock.menu_stock_warehouse_mgmt"
+              action="action_misa_tax_update_wizard"
+              sequence="1"/>
+</odoo>
