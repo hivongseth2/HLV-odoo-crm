@@ -5,5 +5,5 @@ from odoo import models, fields, api
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
-    # shopee_delivery_status = fields.Char(string='Shopee Delivery Status', help="Status received from Shopee Webhook")
+    shopee_order_status = fields.Char(string='Shopee Order Status', help="Status received from Shopee Webhook (e.g. PROCESSED, COMPLETED)")
     
