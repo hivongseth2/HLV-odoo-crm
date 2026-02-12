@@ -70,11 +70,66 @@ class PickingExportShopeeWizard(models.TransientModel):
             
         return ''
 
+    def _normalize_text(self, text):
+        if not text:
+            return ''
+        return ' '.join(str(text).strip().lower().split())
+
+    def _extract_bom_description(self, move=None, ml=None):
+        description = ''
+        if move:
+            description = getattr(move, 'description_bom_line', False) or ''
+        if not description and ml:
+            description = getattr(ml, 'description_bom_line', False) or ''
+        return description.strip() if isinstance(description, str) else ''
+
+    def _find_sale_line_by_bom_description(self, so, bom_description):
+        """
+        Try to map description_bom_line from OUT moves back to SO line (kit parent).
+        """
+        if not so or not bom_description:
+            return False
+
+        desc_norm = self._normalize_text(bom_description)
+        if not desc_norm:
+            return False
+
+        # Pass 1: exact / contains against SOL name and product labels
+        for sol in so.order_line:
+            prod = sol.product_id
+            if not prod:
+                continue
+
+            probe_values = [
+                sol.name,
+                prod.display_name,
+                prod.name,
+                prod.default_code,
+            ]
+            normalized_values = [self._normalize_text(v) for v in probe_values if v]
+            if not normalized_values:
+                continue
+
+            if desc_norm in normalized_values:
+                return sol
+            if any(desc_norm in nv or nv in desc_norm for nv in normalized_values):
+                return sol
+
+        # Pass 2: fallback by product default_code token inside description
+        for sol in so.order_line:
+            prod = sol.product_id
+            code = prod.default_code if prod else False
+            if code and self._normalize_text(code) in desc_norm:
+                return sol
+
+        return False
+
     def _get_move_line_rows(self, picking):
         """
-        Ensure BoM kit exports include both:
-        - parent combo line (sale.order.line product)
-        - exploded component lines (stock moves)
+        Ensure BoM kit exports include both parent kit line and component lines.
+        Parent line is detected from:
+        1) sale_line_id mismatch (standard Odoo kit explosion), or
+        2) description_bom_line on OUT move/move line (fallback as user explained).
         """
         rows = super()._get_move_line_rows(picking)
         if not rows:
@@ -85,7 +140,9 @@ class PickingExportShopeeWizard(models.TransientModel):
         if not source_moves:
             return rows
 
-        # Keep first move line per move for context (location/uom fallback in _build_row_data)
+        so = self._find_sale_order(source_moves[0], picking)
+
+        # Keep first move line per move for context
         first_ml_by_move_id = {}
         if move_lines:
             for ml in move_lines:
@@ -93,56 +150,85 @@ class PickingExportShopeeWizard(models.TransientModel):
                 if mv and mv.id not in first_ml_by_move_id:
                     first_ml_by_move_id[mv.id] = ml
 
-        # Collect combo sale lines from component moves:
-        # component move => move.product_id != sale_line.product_id
-        combo_source_by_sol_id = {}
+        # Group component moves by parent SOL (kit header)
+        combo_source_by_key = {}
         for move in source_moves:
-            sol = getattr(move, 'sale_line_id', False)
-            if not sol or not sol.product_id:
+            if not move.product_id:
                 continue
-            if sol.product_id.id == move.product_id.id:
-                continue
-            if sol.id not in combo_source_by_sol_id:
-                combo_source_by_sol_id[sol.id] = {
-                    'sol': sol,
-                    'move': move,
-                    'ml': first_ml_by_move_id.get(move.id),
-                }
+            ml = first_ml_by_move_id.get(move.id)
+            bom_description = self._extract_bom_description(move=move, ml=ml)
 
-        if not combo_source_by_sol_id:
+            parent_sol = False
+            move_sol = getattr(move, 'sale_line_id', False)
+
+            # Standard Odoo kit behavior: component move linked to parent SOL
+            if move_sol and move_sol.product_id and move_sol.product_id.id != move.product_id.id:
+                parent_sol = move_sol
+            # Fallback: OUT line contains description_bom_line only
+            elif bom_description:
+                candidate_sol = self._find_sale_line_by_bom_description(so, bom_description)
+                if candidate_sol and candidate_sol.product_id and candidate_sol.product_id.id != move.product_id.id:
+                    parent_sol = candidate_sol
+
+            if not parent_sol or not parent_sol.product_id:
+                continue
+
+            group_key = "sol:%s" % parent_sol.id
+            if group_key not in combo_source_by_key:
+                combo_source_by_key[group_key] = {
+                    'sol': parent_sol,
+                    'parent_product': parent_sol.product_id,
+                    'move': move,
+                    'ml': ml,
+                    'bom_description': bom_description,
+                    'component_product_ids': set(),
+                }
+            combo_source_by_key[group_key]['component_product_ids'].add(move.product_id.id)
+            if bom_description and not combo_source_by_key[group_key]['bom_description']:
+                combo_source_by_key[group_key]['bom_description'] = bom_description
+
+        if not combo_source_by_key:
             return rows
 
-        so = self._find_sale_order(source_moves[0], picking)
-
         # Existing parent rows (if already present, do not add duplicates)
-        existing_parent_sol_ids = {
-            row.get('_sale_line_id')
+        existing_parent_keys = {
+            "sol:%s" % row.get('_sale_line_id')
             for row in rows
             if row.get('_sale_line_id') and row.get('_product_id') == row.get('_parent_product_id')
         }
 
-        # First position of each SOL in current rows (for insertion before components)
-        first_index_by_sol = {}
-        for idx, row in enumerate(rows):
-            sol_id = row.get('_sale_line_id')
-            if sol_id and sol_id not in first_index_by_sol:
-                first_index_by_sol[sol_id] = idx
-
         default_ref_row = rows[0]
         pending_inserts = []
 
-        for sol_id, payload in combo_source_by_sol_id.items():
-            if sol_id in existing_parent_sol_ids:
+        for group_key, payload in combo_source_by_key.items():
+            if group_key in existing_parent_keys:
                 continue
 
             sol = payload['sol']
+            parent_product = payload['parent_product']
             move = payload['move']
             ml = payload['ml']
+            bom_description = payload['bom_description']
+            component_product_ids = payload['component_product_ids']
 
-            ref_row = rows[first_index_by_sol.get(sol_id)] if sol_id in first_index_by_sol else default_ref_row
+            # Insert before the first component row of this kit group
+            insert_idx = len(rows)
+            for idx, row in enumerate(rows):
+                same_sol = row.get('_sale_line_id') == sol.id
+                same_desc = bool(
+                    bom_description and
+                    row.get('_description_bom_line') and
+                    self._normalize_text(row.get('_description_bom_line')) == self._normalize_text(bom_description)
+                )
+                is_component = row.get('_product_id') in component_product_ids
+                if (same_sol or same_desc) and is_component:
+                    insert_idx = idx
+                    break
+
+            ref_row = rows[insert_idx] if insert_idx < len(rows) else default_ref_row
 
             parent_row = self._build_row_data(
-                picking, so, sol.product_id, ml, move,
+                picking, so, parent_product, ml, move,
                 ref_row.get('ngay_hoa_don', ''),
                 ref_row.get('so_chung_tu', picking.name or ''),
                 ref_row.get('ma_khach_hang', ''),
@@ -156,8 +242,9 @@ class PickingExportShopeeWizard(models.TransientModel):
                 ref_row.get('ma_kho', ''),
                 sale_line=sol,
             )
+            parent_row['_description_bom_line'] = bom_description or parent_row.get('_description_bom_line') or ''
+            parent_row['_is_parent_combo'] = True
 
-            insert_idx = first_index_by_sol.get(sol_id, len(rows))
             pending_inserts.append((insert_idx, parent_row))
 
         # Insert from back to front so indices remain stable
@@ -256,6 +343,10 @@ class PickingExportShopeeWizard(models.TransientModel):
         row['_parent_product_id'] = sol.product_id.id if sol and sol.product_id else False
         row['_is_component_of_kit'] = bool(
             sol and sol.product_id and prod and sol.product_id.id != prod.id
+        )
+        row['_description_bom_line'] = self._extract_bom_description(move=move, ml=ml)
+        row['_is_parent_combo'] = bool(
+            sol and sol.product_id and prod and sol.product_id.id == prod.id and row['_description_bom_line']
         )
         
         return row
