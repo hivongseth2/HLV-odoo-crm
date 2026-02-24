@@ -17,6 +17,7 @@
                    domain="[('company_id','in', allowed_company_ids)]"
                    placeholder="Để trống = Tất cả kho"/>
             <field name="state_filter"/>
+            <field name="exclude_shopee"/>
           </group>
         </group>
 
