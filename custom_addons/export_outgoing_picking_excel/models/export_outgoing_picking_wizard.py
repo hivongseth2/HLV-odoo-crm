@@ -101,6 +101,39 @@ class PickingExportWizard(models.TransientModel):
             return picking.sale_id
         return False
 
+    def _find_source_pos_picking(self, picking):
+        """
+        Truy ngược từ phiếu OUT/PACK về phiếu PICK gốc có POS order.
+        Dùng cho 3-step delivery: OUT không có pos_order_id / x_studio_pos_group,
+        nhưng phiếu PICK gốc thì có.
+        Trả về picking gốc hoặc False.
+        """
+        visited = set()
+        pickings_to_check = picking
+        
+        while pickings_to_check:
+            for p in pickings_to_check:
+                if p.id in visited:
+                    continue
+                visited.add(p.id)
+                
+                # Kiểm tra phiếu này có POS order không
+                pos_order = getattr(p, 'pos_order_id', False)
+                if pos_order:
+                    return p
+            
+            # Truy ngược qua move_orig_ids
+            orig_moves = pickings_to_check.mapped('move_ids.move_orig_ids')
+            upstream_pickings = orig_moves.mapped('picking_id').filtered(
+                lambda p: p.id not in visited
+            )
+            
+            if not upstream_pickings:
+                break
+            pickings_to_check = upstream_pickings
+        
+        return False
+
     def _get_columns_definition(self):
         """Định nghĩa các cột theo template kế toán"""
         return [
@@ -1507,8 +1540,20 @@ class PickingExportWizard(models.TransientModel):
         """
         Mapping dữ liệu từ picking/POS order sang row Sheet 1 (49 cột)
         Trả về dict với key tương ứng columns sheet 1
+        
+        Hỗ trợ 3-step delivery: nếu phiếu OUT không có pos_order_id / x_studio_pos_group,
+        truy ngược về phiếu PICK gốc để lấy dữ liệu POS.
         """
         pos_order = getattr(picking, 'pos_order_id', False)
+        
+        # Fallback: truy ngược về phiếu PICK gốc nếu OUT không có POS data
+        source_picking = picking
+        if not pos_order and not picking.x_studio_pos_group:
+            source_pos_picking = self._find_source_pos_picking(picking)
+            if source_pos_picking:
+                source_picking = source_pos_picking
+                pos_order = getattr(source_picking, 'pos_order_id', False)
+
         partner = picking.partner_id
         
         # Dates
@@ -1516,8 +1561,11 @@ class PickingExportWizard(models.TransientModel):
         date_str = _to_date_str(date_done)
         scheduled_date_str = _to_date_str(picking.scheduled_date) if picking.scheduled_date else date_str
         
-        # Order reference - use x_studio_pos_group
-        so_don_hang = picking.x_studio_pos_group or (pos_order and pos_order.name) or picking.name or ''
+        # Order reference - use x_studio_pos_group (from source picking if needed)
+        so_don_hang = (picking.x_studio_pos_group 
+                       or source_picking.x_studio_pos_group 
+                       or (pos_order and pos_order.name) 
+                       or picking.name or '')
         
         # Partner info
         partner_name = (partner and partner.name) or ''
@@ -1548,8 +1596,12 @@ class PickingExportWizard(models.TransientModel):
             gia_tri_don_hang = pos_order.amount_total or 0.0
             thuc_thu = pos_order.amount_paid or 0.0
         
-        # Payment method
-        payment_method = getattr(picking, 'x_studio_pos_payment_method', '') or getattr(picking, 'x_studio_payment_method', '') or ''
+        # Payment method (try current picking first, then source picking)
+        payment_method = (getattr(picking, 'x_studio_pos_payment_method', '') 
+                          or getattr(picking, 'x_studio_payment_method', '') 
+                          or getattr(source_picking, 'x_studio_pos_payment_method', '')
+                          or getattr(source_picking, 'x_studio_payment_method', '') 
+                          or '')
         
         # Update partner_name based on warehouse and payment method
         warehouse_code = self._get_warehouse_code(picking)
@@ -1630,17 +1682,22 @@ class PickingExportWizard(models.TransientModel):
             'dong_bo_don_gia_sau_ck': '',
         }
 
-    def _get_pos_crm_line_data(self, picking, pos_line):
+    def _get_pos_crm_line_data(self, picking, pos_line, source_picking=None):
         """
         Mapping dữ liệu từ pos.order.line sang row Sheet 2 (18 cột)
         pos_line: pos.order.line record
+        source_picking: phiếu PICK gốc (nếu picking là OUT trong 3-step delivery)
         Trả về dict với key tương ứng columns sheet 2
         """
-        pos_order = getattr(picking, 'pos_order_id', False)
+        src = source_picking or picking
+        pos_order = getattr(src, 'pos_order_id', False)
         prod = pos_line.product_id
         
         # Order reference (FK to Sheet 1) - use x_studio_pos_group
-        so_don_hang = picking.x_studio_pos_group or (pos_order and pos_order.name) or picking.name or ''
+        so_don_hang = (picking.x_studio_pos_group 
+                       or src.x_studio_pos_group 
+                       or (pos_order and pos_order.name) 
+                       or picking.name or '')
         
         # Warehouse
         raw_warehouse_code = self._get_warehouse_code(picking)
@@ -1791,6 +1848,15 @@ class PickingExportWizard(models.TransientModel):
         current_row = 2
         for picking in pickings:
             pos_order = getattr(picking, 'pos_order_id', False)
+            source_picking = None
+            
+            # Fallback: truy ngược từ OUT → PICK để lấy POS order
+            if not pos_order:
+                source_pos_picking = self._find_source_pos_picking(picking)
+                if source_pos_picking:
+                    source_picking = source_pos_picking
+                    pos_order = getattr(source_picking, 'pos_order_id', False)
+            
             if not pos_order:
                 continue
             
@@ -1798,7 +1864,7 @@ class PickingExportWizard(models.TransientModel):
                 if not pos_line.product_id:
                     continue
                 
-                row_data = self._get_pos_crm_line_data(picking, pos_line)
+                row_data = self._get_pos_crm_line_data(picking, pos_line, source_picking=source_picking)
                 for col_idx, col_def in enumerate(columns_s2, start=1):
                     cell = ws2.cell(row=current_row, column=col_idx)
                     value = row_data.get(col_def['key'], '')
