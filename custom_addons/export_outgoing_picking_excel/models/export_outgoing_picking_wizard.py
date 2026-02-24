@@ -1426,35 +1426,6 @@ class PickingExportWizard(models.TransientModel):
 
     # ====== POS CRM EXPORT METHODS ======
     
-    def _get_pos_order_from_picking(self, picking):
-        """Helper để tìm pos.order cho picking, đặc biệt là phiếu xuất 3 bước"""
-        # 1. Thử lấy trực tiếp từ thuộc tính pos_order_id (đơn 1 bước)
-        if hasattr(picking, 'pos_order_id') and picking.pos_order_id:
-            return picking.pos_order_id
-            
-        # 2. Tìm qua x_studio_pos_group (VD: TMBC060226)
-        if picking.x_studio_pos_group:
-            # prefix POS group là pos_order.name -> nhưng group id được format theo ngày.
-            # pos_order ko có field này trực tiếp, ta tìm các pickings khác chung group
-            related_pickings = self.env['stock.picking'].sudo().search([
-                ('x_studio_pos_group', '=', picking.x_studio_pos_group)
-            ])
-            for related in related_pickings:
-                if hasattr(related, 'pos_order_id') and related.pos_order_id:
-                    return related.pos_order_id
-                    
-        # 3. Tìm qua procurement group (group_id)
-        if picking.group_id:
-            # pos_order có id = group_id.pos_order_id ?
-            # POS session sinh group_id mang tên POS order (VD: POS/0001)
-            pos_orders = self.env['pos.order'].sudo().search([
-                ('name', '=', picking.group_id.name)
-            ], limit=1)
-            if pos_orders:
-                return pos_orders[0]
-                
-        return False
-        
     def _get_pos_crm_columns_sheet1(self):
         """Định nghĩa 49 cột cho Sheet 1: Nhập khẩu Đơn hàng"""
         return [
@@ -1537,7 +1508,7 @@ class PickingExportWizard(models.TransientModel):
         Mapping dữ liệu từ picking/POS order sang row Sheet 1 (49 cột)
         Trả về dict với key tương ứng columns sheet 1
         """
-        pos_order = self._get_pos_order_from_picking(picking)
+        pos_order = getattr(picking, 'pos_order_id', False)
         partner = picking.partner_id
         
         # Dates
@@ -1665,7 +1636,7 @@ class PickingExportWizard(models.TransientModel):
         pos_line: pos.order.line record
         Trả về dict với key tương ứng columns sheet 2
         """
-        pos_order = self._get_pos_order_from_picking(picking)
+        pos_order = getattr(picking, 'pos_order_id', False)
         prod = pos_line.product_id
         
         # Order reference (FK to Sheet 1) - use x_studio_pos_group
@@ -1819,7 +1790,7 @@ class PickingExportWizard(models.TransientModel):
         # Data rows - multiple rows per picking (1 per pos_line)
         current_row = 2
         for picking in pickings:
-            pos_order = self._get_pos_order_from_picking(picking)
+            pos_order = getattr(picking, 'pos_order_id', False)
             if not pos_order:
                 continue
             
