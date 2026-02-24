@@ -16,7 +16,8 @@ class StockPickingLabelWizard(models.TransientModel):
     auto_generate_ean13 = fields.Boolean(string="Tự động tạo mã vạch", help="Tự động tạo mã EAN13 cho sản phẩm chưa có mã")
     generate_type = fields.Selection([
         ('date', 'Theo ngày hiện tại'),
-        ('random', 'Ngẫu nhiên')
+        ('random', 'Ngẫu nhiên'),
+        ('ref', 'Theo mã tham chiếu')
     ], string="Kiểu tạo mã", default='date')
 
     line_ids = fields.One2many('stock.picking.label.wizard.line', 'wizard_id', string='Sản phẩm')
@@ -31,6 +32,9 @@ class StockPickingLabelWizard(models.TransientModel):
                     if self.generate_type == 'date':
                         # Format: HLV + ProductID + DateStr
                         barcode_str = "HLV%s%s" % (product.id, datetime.now().strftime("%d%m%y%H%M"))
+                    elif self.generate_type == 'ref':
+                        # Use default_code as barcode
+                        barcode_str = product.default_code
                     else:
                         # Format: HLV + RandomNumber
                         number_random = int("%0.13d" % random.randint(0, 999999999999))
