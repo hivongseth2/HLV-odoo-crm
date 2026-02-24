@@ -1892,13 +1892,35 @@ class PickingExportWizard(models.TransientModel):
         if Workbook is None:
             raise UserError(_("Thiếu thư viện openpyxl. Vui lòng cài đặt 'openpyxl' cho Python."))
         
-        # Domain tương tự POS export: lọc POS orders
+        # Phase 1: Tìm pickings có POS fields trực tiếp
         domain = self._domain()
         domain.append('|')
         domain.append(('x_studio_pos_group', '!=', False))
         domain.append(('pos_session_id', '!=', False))
         
-        pickings = self.env["stock.picking"].sudo().search(domain, order="scheduled_date asc, id asc")
+        direct_pickings = self.env["stock.picking"].sudo().search(domain, order="scheduled_date asc, id asc")
+        
+        # Phase 2: Tìm thêm pickings outgoing chưa có POS fields nhưng trace lại được POS order
+        # (3-step delivery: OUT picking không có x_studio_pos_group nhưng PICK gốc có)
+        base_domain = self._domain()  # outgoing, done, date range
+        all_outgoing = self.env["stock.picking"].sudo().search(base_domain, order="scheduled_date asc, id asc")
+        
+        # Lọc: pickings chưa có trong direct_pickings mà trace ngược lại có POS order
+        traced_pickings = self.env["stock.picking"]
+        already_found_ids = set(direct_pickings.ids)
+        
+        for picking in all_outgoing:
+            if picking.id in already_found_ids:
+                continue
+            # Dùng _find_source_pos_picking để kiểm tra
+            source = self._find_source_pos_picking(picking)
+            if source:
+                traced_pickings |= picking
+        
+        # Gộp lại
+        pickings = direct_pickings | traced_pickings
+        pickings = pickings.sorted(key=lambda p: (p.scheduled_date or p.date_done, p.id))
+        
         if not pickings:
             raise UserError(_("Không tìm thấy phiếu xuất POS nào trong khoảng ngày đã chọn."))
         
