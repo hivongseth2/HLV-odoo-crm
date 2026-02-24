@@ -88,6 +88,12 @@ class PickingExportWizard(models.TransientModel):
         default="all",
     )
 
+    exclude_shopee = fields.Boolean(
+        string="Không xuất đơn Shopee",
+        default=True,
+        help="Chọn để loại bỏ các đơn hàng có đối tác chứa từ khóa 'shopee' khỏi file xuất."
+    )
+
     def _find_sale_order(self, move, picking):
         # 1) Từ sale_line_id trực tiếp
         if getattr(move, 'sale_line_id', False) and move.sale_line_id.order_id:
@@ -228,6 +234,9 @@ class PickingExportWizard(models.TransientModel):
             domain.append(("picking_type_id.warehouse_id", "in", self.warehouse_ids.ids))
 
         # Không cần lọc state_filter nữa vì đã cố định là 'done'
+
+        if self.exclude_shopee:
+            domain.append(('partner_id.name', 'not ilike', 'shopee'))
 
         return domain
 
