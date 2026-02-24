@@ -63,6 +63,13 @@ class StockExportWizard(models.TransientModel):
         ('all', 'Tất cả')
     ], string="Trạng thái", default='done')
 
+    exclude_shopee = fields.Boolean(
+        string="Không xuất đơn Shopee",
+        default=True,
+        help="Chọn để loại bỏ các đơn hàng có đối tác chứa từ khóa 'shopee' khỏi file xuất."
+    )
+
+
     def _get_warehouse_code(self, picking):
         """Lấy mã kho"""
         if picking.picking_type_id and picking.picking_type_id.warehouse_id:
@@ -117,6 +124,9 @@ class StockExportWizard(models.TransientModel):
 
         if self.warehouse_ids:
             domain.append(("picking_type_id.warehouse_id", "in", self.warehouse_ids.ids))
+
+        if self.exclude_shopee:
+            domain.append(('partner_id.name', 'not ilike', 'shopee'))
 
         return domain
 
