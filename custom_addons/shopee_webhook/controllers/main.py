@@ -12,13 +12,21 @@ _LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 _LOG_FILE = os.path.join(_LOG_DIR, 'shopee_webhook.log')
 
 
-def _log_to_file(data):
-    """Ghi raw data vào file log persistent."""
+def _log_to_file(data, result=None):
+    """Ghi data vào file log persistent, dễ đọc."""
     try:
         os.makedirs(_LOG_DIR, exist_ok=True)
         with open(_LOG_FILE, 'a', encoding='utf-8') as f:
             ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            f.write(f"[{ts}] {json.dumps(data, ensure_ascii=False)}\n")
+            push_code = data.get('code', '?') if isinstance(data, dict) else '?'
+            shop_id = data.get('shop_id', '?') if isinstance(data, dict) else '?'
+            f.write(f"{'=' * 60}\n")
+            f.write(f"TIME     : {ts}\n")
+            f.write(f"PUSH CODE: {push_code}\n")
+            f.write(f"SHOP ID  : {shop_id}\n")
+            if result:
+                f.write(f"RESULT   : {result}\n")
+            f.write(f"DATA     :\n{json.dumps(data, indent=2, ensure_ascii=False)}\n")
     except Exception as e:
         _logger.error("Failed to write Shopee log file: %s", str(e))
 
@@ -43,7 +51,7 @@ class ShopeeWebhookController(http.Controller):
             data = request.get_json_data()
             _logger.info("Received Shopee Webhook Data: %s", json.dumps(data))
 
-            # Ghi vào file log persistent
+            # Ghi vào file log persistent (log trước khi xử lý)
             _log_to_file(data)
 
             if not data:
@@ -106,6 +114,7 @@ class ShopeeWebhookController(http.Controller):
                     old_status = order.shopee_order_status
                     order.write({'shopee_order_status': status})
                     _logger.info("Shopee Webhook: Updated Order %s status from '%s' to '%s'", order.name, old_status, status)
+                    _log_to_file(data, result=f"Updated {order.name}: {old_status} -> {status}")
                 else:
                     _logger.info("Shopee Webhook: No status update found in payload for Order %s", order.name)
 
@@ -113,21 +122,54 @@ class ShopeeWebhookController(http.Controller):
 
         except Exception as e:
             _logger.error("Error processing Shopee Webhook: %s", str(e), exc_info=True)
+            _log_to_file(data if 'data' in dir() else {}, result=f"ERROR: {str(e)}")
             return {'code': 3, 'msg': str(e)}
 
     @http.route('/shopee/webhook/logs', type='http', auth='user', methods=['GET'])
-    def shopee_webhook_logs(self, lines=200, **kwargs):
-        """Xem log webhook qua trình duyệt: /shopee/webhook/logs?lines=500"""
+    def shopee_webhook_logs(self, lines=100, **kwargs):
+        """Xem log webhook qua trình duyệt: /shopee/webhook/logs?lines=50"""
         try:
             if not os.path.exists(_LOG_FILE):
-                content = 'No log file yet.'
+                raw = 'Chưa có log nào.'
             else:
                 with open(_LOG_FILE, 'r', encoding='utf-8') as f:
                     all_lines = f.readlines()
-                    content = ''.join(all_lines[-int(lines):])
-            return request.make_response(
-                content,
-                headers=[('Content-Type', 'text/plain; charset=utf-8')]
-            )
+                    raw = ''.join(all_lines[-int(lines):])
+
+            # Tách từng block log (phân cách bởi ====)
+            import html as html_mod
+            blocks = raw.split('=' * 60)
+            entries_html = ''
+            for block in reversed(blocks):
+                block = block.strip()
+                if not block:
+                    continue
+                # Xác định màu theo nội dung
+                css_class = 'log-entry'
+                if 'ERROR' in block:
+                    css_class += ' log-error'
+                elif 'Updated' in block:
+                    css_class += ' log-success'
+                entries_html += f'<div class="{css_class}"><pre>{html_mod.escape(block)}</pre></div>\n'
+
+            if not entries_html:
+                entries_html = '<p style="color:#888;">Chưa có log nào.</p>'
+
+            page = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Shopee Webhook Logs</title>
+<style>
+  body {{ font-family: 'Segoe UI', monospace; background: #1e1e2e; color: #cdd6f4; padding: 20px; }}
+  h1 {{ color: #89b4fa; border-bottom: 1px solid #45475a; padding-bottom: 10px; }}
+  .log-entry {{ background: #313244; border-left: 4px solid #89b4fa; padding: 12px 16px; margin: 8px 0; border-radius: 4px; }}
+  .log-error {{ border-left-color: #f38ba8; background: #31222e; }}
+  .log-success {{ border-left-color: #a6e3a1; background: #22312a; }}
+  pre {{ margin: 0; white-space: pre-wrap; word-wrap: break-word; font-size: 13px; line-height: 1.5; }}
+  .info {{ color: #a6adc8; font-size: 13px; margin-bottom: 16px; }}
+</style></head><body>
+<h1>📦 Shopee Webhook Logs</h1>
+<div class="info">Hiển thị {lines} dòng gần nhất · Mới nhất ở trên · <a href="?lines=500" style="color:#89b4fa">Xem 500 dòng</a></div>
+{entries_html}
+</body></html>"""
+            return request.make_response(page, headers=[('Content-Type', 'text/html; charset=utf-8')])
         except Exception as e:
             return request.make_response(str(e), headers=[('Content-Type', 'text/plain')])
