@@ -8,9 +8,16 @@ from odoo.http import request
 
 _logger = logging.getLogger(__name__)
 
-_LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
-_LOG_FILE = os.path.join(_LOG_DIR, 'shopee_webhook.log')
+# Use a writable directory outside the module path, typically in the user's home or tmp
+try:
+    _LOG_DIR = os.path.join(os.path.expanduser('~'), 'shopee_logs')
+    os.makedirs(_LOG_DIR, exist_ok=True)
+except Exception:
+    # Fallback to /tmp if home dir is not writable
+    _LOG_DIR = '/tmp/shopee_logs'
+    os.makedirs(_LOG_DIR, exist_ok=True)
 
+_LOG_FILE = os.path.join(_LOG_DIR, 'shopee_webhook.log')
 
 def _log_to_file(data, result=None):
     """Ghi data vào file log persistent, dễ đọc."""
