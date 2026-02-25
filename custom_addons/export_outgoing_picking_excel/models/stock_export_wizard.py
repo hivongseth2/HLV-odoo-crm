@@ -125,9 +125,6 @@ class StockExportWizard(models.TransientModel):
         if self.warehouse_ids:
             domain.append(("picking_type_id.warehouse_id", "in", self.warehouse_ids.ids))
 
-        if self.exclude_shopee:
-            domain.append(('partner_id.name', 'not ilike', 'shopee'))
-
         return domain
 
     # ====== STOCK EXPORT TEMPLATE ======
@@ -202,6 +199,25 @@ class StockExportWizard(models.TransientModel):
         
         so = self._find_sale_order(first_move_id, picking)
         don_hang_goc = so.name if so else (picking.origin or "")
+
+        # --- EARLY SHOPEE EXCLUSION CHECK ---
+        if self.exclude_shopee:
+            is_shopee = False
+            p_name = str(partner_name).lower() if partner_name else ''
+            p_code = str(partner_code).lower() if partner_code else ''
+            
+            if 'shopee' in p_name or 'shopee' in p_code:
+                is_shopee = True
+            elif getattr(picking, 'shopee_order_ref', False):
+                is_shopee = True
+            elif so:
+                if getattr(so, 'shopee_shop_id', False):
+                    is_shopee = True
+                elif so.partner_id and 'shopee' in str(so.partner_id.name).lower():
+                    is_shopee = True
+            
+            if is_shopee:
+                return [] # Skip this picking entirely
         
         # Customer Name (Khách hàng) - Priority: SO Partner -> Picking Commercial Partner -> Picking Partner
         khach_hang = ""
