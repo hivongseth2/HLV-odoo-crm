@@ -1,10 +1,26 @@
 # -*- coding: utf-8 -*-
 import json
+import os
 import logging
+from datetime import datetime
 from odoo import http
 from odoo.http import request
 
 _logger = logging.getLogger(__name__)
+
+_LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
+_LOG_FILE = os.path.join(_LOG_DIR, 'shopee_webhook.log')
+
+
+def _log_to_file(data):
+    """Ghi raw data vào file log persistent."""
+    try:
+        os.makedirs(_LOG_DIR, exist_ok=True)
+        with open(_LOG_FILE, 'a', encoding='utf-8') as f:
+            ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            f.write(f"[{ts}] {json.dumps(data, ensure_ascii=False)}\n")
+    except Exception as e:
+        _logger.error("Failed to write Shopee log file: %s", str(e))
 
 class ShopeeWebhookController(http.Controller):
 
@@ -26,6 +42,9 @@ class ShopeeWebhookController(http.Controller):
             # Get JSON data from request
             data = request.get_json_data()
             _logger.info("Received Shopee Webhook Data: %s", json.dumps(data))
+
+            # Ghi vào file log persistent
+            _log_to_file(data)
 
             if not data:
                  return {'code': 1, 'msg': 'Empty payload'}
@@ -95,3 +114,20 @@ class ShopeeWebhookController(http.Controller):
         except Exception as e:
             _logger.error("Error processing Shopee Webhook: %s", str(e), exc_info=True)
             return {'code': 3, 'msg': str(e)}
+
+    @http.route('/shopee/webhook/logs', type='http', auth='user', methods=['GET'])
+    def shopee_webhook_logs(self, lines=200, **kwargs):
+        """Xem log webhook qua trình duyệt: /shopee/webhook/logs?lines=500"""
+        try:
+            if not os.path.exists(_LOG_FILE):
+                content = 'No log file yet.'
+            else:
+                with open(_LOG_FILE, 'r', encoding='utf-8') as f:
+                    all_lines = f.readlines()
+                    content = ''.join(all_lines[-int(lines):])
+            return request.make_response(
+                content,
+                headers=[('Content-Type', 'text/plain; charset=utf-8')]
+            )
+        except Exception as e:
+            return request.make_response(str(e), headers=[('Content-Type', 'text/plain')])
