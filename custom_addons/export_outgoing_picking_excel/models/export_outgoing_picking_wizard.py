@@ -996,9 +996,23 @@ class PickingExportWizard(models.TransientModel):
         date_done = picking.date_done or picking.scheduled_date or fields.Datetime.now()
         date_str = _to_date_str(date_done)
         
+        # --- Xử lý hậu tố 2 ca ---
+        import pytz
+        user_tz = pytz.timezone(self.env.user.tz or 'Asia/Ho_Chi_Minh')
+        dt = picking.date_done or picking.scheduled_date
+        shift_suffix = ""
+        if dt:
+            dt_utc = pytz.utc.localize(dt) if not getattr(dt, 'tzinfo', None) else dt
+            dt_vn = dt_utc.astimezone(user_tz)
+            if dt_vn.hour < 16 or (dt_vn.hour == 16 and dt_vn.minute < 30):
+                shift_suffix = "-1"
+            else:
+                shift_suffix = "-2"
+
         # Số chứng từ: x_studio_pos_group (VD: POS/050126)
         # Nếu chưa có thì fallback về picking name
-        so_chung_tu = picking.x_studio_pos_group or picking.name
+        base_so_chung_tu = picking.x_studio_pos_group or picking.name
+        so_chung_tu = f"{base_so_chung_tu}{shift_suffix}" if base_so_chung_tu else ""
         
         # Số phiếu xuất: thêm 'PXK' trước số chứng từ
         # VD: PXKPOS/050126
@@ -1006,19 +1020,12 @@ class PickingExportWizard(models.TransientModel):
         so_phieu_xuat = ""
         if picking.x_studio_pos_group:
             # Xử lý format nếu cần, ở đây ghép chuỗi đơn giản
-            # Giả sử group là POS/050126 -> PXKPOS/050126
-            # Hoặc PXK + POS/050126 -> PXKPOS/050126
-            so_phieu_xuat = "PXK" + picking.x_studio_pos_group.replace("POS/", "POS") 
-            # Hay là "PXK" + full string? User: "số phiếu xuất là số chứng từ có thêm PXK phía trước"
-            # Nếu group = POS/010126 -> PXKPOS/010126 ?
-            # Hay PXK POS/010126 ?
-            # Thường là liền: PXKPOS/010126
             if "POS/" in picking.x_studio_pos_group:
-                 so_phieu_xuat = "PXK" + picking.x_studio_pos_group.replace("/", "")
+                 so_phieu_xuat = "PXK" + picking.x_studio_pos_group.replace("/", "") + shift_suffix
             else:
-                 so_phieu_xuat = "PXK" + picking.x_studio_pos_group
+                 so_phieu_xuat = "PXK" + picking.x_studio_pos_group + shift_suffix
         else:
-            so_phieu_xuat = "PXK" + picking.name
+            so_phieu_xuat = "PXK" + picking.name + shift_suffix
 
         partner = picking.partner_id
         partner_code = self._partner_code(partner)
