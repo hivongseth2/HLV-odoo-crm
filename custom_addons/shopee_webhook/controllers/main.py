@@ -57,6 +57,11 @@ class ShopeeWebhookController(http.Controller):
             if not data:
                  return {'code': 1, 'msg': 'Empty payload'}
 
+            # Get Push Code
+            push_code = data.get('code')
+            if push_code not in (23, 30):
+                return {'code': 0, 'msg': f'ignored (code={push_code})'}
+
             # The payload structure usually has a 'data' key or matches generic format.
             # Adjust these keys based on actual Shopee documentation if needed.
             # Assuming 'ordersn' is the key for Order SN (Shopee Order Ref).
@@ -109,14 +114,66 @@ class ShopeeWebhookController(http.Controller):
                 # Otherwise they might retry indefinitely.
                 return {'code': 0, 'msg': 'Order not found, but processed'}
 
+            results_log = []
             for order in orders:
                 if status:
                     old_status = order.shopee_order_status
                     order.write({'shopee_order_status': status})
                     _logger.info("Shopee Webhook: Updated Order %s status from '%s' to '%s'", order.name, old_status, status)
-                    _log_to_file(data, result=f"Updated {order.name}: {old_status} -> {status}")
+                    results_log.append(f"Updated {order.name}: {old_status} -> {status}")
                 else:
                     _logger.info("Shopee Webhook: No status update found in payload for Order %s", order.name)
+
+                # --- Auto Validate Delivery Order ---
+                if push_code == 30 and status == 'LOGISTICS_DELIVERY_DONE':
+                    # Find outging picking for this order
+                    pickings_to_validate = request.env['stock.picking'].sudo().search([
+                        ('sale_id', '=', order.id),
+                        ('picking_type_id.code', '=', 'outgoing'),
+                        ('state', 'in', ['confirmed', 'assigned'])
+                    ])
+                    for pick in pickings_to_validate:
+                        try:
+                            # 1. Assign (Reserve) if not assigned
+                            if pick.state == 'confirmed':
+                                pick.action_assign()
+                            
+                            # 2. Set Done Quantities to Reserved or Demanded Quantities
+                            for move in pick.move_ids.filtered(lambda m: m.state not in ['done', 'cancel']):
+                                # In Odoo 16/17/18, we can write directly on move line or move
+                                if hasattr(move, 'move_line_ids') and move.move_line_ids:
+                                    for line in move.move_line_ids:
+                                        if hasattr(line, 'qty_done') and hasattr(line, 'reserved_uom_qty'):
+                                            line.qty_done = line.reserved_uom_qty
+                                        elif hasattr(line, 'quantity') and hasattr(line, 'quantity_product_uom'): # v17+
+                                            line.quantity = line.quantity_product_uom
+                                else:
+                                    # Fallback to move level
+                                    if hasattr(move, 'quantity_done'):
+                                        move.quantity_done = move.product_uom_qty
+
+                            # 3. Validate
+                            # _action_done could trigger immediate transfer limits depending on Odoo version
+                            # We use button_validate to go through standard UI flow checks if possible,
+                            # or _action_done directly if we just want to force it.
+                            res_validate = pick.button_validate()
+                            if isinstance(res_validate, dict) and res_validate.get('res_model') == 'stock.immediate.transfer':
+                                # Process immediate transfer wizard if it pops up
+                                immediate_transfer = request.env['stock.immediate.transfer'].sudo().with_context(res_validate.get('context', {})).create({'pick_ids': [(4, pick.id)]})
+                                immediate_transfer.process()
+                            elif isinstance(res_validate, dict) and res_validate.get('res_model') == 'stock.backorder.confirmation':
+                                # This shouldn't happen if we set qty_done = product_uom_qty, but just in case
+                                backorder_conf = request.env['stock.backorder.confirmation'].sudo().with_context(res_validate.get('context', {})).create({'pick_ids': [(4, pick.id)]})
+                                backorder_conf.process_cancel_backorder() # Do not create backorder
+
+                            results_log.append(f"Auto-validated picking: {pick.name}")
+                            _logger.info("Shopee Webhook: Auto-validated picking %s for order %s", pick.name, order.name)
+                        except Exception as e:
+                            _logger.error("Shopee Webhook: Auto-validate failed for %s: %s", pick.name, str(e))
+                            results_log.append(f"Auto-validate failed {pick.name}: {str(e)}")
+
+            if results_log:
+                _log_to_file(data, result=" | ".join(results_log))
 
             return {'code': 0, 'msg': 'success'}
 
