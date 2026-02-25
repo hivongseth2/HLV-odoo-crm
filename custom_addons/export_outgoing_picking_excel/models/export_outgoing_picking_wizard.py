@@ -1433,20 +1433,64 @@ class PickingExportWizard(models.TransientModel):
         if not pickings:
             raise UserError(_("Không tìm thấy phiếu xuất kho nào trong khoảng ngày đã chọn."))
 
-        # Create workbook passing pickings directly to iterate there
-        wb = self._create_pos_excel_workbook(pickings)
+        import pytz
+        import zipfile
         
-        # Save
-        out = BytesIO()
-        wb.save(out)
-        out.seek(0)
+        user_tz = pytz.timezone(self.env.user.tz or 'Asia/Ho_Chi_Minh')
+        
+        groups = {}
+        for p in pickings:
+            dt = p.date_done or p.scheduled_date
+            if not dt:
+                key = "KhongCoNgay_Ca1"
+            else:
+                dt_utc = pytz.utc.localize(dt) if not getattr(dt, 'tzinfo', None) else dt
+                dt_vn = dt_utc.astimezone(user_tz)
+                d_str = dt_vn.strftime('%d-%m-%Y')
+                
+                # Check 0h-16h30 vs 16h30-24h
+                if dt_vn.hour < 16 or (dt_vn.hour == 16 and dt_vn.minute < 30):
+                    shift = 'Ca1_0h-16h30'
+                else:
+                    shift = 'Ca2_16h30-24h'
+                
+                key = f"{d_str}_{shift}"
+            
+            if key not in groups:
+                groups[key] = self.env["stock.picking"].sudo().browse()
+            groups[key] |= p
 
-        filename = f"Xuat_POS_{self.date_from}_{self.date_to}.xlsx"
+        # If only 1 group, just export 1 excel
+        if len(groups) == 1:
+            key, group_pickings = list(groups.items())[0]
+            wb = self._create_pos_excel_workbook(group_pickings)
+            out = BytesIO()
+            wb.save(out)
+            out.seek(0)
+            filename = f"Xuat_POS_{key}.xlsx"
+            mimetype = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            datas = base64.b64encode(out.getvalue())
+        else:
+            # Create a ZIP file containing multiple excel files
+            out_zip = BytesIO()
+            with zipfile.ZipFile(out_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for key, group_pickings in groups.items():
+                    wb = self._create_pos_excel_workbook(group_pickings)
+                    out = BytesIO()
+                    wb.save(out)
+                    out.seek(0)
+                    zf.writestr(f"Xuat_POS_{key}.xlsx", out.getvalue())
+            
+            out_zip.seek(0)
+            filename = f"Xuat_POS_{self.date_from}_den_{self.date_to}.zip"
+            mimetype = "application/zip"
+            datas = base64.b64encode(out_zip.getvalue())
+
         attachment = self.env["ir.attachment"].sudo().create({
             "name": filename,
             "type": "binary",
-            "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "datas": base64.b64encode(out.getvalue()),
+            "mimetype": mimetype,
+            "datas": datas,
             "res_model": "picking.export.wizard",
             "res_id": self.id,
         })
