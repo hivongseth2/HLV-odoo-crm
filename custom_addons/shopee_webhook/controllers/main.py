@@ -2,7 +2,12 @@
 import json
 import os
 import logging
+import time
+import hashlib
+import hmac
 from datetime import datetime
+
+import requests as req_lib
 from odoo import http
 from odoo.http import request
 
@@ -238,3 +243,103 @@ class ShopeeWebhookController(http.Controller):
             return request.make_response(page, headers=[('Content-Type', 'text/html; charset=utf-8')])
         except Exception as e:
             return request.make_response(str(e), headers=[('Content-Type', 'text/plain')])
+
+    # ──────────────────────────────────────────────────────────────
+    #  Shopee API Proxy – get_order_detail (read-only, no DB write)
+    # ──────────────────────────────────────────────────────────────
+    @http.route('/shopee/api/get_order_detail', type='http', auth='public', methods=['GET'], csrf=False)
+    def shopee_get_order_detail(self, **kwargs):
+        """
+        Proxy endpoint gọi Shopee Open API v2/order/get_order_detail.
+        Trả về raw JSON response từ Shopee. Không ghi gì vào DB.
+
+        Query params:
+            partner_id        (int, required)
+            partner_key       (string, required) – để tạo sign
+            access_token      (string, required)
+            shop_id           (int, required)
+            order_sn_list     (string, required) – danh sách order SN cách bởi dấu phẩy
+            request_order_status_pending (string, optional) – "true"/"false"
+            response_optional_fields     (string, optional)
+        """
+        try:
+            # --- 1. Đọc params ---
+            partner_id = kwargs.get('partner_id')
+            partner_key = kwargs.get('partner_key')
+            access_token = kwargs.get('access_token')
+            shop_id = kwargs.get('shop_id')
+            order_sn_list = kwargs.get('order_sn_list')
+
+            if not all([partner_id, partner_key, access_token, shop_id, order_sn_list]):
+                return request.make_response(
+                    json.dumps({
+                        'error': 'Missing required params',
+                        'required': ['partner_id', 'partner_key', 'access_token', 'shop_id', 'order_sn_list'],
+                    }),
+                    headers=[('Content-Type', 'application/json')],
+                )
+
+            partner_id = int(partner_id)
+            shop_id = int(shop_id)
+
+            # --- 2. Tạo timestamp & sign (HMAC-SHA256) ---
+            ts = int(time.time())
+            api_path = '/api/v2/order/get_order_detail'
+            # base_string = partner_id + api_path + timestamp + access_token + shop_id
+            base_string = f"{partner_id}{api_path}{ts}{access_token}{shop_id}"
+            sign = hmac.new(
+                partner_key.encode('utf-8'),
+                base_string.encode('utf-8'),
+                hashlib.sha256,
+            ).hexdigest()
+
+            # --- 3. Gọi Shopee API ---
+            shopee_url = 'https://partner.shopeemobile.com/api/v2/order/get_order_detail'
+            params = {
+                'partner_id': partner_id,
+                'timestamp': ts,
+                'access_token': access_token,
+                'shop_id': shop_id,
+                'sign': sign,
+                'order_sn_list': order_sn_list,
+            }
+
+            # Optional params
+            pending = kwargs.get('request_order_status_pending')
+            if pending is not None:
+                params['request_order_status_pending'] = pending
+
+            opt_fields = kwargs.get('response_optional_fields')
+            if opt_fields:
+                params['response_optional_fields'] = opt_fields
+
+            _logger.info("Shopee API call – get_order_detail params: %s", params)
+
+            resp = req_lib.get(shopee_url, params=params, timeout=30)
+
+            # --- 4. Trả raw response ---
+            try:
+                body = resp.json()
+            except Exception:
+                body = resp.text
+
+            result = {
+                'shopee_http_status': resp.status_code,
+                'shopee_response': body,
+                'request_params_sent': params,
+            }
+
+            _logger.info("Shopee API response – status=%s body=%s", resp.status_code, body)
+
+            return request.make_response(
+                json.dumps(result, indent=2, ensure_ascii=False),
+                headers=[('Content-Type', 'application/json; charset=utf-8')],
+            )
+
+        except Exception as e:
+            _logger.error("Shopee get_order_detail error: %s", str(e), exc_info=True)
+            return request.make_response(
+                json.dumps({'error': str(e)}),
+                headers=[('Content-Type', 'application/json')],
+            )
+
