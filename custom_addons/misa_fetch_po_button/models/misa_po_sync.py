@@ -632,9 +632,13 @@ class MisaPOSync(models.TransientModel):
         if not location:
             raise models.UserError(f"❌ Không tìm thấy location {location_name}")
 
-        warehouse = self.env['stock.warehouse'].search([
-            ('view_location_id', '=', location.location_id.id)
-        ], limit=1)
+        warehouse = False
+        curr_loc = location
+        while curr_loc and not warehouse:
+            warehouse = self.env['stock.warehouse'].search([
+                ('view_location_id', '=', curr_loc.id)
+            ], limit=1)
+            curr_loc = curr_loc.location_id
 
         if not warehouse:
             raise models.UserError(f"❌ Không tìm thấy warehouse cho {stock_code}")
