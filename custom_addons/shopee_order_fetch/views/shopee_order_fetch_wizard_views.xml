@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Wizard Form View -->
+    <record id="shopee_order_fetch_wizard_form" model="ir.ui.view">
+        <field name="name">shopee.order.fetch.wizard.form</field>
+        <field name="model">shopee.order.fetch.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Lấy thông tin đơn hàng Shopee">
+                <group>
+                    <group string="Cấu hình">
+                        <field name="shop_id" options="{'no_create': True, 'no_open': True}"/>
+                        <field name="response_optional_fields" widget="text"/>
+                    </group>
+                    <group string="Đơn hàng">
+                        <field name="order_sn_list" placeholder="Nhập mã đơn hàng, mỗi dòng 1 mã hoặc cách bởi dấu phẩy&#10;Ví dụ:&#10;240101ABCDEF&#10;240101GHIJKL"/>
+                    </group>
+                </group>
+                <footer>
+                    <button name="action_fetch_order"
+                            string="🔍 Lấy thông tin đơn hàng"
+                            type="object"
+                            class="btn-primary"/>
+                    <button string="Đóng" class="btn-secondary" special="cancel"/>
+                </footer>
+                <group string="Kết quả API" invisible="not result_display">
+                    <field name="result_display" nolabel="1" widget="text" readonly="1"/>
+                </group>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action to open wizard -->
+    <record id="action_shopee_order_fetch_wizard" model="ir.actions.act_window">
+        <field name="name">Lấy đơn hàng Shopee</field>
+        <field name="res_model">shopee.order.fetch.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Menu Item under Sales -->
+    <menuitem id="menu_shopee_order_fetch"
+              name="Lấy đơn hàng Shopee (thủ công)"
+              parent="stock.menu_stock_root"
+              action="action_shopee_order_fetch_wizard"
+              sequence="99"/>
+
+</odoo>
