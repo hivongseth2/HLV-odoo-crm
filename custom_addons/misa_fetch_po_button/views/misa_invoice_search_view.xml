@@ -152,7 +152,7 @@
                                                 
                                                 // Đảm bảo link là tuyệt đối, MISA đôi khi trả về thiếu http
                                                 var invLinkStr = inv.inv_link ? inv.inv_link : '';
-                                                if(invLinkStr && !invLinkStr.startsWith('http')) {
+                                                if(invLinkStr &amp;&amp; !invLinkStr.startsWith('http')) {
                                                     invLinkStr = 'https://' + invLinkStr;
                                                 }
 
