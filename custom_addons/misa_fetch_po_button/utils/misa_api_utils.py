@@ -13,6 +13,83 @@ class MisaApiUtils(models.AbstractModel):
     _name = 'misa.api.utils'
     _description = 'MISA API Utilities'
     
+    def _sync_customer_from_misa_account_api(self, account_id, headers):
+        """
+        Sync customer detailed info from MISA Account API.
+        Columns: ID;Debt;DebtLimit;FormLayoutID;AccountName;AccountNumber;TaxCode
+        Uses AccountNumber as unique identifier (ref) in Odoo.
+        """
+        if not account_id:
+            return None
+        
+        url = f"https://amisapp.misa.vn/crm/g2/api/business/Account/{account_id}/?columns=ID;Debt;DebtLimit;FormLayoutID;AccountName;AccountNumber;TaxCode"
+        
+        try:
+            # Note: MISA often works with POST for filtering, but for simple ID retrieval with columns in URL, GET is standard.
+            # If GET fails, we might need to verify auth headers or method. Assuming GET based on URL structure.
+            resp = requests.get(url, headers=headers, timeout=30)
+            
+            # Helper to handle potential 404 or other issues
+            if not resp.ok:
+                _logger.warning("⚠️ MISA Account API error %s: %s", resp.status_code, resp.text)
+                return None
+                
+            js = resp.json()
+            if not js.get("Success"):
+                _logger.warning("⚠️ MISA Account API success=False for ID %s: %s", account_id, js.get("UserMsg"))
+                return None
+            
+            data = js.get("Data", {})
+            if not data:
+                 return None
+            
+            account_number = (str(data.get("AccountNumber") or "")).strip()
+            account_name = (data.get("AccountName") or "").strip()
+            tax_code = (str(data.get("TaxCode") or "")).strip()
+            
+            if not account_number:
+                # If no account number in MISA, we cannot link by 'ref'. 
+                # Fallback to name-based logic in main loop logic.
+                _logger.warning("⚠️ MISA Account ID %s has no AccountNumber", account_id)
+                return None
+                
+            Partner = self.env['res.partner']
+            
+            # Find by ref (AccountNumber)
+            # Case-insensitive search ideally, but 'ref' is usually exact.
+            partner = Partner.search([('ref', '=', account_number)], limit=1)
+            
+            vals = {}
+            # Always update name if provided? Or only if different?
+            # User wants to update info.
+            if account_name:
+                vals['name'] = account_name
+            if tax_code:
+                vals['vat'] = tax_code
+            
+            # Ensure company type
+            if not partner and not vals.get('name'):
+                 # Should rare happen if account_name exists
+                 vals['name'] = account_number
+
+            if partner:
+                # Update existing
+                if vals:
+                    partner.write(vals)
+                _logger.info("✅ Synced customer %s (ref=%s) from MISA Account API", partner.name, account_number)
+            else:
+                # Create new
+                vals['ref'] = account_number
+                vals['company_type'] = 'company' 
+                partner = Partner.create(vals)
+                _logger.info("🆕 Created customer %s (ref=%s) from MISA Account API", partner.name, account_number)
+                
+            return partner
+            
+        except Exception as e:
+             _logger.error("❌ Error syncing MISA Account %s: %s", account_id, e)
+             return None
+
     def get_or_create_combo_product(self, combo_data, children_data, env=None, sale_headers=None):
         """
         Tạo/cập nhật combo product VỚI BOM (Kit/phantom) thay vì combo.product lines

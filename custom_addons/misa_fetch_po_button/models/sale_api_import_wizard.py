@@ -1001,8 +1001,16 @@ class SaleApiImportWizard(models.TransientModel):
 
                 # Ưu tiên lấy tên người nhận hàng từ ShippingContactIDText, nếu không có thì dùng AccountIDText
                 # partner_name_for_so = owner_date.get('shipping_contact') or customer_name
-                partner_name_for_so = customer_name
-                partner = odoo_utils._get_or_create_partner(partner_name_for_so)
+       
+                # --- NEW LOGIC: Sync from MISA Account API first ---
+                partner = None
+                if account_id:
+                     partner = misa_utils._sync_customer_from_misa_account_api(account_id, sale_headers)
+                
+                if not partner:
+                     # Fallback to legacy logic (create by name)
+                     partner_name_for_so = customer_name
+                     partner = odoo_utils._get_or_create_partner(partner_name_for_so)
                 
                 try:
                     if account_id:
