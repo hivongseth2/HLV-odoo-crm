@@ -985,6 +985,7 @@ class PickingExportWizard(models.TransientModel):
             {'key': 'don_gia_von', 'name': 'Đơn giá vốn', 'width': 15},
             {'key': 'tien_von', 'name': 'Tiền vốn', 'width': 15},
             {'key': 'hang_hoa_giu_ho', 'name': 'Hàng hóa giữ hộ/bán hộ', 'width': 20},
+            {'key': 'la_hoa_don_tu_may_tinh_tien', 'name': 'Là hóa đơn từ máy tính tiền', 'width': 25},
         ]
 
     def _get_pos_row_data(self, picking):
@@ -1197,6 +1198,7 @@ class PickingExportWizard(models.TransientModel):
                     'don_gia_von': prod.standard_price,
                     'tien_von': prod.standard_price * abs(qty),  # Use abs for cost calculation
                     'hang_hoa_giu_ho': '',
+                    'la_hoa_don_tu_may_tinh_tien': 'Có',
                 }
                 rows.append(row)
                 
@@ -1359,6 +1361,7 @@ class PickingExportWizard(models.TransientModel):
                 'don_gia_von': prod.standard_price,
                 'tien_von': prod.standard_price * qty,
                 'hang_hoa_giu_ho': '',
+                'la_hoa_don_tu_may_tinh_tien': 'Có',
             }
             rows.append(row)
         return rows
