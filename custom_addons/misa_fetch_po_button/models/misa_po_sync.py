@@ -609,12 +609,12 @@ class MisaPOSync(models.TransientModel):
         
         stock_mapping = {
                 "HCM": "TSN/Stock",
-                "BENCAM": "KBC/Tồn kho",
+                "BENCAM": "KBC / Tồn kho / KỆ NHẬP CHỜ GIAO",
                 "HIENDUC": "KHD/Tồn kho",
                 "HCM_SHOWROOM": "TSNSR/Stock",
                 "HLV":"HLV/Stock",
-                "BẾN CAM": "KBC/Tồn kho",
-                "BẾNCAM": "KBC/Tồn kho",
+                "BẾN CAM": "KBC / Tồn kho / KỆ NHẬP CHỜ GIAO",
+                "BẾNCAM": "KBC / Tồn kho / KỆ NHẬP CHỜ GIAO",
                 "HIỀN ĐỨC": "KHD/Tồn kho",
                 "ĐÀ NẴNG": "KDN/Tồn kho",
                 "ĐÀNẴNG": "KDN/Tồn kho",
