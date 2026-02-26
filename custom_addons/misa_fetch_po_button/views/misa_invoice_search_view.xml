@@ -155,6 +155,11 @@
                                                 if(invLinkStr &amp;&amp; !invLinkStr.startsWith('http')) {
                                                     invLinkStr = 'https://' + invLinkStr;
                                                 }
+                                                
+                                                var phatHanhBtnHtml = '';
+                                                if (invLinkStr) {
+                                                    phatHanhBtnHtml = `<button class="btn-view" onclick="window.open('${invLinkStr}', '_blank')" style="margin-left:5px; background-color:#17a2b8;">Xem HĐ Phát Hành</button>`;
+                                                }
 
                                                 var html = `
                                                     <tr>
@@ -164,7 +169,7 @@
                                                         <td>${maCqt}</td>
                                                         <td style="text-align:center;">
                                                             <button class="btn-view" onclick="previewPDF(this, '${inv.refid}', '${inv.inv_date}')">Xem HĐ Nháp</button>
-                                                            ${invLinkStr ? `<a class="btn-view" href="${invLinkStr}" target="_blank" style="text-decoration:none; margin-left:5px; background-color:#17a2b8;">Xem HĐ Phát Hành</a>` : ''}
+                                                            ${phatHanhBtnHtml}
                                                         </td>
                                                     </tr>
                                                 `;
