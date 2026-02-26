@@ -99,6 +99,14 @@ class ShopeeWebhookController(http.Controller):
             if ordersn:
                 # 1. Try finding by Shopee Order Ref (Mã đơn hàng)
                 orders = request.env['sale.order'].sudo().search([('shopee_order_ref', '=', ordersn)])
+                
+                # 1b. Fallback to Odoo Order Name (especially useful for manual testing)
+                if not orders:
+                    orders = request.env['sale.order'].sudo().search([('name', '=', ordersn)])
+                    
+                # 1c. Fallback to Client Order Ref
+                if not orders:
+                    orders = request.env['sale.order'].sudo().search([('client_order_ref', '=', ordersn)])
             
             if not orders and tracking_no:
                 # 2. If not found by Order Ref, try finding by Tracking Number (Mã vận đơn) in Stock Picking
