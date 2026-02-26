@@ -89,6 +89,23 @@ class ShopeeWebhookController(http.Controller):
             # Possible keys for status: 'status', 'tracking_status', 'logistics_status'
             status = find_value(data, 'status') or find_value(data, 'tracking_status') or find_value(data, 'logistics_status')
 
+            # Thêm logic mapping tiếng Việt đối với push mechanism code 3 theo yêu cầu
+            push_code = data.get('code')
+            if str(push_code) == '3' and status:
+                status_mapping = {
+                    'UNPAID': 'Chưa thanh toán',
+                    'READY_TO_SHIP': 'Chờ lấy hàng',
+                    'PROCESSED': 'Đã xử lý',
+                    'SHIPPED': 'Đang giao',
+                    'COMPLETED': 'Hoàn thành',
+                    'IN_CANCEL': 'Chờ xác nhận hủy',
+                    'CANCELLED': 'Đã hủy',
+                    'INVOICE_PENDING': 'Chờ xuất HĐ',
+                    'RETRY_SHIP': 'Giao lại',
+                    'PENDING': 'Tạm chờ'
+                }
+                status = status_mapping.get(str(status).upper(), status)
+
             # Possible keys for tracking number: 'tracking_no', 'tracking_number'
             tracking_no = find_value(data, 'tracking_no') or find_value(data, 'tracking_number')
 
