@@ -418,6 +418,22 @@ class MisaApiUtils(models.AbstractModel):
             response = requests.post(url, headers=headers, json=payload)
         return response
 
+    def search_invoice_api(self, query):
+        """API lấy danh sách invoice map từ JS payload."""
+        token = self._get_misa_token()
+        headers = self.env['misa.config'].get_default_headers(token)
+        payload = self.env['misa.config'].get_invoice_search_payload(query)
+        url = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_get/paging_filter_v2"
+        return self._fetch_with_retry(url, headers, payload)
+
+    def preview_invoice_api(self, refid, date):
+        """API lấy link PDF của Invoice."""
+        token = self._get_misa_token()
+        headers = self.env['misa.config'].get_default_headers(token)
+        payload = self.env['misa.config'].get_invoice_preview_payload(refid, date)
+        url = "https://actapp.misa.vn/g2/api/einvoice/v1/einvoice/preview_one?viewType=1&publishType=1&decreeType=3&isFollowSerial=true"
+        return self._fetch_with_retry(url, headers, payload)
+
     def _fetch_login_crm_token(self):
         """Fetch CRM token for MISA"""
         # Sử dụng session để duy trì cookie, bao gồm cả HttpOnly

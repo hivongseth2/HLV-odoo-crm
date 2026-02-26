@@ -21,6 +21,7 @@
         'wizard/misa_tax_update_wizard_views.xml',
         'wizard/misa_tag_update_wizard_views.xml',
         'wizard/misa_purchase_request_sync_views.xml',
+        'views/misa_invoice_search_view.xml',
     ],
 
     'python': [
