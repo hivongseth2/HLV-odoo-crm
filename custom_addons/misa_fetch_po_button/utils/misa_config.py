@@ -216,7 +216,7 @@ class MisaConfig(models.AbstractModel):
             "sort": "[{\"property\":2127,\"desc\":true,\"data_type\":3,\"operand\":1}]",
             "filter": [{ "property": 2127, "value": "2025-12-31T17:00:00.00Z", "operator": 10, "operand": 1, "data_type": 3 }],
             "customFilter": [{ "property": 57, "value": query, "operator": 1, "operand": 1, "childrens": [], "data_type": 1 }],
-            "pageIndex": 1, "pageSize": 10, "view": 41, "loadMode": 2
+            "pageIndex": 1, "pageSize": 100, "view": 41, "loadMode": 2
         }
 
     def get_invoice_preview_payload(self, refid, date):
