@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="misa_invoice_search_template" name="MISA Invoice Search">
+        &lt;!DOCTYPE html&gt;
+        <html>
+            <head>
+                <title>Tra cứu Hóa đơn MISA</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <script type="text/javascript" src="/web/static/lib/jquery/jquery.js"></script>
+                <style>
+                    body { font-family: sans-serif; background: #f4f6f9; margin: 0; padding: 20px; }
+                    .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+                    h2 { color: #0075c0; margin-top: 0; font-weight: 600; }
+                    .search-box { display: flex; gap: 10px; margin-bottom: 20px; }
+                    .search-box input { flex: 1; padding: 12px 15px; border: 1px solid #ddd; border-radius: 6px; font-size: 15px; }
+                    .search-box input:focus { outline: none; border-color: #0075c0; box-shadow: 0 0 0 2px rgba(0,117,192,0.2); }
+                    .btn-search { background: #0075c0; color: white; border: none; padding: 12px 25px; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: bold; transition: background 0.2s; }
+                    .btn-search:hover { background: #005a96; }
+                    .btn-search:disabled { background: #88c1e8; cursor: not-allowed; }
+                    .inv-row { border: 1px solid #eee; padding: 15px; margin-bottom: 15px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; transition: all 0.2s ease; background: #fff; }
+                    .inv-row:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-color: #ddd; transform: translateY(-1px); }
+                    .inv-info h4 { margin: 0 0 8px 0; color: #333; font-size: 16px; }
+                    .inv-info p { margin: 0 0 4px 0; color: #666; font-size: 14px; }
+                    .btn-view { background: #28a745; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold; transition: background 0.2s; }
+                    .btn-view:hover { background: #218838; }
+                    .btn-view:disabled { background: #94d3a2; cursor: not-allowed; }
+                    #loader { display: none; margin: 30px 0; text-align: center; color: #666; font-size: 14px; }
+                    .empty-state { text-align: center; color: #888; margin-top: 40px; font-size: 14px; }
+                    .error-state { text-align: center; color: #d9534f; margin-top: 20px; font-size: 14px; background: #fdf2f2; padding: 10px; border-radius: 4px; }
+                    .highlight { color: #d9534f; font-weight: bold; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h2>Tra cứu Hóa đơn MISA Mẫu Nhanh</h2>
+                    <div class="search-box">
+                        <input type="text" id="misa-search-input" placeholder="Nhập tên khách hàng cần tìm..."/>
+                        <button class="btn-search" id="btn-misa-search">Tìm Kiếm</button>
+                    </div>
+                    <div id="loader">Đang lấy dữ liệu từ MISA, vui lòng chờ...</div>
+                    <div id="misa-result-list">
+                        <div class="empty-state">Nhập tên khách hàng và bấm tìm kiếm để xem kết quả hóa đơn.</div>
+                    </div>
+                </div>
+
+                <script type="text/javascript">
+                    $(document).ready(function() {
+                        $('#btn-misa-search').on('click', function() {
+                            var query = $('#misa-search-input').val().trim();
+                            if (!query) {
+                                alert("Vui lòng nhập từ khóa tìm kiếm.");
+                                return;
+                            }
+                            
+                            $('#misa-result-list').empty();
+                            $('#loader').show();
+                            $('#btn-misa-search').prop('disabled', true);
+                            
+                            $.ajax({
+                                url: '/api/misa/invoice/search',
+                                type: 'POST',
+                                contentType: 'application/json',
+                                data: JSON.stringify({
+                                    "jsonrpc": "2.0",
+                                    "params": {
+                                        "query": query
+                                    }
+                                }),
+                                success: function(response) {
+                                    $('#loader').hide();
+                                    $('#btn-misa-search').prop('disabled', false);
+                                    
+                                    if (response.result &amp;&amp; response.result.status === 'success') {
+                                        var resultData = response.result.data;
+                                        if (resultData.Data &amp;&amp; resultData.Data.PageData &amp;&amp; resultData.Data.PageData.length > 0) {
+                                            resultData.Data.PageData.forEach(function(inv) {
+                                                var dateObj = new Date(inv.inv_date);
+                                                var dateStr = (!isNaN(dateObj)) ? dateObj.toLocaleDateString('vi-VN') : inv.inv_date;
+                                                var amountStr = inv.total_amount ? inv.total_amount.toLocaleString('vi-VN') : '0';
+                                                
+                                                var html = `
+                                                    &lt;div class="inv-row"&gt;
+                                                        &lt;div class="inv-info"&gt;
+                                                            &lt;h4&gt;${inv.account_object_code} - ${inv.account_object_name || 'Không tên'}&lt;/h4&gt;
+                                                            &lt;p&gt;Ngày HĐ: &lt;b&gt;${dateStr}&lt;/b&gt; - Số HĐ: &lt;b&gt;${inv.inv_no || 'N/A'}&lt;/b&gt;&lt;/p&gt;
+                                                            &lt;p&gt;Tổng tiền: &lt;span class="highlight"&gt;${amountStr} đ&lt;/span&gt;&lt;/p&gt;
+                                                            &lt;p&gt;Mã số thuế: ${inv.account_object_tax_code || 'N/A'}&lt;/p&gt;
+                                                        &lt;/div&gt;
+                                                        &lt;button class="btn-view" onclick="previewPDF(this, '${inv.refid}', '${inv.inv_date}')"&gt;Xem PDF&lt;/button&gt;
+                                                    &lt;/div&gt;
+                                                `;
+                                                $('#misa-result-list').append(html);
+                                            });
+                                        } else {
+                                            $('#misa-result-list').html('&lt;div class="empty-state"&gt;Không tìm thấy hóa đơn nào khớp với từ khóa.&lt;/div&gt;');
+                                        }
+                                    } else {
+                                        var errMsg = response.result ? response.result.message : "Lỗi không xác định";
+                                        $('#misa-result-list').html(`&lt;div class="error-state"&gt;Có lỗi xảy ra: ${errMsg}&lt;/div&gt;`);
+                                    }
+                                },
+                                error: function(err) {
+                                    $('#loader').hide();
+                                    $('#btn-misa-search').prop('disabled', false);
+                                    $('#misa-result-list').html('&lt;div class="error-state"&gt;Lỗi kết nối đến máy chủ Odoo.&lt;/div&gt;');
+                                    console.error(err);
+                                }
+                            });
+                        });
+                        
+                        $('#misa-search-input').on('keypress', function (e) {
+                            if (e.which === 13) {
+                                $('#btn-misa-search').click();
+                            }
+                        });
+                    });
+
+                    window.previewPDF = function(btnElem, refid, date) {
+                        var btn = $(btnElem);
+                        var originalText = btn.text();
+                        btn.text('Đang tải...').prop('disabled', true);
+                        
+                        $.ajax({
+                            url: '/api/misa/invoice/preview',
+                            type: 'POST',
+                            contentType: 'application/json',
+                            data: JSON.stringify({
+                                "jsonrpc": "2.0",
+                                "params": {
+                                    "refid": refid,
+                                    "date": date
+                                }
+                            }),
+                            success: function(response) {
+                                btn.text(originalText).prop('disabled', false);
+                                if (response.result &amp;&amp; response.result.status === 'success') {
+                                    var data = response.result.data;
+                                    if (data.Success &amp;&amp; data.Data) {
+                                        window.open(data.Data, '_blank');
+                                    } else {
+                                        alert("Lỗi từ MISA: " + (data.UserMsg || "Không thể lấy link PDF."));
+                                    }
+                                } else {
+                                    alert("Lỗi: " + (response.result ? response.result.message : "Unknown error"));
+                                }
+                            },
+                            error: function(err) {
+                                btn.text(originalText).prop('disabled', false);
+                                alert("Lỗi khi kết nối đến máy chủ Odoo.");
+                            }
+                        });
+                    };
+                </script>
+            </body>
+        </html>
+    </template>
+</odoo>

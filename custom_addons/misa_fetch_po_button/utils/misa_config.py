@@ -209,3 +209,19 @@ class MisaConfig(models.AbstractModel):
             "SessionID": "7781e4ab-f17a-dda6-0af2-c470ee96a470",
             "AISearchKeyword": ""
         }
+
+    def get_invoice_search_payload(self, query):
+        """Payload to search invoices by name."""
+        return {
+            "sort": "[{\"property\":2127,\"desc\":true,\"data_type\":3,\"operand\":1}]",
+            "filter": [{ "property": 2127, "value": "2025-12-31T17:00:00.00Z", "operator": 10, "operand": 1, "data_type": 3 }],
+            "customFilter": [{ "property": 57, "value": query, "operator": 1, "operand": 1, "childrens": [], "data_type": 1 }],
+            "pageIndex": 1, "pageSize": 10, "view": 41, "loadMode": 2
+        }
+
+    def get_invoice_preview_payload(self, refid, date):
+        """Payload to fetch a preview PDF link for a specific invoice."""
+        return [{
+            "RefID": refid, "inv_refid": refid, "RefType": 3560, "invdate": date,
+            "invtemplateno": "1", "invseries": "1C26TLV", "InvoiceTemplateID": "5d966b18-1ca1-404a-af7f-6c1edddf15ce"
+        }]
