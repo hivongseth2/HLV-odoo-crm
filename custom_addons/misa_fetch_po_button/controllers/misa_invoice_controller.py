@@ -6,12 +6,12 @@ _logger = logging.getLogger(__name__)
 
 class MisaInvoiceController(http.Controller):
 
-    @http.route('/search_invoice', type='http', auth='user', website=True)
+    @http.route('/search_invoice', type='http', auth='public', website=True)
     def render_search_invoice_page(self, **kwargs):
         """Render the standalone invoice search page"""
         return request.render('misa_fetch_po_button.misa_invoice_search_template', {})
 
-    @http.route('/api/misa/invoice/search', type='json', auth='user', methods=['POST'])
+    @http.route('/api/misa/invoice/search', type='json', auth='public', methods=['POST'])
     def api_search_misa_invoice(self, query, **kwargs):
         """API proxy to search MISA invoices"""
         try:
@@ -28,7 +28,7 @@ class MisaInvoiceController(http.Controller):
             _logger.exception("Error searching invoice")
             return {"status": "error", "message": str(e)}
 
-    @http.route('/api/misa/invoice/preview', type='json', auth='user', methods=['POST'])
+    @http.route('/api/misa/invoice/preview', type='json', auth='public', methods=['POST'])
     def api_preview_misa_invoice(self, refid, date, **kwargs):
         """API proxy to get MISA invoice PDF link"""
         try:

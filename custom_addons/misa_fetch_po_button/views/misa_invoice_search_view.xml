@@ -9,7 +9,13 @@
                 <script type="text/javascript" src="/web/static/lib/jquery/jquery.js"></script>
                 <style>
                     body { font-family: sans-serif; background: #f4f6f9; margin: 0; padding: 20px; }
-                    .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+                    .login-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+                    .login-box { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); width: 100%; max-width: 400px; text-align: center; }
+                    .login-box h3 { margin-top: 0; color: #0075c0; }
+                    .login-input { width: 100%; padding: 10px; margin: 15px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+                    .btn-login { background: #0075c0; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; }
+                    
+                    .container { max-width: 1200px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); display: none; }
                     h2 { color: #0075c0; margin-top: 0; font-weight: 600; }
                     .search-box { display: flex; gap: 10px; margin-bottom: 20px; }
                     .search-box input { flex: 1; padding: 12px 15px; border: 1px solid #ddd; border-radius: 6px; font-size: 15px; }
@@ -17,21 +23,38 @@
                     .btn-search { background: #0075c0; color: white; border: none; padding: 12px 25px; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: bold; transition: background 0.2s; }
                     .btn-search:hover { background: #005a96; }
                     .btn-search:disabled { background: #88c1e8; cursor: not-allowed; }
-                    .inv-row { border: 1px solid #eee; padding: 15px; margin-bottom: 15px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; transition: all 0.2s ease; background: #fff; }
-                    .inv-row:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-color: #ddd; transform: translateY(-1px); }
-                    .inv-info h4 { margin: 0 0 8px 0; color: #333; font-size: 16px; }
-                    .inv-info p { margin: 0 0 4px 0; color: #666; font-size: 14px; }
-                    .btn-view { background: #28a745; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold; transition: background 0.2s; }
+                    
+                    .data-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+                    .data-table th { background: #e6f3f9; color: #333; font-weight: 600; text-align: left; padding: 12px; border: 1px solid #ddd; }
+                    .data-table td { padding: 10px; border: 1px solid #eee; vertical-align: middle; }
+                    .data-table tr:hover { background: #fdfdfd; }
+                    .data-table .highlight { color: #d9534f; font-weight: bold; }
+                    
+                    .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; display: inline-block; }
+                    .status-gray { color: #666; }
+                    .status-green { color: #28a745; }
+                    .status-yellow { color: #b8912e; }
+                    
+                    .btn-view { background: #28a745; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; transition: background 0.2s; white-space: nowrap; }
                     .btn-view:hover { background: #218838; }
                     .btn-view:disabled { background: #94d3a2; cursor: not-allowed; }
                     #loader { display: none; margin: 30px 0; text-align: center; color: #666; font-size: 14px; }
-                    .empty-state { text-align: center; color: #888; margin-top: 40px; font-size: 14px; }
+                    .empty-state { text-align: center; color: #888; padding: 30px; font-size: 14px; border: 1px dashed #ddd; border-top: none; }
                     .error-state { text-align: center; color: #d9534f; margin-top: 20px; font-size: 14px; background: #fdf2f2; padding: 10px; border-radius: 4px; }
-                    .highlight { color: #d9534f; font-weight: bold; }
                 </style>
             </head>
             <body>
-                <div class="container">
+                <div id="loginOverlay" class="login-overlay">
+                    <div class="login-box">
+                        <h3>Đăng nhập</h3>
+                        <p style="color: #666; font-size: 14px;">Bạn cần nhập mật khẩu để truy cập trang cứu hóa đơn.</p>
+                        <input type="password" id="passInput" class="login-input" placeholder="Mật khẩu..."/>
+                        <button id="btnLogin" class="btn-login">Vào Trang</button>
+                        <p id="loginError" style="color: red; font-size: 13px; margin-top: 10px; display: none;">Sai mật khẩu!</p>
+                    </div>
+                </div>
+
+                <div class="container" id="mainContainer">
                     <h2>Tra cứu Hóa đơn MISA Mẫu Nhanh</h2>
                     <div class="search-box">
                         <input type="text" id="misa-search-input" placeholder="Nhập tên khách hàng cần tìm..."/>
@@ -39,12 +62,56 @@
                     </div>
                     <div id="loader">Đang lấy dữ liệu từ MISA, vui lòng chờ...</div>
                     <div id="misa-result-list">
-                        <div class="empty-state">Nhập tên khách hàng và bấm tìm kiếm để xem kết quả hóa đơn.</div>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Khách hàng</th>
+                                    <th>Ngày HĐ / Số HĐ</th>
+                                    <th>Tổng tiền</th>
+                                    <th>TT lập chứng từ</th>
+                                    <th>TT phát hành hóa đơn</th>
+                                    <th>Mã của CQT</th>
+                                    <th style="text-align:center;">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody">
+                                <tr>
+                                    <td colspan="7">
+                                        <div class="empty-state">Nhập tên khách hàng và bấm tìm kiếm để xem kết quả hóa đơn.</div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
                 <script type="text/javascript">
                     $(document).ready(function() {
+                        // Handle Login
+                        $('#btnLogin').on('click', function() {
+                            var pass = $('#passInput').val();
+                            if (pass === 'hlv@2025') {
+                                $('#loginOverlay').hide();
+                                $('#mainContainer').show();
+                            } else {
+                                $('#loginError').show();
+                            }
+                        });
+                        
+                        $('#passInput').on('keypress', function(e) {
+                            if (e.which === 13) $('#btnLogin').click();
+                        });
+
+                        // Make sure MISA properties matching logic matches typical APIs
+                        function getSafeVal(inv, propsList) {
+                            for (var i = 0; i &lt; propsList.length; i++) {
+                                if (inv[propsList[i]] !== undefined &amp;&amp; inv[propsList[i]] !== null) {
+                                    return inv[propsList[i]];
+                                }
+                            }
+                            return null;
+                        }
+
                         $('#btn-misa-search').on('click', function() {
                             var query = $('#misa-search-input').val().trim();
                             if (!query) {
@@ -52,8 +119,9 @@
                                 return;
                             }
                             
-                            $('#misa-result-list').empty();
+                            $('#tableBody').empty();
                             $('#loader').show();
+                            $('.empty-state').hide();
                             $('#btn-misa-search').prop('disabled', true);
                             
                             $.ajax({
@@ -74,35 +142,49 @@
                                         var resultData = response.result.data;
                                         if (resultData.Data &amp;&amp; resultData.Data.PageData &amp;&amp; resultData.Data.PageData.length > 0) {
                                             resultData.Data.PageData.forEach(function(inv) {
+                                                console.log("Invoice data: ", inv); // Log for user debugging missing columns
                                                 var dateObj = new Date(inv.inv_date);
                                                 var dateStr = (!isNaN(dateObj)) ? dateObj.toLocaleDateString('vi-VN') : inv.inv_date;
                                                 var amountStr = inv.total_amount ? inv.total_amount.toLocaleString('vi-VN') : '0';
                                                 
+                                                var customerName = inv.account_object_name || inv.account_object_code || 'Không tên';
+                                                
+                                                // Map new columns 
+                                                var lapChungTu = getSafeVal(inv, ['voucher_status_name', 'voucher_state_name', 'payment_status_name', 'status_name']) || 'Chưa lập';
+                                                var phatHanhHoaDon = getSafeVal(inv, ['einvoice_status_name', 'publish_status_name', 'inv_status_name']) || 'Chưa phát hành';
+                                                var maCqt = getSafeVal(inv, ['cqt_code', 'mcqt', 'tax_code_cqt', 'cqt_tax_code']) || '';
+                                                
+                                                // Some basic UI color mapping for statuses
+                                                var lapChungTuClass = (lapChungTu.toLowerCase().indexOf('đã lập') >= 0) ? 'status-gray' : 'status-gray';
+                                                var phatHanhHoaDonClass = (phatHanhHoaDon.toLowerCase().indexOf('đã cấp') >= 0 || phatHanhHoaDon.toLowerCase().indexOf('đã phát hành') >= 0) ? 'status-gray' : 'status-green';
+
                                                 var html = `
-                                                    &lt;div class="inv-row"&gt;
-                                                        &lt;div class="inv-info"&gt;
-                                                            &lt;h4&gt;${inv.account_object_code} - ${inv.account_object_name || 'Không tên'}&lt;/h4&gt;
-                                                            &lt;p&gt;Ngày HĐ: &lt;b&gt;${dateStr}&lt;/b&gt; - Số HĐ: &lt;b&gt;${inv.inv_no || 'N/A'}&lt;/b&gt;&lt;/p&gt;
-                                                            &lt;p&gt;Tổng tiền: &lt;span class="highlight"&gt;${amountStr} đ&lt;/span&gt;&lt;/p&gt;
-                                                            &lt;p&gt;Mã số thuế: ${inv.account_object_tax_code || 'N/A'}&lt;/p&gt;
-                                                        &lt;/div&gt;
-                                                        &lt;button class="btn-view" onclick="previewPDF(this, '${inv.refid}', '${inv.inv_date}')"&gt;Xem PDF&lt;/button&gt;
-                                                    &lt;/div&gt;
+                                                    &lt;tr&gt;
+                                                        &lt;td&gt;&lt;b&gt;${inv.account_object_code || ''}&lt;/b&gt;&lt;br/&gt;&lt;span style="color:#555;"&gt;${customerName}&lt;/span&gt;&lt;/td&gt;
+                                                        &lt;td&gt;${dateStr}&lt;br/&gt;&lt;b&gt;${inv.inv_no || 'N/A'}&lt;/b&gt;&lt;/td&gt;
+                                                        &lt;td class="highlight"&gt;${amountStr} đ&lt;/td&gt;
+                                                        &lt;td&gt;&lt;span class="status-badge ${lapChungTuClass}"&gt;${lapChungTu}&lt;/span&gt;&lt;/td&gt;
+                                                        &lt;td&gt;&lt;span class="status-badge ${phatHanhHoaDonClass}"&gt;${phatHanhHoaDon}&lt;/span&gt;&lt;/td&gt;
+                                                        &lt;td&gt;${maCqt}&lt;/td&gt;
+                                                        &lt;td style="text-align:center;"&gt;
+                                                            &lt;button class="btn-view" onclick="previewPDF(this, '${inv.refid}', '${inv.inv_date}')"&gt;Xem PDF&lt;/button&gt;
+                                                        &lt;/td&gt;
+                                                    &lt;/tr&gt;
                                                 `;
-                                                $('#misa-result-list').append(html);
+                                                $('#tableBody').append(html);
                                             });
                                         } else {
-                                            $('#misa-result-list').html('&lt;div class="empty-state"&gt;Không tìm thấy hóa đơn nào khớp với từ khóa.&lt;/div&gt;');
+                                            $('#tableBody').html('&lt;tr&gt;&lt;td colspan="7"&gt;&lt;div class="empty-state"&gt;Không tìm thấy hóa đơn nào khớp với từ khóa.&lt;/div&gt;&lt;/td&gt;&lt;/tr&gt;');
                                         }
                                     } else {
                                         var errMsg = response.result ? response.result.message : "Lỗi không xác định";
-                                        $('#misa-result-list').html(`&lt;div class="error-state"&gt;Có lỗi xảy ra: ${errMsg}&lt;/div&gt;`);
+                                        $('#tableBody').html(`&lt;tr&gt;&lt;td colspan="7"&gt;&lt;div class="error-state"&gt;Có lỗi xảy ra: ${errMsg}&lt;/div&gt;&lt;/td&gt;&lt;/tr&gt;`);
                                     }
                                 },
                                 error: function(err) {
                                     $('#loader').hide();
                                     $('#btn-misa-search').prop('disabled', false);
-                                    $('#misa-result-list').html('&lt;div class="error-state"&gt;Lỗi kết nối đến máy chủ Odoo.&lt;/div&gt;');
+                                    $('#tableBody').html('&lt;tr&gt;&lt;td colspan="7"&gt;&lt;div class="error-state"&gt;Lỗi kết nối đến máy chủ Odoo.&lt;/div&gt;&lt;/td&gt;&lt;/tr&gt;');
                                     console.error(err);
                                 }
                             });
