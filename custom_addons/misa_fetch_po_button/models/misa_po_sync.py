@@ -582,7 +582,7 @@ class MisaPOSync(models.TransientModel):
             ],
             "loadMode": 2,
             "pageIndex": 1,
-            "pageSize": 100,
+            "pageSize": 200,
             "sort": "[{\"property\":4555,\"desc\":false,\"data_type\":4,\"operand\":1}]",
             "summaryColumns": [3488, 3870, 3895, 3896, 308, 5350],
             "useSp": False,
