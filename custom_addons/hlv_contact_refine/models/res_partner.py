@@ -24,10 +24,16 @@ class ResPartner(models.Model):
 
     @api.depends('customer_rank', 'supplier_rank', 'parent_id', 'type')
     def _compute_hlv_filter_tag_ids(self):
-        customer_tag = self.env.ref('hlv_contact_refine.tag_customer', raise_if_not_found=False)
-        vendor_tag = self.env.ref('hlv_contact_refine.tag_vendor', raise_if_not_found=False)
-        main_tag = self.env.ref('hlv_contact_refine.tag_main', raise_if_not_found=False)
-        delivery_tag = self.env.ref('hlv_contact_refine.tag_delivery', raise_if_not_found=False)
+        try:
+            customer_tag = self.env.ref('hlv_contact_refine.tag_customer', raise_if_not_found=False)
+            vendor_tag = self.env.ref('hlv_contact_refine.tag_vendor', raise_if_not_found=False)
+            main_tag = self.env.ref('hlv_contact_refine.tag_main', raise_if_not_found=False)
+            delivery_tag = self.env.ref('hlv_contact_refine.tag_delivery', raise_if_not_found=False)
+        except Exception:
+            # Fallback nếu transaction đã fail hoặc data chưa load
+            for partner in self:
+                partner.hlv_filter_tag_ids = [(5, 0, 0)]
+            return
 
         for partner in self:
             tag_ids = []
