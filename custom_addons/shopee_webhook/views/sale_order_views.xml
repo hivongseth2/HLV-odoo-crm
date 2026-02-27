@@ -7,12 +7,12 @@
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='partner_id']" position="after">
-                <field name="shopee_order_status" readonly="1" widget="badge"
-                       decoration-info="shopee_order_status == 'UNPAID'"
-                       decoration-warning="shopee_order_status in ('READY_TO_SHIP', 'RETRY_SHIP', 'INVOICE_PENDING', 'PENDING')"
-                       decoration-primary="shopee_order_status == 'PROCESSED'"
-                       decoration-success="shopee_order_status in ('SHIPPED', 'COMPLETED')"
-                       decoration-danger="shopee_order_status in ('IN_CANCEL', 'CANCELLED')"/>
+                <field name="shopee_order_status_display" widget="badge"
+                       decoration-info="shopee_order_status_display == 'UNPAID'"
+                       decoration-warning="shopee_order_status_display in ('READY_TO_SHIP', 'RETRY_SHIP', 'INVOICE_PENDING', 'PENDING')"
+                       decoration-primary="shopee_order_status_display == 'PROCESSED'"
+                       decoration-success="shopee_order_status_display in ('SHIPPED', 'COMPLETED')"
+                       decoration-danger="shopee_order_status_display in ('IN_CANCEL', 'CANCELLED')"/>
             </xpath>
         </field>
     </record>
@@ -24,12 +24,12 @@
         <field name="inherit_id" ref="sale.view_quotation_tree_with_onboarding"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='state']" position="before">
-                <field name="shopee_order_status" widget="badge" optional="show"
-                       decoration-info="shopee_order_status == 'UNPAID'"
-                       decoration-warning="shopee_order_status in ('READY_TO_SHIP', 'RETRY_SHIP', 'INVOICE_PENDING', 'PENDING')"
-                       decoration-primary="shopee_order_status == 'PROCESSED'"
-                       decoration-success="shopee_order_status in ('SHIPPED', 'COMPLETED')"
-                       decoration-danger="shopee_order_status in ('IN_CANCEL', 'CANCELLED')"/>
+                <field name="shopee_order_status_display" widget="badge" optional="show"
+                       decoration-info="shopee_order_status_display == 'UNPAID'"
+                       decoration-warning="shopee_order_status_display in ('READY_TO_SHIP', 'RETRY_SHIP', 'INVOICE_PENDING', 'PENDING')"
+                       decoration-primary="shopee_order_status_display == 'PROCESSED'"
+                       decoration-success="shopee_order_status_display in ('SHIPPED', 'COMPLETED')"
+                       decoration-danger="shopee_order_status_display in ('IN_CANCEL', 'CANCELLED')"/>
             </xpath>
         </field>
     </record>
