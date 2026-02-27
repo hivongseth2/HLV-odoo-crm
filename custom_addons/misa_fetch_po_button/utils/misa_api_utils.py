@@ -1703,7 +1703,49 @@ class MisaApiUtils(models.AbstractModel):
             # Không raise lỗi để tránh ảnh hưởng response MISA ID nếu MISA tạo thành công rồi
 
         return misa_id
-    
+    def update_product_field_misa(self, misa_id, field_type, new_value, old_value):
+        """
+        Cập nhật từng trường (name hoặc code) lên MISA CRM
+        field_type: 'name' hoặc 'code'
+        """
+        if not misa_id:
+            return False
+
+        misa_config = self.env['misa.config']
+        token = self._fetch_login_crm_token()
+        if not token:
+            _logger.error("Lỗi Token MISA khi cập nhật sản phẩm")
+            return False
+
+        headers = misa_config.get_crm_header(token)
+        headers.update({
+            "LayoutCode": "product", 
+            "X-Misa-Language": "vi-VN"
+        })
+
+        if field_type == 'name':
+            payload = misa_config.get_misa_update_product_name_payload(misa_id, new_value, old_value)
+        elif field_type == 'code':
+            payload = misa_config.get_misa_update_product_code_payload(misa_id, new_value, old_value)
+        else:
+            return False
+
+        url = "https://amisapp.misa.vn/crm/g2/api/business/product"
+        
+        session = self._get_retry_session()
+        try:
+            res = session.put(url, headers=headers, json=payload, timeout=20)
+            res_json = res.json()
+            if res.ok and res_json.get("Success"):
+                _logger.info("✅ Đã cập nhật %s cho MISA ID %s", field_type, misa_id)
+                return True
+            else:
+                _logger.warning("⚠️ Lỗi MISA khi cập nhật %s: %s", field_type, res.text)
+                return False
+        except Exception as e:
+            _logger.error("❌ Exception MISA update %s: %s", field_type, e)
+            return False
+
     # =========================================================================
     # API SEARCH PRODUCT BY NAME
     # =========================================================================

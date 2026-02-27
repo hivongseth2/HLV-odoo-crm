@@ -259,3 +259,51 @@ class MisaConfig(models.AbstractModel):
             "RefID": refid, "inv_refid": refid, "RefType": 3560, "invdate": date,
             "invtemplateno": "1", "invseries": "1C26TLV", "InvoiceTemplateID": "5d966b18-1ca1-404a-af7f-6c1edddf15ce"
         }]
+
+    def get_misa_update_product_name_payload(self, misa_id, new_value, old_value):
+        return {
+            "FieldName": "ProductName",
+            "PrimaryKeyName": "ID",
+            "PrimaryKeyValue": str(misa_id),
+            "Id": 2128,
+            "Value": new_value,
+            "OldValue": old_value,
+            "TypeControl": 1,
+            "FormLayoutID": 45,
+            "LayoutCode": "Product",
+            "Lable": "Tên hàng hóa",
+            "Text": "Tên hàng hóa",
+            "IsRequired": True,
+            "IsNotZero": False,
+            "IsSensitive": False,
+            "IsUnique": False,
+            "MaxLength": 500,
+            "CustomRoundDigit": 2,
+            "DecimalLength": 2,
+            "ComparedValue": None,
+            "ModuleType": None
+        }
+
+    def get_misa_update_product_code_payload(self, misa_id, new_value, old_value):
+        return {
+            "FieldName": "ProductCode",
+            "PrimaryKeyName": "ID",
+            "PrimaryKeyValue": str(misa_id),
+            "Id": 2127,
+            "Value": new_value,
+            "OldValue": old_value,
+            "TypeControl": 10,
+            "FormLayoutID": 45,
+            "LayoutCode": "Product",
+            "Lable": "Mã hàng hóa",
+            "Text": "Mã hàng hóa",
+            "IsRequired": False,
+            "IsNotZero": False,
+            "IsSensitive": False,
+            "IsUnique": True,
+            "MaxLength": 255,
+            "CustomRoundDigit": 2,
+            "DecimalLength": 2,
+            "ComparedValue": None,
+            "ModuleType": None
+        }
