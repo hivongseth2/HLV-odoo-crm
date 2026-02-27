@@ -321,8 +321,8 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         """Tạo sale.order từ 1 order trong Shopee response."""
         shop = self.shop_id
 
-        # 1. Tạo / tìm partner
-        partner = self._find_or_create_partner(order_data)
+        # 1. Tạo / tìm partner + địa chỉ giao hàng
+        partner, delivery_address = self._find_or_create_partner(order_data)
 
         # 2. Tạo sale.order
         so_vals = {
@@ -330,6 +330,8 @@ class ShopeeOrderFetchWizard(models.TransientModel):
             'shopee_order_ref': order_data.get('order_sn', ''),
             'shopee_order_status': order_data.get('order_status', ''),
         }
+        if delivery_address:
+            so_vals['partner_shipping_id'] = delivery_address.id
         if shop:
             so_vals['shopee_shop_id'] = shop.id
         so = self.env['sale.order'].sudo().create(so_vals)
@@ -350,43 +352,78 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         return so
 
     def _find_or_create_partner(self, order_data):
-        """Tìm hoặc tạo res.partner từ buyer_username + recipient_address."""
+        """Tìm hoặc tạo res.partner từ buyer_username.
+        Tạo thêm địa chỉ giao hàng (type=delivery) từ recipient_address."""
         Partner = self.env['res.partner'].sudo()
 
+        buyer_username = order_data.get('buyer_username', '') or 'Khách Shopee'
         addr = order_data.get('recipient_address', {}) or {}
-        buyer_username = order_data.get('buyer_username', '')
 
-        # Tên: ưu tiên recipient name, fallback buyer_username
-        name = addr.get('name') or buyer_username or 'Khách Shopee'
+        # Tìm partner theo buyer_username
+        partner = Partner.search([('name', '=', buyer_username)], limit=1)
+
+        # Tạo mới nếu chưa có
+        if not partner:
+            partner = Partner.create({
+                'name': buyer_username,
+                'customer_rank': 1,
+            })
+            _logger.info("Shopee: Đã tạo liên hệ '%s' (ID: %s)", partner.name, partner.id)
+
+        # Tạo địa chỉ giao hàng (child contact) nếu có recipient_address
+        delivery_address = self._find_or_create_delivery_address(partner, addr)
+
+        return partner, delivery_address
+
+    def _find_or_create_delivery_address(self, parent_partner, addr):
+        """Tạo địa chỉ giao hàng (type=delivery) dưới partner chính."""
+        if not addr:
+            return False
+
+        Partner = self.env['res.partner'].sudo()
+
+        recipient_name = addr.get('name', '')
         phone = addr.get('phone', '')
+        full_address = addr.get('full_address', '')
 
-        # Tìm partner theo phone (nếu có phone)
+        # Nếu tất cả đều bị mask (****) thì bỏ qua
+        if all(v in ('', '****') for v in [recipient_name, phone, full_address]):
+            return False
+
+        # Tìm delivery address đã tồn tại dưới partner
+        domain = [
+            ('parent_id', '=', parent_partner.id),
+            ('type', '=', 'delivery'),
+        ]
         if phone and phone != '****':
-            existing = Partner.search([('phone', '=', phone)], limit=1)
-            if existing:
-                return existing
-
-        # Tìm theo tên buyer_username (fallback)
-        if buyer_username:
-            existing = Partner.search([('name', '=', buyer_username)], limit=1)
-            if existing:
-                return existing
+            domain.append(('phone', '=', phone))
+        existing = Partner.search(domain, limit=1)
+        if existing:
+            return existing
 
         # Tạo mới
-        partner_vals = {
-            'name': name,
-            'customer_rank': 1,
+        delivery_vals = {
+            'parent_id': parent_partner.id,
+            'type': 'delivery',
+            'name': recipient_name if recipient_name and recipient_name != '****' else parent_partner.name,
         }
         if phone and phone != '****':
-            partner_vals['phone'] = phone
-        if addr.get('full_address') and addr['full_address'] != '****':
-            partner_vals['street'] = addr['full_address']
+            delivery_vals['phone'] = phone
+        if full_address and full_address != '****':
+            delivery_vals['street'] = full_address
         if addr.get('city') and addr['city'] != '****':
-            partner_vals['city'] = addr['city']
+            delivery_vals['city'] = addr['city']
+        if addr.get('district') and addr['district'] != '****':
+            delivery_vals['street2'] = addr['district']
+        if addr.get('state') and addr['state'] != '****':
+            delivery_vals['city'] = (delivery_vals.get('city', '') + ', ' + addr['state']).strip(', ')
 
-        partner = Partner.create(partner_vals)
-        _logger.info("Shopee: Đã tạo liên hệ '%s' (ID: %s)", partner.name, partner.id)
-        return partner
+        delivery = Partner.create(delivery_vals)
+        _logger.info(
+            "Shopee: Đã tạo địa chỉ giao hàng cho '%s' (ID: %s)",
+            parent_partner.name, delivery.id,
+        )
+        return delivery
 
     def _find_or_create_shopee_item(self, item_data, shop):
         """Tìm hoặc tạo shopee.item từ item_data. Trả về product.product."""
