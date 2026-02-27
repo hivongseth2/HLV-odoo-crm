@@ -524,13 +524,20 @@ class ShopeeOrderFetchWizard(models.TransientModel):
             'price_unit': original_price,
             'discount': discount,
         }
-        self.env['sale.order.line'].sudo().create(line_vals)
+
+        # Lấy thuế từ sản phẩm đã cấu hình trong Odoo
+        if product.taxes_id:
+            fiscal_position = so.fiscal_position_id
+            taxes = fiscal_position.map_tax(product.taxes_id) if fiscal_position else product.taxes_id
+            line_vals['tax_id'] = [(6, 0, taxes.ids)]
+
+        return self.env['sale.order.line'].sudo().create(line_vals)
 
     def _apply_escrow_voucher(self, so, escrow_data):
         """Áp dụng shopee_voucher từ escrow response.
-        Phân bổ voucher vào chiết khấu của các dòng sản phẩm theo tỷ lệ."""
+        Dùng buyer_total_amount làm tổng chính xác, phân bổ vào chiết khấu các dòng."""
         buyer_payment = escrow_data.get('buyer_payment_info', {})
-        shopee_voucher = buyer_payment.get('shopee_voucher', 0)  # giá trị âm, VD: -20900
+        shopee_voucher = buyer_payment.get('shopee_voucher', 0)  # giá trị âm
         seller_voucher = buyer_payment.get('seller_voucher', 0)
 
         total_voucher = abs((shopee_voucher or 0) + (seller_voucher or 0))
@@ -538,36 +545,56 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         if total_voucher <= 0:
             return
 
-        # Lấy tất cả order lines
+        # Lấy tất cả order lines có giá
         lines = so.order_line.filtered(lambda l: not l.display_type and l.price_unit > 0)
         if not lines:
             return
 
-        # Tính tổng giá trị sau chiết khấu hiện tại
-        total_subtotal = sum(
+        # Tính tổng giá trị sau chiết khấu hiện tại (trước voucher)
+        total_before_voucher = sum(
             l.price_unit * l.product_uom_qty * (1 - l.discount / 100)
             for l in lines
         )
 
-        if total_subtotal <= 0:
+        if total_before_voucher <= 0:
             return
 
-        # Phân bổ voucher theo tỷ lệ vào chiết khấu của từng dòng
-        for line in lines:
-            line_subtotal = line.price_unit * line.product_uom_qty * (1 - line.discount / 100)
-            line_share = (line_subtotal / total_subtotal) * total_voucher
+        target_total = total_before_voucher - total_voucher
+        if target_total < 0:
+            target_total = 0
 
-            # Tính chiết khấu mới: giá sau CK cũ - phần voucher
-            new_subtotal = line_subtotal - line_share
-            if line.price_unit * line.product_uom_qty > 0:
-                new_discount = round(
-                    (1 - new_subtotal / (line.price_unit * line.product_uom_qty)) * 100, 2
+        # Phân bổ voucher theo số tiền chính xác (VNĐ nguyên), không qua %
+        voucher_distributed = 0
+        lines_list = list(lines)
+
+        for i, line in enumerate(lines_list):
+            line_total = line.price_unit * line.product_uom_qty
+            if line_total <= 0:
+                continue
+
+            line_subtotal_before = line_total * (1 - line.discount / 100)
+
+            if i < len(lines_list) - 1:
+                # Phân bổ theo tỷ lệ, làm tròn xuống
+                line_voucher_share = int(
+                    (line_subtotal_before / total_before_voucher) * total_voucher
                 )
-                line.sudo().write({'discount': new_discount})
+            else:
+                # Dòng cuối: lấy phần còn lại để đảm bảo tổng chính xác
+                line_voucher_share = total_voucher - voucher_distributed
+
+            voucher_distributed += line_voucher_share
+
+            # Tính chiết khấu mới từ số tiền chính xác
+            new_subtotal = line_subtotal_before - line_voucher_share
+            new_discount = round(
+                (1 - new_subtotal / line_total) * 100, 2
+            )
+            line.sudo().write({'discount': new_discount})
 
         _logger.info(
-            "Shopee: Đã phân bổ voucher -%s vào chiết khấu các dòng của đơn %s",
-            total_voucher, so.name,
+            "Shopee: Đã phân bổ voucher -%s vào chiết khấu các dòng của đơn %s (target: %s)",
+            total_voucher, so.name, target_total,
         )
 
     # ──────────────────────────────────────────────────
