@@ -210,13 +210,47 @@ class MisaConfig(models.AbstractModel):
             "AISearchKeyword": ""
         }
 
-    def get_invoice_search_payload(self, query):
-        """Payload to search invoices by name."""
+    def get_invoice_request_payload(self, request_no):
+        import datetime
+        now_iso = datetime.datetime.utcnow().isoformat() + "Z"
         return {
-            "sort": "[{\"property\":2127,\"desc\":true,\"data_type\":3,\"operand\":1}]",
-            "filter": [{ "property": 2127, "value": "2025-12-31T17:00:00.00Z", "operator": 10, "operand": 1, "data_type": 3 }],
-            "customFilter": [{ "property": 57, "value": query, "operator": 1, "operand": 1, "childrens": [], "data_type": 1 }],
-            "pageIndex": 1, "pageSize": 100, "view": 41, "loadMode": 2
+            "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4008,\"desc\":true,\"data_type\":1,\"operand\":1}]",
+            "filter": [
+                { "property": 3972, "value": "2025-12-31T17:00:00.00Z", "operator": 10, "operand": 1, "data_type": 3 },
+                { "property": 3972, "value": now_iso, "operator": 12, "operand": 1, "data_type": 3 }
+            ],
+            "customFilter": [{
+                "property": 4008, "value": request_no, "operator": 1, "operand": 1, "childrens": [
+                    { "property": 4177, "value": request_no, "operator": 1, "operand": 2, "data_type": 1 },
+                    { "property": 3342, "value": request_no, "operator": 1, "operand": 2, "data_type": 1 },
+                    { "property": 57, "value": request_no, "operator": 1, "operand": 2, "data_type": 1 },
+                    { "property": 2656, "value": request_no, "operator": 1, "operand": 2, "data_type": 1 },
+                    { "property": 2189, "value": request_no, "operator": 1, "operand": 2, "data_type": 1 },
+                    { "property": 5150, "value": request_no, "operator": 1, "operand": 2, "data_type": 1 },
+                    { "property": 3295, "value": request_no, "operator": 1, "operand": 2, "data_type": 1 }
+                ], "data_type": 1
+            }],
+            "pageIndex": 1, "pageSize": 10, "useSp": False, "view": 65, "summaryColumns": [5127, 5069, 5142, 5047]
+        }
+
+    def get_invoice_full_search_payload(self, target_customer):
+        import datetime
+        now_iso = datetime.datetime.utcnow().isoformat() + "Z"
+        return {
+            "sort": "[{\"property\":2127,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":2189,\"desc\":true,\"data_type\":1,\"operand\":1},{\"property\":1472,\"desc\":true,\"data_type\":4,\"operand\":1},{\"property\":1058,\"desc\":true,\"data_type\":3,\"operand\":1}]",
+            "filter": [
+                { "property": 2127, "value": "2025-12-31T17:00:00.00Z", "operator": 10, "operand": 1, "data_type": 3 },
+                { "property": 2127, "value": now_iso, "operator": 12, "operand": 1, "data_type": 3 }
+            ],
+            "customFilter": [
+                { "property": 57, "value": target_customer, "operator": 1, "operand": 1, "childrens": [], "data_type": 1 },
+                { "property": 1457, "value": None, "operator": 15, "operand": 1, "childrens": [
+                    { "property": 1457, "value": None, "operator": 16, "operand": 2, "childrens": [
+                        { "property": 3811, "value": 1, "operator": 10, "operand": 1, "data_type": 4 }
+                    ]}
+                ]}
+            ],
+            "pageIndex": 1, "pageSize": 20, "useSp": False, "view": 41, "summaryColumns": [5126, 5068, 5141, 5039], "loadMode": 2
         }
 
     def get_invoice_preview_payload(self, refid, date):

@@ -418,12 +418,58 @@ class MisaApiUtils(models.AbstractModel):
         return response
 
     def search_invoice_api(self, query):
-        """API lấy danh sách invoice map từ JS payload."""
+        """API tìm hóa đơn theo mã Đề nghị xuất thay vì Tên Khách Hàng (3 bước)."""
         token = self._get_misa_token()
         headers = self.env['misa.config'].get_default_headers(token)
-        payload = self.env['misa.config'].get_invoice_search_payload(query)
-        url = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_get/paging_filter_v2"
-        return self._fetch_with_retry(url, headers, payload)
+        
+        # Bước 1: Tìm Đề nghị xuất hóa đơn
+        url_req = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_request/paging_filter_v2"
+        payload_req = self.env['misa.config'].get_invoice_request_payload(query)
+        resp_req = self._fetch_with_retry(url_req, headers, payload_req)
+        
+        if resp_req.status_code != 200:
+            return resp_req
+            
+        data_req = resp_req.json()
+        page_data_req = data_req.get("Data", {}).get("PageData", [])
+        
+        class MockResponse:
+            status_code = 200
+            def __init__(self, data):
+                self._data = data
+            def json(self):
+                return self._data
+
+        if not page_data_req:
+            return MockResponse({"Success": True, "Data": {"PageData": []}})
+            
+        req_info = page_data_req[0]
+        target_req_id = req_info.get("refid")
+        target_customer = req_info.get("account_object_name")
+        
+        if not target_customer or not target_req_id:
+            return MockResponse({"Success": True, "Data": {"PageData": []}})
+            
+        # Bước 2: Tìm danh sách Hóa đơn của khách hàng này
+        url_inv = "https://actapp.misa.vn/g2/api/sa/v1/sa_invoice_get/paging_filter_v2"
+        payload_inv = self.env['misa.config'].get_invoice_full_search_payload(target_customer)
+        resp_inv = self._fetch_with_retry(url_inv, headers, payload_inv)
+        
+        if resp_inv.status_code != 200:
+            return resp_inv
+            
+        data_inv = resp_inv.json()
+        page_data_inv = data_inv.get("Data", {}).get("PageData", [])
+        
+        # Bước 3: Lọc lấy các hóa đơn thuộc về Đề nghị xuất này
+        matched_invs = [inv for inv in page_data_inv if inv.get("sa_invoice_request_refid") == target_req_id]
+        
+        # Cập nhật lại PageData với kết quả đã lọc
+        if "Data" not in data_inv:
+            data_inv["Data"] = {}
+        data_inv["Data"]["PageData"] = matched_invs
+        
+        return MockResponse(data_inv)
 
     def preview_invoice_api(self, refid, date):
         """API lấy link PDF của Invoice."""
