@@ -314,6 +314,73 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         }
 
     # ──────────────────────────────────────────────────
+    #  Action: Cập nhật giá từ Escrow
+    # ──────────────────────────────────────────────────
+
+    def action_update_price_from_escrow(self):
+        """Gọi Shopee API get_escrow_detail hoặc đọc từ mock json để cập nhật lại giá cho đơn hàng đã tồn tại."""
+        self.ensure_one()
+
+        sns = self._parse_order_sn_list()
+
+        # Parse Escrow JSON (tùy chọn) trước
+        mock_escrow_data = None
+        if self.mock_escrow_json:
+            try:
+                escrow_raw = json.loads(self.mock_escrow_json)
+                mock_escrow_data = escrow_raw.get('response', escrow_raw)
+            except json.JSONDecodeError as e:
+                raise UserError(_("Mock Escrow JSON không hợp lệ:\n%s") % str(e))
+
+        creds = None
+        if not mock_escrow_data:
+             creds = self._get_shopee_credentials()
+
+        updated_orders = []
+        skipped_orders = []
+
+        for order_sn in sns:
+            so = self.env['sale.order'].sudo().search([
+                ('shopee_order_ref', '=', order_sn)
+            ], limit=1)
+
+            if not so:
+                skipped_orders.append(f"{order_sn} (Không tìm thấy đơn hàng trong hệ thống)")
+                continue
+
+            try:
+                escrow_data = mock_escrow_data
+                if not escrow_data:
+                    escrow_data = self._call_escrow_api(creds, order_sn)
+                
+                if escrow_data:
+                    self._apply_escrow_voucher(so, escrow_data)
+                    updated_orders.append(f"{order_sn} → Đã cập nhật giá (Escrow)")
+                else:
+                    skipped_orders.append(f"{order_sn} (Không có dữ liệu Escrow từ Shopee)")
+            except Exception as e:
+                _logger.error("Shopee: Lỗi cập nhật giá Escrow cho %s: %s", order_sn, str(e), exc_info=True)
+                skipped_orders.append(f"{order_sn} (LỖI: {str(e)})")
+
+        lines = []
+        if updated_orders:
+            lines.append("✅ ĐÃ CẬP NHẬT GIÁ:")
+            lines.extend(f"  • {o}" for o in updated_orders)
+        if skipped_orders:
+            lines.append("\n⏭️ BỎ QUA:")
+            lines.extend(f"  • {o}" for o in skipped_orders)
+
+        self.sudo().result_display = '\n'.join(lines)
+
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': self._name,
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
+    # ──────────────────────────────────────────────────
     #  Order creation helpers
     # ──────────────────────────────────────────────────
 

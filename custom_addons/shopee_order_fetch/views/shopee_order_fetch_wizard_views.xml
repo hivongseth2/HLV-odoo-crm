@@ -28,6 +28,10 @@
                             string="🧪 Test tạo đơn (Mock)"
                             type="object"
                             class="btn-warning"/>
+                    <button name="action_update_price_from_escrow"
+                            string="💰 Cập nhật giá từ Escrow"
+                            type="object"
+                            class="btn-secondary"/>
                     <button string="Đóng" class="btn-secondary" special="cancel"/>
                 </footer>
                 <separator string="Test Mock Data (Staging)"/>
