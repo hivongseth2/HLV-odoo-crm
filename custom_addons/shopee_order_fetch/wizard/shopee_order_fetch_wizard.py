@@ -324,7 +324,12 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         # 1. Tạo / tìm partner + địa chỉ giao hàng
         partner, delivery_address = self._find_or_create_partner(order_data)
 
-        # 2. Tạo sale.order
+        # 2. Tìm kho TSN mặc định
+        warehouse = self.env['stock.warehouse'].sudo().search(
+            [('code', '=', 'TSN')], limit=1
+        )
+
+        # 3. Tạo sale.order
         so_vals = {
             'partner_id': partner.id,
             'shopee_order_ref': order_data.get('order_sn', ''),
@@ -334,16 +339,31 @@ class ShopeeOrderFetchWizard(models.TransientModel):
             so_vals['partner_shipping_id'] = delivery_address.id
         if shop:
             so_vals['shopee_shop_id'] = shop.id
+        if warehouse:
+            so_vals['warehouse_id'] = warehouse.id
         so = self.env['sale.order'].sudo().create(so_vals)
 
-        # 3. Tạo sale.order.line từ item_list
+        # 4. Tạo sale.order.line từ item_list
         item_list = order_data.get('item_list', [])
         for item_data in item_list:
             self._create_order_line(so, item_data, shop)
 
-        # 4. Áp dụng shopee_voucher từ escrow (nếu có)
+        # 5. Áp dụng shopee_voucher từ escrow (phân bổ vào chiết khấu các dòng)
         if escrow_data:
             self._apply_escrow_voucher(so, escrow_data)
+
+        # 6. Xác nhận báo giá → tạo phiếu giao hàng (picking)
+        try:
+            so.sudo().action_confirm()
+            _logger.info(
+                "Shopee: Đã xác nhận đơn hàng %s → picking đã tạo",
+                so.name,
+            )
+        except Exception as e:
+            _logger.warning(
+                "Shopee: Không thể xác nhận đơn %s: %s",
+                so.name, str(e),
+            )
 
         _logger.info(
             "Shopee: Đã tạo đơn hàng %s từ order_sn=%s",
@@ -508,34 +528,45 @@ class ShopeeOrderFetchWizard(models.TransientModel):
 
     def _apply_escrow_voucher(self, so, escrow_data):
         """Áp dụng shopee_voucher từ escrow response.
-        Tạo dòng giảm giá nếu có voucher."""
+        Phân bổ voucher vào chiết khấu của các dòng sản phẩm theo tỷ lệ."""
         buyer_payment = escrow_data.get('buyer_payment_info', {})
         shopee_voucher = buyer_payment.get('shopee_voucher', 0)  # giá trị âm, VD: -20900
-        seller_voucher = buyer_payment.get('seller_voucher', 0)  # giá trị âm nếu có
+        seller_voucher = buyer_payment.get('seller_voucher', 0)
 
-        total_voucher = (shopee_voucher or 0) + (seller_voucher or 0)
+        total_voucher = abs((shopee_voucher or 0) + (seller_voucher or 0))
 
-        if total_voucher >= 0:
-            # Không có voucher giảm giá
+        if total_voucher <= 0:
             return
 
-        # Tạo dòng giảm giá (voucher là số âm → price_unit = giá trị âm)
-        voucher_parts = []
-        if shopee_voucher and shopee_voucher < 0:
-            voucher_parts.append(f"Shopee Voucher: {shopee_voucher:,.0f}")
-        if seller_voucher and seller_voucher < 0:
-            voucher_parts.append(f"Seller Voucher: {seller_voucher:,.0f}")
-        voucher_name = "Giảm giá Voucher Shopee (" + ', '.join(voucher_parts) + ")"
+        # Lấy tất cả order lines
+        lines = so.order_line.filtered(lambda l: not l.display_type and l.price_unit > 0)
+        if not lines:
+            return
 
-        self.env['sale.order.line'].sudo().create({
-            'order_id': so.id,
-            'name': voucher_name,
-            'product_uom_qty': 1,
-            'price_unit': total_voucher,  # giá trị âm → trừ tiền
-            'display_type': False,
-        })
+        # Tính tổng giá trị sau chiết khấu hiện tại
+        total_subtotal = sum(
+            l.price_unit * l.product_uom_qty * (1 - l.discount / 100)
+            for l in lines
+        )
+
+        if total_subtotal <= 0:
+            return
+
+        # Phân bổ voucher theo tỷ lệ vào chiết khấu của từng dòng
+        for line in lines:
+            line_subtotal = line.price_unit * line.product_uom_qty * (1 - line.discount / 100)
+            line_share = (line_subtotal / total_subtotal) * total_voucher
+
+            # Tính chiết khấu mới: giá sau CK cũ - phần voucher
+            new_subtotal = line_subtotal - line_share
+            if line.price_unit * line.product_uom_qty > 0:
+                new_discount = round(
+                    (1 - new_subtotal / (line.price_unit * line.product_uom_qty)) * 100, 2
+                )
+                line.sudo().write({'discount': new_discount})
+
         _logger.info(
-            "Shopee: Đã áp dụng voucher %s cho đơn %s",
+            "Shopee: Đã phân bổ voucher -%s vào chiết khấu các dòng của đơn %s",
             total_voucher, so.name,
         )
 
