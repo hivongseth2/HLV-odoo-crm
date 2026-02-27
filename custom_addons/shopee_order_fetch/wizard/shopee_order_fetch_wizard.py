@@ -523,18 +523,7 @@ class ShopeeOrderFetchWizard(models.TransientModel):
             'price_unit': price_unit,
         }
 
-        # Lấy thuế: ưu tiên thuế sản phẩm → fallback thuế mặc định công ty
-        taxes = product.taxes_id
-        if not taxes:
-            default_tax = so.company_id.account_sale_tax_id
-            if default_tax:
-                taxes = default_tax
-
-        if taxes:
-            fiscal_position = so.fiscal_position_id
-            if fiscal_position:
-                taxes = fiscal_position.map_tax(taxes)
-            line_vals['tax_id'] = [(6, 0, taxes.ids)]
+        # Shopee giá đã bao gồm thuế → không gán thêm tax_id
 
         return self.env['sale.order.line'].sudo().create(line_vals)
 
