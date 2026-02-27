@@ -56,6 +56,11 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         string='Mock JSON - Escrow Detail',
         help="Dán JSON response từ Shopee get_escrow_detail API vào đây để áp dụng voucher.",
     )
+    sale_order_ids = fields.Many2many(
+        'sale.order',
+        string='Mã đơn Odoo (thủ công)',
+        help="Chọn các đơn Odoo (ví dụ S00001) tương ứng với các mã Shopee ở trên (theo thứ tự từ trên xuống). Dùng khi mã Odoo chưa được lưu mã Shopee (shopee_order_ref) và không tự tìm được."
+    )
 
     # ──────────────────────────────────────────────────
     #  Helpers
@@ -338,15 +343,21 @@ class ShopeeOrderFetchWizard(models.TransientModel):
 
         updated_orders = []
         skipped_orders = []
+        manual_orders = list(self.sale_order_ids)
 
-        for order_sn in sns:
+        for i, order_sn in enumerate(sns):
             so = self.env['sale.order'].sudo().search([
                 ('shopee_order_ref', '=', order_sn)
             ], limit=1)
 
             if not so:
-                skipped_orders.append(f"{order_sn} (Không tìm thấy đơn hàng trong hệ thống)")
-                continue
+                if i < len(manual_orders):
+                    so = manual_orders[i]
+                    so.sudo().write({'shopee_order_ref': order_sn})
+                    _logger.info("Shopee: Đã gán mã Shopee %s cho đơn Odoo %s", order_sn, so.name)
+                else:
+                    skipped_orders.append(f"{order_sn} (Không tìm thấy đơn hàng trong hệ thống)")
+                    continue
 
             try:
                 escrow_data = mock_escrow_data
