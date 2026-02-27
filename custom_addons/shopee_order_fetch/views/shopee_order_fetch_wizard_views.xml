@@ -19,6 +19,10 @@
                     <button name="action_fetch_order"
                             string="🔍 Lấy thông tin đơn hàng"
                             type="object"
+                            class="btn-secondary"/>
+                    <button name="action_fetch_and_create_order"
+                            string="🛒 Tạo đơn hàng"
+                            type="object"
                             class="btn-primary"/>
                     <button string="Đóng" class="btn-secondary" special="cancel"/>
                 </footer>

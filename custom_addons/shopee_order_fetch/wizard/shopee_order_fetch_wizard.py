@@ -49,11 +49,14 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         readonly=True,
     )
 
+    # ──────────────────────────────────────────────────
+    #  Helpers
+    # ──────────────────────────────────────────────────
+
     def _parse_order_sn_list(self):
         """Parse order SN list từ input text (hỗ trợ nhiều dòng hoặc dấu phẩy)."""
         self.ensure_one()
         raw = self.order_sn_list or ''
-        # Hỗ trợ cả xuống dòng lẫn dấu phẩy
         sns = []
         for line in raw.replace('\r', '').split('\n'):
             for sn in line.split(','):
@@ -76,11 +79,9 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         ).hexdigest()
         return sign
 
-    def action_fetch_order(self):
-        """Gọi Shopee API get_order_detail và hiển thị kết quả. Không ghi DB."""
+    def _get_shopee_credentials(self):
+        """Đọc credentials từ shop đã chọn. Trả về dict."""
         self.ensure_one()
-
-        # --- 1. Đọc credentials từ shop ---
         shop = self.shop_id
         if not shop:
             raise UserError(_("Vui lòng chọn Shop Shopee."))
@@ -95,7 +96,6 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         partner_id = getattr(account, 'partner_identifier', False)
         partner_key = getattr(account, 'partner_key', False)
 
-        # Validate
         missing = []
         if not partner_id:
             missing.append('partner_identifier (Shopee Account)')
@@ -110,30 +110,34 @@ class ShopeeOrderFetchWizard(models.TransientModel):
                 _("Thiếu thông tin cấu hình:\n%s") % '\n'.join(f"- {m}" for m in missing)
             )
 
-        # --- 2. Parse order SN list ---
-        sns = self._parse_order_sn_list()
-        order_sn_str = ','.join(sns)
+        return {
+            'partner_id': partner_id,
+            'partner_key': partner_key,
+            'access_token': access_token,
+            'shop_identifier': shop_identifier,
+        }
 
-        # --- 3. Tạo timestamp & sign ---
+    def _call_shopee_api(self, creds, order_sn_str):
+        """Gọi Shopee get_order_detail API, trả về parsed JSON body."""
         api_path = '/api/v2/order/get_order_detail'
         ts = int(time.time())
-        sign = self._generate_sign(partner_id, api_path, ts, access_token, shop_identifier, partner_key)
+        sign = self._generate_sign(
+            creds['partner_id'], api_path, ts,
+            creds['access_token'], creds['shop_identifier'],
+            creds['partner_key'],
+        )
 
-        # --- 4. Gọi Shopee API ---
-        shopee_url = f"https://partner.shopeemobile.com{api_path}"
         params = {
-            'partner_id': partner_id,
+            'partner_id': creds['partner_id'],
             'timestamp': ts,
-            'access_token': access_token,
-            'shop_id': shop_identifier,
+            'access_token': creds['access_token'],
+            'shop_id': creds['shop_identifier'],
             'sign': sign,
             'order_sn_list': order_sn_str,
         }
 
-        # Optional fields
         opt_fields = self.response_optional_fields
         if opt_fields:
-            # Loại bỏ khoảng trắng thừa
             params['response_optional_fields'] = ','.join(
                 f.strip() for f in opt_fields.split(',') if f.strip()
             )
@@ -141,31 +145,41 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         _logger.info("Shopee API get_order_detail – params: %s", params)
 
         try:
-            resp = req_lib.get(shopee_url, params=params, timeout=30)
+            resp = req_lib.get(
+                f"https://partner.shopeemobile.com{api_path}",
+                params=params, timeout=30,
+            )
         except Exception as e:
             raise UserError(_("Lỗi kết nối tới Shopee API:\n%s") % str(e))
 
-        # --- 5. Xử lý response ---
         try:
             body = resp.json()
         except Exception:
-            body = resp.text
+            raise UserError(_("Shopee trả về response không hợp lệ:\n%s") % resp.text)
+
+        return resp.status_code, body, params
+
+    # ──────────────────────────────────────────────────
+    #  Action: Chỉ lấy thông tin (read-only)
+    # ──────────────────────────────────────────────────
+
+    def action_fetch_order(self):
+        """Gọi Shopee API get_order_detail và hiển thị kết quả. Không ghi DB."""
+        self.ensure_one()
+
+        creds = self._get_shopee_credentials()
+        sns = self._parse_order_sn_list()
+        status_code, body, params = self._call_shopee_api(creds, ','.join(sns))
 
         result = {
-            'shopee_http_status': resp.status_code,
+            'shopee_http_status': status_code,
             'shopee_response': body,
             'request_params_sent': {
-                k: v for k, v in params.items()
-                if k not in ('sign',)  # Ẩn sign cho gọn
+                k: v for k, v in params.items() if k != 'sign'
             },
         }
-
-        _logger.info("Shopee API response – status=%s", resp.status_code)
-
-        # Hiển thị kết quả
         self.result_display = json.dumps(result, indent=2, ensure_ascii=False)
 
-        # Trả về wizard để user xem kết quả (giữ wizard mở)
         return {
             'type': 'ir.actions.act_window',
             'res_model': self._name,
@@ -173,3 +187,216 @@ class ShopeeOrderFetchWizard(models.TransientModel):
             'view_mode': 'form',
             'target': 'new',
         }
+
+    # ──────────────────────────────────────────────────
+    #  Action: Lấy thông tin + Tạo đơn hàng
+    # ──────────────────────────────────────────────────
+
+    def action_fetch_and_create_order(self):
+        """Gọi Shopee API, sau đó tạo Sale Order từ response."""
+        self.ensure_one()
+
+        creds = self._get_shopee_credentials()
+        sns = self._parse_order_sn_list()
+        status_code, body, params = self._call_shopee_api(creds, ','.join(sns))
+
+        # Validate response
+        if status_code != 200:
+            raise UserError(
+                _("Shopee API trả về lỗi (HTTP %s):\n%s")
+                % (status_code, json.dumps(body, indent=2, ensure_ascii=False))
+            )
+
+        error_msg = body.get('error', '')
+        if error_msg:
+            raise UserError(
+                _("Shopee API error: %s\n%s") % (error_msg, body.get('message', ''))
+            )
+
+        order_list = body.get('response', {}).get('order_list', [])
+        if not order_list:
+            raise UserError(_("Shopee API không trả về đơn hàng nào."))
+
+        created_orders = []
+        skipped_orders = []
+
+        for order_data in order_list:
+            order_sn = order_data.get('order_sn', '')
+
+            # Kiểm tra đơn đã tồn tại chưa
+            existing = self.env['sale.order'].sudo().search([
+                ('shopee_order_ref', '=', order_sn)
+            ], limit=1)
+            if existing:
+                skipped_orders.append(f"{order_sn} (đã tồn tại: {existing.name})")
+                continue
+
+            try:
+                so = self._create_order_from_data(order_data)
+                created_orders.append(f"{order_sn} → {so.name}")
+            except Exception as e:
+                _logger.error("Shopee: Lỗi tạo đơn %s: %s", order_sn, str(e), exc_info=True)
+                skipped_orders.append(f"{order_sn} (LỖI: {str(e)})")
+
+        # Hiển thị kết quả
+        lines = []
+        if created_orders:
+            lines.append("✅ ĐÃ TẠO:")
+            lines.extend(f"  • {o}" for o in created_orders)
+        if skipped_orders:
+            lines.append("\n⏭️ BỎ QUA:")
+            lines.extend(f"  • {o}" for o in skipped_orders)
+
+        self.result_display = '\n'.join(lines)
+
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': self._name,
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
+    # ──────────────────────────────────────────────────
+    #  Order creation helpers
+    # ──────────────────────────────────────────────────
+
+    def _create_order_from_data(self, order_data):
+        """Tạo sale.order từ 1 order trong Shopee response."""
+        shop = self.shop_id
+
+        # 1. Tạo / tìm partner
+        partner = self._find_or_create_partner(order_data)
+
+        # 2. Tạo sale.order
+        so_vals = {
+            'partner_id': partner.id,
+            'shopee_order_ref': order_data.get('order_sn', ''),
+            'shopee_shop_id': shop.id,
+            'shopee_order_status': order_data.get('order_status', ''),
+        }
+        so = self.env['sale.order'].sudo().create(so_vals)
+
+        # 3. Tạo sale.order.line từ item_list
+        item_list = order_data.get('item_list', [])
+        for item_data in item_list:
+            self._create_order_line(so, item_data, shop)
+
+        _logger.info(
+            "Shopee: Đã tạo đơn hàng %s từ order_sn=%s",
+            so.name, order_data.get('order_sn'),
+        )
+        return so
+
+    def _find_or_create_partner(self, order_data):
+        """Tìm hoặc tạo res.partner từ buyer_username + recipient_address."""
+        Partner = self.env['res.partner'].sudo()
+
+        addr = order_data.get('recipient_address', {}) or {}
+        buyer_username = order_data.get('buyer_username', '')
+
+        # Tên: ưu tiên recipient name, fallback buyer_username
+        name = addr.get('name') or buyer_username or 'Khách Shopee'
+        phone = addr.get('phone', '')
+
+        # Tìm partner theo phone (nếu có phone)
+        if phone and phone != '****':
+            existing = Partner.search([('phone', '=', phone)], limit=1)
+            if existing:
+                return existing
+
+        # Tìm theo tên buyer_username (fallback)
+        if buyer_username:
+            existing = Partner.search([('name', '=', buyer_username)], limit=1)
+            if existing:
+                return existing
+
+        # Tạo mới
+        partner_vals = {
+            'name': name,
+            'customer_rank': 1,
+        }
+        if phone and phone != '****':
+            partner_vals['phone'] = phone
+        if addr.get('full_address') and addr['full_address'] != '****':
+            partner_vals['street'] = addr['full_address']
+        if addr.get('city') and addr['city'] != '****':
+            partner_vals['city'] = addr['city']
+
+        partner = Partner.create(partner_vals)
+        _logger.info("Shopee: Đã tạo liên hệ '%s' (ID: %s)", partner.name, partner.id)
+        return partner
+
+    def _find_or_create_shopee_item(self, item_data, shop):
+        """Tìm hoặc tạo shopee.item từ item_data. Trả về product.product."""
+        ShopeeItem = self.env['shopee.item'].sudo()
+
+        item_id = item_data.get('item_id', 0)
+        model_id = item_data.get('model_id', 0)
+        item_name = item_data.get('item_name', '')
+        model_sku = item_data.get('model_sku', '')
+
+        # 1. Tìm shopee.item theo shopee_item_identifier + shopee_model_identifier
+        domain = [('shopee_item_identifier', '=', item_id)]
+        if model_id:
+            domain.append(('shopee_model_identifier', '=', model_id))
+        existing_item = ShopeeItem.search(domain, limit=1)
+
+        if existing_item and existing_item.product_id:
+            return existing_item.product_id
+
+        # 2. Tìm product.product theo model_sku (default_code)
+        product = False
+        if model_sku:
+            product = self.env['product.product'].sudo().search([
+                ('default_code', '=', model_sku)
+            ], limit=1)
+
+        # 3. Nếu chưa có product, tìm theo tên
+        if not product and item_name:
+            product = self.env['product.product'].sudo().search([
+                ('name', '=', item_name)
+            ], limit=1)
+
+        # 4. Nếu vẫn chưa có, tạo product mới
+        if not product:
+            product = self.env['product.product'].sudo().create({
+                'name': item_name or f"Shopee Item {item_id}",
+                'default_code': model_sku or '',
+                'type': 'consu',
+                'sale_ok': True,
+            })
+            _logger.info("Shopee: Đã tạo sản phẩm '%s' (SKU: %s)", product.name, model_sku)
+
+        # 5. Tạo shopee.item nếu chưa có
+        if not existing_item:
+            shopee_item_vals = {
+                'shopee_item_identifier': item_id,
+                'product_id': product.id,
+                'shop_id': shop.id,
+            }
+            if model_id:
+                shopee_item_vals['shopee_model_identifier'] = model_id
+            ShopeeItem.create(shopee_item_vals)
+            _logger.info(
+                "Shopee: Đã tạo shopee.item (item_id=%s, model_id=%s) → product=%s",
+                item_id, model_id, product.name,
+            )
+
+        return product
+
+    def _create_order_line(self, so, item_data, shop):
+        """Tạo sale.order.line từ 1 item trong Shopee response."""
+        product = self._find_or_create_shopee_item(item_data, shop)
+
+        qty = item_data.get('model_quantity_purchased', 1)
+        price_unit = item_data.get('model_original_price', 0)
+
+        line_vals = {
+            'order_id': so.id,
+            'product_id': product.id,
+            'name': product.name,
+            'product_uom_qty': qty,
+            'price_unit': price_unit,
+        }
+        self.env['sale.order.line'].sudo().create(line_vals)
