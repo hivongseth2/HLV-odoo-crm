@@ -64,7 +64,7 @@
                             <a href="/search_stock" class="btn-view" style="background-color: #17a2b8; text-decoration: none; padding: 10px 15px; font-size: 14px;">Tra cứu Kho Hàng</a>
                         </div>
                         <div class="search-box">
-                            <input type="text" id="misa-search-input" placeholder="Nhập tên khách hàng cần tìm..."/>
+                            <input type="text" id="misa-search-input" placeholder="Nhập mã Đề nghị xuất cần tìm..."/>
                             <button class="btn-search" id="btn-misa-search">Tìm Kiếm</button>
                         </div>
                         <div id="loader">Đang lấy dữ liệu từ MISA, vui lòng chờ...</div>
@@ -82,7 +82,7 @@
                                 <tbody id="tableBody">
                                     <tr>
                                         <td colspan="5">
-                                            <div class="empty-state">Nhập tên khách hàng và bấm tìm kiếm để xem kết quả hóa đơn.</div>
+                                            <div class="empty-state">Nhập mã Đề nghị xuất và bấm tìm kiếm để xem kết quả hóa đơn.</div>
                                         </td>
                                     </tr>
                                 </tbody>
@@ -161,7 +161,7 @@
                                                     $('#tableBody').append(html);
                                                 });
                                             } else {
-                                                $('#tableBody').html('<tr><td colspan="5"><div class="empty-state">Không tìm thấy hóa đơn nào khớp với từ khóa.</div></td></tr>');
+                                                $('#tableBody').html('<tr><td colspan="5"><div class="empty-state">Không tìm thấy hóa đơn nào khớp với mã Đề nghị xuất.</div></td></tr>');
                                             }
                                         } else {
                                             var errMsg = response.result ? response.result.message : "Lỗi không xác định";
