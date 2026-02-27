@@ -23,7 +23,7 @@ class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
     shopee_order_status = fields.Char(
-        string='Shopee Status (Raw)',
+        string='Trạng thái Shopee',
         help="Giá trị trạng thái gốc từ Shopee API",
         readonly=True,
         copy=False,
