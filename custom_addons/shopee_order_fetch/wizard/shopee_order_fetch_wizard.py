@@ -511,31 +511,36 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         original_price = item_data.get('model_original_price', 0)
         discounted_price = item_data.get('model_discounted_price', 0)
 
-        # Tính chiết khấu %: (original - discounted) / original * 100
-        discount = 0.0
-        if original_price and discounted_price and original_price > 0:
-            discount = round((original_price - discounted_price) / original_price * 100, 2)
+        # Dùng giá sau chiết khấu (chính xác), không dùng discount %
+        # Vì discount % bị làm tròn gây lệch giá
+        price_unit = discounted_price if discounted_price else original_price
 
         line_vals = {
             'order_id': so.id,
             'product_id': product.id,
             'name': product.name,
             'product_uom_qty': qty,
-            'price_unit': original_price,
-            'discount': discount,
+            'price_unit': price_unit,
         }
 
-        # Lấy thuế từ sản phẩm đã cấu hình trong Odoo
-        if product.taxes_id:
+        # Lấy thuế: ưu tiên thuế sản phẩm → fallback thuế mặc định công ty
+        taxes = product.taxes_id
+        if not taxes:
+            default_tax = so.company_id.account_sale_tax_id
+            if default_tax:
+                taxes = default_tax
+
+        if taxes:
             fiscal_position = so.fiscal_position_id
-            taxes = fiscal_position.map_tax(product.taxes_id) if fiscal_position else product.taxes_id
+            if fiscal_position:
+                taxes = fiscal_position.map_tax(taxes)
             line_vals['tax_id'] = [(6, 0, taxes.ids)]
 
         return self.env['sale.order.line'].sudo().create(line_vals)
 
     def _apply_escrow_voucher(self, so, escrow_data):
         """Áp dụng shopee_voucher từ escrow response.
-        Dùng buyer_total_amount làm tổng chính xác, phân bổ vào chiết khấu các dòng."""
+        Giảm trực tiếp price_unit để đảm bảo tổng chính xác."""
         buyer_payment = escrow_data.get('buyer_payment_info', {})
         shopee_voucher = buyer_payment.get('shopee_voucher', 0)  # giá trị âm
         seller_voucher = buyer_payment.get('seller_voucher', 0)
@@ -550,20 +555,13 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         if not lines:
             return
 
-        # Tính tổng giá trị sau chiết khấu hiện tại (trước voucher)
-        total_before_voucher = sum(
-            l.price_unit * l.product_uom_qty * (1 - l.discount / 100)
-            for l in lines
-        )
+        # Tính tổng giá trị hiện tại (trước voucher)
+        total_before_voucher = sum(l.price_unit * l.product_uom_qty for l in lines)
 
         if total_before_voucher <= 0:
             return
 
-        target_total = total_before_voucher - total_voucher
-        if target_total < 0:
-            target_total = 0
-
-        # Phân bổ voucher theo số tiền chính xác (VNĐ nguyên), không qua %
+        # Phân bổ voucher trực tiếp vào price_unit (VNĐ nguyên)
         voucher_distributed = 0
         lines_list = list(lines)
 
@@ -572,29 +570,25 @@ class ShopeeOrderFetchWizard(models.TransientModel):
             if line_total <= 0:
                 continue
 
-            line_subtotal_before = line_total * (1 - line.discount / 100)
-
             if i < len(lines_list) - 1:
                 # Phân bổ theo tỷ lệ, làm tròn xuống
                 line_voucher_share = int(
-                    (line_subtotal_before / total_before_voucher) * total_voucher
+                    (line_total / total_before_voucher) * total_voucher
                 )
             else:
-                # Dòng cuối: lấy phần còn lại để đảm bảo tổng chính xác
+                # Dòng cuối: lấy phần còn lại → tổng chính xác
                 line_voucher_share = total_voucher - voucher_distributed
 
             voucher_distributed += line_voucher_share
 
-            # Tính chiết khấu mới từ số tiền chính xác
-            new_subtotal = line_subtotal_before - line_voucher_share
-            new_discount = round(
-                (1 - new_subtotal / line_total) * 100, 2
-            )
-            line.sudo().write({'discount': new_discount})
+            # Giảm price_unit trực tiếp (chia đều cho qty)
+            qty = line.product_uom_qty or 1
+            new_price = line.price_unit - (line_voucher_share / qty)
+            line.sudo().write({'price_unit': new_price})
 
         _logger.info(
-            "Shopee: Đã phân bổ voucher -%s vào chiết khấu các dòng của đơn %s (target: %s)",
-            total_voucher, so.name, target_total,
+            "Shopee: Đã giảm giá voucher -%s trực tiếp vào đơn %s",
+            total_voucher, so.name,
         )
 
     # ──────────────────────────────────────────────────
