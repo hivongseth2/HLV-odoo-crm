@@ -49,8 +49,12 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         readonly=True,
     )
     mock_json = fields.Text(
-        string='Mock JSON (Test)',
-        help="Dán JSON response từ Shopee API vào đây để test tạo đơn mà không cần gọi API.",
+        string='Mock JSON - Order Detail',
+        help="Dán JSON response từ Shopee get_order_detail API vào đây để test tạo đơn.",
+    )
+    mock_escrow_json = fields.Text(
+        string='Mock JSON - Escrow Detail',
+        help="Dán JSON response từ Shopee get_escrow_detail API vào đây để áp dụng voucher.",
     )
 
     # ──────────────────────────────────────────────────
@@ -163,6 +167,46 @@ class ShopeeOrderFetchWizard(models.TransientModel):
 
         return resp.status_code, body, params
 
+    def _call_escrow_api(self, creds, order_sn):
+        """Gọi Shopee get_escrow_detail API để lấy thông tin thanh toán chi tiết."""
+        api_path = '/api/v2/payment/get_escrow_detail'
+        ts = int(time.time())
+        sign = self._generate_sign(
+            creds['partner_id'], api_path, ts,
+            creds['access_token'], creds['shop_identifier'],
+            creds['partner_key'],
+        )
+
+        params = {
+            'partner_id': creds['partner_id'],
+            'timestamp': ts,
+            'access_token': creds['access_token'],
+            'shop_id': creds['shop_identifier'],
+            'sign': sign,
+            'order_sn': order_sn,
+        }
+
+        _logger.info("Shopee API get_escrow_detail – order_sn=%s", order_sn)
+
+        try:
+            resp = req_lib.get(
+                f"https://partner.shopeemobile.com{api_path}",
+                params=params, timeout=30,
+            )
+            body = resp.json()
+        except Exception as e:
+            _logger.warning("Shopee: Lỗi gọi escrow API cho %s: %s", order_sn, str(e))
+            return None
+
+        if body.get('error'):
+            _logger.warning(
+                "Shopee escrow API error cho %s: %s - %s",
+                order_sn, body.get('error'), body.get('message'),
+            )
+            return None
+
+        return body.get('response', {})
+
     # ──────────────────────────────────────────────────
     #  Action: Chỉ lấy thông tin (read-only)
     # ──────────────────────────────────────────────────
@@ -237,7 +281,14 @@ class ShopeeOrderFetchWizard(models.TransientModel):
 
             try:
                 with self.env.cr.savepoint():
-                    so = self._create_order_from_data(order_data)
+                    # Gọi escrow API để lấy voucher (best-effort)
+                    escrow_data = None
+                    try:
+                        escrow_data = self._call_escrow_api(creds, order_sn)
+                    except Exception as esc_err:
+                        _logger.warning("Shopee: Không lấy được escrow cho %s: %s", order_sn, str(esc_err))
+
+                    so = self._create_order_from_data(order_data, escrow_data=escrow_data)
                     created_orders.append(f"{order_sn} → {so.name}")
             except Exception as e:
                 _logger.error("Shopee: Lỗi tạo đơn %s: %s", order_sn, str(e), exc_info=True)
@@ -266,7 +317,7 @@ class ShopeeOrderFetchWizard(models.TransientModel):
     #  Order creation helpers
     # ──────────────────────────────────────────────────
 
-    def _create_order_from_data(self, order_data):
+    def _create_order_from_data(self, order_data, escrow_data=None):
         """Tạo sale.order từ 1 order trong Shopee response."""
         shop = self.shop_id
 
@@ -287,6 +338,10 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         item_list = order_data.get('item_list', [])
         for item_data in item_list:
             self._create_order_line(so, item_data, shop)
+
+        # 4. Áp dụng shopee_voucher từ escrow (nếu có)
+        if escrow_data:
+            self._apply_escrow_voucher(so, escrow_data)
 
         _logger.info(
             "Shopee: Đã tạo đơn hàng %s từ order_sn=%s",
@@ -396,16 +451,56 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         product = self._find_or_create_shopee_item(item_data, shop)
 
         qty = item_data.get('model_quantity_purchased', 1)
-        price_unit = item_data.get('model_original_price', 0)
+        original_price = item_data.get('model_original_price', 0)
+        discounted_price = item_data.get('model_discounted_price', 0)
+
+        # Tính chiết khấu %: (original - discounted) / original * 100
+        discount = 0.0
+        if original_price and discounted_price and original_price > 0:
+            discount = round((original_price - discounted_price) / original_price * 100, 2)
 
         line_vals = {
             'order_id': so.id,
             'product_id': product.id,
             'name': product.name,
             'product_uom_qty': qty,
-            'price_unit': price_unit,
+            'price_unit': original_price,
+            'discount': discount,
         }
         self.env['sale.order.line'].sudo().create(line_vals)
+
+    def _apply_escrow_voucher(self, so, escrow_data):
+        """Áp dụng shopee_voucher từ escrow response.
+        Tạo dòng giảm giá nếu có voucher."""
+        buyer_payment = escrow_data.get('buyer_payment_info', {})
+        shopee_voucher = buyer_payment.get('shopee_voucher', 0)  # giá trị âm, VD: -20900
+        seller_voucher = buyer_payment.get('seller_voucher', 0)  # giá trị âm nếu có
+
+        total_voucher = (shopee_voucher or 0) + (seller_voucher or 0)
+
+        if total_voucher >= 0:
+            # Không có voucher giảm giá
+            return
+
+        # Tạo dòng giảm giá (voucher là số âm → price_unit = giá trị âm)
+        voucher_parts = []
+        if shopee_voucher and shopee_voucher < 0:
+            voucher_parts.append(f"Shopee Voucher: {shopee_voucher:,.0f}")
+        if seller_voucher and seller_voucher < 0:
+            voucher_parts.append(f"Seller Voucher: {seller_voucher:,.0f}")
+        voucher_name = "Giảm giá Voucher Shopee (" + ', '.join(voucher_parts) + ")"
+
+        self.env['sale.order.line'].sudo().create({
+            'order_id': so.id,
+            'name': voucher_name,
+            'product_uom_qty': 1,
+            'price_unit': total_voucher,  # giá trị âm → trừ tiền
+            'display_type': False,
+        })
+        _logger.info(
+            "Shopee: Đã áp dụng voucher %s cho đơn %s",
+            total_voucher, so.name,
+        )
 
     # ──────────────────────────────────────────────────
     #  Action: Test tạo đơn với mock JSON (staging)
@@ -418,15 +513,15 @@ class ShopeeOrderFetchWizard(models.TransientModel):
 
         if not self.mock_json:
             raise UserError(_(
-                "Vui lòng dán JSON response từ Shopee API vào trường 'Mock JSON (Test)'.\n"
+                "Vui lòng dán JSON response từ Shopee get_order_detail API vào trường 'Mock JSON - Order Detail'.\n"
                 "Bạn có thể lấy response bằng cách gọi API trên production hoặc dùng Postman."
             ))
 
-        # Parse JSON
+        # Parse Order Detail JSON
         try:
             data = json.loads(self.mock_json)
         except json.JSONDecodeError as e:
-            raise UserError(_("JSON không hợp lệ:\n%s") % str(e))
+            raise UserError(_("Order Detail JSON không hợp lệ:\n%s") % str(e))
 
         # Hỗ trợ cả format đầy đủ (có shopee_response wrapper) và format trực tiếp
         if 'shopee_response' in data:
@@ -448,6 +543,15 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         if not order_list:
             raise UserError(_("Không tìm thấy order_list trong JSON."))
 
+        # Parse Escrow JSON (tùy chọn)
+        escrow_data = None
+        if self.mock_escrow_json:
+            try:
+                escrow_raw = json.loads(self.mock_escrow_json)
+                escrow_data = escrow_raw.get('response', escrow_raw)
+            except json.JSONDecodeError as e:
+                _logger.warning("Escrow JSON parse error: %s", str(e))
+
         created_orders = []
         skipped_orders = []
 
@@ -464,7 +568,7 @@ class ShopeeOrderFetchWizard(models.TransientModel):
 
             try:
                 with self.env.cr.savepoint():
-                    so = self._create_order_from_data(order_data)
+                    so = self._create_order_from_data(order_data, escrow_data=escrow_data)
                     created_orders.append(f"{order_sn} → {so.name}")
             except Exception as e:
                 _logger.error("Shopee Mock: Lỗi tạo đơn %s: %s", order_sn, str(e), exc_info=True)

@@ -32,7 +32,10 @@
                 </footer>
                 <separator string="Test Mock Data (Staging)"/>
                 <group>
-                    <field name="mock_json" nolabel="1" placeholder="Dán JSON response từ Shopee API vào đây để test tạo đơn trên staging..."/>
+                    <field name="mock_json" nolabel="1" placeholder="Dán JSON response từ get_order_detail API vào đây..."/>
+                </group>
+                <group>
+                    <field name="mock_escrow_json" nolabel="1" placeholder="(Tùy chọn) Dán JSON response từ get_escrow_detail API để áp dụng voucher..."/>
                 </group>
                 <group string="Kết quả" invisible="not result_display">
                     <field name="result_display" nolabel="1" widget="text" readonly="1"/>
