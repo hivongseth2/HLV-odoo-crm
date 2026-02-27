@@ -562,13 +562,18 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         return False
 
     def _apply_escrow_voucher(self, so, escrow_data):
-        """Áp dụng shopee_voucher từ escrow response.
-        Tăng discount % của các dòng để giảm giá chính xác."""
-        buyer_payment = escrow_data.get('buyer_payment_info', {})
-        shopee_voucher = buyer_payment.get('shopee_voucher', 0)
-        seller_voucher = buyer_payment.get('seller_voucher', 0)
+        """Áp dụng voucher của Shop từ escrow response.
+        Chỉ giảm giá phần voucher do Shop chịu (voucher_from_seller), 
+        phần Shopee tài trợ vẫn được tính vào doanh thu."""
+        order_income = escrow_data.get('order_income', {})
+        seller_voucher = order_income.get('voucher_from_seller', 0)
 
-        total_voucher = abs((shopee_voucher or 0) + (seller_voucher or 0))
+        # Fallback lấy từ buyer_payment_info nếu không có order_income
+        if not seller_voucher:
+            buyer_payment = escrow_data.get('buyer_payment_info', {})
+            seller_voucher = abs(buyer_payment.get('seller_voucher', 0))
+
+        total_voucher = abs(seller_voucher)
 
         if total_voucher <= 0:
             return
@@ -618,9 +623,14 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         )
 
     def _apply_shipping_fee(self, so, escrow_data):
-        """Thêm phí vận chuyển từ escrow response vào đơn hàng."""
+        """Thêm phí vận chuyển mà khách hàng thực trả vào đơn hàng."""
+        order_income = escrow_data.get('order_income', {})
         buyer_payment = escrow_data.get('buyer_payment_info', {})
-        shipping_fee = buyer_payment.get('shipping_fee', 0)
+        
+        # Chỉ lấy phí vận chuyển mà người mua thực trả
+        shipping_fee = order_income.get('buyer_paid_shipping_fee')
+        if shipping_fee is None:
+            shipping_fee = buyer_payment.get('shipping_fee', 0)
 
         if shipping_fee <= 0:
             return
