@@ -32,7 +32,7 @@ class SaleOrder(models.Model):
         selection=SHOPEE_STATUS_SELECTION,
         string='Trạng thái Shopee',
         compute='_compute_shopee_order_status_display',
-        store=True,
+        store=False,
         readonly=True,
     )
 
