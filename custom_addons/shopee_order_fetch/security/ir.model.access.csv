@@ -1,0 +1,2 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_shopee_order_fetch_wizard,shopee.order.fetch.wizard,model_shopee_order_fetch_wizard,base.group_user,1,1,1,1
