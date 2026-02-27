@@ -100,9 +100,9 @@ class ShopeeWebhookController(http.Controller):
                     'COMPLETED': 'Hoàn thành',
                     'IN_CANCEL': 'Chờ xác nhận hủy',
                     'CANCELLED': 'Đã hủy',
-                    'INVOICE_PENDING': 'Chờ xuất HĐ',
                     'RETRY_SHIP': 'Giao lại',
-                    'PENDING': 'Tạm chờ'
+                    'TO_COMFIRM_RECIEVED': 'Đã nhận hàng',
+                    'TO_RETURN': 'Đang trả hàng'
                 }
                 status = status_mapping.get(str(status).upper(), status)
 
