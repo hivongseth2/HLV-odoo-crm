@@ -24,9 +24,17 @@
                             string="🛒 Tạo đơn hàng"
                             type="object"
                             class="btn-primary"/>
+                    <button name="action_test_create_order"
+                            string="🧪 Test tạo đơn (Mock)"
+                            type="object"
+                            class="btn-warning"/>
                     <button string="Đóng" class="btn-secondary" special="cancel"/>
                 </footer>
-                <group string="Kết quả API" invisible="not result_display">
+                <separator string="Test Mock Data (Staging)"/>
+                <group>
+                    <field name="mock_json" nolabel="1" placeholder="Dán JSON response từ Shopee API vào đây để test tạo đơn trên staging..."/>
+                </group>
+                <group string="Kết quả" invisible="not result_display">
                     <field name="result_display" nolabel="1" widget="text" readonly="1"/>
                 </group>
             </form>

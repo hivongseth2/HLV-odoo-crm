@@ -31,8 +31,8 @@ class ShopeeOrderFetchWizard(models.TransientModel):
     shop_id = fields.Many2one(
         'shopee.shop',
         string='Shop Shopee',
-        required=True,
-        help="Chọn shop Shopee để lấy access_token và shop_identifier",
+        required=False,
+        help="Chọn shop Shopee để lấy access_token và shop_identifier. Bỏ trống nếu test mock data.",
     )
     order_sn_list = fields.Text(
         string='Mã đơn hàng Shopee',
@@ -47,6 +47,10 @@ class ShopeeOrderFetchWizard(models.TransientModel):
     result_display = fields.Text(
         string='Kết quả API',
         readonly=True,
+    )
+    mock_json = fields.Text(
+        string='Mock JSON (Test)',
+        help="Dán JSON response từ Shopee API vào đây để test tạo đơn mà không cần gọi API.",
     )
 
     # ──────────────────────────────────────────────────
@@ -400,3 +404,87 @@ class ShopeeOrderFetchWizard(models.TransientModel):
             'price_unit': price_unit,
         }
         self.env['sale.order.line'].sudo().create(line_vals)
+
+    # ──────────────────────────────────────────────────
+    #  Action: Test tạo đơn với mock JSON (staging)
+    # ──────────────────────────────────────────────────
+
+    def action_test_create_order(self):
+        """Tạo đơn hàng từ mock JSON response (dùng cho staging test).
+        Không gọi Shopee API — lấy dữ liệu từ trường mock_json."""
+        self.ensure_one()
+
+        if not self.mock_json:
+            raise UserError(_(
+                "Vui lòng dán JSON response từ Shopee API vào trường 'Mock JSON (Test)'.\n"
+                "Bạn có thể lấy response bằng cách gọi API trên production hoặc dùng Postman."
+            ))
+
+        # Parse JSON
+        try:
+            data = json.loads(self.mock_json)
+        except json.JSONDecodeError as e:
+            raise UserError(_("JSON không hợp lệ:\n%s") % str(e))
+
+        # Hỗ trợ cả format đầy đủ (có shopee_response wrapper) và format trực tiếp
+        if 'shopee_response' in data:
+            body = data['shopee_response']
+        elif 'response' in data:
+            body = data
+        else:
+            raise UserError(_(
+                "JSON không đúng format. Cần có key 'shopee_response' hoặc 'response'."
+            ))
+
+        error_msg = body.get('error', '')
+        if error_msg:
+            raise UserError(
+                _("Response chứa lỗi: %s\n%s") % (error_msg, body.get('message', ''))
+            )
+
+        order_list = body.get('response', {}).get('order_list', [])
+        if not order_list:
+            raise UserError(_("Không tìm thấy order_list trong JSON."))
+
+        created_orders = []
+        skipped_orders = []
+
+        for order_data in order_list:
+            order_sn = order_data.get('order_sn', '')
+
+            # Kiểm tra trùng
+            existing = self.env['sale.order'].sudo().search([
+                ('shopee_order_ref', '=', order_sn)
+            ], limit=1)
+            if existing:
+                skipped_orders.append(f"{order_sn} (đã tồn tại: {existing.name})")
+                continue
+
+            try:
+                so = self._create_order_from_data(order_data)
+                created_orders.append(f"{order_sn} → {so.name}")
+            except Exception as e:
+                _logger.error("Shopee Mock: Lỗi tạo đơn %s: %s", order_sn, str(e), exc_info=True)
+                skipped_orders.append(f"{order_sn} (LỖI: {str(e)})")
+
+        # Hiển thị kết quả
+        lines = ["📋 KẾT QUẢ TEST (Mock Data):"]
+        if created_orders:
+            lines.append("\n✅ ĐÃ TẠO:")
+            lines.extend(f"  • {o}" for o in created_orders)
+        if skipped_orders:
+            lines.append("\n⏭️ BỎ QUA:")
+            lines.extend(f"  • {o}" for o in skipped_orders)
+        if not created_orders and not skipped_orders:
+            lines.append("\n⚠️ Không có đơn hàng nào để xử lý.")
+
+        self.result_display = '\n'.join(lines)
+
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': self._name,
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
