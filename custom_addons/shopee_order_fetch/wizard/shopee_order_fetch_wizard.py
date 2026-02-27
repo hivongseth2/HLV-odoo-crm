@@ -236,8 +236,9 @@ class ShopeeOrderFetchWizard(models.TransientModel):
                 continue
 
             try:
-                so = self._create_order_from_data(order_data)
-                created_orders.append(f"{order_sn} → {so.name}")
+                with self.env.cr.savepoint():
+                    so = self._create_order_from_data(order_data)
+                    created_orders.append(f"{order_sn} → {so.name}")
             except Exception as e:
                 _logger.error("Shopee: Lỗi tạo đơn %s: %s", order_sn, str(e), exc_info=True)
                 skipped_orders.append(f"{order_sn} (LỖI: {str(e)})")
@@ -251,7 +252,7 @@ class ShopeeOrderFetchWizard(models.TransientModel):
             lines.append("\n⏭️ BỎ QUA:")
             lines.extend(f"  • {o}" for o in skipped_orders)
 
-        self.result_display = '\n'.join(lines)
+        self.sudo().result_display = '\n'.join(lines)
 
         return {
             'type': 'ir.actions.act_window',
@@ -461,8 +462,9 @@ class ShopeeOrderFetchWizard(models.TransientModel):
                 continue
 
             try:
-                so = self._create_order_from_data(order_data)
-                created_orders.append(f"{order_sn} → {so.name}")
+                with self.env.cr.savepoint():
+                    so = self._create_order_from_data(order_data)
+                    created_orders.append(f"{order_sn} → {so.name}")
             except Exception as e:
                 _logger.error("Shopee Mock: Lỗi tạo đơn %s: %s", order_sn, str(e), exc_info=True)
                 skipped_orders.append(f"{order_sn} (LỖI: {str(e)})")
@@ -478,7 +480,7 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         if not created_orders and not skipped_orders:
             lines.append("\n⚠️ Không có đơn hàng nào để xử lý.")
 
-        self.result_display = '\n'.join(lines)
+        self.sudo().result_display = '\n'.join(lines)
 
         return {
             'type': 'ir.actions.act_window',
