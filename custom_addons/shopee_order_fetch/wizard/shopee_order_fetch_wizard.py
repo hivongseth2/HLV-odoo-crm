@@ -671,9 +671,10 @@ class ShopeeOrderFetchWizard(models.TransientModel):
             original_price = item_data.get('model_original_price', item_data.get('original_price', 0))
             discounted_price = item_data.get('model_discounted_price', item_data.get('discounted_price', 0))
 
+            # Tính phần trăm discount với độ chính xác cao để tránh lệch (vd: giữ 8 chữ số thập phân thay vì Odoo tự làm tròn 2 số)
             discount = 0.0
             if original_price and discounted_price and original_price > 0:
-                discount = (original_price - discounted_price) / original_price * 100
+                discount = (original_price - discounted_price) / original_price * 100.0
 
             line_vals = {
                 'price_unit': original_price,
@@ -727,20 +728,26 @@ class ShopeeOrderFetchWizard(models.TransientModel):
             if line_total <= 0:
                 continue
 
-            line_subtotal_before = line_total * (1 - line.discount / 100)
+            # Giá trị của dòng trước khi trừ thêm voucher của Escrow
+            # (tương đương amount đã chiết khấu do giá gốc / giá đã giảm của món hàng)
+            line_subtotal_before = line_total * (1 - line.discount / 100.0)
 
             if i < len(lines_list) - 1:
-                line_voucher_share = int(
-                    (line_subtotal_before / total_before_voucher) * total_voucher
-                )
+                # Phân bổ theo tỷ trọng của dòng đó so với tổng giá trị các dòng
+                line_voucher_share = (line_subtotal_before / total_before_voucher) * total_voucher
             else:
+                # Dòng cuối cùng tự ôm nốt phần dư để cho khớp hoàn toàn số tiền
                 line_voucher_share = total_voucher - voucher_distributed
 
             voucher_distributed += line_voucher_share
 
-            # Tính discount mới: không làm tròn
+            # Cập nhật lại discount % cho dòng để ra đúng số tiền
             new_subtotal = line_subtotal_before - line_voucher_share
-            new_discount = (1 - new_subtotal / line_total) * 100
+            
+            if new_subtotal < 0:
+                new_subtotal = 0.0
+                
+            new_discount = (1 - new_subtotal / line_total) * 100.0
             line.sudo().write({'discount': new_discount})
 
         _logger.info(
