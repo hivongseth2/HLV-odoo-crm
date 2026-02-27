@@ -250,7 +250,7 @@ class MisaConfig(models.AbstractModel):
                     ]}
                 ]}
             ],
-            "pageIndex": 1, "pageSize": 20, "useSp": False, "view": 41, "summaryColumns": [5126, 5068, 5141, 5039], "loadMode": 2
+            "pageIndex": 1, "pageSize": 200, "useSp": False, "view": 41, "summaryColumns": [5126, 5068, 5141, 5039], "loadMode": 2
         }
 
     def get_invoice_preview_payload(self, refid, date):
