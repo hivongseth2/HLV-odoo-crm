@@ -37,16 +37,14 @@ class ProductTemplate(models.Model):
             raise UserError(_("Lỗi đồng bộ MISA:\n%s") % str(e))
 
     def write(self, vals):
-        # Lưu các giá trị cũ trường thay đổi trước khi ghi
+        # Lưu các giá trị cũ của trường chuẩn bị thay đổi trước khi ghi
         old_misa_values = {}
         if 'name' in vals or 'default_code' in vals:
             for rec in self:
-                if rec.misa_product_id:
-                    old_misa_values[rec.id] = {
-                        'name': rec.name or '',
-                        'default_code': rec.default_code or '',
-                        'misa_id': rec.misa_product_id
-                    }
+                old_misa_values[rec.id] = {
+                    'name': rec.name or '',
+                    'default_code': rec.default_code or '',
+                }
 
         res = super(ProductTemplate, self).write(vals)
 
@@ -58,15 +56,34 @@ class ProductTemplate(models.Model):
                 if not old_vals:
                     continue
                 
-                misa_id = old_vals['misa_id']
-                if 'name' in vals:
-                    new_name = rec.name or ''
-                    if new_name != old_vals['name']:
-                        misa_utils.update_product_field_misa(misa_id, 'name', new_name, old_vals['name'])
+                old_code = old_vals['default_code']
+                if not old_code:
+                    continue
                 
-                if 'default_code' in vals:
-                    new_code = rec.default_code or ''
-                    if new_code != old_vals['default_code']:
-                        misa_utils.update_product_field_misa(misa_id, 'code', new_code, old_vals['default_code'])
+                try:
+                    # Dùng mã tham chiếu cũ (default_code) search trên MISA để lấy ID sản phẩm
+                    search_res = misa_utils.search_product_by_name(code=old_code)
+                    misa_id = None
+                    if search_res:
+                        for p in search_res:
+                            # So sánh chính xác ProductCode trên MISA với old_code
+                            if p.get('code') == old_code:
+                                misa_id = str(p.get('misa_id'))
+                                break
+                    
+                    if misa_id:
+                        if 'name' in vals:
+                            new_name = rec.name or ''
+                            if new_name != old_vals['name']:
+                                misa_utils.update_product_field_misa(misa_id, 'name', new_name, old_vals['name'])
+                        
+                        if 'default_code' in vals:
+                            new_code = rec.default_code or ''
+                            if new_code != old_code:
+                                misa_utils.update_product_field_misa(misa_id, 'code', new_code, old_code)
+                except Exception as e:
+                    # Log lỗi nhưng không chặn luồng update trong Odoo
+                    # _logger.error("Lỗi đồng bộ cập nhật sản phẩm MISA: %s", str(e))
+                    pass
                         
         return res
