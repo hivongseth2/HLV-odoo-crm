@@ -351,7 +351,6 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         # 5. Áp dụng shopee_voucher từ escrow (phân bổ vào chiết khấu các dòng)
         if escrow_data:
             self._apply_escrow_voucher(so, escrow_data)
-            self._apply_shipping_fee(so, escrow_data)
 
         # 6. Xác nhận báo giá → tạo phiếu giao hàng (picking)
         try:
@@ -620,51 +619,6 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         _logger.info(
             "Shopee: Đã áp dụng voucher -%s vào discount các dòng của đơn %s",
             total_voucher, so.name,
-        )
-
-    def _apply_shipping_fee(self, so, escrow_data):
-        """Thêm phí vận chuyển mà khách hàng thực trả vào đơn hàng."""
-        order_income = escrow_data.get('order_income', {})
-        buyer_payment = escrow_data.get('buyer_payment_info', {})
-        
-        # Chỉ lấy phí vận chuyển mà người mua thực trả
-        shipping_fee = order_income.get('buyer_paid_shipping_fee')
-        if shipping_fee is None:
-            shipping_fee = buyer_payment.get('shipping_fee', 0)
-
-        if shipping_fee <= 0:
-            return
-
-        Product = self.env['product.product'].sudo()
-        # Tìm sản phẩm vận chuyển (ưu tiên service)
-        shipping_product = Product.search([('name', 'ilike', 'vận chuyển'), ('type', '=', 'service')], limit=1)
-        if not shipping_product:
-            shipping_product = Product.search([('name', 'ilike', 'shipping'), ('type', '=', 'service')], limit=1)
-        
-        if not shipping_product:
-            # Nếu không tìm thấy, tạo 1 sản phẩm dịch vụ "Phí vận chuyển Shopee"
-            shipping_product = Product.create({
-                'name': 'Phí vận chuyển Shopee',
-                'type': 'service',
-                'taxes_id': False,
-            })
-
-        line_vals = {
-            'order_id': so.id,
-            'product_id': shipping_product.id,
-            'name': 'Phí vận chuyển Shopee',
-            'product_uom_qty': 1,
-            'price_unit': shipping_fee,
-        }
-
-        tax_included = self._get_tax_included(so.company_id)
-        if tax_included:
-            line_vals['tax_id'] = [(6, 0, tax_included.ids)]
-
-        self.env['sale.order.line'].sudo().create(line_vals)
-        _logger.info(
-            "Shopee: Đã thêm phí vận chuyển %s cho đơn %s",
-            shipping_fee, so.name,
         )
 
     # ──────────────────────────────────────────────────
