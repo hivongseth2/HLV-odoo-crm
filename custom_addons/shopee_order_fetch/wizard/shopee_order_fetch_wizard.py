@@ -337,17 +337,8 @@ class ShopeeOrderFetchWizard(models.TransientModel):
             except json.JSONDecodeError as e:
                 raise UserError(_("Mock Escrow JSON không hợp lệ:\n%s") % str(e))
 
-        # Parse Order Detail JSON (tùy chọn) trước
-        mock_order_list = []
-        if self.mock_order_detail_json:
-            try:
-                order_detail_raw = json.loads(self.mock_order_detail_json)
-                mock_order_list = order_detail_raw.get('response', {}).get('order_list', [])
-            except json.JSONDecodeError as e:
-                raise UserError(_("Mock Order Detail JSON không hợp lệ:\n%s") % str(e))
-
         creds = None
-        if not mock_escrow_data and not mock_order_list:
+        if not mock_escrow_data:
              creds = self._get_shopee_credentials()
 
         updated_orders = []
@@ -368,18 +359,6 @@ class ShopeeOrderFetchWizard(models.TransientModel):
                     skipped_orders.append(f"{order_sn} (Không tìm thấy đơn hàng trong hệ thống)")
                     continue
 
-            # --- Update prices from Order Detail or Escrow ---
-            order_data = next((o for o in mock_order_list if isinstance(o, dict) and o.get('order_sn') == order_sn), None)
-            if not order_data and creds:
-                try:
-                    status_code, body, params = self._call_shopee_api(creds, order_sn)
-                    if status_code == 200:
-                        order_list = body.get('response', {}).get('order_list', [])
-                        if order_list:
-                            order_data = order_list[0]
-                except Exception as e:
-                    _logger.warning("Shopee: Lỗi lấy get_order_detail cho %s: %s", order_sn, str(e))
-
             # Nếu không tìm được Order Detail, thử dùng dữ liệu từ Escrow (nếu có items)
             try:
                 escrow_data = mock_escrow_data
@@ -389,9 +368,7 @@ class ShopeeOrderFetchWizard(models.TransientModel):
                 _logger.warning("Shopee: Lỗi gọi escrow API: %s", str(e))
                 escrow_data = None
 
-            if order_data:
-                self._update_order_lines_from_data(so, order_data)
-            elif escrow_data and escrow_data.get('order_income', {}).get('items'):
+            if escrow_data and escrow_data.get('order_income', {}).get('items'):
                 # Escrow có items -> update giá theo escrow items
                 self._update_order_lines_from_data(so, escrow_data.get('order_income', {}))
 
