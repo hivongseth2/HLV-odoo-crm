@@ -21,7 +21,7 @@
                                             <a class="nav-link text-dark" href="/misa/purchase/lookup" style="font-weight: 500; font-size: 0.85rem;">Tra cứu chứng từ</a>
                                         </li>
                                         <li class="nav-item mx-1">
-                                            <a class="nav-link active bg-primary text-white" href="/cancel-request/login" style="font-weight: 600; font-size: 0.85rem;">Yêu cầu Hủy Đơn</a>
+                                            <a class="nav-link active bg-primary text-white" href="/search_invoice" style="font-weight: 600; font-size: 0.85rem;">Tra cứu hóa đơn</a>
                                         </li>
                                     </ul>
                                     <div class="text-center mb-4">

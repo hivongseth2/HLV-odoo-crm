@@ -34,7 +34,7 @@
                                 <a class="nav-link active bg-dark text-white" href="/misa/purchase/lookup" style="font-weight: 600;">Tra cứu chứng từ mua hàng</a>
                             </li>
                             <li class="nav-item mx-1">
-                                <a class="nav-link text-dark" href="/cancel-request/login" style="font-weight: 500;">Yêu cầu Hủy Đơn</a>
+                                <a class="nav-link text-dark" href="/search_invoice" style="font-weight: 500;">Tra cứu hóa đơn</a>
                             </li>
                         </ul>
 
