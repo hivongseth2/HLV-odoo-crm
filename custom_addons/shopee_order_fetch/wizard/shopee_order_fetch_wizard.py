@@ -56,6 +56,11 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         string='Mock JSON - Escrow Detail',
         help="Dán JSON response từ Shopee get_escrow_detail API vào đây để áp dụng voucher.",
     )
+    sale_order_ids = fields.Many2many(
+        'sale.order',
+        string='Mã đơn Odoo (thủ công)',
+        help="Chọn các đơn Odoo (ví dụ S00001) tương ứng với các mã Shopee ở trên (theo thứ tự từ trên xuống). Dùng khi mã Odoo chưa được lưu mã Shopee (shopee_order_ref) và không tự tìm được."
+    )
 
     # ──────────────────────────────────────────────────
     #  Helpers
@@ -299,6 +304,79 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         if created_orders:
             lines.append("✅ ĐÃ TẠO:")
             lines.extend(f"  • {o}" for o in created_orders)
+        if skipped_orders:
+            lines.append("\n⏭️ BỎ QUA:")
+            lines.extend(f"  • {o}" for o in skipped_orders)
+
+        self.sudo().result_display = '\n'.join(lines)
+
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': self._name,
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
+    # ──────────────────────────────────────────────────
+    #  Action: Cập nhật giá từ Escrow
+    # ──────────────────────────────────────────────────
+
+    def action_update_price_from_escrow(self):
+        """Gọi Shopee API get_escrow_detail hoặc đọc từ mock json để cập nhật lại giá cho đơn hàng đã tồn tại."""
+        self.ensure_one()
+
+        sns = self._parse_order_sn_list()
+
+        # Parse Escrow JSON (tùy chọn) trước
+        mock_escrow_data = None
+        if self.mock_escrow_json:
+            try:
+                escrow_raw = json.loads(self.mock_escrow_json)
+                mock_escrow_data = escrow_raw.get('response', escrow_raw)
+            except json.JSONDecodeError as e:
+                raise UserError(_("Mock Escrow JSON không hợp lệ:\n%s") % str(e))
+
+        creds = None
+        if not mock_escrow_data:
+             creds = self._get_shopee_credentials()
+
+        updated_orders = []
+        skipped_orders = []
+        manual_orders = list(self.sale_order_ids)
+
+        for i, order_sn in enumerate(sns):
+            so = self.env['sale.order'].sudo().search([
+                ('shopee_order_ref', '=', order_sn)
+            ], limit=1)
+
+            if not so:
+                if i < len(manual_orders):
+                    so = manual_orders[i]
+                    so.sudo().write({'shopee_order_ref': order_sn})
+                    _logger.info("Shopee: Đã gán mã Shopee %s cho đơn Odoo %s", order_sn, so.name)
+                else:
+                    skipped_orders.append(f"{order_sn} (Không tìm thấy đơn hàng trong hệ thống)")
+                    continue
+
+            try:
+                escrow_data = mock_escrow_data
+                if not escrow_data:
+                    escrow_data = self._call_escrow_api(creds, order_sn)
+                
+                if escrow_data:
+                    self._apply_escrow_voucher(so, escrow_data)
+                    updated_orders.append(f"{order_sn} → Đã cập nhật giá (Escrow)")
+                else:
+                    skipped_orders.append(f"{order_sn} (Không có dữ liệu Escrow từ Shopee)")
+            except Exception as e:
+                _logger.error("Shopee: Lỗi cập nhật giá Escrow cho %s: %s", order_sn, str(e), exc_info=True)
+                skipped_orders.append(f"{order_sn} (LỖI: {str(e)})")
+
+        lines = []
+        if updated_orders:
+            lines.append("✅ ĐÃ CẬP NHẬT GIÁ:")
+            lines.extend(f"  • {o}" for o in updated_orders)
         if skipped_orders:
             lines.append("\n⏭️ BỎ QUA:")
             lines.extend(f"  • {o}" for o in skipped_orders)
@@ -561,13 +639,18 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         return False
 
     def _apply_escrow_voucher(self, so, escrow_data):
-        """Áp dụng shopee_voucher từ escrow response.
-        Tăng discount % của các dòng để giảm giá chính xác."""
-        buyer_payment = escrow_data.get('buyer_payment_info', {})
-        shopee_voucher = buyer_payment.get('shopee_voucher', 0)
-        seller_voucher = buyer_payment.get('seller_voucher', 0)
+        """Áp dụng voucher của Shop từ escrow response.
+        Chỉ giảm giá phần voucher do Shop chịu (voucher_from_seller), 
+        phần Shopee tài trợ vẫn được tính vào doanh thu."""
+        order_income = escrow_data.get('order_income', {})
+        seller_voucher = order_income.get('voucher_from_seller', 0)
 
-        total_voucher = abs((shopee_voucher or 0) + (seller_voucher or 0))
+        # Fallback lấy từ buyer_payment_info nếu không có order_income
+        if not seller_voucher:
+            buyer_payment = escrow_data.get('buyer_payment_info', {})
+            seller_voucher = abs(buyer_payment.get('seller_voucher', 0))
+
+        total_voucher = abs(seller_voucher)
 
         if total_voucher <= 0:
             return
