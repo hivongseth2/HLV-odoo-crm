@@ -277,9 +277,10 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         so_vals = {
             'partner_id': partner.id,
             'shopee_order_ref': order_data.get('order_sn', ''),
-            'shopee_shop_id': shop.id,
             'shopee_order_status': order_data.get('order_status', ''),
         }
+        if shop:
+            so_vals['shopee_shop_id'] = shop.id
         so = self.env['sale.order'].sudo().create(so_vals)
 
         # 3. Tạo sale.order.line từ item_list
@@ -373,8 +374,8 @@ class ShopeeOrderFetchWizard(models.TransientModel):
             })
             _logger.info("Shopee: Đã tạo sản phẩm '%s' (SKU: %s)", product.name, model_sku)
 
-        # 5. Tạo shopee.item nếu chưa có
-        if not existing_item:
+        # 5. Tạo shopee.item nếu chưa có VÀ có shop
+        if not existing_item and shop:
             shopee_item_vals = {
                 'shopee_item_identifier': item_id,
                 'product_id': product.id,
