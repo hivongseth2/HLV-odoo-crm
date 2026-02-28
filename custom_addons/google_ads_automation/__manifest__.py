@@ -14,8 +14,12 @@
     "data": [
         "security/google_ads_security.xml",
         "security/ir.model.access.csv",
+        "data/ir_cron_data.xml",
         "views/google_ads_account_views.xml",
         "views/google_ads_campaign_views.xml",
+        "views/google_ads_ad_group_views.xml",
+        "views/google_ads_ad_views.xml",
+        "views/google_ads_rule_views.xml",
         "views/menu_views.xml",
     ],
     "installable": True,

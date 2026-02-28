@@ -8,18 +8,42 @@
 
     <!-- Sub menus -->
     <menuitem id="menu_google_ads_campaigns"
-              name="Campaigns"
+              name="Chiến Dịch"
               parent="menu_google_ads_root"
               action="action_google_ads_campaign"
               sequence="10"/>
 
+    <menuitem id="menu_google_ads_ad_groups"
+              name="Nhóm Quảng Cáo"
+              parent="menu_google_ads_root"
+              action="action_google_ads_ad_group"
+              sequence="20"/>
+
+    <menuitem id="menu_google_ads_ads"
+              name="Quảng Cáo"
+              parent="menu_google_ads_root"
+              action="action_google_ads_ad"
+              sequence="30"/>
+
+    <menuitem id="menu_google_ads_rules"
+              name="Quy Tắc Tự Động"
+              parent="menu_google_ads_root"
+              action="action_google_ads_rule"
+              sequence="40"/>
+
+    <menuitem id="menu_google_ads_rules_log"
+              name="Lịch Sử Quy Tắc"
+              parent="menu_google_ads_root"
+              action="action_google_ads_rule_log"
+              sequence="45"/>
+
     <menuitem id="menu_google_ads_configuration"
-              name="Configuration"
+              name="Cấu Hình"
               parent="menu_google_ads_root"
               sequence="100"/>
 
     <menuitem id="menu_google_ads_accounts"
-              name="Accounts"
+              name="Tài Khoản API"
               parent="menu_google_ads_configuration"
               action="action_google_ads_account"
               sequence="10"/>

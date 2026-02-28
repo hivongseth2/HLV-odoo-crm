@@ -14,11 +14,11 @@ except ImportError:
 
 class GoogleAdsAccount(models.Model):
     _name = 'google.ads.account'
-    _description = 'Google Ads API Account'
+    _description = 'Tài khoản Google Ads API'
     _inherit = ['mail.thread', 'mail.activity.mixin']
 
-    name = fields.Char(string='Account Name', required=True)
-    active = fields.Boolean(default=True)
+    name = fields.Char(string='Tên Tài Khoản', required=True)
+    active = fields.Boolean(default=True, string='Kích Hoạt')
     
     # API Credentials
     developer_token = fields.Char(string='Developer Token', required=True, tracking=True)
@@ -27,24 +27,24 @@ class GoogleAdsAccount(models.Model):
     refresh_token = fields.Char(string='Refresh Token', required=True)
     login_customer_id = fields.Char(
         string='Login Customer ID (MCC)', 
-        help='The Manager Account ID to authenticate. Format: 1234567890 (no dashes)'
+        help='ID của tài khoản người quản lý (MCC). Định dạng: 1234567890 (không có dấu -)'
     )
     operating_customer_id = fields.Char(
         string='Operating Customer ID', required=True,
-        help='The ID of the specific Ads Account you want to manage. Format: 1234567890 (no dashes)'
+        help='ID của tài khoản Ads bạn muốn quản lý trực tiếp. Định dạng: 1234567890 (không có dấu -)'
     )
 
     state = fields.Selection([
-        ('draft', 'Draft'),
-        ('connected', 'Connected'),
-        ('error', 'Error')
-    ], string='Status', default='draft', tracking=True)
+        ('draft', 'Nháp'),
+        ('connected', 'Đã Kết Nối'),
+        ('error', 'Lỗi')
+    ], string='Trạng Thái', default='draft', tracking=True)
 
     def _get_google_ads_client(self):
         """Build Google Ads Client from credentials"""
         self.ensure_one()
         if not GoogleAdsClient:
-            raise UserError(_("The 'google-ads' python library is not installed. Please contact your system administrator."))
+            raise UserError(_("Thư viện Python 'google-ads' chưa được cài đặt. Vui lòng liên hệ quản trị hệ thống (Chạy: pip install google-ads)."))
         
         credentials = {
             "developer_token": self.developer_token,
@@ -58,7 +58,7 @@ class GoogleAdsAccount(models.Model):
         try:
             return GoogleAdsClient.load_from_dict(credentials, version="v15")
         except Exception as e:
-            raise UserError(_("Could not construct Google Ads Client. Error: %s") % str(e))
+            raise UserError(_("Không thể khởi tạo Google Ads Client. Chi tiết lỗi: %s") % str(e))
 
     def action_test_connection(self):
         self.ensure_one()
@@ -71,13 +71,13 @@ class GoogleAdsAccount(models.Model):
         try:
             response = customer_service.get_customer(resource_name=resource_name)
             self.state = 'connected'
-            self.message_post(body=_("Connection successful! Connected to account: %s") % response.descriptive_name)
+            self.message_post(body=_("Kết nối thành công! Đã kết nối với tài khoản: %s") % response.descriptive_name)
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
                 'params': {
-                    'title': _('Success'),
-                    'message': _('Connection successful to account: %s') % response.descriptive_name,
+                    'title': _('Thành Công'),
+                    'message': _('Kết nối thành công tới tài khoản: %s') % response.descriptive_name,
                     'type': 'success',
                     'sticky': False,
                 }
@@ -87,23 +87,48 @@ class GoogleAdsAccount(models.Model):
             for error in ex.failure.errors:
                 error_details.append(f"{error.error_code}: {error.message}")
             self.state = 'error'
-            raise UserError(_("Google Ads API Error: \n%s") % '\n'.join(error_details))
+            raise UserError(_("Lỗi Google Ads API: \n%s") % '\n'.join(error_details))
         except Exception as e:
             self.state = 'error'
-            raise UserError(_("Connection failed: %s") % str(e))
+            raise UserError(_("Kết nối thất bại: %s") % str(e))
+
+    def action_sync_all_data(self):
+        """Đồng bộ toàn bộ Dữ liệu Chiến dịch & Chỉ số hiệu suất"""
+        self.ensure_one()
+        self.action_sync_campaigns()
+        self.action_sync_ad_groups()
+        self.action_sync_ads()
+        
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Đồng bộ Hoàn tất'),
+                'message': _('Đã yêu cầu đồng bộ toàn bộ dữ liệu (Chiến dịch, Nhóm QC, Quảng Cáo, Chỉ số).'),
+                'type': 'success',
+                'sticky': False,
+            }
+        }
 
     def action_sync_campaigns(self):
         self.ensure_one()
         client = self._get_google_ads_client()
         ga_service = client.get_service("GoogleAdsService")
         
+        # Lấy chiến dịch kèm chỉ số cơ bản (metrics) của ngày hôm nay
+        # hoặc có thể tuỳ chọn lấy metrics 30 ngày (sẽ xử lý nâng cao sau)
         query = """
             SELECT
               campaign.id,
               campaign.name,
               campaign.status,
-              campaign.advertising_channel_type
+              campaign.advertising_channel_type,
+              metrics.clicks,
+              metrics.impressions,
+              metrics.cost_micros,
+              metrics.conversions
             FROM campaign
+            WHERE segments.date DURING YESTERDAY
             ORDER BY campaign.id
         """
         
@@ -115,6 +140,7 @@ class GoogleAdsAccount(models.Model):
             for batch in stream:
                 for row in batch.results:
                     campaign = row.campaign
+                    metrics = row.metrics
                     
                     status_name = campaign.status.name.lower() # UNKNOWN, UNSPECIFIED, ENABLED, PAUSED, REMOVED
                     
@@ -124,6 +150,10 @@ class GoogleAdsAccount(models.Model):
                         'google_campaign_id': str(campaign.id),
                         'status': status_name,
                         'channel_type': campaign.advertising_channel_type.name,
+                        'clicks': metrics.clicks,
+                        'impressions': metrics.impressions,
+                        'cost': metrics.cost_micros / 1000000.0,
+                        'conversions': metrics.conversions,
                     }
                     
                     existing = campaign_obj.search([('google_campaign_id', '=', str(campaign.id))], limit=1)
@@ -133,16 +163,145 @@ class GoogleAdsAccount(models.Model):
                         campaign_obj.create(vals)
                     synced_count += 1
             
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': _('Sync Complete'),
-                    'message': _('Successfully synced %s campaigns.') % synced_count,
-                    'type': 'success',
-                    'sticky': False,
-                }
-            }
+            self.message_post(body=_("Đã đồng bộ %s chiến dịch.") % synced_count)
+            return True
             
         except GoogleAdsException as ex:
-            raise UserError(_("Could not fetch campaigns. Google API Error: %s") % str(ex))
+            raise UserError(_("Không thể lấy dữ liệu chiến dịch. Lỗi API Google Ads: %s") % str(ex))
+
+    def action_sync_ad_groups(self):
+        self.ensure_one()
+        client = self._get_google_ads_client()
+        ga_service = client.get_service("GoogleAdsService")
+        
+        query = """
+            SELECT
+              campaign.id,
+              ad_group.id,
+              ad_group.name,
+              ad_group.status,
+              ad_group.type,
+              metrics.clicks,
+              metrics.impressions,
+              metrics.cost_micros,
+              metrics.conversions
+            FROM ad_group
+            WHERE segments.date DURING YESTERDAY
+            ORDER BY ad_group.id
+        """
+        
+        try:
+            stream = ga_service.search_stream(customer_id=self.operating_customer_id, query=query)
+            
+            ad_group_obj = self.env['google.ads.ad.group']
+            campaign_obj = self.env['google.ads.campaign']
+            
+            synced_count = 0
+            for batch in stream:
+                for row in batch.results:
+                    ad_group = row.ad_group
+                    campaign = row.campaign
+                    metrics = row.metrics
+                    
+                    status_name = ad_group.status.name.lower()
+                    
+                    # Cần lấy ID chiến dịch nội bộ của Odoo
+                    campaign_record = campaign_obj.search([('google_campaign_id', '=', str(campaign.id))], limit=1)
+                    if not campaign_record:
+                        continue # Bỏ qua nếu chưa đồng bộ campaign này
+                    
+                    vals = {
+                        'name': ad_group.name,
+                        'campaign_id': campaign_record.id,
+                        'google_ad_group_id': str(ad_group.id),
+                        'status': status_name,
+                        'type': ad_group.type_.name if hasattr(ad_group, 'type_') else 'UNKNOWN',
+                        'clicks': metrics.clicks,
+                        'impressions': metrics.impressions,
+                        'cost': metrics.cost_micros / 1000000.0,
+                        'conversions': metrics.conversions,
+                    }
+                    
+                    existing = ad_group_obj.search([('google_ad_group_id', '=', str(ad_group.id))], limit=1)
+                    if existing:
+                        existing.write(vals)
+                    else:
+                        ad_group_obj.create(vals)
+                    synced_count += 1
+            
+            self.message_post(body=_("Đã đồng bộ %s nhóm quảng cáo.") % synced_count)
+            return True
+            
+        except GoogleAdsException as ex:
+            raise UserError(_("Không thể lấy dữ liệu nhóm quảng cáo. Lỗi API: %s") % str(ex))
+
+    def action_sync_ads(self):
+        self.ensure_one()
+        client = self._get_google_ads_client()
+        ga_service = client.get_service("GoogleAdsService")
+        
+        query = """
+            SELECT
+              ad_group.id,
+              ad_group_ad.ad.id,
+              ad_group_ad.ad.name,
+              ad_group_ad.status,
+              ad_group_ad.ad.type,
+              ad_group_ad.ad.final_urls,
+              metrics.clicks,
+              metrics.impressions,
+              metrics.cost_micros,
+              metrics.conversions
+            FROM ad_group_ad
+            WHERE segments.date DURING YESTERDAY
+            ORDER BY ad_group_ad.ad.id
+        """
+        
+        try:
+            stream = ga_service.search_stream(customer_id=self.operating_customer_id, query=query)
+            
+            ad_obj = self.env['google.ads.ad']
+            ad_group_obj = self.env['google.ads.ad.group']
+            
+            synced_count = 0
+            for batch in stream:
+                for row in batch.results:
+                    ad_group_ad = row.ad_group_ad
+                    ad = ad_group_ad.ad
+                    ad_group = row.ad_group
+                    metrics = row.metrics
+                    
+                    status_name = ad_group_ad.status.name.lower()
+                    
+                    # Cần lấy ID Ad Group nội bộ của Odoo
+                    ad_group_record = ad_group_obj.search([('google_ad_group_id', '=', str(ad_group.id))], limit=1)
+                    if not ad_group_record:
+                        continue 
+                    
+                    final_urls = ", ".join(ad.final_urls) if getattr(ad, 'final_urls', None) else ""
+                    
+                    vals = {
+                        'name': ad.name or f"Ad {ad.id}",
+                        'ad_group_id': ad_group_record.id,
+                        'google_ad_id': str(ad.id),
+                        'status': status_name,
+                        'type': ad.type_.name if hasattr(ad, 'type_') else 'UNKNOWN',
+                        'final_urls': final_urls,
+                        'clicks': metrics.clicks,
+                        'impressions': metrics.impressions,
+                        'cost': metrics.cost_micros / 1000000.0,
+                        'conversions': metrics.conversions,
+                    }
+                    
+                    existing = ad_obj.search([('google_ad_id', '=', str(ad.id))], limit=1)
+                    if existing:
+                        existing.write(vals)
+                    else:
+                        ad_obj.create(vals)
+                    synced_count += 1
+            
+            self.message_post(body=_("Đã đồng bộ %s mẫu quảng cáo.") % synced_count)
+            return True
+            
+        except GoogleAdsException as ex:
+            raise UserError(_("Không thể lấy dữ liệu mẫu quảng cáo. Lỗi API: %s") % str(ex))

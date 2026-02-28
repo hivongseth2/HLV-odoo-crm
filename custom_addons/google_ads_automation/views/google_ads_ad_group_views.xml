@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_google_ads_campaign_tree" model="ir.ui.view">
-        <field name="name">google.ads.campaign.list</field>
-        <field name="model">google.ads.campaign</field>
+    <record id="view_google_ads_ad_group_list" model="ir.ui.view">
+        <field name="name">google.ads.ad.group.list</field>
+        <field name="model">google.ads.ad.group</field>
         <field name="arch" type="xml">
-            <list string="Chiến Dịch Google Ads" create="false" edit="false">
+            <list string="Nhóm Quảng Cáo Google Ads" create="false" edit="false">
                 <field name="name"/>
-                <field name="account_id"/>
-                <field name="channel_type"/>
+                <field name="campaign_id"/>
+                <field name="type"/>
                 <field name="clicks"/>
                 <field name="impressions"/>
                 <field name="cost"/>
@@ -17,9 +17,9 @@
         </field>
     </record>
 
-    <record id="action_google_ads_campaign" model="ir.actions.act_window">
-        <field name="name">Chiến Dịch</field>
-        <field name="res_model">google.ads.campaign</field>
+    <record id="action_google_ads_ad_group" model="ir.actions.act_window">
+        <field name="name">Nhóm Quảng Cáo</field>
+        <field name="res_model">google.ads.ad.group</field>
         <field name="view_mode">list,form</field>
     </record>
 </odoo>
