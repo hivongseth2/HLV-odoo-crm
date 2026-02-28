@@ -40,20 +40,20 @@
     </record>
 
     <record id="view_google_ads_account_tree" model="ir.ui.view">
-        <field name="name">google.ads.account.tree</field>
+        <field name="name">google.ads.account.list</field>
         <field name="model">google.ads.account</field>
         <field name="arch" type="xml">
-            <tree string="Google Ads Accounts">
+            <list string="Google Ads Accounts">
                 <field name="name"/>
                 <field name="operating_customer_id"/>
                 <field name="state"/>
-            </tree>
+            </list>
         </field>
     </record>
 
     <record id="action_google_ads_account" model="ir.actions.act_window">
         <field name="name">Google Ads Accounts</field>
         <field name="res_model">google.ads.account</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
     </record>
 </odoo>
