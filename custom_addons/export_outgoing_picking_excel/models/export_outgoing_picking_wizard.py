@@ -234,7 +234,7 @@ class PickingExportWizard(models.TransientModel):
     def _partner_code(self, partner):
         if not partner:
             return ""
-        return partner.ref or (partner.barcode if hasattr(partner, "barcode") else None) or partner.vat or str(partner.id) or ""
+        return partner.ref or (partner.company_registry if hasattr(partner, "company_registry") else None) or partner.vat or str(partner.id) or ""
 
     def _get_warehouse_code(self, picking):
         """Lấy mã kho"""
@@ -521,14 +521,18 @@ class PickingExportWizard(models.TransientModel):
             # Lấy từ POS Order Line (số lượng đã có dấu âm cho đơn hoàn tiền)
             uom = prod.uom_id  # POS không có product_uom field
             qty = pos_line.qty or 0.0  # Số lượng từ POS (đã âm nếu là return)
-            don_gia = pos_line.price_unit or 0.0
+            # Thành tiền chưa thuế
+            thanh_tien = pos_line.price_subtotal or 0.0
+            
+            # Tính lại đơn giá chưa thuế để tương thích với chiết khấu
             ty_le_ck = pos_line.discount or 0.0
+            if qty != 0 and ty_le_ck != 100.0:
+                 don_gia = thanh_tien / (qty * (1 - ty_le_ck / 100.0))
+            else:
+                 don_gia = pos_line.price_unit# Fallback if qty is 0 or discount is 100%
             
             # Tính tiền chiết khấu
             tien_chiet_khau = abs(don_gia * qty * ty_le_ck / 100)
-            
-            # Thành tiền = price_subtotal từ POS Order Line (đã tính sẵn chiết khấu và dấu)
-            thanh_tien = pos_line.price_subtotal_incl or 0.0
             
             # Thuế GTGT từ POS
             ty_le_thue_gtgt = 0.0
@@ -985,6 +989,7 @@ class PickingExportWizard(models.TransientModel):
             {'key': 'don_gia_von', 'name': 'Đơn giá vốn', 'width': 15},
             {'key': 'tien_von', 'name': 'Tiền vốn', 'width': 15},
             {'key': 'hang_hoa_giu_ho', 'name': 'Hàng hóa giữ hộ/bán hộ', 'width': 20},
+            {'key': 'la_hoa_don_tu_may_tinh_tien', 'name': 'Là hóa đơn từ máy tính tiền', 'width': 25},
         ]
 
     def _get_pos_row_data(self, picking):
@@ -1139,16 +1144,16 @@ class PickingExportWizard(models.TransientModel):
                     'hinh_thuc_ban_hang': 'Bán hàng hóa trong nước',
                     'phuong_thuc_thanh_toan': phuong_thuc_excel,
                     'kiem_phieu_xuat_kho': 'Có',
-                    'lap_kem_hoa_don': 'Không',
-                    'da_lap_hoa_don': 'Chưa lập',
+                    'lap_kem_hoa_don': 'Có',
+                    'da_lap_hoa_don': 'Đã lập',
                     'ngay_hach_toan': date_str,
                     'ngay_chung_tu': date_str,
                     'so_chung_tu': so_chung_tu,
                     'so_phieu_xuat': so_phieu_xuat,
-                    'mau_so_hd': '',
-                    'ky_hieu_hd': '',
+                    'mau_so_hd': '1',
+                    'ky_hieu_hd': '1C26TLV',
                     'so_hoa_don': '',
-                    'ngay_hoa_don': '',
+                    'ngay_hoa_don': date_str,
                     'ma_khach_hang': ma_khach_hang,
                     'ten_khach_hang': partner_name,
                     'dia_chi': partner_address,
@@ -1197,6 +1202,7 @@ class PickingExportWizard(models.TransientModel):
                     'don_gia_von': prod.standard_price,
                     'tien_von': prod.standard_price * abs(qty),  # Use abs for cost calculation
                     'hang_hoa_giu_ho': '',
+                    'la_hoa_don_tu_may_tinh_tien': 'Có',
                 }
                 rows.append(row)
                 
@@ -1359,6 +1365,7 @@ class PickingExportWizard(models.TransientModel):
                 'don_gia_von': prod.standard_price,
                 'tien_von': prod.standard_price * qty,
                 'hang_hoa_giu_ho': '',
+                'la_hoa_don_tu_may_tinh_tien': 'Có',
             }
             rows.append(row)
         return rows
