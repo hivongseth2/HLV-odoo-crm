@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_google_ads_account_user,google.ads.account.user,model_google_ads_account,group_google_ads_user,1,0,0,0
+access_google_ads_account_manager,google.ads.account.manager,model_google_ads_account,group_google_ads_manager,1,1,1,1
+access_google_ads_campaign_user,google.ads.campaign.user,model_google_ads_campaign,group_google_ads_user,1,0,0,0
+access_google_ads_campaign_manager,google.ads.campaign.manager,model_google_ads_campaign,group_google_ads_manager,1,1,1,1

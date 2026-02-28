@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Top level menu -->
+    <menuitem id="menu_google_ads_root"
+              name="Google Ads"
+              web_icon="google_ads_automation,static/description/icon.png"
+              sequence="55"/>
+
+    <!-- Sub menus -->
+    <menuitem id="menu_google_ads_campaigns"
+              name="Campaigns"
+              parent="menu_google_ads_root"
+              action="action_google_ads_campaign"
+              sequence="10"/>
+
+    <menuitem id="menu_google_ads_configuration"
+              name="Configuration"
+              parent="menu_google_ads_root"
+              sequence="100"/>
+
+    <menuitem id="menu_google_ads_accounts"
+              name="Accounts"
+              parent="menu_google_ads_configuration"
+              action="action_google_ads_account"
+              sequence="10"/>
+</odoo>
