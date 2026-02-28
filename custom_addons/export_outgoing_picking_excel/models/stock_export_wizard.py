@@ -83,8 +83,10 @@ class StockExportWizard(models.TransientModel):
     def _partner_code(self, partner):
         if not partner:
             return ""
-        # Prioritize Commercial Partner Ref, then Partner Ref
+        # Prioritize Commercial Partner Ref, then Partner Ref, then company_registry
         ref = partner.commercial_partner_id.ref or partner.ref
+        if not ref:
+            ref = partner.commercial_partner_id.company_registry or partner.company_registry
         if ref:
             return ref
         return ""
