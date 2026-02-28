@@ -359,11 +359,21 @@ class ShopeeOrderFetchWizard(models.TransientModel):
                     skipped_orders.append(f"{order_sn} (Không tìm thấy đơn hàng trong hệ thống)")
                     continue
 
+            # Nếu không tìm được Order Detail, thử dùng dữ liệu từ Escrow (nếu có items)
             try:
                 escrow_data = mock_escrow_data
-                if not escrow_data:
+                if not escrow_data and creds:
                     escrow_data = self._call_escrow_api(creds, order_sn)
-                
+            except Exception as e:
+                _logger.warning("Shopee: Lỗi gọi escrow API: %s", str(e))
+                escrow_data = None
+
+            if escrow_data and escrow_data.get('order_income', {}).get('items'):
+                # Escrow có items -> update giá theo escrow items
+                self._update_order_lines_from_data(so, escrow_data.get('order_income', {}))
+
+            # --- Apply Escrow Voucher ---
+            try:
                 if escrow_data:
                     self._apply_escrow_voucher(so, escrow_data)
                     updated_orders.append(f"{order_sn} → Đã cập nhật giá (Escrow)")
@@ -638,6 +648,46 @@ class ShopeeOrderFetchWizard(models.TransientModel):
 
         return False
 
+    def _update_order_lines_from_data(self, so, order_data):
+        """Cập nhật giá và chiết khấu cho các sale.order.line hiện tại từ data (Order Detail hoặc Escrow)."""
+        # Hỗ trợ cả trường hợp data là từ get_order_detail (có 'item_list')
+        # Hoặc data là từ get_escrow_detail.order_income (có 'items')
+        
+        item_list = order_data.get('item_list', [])
+        if not item_list:
+            item_list = order_data.get('items', [])
+            
+        for item_data in item_list:
+            model_sku = item_data.get('model_sku', '') or item_data.get('item_sku', '')
+            if not model_sku:
+                continue
+            
+            # Tìm line tương ứng trong so theo mã nội bộ (default_code)
+            line = so.order_line.filtered(lambda l: l.product_id.default_code == model_sku)
+            if not line:
+                continue
+                
+            qty = item_data.get('model_quantity_purchased', item_data.get('quantity_purchased', 1))
+            original_price = item_data.get('model_original_price', item_data.get('original_price', 0))
+            discounted_price = item_data.get('model_discounted_price', item_data.get('discounted_price', 0))
+
+            # Tính phần trăm discount với độ chính xác cao để tránh lệch (vd: giữ 8 chữ số thập phân thay vì Odoo tự làm tròn 2 số)
+            discount = 0.0
+            if original_price and discounted_price and original_price > 0:
+                discount = (original_price - discounted_price) / original_price * 100.0
+
+            line_vals = {
+                'price_unit': original_price,
+                'discount': discount,
+            }
+            
+            tax_included = self._get_tax_included(so.company_id)
+            if tax_included:
+                line_vals['tax_id'] = [(6, 0, tax_included.ids)]
+                
+            line.sudo().write(line_vals)
+            _logger.info("Shopee: Đã update giá dòng %s: price=%s, discount=%s", model_sku, original_price, discount)
+
     def _apply_escrow_voucher(self, so, escrow_data):
         """Áp dụng voucher của Shop từ escrow response.
         Chỉ giảm giá phần voucher do Shop chịu (voucher_from_seller), 
@@ -678,20 +728,26 @@ class ShopeeOrderFetchWizard(models.TransientModel):
             if line_total <= 0:
                 continue
 
-            line_subtotal_before = line_total * (1 - line.discount / 100)
+            # Giá trị của dòng trước khi trừ thêm voucher của Escrow
+            # (tương đương amount đã chiết khấu do giá gốc / giá đã giảm của món hàng)
+            line_subtotal_before = line_total * (1 - line.discount / 100.0)
 
             if i < len(lines_list) - 1:
-                line_voucher_share = int(
-                    (line_subtotal_before / total_before_voucher) * total_voucher
-                )
+                # Phân bổ theo tỷ trọng của dòng đó so với tổng giá trị các dòng
+                line_voucher_share = (line_subtotal_before / total_before_voucher) * total_voucher
             else:
+                # Dòng cuối cùng tự ôm nốt phần dư để cho khớp hoàn toàn số tiền
                 line_voucher_share = total_voucher - voucher_distributed
 
             voucher_distributed += line_voucher_share
 
-            # Tính discount mới: không làm tròn
+            # Cập nhật lại discount % cho dòng để ra đúng số tiền
             new_subtotal = line_subtotal_before - line_voucher_share
-            new_discount = (1 - new_subtotal / line_total) * 100
+            
+            if new_subtotal < 0:
+                new_subtotal = 0.0
+                
+            new_discount = (1 - new_subtotal / line_total) * 100.0
             line.sudo().write({'discount': new_discount})
 
         _logger.info(
