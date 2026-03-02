@@ -170,7 +170,7 @@ class DeliveryScheduleLine(models.Model):
     # Sale Order info cho thủ kho
     order_tag_ids = fields.Many2many(related='order_id.tag_ids', string='Thẻ đơn hàng')
     order_origin = fields.Char(related='order_id.origin', string='Nguồn gốc (Origin)')
-    order_htgh = fields.Selection(related='order_id.x_studio_htgh', string='Hình thức giao hàng')
+    order_htgh = fields.Text(related='order_id.x_studio_htgh', string='Hình thức giao hàng')
     po_expected_date = fields.Date(string='Ngày hàng về dự kiến (PO)', compute='_compute_po_expected_date', store=True)
 
     @api.depends('order_id')
