@@ -151,9 +151,14 @@ class DeliveryCoordinatorWizard(models.TransientModel):
         5. Quy tắc ưu tiên phương tiện:
            - Priority 1: Nếu cùng tuyến đi giao thông suốt có >= 9 đơn (List A + B), bắt buộc gán Xe tải lớn (tai_lon).
            - Priority 2: Nếu giao lẻ tẻ, đi nhiều địa điểm cách xa nhau hoặc giao nội thành, ưu tiên Xe tải Van/Xe máy (van_xe_may).
-        6. Tình huống:
+        6. Phân bổ Phiên giao hàng (session):
+           - "morning" (Sáng): Tuyến xa đủ đơn List A, hoặc Tuyến nội thành đi sớm.
+           - "afternoon" (Chiều): Tuyến có đơn List B (chờ hàng về trưa), hoặc ca 2 của các xe.
+           - "evening" (Tối): Giao ngoài giờ.
+           - "other" (Khác): Tùy biến.
+        7. Tình huống:
            - Cùng 1 chuyến đi hãy xếp thứ tự các điểm dừng logic nhất tính từ kho xuất phát. Có thể ghi chú trong ai_strategy.
-           - Nếu hàng List B (chờ nhập trưa về): Chọn các đơn cực kỳ gần kho để đi giao trước 10h sáng, sau đó quay lại kho lấy hàng.
+           - Nếu hàng List B: ưu tiên cho Phiên Chiều (afternoon) để đảm bảo hàng kịp về.
         """
         
         system_prompt += """
@@ -165,6 +170,7 @@ class DeliveryCoordinatorWizard(models.TransientModel):
              {
                "route": "Nhơn Trạch | Long Thành | Mỹ Xuân - Phú Mỹ | Nội Thành / Gần Công Ty | Khác",
                "vehicle_type": "tai_lon | van_xe_may",
+               "session": "morning | afternoon | evening | other",
                "order_ids": [
                  {
                    "id": 1,
@@ -221,9 +227,9 @@ class DeliveryCoordinatorWizard(models.TransientModel):
                 'warehouse_code': warehouse_code,
                 'route': sched.get('route', 'Khác'),
                 'vehicle_type': sched.get('vehicle_type', 'van_xe_may'),
+                'session': sched.get('session', 'morning'),
                 'note': sched.get('note', ''),
                 'driver_name': sched.get('driver_name', ''),
-                'state': 'draft',
             }
             new_sched = self.env['delivery.schedule'].create(vals)
             new_sched.name = f"DC-{new_sched.id:04d}"

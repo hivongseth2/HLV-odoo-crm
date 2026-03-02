@@ -25,22 +25,14 @@ class DeliverySchedule(models.Model):
     
     line_ids = fields.One2many('delivery.schedule.line', 'schedule_id', string='Chi tiết đơn hàng')
     
-    state = fields.Selection([
-        ('draft', 'Nháp'),
-        ('confirmed', 'Xác nhận'),
-        ('done', 'Hoàn thành'),
-        ('cancel', 'Hủy')
-    ], string='Trạng thái', default='draft')
+    session = fields.Selection([
+        ('morning', 'Sáng'),
+        ('afternoon', 'Chiều'),
+        ('evening', 'Tối'),
+        ('other', 'Khác')
+    ], string='Phiên giao hàng', default='morning', required=True)
+    
     note = fields.Text(string='Ghi chú từ AI')
-
-    def action_confirm(self):
-        self.write({'state': 'confirmed'})
-
-    def action_done(self):
-        for record in self:
-            if record.state != 'confirmed':
-                raise UserError(_("Chỉ có thể hoàn thành lịch trình ở trạng thái Đã XÁc Nhận."))
-        self.state = 'done'
 
     def action_create_batch_picking(self):
         self.ensure_one()
@@ -71,6 +63,48 @@ class DeliverySchedule(models.Model):
             'res_id': batch.id,
             'view_mode': 'form',
             'target': 'current',
+        }
+
+    def action_view_google_map(self):
+        self.ensure_one()
+        import urllib.parse
+        
+        # Get origin (warehouse)
+        origin = self.warehouse_code or ''
+        warehouse = self.env['stock.warehouse'].search([('code', '=', self.warehouse_code)], limit=1)
+        if warehouse and warehouse.partner_id.contact_address:
+            origin = warehouse.partner_id.contact_address.replace('\n', ', ')
+            
+        # Get destinations (delivery addresses)
+        addresses = []
+        for line in self.line_ids:
+            if line.order_id.partner_shipping_id:
+                addr = line.order_id.partner_shipping_id.contact_address
+                if addr:
+                    addresses.append(addr.replace('\n', ', '))
+                    
+        if not addresses:
+            raise UserError(str("Không có địa chỉ giao hàng nào trong lịch trình này."))
+            
+        # Google Maps Dir URL expects: /dir/?api=1&origin=...&destination=...&waypoints=...|...
+        # We set origin as warehouse, destination as last address, and waypoints as the rest.
+        destination = addresses[-1]
+        waypoints = addresses[:-1]
+        
+        base_url = "https://www.google.com/maps/dir/?api=1"
+        url_params = {
+            'origin': origin,
+            'destination': destination
+        }
+        if waypoints:
+            url_params['waypoints'] = '|'.join(waypoints)
+            
+        full_url = f"{base_url}&{urllib.parse.urlencode(url_params)}"
+        
+        return {
+            'type': 'ir.actions.act_url',
+            'url': full_url,
+            'target': 'new',
         }
 
 class DeliveryScheduleLine(models.Model):
