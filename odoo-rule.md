@@ -358,3 +358,36 @@ class MyModel(models.Model):
 - **Giải pháp**: 
   - Hạn chế tối đa việc write ngược lại Parent trong vòng lặp create của Child. 
   - Sử dụng computed fields `store=True` cẩn thận với trigger phù hợp.
+
+13. Tài liệu kỹ thuật (TECHNICAL.md)
+Mỗi custom module **phải có** file `TECHNICAL.md` đặt trong thư mục gốc của module. File này giúp AI và developer xác định nhanh cấu trúc và tránh trùng lập code khi mở rộng.
+
+**Khi nào tạo / cập nhật**:
+- **Tạo ngay** khi viết xong module lần đầu
+- **Cập nhật ngay** mỗi khi thêm chức năng mới, thêm service/hàm, hoặc thay đổi logic quan trọng
+- Mục tiêu: `TECHNICAL.md` **luôn bám sát code hiện tại**, không để bị lỗi thời
+
+**Nội dung bắt buộc**:
+- Mục đích module (chức năng chính)
+- Cấu trúc thư mục (tree view)
+- Quy tắc kiến trúc (ai được gọi ai, nguyên tắc DRY nội bộ)
+- Mô tả từng file/layer quan trọng (đặc biệt là service layer nếu có)
+- Luồng xử lý chính (dạng sơ đồ text hoặc danh sách)
+- Hướng dẫn mở rộng (thêm endpoint, field, logic mới thì sửa file nào)
+
+**Ví dụ mẫu cấu trúc thư mục trong `TECHNICAL.md`**:
+```
+module_name/
+├── services/             ← Shared logic layer (không phụ thuộc UI)
+│   ├── api.py            ← Gọi API bên ngoài
+│   └── processor.py      ← Xử lý dữ liệu
+├── models/               ← Kế thừa models Odoo
+│   └── sale_order.py     ← Chỉ chứa actions/fields, gọi xuống services/
+└── wizard/               ← UI wizard, gọi xuống services/
+    └── my_wizard.py
+```
+
+**Quy tắc DRY trong TECHNICAL.md**:
+- Mỗi hàm chỉ được tồn tại ở **một file duy nhất**; phải ghi rõ trong `TECHNICAL.md`
+- Khi AI phát hiện code trùng lặp trong module, **trước tiên đọc `TECHNICAL.md`** để biết file đúng để đặt logic đó
+- Sau mỗi lần thêm hàm/service mới, **cập nhật `TECHNICAL.md`** để phản ánh thực trạng hiện tại
