@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_delivery_coordinator_root" name="AI Vận Chuyển" sequence="60" web_icon="delivery,static/description/icon.png"/>
+    <menuitem id="menu_delivery_schedule" name="Lịch trình AI" parent="menu_delivery_coordinator_root" action="action_delivery_schedule" sequence="10"/>
+    <menuitem id="menu_delivery_wizard" name="Chạy AI Lên Lịch" parent="menu_delivery_coordinator_root" action="action_delivery_coordinator_wizard" sequence="20"/>
+</odoo>
