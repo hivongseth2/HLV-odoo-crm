@@ -68,7 +68,7 @@ def update_order_lines_from_escrow(so, escrow_data):
         discounted_price = item_data.get('discounted_price', 0)
 
         discount = 0.0
-        if original_price and discounted_price and original_price > 0:
+        if original_price > 0 and discounted_price is not None:
             discount = (original_price - discounted_price) / original_price * 100.0
 
         line_vals = {
