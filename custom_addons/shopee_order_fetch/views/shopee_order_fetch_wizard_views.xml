@@ -16,35 +16,36 @@
                         <field name="sale_order_ids" widget="many2many_tags" placeholder="Chọn các đơn Odoo tương ứng..."/>
                     </group>
                 </group>
+                <notebook>
+                    <page string="Dữ liệu giả lập (Mock)">
+                        <group>
+                            <field name="mock_json" placeholder="Dán JSON response từ get_order_detail API vào đây..."/>
+                            <field name="mock_escrow_json" placeholder="(Tùy chọn) Dán JSON response từ get_escrow_detail API để áp dụng voucher..."/>
+                        </group>
+                    </page>
+                    <page string="Kết quả" invisible="not result_display">
+                        <field name="result_display" nolabel="1" widget="text" readonly="1"/>
+                    </page>
+                </notebook>
                 <footer>
-                    <button name="action_fetch_order"
-                            string="🔍 Lấy thông tin đơn hàng"
-                            type="object"
-                            class="btn-secondary"/>
                     <button name="action_fetch_and_create_order"
-                            string="🛒 Tạo đơn hàng"
+                            string="Tạo trực tiếp"
                             type="object"
-                            class="btn-primary"/>
-                    <button name="action_test_create_order"
-                            string="🧪 Test tạo đơn (Mock)"
-                            type="object"
-                            class="btn-warning"/>
-                    <button name="action_update_price_from_escrow"
-                            string="💰 Cập nhật giá từ Escrow"
+                            class="btn-primary" data-hotkey="q"/>
+                    <button name="action_fetch_order"
+                            string="Lấy dữ liệu"
                             type="object"
                             class="btn-secondary"/>
-                    <button string="Đóng" class="btn-secondary" special="cancel"/>
+                    <button name="action_update_price_from_escrow"
+                            string="Cập nhật giá từ Escrow"
+                            type="object"
+                            class="btn-secondary"/>
+                    <button name="action_test_create_order"
+                            string="Test giả lập"
+                            type="object"
+                            class="btn-secondary"/>
+                    <button string="Đóng" class="btn-secondary" special="cancel" data-hotkey="z"/>
                 </footer>
-                <separator string="Test Mock Data (Staging)"/>
-                <group>
-                    <field name="mock_json" nolabel="1" placeholder="Dán JSON response từ get_order_detail API vào đây..."/>
-                </group>
-                <group>
-                    <field name="mock_escrow_json" nolabel="1" placeholder="(Tùy chọn) Dán JSON response từ get_escrow_detail API để áp dụng voucher..."/>
-                </group>
-                <group string="Kết quả" invisible="not result_display">
-                    <field name="result_display" nolabel="1" widget="text" readonly="1"/>
-                </group>
             </form>
         </field>
     </record>
@@ -60,7 +61,7 @@
     <!-- Menu Item under Sales -->
     <menuitem id="menu_shopee_order_fetch"
               name="Lấy đơn hàng Shopee (thủ công)"
-              parent="stock.menu_stock_root"
+              parent="sale.sale_order_menu"
               action="action_shopee_order_fetch_wizard"
               sequence="99"/>
 
