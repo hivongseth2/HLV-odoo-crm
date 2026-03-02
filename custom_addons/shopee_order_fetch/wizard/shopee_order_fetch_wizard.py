@@ -1,38 +1,35 @@
 # -*- coding: utf-8 -*-
+"""
+wizard/shopee_order_fetch_wizard.py
+
+Wizard UI để lấy thông tin đơn hàng Shopee và tạo Sale Order.
+File này chỉ chứa fields + action methods; toàn bộ logic
+được ủy thác cho services/shopee_api.py và services/shopee_order_builder.py.
+"""
 import json
-import time
-import hashlib
-import hmac
 import logging
 
-import requests as req_lib
-
-from odoo import api, fields, models, _
+from odoo import fields, models, _
 from odoo.exceptions import UserError
 
-_logger = logging.getLogger(__name__)
+from ..services import shopee_api, shopee_escrow, shopee_order_builder
 
-# Các trường optional mặc định lấy đầy đủ từ Shopee
-_DEFAULT_OPTIONAL_FIELDS = (
-    "buyer_user_id,buyer_username,estimated_shipping_fee,recipient_address,"
-    "actual_shipping_fee,goods_to_declare,note,note_update_time,item_list,"
-    "pay_time,dropshipper,dropshipper_phone,split_up,buyer_cancel_reason,"
-    "cancel_by,cancel_reason,actual_shipping_fee_confirmed,buyer_cpf_id,"
-    "fulfillment_flag,pickup_done_time,package_list,shipping_carrier,"
-    "payment_method,total_amount,buyer_username,invoice_data,"
-    "order_chargeable_weight_gram,return_request_due_date,edt,payment_info"
-)
+_logger = logging.getLogger(__name__)
 
 
 class ShopeeOrderFetchWizard(models.TransientModel):
     _name = 'shopee.order.fetch.wizard'
     _description = 'Lấy thông tin đơn hàng Shopee qua API'
 
+    # ──────────────────────────────────────────────────
+    #  Fields
+    # ──────────────────────────────────────────────────
+
     shop_id = fields.Many2one(
         'shopee.shop',
         string='Shop Shopee',
-        required=True,
-        help="Chọn shop Shopee để lấy access_token và shop_identifier",
+        required=False,
+        help="Chọn shop Shopee để lấy access_token và shop_identifier.",
     )
     order_sn_list = fields.Text(
         string='Mã đơn hàng Shopee',
@@ -41,7 +38,7 @@ class ShopeeOrderFetchWizard(models.TransientModel):
     )
     response_optional_fields = fields.Char(
         string='Response Optional Fields',
-        default=_DEFAULT_OPTIONAL_FIELDS,
+        default=shopee_api.DEFAULT_OPTIONAL_FIELDS,
         help="Các trường tùy chọn muốn lấy từ Shopee API, cách nhau bởi dấu phẩy.",
     )
     result_display = fields.Text(
@@ -49,11 +46,29 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         readonly=True,
     )
 
+    # ── Fields dùng cho test mock (đã comment để production) ──
+    # mock_json = fields.Text(
+    #     string='Mock JSON - Order Detail',
+    #     help="Dán JSON response từ Shopee get_order_detail API vào đây để test tạo đơn.",
+    # )
+    # mock_escrow_json = fields.Text(
+    #     string='Mock JSON - Escrow Detail',
+    #     help="Dán JSON response từ Shopee get_escrow_detail API vào đây để áp dụng voucher.",
+    # )
+    # sale_order_ids = fields.Many2many(
+    #     'sale.order',
+    #     string='Mã đơn Odoo (thủ công)',
+    #     help="Chọn các đơn Odoo tương ứng với các mã Shopee ở trên (theo thứ tự từ trên xuống)."
+    # )
+
+    # ──────────────────────────────────────────────────
+    #  Helpers nội bộ của Wizard
+    # ──────────────────────────────────────────────────
+
     def _parse_order_sn_list(self):
         """Parse order SN list từ input text (hỗ trợ nhiều dòng hoặc dấu phẩy)."""
         self.ensure_one()
         raw = self.order_sn_list or ''
-        # Hỗ trợ cả xuống dòng lẫn dấu phẩy
         sns = []
         for line in raw.replace('\r', '').split('\n'):
             for sn in line.split(','):
@@ -66,106 +81,8 @@ class ShopeeOrderFetchWizard(models.TransientModel):
             raise UserError(_("Shopee API chỉ hỗ trợ tối đa 50 đơn hàng mỗi lần gọi."))
         return sns
 
-    def _generate_sign(self, partner_id, api_path, timestamp, access_token, shop_id, partner_key):
-        """Tạo HMAC-SHA256 sign theo spec Shopee Open API v2."""
-        base_string = f"{partner_id}{api_path}{timestamp}{access_token}{shop_id}"
-        sign = hmac.new(
-            partner_key.encode('utf-8'),
-            base_string.encode('utf-8'),
-            hashlib.sha256,
-        ).hexdigest()
-        return sign
-
-    def action_fetch_order(self):
-        """Gọi Shopee API get_order_detail và hiển thị kết quả. Không ghi DB."""
-        self.ensure_one()
-
-        # --- 1. Đọc credentials từ shop ---
-        shop = self.shop_id
-        if not shop:
-            raise UserError(_("Vui lòng chọn Shop Shopee."))
-
-        access_token = getattr(shop, 'access_token', False)
-        shop_identifier = getattr(shop, 'shop_identifier', False)
-
-        account = getattr(shop, 'account_id', False)
-        if not account:
-            raise UserError(_("Shop '%s' chưa được liên kết với Shopee Account.") % shop.display_name)
-
-        partner_id = getattr(account, 'partner_identifier', False)
-        partner_key = getattr(account, 'partner_key', False)
-
-        # Validate
-        missing = []
-        if not partner_id:
-            missing.append('partner_identifier (Shopee Account)')
-        if not partner_key:
-            missing.append('partner_key (Shopee Account)')
-        if not access_token:
-            missing.append('access_token (Shopee Shop)')
-        if not shop_identifier:
-            missing.append('shop_identifier (Shopee Shop)')
-        if missing:
-            raise UserError(
-                _("Thiếu thông tin cấu hình:\n%s") % '\n'.join(f"- {m}" for m in missing)
-            )
-
-        # --- 2. Parse order SN list ---
-        sns = self._parse_order_sn_list()
-        order_sn_str = ','.join(sns)
-
-        # --- 3. Tạo timestamp & sign ---
-        api_path = '/api/v2/order/get_order_detail'
-        ts = int(time.time())
-        sign = self._generate_sign(partner_id, api_path, ts, access_token, shop_identifier, partner_key)
-
-        # --- 4. Gọi Shopee API ---
-        shopee_url = f"https://partner.shopeemobile.com{api_path}"
-        params = {
-            'partner_id': partner_id,
-            'timestamp': ts,
-            'access_token': access_token,
-            'shop_id': shop_identifier,
-            'sign': sign,
-            'order_sn_list': order_sn_str,
-        }
-
-        # Optional fields
-        opt_fields = self.response_optional_fields
-        if opt_fields:
-            # Loại bỏ khoảng trắng thừa
-            params['response_optional_fields'] = ','.join(
-                f.strip() for f in opt_fields.split(',') if f.strip()
-            )
-
-        _logger.info("Shopee API get_order_detail – params: %s", params)
-
-        try:
-            resp = req_lib.get(shopee_url, params=params, timeout=30)
-        except Exception as e:
-            raise UserError(_("Lỗi kết nối tới Shopee API:\n%s") % str(e))
-
-        # --- 5. Xử lý response ---
-        try:
-            body = resp.json()
-        except Exception:
-            body = resp.text
-
-        result = {
-            'shopee_http_status': resp.status_code,
-            'shopee_response': body,
-            'request_params_sent': {
-                k: v for k, v in params.items()
-                if k not in ('sign',)  # Ẩn sign cho gọn
-            },
-        }
-
-        _logger.info("Shopee API response – status=%s", resp.status_code)
-
-        # Hiển thị kết quả
-        self.result_display = json.dumps(result, indent=2, ensure_ascii=False)
-
-        # Trả về wizard để user xem kết quả (giữ wizard mở)
+    def _return_self(self):
+        """Trả về action mở lại wizard hiện tại (dùng để hiển thị kết quả)."""
         return {
             'type': 'ir.actions.act_window',
             'res_model': self._name,
@@ -173,3 +90,186 @@ class ShopeeOrderFetchWizard(models.TransientModel):
             'view_mode': 'form',
             'target': 'new',
         }
+
+    # ──────────────────────────────────────────────────
+    #  Actions
+    # ──────────────────────────────────────────────────
+
+    def action_fetch_order(self):
+        """Gọi Shopee API get_order_detail và hiển thị kết quả. Không ghi DB."""
+        self.ensure_one()
+        creds = shopee_api.get_credentials_from_wizard(self)
+        sns = self._parse_order_sn_list()
+        status_code, body, params = shopee_api.call_order_detail(
+            creds, ','.join(sns), self.response_optional_fields
+        )
+
+        result = {
+            'shopee_http_status': status_code,
+            'shopee_response': body,
+            'request_params_sent': {k: v for k, v in params.items() if k != 'sign'},
+        }
+        self.result_display = json.dumps(result, indent=2, ensure_ascii=False)
+        return self._return_self()
+
+    def action_fetch_and_create_order(self):
+        """Gọi Shopee API, sau đó tạo Sale Order từ response."""
+        self.ensure_one()
+        creds = shopee_api.get_credentials_from_wizard(self)
+        sns = self._parse_order_sn_list()
+        status_code, body, _params = shopee_api.call_order_detail(
+            creds, ','.join(sns), self.response_optional_fields
+        )
+
+        if status_code != 200:
+            raise UserError(
+                _("Shopee API trả về lỗi (HTTP %s):\n%s")
+                % (status_code, json.dumps(body, indent=2, ensure_ascii=False))
+            )
+        error_msg = body.get('error', '')
+        if error_msg:
+            raise UserError(
+                _("Shopee API error: %s\n%s") % (error_msg, body.get('message', ''))
+            )
+
+        order_list = body.get('response', {}).get('order_list', [])
+        if not order_list:
+            raise UserError(_("Shopee API không trả về đơn hàng nào."))
+
+        shop = self.shop_id
+        created_orders = []
+        skipped_orders = []
+
+        for order_data in order_list:
+            order_sn = order_data.get('order_sn', '')
+
+            existing = self.env['sale.order'].sudo().search(
+                [('shopee_order_ref', '=', order_sn)], limit=1
+            )
+            if existing:
+                skipped_orders.append(f"{order_sn} (đã tồn tại: {existing.name})")
+                continue
+
+            try:
+                with self.env.cr.savepoint():
+                    escrow_data = shopee_api.call_escrow_detail(creds, order_sn)
+                    so = shopee_order_builder.create_order_from_data(
+                        self.env, order_data, shop, escrow_data=escrow_data
+                    )
+                    created_orders.append(f"{order_sn} → {so.name}")
+            except Exception as e:
+                _logger.error("Shopee: Lỗi tạo đơn %s: %s", order_sn, str(e), exc_info=True)
+                skipped_orders.append(f"{order_sn} (LỖI: {str(e)})")
+
+        lines = []
+        if created_orders:
+            lines.append("ĐÃ TẠO:")
+            lines.extend(f"  • {o}" for o in created_orders)
+        if skipped_orders:
+            lines.append("\nBỎ QUA:")
+            lines.extend(f"  • {o}" for o in skipped_orders)
+
+        self.sudo().result_display = '\n'.join(lines)
+        return self._return_self()
+
+    # ── Actions đã comment để production ──────────────
+
+    # def action_update_price_from_escrow(self):
+    #     """Cập nhật giá hàng loạt từ Escrow cho nhiều đơn theo mã. (Ẩn trên production)"""
+    #     self.ensure_one()
+    #     creds = shopee_api.get_credentials_from_wizard(self)
+    #     sns = self._parse_order_sn_list()
+    #
+    #     updated_orders = []
+    #     skipped_orders = []
+    #     # manual_orders = list(self.sale_order_ids)
+    #
+    #     for order_sn in sns:
+    #         so = self.env['sale.order'].sudo().search(
+    #             [('shopee_order_ref', '=', order_sn)], limit=1
+    #         )
+    #         if not so:
+    #             skipped_orders.append(f"{order_sn} (Không tìm thấy trong hệ thống)")
+    #             continue
+    #
+    #         escrow_data = shopee_api.call_escrow_detail(creds, order_sn)
+    #         if not escrow_data:
+    #             skipped_orders.append(f"{order_sn} (Không có dữ liệu Escrow)")
+    #             continue
+    #
+    #         if escrow_data.get('order_income', {}).get('items'):
+    #             shopee_escrow.update_order_lines_from_escrow(so, escrow_data)
+    #         shopee_escrow.apply_escrow_voucher(so, escrow_data)
+    #         updated_orders.append(f"{order_sn} → Đã cập nhật giá")
+    #
+    #     lines = []
+    #     if updated_orders:
+    #         lines.append("ĐÃ CẬP NHẬT GIÁ:")
+    #         lines.extend(f"  • {o}" for o in updated_orders)
+    #     if skipped_orders:
+    #         lines.append("\nBỎ QUA:")
+    #         lines.extend(f"  • {o}" for o in skipped_orders)
+    #
+    #     self.sudo().result_display = '\n'.join(lines)
+    #     return self._return_self()
+
+    # def action_test_create_order(self):
+    #     """Tạo đơn hàng từ mock JSON (dùng cho staging test). (Ẩn trên production)"""
+    #     self.ensure_one()
+    #     if not self.mock_json:
+    #         raise UserError(_("Vui lòng cung cấp Mock JSON (Order Detail)."))
+    #
+    #     try:
+    #         raw = json.loads(self.mock_json)
+    #     except json.JSONDecodeError as e:
+    #         raise UserError(_("Order Detail JSON không hợp lệ:\n%s") % str(e))
+    #
+    #     body = raw if 'response' in raw else {'response': raw}
+    #     error_msg = body.get('error', '')
+    #     if error_msg:
+    #         raise UserError(_("Response chứa lỗi: %s\n%s") % (error_msg, body.get('message', '')))
+    #
+    #     order_list = body.get('response', {}).get('order_list', [])
+    #     if not order_list:
+    #         raise UserError(_("Không tìm thấy order_list trong JSON."))
+    #
+    #     escrow_data = None
+    #     # if self.mock_escrow_json:
+    #     #     try:
+    #     #         escrow_raw = json.loads(self.mock_escrow_json)
+    #     #         escrow_data = escrow_raw.get('response', escrow_raw)
+    #     #     except json.JSONDecodeError as e:
+    #     #         _logger.warning("Escrow JSON parse error: %s", str(e))
+    #
+    #     shop = self.shop_id
+    #     created_orders = []
+    #     skipped_orders = []
+    #
+    #     for order_data in order_list:
+    #         order_sn = order_data.get('order_sn', '')
+    #         existing = self.env['sale.order'].sudo().search(
+    #             [('shopee_order_ref', '=', order_sn)], limit=1
+    #         )
+    #         if existing:
+    #             skipped_orders.append(f"{order_sn} (đã tồn tại: {existing.name})")
+    #             continue
+    #         try:
+    #             with self.env.cr.savepoint():
+    #                 so = shopee_order_builder.create_order_from_data(
+    #                     self.env, order_data, shop, escrow_data=escrow_data
+    #                 )
+    #                 created_orders.append(f"{order_sn} → {so.name}")
+    #         except Exception as e:
+    #             _logger.error("Shopee Mock: Lỗi tạo đơn %s: %s", order_sn, str(e), exc_info=True)
+    #             skipped_orders.append(f"{order_sn} (LỖI: {str(e)})")
+    #
+    #     lines = ["KẾT QUẢ TEST (Mock Data):"]
+    #     if created_orders:
+    #         lines.append("\nĐÃ TẠO:")
+    #         lines.extend(f"  • {o}" for o in created_orders)
+    #     if skipped_orders:
+    #         lines.append("\nBỎ QUA:")
+    #         lines.extend(f"  • {o}" for o in skipped_orders)
+    #
+    #     self.sudo().result_display = '\n'.join(lines)
+    #     return self._return_self()
