@@ -6,14 +6,13 @@
         <field name="model">sale.order</field>
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//field[@name='partner_id']" position="before">
+            <xpath expr="//header" position="inside">
                 <field name="shopee_order_ref" invisible="1"/>
                 <button name="action_update_price_from_escrow"
-                        string="💰 Cập nhật giá Shopee"
+                        string="Cập nhật giá Shopee"
                         type="object"
                         class="btn-secondary"
-                        invisible="not shopee_order_ref"
-                        icon="fa-refresh"/>
+                        invisible="not shopee_order_ref"/>
             </xpath>
         </field>
     </record>
