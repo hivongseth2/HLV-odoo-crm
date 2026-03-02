@@ -97,7 +97,7 @@ class DeliverySchedule(models.Model):
             'destination': destination
         }
         if waypoints:
-            url_params['waypoints'] = '|'.join(waypoints)
+            url_params['waypoints'] = 'optimize:true|' + '|'.join(waypoints)
             
         full_url = f"{base_url}&{urllib.parse.urlencode(url_params)}"
         
@@ -107,13 +107,29 @@ class DeliverySchedule(models.Model):
             'target': 'new',
         }
 
+    def action_open_kanban_board(self):
+        self.ensure_one()
+        return {
+            'name': _('Bảng Điều Phối Lắp Ghép'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'delivery.schedule.line',
+            'view_mode': 'kanban,list,form',
+            'domain': ['|', ('schedule_id', '=', self.id), ('schedule_id', '=', False)],
+            'context': {
+                'default_schedule_id': self.id,
+                'search_default_group_by_schedule': 1
+            }
+        }
+
 class DeliveryScheduleLine(models.Model):
     _name = 'delivery.schedule.line'
     _description = 'Chi tiết đơn hàng trong Lịch trình'
 
-    schedule_id = fields.Many2one('delivery.schedule', string='Lịch trình', required=True, ondelete='cascade')
-    order_id = fields.Many2one('sale.order', string='Đơn hàng', required=True)
-    partner_id = fields.Many2one(related='order_id.partner_id', string='Khách hàng', readonly=True)
+    schedule_id = fields.Many2one('delivery.schedule', string='Lịch trình', ondelete='cascade', index=True) # REMOVED required=True to allow backlog
+    schedule_date = fields.Date(related='schedule_id.date', store=True, string='Ngày giao')
+    
+    order_id = fields.Many2one('sale.order', string='Đơn hàng', required=True, ondelete='cascade')
+    partner_id = fields.Many2one('res.partner', related='order_id.partner_id', string='Khách hàng', store=True)
     commitment_date = fields.Datetime(related='order_id.commitment_date', string='Ngày hẹn giao', readonly=True)
     
     stock_status = fields.Selection([
@@ -123,3 +139,15 @@ class DeliveryScheduleLine(models.Model):
     ], string='Tình trạng hàng')
     
     ai_strategy = fields.Char(string='Chiến lược / Ghi chú AI')
+
+    def write(self, vals):
+        for record in self:
+            if record.schedule_date and record.schedule_date < fields.Date.context_today(self):
+                raise models.ValidationError("Không thể sửa đổi đơn hàng trong Lịch trình của ngày quá khứ.")
+        return super().write(vals)
+
+    def unlink(self):
+        for record in self:
+            if record.schedule_date and record.schedule_date < fields.Date.context_today(self):
+                raise models.ValidationError("Không thể xóa đơn hàng trong Lịch trình của ngày quá khứ.")
+        return super().unlink()

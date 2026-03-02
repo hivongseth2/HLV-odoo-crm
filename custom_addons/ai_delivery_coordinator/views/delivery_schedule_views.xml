@@ -25,6 +25,9 @@
                     <button name="action_view_google_map" string="Xem Bản Đồ (Google Maps)" type="object" icon="fa-map-marker" class="btn-info"/>
                 </header>
                 <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_kanban_board" type="object" class="oe_stat_button" icon="fa-tasks" string="Bảng Kéo Thả"/>
+                    </div>
                     <div class="oe_title">
                         <h1>
                             <field name="name" readonly="1"/>
@@ -134,7 +137,7 @@
                                         <span><field name="order_id"/></span>
                                     </strong>
                                 </div>
-                                <div class="o_dropdown_kanban dropdown">
+                                <div class="o_dropdown_kanban dropdown" invisible="schedule_date &lt; current_date">
                                     <a class="dropdown-toggle o-no-caret btn" role="button" data-bs-toggle="dropdown" href="#" aria-label="Dropdown menu" title="Dropdown menu">
                                         <span class="fa fa-ellipsis-v"/>
                                     </a>
@@ -171,6 +174,7 @@
                 <sheet>
                     <group>
                         <field name="schedule_id"/>
+                        <field name="schedule_date" invisible="1"/>
                         <field name="order_id"/>
                         <field name="partner_id"/>
                         <field name="stock_status"/>

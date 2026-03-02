@@ -48,6 +48,9 @@ class DeliveryCoordinatorWizard(models.TransientModel):
         starting_address = self.warehouse_id.partner_id.contact_address or self.warehouse_id.name
         warehouse_code = self.warehouse_id.code
 
+        # Keep track of all orders processed in this run to identify backlog later
+        all_processed_orders = []
+
         for order in pending_orders:
             # --- XÁC ĐỊNH KHO XUẤT ---
             results = []
@@ -126,7 +129,7 @@ class DeliveryCoordinatorWizard(models.TransientModel):
 
             report_data['orders_ready_to_ship'] += 1
 
-            order_data.append({
+            order_info = {
                 'order_id': order.id,
                 'order_name': order.name,
                 'customer_address': order.partner_shipping_id.contact_address or '',
@@ -135,7 +138,9 @@ class DeliveryCoordinatorWizard(models.TransientModel):
                 'origin': origin_val,
                 'commitment_date': str(order.commitment_date.date()) if order.commitment_date else 'Unknown',
                 'stock_status': stock_status
-            })
+            }
+            order_data.append(order_info)
+            all_processed_orders.append(order_info)
 
         if not order_data:
             raise UserError(_("Không có đơn hàng nào hợp lệ cho Kho được chọn (%s). Vui lòng kiểm tra lại.") % self.warehouse_id.name)
@@ -145,7 +150,7 @@ class DeliveryCoordinatorWizard(models.TransientModel):
         Bạn là hệ thống điều phối giao hàng (AI Coordinator) và tối ưu hóa tuyến đường (Route Optimization). 
         Quy trình điều phối như sau:
         1. ĐỊA CHỈ XUẤT PHÁT CỦA XE (KHO HÀNG): {starting_address}
-        2. Dựa vào địa chỉ xuất phát và địa chỉ khách hàng nhận trong danh sách, hãy tự ước lượng khoảng cách (TSP) để ghép các đơn hàng nằm trên cùng tuyến đường đi, hoặc các khách hàng ở gần nhau vào cùng một chuyến xe.
+        2. Dựa vào địa chỉ xuất phát và địa chỉ khách hàng nhận trong danh sách, hãy ước lượng khoảng cách (TSP) để ghép các đơn hàng nằm trên cùng tuyến đường đi, hoặc các khách hàng ở gần nhau vào cùng một chuyến xe.
         3. Phân loại đơn hàng List A (Sẵn sàng), List B (Chờ nhập buổi sáng), List C (Tạm hoãn - BẮT BUỘC BỎ QUA KHÔNG XẾP VÀO LỊCH TRÌNH).
         4. Phân tuyến giao: Nhơn Trạch, Long Thành, Mỹ Xuân - Phú Mỹ, hoặc Nội thành.
         5. Quy tắc ưu tiên phương tiện:
@@ -157,7 +162,7 @@ class DeliveryCoordinatorWizard(models.TransientModel):
            - "evening" (Tối): Giao ngoài giờ.
            - "other" (Khác): Tùy biến.
         7. Tình huống:
-           - Cùng 1 chuyến đi hãy xếp thứ tự các điểm dừng logic nhất tính từ kho xuất phát. Có thể ghi chú trong ai_strategy.
+           - Cùng 1 chuyến đi hãy xếp thứ tự các điểm dừng logic nhất tính từ kho xuất phát. Có thể ghi chú trong ai_strategy. LƯU Ý: TRONG GHI CHÚ, HÃY ĐỀ CẬP TÊN ĐƠN HÀNG (order_name, ví dụ: SO001, SO002) THAY VÌ ORDER ID để người đọc hiểu.
            - Nếu hàng List B: ưu tiên cho Phiên Chiều (afternoon) để đảm bảo hàng kịp về.
         """
         
@@ -174,10 +179,10 @@ class DeliveryCoordinatorWizard(models.TransientModel):
                "order_ids": [
                  {
                    "id": 1,
-                   "ai_strategy": "Sử dụng Tiếng Việt -> Giải thích độ ưu tiên / khoảng cách (vd: Đơn A gần Kho nhất (2km), Giao đơn A trước rồi qua đơn B)"
+                   "ai_strategy": "Sử dụng Tiếng Việt -> vd: Đơn SO001 gần Kho nhất (2km), Giao đơn SO001 trước rồi qua đơn SO002"
                  }
                ],
-               "note": "Sử dụng Tiếng Việt -> Mô tả lộ trình di chuyển tối đa quãng đường (Ví dụ: Xe dời kho đi Giao Quận 1 -> sang Phú Nhuận -> quay về)",
+               "note": "Sử dụng Tiếng Việt -> Mô tả lộ trình di chuyển tối đa quãng đường (Ví dụ: Xe rời kho đi Giao Quận 1 -> sang Phú Nhuận -> quay về)",
                "driver_name": "Tài xế 1"
              }
           ]
@@ -192,6 +197,8 @@ class DeliveryCoordinatorWizard(models.TransientModel):
 
         # 5. Create Delivery Schedules
         schedule_ids = []
+        assigned_order_ids = set()
+        
         payload = {
             "model": model,
             "messages": [
@@ -219,7 +226,6 @@ class DeliveryCoordinatorWizard(models.TransientModel):
             result_json = json.loads(gpt_content.strip())
         except Exception as e:
             raise UserError(_("OpenAI trả về định dạng JSON không hợp lệ: %s") % str(e))
-
         # Create records
         for sched in result_json.get('schedules', []):
             vals = {
@@ -247,8 +253,25 @@ class DeliveryCoordinatorWizard(models.TransientModel):
                         'stock_status': origin_order['stock_status'],
                         'ai_strategy': o_item.get('ai_strategy', '')
                     })
+                    # Mark as assigned so we know not to put it in backlog
+                    assigned_order_ids.add(origin_order['order_id'])
+                    
             if lines_data:
                 self.env['delivery.schedule.line'].create(lines_data)
+
+        # 5b. Create Backlog lines for unassigned orders (to show on Kanban)
+        backlog_lines_data = []
+        for order in all_processed_orders:
+            if order['order_id'] not in assigned_order_ids:
+                strategy_note = "Trì hoãn (Tồn đọng - Thiếu hàng)" if order['list_status'] == 'List C' else "Chưa sắp xếp chuyến (Backlog)"
+                backlog_lines_data.append({
+                    'schedule_id': False, # No schedule!
+                    'order_id': order['order_id'],
+                    'stock_status': order['stock_status'],
+                    'ai_strategy': strategy_note
+                })
+        if backlog_lines_data:
+            self.env['delivery.schedule.line'].create(backlog_lines_data)
 
         # 6. Save Report
         report_vals = {
