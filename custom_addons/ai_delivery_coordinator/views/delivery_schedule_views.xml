@@ -151,6 +151,9 @@
                 <field name="po_expected_date"/>
                 <field name="commitment_date"/>
                 <field name="ai_suggested_route"/>
+                <field name="order_tag_ids"/>
+                <field name="order_origin"/>
+                <field name="order_htgh"/>
                 <templates>
                     <t t-name="kanban-box">
                         <div class="oe_kanban_global_click">
@@ -177,6 +180,17 @@
                                 </div>
                                 <div t-if="record.commitment_date.raw_value" class="text-muted" style="font-size: 0.9em; color: #ff9800;">
                                     <i class="fa fa-calendar-check-o"/> Hẹn: <field name="commitment_date"/>
+                                </div>
+                                <!-- Tags từ Sale Order -->
+                                <div class="mt-1">
+                                    <field name="order_tag_ids" widget="many2many_tags" options="{'color_field': 'color'}"/>
+                                </div>
+                                <!-- Hình thức giao hàng & Origin -->
+                                <div t-if="record.order_htgh.raw_value" class="mt-1" style="font-size: 0.85em;">
+                                    <i class="fa fa-truck" title="HTGH"/> <strong>HTGH:</strong> <field name="order_htgh"/>
+                                </div>
+                                <div t-if="record.order_origin.raw_value" class="text-muted" style="font-size: 0.85em;">
+                                    <i class="fa fa-info-circle" title="Nguồn"/> <field name="order_origin"/>
                                 </div>
                                 <div class="mt-1">
                                     <field name="stock_status" widget="badge" 
@@ -278,7 +292,7 @@
         <field name="name">Bảng Điều Phối Lắp Ghép (Kanban)</field>
         <field name="res_model">delivery.schedule.line</field>
         <field name="view_mode">kanban,list,form</field>
-        <field name="context">{'search_default_group_by_route': 1, 'search_default_filter_today': 1}</field>
+        <field name="context">{}</field>
     </record>
 
     <!-- SERVER ACTIONS: AI Phân Tuyến & Tải Lại -->

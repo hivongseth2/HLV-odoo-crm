@@ -166,6 +166,11 @@ class DeliveryScheduleLine(models.Model):
 
     delivery_address = fields.Char(related='order_id.partner_shipping_id.contact_address', string='Địa chỉ giao hàng')
     order_line_ids = fields.One2many(related='order_id.order_line', string='Chi tiết sản phẩm')
+
+    # Sale Order info cho thủ kho
+    order_tag_ids = fields.Many2many(related='order_id.tag_ids', string='Thẻ đơn hàng')
+    order_origin = fields.Char(related='order_id.origin', string='Nguồn gốc (Origin)')
+    order_htgh = fields.Char(related='order_id.x_studio_htgh', string='Hình thức giao hàng')
     po_expected_date = fields.Date(string='Ngày hàng về dự kiến (PO)', compute='_compute_po_expected_date', store=True)
 
     @api.depends('order_id')
