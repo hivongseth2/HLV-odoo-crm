@@ -50,8 +50,14 @@ class DeliveryCoordinatorWizard(models.TransientModel):
                     list_status = "List C (Tạm hoãn)"
             
             # Additional strategy from origin or x_studio_htgh
-            strategy = dict(order._fields['x_studio_htgh'].selection).get(order.x_studio_htgh, 'Không rõ') if hasattr(order, 'x_studio_htgh') and order.x_studio_htgh else 'Không ưu tiên'
-            
+            strategy = 'Không rõ'
+            if hasattr(order, 'x_studio_htgh') and order.x_studio_htgh:
+                if order._fields['x_studio_htgh'].type == 'selection':
+                    strategy = dict(order._fields['x_studio_htgh'].selection).get(order.x_studio_htgh, order.x_studio_htgh)
+                else:
+                    strategy = order.x_studio_htgh
+            elif not hasattr(order, 'x_studio_htgh'):
+                strategy = 'Không ưu tiên'
             order_data.append({
                 'order_id': order.id,
                 'order_name': order.name,
