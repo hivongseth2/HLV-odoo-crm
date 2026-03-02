@@ -261,6 +261,7 @@
                 <field name="order_id"/>
                 <field name="partner_id"/>
                 <filter string="Hôm nay" name="filter_today" domain="[('assigned_date', '=', context_today().strftime('%Y-%m-%d'))]"/>
+                <filter string="Chưa phân tuyến" name="filter_unassigned" domain="[('route_id', '=', False)]"/>
                 <separator/>
                 <filter string="Đủ hàng" name="filter_ready" domain="[('stock_status', '=', 'ready')]"/>
                 <filter string="Thiếu hàng / Chờ hàng" name="filter_shortage" domain="[('stock_status', 'in', ('waiting', 'shortage'))]"/>
@@ -277,9 +278,26 @@
         <field name="name">Bảng Điều Phối Lắp Ghép (Kanban)</field>
         <field name="res_model">delivery.schedule.line</field>
         <field name="view_mode">kanban,list,form</field>
-        <field name="context">{'search_default_group_by_route': 1}</field>
+        <field name="context">{'search_default_group_by_route': 1, 'search_default_filter_today': 1}</field>
     </record>
 
+    <!-- SERVER ACTIONS: AI Phân Tuyến & Tải Lại -->
+    <record id="action_server_ai_assign_routes" model="ir.actions.server">
+        <field name="name">🤖 AI Phân Tuyến</field>
+        <field name="model_id" search="[('model', '=', 'delivery.schedule.line')]"/>
+        <field name="binding_model_id" search="[('model', '=', 'delivery.schedule.line')]"/>
+        <field name="binding_view_types">list,kanban</field>
+        <field name="state">code</field>
+        <field name="code">action = model.action_ai_assign_routes()</field>
+    </record>
 
+    <record id="action_server_refresh_unassigned" model="ir.actions.server">
+        <field name="name">🔄 Tải Lại Chưa Phân Tuyến</field>
+        <field name="model_id" search="[('model', '=', 'delivery.schedule.line')]"/>
+        <field name="binding_model_id" search="[('model', '=', 'delivery.schedule.line')]"/>
+        <field name="binding_view_types">list,kanban</field>
+        <field name="state">code</field>
+        <field name="code">action = model.action_refresh_unassigned()</field>
+    </record>
 
 </odoo>
