@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-from odoo import models, fields
+from odoo import models, fields, _
+from odoo.exceptions import UserError
+import urllib.parse
 
 class DeliveryRoute(models.Model):
     _name = 'delivery.route'
@@ -25,22 +27,14 @@ class DeliverySchedule(models.Model):
     
     line_ids = fields.One2many('delivery.schedule.line', 'schedule_id', string='Chi tiết đơn hàng')
     
-    state = fields.Selection([
-        ('draft', 'Nháp'),
-        ('confirmed', 'Xác nhận'),
-        ('done', 'Hoàn thành'),
-        ('cancel', 'Hủy')
-    ], string='Trạng thái', default='draft')
+    session = fields.Selection([
+        ('morning', 'Sáng'),
+        ('afternoon', 'Chiều'),
+        ('evening', 'Tối'),
+        ('other', 'Khác')
+    ], string='Phiên giao hàng', default='morning', required=True)
+    
     note = fields.Text(string='Ghi chú từ AI')
-
-    def action_confirm(self):
-        self.write({'state': 'confirmed'})
-
-    def action_done(self):
-        for record in self:
-            if record.state != 'confirmed':
-                raise UserError(_("Chỉ có thể hoàn thành lịch trình ở trạng thái Đã XÁc Nhận."))
-        self.state = 'done'
 
     def action_create_batch_picking(self):
         self.ensure_one()
@@ -73,13 +67,76 @@ class DeliverySchedule(models.Model):
             'target': 'current',
         }
 
+    def action_view_google_map(self):
+        self.ensure_one()
+        import urllib.parse
+        
+        # Get origin (warehouse)
+        origin = self.warehouse_code or ''
+        warehouse = self.env['stock.warehouse'].search([('code', '=', self.warehouse_code)], limit=1)
+        if warehouse and warehouse.partner_id.contact_address:
+            origin = warehouse.partner_id.contact_address.replace('\n', ', ')
+            
+        # Get destinations (delivery addresses)
+        addresses = []
+        for line in self.line_ids:
+            if line.order_id.partner_shipping_id:
+                addr = line.order_id.partner_shipping_id.contact_address
+                if addr:
+                    addresses.append(addr.replace('\n', ', '))
+                    
+        if not addresses:
+            raise UserError(str("Không có địa chỉ giao hàng nào trong lịch trình này."))
+            
+        # Google Maps Dir URL expects: /dir/?api=1&origin=...&destination=...&waypoints=...|...
+        # We set origin as warehouse, destination as last address, and waypoints as the rest.
+        destination = addresses[-1]
+        waypoints = addresses[:-1]
+        
+        base_url = "https://www.google.com/maps/dir/?api=1"
+        url_params = {
+            'origin': origin,
+            'destination': destination
+        }
+        if waypoints:
+            url_params['waypoints'] = 'optimize:true|' + '|'.join(waypoints)
+            
+        full_url = f"{base_url}&{urllib.parse.urlencode(url_params)}"
+        
+        return {
+            'type': 'ir.actions.act_url',
+            'url': full_url,
+            'target': 'new',
+        }
+
+    def action_open_kanban_board(self):
+        self.ensure_one()
+        return {
+            'name': _('Bảng Điều Phối Lắp Ghép'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'delivery.schedule.line',
+            'view_mode': 'kanban,list,form',
+            'domain': [
+                '|',
+                ('schedule_id', '=', self.id),
+                '&', ('schedule_id', '=', False), ('assigned_date', '=', self.date)
+            ],
+            'context': {
+                'default_schedule_id': self.id,
+                'search_default_group_by_schedule': 1
+            }
+        }
+
 class DeliveryScheduleLine(models.Model):
     _name = 'delivery.schedule.line'
     _description = 'Chi tiết đơn hàng trong Lịch trình'
 
-    schedule_id = fields.Many2one('delivery.schedule', string='Lịch trình', required=True, ondelete='cascade')
-    order_id = fields.Many2one('sale.order', string='Đơn hàng', required=True)
-    partner_id = fields.Many2one(related='order_id.partner_id', string='Khách hàng', readonly=True)
+    schedule_id = fields.Many2one('delivery.schedule', string='Lịch trình', ondelete='cascade', index=True) # REMOVED required=True to allow backlog
+    assigned_date = fields.Date(string='Ngày giao (Gán cứng)')
+    session = fields.Selection(related='schedule_id.session', string='Phiên giao', store=True)
+    
+    order_id = fields.Many2one('sale.order', string='Đơn hàng', required=True, ondelete='cascade')
+    partner_id = fields.Many2one('res.partner', related='order_id.partner_id', string='Khách hàng', store=True)
     commitment_date = fields.Datetime(related='order_id.commitment_date', string='Ngày hẹn giao', readonly=True)
     
     stock_status = fields.Selection([
@@ -89,3 +146,15 @@ class DeliveryScheduleLine(models.Model):
     ], string='Tình trạng hàng')
     
     ai_strategy = fields.Char(string='Chiến lược / Ghi chú AI')
+
+    def write(self, vals):
+        for record in self:
+            if record.assigned_date and record.assigned_date < fields.Date.context_today(self):
+                raise models.ValidationError("Không thể sửa đổi đơn hàng trong Lịch trình của ngày quá khứ.")
+        return super().write(vals)
+
+    def unlink(self):
+        for record in self:
+            if record.assigned_date and record.assigned_date < fields.Date.context_today(self):
+                raise models.ValidationError("Không thể xóa đơn hàng trong Lịch trình của ngày quá khứ.")
+        return super().unlink()

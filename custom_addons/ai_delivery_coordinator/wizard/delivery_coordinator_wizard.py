@@ -11,15 +11,53 @@ class DeliveryCoordinatorWizard(models.TransientModel):
 
     date = fields.Date('Ngày lên lịch (Mặc định: Ngày mai)', default=lambda self: fields.Date.context_today(self) + timedelta(days=1))
     warehouse_id = fields.Many2one('stock.warehouse', string='Kho xuất phát', required=True)
+    
+    has_existing_schedules = fields.Boolean(compute='_compute_has_existing_schedules')
+    override_existing = fields.Boolean(string="Xác nhận Ghi đè (Xoá lịch cũ)", default=False)
+
+    @api.depends('date', 'warehouse_id')
+    def _compute_has_existing_schedules(self):
+        for rec in self:
+            if rec.date and rec.warehouse_id:
+                count = self.env['delivery.schedule'].search_count([
+                    ('date', '=', rec.date),
+                    ('warehouse_code', '=', rec.warehouse_id.code)
+                ])
+                if count == 0:
+                    count += self.env['delivery.schedule.line'].search_count([
+                        ('assigned_date', '=', rec.date),
+                        ('schedule_id', '=', False) # Cần check cả rác của Kho này (nếu thêm link field) ... để đơn giản tạm check schedule là đủ, vì rác thường sinh ra cùng schedule.
+                    ])
+                rec.has_existing_schedules = count > 0
+            else:
+                rec.has_existing_schedules = False
 
     def action_run_ai_coordinator(self):
         # 1. Fetch settings
         api_key = self.env['ir.config_parameter'].sudo().get_param('ai_delivery_coordinator.openai_api_key')
         model = self.env['ir.config_parameter'].sudo().get_param('ai_delivery_coordinator.openai_model_delivery', 'gpt-4o')
         if not api_key:
-            raise UserError(_("Vui lòng cấu hình OpenAI API Key trong Settings."))
+            raise UserError(_("Vui lòng cấu hình OpenAI API Key trong Thiết lập."))
 
-        # 2. Get Orders (Include backlogs up to the selected date)
+        # 1b. Duplicate Check
+        existing_schedules = self.env['delivery.schedule'].search([
+            ('date', '=', self.date),
+            ('warehouse_code', '=', self.warehouse_id.code)
+        ])
+        existing_backlog_lines = self.env['delivery.schedule.line'].search([
+            ('assigned_date', '=', self.date),
+            ('schedule_id', '=', False)
+        ])
+        
+        if existing_schedules or existing_backlog_lines:
+            if not self.override_existing:
+                raise UserError(_("Đã có lịch trình hoặc đơn tồn đọng trong ngày %s cho Kho %s. Vui lòng đánh dấu chọn 'Xác nhận Ghi đè' để xóa và tự động chạy lại.") % (self.date, self.warehouse_id.name))
+            else:
+                # Dọn rác
+                existing_schedules.unlink()
+                existing_backlog_lines.unlink()
+
+        # 2. Lấy dữ liệu Sales Order chưa giao(Include backlogs up to the selected date)
         domain = [
             ('commitment_date', '<', self.date + timedelta(days=1)),
             ('state', 'in', ['sale', 'done'])
@@ -47,6 +85,9 @@ class DeliveryCoordinatorWizard(models.TransientModel):
         # Get Starting Address
         starting_address = self.warehouse_id.partner_id.contact_address or self.warehouse_id.name
         warehouse_code = self.warehouse_id.code
+
+        # Keep track of all orders processed in this run to identify backlog later
+        all_processed_orders = []
 
         for order in pending_orders:
             # --- XÁC ĐỊNH KHO XUẤT ---
@@ -120,13 +161,7 @@ class DeliveryCoordinatorWizard(models.TransientModel):
             if order.commitment_date and order.commitment_date.date() < today:
                 report_data['orders_backlog'].append(order.name)
 
-            if not is_ready and not is_flexible_delivery:
-                report_data['orders_insufficient_stock'].append(order.name)
-                continue # Skip this order from AI scheduling
-
-            report_data['orders_ready_to_ship'] += 1
-
-            order_data.append({
+            order_info = {
                 'order_id': order.id,
                 'order_name': order.name,
                 'customer_address': order.partner_shipping_id.contact_address or '',
@@ -135,7 +170,15 @@ class DeliveryCoordinatorWizard(models.TransientModel):
                 'origin': origin_val,
                 'commitment_date': str(order.commitment_date.date()) if order.commitment_date else 'Unknown',
                 'stock_status': stock_status
-            })
+            }
+            all_processed_orders.append(order_info)
+
+            if not is_ready and not is_flexible_delivery:
+                report_data['orders_insufficient_stock'].append(order.name)
+                continue # Skip this order from AI scheduling
+
+            report_data['orders_ready_to_ship'] += 1
+            order_data.append(order_info)
 
         if not order_data:
             raise UserError(_("Không có đơn hàng nào hợp lệ cho Kho được chọn (%s). Vui lòng kiểm tra lại.") % self.warehouse_id.name)
@@ -145,15 +188,17 @@ class DeliveryCoordinatorWizard(models.TransientModel):
         Bạn là hệ thống điều phối giao hàng (AI Coordinator) và tối ưu hóa tuyến đường (Route Optimization). 
         Quy trình điều phối như sau:
         1. ĐỊA CHỈ XUẤT PHÁT CỦA XE (KHO HÀNG): {starting_address}
-        2. Dựa vào địa chỉ xuất phát và địa chỉ khách hàng nhận trong danh sách, hãy tự ước lượng khoảng cách (TSP) để ghép các đơn hàng nằm trên cùng tuyến đường đi, hoặc các khách hàng ở gần nhau vào cùng một chuyến xe.
+        2. Dựa vào địa chỉ xuất phát và địa chỉ khách hàng nhận trong danh sách, hãy ước lượng khoảng cách (TSP) để ghép các đơn hàng nằm trên cùng tuyến đường đi, hoặc các khách hàng ở gần nhau vào cùng một chuyến xe.
         3. Phân loại đơn hàng List A (Sẵn sàng), List B (Chờ nhập buổi sáng), List C (Tạm hoãn - BẮT BUỘC BỎ QUA KHÔNG XẾP VÀO LỊCH TRÌNH).
-        4. Phân tuyến giao: Nhơn Trạch, Long Thành, Mỹ Xuân - Phú Mỹ, hoặc Nội thành.
-        5. Quy tắc ưu tiên phương tiện:
-           - Priority 1: Nếu cùng tuyến đi giao thông suốt có >= 9 đơn (List A + B), bắt buộc gán Xe tải lớn (tai_lon).
-           - Priority 2: Nếu giao lẻ tẻ, đi nhiều địa điểm cách xa nhau hoặc giao nội thành, ưu tiên Xe tải Van/Xe máy (van_xe_may).
-        6. Tình huống:
-           - Cùng 1 chuyến đi hãy xếp thứ tự các điểm dừng logic nhất tính từ kho xuất phát. Có thể ghi chú trong ai_strategy.
-           - Nếu hàng List B (chờ nhập trưa về): Chọn các đơn cực kỳ gần kho để đi giao trước 10h sáng, sau đó quay lại kho lấy hàng.
+        4. Phân tuyến giao: Nhóm đơn theo 3 hướng chính: Nhơn Trạch, Long Thành, Mỹ Xuân - Phú Mỹ.
+        5. Tối ưu hóa & Phân bổ (QUAN TRỌNG):
+           - Nếu 1 hướng có NHIỀU HƠN HOẶC BẰNG 6 điểm giao (>= 6): Ưu tiên tài xế Nam đi hết buổi sáng từ 8h đến 11h30. Nếu phát sinh hàng cồng kềnh (có ghi chú hàng dài 6m, v.v.), bắt buộc ưu tiên Xe Tải.
+           - Nếu thiếu đơn, hoặc đang chờ hàng List B: Hãy lọc ra 3 địa điểm gần công ty nhất cho tài xế đi ca sớm, và yêu cầu QUAY VỀ KHO LÚC 10H SÁNG để lấy hàng tiếp.
+           - Phân bổ Phiên giao hàng (session): "morning" (Sáng), "afternoon" (Chiều), "evening" (Tối), "other" (Khác).
+           - Phân bổ Phiên giao hàng (session): "morning" (Sáng), "afternoon" (Chiều), "evening" (Tối), "other" (Khác).
+        6. KHÔNG BỎ RỚT ĐƠN (QUAN TRỌNG NHẤT): BẮT BUỘC phải thu xếp TẤT CẢ các đơn hàng Đủ Hàng (List A) và Chờ Nhập (List B) lên xe. Bạn có quyền tạo ra số lượng chuyến xe (schedules) KHÔNG GIỚI HẠN để đảm bảo chở hết hàng. Tuyệt đối không được để thừa đơn hàng List A/B nào ở ngoài.
+        7. Ghi chú AI (ai_strategy): Cùng 1 chuyến đi hãy xếp thứ tự các điểm dừng logic nhất tính từ kho xuất phát, giải thích ngắn gọn lý do chọn. LƯU Ý: TRONG GHI CHÚ, HÃY DÙNG TÊN ĐƠN HÀNG (order_name, ví dụ: SO001, SO002) THAY VÌ ORDER ID.
+        8. Đầu Ra (Note): TRẢ VỀ DẠNG LỆNH ĐIỀU PHỐI. Note phải là một đoạn văn bản tóm tắt chi tiết Lệnh điều phối gồm: Đơn hàng, danh sách điểm giao, lộ trình di chuyển và thời gian quay về kho.
         """
         
         system_prompt += """
@@ -165,14 +210,15 @@ class DeliveryCoordinatorWizard(models.TransientModel):
              {
                "route": "Nhơn Trạch | Long Thành | Mỹ Xuân - Phú Mỹ | Nội Thành / Gần Công Ty | Khác",
                "vehicle_type": "tai_lon | van_xe_may",
+               "session": "morning | afternoon | evening | other",
                "order_ids": [
                  {
                    "id": 1,
-                   "ai_strategy": "Sử dụng Tiếng Việt -> Giải thích độ ưu tiên / khoảng cách (vd: Đơn A gần Kho nhất (2km), Giao đơn A trước rồi qua đơn B)"
+                   "ai_strategy": "Sử dụng Tiếng Việt -> vd: Đơn SO001 gần Kho nhất (2km), Giao đơn SO001 trước rồi qua đơn SO002"
                  }
                ],
-               "note": "Sử dụng Tiếng Việt -> Mô tả lộ trình di chuyển tối đa quãng đường (Ví dụ: Xe dời kho đi Giao Quận 1 -> sang Phú Nhuận -> quay về)",
-               "driver_name": "Tài xế 1"
+               "note": "Lệnh Điều Phối: Điểm đến: SO001 (Long Thành) -> SO002 (Nhơn Trạch). Lộ trình: Tài xế Nam đi ca 8h. Quãng đường xa nhất 15km. Thời gian quay về kho dự kiến: 10h sáng để lấy hàng đợt 2.",
+               "driver_name": "Tài xế Nam"
              }
           ]
         }
@@ -186,6 +232,8 @@ class DeliveryCoordinatorWizard(models.TransientModel):
 
         # 5. Create Delivery Schedules
         schedule_ids = []
+        assigned_order_ids = set()
+        
         payload = {
             "model": model,
             "messages": [
@@ -213,7 +261,6 @@ class DeliveryCoordinatorWizard(models.TransientModel):
             result_json = json.loads(gpt_content.strip())
         except Exception as e:
             raise UserError(_("OpenAI trả về định dạng JSON không hợp lệ: %s") % str(e))
-
         # Create records
         for sched in result_json.get('schedules', []):
             vals = {
@@ -221,9 +268,9 @@ class DeliveryCoordinatorWizard(models.TransientModel):
                 'warehouse_code': warehouse_code,
                 'route': sched.get('route', 'Khác'),
                 'vehicle_type': sched.get('vehicle_type', 'van_xe_may'),
+                'session': sched.get('session', 'morning'),
                 'note': sched.get('note', ''),
                 'driver_name': sched.get('driver_name', ''),
-                'state': 'draft',
             }
             new_sched = self.env['delivery.schedule'].create(vals)
             new_sched.name = f"DC-{new_sched.id:04d}"
@@ -237,12 +284,31 @@ class DeliveryCoordinatorWizard(models.TransientModel):
                 if origin_order:
                     lines_data.append({
                         'schedule_id': new_sched.id,
+                        'assigned_date': self.date,
                         'order_id': origin_order['order_id'],
                         'stock_status': origin_order['stock_status'],
                         'ai_strategy': o_item.get('ai_strategy', '')
                     })
+                    # Mark as assigned so we know not to put it in backlog
+                    assigned_order_ids.add(origin_order['order_id'])
+                    
             if lines_data:
                 self.env['delivery.schedule.line'].create(lines_data)
+
+        # 5b. Create Backlog lines for unassigned orders (to show on Kanban)
+        backlog_lines_data = []
+        for order in all_processed_orders:
+            if order['order_id'] not in assigned_order_ids:
+                strategy_note = "Trì hoãn (Tồn đọng - Thiếu hàng)" if order['list_status'] == 'List C' else "Chưa sắp xếp chuyến (Backlog)"
+                backlog_lines_data.append({
+                    'schedule_id': False, # No schedule!
+                    'assigned_date': self.date,
+                    'order_id': order['order_id'],
+                    'stock_status': order['stock_status'],
+                    'ai_strategy': strategy_note
+                })
+        if backlog_lines_data:
+            self.env['delivery.schedule.line'].create(backlog_lines_data)
 
         # 6. Save Report
         report_vals = {
