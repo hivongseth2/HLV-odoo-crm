@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_delivery_schedule_list" model="ir.ui.view">
+        <field name="name">delivery.schedule.list</field>
+        <field name="model">delivery.schedule</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="date"/>
+                <field name="route"/>
+                <field name="vehicle_type"/>
+                <field name="driver_name"/>
+                <field name="state" widget="badge" decoration-info="state == 'draft'" decoration-success="state == 'done'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_delivery_schedule_form" model="ir.ui.view">
+        <field name="name">delivery.schedule.form</field>
+        <field name="model">delivery.schedule</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_confirm" string="Xác nhận" type="object" class="oe_highlight" invisible="state != 'draft'"/>
+                    <button name="action_done" string="Hoàn thành" type="object" class="oe_highlight" invisible="state != 'confirmed'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,confirmed,done"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="date"/>
+                            <field name="route"/>
+                            <field name="vehicle_type"/>
+                        </group>
+                        <group>
+                            <field name="driver_name"/>
+                            <field name="note" widget="text" placeholder="Lý do điều phối từ AI..."/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Đơn hàng" name="orders">
+                            <field name="sale_order_ids" mode="list">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="partner_id"/>
+                                    <field name="commitment_date"/>
+                                    <field name="state"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_delivery_schedule" model="ir.actions.act_window">
+        <field name="name">Lịch trình Giao Hàng</field>
+        <field name="res_model">delivery.schedule</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>

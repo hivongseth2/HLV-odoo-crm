@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_delivery_coordinator_wizard_form" model="ir.ui.view">
+        <field name="name">delivery.coordinator.wizard.form</field>
+        <field name="model">delivery.coordinator.wizard</field>
+        <field name="arch" type="xml">
+            <form string="AI Delivery Coordinator">
+                <group>
+                    <field name="date"/>
+                </group>
+                <div class="alert alert-info" role="alert">
+                    Hệ thống sẽ tổng hợp các đơn hàng hẹn giao vào ngày được chọn, 
+                    phân loại List A/B/C và gợi ý phương tiện/tuyến đường phù hợp nhất bằng GPT.
+                </div>
+                <footer>
+                    <button name="action_run_ai_coordinator" string="Phân tích &amp; Lên lịch bằng AI" type="object" class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_delivery_coordinator_wizard" model="ir.actions.act_window">
+        <field name="name">AI Delivery Coordinator</field>
+        <field name="res_model">delivery.coordinator.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>
