@@ -229,10 +229,18 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         if isinstance(raw, list):
             order_list = raw
         elif isinstance(raw, dict):
-            if 'response' in raw and isinstance(raw['response'], dict) and 'order_list' in raw['response']:
+            # Dạng JSON lấy từ nút "Lấy dữ liệu" của wizard
+            if 'shopee_response' in raw and isinstance(raw['shopee_response'], dict):
+                inner = raw['shopee_response']
+                if 'response' in inner and isinstance(inner['response'], dict) and 'order_list' in inner['response']:
+                    order_list = inner['response']['order_list']
+            # Dạng JSON chuẩn của Shopee
+            elif 'response' in raw and isinstance(raw['response'], dict) and 'order_list' in raw['response']:
                 order_list = raw['response']['order_list']
+            # Dạng object chỉ có order_list
             elif 'order_list' in raw:
                 order_list = raw['order_list']
+            # Dạng object là 1 order detail duy nhất
             elif 'order_sn' in raw:
                 order_list = [raw]
 
