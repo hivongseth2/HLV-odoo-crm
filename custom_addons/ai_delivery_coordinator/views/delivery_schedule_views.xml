@@ -185,6 +185,25 @@
         </field>
     </record>
 
+    <record id="view_delivery_schedule_line_tree" model="ir.ui.view">
+        <field name="name">delivery.schedule.line.tree</field>
+        <field name="model">delivery.schedule.line</field>
+        <field name="arch" type="xml">
+            <tree default_order="assigned_date desc, session, schedule_id">
+                <field name="assigned_date"/>
+                <field name="session"/>
+                <field name="schedule_id"/>
+                <field name="order_id"/>
+                <field name="partner_id"/>
+                <field name="stock_status" widget="badge" 
+                       decoration-success="stock_status == 'ready'" 
+                       decoration-warning="stock_status == 'waiting'" 
+                       decoration-danger="stock_status == 'shortage'"/>
+                <field name="ai_strategy"/>
+            </tree>
+        </field>
+    </record>
+
     <record id="view_delivery_schedule_line_search" model="ir.ui.view">
         <field name="name">delivery.schedule.line.search</field>
         <field name="model">delivery.schedule.line</field>
@@ -197,8 +216,9 @@
                 <filter string="Đủ hàng" name="filter_ready" domain="[('stock_status', '=', 'ready')]"/>
                 <filter string="Thiếu hàng / Chờ hàng" name="filter_shortage" domain="[('stock_status', 'in', ('waiting', 'shortage'))]"/>
                 <group expand="0" string="Group By">
-                    <filter string="Chuyến xe" name="group_by_schedule" context="{'group_by':'schedule_id'}"/>
                     <filter string="Ngày giao" name="group_by_date" context="{'group_by':'assigned_date'}"/>
+                    <filter string="Phiên giao" name="group_by_session" context="{'group_by':'session'}"/>
+                    <filter string="Chuyến xe" name="group_by_schedule" context="{'group_by':'schedule_id'}"/>
                     <filter string="Tình trạng hàng" name="group_by_stock_status" context="{'group_by':'stock_status'}"/>
                 </group>
             </search>
@@ -208,8 +228,8 @@
     <record id="action_delivery_schedule_board" model="ir.actions.act_window">
         <field name="name">Bảng Điều Phối Lắp Ghép</field>
         <field name="res_model">delivery.schedule.line</field>
-        <field name="view_mode">kanban,list,form</field>
-        <field name="context">{'search_default_filter_today': 1, 'search_default_group_by_schedule': 1}</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="context">{'search_default_group_by_date': 1, 'search_default_group_by_session': 1}</field>
     </record>
 
 </odoo>

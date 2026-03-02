@@ -195,8 +195,10 @@ class DeliveryCoordinatorWizard(models.TransientModel):
            - Nếu 1 hướng có NHIỀU HƠN HOẶC BẰNG 6 điểm giao (>= 6): Ưu tiên tài xế Nam đi hết buổi sáng từ 8h đến 11h30. Nếu phát sinh hàng cồng kềnh (có ghi chú hàng dài 6m, v.v.), bắt buộc ưu tiên Xe Tải.
            - Nếu thiếu đơn, hoặc đang chờ hàng List B: Hãy lọc ra 3 địa điểm gần công ty nhất cho tài xế đi ca sớm, và yêu cầu QUAY VỀ KHO LÚC 10H SÁNG để lấy hàng tiếp.
            - Phân bổ Phiên giao hàng (session): "morning" (Sáng), "afternoon" (Chiều), "evening" (Tối), "other" (Khác).
-        6. Ghi chú AI (ai_strategy): Cùng 1 chuyến đi hãy xếp thứ tự các điểm dừng logic nhất tính từ kho xuất phát, giải thích ngắn gọn lý do chọn. LƯU Ý: TRONG GHI CHÚ, HÃY DÙNG TÊN ĐƠN HÀNG (order_name, ví dụ: SO001, SO002) THAY VÌ ORDER ID.
-        7. Đầu Ra (Note): TRẢ VỀ DẠNG LỆNH ĐIỀU PHỐI. Note phải là một đoạn văn bản tóm tắt chi tiết Lệnh điều phối gồm: Đơn hàng, danh sách điểm giao, lộ trình di chuyển và thời gian quay về kho.
+           - Phân bổ Phiên giao hàng (session): "morning" (Sáng), "afternoon" (Chiều), "evening" (Tối), "other" (Khác).
+        6. KHÔNG BỎ RỚT ĐƠN (QUAN TRỌNG NHẤT): BẮT BUỘC phải thu xếp TẤT CẢ các đơn hàng Đủ Hàng (List A) và Chờ Nhập (List B) lên xe. Bạn có quyền tạo ra số lượng chuyến xe (schedules) KHÔNG GIỚI HẠN để đảm bảo chở hết hàng. Tuyệt đối không được để thừa đơn hàng List A/B nào ở ngoài.
+        7. Ghi chú AI (ai_strategy): Cùng 1 chuyến đi hãy xếp thứ tự các điểm dừng logic nhất tính từ kho xuất phát, giải thích ngắn gọn lý do chọn. LƯU Ý: TRONG GHI CHÚ, HÃY DÙNG TÊN ĐƠN HÀNG (order_name, ví dụ: SO001, SO002) THAY VÌ ORDER ID.
+        8. Đầu Ra (Note): TRẢ VỀ DẠNG LỆNH ĐIỀU PHỐI. Note phải là một đoạn văn bản tóm tắt chi tiết Lệnh điều phối gồm: Đơn hàng, danh sách điểm giao, lộ trình di chuyển và thời gian quay về kho.
         """
         
         system_prompt += """

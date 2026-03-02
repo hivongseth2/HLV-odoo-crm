@@ -133,6 +133,7 @@ class DeliveryScheduleLine(models.Model):
 
     schedule_id = fields.Many2one('delivery.schedule', string='Lịch trình', ondelete='cascade', index=True) # REMOVED required=True to allow backlog
     assigned_date = fields.Date(string='Ngày giao (Gán cứng)')
+    session = fields.Selection(related='schedule_id.session', string='Phiên giao', store=True)
     
     order_id = fields.Many2one('sale.order', string='Đơn hàng', required=True, ondelete='cascade')
     partner_id = fields.Many2one('res.partner', related='order_id.partner_id', string='Khách hàng', store=True)
