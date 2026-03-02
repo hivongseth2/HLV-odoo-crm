@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_google_ads_account_form" model="ir.ui.view">
+        <field name="name">google.ads.account.form</field>
+        <field name="model">google.ads.account</field>
+        <field name="arch" type="xml">
+            <form string="Tài Khoản Google Ads">
+                <header>
+                    <button name="action_test_connection" string="Kiểm Tra Kết Nối" type="object" class="oe_highlight" invisible="state == 'connected'"/>
+                    <button name="action_sync_all_data" string="Đồng Bộ Dữ Liệu" type="object" class="oe_highlight" invisible="state != 'connected'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,connected,error"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Mô tả tài khoản..."/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Cấu Hình Cơ Bản">
+                            <field name="active" widget="boolean_toggle"/>
+                            <field name="operating_customer_id" placeholder="vd: 1234567890"/>
+                            <field name="login_customer_id" placeholder="vd: 0987654321"/>
+                        </group>
+                        <group string="Thông Tin Xác Thực (OAuth)">
+                            <field name="developer_token" password="True"/>
+                            <field name="client_id" password="True"/>
+                            <field name="client_secret" password="True"/>
+                            <field name="refresh_token" password="True"/>
+                        </group>
+                    </group>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_google_ads_account_tree" model="ir.ui.view">
+        <field name="name">google.ads.account.list</field>
+        <field name="model">google.ads.account</field>
+        <field name="arch" type="xml">
+            <list string="Tài Khoản Google Ads">
+                <field name="name"/>
+                <field name="operating_customer_id"/>
+                <field name="state"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_google_ads_account" model="ir.actions.act_window">
+        <field name="name">Tài Khoản Google Ads</field>
+        <field name="res_model">google.ads.account</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>

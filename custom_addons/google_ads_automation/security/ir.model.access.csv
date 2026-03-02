@@ -1,0 +1,13 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_google_ads_account_user,google.ads.account.user,model_google_ads_account,group_google_ads_user,1,0,0,0
+access_google_ads_account_manager,google.ads.account.manager,model_google_ads_account,group_google_ads_manager,1,1,1,1
+access_google_ads_campaign_user,google.ads.campaign.user,model_google_ads_campaign,group_google_ads_user,1,0,0,0
+access_google_ads_campaign_manager,google.ads.campaign.manager,model_google_ads_campaign,group_google_ads_manager,1,1,1,1
+access_google_ads_ad_group_user,google.ads.ad.group.user,model_google_ads_ad_group,group_google_ads_user,1,0,0,0
+access_google_ads_ad_group_manager,google.ads.ad.group.manager,model_google_ads_ad_group,group_google_ads_manager,1,1,1,1
+access_google_ads_ad_user,google.ads.ad.user,model_google_ads_ad,group_google_ads_user,1,0,0,0
+access_google_ads_ad_manager,google.ads.ad.manager,model_google_ads_ad,group_google_ads_manager,1,1,1,1
+access_google_ads_rule_user,google.ads.rule.user,model_google_ads_rule,group_google_ads_user,1,0,0,0
+access_google_ads_rule_manager,google.ads.rule.manager,model_google_ads_rule,group_google_ads_manager,1,1,1,1
+access_google_ads_rule_log_user,google.ads.rule.log.user,model_google_ads_rule_log,group_google_ads_user,1,0,0,0
+access_google_ads_rule_log_manager,google.ads.rule.log.manager,model_google_ads_rule_log,group_google_ads_manager,1,1,1,1

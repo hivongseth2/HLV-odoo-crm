@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_google_ads_rule_form" model="ir.ui.view">
+        <field name="name">google.ads.rule.form</field>
+        <field name="model">google.ads.rule</field>
+        <field name="arch" type="xml">
+            <form string="Quy Tắc Google Ads">
+                <header>
+                    <button name="run_rule" string="Chạy Thử Ngay" type="object" class="oe_highlight" />
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Tên quy tắc..."/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Cấu Hình Cơ Bản">
+                            <field name="active" widget="boolean_toggle"/>
+                            <field name="account_id" />
+                            <field name="target_type" />
+                            <field name="action_type" />
+                        </group>
+                        <group string="Điều Kiện (Hôm Qua)">
+                            <field name="condition_field" />
+                            <field name="condition_operator" />
+                            <field name="condition_value" />
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Lịch Sử Chạy">
+                            <field name="log_ids" readonly="1">
+                                <list>
+                                    <field name="run_date" />
+                                    <field name="target_name" />
+                                    <field name="status" />
+                                    <field name="message" />
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_google_ads_rule_list" model="ir.ui.view">
+        <field name="name">google.ads.rule.list</field>
+        <field name="model">google.ads.rule</field>
+        <field name="arch" type="xml">
+            <list string="Quy Tắc Tự Động Hóa">
+                <field name="name"/>
+                <field name="account_id"/>
+                <field name="target_type"/>
+                <field name="condition_field"/>
+                <field name="condition_operator"/>
+                <field name="condition_value"/>
+                <field name="action_type"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_google_ads_rule" model="ir.actions.act_window">
+        <field name="name">Quy Tắc Tự Động</field>
+        <field name="res_model">google.ads.rule</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_google_ads_rule_log" model="ir.actions.act_window">
+        <field name="name">Lịch Sử Chạy Quy Tắc</field>
+        <field name="res_model">google.ads.rule.log</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>
