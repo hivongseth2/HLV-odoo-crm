@@ -26,7 +26,7 @@ class DeliveryCoordinatorWizard(models.TransientModel):
         orders = self.env['sale.order'].search(domain)
         
         # Filter out completely delivered orders or cancelled lines
-        pending_orders = orders.filtered(lambda o: not all(l.qty_delivered >= l.product_uom_qty for l in o.order_line if l.product_id.type == 'product'))
+        pending_orders = orders.filtered(lambda o: not all(l.qty_delivered >= l.product_uom_qty for l in o.order_line if l.product_id.type == 'consu'))
 
         if not pending_orders:
             raise UserError(_("Không có đơn hàng nào chờ giao tính đến ngày %s.") % self.date)
