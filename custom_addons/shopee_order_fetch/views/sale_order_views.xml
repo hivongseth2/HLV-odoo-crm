@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Thêm nút "Cập nhật giá Shopee" vào form sale.order -->
+    <record id="view_order_form_inherit_shopee_escrow" model="ir.ui.view">
+        <field name="name">sale.order.form.inherit.shopee.escrow</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="before">
+                <field name="shopee_order_ref" invisible="1"/>
+                <button name="action_update_price_from_escrow"
+                        string="💰 Cập nhật giá Shopee"
+                        type="object"
+                        class="btn-secondary"
+                        invisible="not shopee_order_ref"
+                        icon="fa-refresh"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
