@@ -13,16 +13,16 @@
                     </group>
                     <group string="Đơn hàng">
                         <field name="order_sn_list" placeholder="Nhập mã đơn hàng, mỗi dòng 1 mã hoặc cách bởi dấu phẩy&#10;Ví dụ:&#10;240101ABCDEF&#10;240101GHIJKL"/>
-                        <field name="sale_order_ids" widget="many2many_tags" placeholder="Chọn các đơn Odoo tương ứng..."/>
+                        <!-- <field name="sale_order_ids" widget="many2many_tags" placeholder="Chọn các đơn Odoo tương ứng..."/> -->
                     </group>
                 </group>
                 <notebook>
-                    <page string="Dữ liệu giả lập (Mock)">
+                    <!-- <page string="Dữ liệu giả lập (Mock)">
                         <group>
                             <field name="mock_json" placeholder="Dán JSON response từ get_order_detail API vào đây..."/>
                             <field name="mock_escrow_json" placeholder="(Tùy chọn) Dán JSON response từ get_escrow_detail API để áp dụng voucher..."/>
                         </group>
-                    </page>
+                    </page> -->
                     <page string="Kết quả" invisible="not result_display">
                         <field name="result_display" nolabel="1" widget="text" readonly="1"/>
                     </page>
@@ -40,10 +40,10 @@
                             string="Cập nhật giá từ Escrow"
                             type="object"
                             class="btn-secondary"/>
-                    <button name="action_test_create_order"
+                    <!-- <button name="action_test_create_order"
                             string="Test giả lập"
                             type="object"
-                            class="btn-secondary"/>
+                            class="btn-secondary"/> -->
                     <button string="Đóng" class="btn-secondary" special="cancel" data-hotkey="z"/>
                 </footer>
             </form>

@@ -48,19 +48,19 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         string='Kết quả API',
         readonly=True,
     )
-    mock_json = fields.Text(
-        string='Mock JSON - Order Detail',
-        help="Dán JSON response từ Shopee get_order_detail API vào đây để test tạo đơn.",
-    )
-    mock_escrow_json = fields.Text(
-        string='Mock JSON - Escrow Detail',
-        help="Dán JSON response từ Shopee get_escrow_detail API vào đây để áp dụng voucher.",
-    )
-    sale_order_ids = fields.Many2many(
-        'sale.order',
-        string='Mã đơn Odoo (thủ công)',
-        help="Chọn các đơn Odoo (ví dụ S00001) tương ứng với các mã Shopee ở trên (theo thứ tự từ trên xuống). Dùng khi mã Odoo chưa được lưu mã Shopee (shopee_order_ref) và không tự tìm được."
-    )
+    # mock_json = fields.Text(
+    #     string='Mock JSON - Order Detail',
+    #     help="Dán JSON response từ Shopee get_order_detail API vào đây để test tạo đơn.",
+    # )
+    # mock_escrow_json = fields.Text(
+    #     string='Mock JSON - Escrow Detail',
+    #     help="Dán JSON response từ Shopee get_escrow_detail API vào đây để áp dụng voucher.",
+    # )
+    # sale_order_ids = fields.Many2many(
+    #     'sale.order',
+    #     string='Mã đơn Odoo (thủ công)',
+    #     help="Chọn các đơn Odoo (ví dụ S00001) tương ứng với các mã Shopee ở trên (theo thứ tự từ trên xuống). Dùng khi mã Odoo chưa được lưu mã Shopee (shopee_order_ref) và không tự tìm được."
+    # )
 
     # ──────────────────────────────────────────────────
     #  Helpers
@@ -329,21 +329,20 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         sns = self._parse_order_sn_list()
 
         # Parse Escrow JSON (tùy chọn) trước
-        mock_escrow_data = None
-        if self.mock_escrow_json:
-            try:
-                escrow_raw = json.loads(self.mock_escrow_json)
-                mock_escrow_data = escrow_raw.get('response', escrow_raw)
-            except json.JSONDecodeError as e:
-                raise UserError(_("Mock Escrow JSON không hợp lệ:\n%s") % str(e))
+        # mock_escrow_data = None
+        # if self.mock_escrow_json:
+        #     try:
+        #         escrow_raw = json.loads(self.mock_escrow_json)
+        #         mock_escrow_data = escrow_raw.get('response', escrow_raw)
+        #     except json.JSONDecodeError as e:
+        #         raise UserError(_("Mock Escrow JSON không hợp lệ:\n%s") % str(e))
 
-        creds = None
-        if not mock_escrow_data:
-             creds = self._get_shopee_credentials()
+        creds = self._get_shopee_credentials()
 
         updated_orders = []
         skipped_orders = []
-        manual_orders = list(self.sale_order_ids)
+        # Chức năng manual_orders đã được comment để golive
+        # manual_orders = list(self.sale_order_ids)
 
         for i, order_sn in enumerate(sns):
             so = self.env['sale.order'].sudo().search([
@@ -351,19 +350,19 @@ class ShopeeOrderFetchWizard(models.TransientModel):
             ], limit=1)
 
             if not so:
-                if i < len(manual_orders):
-                    so = manual_orders[i]
-                    so.sudo().write({'shopee_order_ref': order_sn})
-                    _logger.info("Shopee: Đã gán mã Shopee %s cho đơn Odoo %s", order_sn, so.name)
-                else:
-                    skipped_orders.append(f"{order_sn} (Không tìm thấy đơn hàng trong hệ thống)")
-                    continue
+                # if i < len(manual_orders):
+                #     so = manual_orders[i]
+                #     so.sudo().write({'shopee_order_ref': order_sn})
+                #     _logger.info("Shopee: Đã gán mã Shopee %s cho đơn Odoo %s", order_sn, so.name)
+                # else:
+                skipped_orders.append(f"{order_sn} (Không tìm thấy đơn hàng trong hệ thống)")
+                continue
 
             # Nếu không tìm được Order Detail, thử dùng dữ liệu từ Escrow (nếu có items)
             try:
-                escrow_data = mock_escrow_data
-                if not escrow_data and creds:
-                    escrow_data = self._call_escrow_api(creds, order_sn)
+                # escrow_data = mock_escrow_data
+                # if not escrow_data and creds:
+                escrow_data = self._call_escrow_api(creds, order_sn)
             except Exception as e:
                 _logger.warning("Shopee: Lỗi gọi escrow API: %s", str(e))
                 escrow_data = None
@@ -759,92 +758,92 @@ class ShopeeOrderFetchWizard(models.TransientModel):
     #  Action: Test tạo đơn với mock JSON (staging)
     # ──────────────────────────────────────────────────
 
-    def action_test_create_order(self):
-        """Tạo đơn hàng từ mock JSON response (dùng cho staging test).
-        Không gọi Shopee API — lấy dữ liệu từ trường mock_json."""
-        self.ensure_one()
-
-        if not self.mock_json:
-            raise UserError(_(
-                "Vui lòng dán JSON response từ Shopee get_order_detail API vào trường 'Mock JSON - Order Detail'.\n"
-                "Bạn có thể lấy response bằng cách gọi API trên production hoặc dùng Postman."
-            ))
-
-        # Parse Order Detail JSON
-        try:
-            data = json.loads(self.mock_json)
-        except json.JSONDecodeError as e:
-            raise UserError(_("Order Detail JSON không hợp lệ:\n%s") % str(e))
-
-        # Hỗ trợ cả format đầy đủ (có shopee_response wrapper) và format trực tiếp
-        if 'shopee_response' in data:
-            body = data['shopee_response']
-        elif 'response' in data:
-            body = data
-        else:
-            raise UserError(_(
-                "JSON không đúng format. Cần có key 'shopee_response' hoặc 'response'."
-            ))
-
-        error_msg = body.get('error', '')
-        if error_msg:
-            raise UserError(
-                _("Response chứa lỗi: %s\n%s") % (error_msg, body.get('message', ''))
-            )
-
-        order_list = body.get('response', {}).get('order_list', [])
-        if not order_list:
-            raise UserError(_("Không tìm thấy order_list trong JSON."))
-
-        # Parse Escrow JSON (tùy chọn)
-        escrow_data = None
-        if self.mock_escrow_json:
-            try:
-                escrow_raw = json.loads(self.mock_escrow_json)
-                escrow_data = escrow_raw.get('response', escrow_raw)
-            except json.JSONDecodeError as e:
-                _logger.warning("Escrow JSON parse error: %s", str(e))
-
-        created_orders = []
-        skipped_orders = []
-
-        for order_data in order_list:
-            order_sn = order_data.get('order_sn', '')
-
-            # Kiểm tra trùng
-            existing = self.env['sale.order'].sudo().search([
-                ('shopee_order_ref', '=', order_sn)
-            ], limit=1)
-            if existing:
-                skipped_orders.append(f"{order_sn} (đã tồn tại: {existing.name})")
-                continue
-
-            try:
-                with self.env.cr.savepoint():
-                    so = self._create_order_from_data(order_data, escrow_data=escrow_data)
-                    created_orders.append(f"{order_sn} → {so.name}")
-            except Exception as e:
-                _logger.error("Shopee Mock: Lỗi tạo đơn %s: %s", order_sn, str(e), exc_info=True)
-                skipped_orders.append(f"{order_sn} (LỖI: {str(e)})")
-
-        # Hiển thị kết quả
-        lines = ["📋 KẾT QUẢ TEST (Mock Data):"]
-        if created_orders:
-            lines.append("\n✅ ĐÃ TẠO:")
-            lines.extend(f"  • {o}" for o in created_orders)
-        if skipped_orders:
-            lines.append("\n⏭️ BỎ QUA:")
-            lines.extend(f"  • {o}" for o in skipped_orders)
-        if not created_orders and not skipped_orders:
-            lines.append("\n⚠️ Không có đơn hàng nào để xử lý.")
-
-        self.sudo().result_display = '\n'.join(lines)
-
-        return {
-            'type': 'ir.actions.act_window',
-            'res_model': self._name,
-            'res_id': self.id,
-            'view_mode': 'form',
-            'target': 'new',
-        }
+    # def action_test_create_order(self):
+    #     """Tạo đơn hàng từ mock JSON response (dùng cho staging test).
+    #     Không gọi Shopee API — lấy dữ liệu từ trường mock_json."""
+    #     self.ensure_one()
+    # 
+    #     if not self.mock_json:
+    #         raise UserError(_(
+    #             "Vui lòng dán JSON response từ Shopee get_order_detail API vào trường 'Mock JSON - Order Detail'.\n"
+    #             "Bạn có thể lấy response bằng cách gọi API trên production hoặc dùng Postman."
+    #         ))
+    # 
+    #     # Parse Order Detail JSON
+    #     try:
+    #         data = json.loads(self.mock_json)
+    #     except json.JSONDecodeError as e:
+    #         raise UserError(_("Order Detail JSON không hợp lệ:\n%s") % str(e))
+    # 
+    #     # Hỗ trợ cả format đầy đủ (có shopee_response wrapper) và format trực tiếp
+    #     if 'shopee_response' in data:
+    #         body = data['shopee_response']
+    #     elif 'response' in data:
+    #         body = data
+    #     else:
+    #         raise UserError(_(
+    #             "JSON không đúng format. Cần có key 'shopee_response' hoặc 'response'."
+    #         ))
+    # 
+    #     error_msg = body.get('error', '')
+    #     if error_msg:
+    #         raise UserError(
+    #             _("Response chứa lỗi: %s\n%s") % (error_msg, body.get('message', ''))
+    #         )
+    # 
+    #     order_list = body.get('response', {}).get('order_list', [])
+    #     if not order_list:
+    #         raise UserError(_("Không tìm thấy order_list trong JSON."))
+    # 
+    #     # Parse Escrow JSON (tùy chọn)
+    #     escrow_data = None
+    #     # if self.mock_escrow_json:
+    #     #     try:
+    #     #         escrow_raw = json.loads(self.mock_escrow_json)
+    #     #         escrow_data = escrow_raw.get('response', escrow_raw)
+    #     #     except json.JSONDecodeError as e:
+    #     #         _logger.warning("Escrow JSON parse error: %s", str(e))
+    # 
+    #     created_orders = []
+    #     skipped_orders = []
+    # 
+    #     for order_data in order_list:
+    #         order_sn = order_data.get('order_sn', '')
+    # 
+    #         # Kiểm tra trùng
+    #         existing = self.env['sale.order'].sudo().search([
+    #             ('shopee_order_ref', '=', order_sn)
+    #         ], limit=1)
+    #         if existing:
+    #             skipped_orders.append(f"{order_sn} (đã tồn tại: {existing.name})")
+    #             continue
+    # 
+    #         try:
+    #             with self.env.cr.savepoint():
+    #                 so = self._create_order_from_data(order_data, escrow_data=escrow_data)
+    #                 created_orders.append(f"{order_sn} → {so.name}")
+    #         except Exception as e:
+    #             _logger.error("Shopee Mock: Lỗi tạo đơn %s: %s", order_sn, str(e), exc_info=True)
+    #             skipped_orders.append(f"{order_sn} (LỖI: {str(e)})")
+    # 
+    #     # Hiển thị kết quả
+    #     lines = ["📋 KẾT QUẢ TEST (Mock Data):"]
+    #     if created_orders:
+    #         lines.append("\n✅ ĐÃ TẠO:")
+    #         lines.extend(f"  • {o}" for o in created_orders)
+    #     if skipped_orders:
+    #         lines.append("\n⏭️ BỎ QUA:")
+    #         lines.extend(f"  • {o}" for o in skipped_orders)
+    #     if not created_orders and not skipped_orders:
+    #         lines.append("\n⚠️ Không có đơn hàng nào để xử lý.")
+    # 
+    #     self.sudo().result_display = '\n'.join(lines)
+    # 
+    #     return {
+    #         'type': 'ir.actions.act_window',
+    #         'res_model': self._name,
+    #         'res_id': self.id,
+    #         'view_mode': 'form',
+    #         'target': 'new',
+    #     }
 
