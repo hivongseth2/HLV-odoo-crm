@@ -161,12 +161,6 @@ class DeliveryCoordinatorWizard(models.TransientModel):
             if order.commitment_date and order.commitment_date.date() < today:
                 report_data['orders_backlog'].append(order.name)
 
-            if not is_ready and not is_flexible_delivery:
-                report_data['orders_insufficient_stock'].append(order.name)
-                continue # Skip this order from AI scheduling
-
-            report_data['orders_ready_to_ship'] += 1
-
             order_info = {
                 'order_id': order.id,
                 'order_name': order.name,
@@ -177,8 +171,14 @@ class DeliveryCoordinatorWizard(models.TransientModel):
                 'commitment_date': str(order.commitment_date.date()) if order.commitment_date else 'Unknown',
                 'stock_status': stock_status
             }
-            order_data.append(order_info)
             all_processed_orders.append(order_info)
+
+            if not is_ready and not is_flexible_delivery:
+                report_data['orders_insufficient_stock'].append(order.name)
+                continue # Skip this order from AI scheduling
+
+            report_data['orders_ready_to_ship'] += 1
+            order_data.append(order_info)
 
         if not order_data:
             raise UserError(_("Không có đơn hàng nào hợp lệ cho Kho được chọn (%s). Vui lòng kiểm tra lại.") % self.warehouse_id.name)
