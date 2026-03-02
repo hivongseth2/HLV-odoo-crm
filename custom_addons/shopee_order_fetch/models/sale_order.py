@@ -34,10 +34,21 @@ class SaleOrder(models.Model):
             creds = shopee_api.get_credentials_from_shop(order.shopee_shop_id)
             escrow_data = shopee_api.call_escrow_detail_strict(creds, order.shopee_order_ref)
 
-            if escrow_data.get('order_income', {}).get('items'):
-                shopee_escrow.update_order_lines_from_escrow(order, escrow_data)
+            # Mở khóa đơn hàng nếu đang bị khóa
+            was_locked = False
+            if getattr(order, 'locked', False) or order.state == 'done':
+                was_locked = True
+                order.action_unlock()
 
-            shopee_escrow.apply_escrow_voucher(order, escrow_data)
+            try:
+                if escrow_data.get('order_income', {}).get('items'):
+                    shopee_escrow.update_order_lines_from_escrow(order, escrow_data)
+
+                shopee_escrow.apply_escrow_voucher(order, escrow_data)
+            finally:
+                # Khóa lại đơn hàng nếu lúc đầu bị khóa
+                if was_locked:
+                    order.action_lock()
 
         return {
             'type': 'ir.actions.client',
