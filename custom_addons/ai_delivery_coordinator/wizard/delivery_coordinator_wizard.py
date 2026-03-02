@@ -11,15 +11,53 @@ class DeliveryCoordinatorWizard(models.TransientModel):
 
     date = fields.Date('Ngày lên lịch (Mặc định: Ngày mai)', default=lambda self: fields.Date.context_today(self) + timedelta(days=1))
     warehouse_id = fields.Many2one('stock.warehouse', string='Kho xuất phát', required=True)
+    
+    has_existing_schedules = fields.Boolean(compute='_compute_has_existing_schedules')
+    override_existing = fields.Boolean(string="Xác nhận Ghi đè (Xoá lịch cũ)", default=False)
+
+    @api.depends('date', 'warehouse_id')
+    def _compute_has_existing_schedules(self):
+        for rec in self:
+            if rec.date and rec.warehouse_id:
+                count = self.env['delivery.schedule'].search_count([
+                    ('date', '=', rec.date),
+                    ('warehouse_code', '=', rec.warehouse_id.code)
+                ])
+                if count == 0:
+                    count += self.env['delivery.schedule.line'].search_count([
+                        ('assigned_date', '=', rec.date),
+                        ('schedule_id', '=', False) # Cần check cả rác của Kho này (nếu thêm link field) ... để đơn giản tạm check schedule là đủ, vì rác thường sinh ra cùng schedule.
+                    ])
+                rec.has_existing_schedules = count > 0
+            else:
+                rec.has_existing_schedules = False
 
     def action_run_ai_coordinator(self):
         # 1. Fetch settings
         api_key = self.env['ir.config_parameter'].sudo().get_param('ai_delivery_coordinator.openai_api_key')
         model = self.env['ir.config_parameter'].sudo().get_param('ai_delivery_coordinator.openai_model_delivery', 'gpt-4o')
         if not api_key:
-            raise UserError(_("Vui lòng cấu hình OpenAI API Key trong Settings."))
+            raise UserError(_("Vui lòng cấu hình OpenAI API Key trong Thiết lập."))
 
-        # 2. Get Orders (Include backlogs up to the selected date)
+        # 1b. Duplicate Check
+        existing_schedules = self.env['delivery.schedule'].search([
+            ('date', '=', self.date),
+            ('warehouse_code', '=', self.warehouse_id.code)
+        ])
+        existing_backlog_lines = self.env['delivery.schedule.line'].search([
+            ('assigned_date', '=', self.date),
+            ('schedule_id', '=', False)
+        ])
+        
+        if existing_schedules or existing_backlog_lines:
+            if not self.override_existing:
+                raise UserError(_("Đã có lịch trình hoặc đơn tồn đọng trong ngày %s cho Kho %s. Vui lòng đánh dấu chọn 'Xác nhận Ghi đè' để xóa và tự động chạy lại.") % (self.date, self.warehouse_id.name))
+            else:
+                # Dọn rác
+                existing_schedules.unlink()
+                existing_backlog_lines.unlink()
+
+        # 2. Lấy dữ liệu Sales Order chưa giao(Include backlogs up to the selected date)
         domain = [
             ('commitment_date', '<', self.date + timedelta(days=1)),
             ('state', 'in', ['sale', 'done'])
@@ -249,6 +287,7 @@ class DeliveryCoordinatorWizard(models.TransientModel):
                 if origin_order:
                     lines_data.append({
                         'schedule_id': new_sched.id,
+                        'assigned_date': self.date,
                         'order_id': origin_order['order_id'],
                         'stock_status': origin_order['stock_status'],
                         'ai_strategy': o_item.get('ai_strategy', '')
@@ -266,6 +305,7 @@ class DeliveryCoordinatorWizard(models.TransientModel):
                 strategy_note = "Trì hoãn (Tồn đọng - Thiếu hàng)" if order['list_status'] == 'List C' else "Chưa sắp xếp chuyến (Backlog)"
                 backlog_lines_data.append({
                     'schedule_id': False, # No schedule!
+                    'assigned_date': self.date,
                     'order_id': order['order_id'],
                     'stock_status': order['stock_status'],
                     'ai_strategy': strategy_note

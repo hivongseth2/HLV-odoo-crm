@@ -126,7 +126,7 @@ class DeliveryScheduleLine(models.Model):
     _description = 'Chi tiết đơn hàng trong Lịch trình'
 
     schedule_id = fields.Many2one('delivery.schedule', string='Lịch trình', ondelete='cascade', index=True) # REMOVED required=True to allow backlog
-    schedule_date = fields.Date(related='schedule_id.date', store=True, string='Ngày giao')
+    assigned_date = fields.Date(string='Ngày giao (Gán cứng)')
     
     order_id = fields.Many2one('sale.order', string='Đơn hàng', required=True, ondelete='cascade')
     partner_id = fields.Many2one('res.partner', related='order_id.partner_id', string='Khách hàng', store=True)
@@ -142,12 +142,12 @@ class DeliveryScheduleLine(models.Model):
 
     def write(self, vals):
         for record in self:
-            if record.schedule_date and record.schedule_date < fields.Date.context_today(self):
+            if record.assigned_date and record.assigned_date < fields.Date.context_today(self):
                 raise models.ValidationError("Không thể sửa đổi đơn hàng trong Lịch trình của ngày quá khứ.")
         return super().write(vals)
 
     def unlink(self):
         for record in self:
-            if record.schedule_date and record.schedule_date < fields.Date.context_today(self):
+            if record.assigned_date and record.assigned_date < fields.Date.context_today(self):
                 raise models.ValidationError("Không thể xóa đơn hàng trong Lịch trình của ngày quá khứ.")
         return super().unlink()

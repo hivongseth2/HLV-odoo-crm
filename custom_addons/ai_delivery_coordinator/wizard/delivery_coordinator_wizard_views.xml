@@ -9,6 +9,13 @@
                     <field name="warehouse_id"/>
                     <field name="date"/>
                 </group>
+                <field name="has_existing_schedules" invisible="1"/>
+                <div class="alert alert-warning" role="alert" invisible="not has_existing_schedules">
+                    <strong>Chú ý!</strong> Đã tồn tại Lịch trình hoặc Đơn Tồn Đọng trong Ngày và Kho đã chọn.
+                </div>
+                <group invisible="not has_existing_schedules">
+                    <field name="override_existing"/>
+                </group>
                 <div class="alert alert-info" role="alert">
                     Hệ thống sẽ tổng hợp các đơn hàng hẹn giao vào ngày được chọn, 
                     phân loại List A/B/C và gợi ý phương tiện/tuyến đường phù hợp nhất bằng GPT.

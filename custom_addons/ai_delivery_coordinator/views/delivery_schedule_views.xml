@@ -137,7 +137,7 @@
                                         <span><field name="order_id"/></span>
                                     </strong>
                                 </div>
-                                <div class="o_dropdown_kanban dropdown" invisible="schedule_date &lt; current_date">
+                                <div class="o_dropdown_kanban dropdown" invisible="assigned_date &lt; current_date">
                                     <a class="dropdown-toggle o-no-caret btn" role="button" data-bs-toggle="dropdown" href="#" aria-label="Dropdown menu" title="Dropdown menu">
                                         <span class="fa fa-ellipsis-v"/>
                                     </a>
@@ -174,7 +174,7 @@
                 <sheet>
                     <group>
                         <field name="schedule_id"/>
-                        <field name="schedule_date" invisible="1"/>
+                        <field name="assigned_date" invisible="1"/>
                         <field name="order_id"/>
                         <field name="partner_id"/>
                         <field name="stock_status"/>
