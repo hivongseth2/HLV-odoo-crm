@@ -18,20 +18,31 @@ class DeliveryCoordinatorWizard(models.TransientModel):
         if not api_key:
             raise UserError(_("Vui lòng cấu hình OpenAI API Key trong Settings."))
 
-        # 2. Get Orders
+        # 2. Get Orders (Include backlogs up to the selected date)
         domain = [
-            ('commitment_date', '>=', self.date),
             ('commitment_date', '<', self.date + timedelta(days=1)),
             ('state', 'in', ['sale', 'done'])
         ]
         orders = self.env['sale.order'].search(domain)
         
-        if not orders:
-            raise UserError(_("Không có đơn hàng nào được hẹn giao vào ngày %s.") % self.date)
+        # Filter out completely delivered orders or cancelled lines
+        pending_orders = orders.filtered(lambda o: not all(l.qty_delivered >= l.product_uom_qty for l in o.order_line if l.product_id.type == 'product'))
+
+        if not pending_orders:
+            raise UserError(_("Không có đơn hàng nào chờ giao tính đến ngày %s.") % self.date)
 
         # 3. Classify and prepare data for AI
         order_data = []
-        for order in orders:
+        report_data = {
+            'total_pending_orders': len(pending_orders),
+            'orders_ready_to_ship': 0,
+            'orders_insufficient_stock': [],
+            'orders_backlog': []
+        }
+        
+        today = fields.Date.context_today(self)
+
+        for order in pending_orders:
             # Determine List A/B/C simplified logic
             is_ready = True
             is_waiting = False
@@ -51,21 +62,43 @@ class DeliveryCoordinatorWizard(models.TransientModel):
             
             # Additional strategy from origin or x_studio_htgh
             strategy = 'Không rõ'
+            htgh_val = ''
             if hasattr(order, 'x_studio_htgh') and order.x_studio_htgh:
+                htgh_val = order.x_studio_htgh
                 if order._fields['x_studio_htgh'].type == 'selection':
                     strategy = dict(order._fields['x_studio_htgh'].selection).get(order.x_studio_htgh, order.x_studio_htgh)
                 else:
                     strategy = order.x_studio_htgh
             elif not hasattr(order, 'x_studio_htgh'):
                 strategy = 'Không ưu tiên'
+                
+            origin_val = order.origin or ''
+            
+            # Rule 2: Strict filtering: skip if not ready AND strategy/origin is not 'giao có gì thì giao' / 'có gì giao nấy'
+            is_flexible_delivery = 'có gì' in strategy.lower() or 'có gì' in origin_val.lower()
+            
+            if order.commitment_date and order.commitment_date.date() < today:
+                report_data['orders_backlog'].append(order.name)
+
+            if not is_ready and not is_flexible_delivery:
+                report_data['orders_insufficient_stock'].append(order.name)
+                continue # Skip this order from AI scheduling
+
+            report_data['orders_ready_to_ship'] += 1
+
             order_data.append({
                 'order_id': order.id,
                 'order_name': order.name,
                 'customer_address': order.partner_shipping_id.contact_address or '',
                 'list_status': list_status,
                 'strategy': strategy,
-                'origin': order.origin or '',
+                'origin': origin_val,
+                'commitment_date': str(order.commitment_date.date()) if order.commitment_date else 'Unknown'
             })
+
+        if not order_data:
+            raise UserError(_("Tất cả đơn hàng đang chờ (nếu có) đều không đủ tồn kho để giao. Vui lòng kiểm tra lại."))
+
 
         # 4. Prepare GPT prompt
         system_prompt = """
@@ -146,11 +179,32 @@ class DeliveryCoordinatorWizard(models.TransientModel):
             new_sched.name = f"DC-{new_sched.id:04d}"
             schedule_ids.append(new_sched.id)
 
-        # 6. Return action to view created schedules
-        return {
+        # 6. Save Report
+        report_vals = {
+            'date': self.date,
+            'total_pending_orders': report_data['total_pending_orders'],
+            'orders_ready_to_ship': report_data['orders_ready_to_ship'],
+            'orders_backlog_text': '\n'.join(list(set(report_data['orders_backlog']))) if report_data['orders_backlog'] else 'Không có đơn nợ',
+            'orders_insufficient_stock_text': '\n'.join(report_data['orders_insufficient_stock']) if report_data['orders_insufficient_stock'] else 'Không có đơn thiếu hàng'
+        }
+        report_rec = self.env['delivery.coordinator.report'].create(report_vals)
+
+        # 7. Return action to view created schedules alongside report
+        schedule_action = {
             'name': _('Lịch trình AI tạo'),
             'type': 'ir.actions.act_window',
             'res_model': 'delivery.schedule',
-            'view_mode': 'list,form', # Odoo 18 style
+            'view_mode': 'list,form',
             'domain': [('id', 'in', schedule_ids)],
+        }
+        
+        # We will show the report and user can close it to see schedules in the background
+        # Note: In standard Odoo UI returning a transient model form overlay is best.
+        return {
+            'name': _('Báo cáo Tổng hợp (AI Điều Phối)'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'delivery.coordinator.report',
+            'res_id': report_rec.id,
+            'view_mode': 'form',
+            'target': 'new',
         }
