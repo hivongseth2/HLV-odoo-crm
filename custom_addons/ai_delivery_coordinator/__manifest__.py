@@ -17,6 +17,7 @@
         'views/res_config_settings_views.xml',
         'views/delivery_schedule_views.xml',
         'views/delivery_status_report_views.xml',
+        'views/delivery_report_views.xml',
         'wizard/delivery_coordinator_wizard_views.xml',
         'views/menu_views.xml',
     ],

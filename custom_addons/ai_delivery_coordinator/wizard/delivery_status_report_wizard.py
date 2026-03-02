@@ -16,14 +16,14 @@ class DeliveryStatusReportWizard(models.TransientModel):
             ('state', 'in', ['sale', 'done'])
         ]
         orders = self.env['sale.order'].search(domain)
-        pending_orders = orders.filtered(lambda o: not all(l.qty_delivered >= l.product_uom_qty for l in o.order_line if l.product_id.type == 'product'))
+        pending_orders = orders.filtered(lambda o: not all(l.qty_delivered >= l.product_uom_qty for l in o.order_line if l.product_id.type == 'consu'))
 
         lines_to_create = []
         for order in pending_orders:
             is_ready = True
             is_waiting = False
             for line in order.order_line:
-                if line.product_id.type == 'product':
+                if line.product_id.type == 'consu':
                     if line.product_id.qty_available < (line.product_uom_qty - line.qty_delivered):
                         is_ready = False
                         if line.product_id.incoming_qty > 0:

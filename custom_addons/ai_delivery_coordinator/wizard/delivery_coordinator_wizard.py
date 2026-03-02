@@ -47,7 +47,7 @@ class DeliveryCoordinatorWizard(models.TransientModel):
             is_ready = True
             is_waiting = False
             for line in order.order_line:
-                if line.product_id.type == 'product':
+                if line.product_id.type == 'consu':
                     if line.product_id.qty_available < (line.product_uom_qty - line.qty_delivered):
                         is_ready = False
                         if line.product_id.incoming_qty > 0:
@@ -179,11 +179,30 @@ class DeliveryCoordinatorWizard(models.TransientModel):
             new_sched.name = f"DC-{new_sched.id:04d}"
             schedule_ids.append(new_sched.id)
 
-        # 6. Return action to view created schedules
-        return {
+        # 6. Save Report
+        report_vals = {
+            'date': self.date,
+            'total_pending_orders': report_data['total_pending_orders'],
+            'orders_ready_to_ship': report_data['orders_ready_to_ship'],
+            'orders_backlog_text': '\n'.join(list(set(report_data['orders_backlog']))) if report_data['orders_backlog'] else 'Không có đơn nợ',
+            'orders_insufficient_stock_text': '\n'.join(report_data['orders_insufficient_stock']) if report_data['orders_insufficient_stock'] else 'Không có đơn thiếu hàng'
+        }
+        report_rec = self.env['delivery.coordinator.report'].create(report_vals)
+
+        # 7. Return action to view created schedules alongside report
+        schedule_action = {
             'name': _('Lịch trình AI tạo'),
             'type': 'ir.actions.act_window',
             'res_model': 'delivery.schedule',
             'view_mode': 'list,form',
             'domain': [('id', 'in', schedule_ids)],
+        }
+        
+        return {
+            'name': _('Báo cáo Tổng hợp (AI Điều Phối)'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'delivery.coordinator.report',
+            'res_id': report_rec.id,
+            'view_mode': 'form',
+            'target': 'new',
         }
