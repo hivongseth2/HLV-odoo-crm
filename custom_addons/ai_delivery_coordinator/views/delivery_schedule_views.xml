@@ -118,16 +118,39 @@
         <field name="view_mode">kanban,list,calendar,form</field>
     </record>
 
+    <!-- VIEWS CHO TUYẾN GIAO HÀNG (DELIVERY ROUTE) -->
+    <record id="view_delivery_route_tree" model="ir.ui.view">
+        <field name="name">delivery.route.tree</field>
+        <field name="model">delivery.route</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_delivery_route" model="ir.actions.act_window">
+        <field name="name">Cấu Hình Tuyến Giao Hàng</field>
+        <field name="res_model">delivery.route</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
     <!-- VIEWS CHO BẢNG ĐIỀU PHỐI (KÉO THẢ LINE) -->
     <record id="view_delivery_schedule_line_kanban" model="ir.ui.view">
         <field name="name">delivery.schedule.line.kanban</field>
         <field name="model">delivery.schedule.line</field>
         <field name="arch" type="xml">
-            <kanban default_group_by="schedule_id" sample="1" class="o_kanban_small_column">
+            <kanban default_group_by="route_id" sample="1" class="o_kanban_small_column">
                 <field name="order_id"/>
                 <field name="partner_id"/>
                 <field name="stock_status"/>
                 <field name="ai_strategy"/>
+                <field name="delivery_address"/>
+                <field name="po_expected_date"/>
+                <field name="commitment_date"/>
+                <field name="ai_suggested_route"/>
                 <templates>
                     <t t-name="kanban-box">
                         <div class="oe_kanban_global_click">
@@ -149,14 +172,26 @@
                             </div>
                             <div class="o_kanban_record_body">
                                 <div><i class="fa fa-user" title="Khách hàng"/> <field name="partner_id"/></div>
+                                <div t-if="record.delivery_address.raw_value" class="text-muted" style="font-size: 0.9em;">
+                                    <i class="fa fa-map-marker"/> <field name="delivery_address"/>
+                                </div>
+                                <div t-if="record.commitment_date.raw_value" class="text-muted" style="font-size: 0.9em; color: #ff9800;">
+                                    <i class="fa fa-calendar-check-o"/> Hẹn: <field name="commitment_date"/>
+                                </div>
                                 <div class="mt-1">
                                     <field name="stock_status" widget="badge" 
                                            decoration-success="stock_status == 'ready'" 
                                            decoration-warning="stock_status == 'waiting'" 
                                            decoration-danger="stock_status == 'shortage'"/>
                                 </div>
-                                <div t-if="record.ai_strategy.raw_value" class="mt-1 text-muted">
-                                    <i class="fa fa-info-circle" title="AI Note"/> <field name="ai_strategy"/>
+                                <div t-if="record.po_expected_date.raw_value and record.stock_status.raw_value != 'ready'" class="mt-1" style="font-size: 0.9em; color: #d32f2f;">
+                                    <i class="fa fa-truck"/> PO Về: <field name="po_expected_date"/>
+                                </div>
+                                <div t-if="record.ai_suggested_route.raw_value" class="mt-1">
+                                    <span class="badge" style="background-color: #00bcd4; color: white;">AI Gợi ý: <field name="ai_suggested_route"/></span>
+                                </div>
+                                <div t-if="record.ai_strategy.raw_value" class="mt-1 text-muted" style="font-size: 0.85em;">
+                                    <i class="fa fa-comment-o" title="AI Note"/> <field name="ai_strategy"/>
                                 </div>
                             </div>
                         </div>
@@ -177,9 +212,23 @@
                         <field name="assigned_date" invisible="1"/>
                         <field name="order_id"/>
                         <field name="partner_id"/>
+                        <field name="delivery_address"/>
+                        <field name="po_expected_date" invisible="po_expected_date == False"/>
                         <field name="stock_status"/>
                         <field name="ai_strategy"/>
                     </group>
+                    <notebook>
+                        <page string="Chi tiết sản phẩm" name="order_lines">
+                            <field name="order_line_ids" readonly="1">
+                                <list>
+                                    <field name="product_id"/>
+                                    <field name="name"/>
+                                    <field name="product_uom_qty" string="SL Đặt"/>
+                                    <field name="qty_delivered" string="SL Đã Giao"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
                 </sheet>
             </form>
         </field>
@@ -216,9 +265,8 @@
                 <filter string="Đủ hàng" name="filter_ready" domain="[('stock_status', '=', 'ready')]"/>
                 <filter string="Thiếu hàng / Chờ hàng" name="filter_shortage" domain="[('stock_status', 'in', ('waiting', 'shortage'))]"/>
                 <group expand="0" string="Group By">
+                    <filter string="Tuyến Giao" name="group_by_route" context="{'group_by':'route_id'}"/>
                     <filter string="Ngày giao" name="group_by_date" context="{'group_by':'assigned_date'}"/>
-                    <filter string="Phiên giao" name="group_by_session" context="{'group_by':'session'}"/>
-                    <filter string="Chuyến xe" name="group_by_schedule" context="{'group_by':'schedule_id'}"/>
                     <filter string="Tình trạng hàng" name="group_by_stock_status" context="{'group_by':'stock_status'}"/>
                 </group>
             </search>
@@ -226,10 +274,17 @@
     </record>
 
     <record id="action_delivery_schedule_board" model="ir.actions.act_window">
-        <field name="name">Bảng Điều Phối Lắp Ghép</field>
+        <field name="name">Bảng Điều Phối Lắp Ghép (Kanban)</field>
         <field name="res_model">delivery.schedule.line</field>
-        <field name="view_mode">list,kanban,form</field>
-        <field name="context">{'search_default_group_by_date': 1, 'search_default_group_by_session': 1}</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="context">{'search_default_group_by_route': 1}</field>
     </record>
+
+    <!-- Thêm menu Tuyến Giao Hàng -->
+    <menuitem id="menu_delivery_route"
+        name="Tuyến Giao Hàng"
+        parent="menu_ai_delivery_coordinator_root"
+        action="action_delivery_route"
+        sequence="40"/>
 
 </odoo>

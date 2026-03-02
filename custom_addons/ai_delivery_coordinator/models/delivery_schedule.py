@@ -131,13 +131,21 @@ class DeliveryScheduleLine(models.Model):
     _name = 'delivery.schedule.line'
     _description = 'Chi tiết đơn hàng trong Lịch trình'
 
-    schedule_id = fields.Many2one('delivery.schedule', string='Lịch trình', ondelete='cascade', index=True) # REMOVED required=True to allow backlog
-    assigned_date = fields.Date(string='Ngày giao (Gán cứng)')
+    schedule_id = fields.Many2one('delivery.schedule', string='Lịch trình', ondelete='set null', index=True)
+    assigned_date = fields.Date(string='Ngày giao (Gán cứng)', default=fields.Date.context_today)
     session = fields.Selection(related='schedule_id.session', string='Phiên giao', store=True)
+    
+    route_id = fields.Many2one('delivery.route', string='Tuyến Giao Thực Tế', group_expand='_read_group_route_ids')
+    ai_suggested_route = fields.Char(string='AI Gợi Ý Tuyến')
     
     order_id = fields.Many2one('sale.order', string='Đơn hàng', required=True, ondelete='cascade')
     partner_id = fields.Many2one('res.partner', related='order_id.partner_id', string='Khách hàng', store=True)
     commitment_date = fields.Datetime(related='order_id.commitment_date', string='Ngày hẹn giao', readonly=True)
+
+    @api.model
+    def _read_group_route_ids(self, routes, domain, order):
+        # This allows the Kanban view to show all routes even if empty
+        return self.env['delivery.route'].search([])
     
     stock_status = fields.Selection([
         ('ready', 'Đủ hàng'),
@@ -146,6 +154,24 @@ class DeliveryScheduleLine(models.Model):
     ], string='Tình trạng hàng')
     
     ai_strategy = fields.Char(string='Chiến lược / Ghi chú AI')
+
+    delivery_address = fields.Char(related='order_id.partner_shipping_id.contact_address', string='Địa chỉ giao hàng')
+    order_line_ids = fields.One2many(related='order_id.order_line', string='Chi tiết sản phẩm')
+    po_expected_date = fields.Date(string='Ngày hàng về dự kiến (PO)', compute='_compute_po_expected_date', store=True)
+
+    @api.depends('order_id')
+    def _compute_po_expected_date(self):
+        for record in self:
+            po_expected_date = False
+            if record.order_id:
+                # Tìm PO liên quan tới SO (dựa theo tên SO trong trường origin)
+                po = self.env['purchase.order'].search([
+                    ('origin', '=', record.order_id.name), 
+                    ('state', 'not in', ('cancel', 'draft'))
+                ], limit=1, order='date_planned desc')
+                if po and po.date_planned:
+                    po_expected_date = po.date_planned.date()
+            record.po_expected_date = po_expected_date
 
     def write(self, vals):
         for record in self:

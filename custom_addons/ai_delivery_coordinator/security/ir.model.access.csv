@@ -5,3 +5,5 @@ access_delivery_status_report_wizard,delivery.status.report.wizard,model_deliver
 access_delivery_status_report_line,delivery.status.report.line,model_delivery_status_report_line,base.group_user,1,1,1,1
 access_delivery_schedule_line,delivery.schedule.line,model_delivery_schedule_line,base.group_user,1,1,1,1
 access_delivery_coordinator_report,delivery.coordinator.report,model_delivery_coordinator_report,base.group_user,1,1,1,1
+access_delivery_route,delivery.route,model_delivery_route,base.group_user,1,1,1,1
+access_delivery_schedule_create_wizard,delivery.schedule.create.wizard,model_delivery_schedule_create_wizard,base.group_user,1,1,1,1

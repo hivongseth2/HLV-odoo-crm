@@ -206,21 +206,16 @@ class DeliveryCoordinatorWizard(models.TransientModel):
         system_prompt += """
         Dữ liệu đầu vào là danh sách các đơn hàng.
         TRẢ LỜI NGHIÊM NGẶT BẰNG TIẾNG VIỆT CHO TẤT CẢ GIÁ TRỊ GHI CHÚ VÀ CHIẾN LƯỢC.
+        ĐỂ CHỐNG "LƯỜI BIẾNG" VÀ BỎ SÓT DỮ LIỆU, BẠN PHẢI TRẢ VỀ KẾT QUẢ DƯỚI DẠNG DANH SÁCH ÁNH XẠ (SEQ2SEQ) CHO TỪNG ĐƠN HÀNG đầu vào.
+        Ghi chú QUAN TRỌNG: AI Coordinator CHI LÀ NGƯỜI LÀM GỢI Ý. BẠN SẼ KHÔNG TẠO CHUYẾN XE. Chức năng của bạn là đọc địa chỉ của từng người mua và gợi ý một TÊN TUYẾN chung nhất cho đơn hàng đó để thủ kho kéo thẻ sau.
+        Ví dụ Tên tuyến: "Tuyến Nhơn Trạch", "Tuyến Long Thành", "Tuyến Mỹ Xuân", "Khu công nghiệp Sóng Thần", "Nội Thành Biên Hòa"...
         Trả về kết quả bằng ĐÚNG chuẩn JSON sau:
         {
-          "schedules": [
+          "order_assignments": [
              {
-               "route": "Nhơn Trạch | Long Thành | Mỹ Xuân - Phú Mỹ | Nội Thành / Gần Công Ty | Khác",
-               "vehicle_type": "tai_lon | van_xe_may",
-               "session": "morning | afternoon | evening | other",
-               "order_ids": [
-                 {
-                   "id": 1,
-                   "ai_strategy": "Giao thứ 1"
-                 }
-               ],
-               "note": "Lệnh Điều Phối: Điểm đến: SO001 (Long Thành) -> SO002 (Nhơn Trạch). Lộ trình: Tài xế Nam đi ca 8h. Quãng đường xa nhất 15km. Thời gian quay về kho dự kiến: 10h sáng để lấy hàng đợt 2.",
-               "driver_name": "Tài xế Nam"
+               "order_id": 1,
+               "suggested_route_name": "Tuyến Nhơn Trạch",
+               "ai_strategy": "Khách nằm gần KCN Nhơn Trạch 2"
              }
           ]
         }
@@ -264,54 +259,37 @@ class DeliveryCoordinatorWizard(models.TransientModel):
             result_json = json.loads(gpt_content.strip())
         except Exception as e:
             raise UserError(_("OpenAI trả về định dạng JSON không hợp lệ: %s") % str(e))
-        # Create records
-        for sched in result_json.get('schedules', []):
-            vals = {
-                'date': self.date,
-                'warehouse_code': warehouse_code,
-                'route': sched.get('route', 'Khác'),
-                'vehicle_type': sched.get('vehicle_type', 'van_xe_may'),
-                'session': sched.get('session', 'morning'),
-                'note': sched.get('note', ''),
-                'driver_name': sched.get('driver_name', ''),
-            }
-            new_sched = self.env['delivery.schedule'].create(vals)
-            new_sched.name = f"DC-{new_sched.id:04d}"
-            schedule_ids.append(new_sched.id)
             
-            # Create lines
-            lines_data = []
-            for o_item in sched.get('order_ids', []):
-                # Find origin record
-                origin_order = next((o for o in order_data if o['order_id'] == o_item['id']), None)
-                if origin_order:
-                    lines_data.append({
-                        'schedule_id': new_sched.id,
-                        'assigned_date': self.date,
-                        'order_id': origin_order['order_id'],
-                        'stock_status': origin_order['stock_status'],
-                        'ai_strategy': o_item.get('ai_strategy', '')
-                    })
-                    # Mark as assigned so we know not to put it in backlog
-                    assigned_order_ids.add(origin_order['order_id'])
-                    
-            if lines_data:
-                self.env['delivery.schedule.line'].create(lines_data)
+        # Xóa logic tạo trips cũ, chuyển thành chỉ tạo các Lines (thẻ Kanban) chưa có tuyến
+        assignments = result_json.get('order_assignments', [])
+        ai_suggestion_map = {item['order_id']: item for item in assignments if 'order_id' in item}
 
-        # 5b. Create Backlog lines for unassigned orders (to show on Kanban)
-        backlog_lines_data = []
+        lines_data = []
         for order in all_processed_orders:
-            if order['order_id'] not in assigned_order_ids:
-                strategy_note = "Trì hoãn (Tồn đọng - Thiếu hàng)" if order['list_status'] == 'List C' else "Chưa sắp xếp chuyến (Backlog)"
-                backlog_lines_data.append({
-                    'schedule_id': False, # No schedule!
-                    'assigned_date': self.date,
-                    'order_id': order['order_id'],
-                    'stock_status': order['stock_status'],
-                    'ai_strategy': strategy_note
-                })
-        if backlog_lines_data:
-            self.env['delivery.schedule.line'].create(backlog_lines_data)
+            order_id = order['order_id']
+            suggested_route = ""
+            ai_strategy = ""
+            
+            # Ưu tiên lấy ghi chú từ List C nếu có
+            if order['list_status'] == 'List C':
+                ai_strategy = "Trì hoãn (Tồn đọng - Thiếu hàng)"
+            else:
+                if order_id in ai_suggestion_map:
+                    suggested_route = ai_suggestion_map[order_id].get('suggested_route_name', '')
+                    ai_strategy = ai_suggestion_map[order_id].get('ai_strategy', '')
+
+            lines_data.append({
+                'schedule_id': False, # Chưa xếp chuyến
+                'route_id': False, # Cột Kanban chưa có
+                'ai_suggested_route': suggested_route,
+                'assigned_date': self.date,
+                'order_id': order_id,
+                'stock_status': order['stock_status'],
+                'ai_strategy': ai_strategy
+            })
+
+        if lines_data:
+            self.env['delivery.schedule.line'].create(lines_data)
 
         # 6. Save Report
         report_vals = {
