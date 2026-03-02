@@ -171,6 +171,7 @@ class DeliveryScheduleLine(models.Model):
     order_tag_ids = fields.Many2many(related='order_id.tag_ids', string='Thẻ đơn hàng')
     order_origin = fields.Char(related='order_id.origin', string='Nguồn gốc (Origin)')
     order_htgh = fields.Text(related='order_id.x_studio_htgh', string='Hình thức giao hàng')
+    distance_km = fields.Float(string='Khoảng cách (km)', digits=(10, 1), help='Ước lượng khoảng cách từ kho đến điểm giao')
     po_expected_date = fields.Date(string='Ngày hàng về dự kiến (PO)', compute='_compute_po_expected_date', store=True)
 
     @api.depends('order_id')
@@ -228,14 +229,16 @@ class DeliveryScheduleLine(models.Model):
     # Helper: Gọi GPT cho 1 batch đơn hàng
     # =====================================================
     @api.model
-    def _call_gpt_for_routes(self, api_key, model_name, route_names, batch_data):
-        """Gọi GPT phân tuyến cho 1 batch nhỏ. Trả về list of {id, r}."""
+    def _call_gpt_for_routes(self, api_key, model_name, route_names, batch_data, wh_address=''):
+        """Gọi GPT phân tuyến cho 1 batch nhỏ. Trả về list of {id, r, km}."""
+        wh_info = f"\nĐịa chỉ kho xuất phát: {wh_address}" if wh_address else ""
         system_prompt = f"""Phân tuyến giao hàng. Gán mỗi đơn vào 1 tuyến:
-{json.dumps(route_names, ensure_ascii=False)}
+{json.dumps(route_names, ensure_ascii=False)}{wh_info}
 
 Input: [{{"id":1,"addr":"địa chỉ"}}]
-Output JSON: {{"a":[{{"id":1,"r":"Tên tuyến"}}]}}
-Dùng key ngắn. Mỗi đơn PHẢI có tuyến. Không bỏ sót."""
+Output JSON: {{"a":[{{"id":1,"r":"Tên tuyến","km":25}}]}}
+km = ước lượng khoảng cách lái xe (km) từ kho đến điểm giao.
+Dùng key ngắn. Mỗi đơn PHẢI có tuyến + km. Không bỏ sót."""
 
         headers = {
             "Content-Type": "application/json",
@@ -281,64 +284,111 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến. Không bỏ sót."""
             return []
 
     # =====================================================
-    # AI Route Assignment - Phân tuyến tự động bằng AI
+    # Auto-assign route bằng Tags (không cần AI)
     # =====================================================
-    def action_ai_assign_routes(self):
-        """Gọi GPT để phân tuyến tự động. Hỗ trợ chọn đơn hoặc chạy hết."""
-        # Xác định records cần xử lý: chọn tay hoặc tất cả chưa phân tuyến
+    def action_auto_assign_by_tags(self):
+        """Tự động gán route_id nếu tag đơn hàng khớp tên tuyến."""
         lines = self.browse(self.env.context.get('active_ids', [])) if self.env.context.get('active_ids') else self
         if not lines:
             lines = self.search([('route_id', '=', False)])
-        # Chỉ xử lý đơn chưa có tuyến
         lines = lines.filtered(lambda l: not l.route_id)
         if not lines:
-            raise UserError(_("Không có đơn hàng nào chưa phân tuyến trong danh sách đã chọn."))
+            raise UserError(_('Không có đơn hàng nào chưa phân tuyến.'))
 
-        # 1. Lấy API Key
+        routes = self.env['delivery.route'].search([('active', '=', True)])
+        # Map tên tuyến (lowercase) -> route id
+        route_map = {}
+        for r in routes:
+            route_map[r.name.strip().lower()] = r.id
+
+        assigned_count = 0
+        for line in lines:
+            if not line.order_tag_ids:
+                continue
+            for tag in line.order_tag_ids:
+                tag_lower = tag.name.strip().lower()
+                matched_id = route_map.get(tag_lower)
+                if not matched_id:
+                    # Fuzzy: tag chứa tên tuyến hoặc ngược lại
+                    for rname, rid in route_map.items():
+                        if rname in tag_lower or tag_lower in rname:
+                            matched_id = rid
+                            break
+                if matched_id:
+                    line.write({
+                        'route_id': matched_id,
+                        'ai_suggested_route': tag.name,
+                    })
+                    assigned_count += 1
+                    break  # 1 tag khớp là đủ
+
+        _logger.info('Tag auto-assign: %d/%d lines.', assigned_count, len(lines))
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Phân Tuyến Theo Tags Hoàn Tất'),
+                'message': _('Đã phân tuyến %d/%d đơn (khớp tag).') % (assigned_count, len(lines)),
+                'type': 'success',
+                'sticky': False,
+                'next': {'type': 'ir.actions.client', 'tag': 'reload'},
+            }
+        }
+
+    # =====================================================
+    # AI Route Assignment - Phân tuyến tự động bằng AI
+    # =====================================================
+    def action_ai_assign_routes(self):
+        """Gọi GPT để phân tuyến tự động + ước lượng km."""
+        lines = self.browse(self.env.context.get('active_ids', [])) if self.env.context.get('active_ids') else self
+        if not lines:
+            lines = self.search([('route_id', '=', False)])
+        lines = lines.filtered(lambda l: not l.route_id)
+        if not lines:
+            raise UserError(_('Không có đơn hàng nào chưa phân tuyến trong danh sách đã chọn.'))
+
         api_key = self.env['ir.config_parameter'].sudo().get_param('ai_delivery_coordinator.openai_api_key')
         model_name = self.env['ir.config_parameter'].sudo().get_param('ai_delivery_coordinator.openai_model_delivery', 'gpt-4o')
         if not api_key:
-            raise UserError(_("Vui lòng cấu hình OpenAI API Key trong Thiết lập > AI Vận Chuyển."))
+            raise UserError(_('Vui lòng cấu hình OpenAI API Key trong Thiết lập > AI Vận Chuyển.'))
 
-        # 2. Lấy danh sách tuyến có sẵn
         routes = self.env['delivery.route'].search([('active', '=', True)])
         if not routes:
-            raise UserError(_("Chưa cấu hình Tuyến Giao Hàng. Vui lòng tạo tuyến trong menu 'Tuyến Giao Hàng'."))
+            raise UserError(_('Chưa cấu hình Tuyến Giao Hàng.'))
 
         route_names = [r.name for r in routes]
         route_map = {r.name.strip().lower(): r.id for r in routes}
 
-        # 3. Chuẩn bị dữ liệu tối thiểu — tiết kiệm token
+        # Lấy địa chỉ kho xuất phát
+        warehouse = self.env['stock.warehouse'].search([], limit=1)
+        wh_address = ''
+        if warehouse and warehouse.partner_id and warehouse.partner_id.contact_address:
+            wh_address = warehouse.partner_id.contact_address.replace('\n', ', ')
+
         order_data = []
         for line in lines:
             address = line.delivery_address or ''
             address = ', '.join([p.strip() for p in address.split('\n') if p.strip()])
-            order_data.append({
-                'id': line.id,
-                'addr': address,
-            })
+            order_data.append({'id': line.id, 'addr': address})
 
-        # 4. Chia batch (mỗi batch tối đa 50 đơn) & gọi GPT
         BATCH_SIZE = 50
         all_assignments = []
         total_batches = (len(order_data) + BATCH_SIZE - 1) // BATCH_SIZE
 
         for batch_idx in range(total_batches):
             start = batch_idx * BATCH_SIZE
-            end = start + BATCH_SIZE
-            batch = order_data[start:end]
-
-            _logger.info("AI Route Assignment: Batch %d/%d (%d items)", batch_idx + 1, total_batches, len(batch))
-            batch_result = self._call_gpt_for_routes(api_key, model_name, route_names, batch)
+            batch = order_data[start:start + BATCH_SIZE]
+            _logger.info('AI Route: Batch %d/%d (%d items)', batch_idx + 1, total_batches, len(batch))
+            batch_result = self._call_gpt_for_routes(api_key, model_name, route_names, batch, wh_address)
             all_assignments.extend(batch_result)
 
-        # 5. Gán route_id cho từng line
         assigned_count = 0
         line_map = {line.id: line for line in lines}
 
         for item in all_assignments:
             line_id = item.get('id')
             route_name = (item.get('r') or '').strip()
+            km = item.get('km', 0)
 
             if line_id not in line_map:
                 continue
@@ -355,10 +405,14 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến. Không bỏ sót."""
             if matched_route_id:
                 vals['route_id'] = matched_route_id
                 assigned_count += 1
+            try:
+                vals['distance_km'] = float(km) if km else 0
+            except (ValueError, TypeError):
+                vals['distance_km'] = 0
 
             line.write(vals)
 
-        _logger.info("AI Route Assignment: %d/%d lines assigned.", assigned_count, len(lines))
+        _logger.info('AI Route Assignment: %d/%d lines assigned.', assigned_count, len(lines))
 
         return {
             'type': 'ir.actions.client',
@@ -373,13 +427,13 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến. Không bỏ sót."""
         }
 
     # =====================================================
-    # Tải lại danh sách chưa phân tuyến & cập nhật stock
+    # Tải lại & cập nhật stock + xóa đơn đã giao xong
     # =====================================================
     def action_refresh_unassigned(self):
-        """Cập nhật lại stock_status. Hỗ trợ chọn đơn hoặc chạy tất cả chưa phân tuyến."""
+        """Cập nhật stock_status + tự xóa đơn đã giao hết."""
         lines = self.browse(self.env.context.get('active_ids', [])) if self.env.context.get('active_ids') else self
         if not lines:
-            lines = self.search([('route_id', '=', False)])
+            lines = self.search([])
         if not lines:
             return {
                 'type': 'ir.actions.client',
@@ -394,11 +448,24 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến. Không bỏ sót."""
             }
 
         updated_count = 0
+        delivered_lines = self.env['delivery.schedule.line']
+
         for line in lines:
             order = line.order_id
             if not order:
                 continue
 
+            # Kiểm tra đơn đã giao hết chưa
+            is_fully_delivered = all(
+                sol.qty_delivered >= sol.product_uom_qty
+                for sol in order.order_line
+                if sol.product_id and sol.product_id.type == 'consu'
+            )
+            if is_fully_delivered:
+                delivered_lines |= line
+                continue
+
+            # Cập nhật stock_status
             is_ready = True
             is_waiting = False
             for sol in order.order_line:
@@ -417,17 +484,26 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến. Không bỏ sót."""
                 line.write({'stock_status': new_status})
                 updated_count += 1
 
-        _logger.info("Refresh: %d/%d lines updated.", updated_count, len(lines))
+        # Xóa đơn đã giao hết
+        delivered_count = len(delivered_lines)
+        if delivered_lines:
+            _logger.info('Removing %d fully delivered lines.', delivered_count)
+            delivered_lines.sudo().unlink()
+
+        _logger.info('Refresh: %d updated, %d delivered removed.', updated_count, delivered_count)
+
+        msg = _('Cập nhật %d đơn.') % updated_count
+        if delivered_count:
+            msg += _(' Đã xóa %d đơn giao xong.') % delivered_count
 
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': _('Cập nhật Xong'),
-                'message': _('Đã cập nhật tình trạng hàng cho %d/%d đơn.') % (updated_count, len(lines)),
+                'message': msg,
                 'type': 'success',
                 'sticky': False,
                 'next': {'type': 'ir.actions.client', 'tag': 'reload'},
             }
         }
-

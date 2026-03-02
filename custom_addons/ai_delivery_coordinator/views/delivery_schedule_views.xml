@@ -154,6 +154,7 @@
                 <field name="order_tag_ids"/>
                 <field name="order_origin"/>
                 <field name="order_htgh"/>
+                <field name="distance_km"/>
                 <templates>
                     <t t-name="kanban-box">
                         <div class="oe_kanban_global_click">
@@ -206,6 +207,9 @@
                                 </div>
                                 <div t-if="record.ai_strategy.raw_value" class="mt-1 text-muted" style="font-size: 0.85em;">
                                     <i class="fa fa-comment-o" title="AI Note"/> <field name="ai_strategy"/>
+                                </div>
+                                <div t-if="record.distance_km.raw_value" class="mt-1" style="font-size: 0.85em;">
+                                    <i class="fa fa-road" title="Khoảng cách"/> <strong><field name="distance_km"/> km</strong>
                                 </div>
                             </div>
                         </div>
@@ -274,6 +278,7 @@
             <search>
                 <field name="order_id"/>
                 <field name="partner_id"/>
+                <field name="order_tag_ids"/>
                 <filter string="Hôm nay" name="filter_today" domain="[('assigned_date', '=', context_today().strftime('%Y-%m-%d'))]"/>
                 <filter string="Chưa phân tuyến" name="filter_unassigned" domain="[('route_id', '=', False)]"/>
                 <separator/>
@@ -306,12 +311,21 @@
     </record>
 
     <record id="action_server_refresh_unassigned" model="ir.actions.server">
-        <field name="name">🔄 Tải Lại Chưa Phân Tuyến</field>
+        <field name="name">🔄 Tải Lại & Dọn Đơn Xong</field>
         <field name="model_id" search="[('model', '=', 'delivery.schedule.line')]"/>
         <field name="binding_model_id" search="[('model', '=', 'delivery.schedule.line')]"/>
         <field name="binding_view_types">list,kanban</field>
         <field name="state">code</field>
         <field name="code">action = records.action_refresh_unassigned()</field>
+    </record>
+
+    <record id="action_server_auto_assign_tags" model="ir.actions.server">
+        <field name="name">🏷️ Phân Tuyến Theo Tags</field>
+        <field name="model_id" search="[('model', '=', 'delivery.schedule.line')]"/>
+        <field name="binding_model_id" search="[('model', '=', 'delivery.schedule.line')]"/>
+        <field name="binding_view_types">list,kanban</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_auto_assign_by_tags()</field>
     </record>
 
 </odoo>
