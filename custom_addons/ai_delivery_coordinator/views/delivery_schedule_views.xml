@@ -288,7 +288,7 @@
         <field name="binding_model_id" search="[('model', '=', 'delivery.schedule.line')]"/>
         <field name="binding_view_types">list,kanban</field>
         <field name="state">code</field>
-        <field name="code">action = model.action_ai_assign_routes()</field>
+        <field name="code">action = records.action_ai_assign_routes()</field>
     </record>
 
     <record id="action_server_refresh_unassigned" model="ir.actions.server">
@@ -297,7 +297,7 @@
         <field name="binding_model_id" search="[('model', '=', 'delivery.schedule.line')]"/>
         <field name="binding_view_types">list,kanban</field>
         <field name="state">code</field>
-        <field name="code">action = model.action_refresh_unassigned()</field>
+        <field name="code">action = records.action_refresh_unassigned()</field>
     </record>
 
 </odoo>

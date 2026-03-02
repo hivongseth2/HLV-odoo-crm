@@ -195,62 +195,43 @@ class DeliveryScheduleLine(models.Model):
         return super().unlink()
 
     # =====================================================
-    # AI Route Assignment - Phân tuyến tự động bằng AI
+    # Helper: Sửa JSON bị cắt ngắn từ GPT
     # =====================================================
     @api.model
-    def action_ai_assign_routes(self):
-        """Gọi GPT để phân tuyến tự động cho các đơn chưa có route_id."""
-        # 1. Lấy API Key
-        api_key = self.env['ir.config_parameter'].sudo().get_param('ai_delivery_coordinator.openai_api_key')
-        model_name = self.env['ir.config_parameter'].sudo().get_param('ai_delivery_coordinator.openai_model_delivery', 'gpt-4o')
-        if not api_key:
-            raise UserError(_("Vui lòng cấu hình OpenAI API Key trong Thiết lập > AI Vận Chuyển."))
+    def _repair_truncated_json(self, text):
+        """Cố gắng sửa JSON bị cắt ngắn do GPT hết token."""
+        # Tìm vị trí cuối cùng của một object hoàn chỉnh trong array
+        last_complete = text.rfind('}')
+        if last_complete == -1:
+            return text
 
-        # 2. Tìm các line chưa phân tuyến
-        unassigned_lines = self.search([
-            ('route_id', '=', False),
-        ])
-        if not unassigned_lines:
-            raise UserError(_("Không có đơn hàng nào chưa phân tuyến."))
+        # Cắt tại object hoàn chỉnh cuối cùng
+        truncated = text[:last_complete + 1]
 
-        # 3. Lấy danh sách tuyến có sẵn
-        routes = self.env['delivery.route'].search([('active', '=', True)])
-        if not routes:
-            raise UserError(_("Chưa cấu hình Tuyến Giao Hàng. Vui lòng tạo tuyến trong menu 'Tuyến Giao Hàng'."))
+        # Đếm brackets chưa đóng
+        open_brackets = truncated.count('[') - truncated.count(']')
+        open_braces = truncated.count('{') - truncated.count('}')
 
-        route_names = [r.name for r in routes]
-        route_map = {r.name.strip().lower(): r.id for r in routes}
+        # Đóng brackets/braces còn thiếu
+        truncated += ']' * max(0, open_brackets)
+        truncated += '}' * max(0, open_braces)
 
-        # 4. Chuẩn bị dữ liệu gửi GPT
-        order_data = []
-        for line in unassigned_lines:
-            address = line.delivery_address or ''
-            address = ', '.join([part.strip() for part in address.split('\n') if part.strip()])
-            order_data.append({
-                'line_id': line.id,
-                'order_name': line.order_id.name,
-                'customer': line.partner_id.name or '',
-                'delivery_address': address,
-            })
+        _logger.info("JSON repair: closed %d brackets, %d braces", max(0, open_brackets), max(0, open_braces))
+        return truncated
 
-        # 5. Prompt GPT
-        system_prompt = f"""Bạn là hệ thống phân tuyến giao hàng.
-Nhiệm vụ: Đọc địa chỉ giao hàng của từng đơn hàng và gán vào MỘT trong các tuyến sau:
+    # =====================================================
+    # Helper: Gọi GPT cho 1 batch đơn hàng
+    # =====================================================
+    @api.model
+    def _call_gpt_for_routes(self, api_key, model_name, route_names, batch_data):
+        """Gọi GPT phân tuyến cho 1 batch nhỏ. Trả về list of {id, r}."""
+        system_prompt = f"""Phân tuyến giao hàng. Gán mỗi đơn vào 1 tuyến:
 {json.dumps(route_names, ensure_ascii=False)}
 
-Quy tắc:
-- Dựa vào địa chỉ (quận/huyện, tỉnh/thành phố, KCN...) để xác định tuyến phù hợp nhất.
-- Nếu không khớp chính xác tuyến nào, hãy chọn tuyến gần nhất về mặt địa lý.
-- KHÔNG được bỏ sót bất kỳ đơn hàng nào. Mỗi đơn PHẢI được gán một tuyến.
-- Trả về ĐÚNG chuẩn JSON, không có markdown.
+Input: [{{"id":1,"addr":"địa chỉ"}}]
+Output JSON: {{"a":[{{"id":1,"r":"Tên tuyến"}}]}}
+Dùng key ngắn. Mỗi đơn PHẢI có tuyến. Không bỏ sót."""
 
-Trả về JSON:
-{{
-  "assignments": [
-    {{"line_id": 1, "route_name": "Tuyến ABC", "reason": "Lý do ngắn gọn"}}
-  ]
-}}
-"""
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}"
@@ -259,79 +240,127 @@ Trả về JSON:
             "model": model_name,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": json.dumps(order_data, ensure_ascii=False)}
+                {"role": "user", "content": json.dumps(batch_data, ensure_ascii=False)}
             ],
             "temperature": 0.1,
-            "max_tokens": 4000
+            "max_tokens": 8000,
+            "response_format": {"type": "json_object"},
         }
 
         try:
             response = requests.post(
                 "https://api.openai.com/v1/chat/completions",
-                headers=headers, json=payload, timeout=90
+                headers=headers, json=payload, timeout=120
             )
             if response.status_code != 200:
-                raise UserError(_("Lỗi kết nối OpenAI API: %s") % response.text)
+                _logger.error("OpenAI API error: %s", response.text[:300])
+                raise UserError(_("Lỗi kết nối OpenAI API: %s") % response.text[:200])
 
-            gpt_content = response.json()['choices'][0]['message']['content'].strip()
-            # Clean markdown
-            if gpt_content.startswith('```json'):
-                gpt_content = gpt_content[7:]
-            if gpt_content.startswith('```'):
-                gpt_content = gpt_content[3:]
-            if gpt_content.endswith('```'):
-                gpt_content = gpt_content[:-3]
+            resp_json = response.json()
+            gpt_content = resp_json['choices'][0]['message']['content'].strip()
+            finish_reason = resp_json['choices'][0].get('finish_reason', '')
 
-            result = json.loads(gpt_content.strip())
+            if finish_reason == 'length':
+                _logger.warning("GPT batch response truncated. Repairing...")
+                gpt_content = self._repair_truncated_json(gpt_content)
+
+            result = json.loads(gpt_content)
+            return result.get('a', result.get('assignments', []))
+
         except json.JSONDecodeError as e:
-            raise UserError(_("AI trả về JSON không hợp lệ: %s") % str(e))
+            _logger.error("GPT batch JSON error: %s | Content: %s", str(e), gpt_content[:300] if gpt_content else 'EMPTY')
+            # Trả về list rỗng thay vì crash — batch sau vẫn chạy
+            return []
         except requests.exceptions.Timeout:
-            raise UserError(_("Kết nối OpenAI bị timeout. Vui lòng thử lại."))
+            _logger.error("GPT batch timeout")
+            return []
 
-        # 6. Gán route_id cho từng line
-        assignments = result.get('assignments', [])
+    # =====================================================
+    # AI Route Assignment - Phân tuyến tự động bằng AI
+    # =====================================================
+    def action_ai_assign_routes(self):
+        """Gọi GPT để phân tuyến tự động. Hỗ trợ chọn đơn hoặc chạy hết."""
+        # Xác định records cần xử lý: chọn tay hoặc tất cả chưa phân tuyến
+        lines = self.browse(self.env.context.get('active_ids', [])) if self.env.context.get('active_ids') else self
+        if not lines:
+            lines = self.search([('route_id', '=', False)])
+        # Chỉ xử lý đơn chưa có tuyến
+        lines = lines.filtered(lambda l: not l.route_id)
+        if not lines:
+            raise UserError(_("Không có đơn hàng nào chưa phân tuyến trong danh sách đã chọn."))
+
+        # 1. Lấy API Key
+        api_key = self.env['ir.config_parameter'].sudo().get_param('ai_delivery_coordinator.openai_api_key')
+        model_name = self.env['ir.config_parameter'].sudo().get_param('ai_delivery_coordinator.openai_model_delivery', 'gpt-4o')
+        if not api_key:
+            raise UserError(_("Vui lòng cấu hình OpenAI API Key trong Thiết lập > AI Vận Chuyển."))
+
+        # 2. Lấy danh sách tuyến có sẵn
+        routes = self.env['delivery.route'].search([('active', '=', True)])
+        if not routes:
+            raise UserError(_("Chưa cấu hình Tuyến Giao Hàng. Vui lòng tạo tuyến trong menu 'Tuyến Giao Hàng'."))
+
+        route_names = [r.name for r in routes]
+        route_map = {r.name.strip().lower(): r.id for r in routes}
+
+        # 3. Chuẩn bị dữ liệu tối thiểu — tiết kiệm token
+        order_data = []
+        for line in lines:
+            address = line.delivery_address or ''
+            address = ', '.join([p.strip() for p in address.split('\n') if p.strip()])
+            order_data.append({
+                'id': line.id,
+                'addr': address,
+            })
+
+        # 4. Chia batch (mỗi batch tối đa 50 đơn) & gọi GPT
+        BATCH_SIZE = 50
+        all_assignments = []
+        total_batches = (len(order_data) + BATCH_SIZE - 1) // BATCH_SIZE
+
+        for batch_idx in range(total_batches):
+            start = batch_idx * BATCH_SIZE
+            end = start + BATCH_SIZE
+            batch = order_data[start:end]
+
+            _logger.info("AI Route Assignment: Batch %d/%d (%d items)", batch_idx + 1, total_batches, len(batch))
+            batch_result = self._call_gpt_for_routes(api_key, model_name, route_names, batch)
+            all_assignments.extend(batch_result)
+
+        # 5. Gán route_id cho từng line
         assigned_count = 0
-        line_map = {line.id: line for line in unassigned_lines}
+        line_map = {line.id: line for line in lines}
 
-        for item in assignments:
-            line_id = item.get('line_id')
-            route_name = (item.get('route_name') or '').strip()
-            reason = item.get('reason', '')
+        for item in all_assignments:
+            line_id = item.get('id')
+            route_name = (item.get('r') or '').strip()
 
             if line_id not in line_map:
                 continue
 
             line = line_map[line_id]
-            # Tìm route_id khớp tên (case-insensitive)
             matched_route_id = route_map.get(route_name.lower())
             if not matched_route_id:
-                # Fuzzy fallback: tìm route chứa keyword
                 for rname, rid in route_map.items():
                     if rname in route_name.lower() or route_name.lower() in rname:
                         matched_route_id = rid
                         break
 
-            vals = {
-                'ai_suggested_route': route_name,
-            }
+            vals = {'ai_suggested_route': route_name}
             if matched_route_id:
                 vals['route_id'] = matched_route_id
                 assigned_count += 1
 
-            if reason:
-                vals['ai_strategy'] = reason
-
             line.write(vals)
 
-        _logger.info("AI Route Assignment: %d/%d lines assigned.", assigned_count, len(unassigned_lines))
+        _logger.info("AI Route Assignment: %d/%d lines assigned.", assigned_count, len(lines))
 
-        # 7. Reload Kanban
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': _('AI Phân Tuyến Hoàn Tất'),
-                'message': _('Đã phân tuyến %d/%d đơn hàng.') % (assigned_count, len(unassigned_lines)),
+                'message': _('Đã phân tuyến %d/%d đơn hàng.') % (assigned_count, len(lines)),
                 'type': 'success',
                 'sticky': False,
                 'next': {'type': 'ir.actions.client', 'tag': 'reload'},
@@ -341,19 +370,18 @@ Trả về JSON:
     # =====================================================
     # Tải lại danh sách chưa phân tuyến & cập nhật stock
     # =====================================================
-    @api.model
     def action_refresh_unassigned(self):
-        """Cập nhật lại stock_status cho tất cả đơn chưa phân tuyến."""
-        unassigned_lines = self.search([
-            ('route_id', '=', False),
-        ])
-        if not unassigned_lines:
+        """Cập nhật lại stock_status. Hỗ trợ chọn đơn hoặc chạy tất cả chưa phân tuyến."""
+        lines = self.browse(self.env.context.get('active_ids', [])) if self.env.context.get('active_ids') else self
+        if not lines:
+            lines = self.search([('route_id', '=', False)])
+        if not lines:
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
                 'params': {
                     'title': _('Thông báo'),
-                    'message': _('Không có đơn hàng nào chưa phân tuyến.'),
+                    'message': _('Không có đơn hàng nào để cập nhật.'),
                     'type': 'info',
                     'sticky': False,
                     'next': {'type': 'ir.actions.client', 'tag': 'reload'},
@@ -361,7 +389,7 @@ Trả về JSON:
             }
 
         updated_count = 0
-        for line in unassigned_lines:
+        for line in lines:
             order = line.order_id
             if not order:
                 continue
@@ -384,16 +412,17 @@ Trả về JSON:
                 line.write({'stock_status': new_status})
                 updated_count += 1
 
-        _logger.info("Refresh Unassigned: %d lines updated out of %d.", updated_count, len(unassigned_lines))
+        _logger.info("Refresh: %d/%d lines updated.", updated_count, len(lines))
 
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': _('Cập nhật Xong'),
-                'message': _('Đã cập nhật tình trạng hàng cho %d/%d đơn chưa phân tuyến.') % (updated_count, len(unassigned_lines)),
+                'message': _('Đã cập nhật tình trạng hàng cho %d/%d đơn.') % (updated_count, len(lines)),
                 'type': 'success',
                 'sticky': False,
                 'next': {'type': 'ir.actions.client', 'tag': 'reload'},
             }
         }
+
