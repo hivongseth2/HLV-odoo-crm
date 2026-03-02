@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-from odoo import models, fields
+from odoo import models, fields, _
+from odoo.exceptions import UserError
+import urllib.parse
 
 class DeliveryRoute(models.Model):
     _name = 'delivery.route'
