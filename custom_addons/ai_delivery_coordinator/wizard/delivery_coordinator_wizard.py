@@ -318,3 +318,146 @@ class DeliveryCoordinatorWizard(models.TransientModel):
             'view_mode': 'form',
             'target': 'new',
         }
+
+    def action_fetch_orders_no_ai(self):
+        # 1. Duplicate Check
+        existing_schedules = self.env['delivery.schedule'].search([
+            ('date', '=', self.date),
+            ('warehouse_code', '=', self.warehouse_id.code)
+        ])
+        existing_backlog_lines = self.env['delivery.schedule.line'].search([
+            ('assigned_date', '=', self.date),
+            ('schedule_id', '=', False)
+        ])
+        
+        if existing_schedules or existing_backlog_lines:
+            if not self.override_existing:
+                raise UserError(_("Đã có lịch trình hoặc đơn tồn đọng trong ngày %s. Vui lòng chọn 'Xác nhận Ghi đè'.") % self.date)
+            else:
+                existing_schedules.unlink()
+                existing_backlog_lines.unlink()
+
+        # 2. Extract Data
+        domain = [
+            ('commitment_date', '<', self.date + timedelta(days=1)),
+            ('state', 'in', ['sale', 'done'])
+        ]
+        orders = self.env['sale.order'].search(domain)
+        pending_orders = orders.filtered(lambda o: not all(l.qty_delivered >= l.product_uom_qty for l in o.order_line if l.product_id.type == 'consu'))
+
+        if not pending_orders:
+            raise UserError(_("Không có đơn hàng nào chờ giao."))
+
+        report_data = {
+            'total_pending_orders': len(pending_orders),
+            'orders_ready_to_ship': 0,
+            'orders_insufficient_stock': [],
+            'orders_backlog': []
+        }
+        
+        today = fields.Date.context_today(self)
+        warehouse_map = {'KBC': 'KBC', 'KHD': 'KHD', 'TSN': 'TSN', 'TSNSR': 'TSNSR'}
+        warehouse_code = self.warehouse_id.code
+        
+        lines_data = []
+
+        for order in pending_orders:
+            results = []
+            pickings = order.picking_ids.filtered(lambda p: p.state != 'cancel')
+            if pickings:
+                for p in pickings:
+                    raw_loc = p.location_id.display_name or ""
+                    if raw_loc:
+                        code = raw_loc.split('/')[0].strip()
+                        if code in warehouse_map:
+                            results.append(warehouse_map.get(code))
+            
+            if not results and order.warehouse_id:
+                raw_code = order.warehouse_id.code or ""
+                results.append(warehouse_map.get(raw_code, raw_code))
+                
+            order_warehouse_codes = [c.strip() for c in results if c]
+            
+            if warehouse_code not in order_warehouse_codes and results:
+                continue
+
+            is_ready = True
+            is_waiting = False
+            for line in order.order_line:
+                if line.product_id.type == 'consu':
+                    if line.product_id.qty_available < (line.product_uom_qty - line.qty_delivered):
+                        is_ready = False
+                        if line.product_id.incoming_qty > 0:
+                            is_waiting = True
+            
+            po_info = ""
+            if not is_ready:
+                po = self.env['purchase.order'].search([
+                    ('origin', '=', order.name),
+                    ('state', 'not in', ['cancel'])
+                ], limit=1)
+                if po and po.date_planned:
+                    po_info = f" (Dự kiến hàng về: {po.date_planned.strftime('%d/%m/%Y')})"
+            
+            list_status = "List A"
+            stock_status = "ready"
+            if not is_ready:
+                if is_waiting:
+                    list_status = f"List B"
+                    stock_status = "waiting"
+                else:
+                    list_status = f"List C"
+                    stock_status = "shortage"
+            
+            strategy = 'Không rõ'
+            if hasattr(order, 'x_studio_htgh') and order.x_studio_htgh:
+                if order._fields['x_studio_htgh'].type == 'selection':
+                    strategy = dict(order._fields['x_studio_htgh'].selection).get(order.x_studio_htgh, order.x_studio_htgh)
+                else:
+                    strategy = order.x_studio_htgh
+                
+            origin_val = order.origin or ''
+            is_flexible_delivery = 'có gì' in strategy.lower() or 'có gì' in origin_val.lower()
+            
+            if order.commitment_date and order.commitment_date.date() < today:
+                report_data['orders_backlog'].append(order.name)
+
+            if not is_ready and not is_flexible_delivery:
+                report_data['orders_insufficient_stock'].append(order.name)
+                continue
+
+            report_data['orders_ready_to_ship'] += 1
+            
+            strategy_note = "Trì hoãn (Tồn đọng - Thiếu hàng)" if list_status == 'List C' else "Thêm thủ công (Chưa quét AI)"
+            lines_data.append({
+                'schedule_id': False,
+                'route_id': False,
+                'ai_suggested_route': '',
+                'assigned_date': self.date,
+                'order_id': order.id,
+                'stock_status': stock_status,
+                'ai_strategy': strategy_note
+            })
+
+        if not lines_data:
+            raise UserError(_("Không có đơn hàng nào hợp lệ cho Kho được chọn."))
+
+        self.env['delivery.schedule.line'].create(lines_data)
+        
+        report_vals = {
+            'date': self.date,
+            'total_pending_orders': report_data['total_pending_orders'],
+            'orders_ready_to_ship': report_data['orders_ready_to_ship'],
+            'orders_backlog_text': '\n'.join(list(set(report_data['orders_backlog']))) if report_data['orders_backlog'] else 'Không có đơn nợ',
+            'orders_insufficient_stock_text': '\n'.join(report_data['orders_insufficient_stock']) if report_data['orders_insufficient_stock'] else 'Không có đơn thiếu hàng'
+        }
+        report_rec = self.env['delivery.coordinator.report'].create(report_vals)
+
+        return {
+            'name': _('Bảng Điều Phối & Báo cáo Tóm tắt'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'delivery.coordinator.report',
+            'res_id': report_rec.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }

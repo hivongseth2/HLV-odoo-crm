@@ -22,6 +22,7 @@
                 </div>
                 <footer>
                     <button name="action_run_ai_coordinator" string="Phân tích &amp; Lên lịch bằng AI" type="object" class="btn-primary"/>
+                    <button name="action_fetch_orders_no_ai" string="Tải Dữ Liệu Nhanh (Không AI)" type="object" class="btn-info"/>
                     <button string="Hủy" class="btn-secondary" special="cancel"/>
                 </footer>
             </form>
