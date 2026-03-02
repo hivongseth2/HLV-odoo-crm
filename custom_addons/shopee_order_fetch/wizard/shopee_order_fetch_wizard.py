@@ -224,22 +224,31 @@ class ShopeeOrderFetchWizard(models.TransientModel):
         except json.JSONDecodeError as e:
             raise UserError(_("Order Detail JSON không hợp lệ:\n%s") % str(e))
 
-        body = raw if 'response' in raw else {'response': raw}
-        error_msg = body.get('error', '')
-        if error_msg:
-            raise UserError(_("Response chứa lỗi: %s\n%s") % (error_msg, body.get('message', '')))
+        # Hỗ trợ lấy order_list linh hoạt từ nhiều cấu trúc JSON khác nhau
+        order_list = []
+        if isinstance(raw, list):
+            order_list = raw
+        elif isinstance(raw, dict):
+            if 'response' in raw and isinstance(raw['response'], dict) and 'order_list' in raw['response']:
+                order_list = raw['response']['order_list']
+            elif 'order_list' in raw:
+                order_list = raw['order_list']
+            elif 'order_sn' in raw:
+                order_list = [raw]
 
-        order_list = body.get('response', {}).get('order_list', [])
         if not order_list:
-            raise UserError(_("Không tìm thấy order_list trong JSON."))
+            raise UserError(_("Không tìm thấy order_list (hoặc order_sn) trong JSON."))
 
         escrow_data = None
-        # if self.mock_escrow_json:
-        #     try:
-        #         escrow_raw = json.loads(self.mock_escrow_json)
-        #         escrow_data = escrow_raw.get('response', escrow_raw)
-        #     except json.JSONDecodeError as e:
-        #         _logger.warning("Escrow JSON parse error: %s", str(e))
+        if self.mock_escrow_json:
+            try:
+                escrow_raw = json.loads(self.mock_escrow_json)
+                if isinstance(escrow_raw, dict) and 'response' in escrow_raw:
+                    escrow_data = escrow_raw['response']
+                else:
+                    escrow_data = escrow_raw
+            except json.JSONDecodeError as e:
+                _logger.warning("Escrow JSON parse error: %s", str(e))
 
         shop = self.shop_id
         created_orders = []
