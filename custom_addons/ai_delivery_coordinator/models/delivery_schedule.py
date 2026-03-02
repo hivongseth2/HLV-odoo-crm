@@ -6,8 +6,11 @@ import urllib.parse
 class DeliveryRoute(models.Model):
     _name = 'delivery.route'
     _description = 'Delivery Route'
+    _order = 'sequence, name'
 
     name = fields.Char(string='Tên tuyến', required=True)
+    sequence = fields.Integer(string='Sequence', default=10)
+    active = fields.Boolean(string='Active', default=True)
     description = fields.Text(string='Mô tả')
 
 class DeliverySchedule(models.Model):
