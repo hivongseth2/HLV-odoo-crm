@@ -6,6 +6,7 @@
         <field name="arch" type="xml">
             <form string="AI Delivery Coordinator">
                 <group>
+                    <field name="warehouse_id"/>
                     <field name="date"/>
                 </group>
                 <div class="alert alert-info" role="alert">

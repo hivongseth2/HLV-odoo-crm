@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_delivery_status_report_wizard_form" model="ir.ui.view">
+        <field name="name">delivery.status.report.wizard.form</field>
+        <field name="model">delivery.status.report.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Tạo báo cáo tình trạng giao hàng">
+                <group>
+                    <field name="date_to"/>
+                </group>
+                <footer>
+                    <button name="action_view_report" string="Xem Báo Cáo" type="object" class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_delivery_status_report_wizard" model="ir.actions.act_window">
+        <field name="name">Báo cáo Khả năng Giao hàng</field>
+        <field name="res_model">delivery.status.report.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <record id="view_delivery_status_report_line_list" model="ir.ui.view">
+        <field name="name">delivery.status.report.line.list</field>
+        <field name="model">delivery.status.report.line</field>
+        <field name="arch" type="xml">
+            <list create="0" edit="0" delete="0">
+                <field name="order_id" widget="many2one"/>
+                <field name="partner_id"/>
+                <field name="commitment_date" widget="date"/>
+                <field name="stock_status" widget="badge" 
+                       decoration-success="stock_status == 'ready'" 
+                       decoration-warning="stock_status == 'waiting'" 
+                       decoration-danger="stock_status == 'shortage'"/>
+                <field name="strategy_note"/>
+            </list>
+        </field>
+    </record>
+</odoo>
