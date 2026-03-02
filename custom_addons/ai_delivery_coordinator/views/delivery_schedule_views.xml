@@ -280,11 +280,6 @@
         <field name="context">{'search_default_group_by_route': 1}</field>
     </record>
 
-    <!-- Thêm menu Tuyến Giao Hàng -->
-    <menuitem id="menu_delivery_route"
-        name="Tuyến Giao Hàng"
-        parent="menu_ai_delivery_coordinator_root"
-        action="action_delivery_route"
-        sequence="40"/>
+
 
 </odoo>
