@@ -72,3 +72,20 @@ class DeliverySchedule(models.Model):
             'view_mode': 'form',
             'target': 'current',
         }
+
+class DeliveryScheduleLine(models.Model):
+    _name = 'delivery.schedule.line'
+    _description = 'Chi tiết đơn hàng trong Lịch trình'
+
+    schedule_id = fields.Many2one('delivery.schedule', string='Lịch trình', required=True, ondelete='cascade')
+    order_id = fields.Many2one('sale.order', string='Đơn hàng', required=True)
+    partner_id = fields.Many2one(related='order_id.partner_id', string='Khách hàng', readonly=True)
+    commitment_date = fields.Datetime(related='order_id.commitment_date', string='Ngày hẹn giao', readonly=True)
+    
+    stock_status = fields.Selection([
+        ('ready', 'Đủ hàng'),
+        ('waiting', 'Chờ hàng về'),
+        ('shortage', 'Thiếu hàng')
+    ], string='Tình trạng hàng')
+    
+    ai_strategy = fields.Char(string='Chiến lược / Ghi chú AI')
