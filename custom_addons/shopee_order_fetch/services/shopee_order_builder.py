@@ -171,7 +171,7 @@ def create_order_line(env, so, item_data, shop):
     discounted_price = item_data.get('model_discounted_price', 0)
 
     discount = 0.0
-    if original_price and discounted_price and original_price > 0:
+    if original_price > 0 and discounted_price is not None:
         discount = (original_price - discounted_price) / original_price * 100
 
     line_vals = {
