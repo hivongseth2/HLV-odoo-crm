@@ -58,10 +58,10 @@
         <field name="target">new</field>
     </record>
 
-    <!-- Menu Item under Sales -->
+    <!-- Menu Item under Inventory -->
     <menuitem id="menu_shopee_order_fetch"
               name="Lấy đơn hàng Shopee (thủ công)"
-              parent="sale.sale_order_menu"
+              parent="stock.menu_stock_root"
               action="action_shopee_order_fetch_wizard"
               sequence="99"/>
 
