@@ -36,10 +36,10 @@
                             string="Lấy dữ liệu"
                             type="object"
                             class="btn-secondary"/>
-                    <button name="action_update_price_from_escrow"
+                    <!-- <button name="action_update_price_from_escrow"
                             string="Cập nhật giá từ Escrow"
                             type="object"
-                            class="btn-secondary"/>
+                            class="btn-secondary"/> -->
                     <!-- <button name="action_test_create_order"
                             string="Test giả lập"
                             type="object"
