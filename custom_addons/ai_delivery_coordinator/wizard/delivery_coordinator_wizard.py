@@ -190,18 +190,13 @@ class DeliveryCoordinatorWizard(models.TransientModel):
         1. ĐỊA CHỈ XUẤT PHÁT CỦA XE (KHO HÀNG): {starting_address}
         2. Dựa vào địa chỉ xuất phát và địa chỉ khách hàng nhận trong danh sách, hãy ước lượng khoảng cách (TSP) để ghép các đơn hàng nằm trên cùng tuyến đường đi, hoặc các khách hàng ở gần nhau vào cùng một chuyến xe.
         3. Phân loại đơn hàng List A (Sẵn sàng), List B (Chờ nhập buổi sáng), List C (Tạm hoãn - BẮT BUỘC BỎ QUA KHÔNG XẾP VÀO LỊCH TRÌNH).
-        4. Phân tuyến giao: Nhơn Trạch, Long Thành, Mỹ Xuân - Phú Mỹ, hoặc Nội thành.
-        5. Quy tắc ưu tiên phương tiện:
-           - Priority 1: Nếu cùng tuyến đi giao thông suốt có >= 9 đơn (List A + B), bắt buộc gán Xe tải lớn (tai_lon).
-           - Priority 2: Nếu giao lẻ tẻ, đi nhiều địa điểm cách xa nhau hoặc giao nội thành, ưu tiên Xe tải Van/Xe máy (van_xe_may).
-        6. Phân bổ Phiên giao hàng (session):
-           - "morning" (Sáng): Tuyến xa đủ đơn List A, hoặc Tuyến nội thành đi sớm.
-           - "afternoon" (Chiều): Tuyến có đơn List B (chờ hàng về trưa), hoặc ca 2 của các xe.
-           - "evening" (Tối): Giao ngoài giờ.
-           - "other" (Khác): Tùy biến.
-        7. Tình huống:
-           - Cùng 1 chuyến đi hãy xếp thứ tự các điểm dừng logic nhất tính từ kho xuất phát. Có thể ghi chú trong ai_strategy. LƯU Ý: TRONG GHI CHÚ, HÃY ĐỀ CẬP TÊN ĐƠN HÀNG (order_name, ví dụ: SO001, SO002) THAY VÌ ORDER ID để người đọc hiểu.
-           - Nếu hàng List B: ưu tiên cho Phiên Chiều (afternoon) để đảm bảo hàng kịp về.
+        4. Phân tuyến giao: Nhóm đơn theo 3 hướng chính: Nhơn Trạch, Long Thành, Mỹ Xuân - Phú Mỹ.
+        5. Tối ưu hóa & Phân bổ (QUAN TRỌNG):
+           - Nếu 1 hướng có NHIỀU HƠN HOẶC BẰNG 6 điểm giao (>= 6): Ưu tiên tài xế Nam đi hết buổi sáng từ 8h đến 11h30. Nếu phát sinh hàng cồng kềnh (có ghi chú hàng dài 6m, v.v.), bắt buộc ưu tiên Xe Tải.
+           - Nếu thiếu đơn, hoặc đang chờ hàng List B: Hãy lọc ra 3 địa điểm gần công ty nhất cho tài xế đi ca sớm, và yêu cầu QUAY VỀ KHO LÚC 10H SÁNG để lấy hàng tiếp.
+           - Phân bổ Phiên giao hàng (session): "morning" (Sáng), "afternoon" (Chiều), "evening" (Tối), "other" (Khác).
+        6. Ghi chú AI (ai_strategy): Cùng 1 chuyến đi hãy xếp thứ tự các điểm dừng logic nhất tính từ kho xuất phát, giải thích ngắn gọn lý do chọn. LƯU Ý: TRONG GHI CHÚ, HÃY DÙNG TÊN ĐƠN HÀNG (order_name, ví dụ: SO001, SO002) THAY VÌ ORDER ID.
+        7. Đầu Ra (Note): TRẢ VỀ DẠNG LỆNH ĐIỀU PHỐI. Note phải là một đoạn văn bản tóm tắt chi tiết Lệnh điều phối gồm: Đơn hàng, danh sách điểm giao, lộ trình di chuyển và thời gian quay về kho.
         """
         
         system_prompt += """
@@ -220,8 +215,8 @@ class DeliveryCoordinatorWizard(models.TransientModel):
                    "ai_strategy": "Sử dụng Tiếng Việt -> vd: Đơn SO001 gần Kho nhất (2km), Giao đơn SO001 trước rồi qua đơn SO002"
                  }
                ],
-               "note": "Sử dụng Tiếng Việt -> Mô tả lộ trình di chuyển tối đa quãng đường (Ví dụ: Xe rời kho đi Giao Quận 1 -> sang Phú Nhuận -> quay về)",
-               "driver_name": "Tài xế 1"
+               "note": "Lệnh Điều Phối: Điểm đến: SO001 (Long Thành) -> SO002 (Nhơn Trạch). Lộ trình: Tài xế Nam đi ca 8h. Quãng đường xa nhất 15km. Thời gian quay về kho dự kiến: 10h sáng để lấy hàng đợt 2.",
+               "driver_name": "Tài xế Nam"
              }
           ]
         }

@@ -116,7 +116,11 @@ class DeliverySchedule(models.Model):
             'type': 'ir.actions.act_window',
             'res_model': 'delivery.schedule.line',
             'view_mode': 'kanban,list,form',
-            'domain': ['|', ('schedule_id', '=', self.id), ('schedule_id', '=', False)],
+            'domain': [
+                '|',
+                ('schedule_id', '=', self.id),
+                '&', ('schedule_id', '=', False), ('assigned_date', '=', self.date)
+            ],
             'context': {
                 'default_schedule_id': self.id,
                 'search_default_group_by_schedule': 1

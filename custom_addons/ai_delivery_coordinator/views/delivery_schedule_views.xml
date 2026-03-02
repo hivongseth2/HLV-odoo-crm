@@ -185,11 +185,31 @@
         </field>
     </record>
 
+    <record id="view_delivery_schedule_line_search" model="ir.ui.view">
+        <field name="name">delivery.schedule.line.search</field>
+        <field name="model">delivery.schedule.line</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="order_id"/>
+                <field name="partner_id"/>
+                <filter string="Hôm nay" name="filter_today" domain="[('assigned_date', '=', context_today().strftime('%Y-%m-%d'))]"/>
+                <separator/>
+                <filter string="Đủ hàng" name="filter_ready" domain="[('stock_status', '=', 'ready')]"/>
+                <filter string="Thiếu hàng / Chờ hàng" name="filter_shortage" domain="[('stock_status', 'in', ('waiting', 'shortage'))]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Chuyến xe" name="group_by_schedule" context="{'group_by':'schedule_id'}"/>
+                    <filter string="Ngày giao" name="group_by_date" context="{'group_by':'assigned_date'}"/>
+                    <filter string="Tình trạng hàng" name="group_by_stock_status" context="{'group_by':'stock_status'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
     <record id="action_delivery_schedule_board" model="ir.actions.act_window">
         <field name="name">Bảng Điều Phối Lắp Ghép</field>
         <field name="res_model">delivery.schedule.line</field>
         <field name="view_mode">kanban,list,form</field>
-        <field name="context">{'search_default_group_by_schedule': 1}</field>
+        <field name="context">{'search_default_filter_today': 1, 'search_default_group_by_schedule': 1}</field>
     </record>
 
 </odoo>
