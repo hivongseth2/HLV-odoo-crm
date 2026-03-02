@@ -189,7 +189,7 @@
         <field name="name">delivery.schedule.line.tree</field>
         <field name="model">delivery.schedule.line</field>
         <field name="arch" type="xml">
-            <tree default_order="assigned_date desc, session, schedule_id">
+            <list default_order="assigned_date desc, session, schedule_id">
                 <field name="assigned_date"/>
                 <field name="session"/>
                 <field name="schedule_id"/>
@@ -200,7 +200,7 @@
                        decoration-warning="stock_status == 'waiting'" 
                        decoration-danger="stock_status == 'shortage'"/>
                 <field name="ai_strategy"/>
-            </tree>
+            </list>
         </field>
     </record>
 
