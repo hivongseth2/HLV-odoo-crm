@@ -21,6 +21,7 @@
         <field name="arch" type="xml">
             <form>
                 <header>
+                    <button name="action_create_batch_picking" string="Tạo Batch Giao Hàng" type="object" class="oe_highlight" invisible="state == 'done'"/>
                     <button name="action_confirm" string="Xác nhận" type="object" class="oe_highlight" invisible="state != 'draft'"/>
                     <button name="action_done" string="Hoàn thành" type="object" class="oe_highlight" invisible="state != 'confirmed'"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,confirmed,done"/>
@@ -34,6 +35,7 @@
                     <group>
                         <group>
                             <field name="date"/>
+                            <field name="warehouse_code"/>
                             <field name="route"/>
                             <field name="vehicle_type"/>
                         </group>
@@ -44,12 +46,16 @@
                     </group>
                     <notebook>
                         <page string="Đơn hàng" name="orders">
-                            <field name="sale_order_ids" mode="list">
+                            <field name="line_ids" mode="list">
                                 <list>
-                                    <field name="name"/>
+                                    <field name="order_id" widget="many2one"/>
                                     <field name="partner_id"/>
-                                    <field name="commitment_date"/>
-                                    <field name="state"/>
+                                    <field name="commitment_date" widget="date"/>
+                                    <field name="stock_status" widget="badge" 
+                                           decoration-success="stock_status == 'ready'" 
+                                           decoration-warning="stock_status == 'waiting'" 
+                                           decoration-danger="stock_status == 'shortage'"/>
+                                    <field name="ai_strategy"/>
                                 </list>
                             </field>
                         </page>

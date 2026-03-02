@@ -11,7 +11,7 @@
     'author': "Your Company",
     'category': 'Sales/Delivery',
     'version': '18.0.1.0.0',
-    'depends': ['base', 'sale_management', 'stock', 'delivery'],
+    'depends': ['base', 'sale_management', 'stock', 'delivery', 'stock_picking_batch'],
     'data': [
         'security/ir.model.access.csv',
         'views/res_config_settings_views.xml',
