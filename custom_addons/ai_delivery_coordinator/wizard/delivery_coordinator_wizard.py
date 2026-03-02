@@ -193,12 +193,12 @@ class DeliveryCoordinatorWizard(models.TransientModel):
         1. ĐỊA CHỈ XUẤT PHÁT CỦA XE (KHO HÀNG): {starting_address}
         2. Dựa vào địa chỉ xuất phát và địa chỉ khách hàng nhận trong danh sách, hãy ước lượng khoảng cách (TSP) để ghép các đơn hàng nằm trên cùng tuyến đường đi, hoặc các khách hàng ở gần nhau vào cùng một chuyến xe.
         3. Phân loại đơn hàng List A (Sẵn sàng), List B (Chờ nhập buổi sáng), List C (Tạm hoãn - BẮT BUỘC BỎ QUA KHÔNG XẾP VÀO LỊCH TRÌNH).
-        4. Phân tuyến giao: Nhóm đơn theo 3 hướng chính: Nhơn Trạch, Long Thành, Mỹ Xuân - Phú Mỹ.
+        4. Phân tuyến giao: Ưu tiên gom theo 3 hướng chính: Nhơn Trạch, Long Thành, Mỹ Xuân - Phú Mỹ. Tuy nhiên, NẾU LÀ CÁC ĐỊA CHỈ KHÁC (vd: Biên Hòa, TP.HCM, Bình Dương...), BẮT BUỘC tạo thêm các chuyến đi đến các hướng đó. KHÔNG ĐƯỢC BỎ LẠI BẤT KỲ ĐƠN NÀO VÌ KHÁC TUYẾN.
         5. Tối ưu hóa & Phân bổ (QUAN TRỌNG):
            - Nếu 1 hướng có NHIỀU HƠN HOẶC BẰNG 6 điểm giao (>= 6): Ưu tiên tài xế Nam đi hết buổi sáng từ 8h đến 11h30. Nếu phát sinh hàng cồng kềnh (có ghi chú hàng dài 6m, v.v.), bắt buộc ưu tiên Xe Tải.
            - Nếu thiếu đơn, hoặc đang chờ hàng List B: Hãy lọc ra 3 địa điểm gần công ty nhất cho tài xế đi ca sớm, và yêu cầu QUAY VỀ KHO LÚC 10H SÁNG để lấy hàng tiếp.
            - Phân bổ Phiên giao hàng (session): "morning" (Sáng), "afternoon" (Chiều), "evening" (Tối), "other" (Khác).
-        6. KHÔNG BỎ RỚT ĐƠN (QUAN TRỌNG NHẤT): BẮT BUỘC phải thu xếp TẤT CẢ các đơn hàng Đủ Hàng (List A) và Chờ Nhập (List B) lên xe. Bạn có quyền tạo ra số lượng chuyến xe (schedules) KHÔNG GIỚI HẠN để đảm bảo chở hết hàng. Tuyệt đối không được để thừa đơn hàng List A/B nào ở ngoài. NẾU BỎ SÓT BẤT KỲ ĐƠN NÀO LÀ LỖI RẤT NẶNG!
+        6. KHÔNG BỎ RỚT ĐƠN (QUAN TRỌNG NHẤT): TRƯỚC KHI TRẢ VỀ JSON, HÃY KIỂM ĐẾM LẠI ĐỂ ĐẢM BẢO 100% TẤT CẢ CÁC ĐƠN HÀNG LIST A VÀ LIST B ĐỀU ĐÃ ĐƯỢC XẾP LÊN MỘT CHUYẾN XE NÀO ĐÓ! Bạn có quyền phân bổ tuỳ ý bao nhiêu chuyến xe cũng được miễn là quét sạch 100% đơn hàng List A và B. Viết "Tuyệt đối không bỏ hàng" vào dòng ghi chú đầu tiên.
         7. Thứ tự giao hàng (ai_strategy): Chỉ ghi ngắn gọn thứ tự giao (vd: "Giao thứ 1", "Giao thứ 2"). KHÔNG giải thích dài dòng để tiết kiệm thời gian và tài nguyên. Mọi giải thích hãy gom vào phần `note` của hệ thống.
         8. Đầu Ra (Note): TRẢ VỀ DẠNG LỆNH ĐIỀU PHỐI. Note phải là một đoạn văn bản tóm tắt chi tiết Lệnh điều phối gồm: Đơn hàng, danh sách điểm giao, lộ trình di chuyển và thời gian quay về kho.
         """
@@ -243,7 +243,7 @@ class DeliveryCoordinatorWizard(models.TransientModel):
                 {"role": "user", "content": json.dumps(order_data, ensure_ascii=False)}
             ],
             "temperature": 0.2,
-            "max_tokens": 4000
+            "max_tokens": 8000
         }
 
         response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=90)
