@@ -146,7 +146,7 @@ class DeliveryScheduleLine(models.Model):
     commitment_date = fields.Datetime(related='order_id.commitment_date', string='Ngày hẹn giao', readonly=True)
 
     @api.model
-    def _read_group_route_ids(self, routes, domain, order):
+    def _read_group_route_ids(self, routes, domain, order=None):
         # This allows the Kanban view to show all routes even if empty
         return self.env['delivery.route'].search([])
     
