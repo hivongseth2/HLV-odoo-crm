@@ -1,4 +1,5 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_delivery_schedule,delivery.schedule,model_delivery_schedule,base.group_user,1,1,1,1
 access_delivery_coordinator_wizard,delivery.coordinator.wizard,model_delivery_coordinator_wizard,base.group_user,1,1,1,1
-access_delivery_coordinator_report,delivery.coordinator.report,model_delivery_coordinator_report,base.group_user,1,1,1,1
+access_delivery_status_report_wizard,delivery.status.report.wizard,model_delivery_status_report_wizard,base.group_user,1,1,1,1
+access_delivery_status_report_line,delivery.status.report.line,model_delivery_status_report_line,base.group_user,1,1,1,1
