@@ -156,6 +156,7 @@
                 <field name="order_htgh"/>
                 <field name="distance_km"/>
                 <field name="is_selected"/>
+                <field name="kho_xuat"/>
                 <progressbar field="stock_status" colors='{"ready": "success", "partial": "warning", "waiting": "info", "shortage": "danger"}'/>
                 <templates>
                     <t t-name="kanban-box">
@@ -217,6 +218,10 @@
                                 </div>
                                 <div t-if="record.ai_suggested_route.raw_value" class="mt-1">
                                     <span class="badge" style="background-color: #00bcd4; color: white;">AI Gợi ý: <field name="ai_suggested_route"/></span>
+                                </div>
+                                <div t-if="record.kho_xuat.raw_value" class="mt-1" style="font-size: 0.85em;">
+                                    <i class="fa fa-warehouse" title="Kho xuất"/>
+                                    <span class="badge text-bg-secondary"><field name="kho_xuat"/></span>
                                 </div>
                             </div>
                         </div>

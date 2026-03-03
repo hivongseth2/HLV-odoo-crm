@@ -3,10 +3,46 @@ import { registry } from "@web/core/registry";
 import { kanbanView } from "@web/views/kanban/kanban_view";
 import { KanbanController } from "@web/views/kanban/kanban_controller";
 import { useService } from "@web/core/utils/hooks";
-import { onMounted, onPatched } from "@odoo/owl";
+import { onMounted, onWillUnmount } from "@odoo/owl";
 
-// ─── Frontend-only selection state (no backend RPC) ───
+// ─── Frontend-only selection (zero RPC) ───
 const selectedIds = new Set();
+
+/**
+ * Global click handler using event delegation on document.
+ * This works regardless of when kanban records render.
+ */
+function onGlobalClick(ev) {
+    const btn = ev.target.closest(".delivery_select_btn");
+    if (!btn) return;
+
+    ev.preventDefault();
+    ev.stopPropagation();
+
+    const card = btn.closest(".o_kanban_record");
+    if (!card) return;
+
+    // Get record ID from the card's data-id attribute
+    const id = parseInt(card.dataset.id);
+    if (!id) return;
+
+    // Toggle selection
+    if (selectedIds.has(id)) {
+        selectedIds.delete(id);
+    } else {
+        selectedIds.add(id);
+    }
+
+    // Instant visual feedback
+    const isSelected = selectedIds.has(id);
+    card.classList.toggle("delivery_selected", isSelected);
+    const icon = btn.querySelector(".delivery_select_icon");
+    if (icon) {
+        icon.className = isSelected
+            ? "fa fa-check-square text-primary delivery_select_icon"
+            : "fa fa-square-o text-muted delivery_select_icon";
+    }
+}
 
 // ─── Custom KanbanController ───
 export class DeliveryKanbanController extends KanbanController {
@@ -15,43 +51,11 @@ export class DeliveryKanbanController extends KanbanController {
         this.actionService = useService("action");
         this.orm = useService("orm");
 
-        // Bind click handler for checkboxes after render
-        onMounted(() => this._bindSelectButtons());
-        onPatched(() => this._bindSelectButtons());
-    }
-
-    _bindSelectButtons() {
-        const el = this.rootRef?.el;
-        if (!el) return;
-        el.querySelectorAll(".delivery_select_btn").forEach((btn) => {
-            if (btn._bound) return; // avoid double-binding
-            btn._bound = true;
-            btn.addEventListener("click", (ev) => {
-                ev.preventDefault();
-                ev.stopPropagation();
-                // Find the record ID from the kanban card
-                const card = btn.closest(".o_kanban_record");
-                if (!card) return;
-                const dataId = card.dataset.id;
-                const id = parseInt(dataId);
-                if (!id) return;
-
-                if (selectedIds.has(id)) {
-                    selectedIds.delete(id);
-                } else {
-                    selectedIds.add(id);
-                }
-
-                // Toggle visual
-                const isSelected = selectedIds.has(id);
-                card.classList.toggle("delivery_selected", isSelected);
-                const icon = btn.querySelector("i");
-                if (icon) {
-                    icon.className = isSelected
-                        ? "fa fa-check-square text-primary delivery_select_icon"
-                        : "fa fa-square-o text-muted delivery_select_icon";
-                }
-            });
+        onMounted(() => {
+            document.addEventListener("click", onGlobalClick, true);
+        });
+        onWillUnmount(() => {
+            document.removeEventListener("click", onGlobalClick, true);
         });
     }
 
@@ -109,12 +113,10 @@ export class DeliveryKanbanController extends KanbanController {
 
     onClearSelection() {
         selectedIds.clear();
-        const el = this.rootRef?.el;
-        if (!el) return;
-        el.querySelectorAll(".delivery_selected").forEach((card) => {
+        document.querySelectorAll(".delivery_selected").forEach((card) => {
             card.classList.remove("delivery_selected");
         });
-        el.querySelectorAll(".delivery_select_icon").forEach((icon) => {
+        document.querySelectorAll(".delivery_select_icon").forEach((icon) => {
             icon.className = "fa fa-square-o text-muted delivery_select_icon";
         });
     }
