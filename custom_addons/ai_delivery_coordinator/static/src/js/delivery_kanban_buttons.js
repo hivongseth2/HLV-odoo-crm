@@ -1,30 +1,26 @@
 /** @odoo-module **/
+import { registry } from "@web/core/registry";
+import { kanbanView } from "@web/views/kanban/kanban_view";
 import { KanbanController } from "@web/views/kanban/kanban_controller";
-import { patch } from "@web/core/utils/patch";
 import { useService } from "@web/core/utils/hooks";
 
-patch(KanbanController.prototype, {
+export class DeliveryKanbanController extends KanbanController {
     setup() {
-        super.setup(...arguments);
+        super.setup();
         this.actionService = useService("action");
         this.orm = useService("orm");
-    },
-
-    get isDeliveryScheduleLine() {
-        return this.props.resModel === "delivery.schedule.line";
-    },
+    }
 
     async onRefreshCleanup() {
-        // Gọi action_refresh_unassigned trên tất cả records
         const action = await this.orm.call(
             "delivery.schedule.line",
             "action_refresh_unassigned",
             [[]],
         );
         if (action) {
-            this.actionService.doAction(action);
+            await this.actionService.doAction(action);
         }
-    },
+    }
 
     async onTagAssign() {
         const action = await this.orm.call(
@@ -33,7 +29,15 @@ patch(KanbanController.prototype, {
             [[]],
         );
         if (action) {
-            this.actionService.doAction(action);
+            await this.actionService.doAction(action);
         }
-    },
-});
+    }
+}
+
+export const deliveryKanbanView = {
+    ...kanbanView,
+    Controller: DeliveryKanbanController,
+    buttonTemplate: "ai_delivery_coordinator.DeliveryKanbanButtons",
+};
+
+registry.category("views").add("delivery_kanban", deliveryKanbanView);

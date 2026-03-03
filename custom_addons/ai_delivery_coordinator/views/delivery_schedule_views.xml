@@ -142,7 +142,7 @@
         <field name="name">delivery.schedule.line.kanban</field>
         <field name="model">delivery.schedule.line</field>
         <field name="arch" type="xml">
-            <kanban default_group_by="route_id" sample="1" class="o_kanban_small_column">
+            <kanban default_group_by="route_id" sample="1" class="o_kanban_small_column" js_class="delivery_kanban">
                 <field name="order_id"/>
                 <field name="partner_id"/>
                 <field name="stock_status"/>
