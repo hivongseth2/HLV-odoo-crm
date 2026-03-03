@@ -159,6 +159,10 @@
                 <templates>
                     <t t-name="kanban-box">
                         <div t-attf-class="oe_kanban_global_click #{record.stock_status.raw_value == 'ready' ? 'bg-success-subtle' : record.stock_status.raw_value == 'partial' ? 'bg-warning-subtle' : record.stock_status.raw_value == 'shortage' ? 'bg-danger-subtle' : ''}">
+                            <!-- Ribbon quá hạn giao -->
+                            <t t-if="record.commitment_date.raw_value and new Date(record.commitment_date.raw_value) &lt;= new Date()">
+                                <div class="delivery_overdue_ribbon">⚠ QUÁ HẠN</div>
+                            </t>
                             <div class="o_kanban_record_top mb-1">
                                 <div class="o_kanban_record_headings">
                                     <strong class="o_kanban_record_title">

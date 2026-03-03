@@ -1,0 +1,21 @@
+/* Ribbon cho đơn quá hạn giao */
+.o_kanban_record .delivery_overdue_ribbon {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: #dc3545;
+    color: white;
+    padding: 2px 12px;
+    font-size: 0.7em;
+    font-weight: bold;
+    border-bottom-left-radius: 6px;
+    z-index: 1;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+/* Card position relative cho ribbon */
+.o_kanban_record .oe_kanban_global_click {
+    position: relative;
+    overflow: hidden;
+}

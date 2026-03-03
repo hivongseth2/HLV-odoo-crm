@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="ai_delivery_coordinator.KanbanButtons" t-inherit="web.KanbanView.Buttons" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('o_kanban_buttons')]" position="inside">
+            <t t-if="this.isDeliveryScheduleLine">
+                <button class="btn btn-primary ms-1" t-on-click="onRefreshCleanup" title="Cập nhật stock + xóa đơn đã giao xong">
+                    <i class="fa fa-refresh"/> Tải Lại
+                </button>
+                <button class="btn btn-success ms-1" t-on-click="onTagAssign" title="Phân tuyến theo tags đơn hàng">
+                    <i class="fa fa-tags"/> Phân Tuyến Tags
+                </button>
+            </t>
+        </xpath>
+    </t>
+
+</templates>

@@ -24,4 +24,11 @@
     ],
     'installable': True,
     'application': True,
+    'assets': {
+        'web.assets_backend': [
+            'ai_delivery_coordinator/static/src/css/delivery_kanban.css',
+            'ai_delivery_coordinator/static/src/js/delivery_kanban_buttons.js',
+            'ai_delivery_coordinator/static/src/xml/delivery_kanban_buttons.xml',
+        ],
+    },
 }
