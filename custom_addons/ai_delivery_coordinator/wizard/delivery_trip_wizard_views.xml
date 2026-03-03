@@ -29,6 +29,7 @@
                         <field name="line_ids" nolabel="1">
                             <list editable="bottom">
                                 <field name="selected" widget="boolean_toggle"/>
+                                <field name="schedule_line_id" column_invisible="1"/>
                                 <field name="order_id"/>
                                 <field name="partner_id"/>
                                 <field name="delivery_address"/>
@@ -47,8 +48,8 @@
                 </notebook>
                 <footer>
                     <button name="action_create_trip" type="object" string="📦 Tạo Chuyến" class="btn-primary"/>
-                    <button name="action_suggest_early_morning" type="object" string="🌅 Gợi ý 3 đơn gần nhất" class="btn-warning"/>
-                    <button name="action_select_ready_only" type="object" string="✅ Chỉ đơn đủ hàng" class="btn-info"/>
+                    <button name="action_suggest_early_morning" type="object" string="🌅 3 đơn gần nhất" class="btn-warning"/>
+                    <button name="action_select_ready_only" type="object" string="✅ Chỉ đủ hàng" class="btn-info"/>
                     <button string="Hủy" class="btn-secondary" special="cancel"/>
                 </footer>
             </form>
