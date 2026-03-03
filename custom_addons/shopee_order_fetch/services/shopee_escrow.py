@@ -10,12 +10,38 @@ import logging
 _logger = logging.getLogger(__name__)
 
 
-def get_tax_included(env, company):
+def get_tax_included(env, company, product=None):
     """
     Tìm thuế bán hàng có price_include=True trong công ty chỉ định.
+    Nếu `product` được truyền vào, sẽ dựa trên `taxes_id` (Customer Taxes) của sản phẩm 
+    để tìm thuế `price_include=True` có cùng VAT (%) amount.
+    - Nếu sản phẩm KHÔNG CÓ thuế -> Bỏ trống thuế (return False).
     Trả về account.tax record hoặc False.
     """
     Tax = env['account.tax'].sudo()
+    
+    # 1. Tìm thuế Include dựa trên thuế đang cấu hình trên Sản phẩm
+    if product:
+        if not product.taxes_id:
+            # Nếu sản phẩm không cấu hình thuế -> Không gán thuế cho dòng này
+            return False
+            
+        # Lập domain tìm loại thuế có cùng mức % (amount) như thuế của sản phẩm
+        tax_amount = product.taxes_id[0].amount
+        tax = Tax.search([
+            ('type_tax_use', '=', 'sale'),
+            ('price_include', '=', True),
+            ('amount', '=', tax_amount),
+            ('company_id', '=', company.id),
+        ], limit=1)
+        
+        if tax:
+            return tax
+        else:
+            _logger.warning("Shopee: Sản phẩm '%s' chịu thuế %s%% nhưng không có cấu hình 'Thuế %s%% (Bao gồm)'. Bỏ trống thuế dòng này.", product.name, tax_amount, tax_amount)
+            return False
+
+    # 2. Rơi vào fallback (chỉ dùng khi gọi hàm mà KO TRUYỀN product)
     tax = Tax.search([
         ('type_tax_use', '=', 'sale'),
         ('price_include', '=', True),
@@ -24,6 +50,7 @@ def get_tax_included(env, company):
     if tax:
         return tax
 
+    # 3. Fallback cuối
     default_tax = company.account_sale_tax_id
     if default_tax:
         tax = Tax.search([
@@ -52,8 +79,6 @@ def update_order_lines_from_escrow(so, escrow_data):
     order_income = escrow_data.get('order_income', {})
     item_list = order_income.get('items', [])
 
-    tax_included = get_tax_included(so.env, so.company_id)
-
     for item_data in item_list:
         sku = item_data.get('model_sku', '') or item_data.get('item_sku', '')
         if not sku:
@@ -75,6 +100,10 @@ def update_order_lines_from_escrow(so, escrow_data):
             'price_unit': original_price,
             'discount': discount,
         }
+
+        # Truy xuất Thuế include chính xác theo từng sản phẩm
+        # Lấy sản phẩm của dòng đầu tiên (trong trường hợp 1 sku bị chia 2 line)
+        tax_included = get_tax_included(so.env, so.company_id, line[0].product_id)
         if tax_included:
             line_vals['tax_id'] = [(6, 0, tax_included.ids)]
 
