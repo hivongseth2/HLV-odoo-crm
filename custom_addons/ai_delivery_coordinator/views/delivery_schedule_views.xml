@@ -159,15 +159,15 @@
                 <progressbar field="stock_status" colors='{"ready": "success", "partial": "warning", "waiting": "info", "shortage": "danger"}'/>
                 <templates>
                     <t t-name="kanban-box">
-                        <div t-attf-class="oe_kanban_global_click #{record.stock_status.raw_value == 'ready' ? 'bg-success-subtle' : record.stock_status.raw_value == 'partial' ? 'bg-warning-subtle' : record.stock_status.raw_value == 'shortage' ? 'bg-danger-subtle' : ''} #{record.is_selected.raw_value ? 'border border-primary border-2' : ''}">
+                        <div t-attf-class="oe_kanban_global_click #{record.stock_status.raw_value == 'ready' ? 'bg-success-subtle' : record.stock_status.raw_value == 'partial' ? 'bg-warning-subtle' : record.stock_status.raw_value == 'shortage' ? 'bg-danger-subtle' : ''}">
                             <!-- Ribbon quá hạn giao -->
                             <t t-if="record.commitment_date.raw_value and new Date(record.commitment_date.raw_value) &lt;= new Date()">
                                 <div class="delivery_overdue_ribbon">⚠ QUÁ HẠN</div>
                             </t>
                             <div class="o_kanban_record_top mb-1">
                                 <div style="display: flex; align-items: center; gap: 6px;">
-                                    <a role="button" type="object" name="action_toggle_select" style="cursor:pointer; font-size: 1.2em;" title="Chọn/Bỏ chọn">
-                                        <i t-attf-class="fa #{record.is_selected.raw_value ? 'fa-check-square text-primary' : 'fa-square-o text-muted'}"/>
+                                    <a class="delivery_select_btn" style="cursor:pointer; font-size: 1.2em;" title="Chọn/Bỏ chọn">
+                                        <i class="fa fa-square-o text-muted delivery_select_icon"/>
                                     </a>
                                     <strong class="o_kanban_record_title">
                                         <span><field name="order_id"/></span>
