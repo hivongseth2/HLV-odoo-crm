@@ -282,8 +282,10 @@
                 <field name="order_id"/>
                 <field name="partner_id"/>
                 <field name="order_tag_ids"/>
+                <field name="warehouse_id"/>
                 <filter string="Hôm nay" name="filter_today" domain="[('assigned_date', '=', context_today().strftime('%Y-%m-%d'))]"/>
                 <filter string="Chưa phân tuyến" name="filter_unassigned" domain="[('route_id', '=', False)]"/>
+                <filter string="Chưa có chuyến" name="filter_no_trip" domain="[('trip_id', '=', False)]"/>
                 <separator/>
                 <filter string="Đủ hàng" name="filter_ready" domain="[('stock_status', '=', 'ready')]"/>
                 <filter string="Có 1 phần" name="filter_partial" domain="[('stock_status', '=', 'partial')]"/>
@@ -293,6 +295,7 @@
                     <filter string="Tuyến Giao" name="group_by_route" context="{'group_by':'route_id'}"/>
                     <filter string="Ngày giao" name="group_by_date" context="{'group_by':'assigned_date'}"/>
                     <filter string="Tình trạng hàng" name="group_by_stock_status" context="{'group_by':'stock_status'}"/>
+                    <filter string="Kho" name="group_by_warehouse" context="{'group_by':'warehouse_id'}"/>
                 </group>
             </search>
         </field>

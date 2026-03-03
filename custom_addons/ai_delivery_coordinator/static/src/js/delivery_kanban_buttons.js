@@ -11,11 +11,20 @@ export class DeliveryKanbanController extends KanbanController {
         this.orm = useService("orm");
     }
 
+    /**
+     * Lấy danh sách IDs đang được chọn trên Kanban.
+     */
+    _getSelectedIds() {
+        const records = this.model.root.selection;
+        return records ? records.map((r) => r.resId) : [];
+    }
+
     async onRefreshCleanup() {
+        const ids = this._getSelectedIds();
         const action = await this.orm.call(
             "delivery.schedule.line",
             "action_refresh_unassigned",
-            [[]],
+            [ids.length ? ids : []],
         );
         if (action) {
             await this.actionService.doAction(action);
@@ -23,10 +32,11 @@ export class DeliveryKanbanController extends KanbanController {
     }
 
     async onTagAssign() {
+        const ids = this._getSelectedIds();
         const action = await this.orm.call(
             "delivery.schedule.line",
             "action_auto_assign_by_tags",
-            [[]],
+            [ids.length ? ids : []],
         );
         if (action) {
             await this.actionService.doAction(action);
@@ -34,10 +44,11 @@ export class DeliveryKanbanController extends KanbanController {
     }
 
     async onAiAssign() {
+        const ids = this._getSelectedIds();
         const action = await this.orm.call(
             "delivery.schedule.line",
             "action_ai_assign_routes",
-            [[]],
+            [ids.length ? ids : []],
         );
         if (action) {
             await this.actionService.doAction(action);
@@ -45,6 +56,7 @@ export class DeliveryKanbanController extends KanbanController {
     }
 
     async onCreateTrip() {
+        const ids = this._getSelectedIds();
         await this.actionService.doAction({
             type: "ir.actions.act_window",
             res_model: "delivery.trip.wizard",
@@ -52,6 +64,9 @@ export class DeliveryKanbanController extends KanbanController {
             view_mode: "form",
             views: [[false, "form"]],
             target: "new",
+            context: {
+                default_selected_line_ids: ids,
+            },
         });
     }
 }

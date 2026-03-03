@@ -11,7 +11,7 @@ class DeliveryTripWizardLine(models.TransientModel):
     _description = 'Dòng wizard tạo chuyến'
 
     wizard_id = fields.Many2one('delivery.trip.wizard', string='Wizard', ondelete='cascade')
-    schedule_line_id = fields.Many2one('delivery.schedule.line', string='Đơn hàng', required=True)
+    schedule_line_id = fields.Many2one('delivery.schedule.line', string='Đơn hàng')
     order_id = fields.Many2one('sale.order', related='schedule_line_id.order_id', string='Mã đơn')
     partner_id = fields.Many2one('res.partner', related='schedule_line_id.partner_id', string='Khách hàng')
     delivery_address = fields.Char(related='schedule_line_id.delivery_address', string='Địa chỉ')
@@ -24,7 +24,7 @@ class DeliveryTripWizard(models.TransientModel):
     _name = 'delivery.trip.wizard'
     _description = 'Wizard Tạo Chuyến Giao Hàng'
 
-    route_id = fields.Many2one('delivery.route', string='Tuyến giao', required=True)
+    route_id = fields.Many2one('delivery.route', string='Tuyến giao')
     date = fields.Date(string='Ngày giao', required=True, default=fields.Date.context_today)
     driver_id = fields.Many2one('res.partner', string='Tài xế')
     vehicle_type = fields.Selection([
@@ -46,6 +46,28 @@ class DeliveryTripWizard(models.TransientModel):
     total_km = fields.Float(string='Tổng km', compute='_compute_stats', digits=(10, 1))
     priority_label = fields.Char(string='Mức ưu tiên', compute='_compute_stats')
     suggestion_text = fields.Text(string='Gợi ý AI', compute='_compute_stats')
+
+    @api.model
+    def default_get(self, fields_list):
+        res = super().default_get(fields_list)
+        selected_ids = self.env.context.get('default_selected_line_ids', [])
+        if selected_ids:
+            lines = self.env['delivery.schedule.line'].browse(selected_ids).filtered(
+                lambda l: not l.trip_id
+            )
+            if lines:
+                # Auto-detect common route
+                routes = lines.mapped('route_id')
+                if len(routes) == 1:
+                    res['route_id'] = routes.id
+                wizard_lines = []
+                for line in lines.sorted(key=lambda l: l.distance_km):
+                    wizard_lines.append((0, 0, {
+                        'schedule_line_id': line.id,
+                        'selected': True,
+                    }))
+                res['line_ids'] = wizard_lines
+        return res
 
     @api.depends('line_ids', 'line_ids.selected')
     def _compute_stats(self):
@@ -142,6 +164,8 @@ class DeliveryTripWizard(models.TransientModel):
     def action_create_trip(self):
         """Tạo chuyến giao từ các đơn đã chọn."""
         self.ensure_one()
+        if not self.route_id:
+            raise UserError(_('Vui lòng chọn Tuyến giao trước khi tạo chuyến.'))
         selected = self.line_ids.filtered('selected')
         if not selected:
             raise UserError(_('Chưa chọn đơn hàng nào cho chuyến giao.'))

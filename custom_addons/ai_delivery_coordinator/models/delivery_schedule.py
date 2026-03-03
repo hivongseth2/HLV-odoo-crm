@@ -174,6 +174,7 @@ class DeliveryScheduleLine(models.Model):
     order_origin = fields.Char(related='order_id.origin', string='Nguồn gốc (Origin)')
     order_htgh = fields.Text(related='order_id.x_studio_htgh', string='Hình thức giao hàng')
     distance_km = fields.Float(string='Khoảng cách (km)', digits=(10, 1), help='Ước lượng khoảng cách từ kho đến điểm giao')
+    warehouse_id = fields.Many2one('stock.warehouse', related='order_id.warehouse_id', string='Kho', store=True)
     po_expected_date = fields.Date(string='Ngày hàng về dự kiến (PO)', compute='_compute_po_expected_date', store=True)
 
     @api.depends('order_id')
