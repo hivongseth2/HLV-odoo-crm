@@ -183,7 +183,7 @@ def create_order_line(env, so, item_data, shop):
         'discount': discount,
     }
 
-    tax_included = shopee_escrow.get_tax_included(env, so.company_id)
+    tax_included = shopee_escrow.get_tax_included(env, so.company_id, product)
     if tax_included:
         line_vals['tax_id'] = [(6, 0, tax_included.ids)]
 
