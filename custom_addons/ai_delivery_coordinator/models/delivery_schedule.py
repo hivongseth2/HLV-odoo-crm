@@ -196,47 +196,50 @@ class DeliveryScheduleLine(models.Model):
                 line.picking_status = 'Chưa có phiếu'
                 continue
 
-            # Phân loại theo loại phiếu
-            pick_ops = all_pickings.filtered(lambda p: p.picking_type_code == 'internal' and 'Pick' in (p.picking_type_id.name or ''))
-            pack_ops = all_pickings.filtered(lambda p: p.picking_type_code == 'internal' and 'Pack' in (p.picking_type_id.name or ''))
-            out_ops = all_pickings.filtered(lambda p: p.picking_type_code == 'outgoing')
+            # Tổng quan: có phiếu nào đang active (chưa done)?
+            done_pickings = all_pickings.filtered(lambda p: p.state == 'done')
+            active_pickings = all_pickings.filtered(lambda p: p.state not in ('done', 'cancel'))
 
-            # Nếu không phân loại được (single step), dùng all
-            if not pick_ops and not pack_ops and not out_ops:
-                pick_ops = all_pickings.filtered(lambda p: p.picking_type_code == 'internal')
-                out_ops = all_pickings.filtered(lambda p: p.picking_type_code == 'outgoing')
+            # Nếu tất cả done → đã hoàn tất
+            if not active_pickings:
+                line.picking_status = 'Hoàn tất'
+                continue
 
-            # Tìm bước hiện tại (bước chưa hoàn thành đầu tiên)
-            status_parts = []
+            # Có done lẫn active → giao 1 phần, đang xử lý tiếp
+            has_partial = len(done_pickings) > 0 and len(active_pickings) > 0
 
-            # Check từng bước theo thứ tự
-            for ops, label in [(pick_ops, 'Lấy hàng'), (pack_ops, 'Đóng gói'), (out_ops, 'Xuất kho')]:
-                if not ops:
-                    continue
-                done = ops.filtered(lambda p: p.state == 'done')
-                active = ops.filtered(lambda p: p.state not in ('done', 'cancel'))
-                if active:
-                    states = active.mapped('state')
-                    if 'assigned' in states:
-                        status_parts.append(f'{label}: Sẵn sàng')
-                    elif 'confirmed' in states or 'waiting' in states:
-                        status_parts.append(f'{label}: Chờ')
+            # Tìm bước hiện tại đang ở đâu (phiếu active đầu tiên)
+            current_step = []
+            for pick in active_pickings.sorted(key=lambda p: p.id):
+                pick_type = pick.picking_type_id.name or ''
+                state_label = {
+                    'draft': 'Nháp',
+                    'waiting': 'Chờ',
+                    'confirmed': 'Chờ xử lý',
+                    'assigned': 'Sẵn sàng',
+                }.get(pick.state, pick.state)
+
+                # Xác định tên bước
+                if pick.picking_type_code == 'internal':
+                    if 'Pick' in pick_type or 'pick' in pick_type:
+                        step_name = 'Lấy hàng'
+                    elif 'Pack' in pick_type or 'pack' in pick_type:
+                        step_name = 'Đóng gói'
                     else:
-                        status_parts.append(f'{label}: {states[0]}')
-                    break  # Dừng ở bước chưa xong
-                elif done:
-                    status_parts.append(f'{label}: ✓')
+                        step_name = pick_type
+                elif pick.picking_type_code == 'outgoing':
+                    step_name = 'Xuất kho'
+                else:
+                    step_name = pick_type
 
-            # Kiểm tra giao hàng
-            if out_ops:
-                out_done = out_ops.filtered(lambda p: p.state == 'done')
-                out_active = out_ops.filtered(lambda p: p.state not in ('done', 'cancel'))
-                if out_done and out_active:
-                    status_parts = ['Giao 1 phần']
-                elif out_done and not out_active:
-                    status_parts = ['Đã giao hết']
+                current_step.append(f'{step_name}: {state_label}')
+                break  # Chỉ hiện bước đầu tiên đang xử lý
 
-            line.picking_status = ' | '.join(status_parts) if status_parts else 'Đang xử lý'
+            status = ' | '.join(current_step) if current_step else 'Đang xử lý'
+            if has_partial:
+                status = f'Giao 1 phần | {status}'
+
+            line.picking_status = status
 
     po_expected_date = fields.Date(string='Ngày hàng về dự kiến (PO)', compute='_compute_po_expected_date', store=True)
 
