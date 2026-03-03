@@ -176,34 +176,67 @@ class DeliveryScheduleLine(models.Model):
     order_htgh = fields.Text(related='order_id.x_studio_htgh', string='Hình thức giao hàng')
     distance_km = fields.Float(string='Khoảng cách (km)', digits=(10, 1), help='Ước lượng khoảng cách từ kho đến điểm giao')
     kho_xuat = fields.Char(related='order_id.x_studio_kho_xuat', string='Kho xuất', store=True)
-    picking_status = fields.Char(string='Trạng thái phiếu kho', compute='_compute_picking_status')
+    picking_status = fields.Char(string='Trạng thái kho', compute='_compute_picking_status')
 
     @api.depends('order_id')
     def _compute_picking_status(self):
-        status_map = {
-            'draft': 'Nháp',
-            'waiting': 'Chờ',
-            'confirmed': 'Chờ xử lý',
-            'assigned': 'Sẵn sàng',
-            'done': 'Hoàn thành',
-            'cancel': 'Đã hủy',
-        }
+        """Hiển thị trạng thái phiếu kho: lấy hàng / đóng gói / xuất kho / giao."""
         for line in self:
-            picking = self.env['stock.picking'].search([
-                ('origin', '=', line.order_id.name),
-                ('picking_type_code', '=', 'outgoing'),
-                ('state', 'not in', ('done', 'cancel')),
-            ], limit=1, order='id desc')
-            if picking:
-                line.picking_status = status_map.get(picking.state, picking.state)
-            else:
-                # Check if any picking exists at all
-                any_picking = self.env['stock.picking'].search([
-                    ('origin', '=', line.order_id.name),
-                    ('picking_type_code', '=', 'outgoing'),
-                    ('state', '=', 'done'),
-                ], limit=1)
-                line.picking_status = 'Đã giao' if any_picking else 'Chưa có phiếu'
+            if not line.order_id:
+                line.picking_status = ''
+                continue
+
+            # Tìm tất cả phiếu kho liên quan đến SO
+            all_pickings = self.env['stock.picking'].search([
+                ('origin', 'like', line.order_id.name),
+                ('state', '!=', 'cancel'),
+            ])
+
+            if not all_pickings:
+                line.picking_status = 'Chưa có phiếu'
+                continue
+
+            # Phân loại theo loại phiếu
+            pick_ops = all_pickings.filtered(lambda p: p.picking_type_code == 'internal' and 'Pick' in (p.picking_type_id.name or ''))
+            pack_ops = all_pickings.filtered(lambda p: p.picking_type_code == 'internal' and 'Pack' in (p.picking_type_id.name or ''))
+            out_ops = all_pickings.filtered(lambda p: p.picking_type_code == 'outgoing')
+
+            # Nếu không phân loại được (single step), dùng all
+            if not pick_ops and not pack_ops and not out_ops:
+                pick_ops = all_pickings.filtered(lambda p: p.picking_type_code == 'internal')
+                out_ops = all_pickings.filtered(lambda p: p.picking_type_code == 'outgoing')
+
+            # Tìm bước hiện tại (bước chưa hoàn thành đầu tiên)
+            status_parts = []
+
+            # Check từng bước theo thứ tự
+            for ops, label in [(pick_ops, 'Lấy hàng'), (pack_ops, 'Đóng gói'), (out_ops, 'Xuất kho')]:
+                if not ops:
+                    continue
+                done = ops.filtered(lambda p: p.state == 'done')
+                active = ops.filtered(lambda p: p.state not in ('done', 'cancel'))
+                if active:
+                    states = active.mapped('state')
+                    if 'assigned' in states:
+                        status_parts.append(f'{label}: Sẵn sàng')
+                    elif 'confirmed' in states or 'waiting' in states:
+                        status_parts.append(f'{label}: Chờ')
+                    else:
+                        status_parts.append(f'{label}: {states[0]}')
+                    break  # Dừng ở bước chưa xong
+                elif done:
+                    status_parts.append(f'{label}: ✓')
+
+            # Kiểm tra giao hàng
+            if out_ops:
+                out_done = out_ops.filtered(lambda p: p.state == 'done')
+                out_active = out_ops.filtered(lambda p: p.state not in ('done', 'cancel'))
+                if out_done and out_active:
+                    status_parts = ['Giao 1 phần']
+                elif out_done and not out_active:
+                    status_parts = ['Đã giao hết']
+
+            line.picking_status = ' | '.join(status_parts) if status_parts else 'Đang xử lý'
 
     po_expected_date = fields.Date(string='Ngày hàng về dự kiến (PO)', compute='_compute_po_expected_date', store=True)
 

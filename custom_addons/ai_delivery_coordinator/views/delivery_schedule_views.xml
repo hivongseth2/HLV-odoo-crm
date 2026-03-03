@@ -168,9 +168,7 @@
                             </t>
                             <div class="o_kanban_record_top mb-1">
                                 <div style="display: flex; align-items: center; gap: 6px;">
-                                    <a class="delivery_select_btn" style="cursor:pointer; font-size: 1.2em;" title="Chọn/Bỏ chọn">
-                                        <i class="fa fa-square-o text-muted delivery_select_icon"/>
-                                    </a>
+                                    <field name="is_selected" widget="boolean"/>
                                     <strong class="o_kanban_record_title">
                                         <span><field name="order_id"/></span>
                                     </strong>

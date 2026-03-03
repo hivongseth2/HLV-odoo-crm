@@ -3,64 +3,24 @@ import { registry } from "@web/core/registry";
 import { kanbanView } from "@web/views/kanban/kanban_view";
 import { KanbanController } from "@web/views/kanban/kanban_controller";
 import { useService } from "@web/core/utils/hooks";
-import { onMounted, onWillUnmount } from "@odoo/owl";
 
-// ─── Frontend-only selection (zero RPC) ───
-const selectedIds = new Set();
-
-/**
- * Bulletproof click handler.
- * Uses capture phase + stopImmediatePropagation to prevent
- * oe_kanban_global_click from opening the form.
- */
-function handleSelectClick(ev) {
-    // Find the select button (could click on <a> or <i>)
-    const btn = ev.target.closest(".delivery_select_btn");
-    if (!btn) return;
-
-    // CRITICAL: Stop everything - prevent form opening
-    ev.stopImmediatePropagation();
-    ev.stopPropagation();
-    ev.preventDefault();
-
-    const card = btn.closest(".o_kanban_record");
-    if (!card) return;
-
-    const id = parseInt(card.dataset.id);
-    if (!id) return;
-
-    // Toggle
-    if (selectedIds.has(id)) {
-        selectedIds.delete(id);
-    } else {
-        selectedIds.add(id);
-    }
-
-    // Instant visual
-    const isSelected = selectedIds.has(id);
-    card.classList.toggle("delivery_selected", isSelected);
-    const icon = btn.querySelector(".delivery_select_icon");
-    if (icon) {
-        icon.className = isSelected
-            ? "fa fa-check-square-o text-primary delivery_select_icon"
-            : "fa fa-square-o text-muted delivery_select_icon";
-    }
-}
-
-// ─── Custom Controller ───
 export class DeliveryKanbanController extends KanbanController {
     setup() {
         super.setup();
         this.actionService = useService("action");
         this.orm = useService("orm");
+    }
 
-        onMounted(() => {
-            // Capture phase = fires BEFORE any other handler
-            document.addEventListener("click", handleSelectClick, true);
-        });
-        onWillUnmount(() => {
-            document.removeEventListener("click", handleSelectClick, true);
-        });
+    /**
+     * Get IDs of records where is_selected=True (set via native boolean widget)
+     */
+    async _getSelectedIds() {
+        const records = await this.orm.searchRead(
+            "delivery.schedule.line",
+            [["is_selected", "=", true]],
+            ["id"],
+        );
+        return records.map((r) => r.id);
     }
 
     async onRefreshCleanup() {
@@ -75,33 +35,31 @@ export class DeliveryKanbanController extends KanbanController {
     }
 
     async onTagAssign() {
-        const ids = [...selectedIds];
+        const ids = await this._getSelectedIds();
         const action = await this.orm.call(
             "delivery.schedule.line",
             "action_auto_assign_by_tags",
             [ids.length ? ids : []],
         );
         if (action) {
-            selectedIds.clear();
             await this.actionService.doAction(action);
         }
     }
 
     async onAiAssign() {
-        const ids = [...selectedIds];
+        const ids = await this._getSelectedIds();
         const action = await this.orm.call(
             "delivery.schedule.line",
             "action_ai_assign_routes",
             [ids.length ? ids : []],
         );
         if (action) {
-            selectedIds.clear();
             await this.actionService.doAction(action);
         }
     }
 
     async onCreateTrip() {
-        const ids = [...selectedIds];
+        const ids = await this._getSelectedIds();
         await this.actionService.doAction({
             type: "ir.actions.act_window",
             res_model: "delivery.trip.wizard",
@@ -115,13 +73,15 @@ export class DeliveryKanbanController extends KanbanController {
         });
     }
 
-    onClearSelection() {
-        selectedIds.clear();
-        document.querySelectorAll(".delivery_selected").forEach((c) => {
-            c.classList.remove("delivery_selected");
-        });
-        document.querySelectorAll(".delivery_select_icon").forEach((i) => {
-            i.className = "fa fa-square-o text-muted delivery_select_icon";
+    async onClearSelection() {
+        await this.orm.call(
+            "delivery.schedule.line",
+            "action_clear_selection",
+            [[]],
+        );
+        this.actionService.doAction({
+            type: "ir.actions.client",
+            tag: "soft_reload",
         });
     }
 }
