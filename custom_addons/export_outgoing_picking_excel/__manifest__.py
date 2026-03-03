@@ -16,6 +16,7 @@
         "views/picking_export_shopee_wizard_views.xml",
         "views/stock_export_wizard_views.xml",
         "views/out_return_report_wizard_views.xml",
+        "views/sales_report_export_wizard_views.xml",
     ],
     "assets": {},
     "installable": True,
