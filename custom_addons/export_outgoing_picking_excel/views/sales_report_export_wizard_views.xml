@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <record id="view_picking_export_sales_report_wizard_form" model="ir.ui.view">
+    <field name="name">picking.export.sales.report.wizard.form</field>
+    <field name="model">picking.export.sales.report.wizard</field>
+    <field name="arch" type="xml">
+      <form string="Báo cáo bán hàng (Excel)">
+        <group>
+          <group>
+            <field name="date_from"/>
+            <field name="date_to"/>
+          </group>
+          <group>
+            <field name="warehouse_ids" 
+                   widget="many2many_tags"
+                   domain="[('company_id','in', allowed_company_ids)]"
+                   placeholder="Để trống = Tất cả kho"/>
+            <field name="state_filter"/>
+          </group>
+        </group>
+
+        <footer>
+          <button string="Xuất Báo cáo" type="object" name="action_export" class="btn-primary"/>
+          <button string="Đóng" special="cancel" class="btn-secondary"/>
+        </footer>
+      </form>
+    </field>
+  </record>
+</odoo>
