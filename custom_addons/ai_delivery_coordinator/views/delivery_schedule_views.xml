@@ -311,7 +311,7 @@
     </record>
 
     <record id="action_server_refresh_unassigned" model="ir.actions.server">
-        <field name="name">🔄 Tải Lại & Dọn Đơn Xong</field>
+        <field name="name">🔄 Tải Lại và Dọn Đơn Xong</field>
         <field name="model_id" search="[('model', '=', 'delivery.schedule.line')]"/>
         <field name="binding_model_id" search="[('model', '=', 'delivery.schedule.line')]"/>
         <field name="binding_view_types">list,kanban</field>
