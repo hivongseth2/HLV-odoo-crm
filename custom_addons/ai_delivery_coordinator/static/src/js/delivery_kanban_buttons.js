@@ -2,8 +2,26 @@
 import { registry } from "@web/core/registry";
 import { kanbanView } from "@web/views/kanban/kanban_view";
 import { KanbanController } from "@web/views/kanban/kanban_controller";
+import { KanbanRecord } from "@web/views/kanban/kanban_record";
 import { useService } from "@web/core/utils/hooks";
+import { patch } from "@web/core/utils/patch";
 
+// ─── Patch KanbanRecord to add toggleSelect ───
+patch(KanbanRecord.prototype, {
+    async toggleSelect() {
+        const resId = this.props.record.resId;
+        await this.props.record.model.orm.call(
+            "delivery.schedule.line",
+            "action_toggle_select",
+            [[resId]],
+        );
+        // Reload the record to reflect the change
+        await this.props.record.load();
+        this.render(true);
+    },
+});
+
+// ─── Custom KanbanController with action buttons ───
 export class DeliveryKanbanController extends KanbanController {
     setup() {
         super.setup();
@@ -12,19 +30,21 @@ export class DeliveryKanbanController extends KanbanController {
     }
 
     /**
-     * Lấy danh sách IDs đang được chọn trên Kanban.
+     * Get selected (is_selected=True) record IDs from the server
      */
-    _getSelectedIds() {
-        const records = this.model.root.selection;
-        return records ? records.map((r) => r.resId) : [];
+    async _getSelectedIds() {
+        return await this.orm.searchRead(
+            "delivery.schedule.line",
+            [["is_selected", "=", true]],
+            ["id"],
+        );
     }
 
     async onRefreshCleanup() {
-        const ids = this._getSelectedIds();
         const action = await this.orm.call(
             "delivery.schedule.line",
             "action_refresh_unassigned",
-            [ids.length ? ids : []],
+            [[]],
         );
         if (action) {
             await this.actionService.doAction(action);
@@ -32,7 +52,8 @@ export class DeliveryKanbanController extends KanbanController {
     }
 
     async onTagAssign() {
-        const ids = this._getSelectedIds();
+        const selected = await this._getSelectedIds();
+        const ids = selected.map((r) => r.id);
         const action = await this.orm.call(
             "delivery.schedule.line",
             "action_auto_assign_by_tags",
@@ -44,7 +65,8 @@ export class DeliveryKanbanController extends KanbanController {
     }
 
     async onAiAssign() {
-        const ids = this._getSelectedIds();
+        const selected = await this._getSelectedIds();
+        const ids = selected.map((r) => r.id);
         const action = await this.orm.call(
             "delivery.schedule.line",
             "action_ai_assign_routes",
@@ -56,7 +78,8 @@ export class DeliveryKanbanController extends KanbanController {
     }
 
     async onCreateTrip() {
-        const ids = this._getSelectedIds();
+        const selected = await this._getSelectedIds();
+        const ids = selected.map((r) => r.id);
         await this.actionService.doAction({
             type: "ir.actions.act_window",
             res_model: "delivery.trip.wizard",
@@ -68,6 +91,15 @@ export class DeliveryKanbanController extends KanbanController {
                 default_selected_line_ids: ids,
             },
         });
+    }
+
+    async onClearSelection() {
+        await this.orm.call(
+            "delivery.schedule.line",
+            "action_clear_selection",
+            [[]],
+        );
+        window.location.reload();
     }
 }
 

@@ -155,16 +155,20 @@
                 <field name="order_origin"/>
                 <field name="order_htgh"/>
                 <field name="distance_km"/>
+                <field name="is_selected"/>
                 <progressbar field="stock_status" colors='{"ready": "success", "partial": "warning", "waiting": "info", "shortage": "danger"}'/>
                 <templates>
                     <t t-name="kanban-box">
-                        <div t-attf-class="oe_kanban_global_click #{record.stock_status.raw_value == 'ready' ? 'bg-success-subtle' : record.stock_status.raw_value == 'partial' ? 'bg-warning-subtle' : record.stock_status.raw_value == 'shortage' ? 'bg-danger-subtle' : ''}">
+                        <div t-attf-class="oe_kanban_global_click #{record.stock_status.raw_value == 'ready' ? 'bg-success-subtle' : record.stock_status.raw_value == 'partial' ? 'bg-warning-subtle' : record.stock_status.raw_value == 'shortage' ? 'bg-danger-subtle' : ''} #{record.is_selected.raw_value ? 'border border-primary border-2' : ''}">
                             <!-- Ribbon quá hạn giao -->
                             <t t-if="record.commitment_date.raw_value and new Date(record.commitment_date.raw_value) &lt;= new Date()">
                                 <div class="delivery_overdue_ribbon">⚠ QUÁ HẠN</div>
                             </t>
                             <div class="o_kanban_record_top mb-1">
-                                <div class="o_kanban_record_headings">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <a t-on-click.stop.prevent="() => this.toggleSelect()" style="cursor:pointer; font-size: 1.2em;">
+                                        <i t-attf-class="fa #{record.is_selected.raw_value ? 'fa-check-square text-primary' : 'fa-square-o text-muted'}"/>
+                                    </a>
                                     <strong class="o_kanban_record_title">
                                         <span><field name="order_id"/></span>
                                     </strong>
@@ -282,10 +286,11 @@
                 <field name="order_id"/>
                 <field name="partner_id"/>
                 <field name="order_tag_ids"/>
-                <field name="warehouse_id"/>
+                <field name="kho_xuat"/>
                 <filter string="Hôm nay" name="filter_today" domain="[('assigned_date', '=', context_today().strftime('%Y-%m-%d'))]"/>
                 <filter string="Chưa phân tuyến" name="filter_unassigned" domain="[('route_id', '=', False)]"/>
                 <filter string="Chưa có chuyến" name="filter_no_trip" domain="[('trip_id', '=', False)]"/>
+                <filter string="Đã chọn" name="filter_selected" domain="[('is_selected', '=', True)]"/>
                 <separator/>
                 <filter string="Đủ hàng" name="filter_ready" domain="[('stock_status', '=', 'ready')]"/>
                 <filter string="Có 1 phần" name="filter_partial" domain="[('stock_status', '=', 'partial')]"/>
@@ -295,7 +300,7 @@
                     <filter string="Tuyến Giao" name="group_by_route" context="{'group_by':'route_id'}"/>
                     <filter string="Ngày giao" name="group_by_date" context="{'group_by':'assigned_date'}"/>
                     <filter string="Tình trạng hàng" name="group_by_stock_status" context="{'group_by':'stock_status'}"/>
-                    <filter string="Kho" name="group_by_warehouse" context="{'group_by':'warehouse_id'}"/>
+                    <filter string="Kho xuất" name="group_by_kho_xuat" context="{'group_by':'kho_xuat'}"/>
                 </group>
             </search>
         </field>

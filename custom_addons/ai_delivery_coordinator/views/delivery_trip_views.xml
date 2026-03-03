@@ -16,17 +16,8 @@
         <field name="arch" type="xml">
             <form string="Chuyến Giao Hàng">
                 <header>
-                    <button name="action_confirm" type="object" string="Xác nhận"
-                            invisible="state != 'draft'" class="btn-primary"/>
-                    <button name="action_start" type="object" string="Bắt đầu giao"
-                            invisible="state != 'confirmed'" class="btn-primary"/>
-                    <button name="action_done" type="object" string="Hoàn thành"
-                            invisible="state != 'in_progress'" class="btn-success"/>
-                    <button name="action_cancel" type="object" string="Hủy"
-                            invisible="state in ('done', 'cancel')" class="btn-danger"/>
-                    <button name="action_draft" type="object" string="Quay lại nháp"
-                            invisible="state != 'cancel'"/>
-                    <field name="state" widget="statusbar" statusbar_visible="draft,confirmed,in_progress,done"/>
+                    <button name="action_create_batch" type="object" string="📦 Tạo Batch Picking"
+                            class="btn-primary" invisible="batch_id"/>
                 </header>
                 <sheet>
                     <div class="oe_title">
@@ -47,6 +38,7 @@
                             <field name="vehicle_type"/>
                             <field name="total_orders"/>
                             <field name="total_km"/>
+                            <field name="batch_id"/>
                         </group>
                     </group>
                     <notebook>
@@ -70,7 +62,6 @@
                         </page>
                     </notebook>
                 </sheet>
-                <chatter/>
             </form>
         </field>
     </record>
@@ -80,7 +71,7 @@
         <field name="name">delivery.trip.list</field>
         <field name="model">delivery.trip</field>
         <field name="arch" type="xml">
-            <list decoration-success="state == 'done'" decoration-muted="state == 'cancel'" decoration-info="state == 'in_progress'">
+            <list>
                 <field name="name"/>
                 <field name="date"/>
                 <field name="route_id"/>
@@ -93,11 +84,7 @@
                        decoration-danger="priority == 'high'"
                        decoration-warning="priority == 'normal'"
                        decoration-info="priority == 'low'"/>
-                <field name="state" widget="badge"
-                       decoration-success="state == 'done'"
-                       decoration-info="state in ('confirmed', 'in_progress')"
-                       decoration-warning="state == 'draft'"
-                       decoration-danger="state == 'cancel'"/>
+                <field name="batch_id"/>
             </list>
         </field>
     </record>
@@ -112,13 +99,11 @@
                 <field name="route_id"/>
                 <field name="driver_id"/>
                 <filter string="Hôm nay" name="filter_today" domain="[('date', '=', context_today().strftime('%Y-%m-%d'))]"/>
-                <filter string="Đang hoạt động" name="filter_active" domain="[('state', 'not in', ('done', 'cancel'))]"/>
-                <separator/>
                 <filter string="Ưu tiên cao" name="filter_high" domain="[('priority', '=', 'high')]"/>
+                <filter string="Chưa tạo batch" name="filter_no_batch" domain="[('batch_id', '=', False)]"/>
                 <group expand="0" string="Group By">
                     <filter string="Tuyến" name="group_route" context="{'group_by': 'route_id'}"/>
                     <filter string="Ngày" name="group_date" context="{'group_by': 'date'}"/>
-                    <filter string="Trạng thái" name="group_state" context="{'group_by': 'state'}"/>
                     <filter string="Tài xế" name="group_driver" context="{'group_by': 'driver_id'}"/>
                 </group>
             </search>
@@ -130,7 +115,6 @@
         <field name="name">Chuyến Giao Hàng</field>
         <field name="res_model">delivery.trip</field>
         <field name="view_mode">list,form</field>
-        <field name="context">{'search_default_filter_active': 1}</field>
     </record>
 
 </odoo>

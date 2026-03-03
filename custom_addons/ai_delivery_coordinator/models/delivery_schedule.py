@@ -147,6 +147,7 @@ class DeliveryScheduleLine(models.Model):
     route_id = fields.Many2one('delivery.route', string='Tuyến Giao Thực Tế', group_expand='_read_group_route_ids')
     ai_suggested_route = fields.Char(string='AI Gợi Ý Tuyến')
     trip_id = fields.Many2one('delivery.trip', string='Chuyến giao', ondelete='set null', index=True)
+    is_selected = fields.Boolean(string='Đã chọn', default=False)
     
     order_id = fields.Many2one('sale.order', string='Đơn hàng', required=True, ondelete='cascade')
     partner_id = fields.Many2one('res.partner', related='order_id.partner_id', string='Khách hàng', store=True)
@@ -174,7 +175,7 @@ class DeliveryScheduleLine(models.Model):
     order_origin = fields.Char(related='order_id.origin', string='Nguồn gốc (Origin)')
     order_htgh = fields.Text(related='order_id.x_studio_htgh', string='Hình thức giao hàng')
     distance_km = fields.Float(string='Khoảng cách (km)', digits=(10, 1), help='Ước lượng khoảng cách từ kho đến điểm giao')
-    warehouse_id = fields.Many2one('stock.warehouse', related='order_id.warehouse_id', string='Kho', store=True)
+    kho_xuat = fields.Char(related='order_id.x_studio_kho_xuat', string='Kho xuất', store=True)
     po_expected_date = fields.Date(string='Ngày hàng về dự kiến (PO)', compute='_compute_po_expected_date', store=True)
 
     @api.depends('order_id')
@@ -337,6 +338,20 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến + km. Không bỏ sót."""
                 'next': {'type': 'ir.actions.client', 'tag': 'reload'},
             }
         }
+
+    # =====================================================
+    # Kanban Selection
+    # =====================================================
+    def action_toggle_select(self):
+        """Toggle is_selected cho Kanban checkbox."""
+        for line in self:
+            line.is_selected = not line.is_selected
+        return {'type': 'ir.actions.client', 'tag': 'soft_reload'}
+
+    def action_clear_selection(self):
+        """Bỏ chọn tất cả."""
+        self.search([('is_selected', '=', True)]).write({'is_selected': False})
+        return {'type': 'ir.actions.client', 'tag': 'soft_reload'}
 
     # =====================================================
     # AI Route Assignment - Phân tuyến tự động bằng AI
