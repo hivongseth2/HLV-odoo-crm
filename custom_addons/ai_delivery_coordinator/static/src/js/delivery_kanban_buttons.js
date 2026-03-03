@@ -32,6 +32,28 @@ export class DeliveryKanbanController extends KanbanController {
             await this.actionService.doAction(action);
         }
     }
+
+    async onAiAssign() {
+        const action = await this.orm.call(
+            "delivery.schedule.line",
+            "action_ai_assign_routes",
+            [[]],
+        );
+        if (action) {
+            await this.actionService.doAction(action);
+        }
+    }
+
+    async onCreateTrip() {
+        await this.actionService.doAction({
+            type: "ir.actions.act_window",
+            res_model: "delivery.trip.wizard",
+            name: "Tạo Chuyến Giao",
+            view_mode: "form",
+            views: [[false, "form"]],
+            target: "new",
+        });
+    }
 }
 
 export const deliveryKanbanView = {

@@ -146,6 +146,7 @@ class DeliveryScheduleLine(models.Model):
     
     route_id = fields.Many2one('delivery.route', string='Tuyến Giao Thực Tế', group_expand='_read_group_route_ids')
     ai_suggested_route = fields.Char(string='AI Gợi Ý Tuyến')
+    trip_id = fields.Many2one('delivery.trip', string='Chuyến giao', ondelete='set null', index=True)
     
     order_id = fields.Many2one('sale.order', string='Đơn hàng', required=True, ondelete='cascade')
     partner_id = fields.Many2one('res.partner', related='order_id.partner_id', string='Khách hàng', store=True)

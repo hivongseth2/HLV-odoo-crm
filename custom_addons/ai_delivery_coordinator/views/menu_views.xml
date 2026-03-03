@@ -2,6 +2,7 @@
 <odoo>
     <menuitem id="menu_delivery_coordinator_root" name="AI Vận Chuyển" sequence="60" web_icon="delivery,static/description/icon.png"/>
     <menuitem id="menu_delivery_schedule_board" name="Bảng Điều Phối Lắp Ghép" parent="menu_delivery_coordinator_root" action="action_delivery_schedule_board" sequence="15"/>
+    <menuitem id="menu_delivery_trip" name="Chuyến Giao Hàng" parent="menu_delivery_coordinator_root" action="action_delivery_trip" sequence="20"/>
     <menuitem id="menu_delivery_status_report" name="Báo cáo Tình trạng Giao hàng" parent="menu_delivery_coordinator_root" action="action_delivery_status_report_wizard" sequence="30"/>
     <menuitem id="menu_delivery_route" name="Tuyến Giao Hàng" parent="menu_delivery_coordinator_root" action="action_delivery_route" sequence="40"/>
 </odoo>

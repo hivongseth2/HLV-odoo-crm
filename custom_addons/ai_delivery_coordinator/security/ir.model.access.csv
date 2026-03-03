@@ -7,3 +7,6 @@ access_delivery_schedule_line,delivery.schedule.line,model_delivery_schedule_lin
 access_delivery_coordinator_report,delivery.coordinator.report,model_delivery_coordinator_report,base.group_user,1,1,1,1
 access_delivery_route,delivery.route,model_delivery_route,base.group_user,1,1,1,1
 access_delivery_schedule_create_wizard,delivery.schedule.create.wizard,model_delivery_schedule_create_wizard,base.group_user,1,1,1,1
+access_delivery_trip,delivery.trip,model_delivery_trip,base.group_user,1,1,1,1
+access_delivery_trip_wizard,delivery.trip.wizard,model_delivery_trip_wizard,base.group_user,1,1,1,1
+access_delivery_trip_wizard_line,delivery.trip.wizard.line,model_delivery_trip_wizard_line,base.group_user,1,1,1,1
