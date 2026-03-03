@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- FORM VIEW CHO WIZARD TẠO CHUYẾN XE -->
+    <record id="view_delivery_schedule_create_wizard_form" model="ir.ui.view">
+        <field name="name">delivery.schedule.create.wizard.form</field>
+        <field name="model">delivery.schedule.create.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Tạo Chuyến Xe">
+                <sheet>
+                    <group>
+                        <field name="date"/>
+                         <field name="route_id" options="{'no_create': True, 'no_open': True}"/>
+                    </group>
+                    <group>
+                        <group>
+                            <field name="vehicle_type"/>
+                            <field name="session"/>
+                        </group>
+                        <group>
+                            <field name="driver_name"/>
+                        </group>
+                    </group>
+                    <group>
+                         <field name="note"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_create_schedule" string="Tạo Chuyến" type="object" class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- ACTION ĐỂ GỌI TỪ LIST VIEW TRÊN LINE -->
+    <record id="action_create_schedule_from_lines" model="ir.actions.act_window">
+        <field name="name">Gom Hành Chuyến Xe Lớn</field>
+        <field name="res_model">delivery.schedule.create.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="model_delivery_schedule_line"/>
+        <field name="binding_view_types">list</field>
+    </record>
+
+</odoo>

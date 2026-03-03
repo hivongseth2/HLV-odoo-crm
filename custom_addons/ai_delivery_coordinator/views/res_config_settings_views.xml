@@ -15,6 +15,9 @@
                         <setting string="Model" help="VD: gpt-4o">
                             <field name="openai_model_delivery"/>
                         </setting>
+                        <setting string="Kho xuất phát" help="Kho dùng để tính khoảng cách giao hàng">
+                            <field name="delivery_warehouse_id"/>
+                        </setting>
                     </block>
                 </app>
             </xpath>
