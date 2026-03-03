@@ -158,13 +158,14 @@ class DeliveryScheduleLine(models.Model):
     
     stock_status = fields.Selection([
         ('ready', 'Đủ hàng'),
+        ('partial', 'Có 1 phần'),
         ('waiting', 'Chờ hàng về'),
         ('shortage', 'Thiếu hàng')
     ], string='Tình trạng hàng')
     
     ai_strategy = fields.Char(string='Chiến lược / Ghi chú AI')
 
-    delivery_address = fields.Char(related='order_id.partner_shipping_id.contact_address', string='Địa chỉ giao hàng')
+    delivery_address = fields.Char(related='order_id.partner_shipping_id.street', string='Địa chỉ giao hàng')
     order_line_ids = fields.One2many(related='order_id.order_line', string='Chi tiết sản phẩm')
 
     # Sale Order info cho thủ kho
@@ -359,11 +360,12 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến + km. Không bỏ sót."""
         route_names = [r.name for r in routes]
         route_map = {r.name.strip().lower(): r.id for r in routes}
 
-        # Lấy địa chỉ kho xuất phát
-        warehouse = self.env['stock.warehouse'].search([], limit=1)
+        # Lấy địa chỉ kho xuất phát từ cấu hình
+        wh_id = self.env['ir.config_parameter'].sudo().get_param('ai_delivery_coordinator.warehouse_id')
+        warehouse = self.env['stock.warehouse'].browse(int(wh_id)) if wh_id else self.env['stock.warehouse'].search([], limit=1)
         wh_address = ''
-        if warehouse and warehouse.partner_id and warehouse.partner_id.contact_address:
-            wh_address = warehouse.partner_id.contact_address.replace('\n', ', ')
+        if warehouse and warehouse.partner_id and warehouse.partner_id.street:
+            wh_address = warehouse.partner_id.street
 
         order_data = []
         for line in lines:
@@ -466,19 +468,27 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến + km. Không bỏ sót."""
                 continue
 
             # Cập nhật stock_status
-            is_ready = True
-            is_waiting = False
+            total_lines = 0
+            ready_lines = 0
+            has_incoming = False
             for sol in order.order_line:
                 if sol.product_id and sol.product_id.type == 'consu':
                     remaining = sol.product_uom_qty - sol.qty_delivered
-                    if remaining > 0 and sol.product_id.qty_available < remaining:
-                        is_ready = False
-                        if sol.product_id.incoming_qty > 0:
-                            is_waiting = True
+                    if remaining > 0:
+                        total_lines += 1
+                        if sol.product_id.qty_available >= remaining:
+                            ready_lines += 1
+                        elif sol.product_id.incoming_qty > 0:
+                            has_incoming = True
 
-            new_status = 'ready'
-            if not is_ready:
-                new_status = 'waiting' if is_waiting else 'shortage'
+            if total_lines == 0 or ready_lines == total_lines:
+                new_status = 'ready'
+            elif ready_lines > 0:
+                new_status = 'partial'
+            elif has_incoming:
+                new_status = 'waiting'
+            else:
+                new_status = 'shortage'
 
             if line.stock_status != new_status:
                 line.write({'stock_status': new_status})
