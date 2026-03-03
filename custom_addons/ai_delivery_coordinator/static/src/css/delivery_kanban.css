@@ -1,4 +1,9 @@
-/* Ribbon cho đơn quá hạn giao */
+/* Kanban card - relative positioning for ribbon */
+.o_kanban_record {
+    position: relative;
+}
+
+/* Overdue ribbon */
 .o_kanban_record .delivery_overdue_ribbon {
     position: absolute;
     top: 0;
@@ -14,8 +19,16 @@
     text-transform: uppercase;
 }
 
-/* Card position relative cho ribbon */
-.o_kanban_record .oe_kanban_global_click {
+/* Selected card - blue border + subtle blue background */
+.o_kanban_record .delivery_selected,
+.o_kanban_record.delivery_selected {
+    border: 2px solid #0d6efd !important;
+    background-color: rgba(13, 110, 253, 0.05) !important;
+    box-shadow: 0 0 0 1px rgba(13, 110, 253, 0.25);
+}
+
+/* Checkbox button - prevent card click */
+.delivery_select_btn {
+    z-index: 2;
     position: relative;
-    overflow: hidden;
 }
