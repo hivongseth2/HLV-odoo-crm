@@ -176,6 +176,35 @@ class DeliveryScheduleLine(models.Model):
     order_htgh = fields.Text(related='order_id.x_studio_htgh', string='Hình thức giao hàng')
     distance_km = fields.Float(string='Khoảng cách (km)', digits=(10, 1), help='Ước lượng khoảng cách từ kho đến điểm giao')
     kho_xuat = fields.Char(related='order_id.x_studio_kho_xuat', string='Kho xuất', store=True)
+    picking_status = fields.Char(string='Trạng thái phiếu kho', compute='_compute_picking_status')
+
+    @api.depends('order_id')
+    def _compute_picking_status(self):
+        status_map = {
+            'draft': 'Nháp',
+            'waiting': 'Chờ',
+            'confirmed': 'Chờ xử lý',
+            'assigned': 'Sẵn sàng',
+            'done': 'Hoàn thành',
+            'cancel': 'Đã hủy',
+        }
+        for line in self:
+            picking = self.env['stock.picking'].search([
+                ('origin', '=', line.order_id.name),
+                ('picking_type_code', '=', 'outgoing'),
+                ('state', 'not in', ('done', 'cancel')),
+            ], limit=1, order='id desc')
+            if picking:
+                line.picking_status = status_map.get(picking.state, picking.state)
+            else:
+                # Check if any picking exists at all
+                any_picking = self.env['stock.picking'].search([
+                    ('origin', '=', line.order_id.name),
+                    ('picking_type_code', '=', 'outgoing'),
+                    ('state', '=', 'done'),
+                ], limit=1)
+                line.picking_status = 'Đã giao' if any_picking else 'Chưa có phiếu'
+
     po_expected_date = fields.Date(string='Ngày hàng về dự kiến (PO)', compute='_compute_po_expected_date', store=True)
 
     @api.depends('order_id')

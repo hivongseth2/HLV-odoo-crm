@@ -9,42 +9,45 @@ import { onMounted, onWillUnmount } from "@odoo/owl";
 const selectedIds = new Set();
 
 /**
- * Global click handler using event delegation on document.
- * This works regardless of when kanban records render.
+ * Bulletproof click handler.
+ * Uses capture phase + stopImmediatePropagation to prevent
+ * oe_kanban_global_click from opening the form.
  */
-function onGlobalClick(ev) {
+function handleSelectClick(ev) {
+    // Find the select button (could click on <a> or <i>)
     const btn = ev.target.closest(".delivery_select_btn");
     if (!btn) return;
 
-    ev.preventDefault();
+    // CRITICAL: Stop everything - prevent form opening
+    ev.stopImmediatePropagation();
     ev.stopPropagation();
+    ev.preventDefault();
 
     const card = btn.closest(".o_kanban_record");
     if (!card) return;
 
-    // Get record ID from the card's data-id attribute
     const id = parseInt(card.dataset.id);
     if (!id) return;
 
-    // Toggle selection
+    // Toggle
     if (selectedIds.has(id)) {
         selectedIds.delete(id);
     } else {
         selectedIds.add(id);
     }
 
-    // Instant visual feedback
+    // Instant visual
     const isSelected = selectedIds.has(id);
     card.classList.toggle("delivery_selected", isSelected);
     const icon = btn.querySelector(".delivery_select_icon");
     if (icon) {
         icon.className = isSelected
-            ? "fa fa-check-square text-primary delivery_select_icon"
+            ? "fa fa-check-square-o text-primary delivery_select_icon"
             : "fa fa-square-o text-muted delivery_select_icon";
     }
 }
 
-// ─── Custom KanbanController ───
+// ─── Custom Controller ───
 export class DeliveryKanbanController extends KanbanController {
     setup() {
         super.setup();
@@ -52,10 +55,11 @@ export class DeliveryKanbanController extends KanbanController {
         this.orm = useService("orm");
 
         onMounted(() => {
-            document.addEventListener("click", onGlobalClick, true);
+            // Capture phase = fires BEFORE any other handler
+            document.addEventListener("click", handleSelectClick, true);
         });
         onWillUnmount(() => {
-            document.removeEventListener("click", onGlobalClick, true);
+            document.removeEventListener("click", handleSelectClick, true);
         });
     }
 
@@ -113,11 +117,11 @@ export class DeliveryKanbanController extends KanbanController {
 
     onClearSelection() {
         selectedIds.clear();
-        document.querySelectorAll(".delivery_selected").forEach((card) => {
-            card.classList.remove("delivery_selected");
+        document.querySelectorAll(".delivery_selected").forEach((c) => {
+            c.classList.remove("delivery_selected");
         });
-        document.querySelectorAll(".delivery_select_icon").forEach((icon) => {
-            icon.className = "fa fa-square-o text-muted delivery_select_icon";
+        document.querySelectorAll(".delivery_select_icon").forEach((i) => {
+            i.className = "fa fa-square-o text-muted delivery_select_icon";
         });
     }
 }
