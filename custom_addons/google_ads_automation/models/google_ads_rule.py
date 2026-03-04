@@ -111,14 +111,14 @@ class GoogleAdsRule(models.Model):
 
             for rec, val in applicable_records:
                 log_message = _(
-                    "Đối tượng '%(name)s' thoả mãn: %(field)s %(op)s %(threshold)s "
-                    "(Thực tế: %(val)s). Hành động: %(action)s",
-                    name=rec.name,
-                    field=rule.condition_field,
-                    op=rule.condition_operator,
-                    threshold=rule.condition_value,
-                    val=round(val, 2),
-                    action=rule.action_type,
+                    "Đối tượng '%s' thoả mãn: %s %s %s (Thực tế: %s). Hành động: %s"
+                ) % (
+                    rec.name,
+                    rule.condition_field,
+                    rule.condition_operator,
+                    rule.condition_value,
+                    round(val, 2),
+                    rule.action_type,
                 )
                 self.env['google.ads.rule.log'].create({
                     'rule_id': rule.id,
