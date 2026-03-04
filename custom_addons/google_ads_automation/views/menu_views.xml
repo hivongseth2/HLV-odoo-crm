@@ -50,6 +50,12 @@
               action="action_google_ads_rule_log"
               sequence="45"/>
 
+    <menuitem id="menu_google_ads_conversions"
+              name="Lượt Chuyển Đổi"
+              parent="menu_google_ads_root"
+              action="action_google_ads_conversion"
+              sequence="50"/>
+
     <menuitem id="menu_google_ads_configuration"
               name="Cấu Hình"
               parent="menu_google_ads_root"

@@ -25,6 +25,7 @@
         "views/google_ads_product_feed_views.xml",
         "views/google_ads_strategy_views.xml",
         "views/google_ads_rule_views.xml",
+        "views/google_ads_conversion_views.xml",
         "views/menu_views.xml",
     ],
     "installable": True,

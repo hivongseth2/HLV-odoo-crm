@@ -162,8 +162,9 @@ class GoogleAdsAccount(models.Model):
         self._demo_seed_campaigns()
         self._demo_seed_ad_groups()
         self._demo_seed_ads()
+        self._demo_seed_conversions()
         self.message_post(body=_(
-            "[DEMO] Đã tạo dữ liệu mẫu: 4 Campaigns, 8 Nhóm QC, 12 Ads với metrics ngẫu nhiên."
+            "[DEMO] Đã tạo dữ liệu mẫu: 4 Campaigns, 8 Nhóm QC, 12 Ads, ~15 Lượt Chuyển Đổi từ WooCommerce giả."
         ))
 
     def _demo_seed_campaigns(self):
@@ -254,6 +255,59 @@ class GoogleAdsAccount(models.Model):
                     existing.write(vals)
                 else:
                     Ad.create(vals)
+
+    def _demo_seed_conversions(self):
+        """Tạo 15 đơn hàng WooCommerce giả phân bổ cho các campaign demo"""
+        from datetime import timedelta
+        self.ensure_one()
+        Conversion = self.env['google.ads.conversion']
+        Campaign = self.env['google.ads.campaign']
+
+        campaigns = Campaign.search([('google_campaign_id', 'like', f'DEMO_{self.id}_')])
+        if not campaigns:
+            return
+
+        fake_products = [
+            'Giày Nam Thể Thao Speed X2', 'Giày Nữ Sneaker Air', 'Dép Quai Hậu Nam',
+            'Ba Lô Du Lịch 45L', 'Túi Xách Nữ Công Sở', 'Ví Nam Da Thật',
+            'Áo Thun Nam Polo', 'Quần Short Thể Thao', 'Nón Lưỡi Trai Basic',
+        ]
+        fake_customers = [
+            'Nguyễn Văn An', 'Trần Thị Bình', 'Lê Hoàng Cường', 'Phạm Minh Đức',
+            'Hoàng Thị Lan', 'Vũ Quốc Tuấn', 'Đặng Thị Mai', 'Bùi Văn Hùng',
+            'Lý Thị Hoa', 'Đinh Văn Khoa',
+        ]
+        statuses = ['completed', 'completed', 'completed', 'processing', 'cancelled']
+        today = fields.Datetime.now()
+
+        for i in range(1, 16):
+            camp = campaigns[i % len(campaigns)]
+            days_ago = random.randint(0, 30)
+            order_date = today - timedelta(days=days_ago)
+            product = random.choice(fake_products)
+            customer = random.choice(fake_customers)
+            status = random.choice(statuses)
+            revenue = round(random.uniform(200000, 3000000), 0) if status != 'cancelled' else 0
+            gclid = f'DEMO_GCLID_{self.id}_{i}_{random.randint(1000, 9999)}'
+
+            order_ref = f'DEMO-WC-{self.id}-{i:04d}'
+            existing = Conversion.search([('order_ref', '=', order_ref)], limit=1)
+            vals = {
+                'source': 'demo',
+                'account_id': self.id,
+                'campaign_id': camp.id,
+                'order_ref': order_ref,
+                'order_date': order_date,
+                'revenue': revenue,
+                'product_names': product,
+                'customer_name': customer,
+                'order_status': status,
+                'gclid': gclid,
+            }
+            if existing:
+                existing.write(vals)
+            else:
+                Conversion.create(vals)
 
     def action_sync_campaigns(self):
         self.ensure_one()
