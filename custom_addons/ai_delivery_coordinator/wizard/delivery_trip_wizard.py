@@ -19,6 +19,7 @@ class DeliveryTripWizardLine(models.TransientModel):
     delivery_address = fields.Char(related='schedule_line_id.delivery_address', string='Địa chỉ')
     stock_status = fields.Selection(related='schedule_line_id.stock_status', string='Tình trạng hàng')
     picking_status = fields.Char(related='schedule_line_id.picking_status', string='Trạng thái kho')
+    order_htgh = fields.Text(related='schedule_line_id.order_htgh', string='HTGH')
     distance_km = fields.Float(related='schedule_line_id.distance_km', string='Km')
     selected = fields.Boolean(string='Chọn', default=True)
     ai_group = fields.Char(string='Nhóm AI')
@@ -220,6 +221,9 @@ class DeliveryTripWizard(models.TransientModel):
                 'partner': sl.partner_id.name or '',
                 'addr': (sl.delivery_address or '').replace('\n', ', '),
                 'picking': sl.picking_status or '',
+                'stock': sl.stock_status or '',
+                'htgh': (sl.order_htgh or '').strip(),
+                'origin': (sl.order_origin or '').strip(),
                 'km': sl.distance_km or 0,
             })
 
@@ -235,8 +239,13 @@ class DeliveryTripWizard(models.TransientModel):
             "4. MỖI NHÓM TỐI THIỂU 3 ĐƠN. "
             "Nếu nhóm chỉ 1-2 đơn → GỘP vào nhóm gần nhất\n"
             "5. Tối đa 15 đơn/nhóm, tối đa 6 nhóm\n"
-            "6. Tên nhóm ngắn gọn theo khu vực "
-            "(VD: 'Nhơn Trạch - Long Thành', 'HCM Q7-8')\n\n"
+            "6. Tên nhóm ngắn gọn theo khu vực\n"
+            "7. Trường 'htgh' là chiến lược giao hàng: "
+            "'có gì giao nấy' = giao được ngay dù chưa đủ. "
+            "'chờ đủ hàng mới giao' = chỉ giao khi stock=ready. "
+            "Ƭu tiên đơn 'có gì giao nấy' + stock ready/partial\n"
+            "8. Trường 'stock': ready=đủ hàng, partial=thiếu 1 phần, "
+            "shortage=thiếu hàng, waiting=chờ hàng về\n\n"
             f"ĐƠN HÀNG ({len(order_data)} đơn):\n"
             f"{json.dumps(order_data, ensure_ascii=False)}\n\n"
             "TRẢ VỀ JSON: [{\"id\": <wizard_line_id>, "
@@ -283,6 +292,9 @@ class DeliveryTripWizard(models.TransientModel):
         for wl in self.line_ids:
             if not wl.ai_group:
                 wl.ai_group = 'Khác'
+
+        # Auto-select tất cả đơn
+        self.line_ids.write({'selected': True})
 
         # Tổng kết
         groups = {}
