@@ -152,6 +152,35 @@ class DeliveryScheduleLine(models.Model):
     order_id = fields.Many2one('sale.order', string='Đơn hàng', required=True, ondelete='cascade')
     partner_id = fields.Many2one('res.partner', related='order_id.partner_id', string='Khách hàng', store=True)
     commitment_date = fields.Datetime(related='order_id.commitment_date', string='Ngày hẹn giao', readonly=True)
+    deadline_label = fields.Char(string='Hạn giao', compute='_compute_deadline_label')
+    deadline_urgency = fields.Selection([
+        ('overdue', 'Quá hạn'),
+        ('today', 'Tới hạn'),
+        ('soon', 'Sắp tới'),
+        ('ok', 'Bình thường'),
+    ], string='Độ gấp', compute='_compute_deadline_label')
+
+    def _compute_deadline_label(self):
+        today = fields.Date.context_today(self)
+        for rec in self:
+            if not rec.commitment_date:
+                rec.deadline_label = ''
+                rec.deadline_urgency = 'ok'
+                continue
+            commit = rec.commitment_date.date()
+            delta = (commit - today).days
+            if delta < 0:
+                rec.deadline_label = f'Quá hạn {abs(delta)} ngày'
+                rec.deadline_urgency = 'overdue'
+            elif delta == 0:
+                rec.deadline_label = 'Tới hạn'
+                rec.deadline_urgency = 'today'
+            elif delta <= 7:
+                rec.deadline_label = f'Tới hẹn: {delta} ngày'
+                rec.deadline_urgency = 'soon'
+            else:
+                rec.deadline_label = ''
+                rec.deadline_urgency = 'ok'
 
     @api.model
     def _read_group_route_ids(self, routes, domain, order=None):
@@ -322,7 +351,7 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến + km. Không bỏ sót."""
                 {"role": "user", "content": json.dumps(batch_data, ensure_ascii=False)}
             ],
             "temperature": 0.1,
-            "max_tokens": 8000,
+            "max_completion_tokens": 8000,
             "response_format": {"type": "json_object"},
         }
 
