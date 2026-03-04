@@ -255,8 +255,8 @@ class DeliveryScheduleLine(models.Model):
             record.po_expected_date = po_expected_date
 
     def write(self, vals):
-        # Cho phép thay đổi is_selected, stock_status trên đơn cũ
-        safe_fields = {'is_selected', 'stock_status'}
+        # Cho phép thay đổi các field hệ thống trên đơn cũ
+        safe_fields = {'is_selected', 'stock_status', 'trip_id', 'route_id', 'ai_suggested_route', 'ai_strategy', 'distance_km'}
         if not safe_fields.issuperset(vals.keys()):
             for record in self:
                 if record.assigned_date and record.assigned_date < fields.Date.context_today(self):
