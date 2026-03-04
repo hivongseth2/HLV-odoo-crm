@@ -13,10 +13,22 @@ class GoogleAdsAdGroup(models.Model):
         ('unknown', 'Không rõ'),
         ('enabled', 'Đang hoạt động'),
         ('paused', 'Tạm dừng'),
-        ('removed', 'Đã xóa')
+        ('removed', 'Đã xóa'),
     ], string='Trạng Thái', default='unknown')
 
-    type = fields.Char(string='Loại Nhóm Quảng Cáo')
+    type = fields.Selection([
+        ('SEARCH_STANDARD',         'Tìm Kiếm Chuẩn'),
+        ('SEARCH_DYNAMIC_ADS',      'Tìm Kiếm Động (DSA)'),
+        ('DISPLAY_STANDARD',        'Hiển Thị Chuẩn'),
+        ('SHOPPING_PRODUCT_ADS',    'Mua Sắm — Sản Phẩm'),
+        ('SHOPPING_SMART_ADS',      'Mua Sắm Thông Minh'),
+        ('VIDEO_TRUE_VIEW_IN_STREAM', 'Video In-Stream'),
+        ('VIDEO_BUMPER',            'Video Bumper (6 giây)'),
+        ('VIDEO_OUTSTREAM',         'Video Outstream'),
+        ('HOTEL_ADS',               'Khách Sạn'),
+        ('DISCOVERY',               'Khám Phá'),
+        ('UNKNOWN',                 'Không rõ'),
+    ], string='Loại Nhóm Quảng Cáo')
 
     # Metrics
     clicks = fields.Integer(string='Lượt Nhấp', default=0)
