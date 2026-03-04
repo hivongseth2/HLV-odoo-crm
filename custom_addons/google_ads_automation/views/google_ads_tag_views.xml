@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ══════════  List View  ══════════ -->
+    <record id="view_google_ads_tag_list" model="ir.ui.view">
+        <field name="name">google.ads.tag.list</field>
+        <field name="model">google.ads.tag</field>
+        <field name="arch" type="xml">
+            <list string="Google Tag / GTM">
+                <field name="name"/>
+                <field name="account_id"/>
+                <field name="tag_type"/>
+                <field name="gtm_container_id"/>
+                <field name="measurement_id"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ══════════  Form View  ══════════ -->
+    <record id="view_google_ads_tag_form" model="ir.ui.view">
+        <field name="name">google.ads.tag.form</field>
+        <field name="model">google.ads.tag</field>
+        <field name="arch" type="xml">
+            <form string="Cấu Hình Google Tag">
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" placeholder="VD: GTM Production"/></h1>
+                    </div>
+                    <group>
+                        <group string="Cài Đặt Chung">
+                            <field name="account_id"/>
+                            <field name="tag_type" widget="radio"/>
+                            <field name="active" widget="boolean_toggle"/>
+                        </group>
+                        <group string="ID Định Danh">
+                            <field name="gtm_container_id"
+                                   placeholder="GTM-XXXXXXX"
+                                   invisible="tag_type != 'gtm'"/>
+                            <field name="measurement_id"
+                                   placeholder="AW-XXXXXXXXX hoặc G-XXXXXXXXXX"
+                                   invisible="tag_type != 'gtag'"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <!-- Tab: Conversion Actions -->
+                        <page string="Conversion Actions" icon="fa-bullseye">
+                            <field name="conversion_action_ids">
+                                <list editable="bottom">
+                                    <field name="name"/>
+                                    <field name="action_type"/>
+                                    <field name="conversion_id" placeholder="123456789"/>
+                                    <field name="conversion_label" placeholder="AbCdEfGhIjK"/>
+                                </list>
+                            </field>
+                        </page>
+
+                        <!-- Tab: Code cho <head> -->
+                        <page string="📋 Code Dán Vào &lt;head&gt;" icon="fa-code">
+                            <div class="alert alert-info">
+                                Copy đoạn code bên dưới và dán vào <code>&lt;head&gt;</code> của tất cả trang WordPress
+                                (hoặc dùng plugin <b>Insert Headers and Footers</b>).
+                            </div>
+                            <field name="snippet_head" widget="code" readonly="1"
+                                   options="{'mode': 'html'}"/>
+                        </page>
+
+                        <!-- Tab: Code cho <body> (GTM only) -->
+                        <page string="📋 Code Dán Sau &lt;body&gt;" icon="fa-code"
+                              invisible="tag_type != 'gtm'">
+                            <div class="alert alert-info">
+                                Copy đoạn code bên dưới và dán ngay sau thẻ <code>&lt;body&gt;</code> của WordPress.
+                            </div>
+                            <field name="snippet_body" widget="code" readonly="1"
+                                   options="{'mode': 'html'}"/>
+                        </page>
+
+                        <!-- Tab: WooCommerce Purchase Tracking -->
+                        <page string="🛒 Theo Dõi Đơn Hàng (WooCommerce)" icon="fa-shopping-cart">
+                            <div class="alert alert-warning">
+                                Dán đoạn PHP này vào file <code>functions.php</code> của theme WordPress
+                                hoặc dùng plugin <b>Code Snippets</b>.
+                                Đoạn code này tự động bắn sự kiện mua hàng khi có đơn thành công.
+                            </div>
+                            <field name="snippet_purchase" widget="code" readonly="1"
+                                   options="{'mode': 'php'}"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ══════════  Action  ══════════ -->
+    <record id="action_google_ads_tag" model="ir.actions.act_window">
+        <field name="name">Google Tag / GTM</field>
+        <field name="res_model">google.ads.tag</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>
