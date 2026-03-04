@@ -255,15 +255,20 @@ class DeliveryScheduleLine(models.Model):
             record.po_expected_date = po_expected_date
 
     def write(self, vals):
-        for record in self:
-            if record.assigned_date and record.assigned_date < fields.Date.context_today(self):
-                raise models.ValidationError("Không thể sửa đổi đơn hàng trong Lịch trình của ngày quá khứ.")
+        # Cho phép thay đổi is_selected, stock_status trên đơn cũ
+        safe_fields = {'is_selected', 'stock_status'}
+        if not safe_fields.issuperset(vals.keys()):
+            for record in self:
+                if record.assigned_date and record.assigned_date < fields.Date.context_today(self):
+                    raise models.ValidationError("Không thể sửa đổi đơn hàng trong Lịch trình của ngày quá khứ.")
         return super().write(vals)
 
     def unlink(self):
-        for record in self:
-            if record.assigned_date and record.assigned_date < fields.Date.context_today(self):
-                raise models.ValidationError("Không thể xóa đơn hàng trong Lịch trình của ngày quá khứ.")
+        # Cho phép xóa từ refresh (context flag)
+        if not self.env.context.get('force_unlink'):
+            for record in self:
+                if record.assigned_date and record.assigned_date < fields.Date.context_today(self):
+                    raise models.ValidationError("Không thể xóa đơn hàng trong Lịch trình của ngày quá khứ.")
         return super().unlink()
 
     # =====================================================
@@ -552,7 +557,7 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến + km. Không bỏ sót."""
         cancelled_count = len(cancelled_lines)
         if cancelled_lines:
             _logger.info('Removing %d cancelled order lines.', cancelled_count)
-            cancelled_lines.sudo().unlink()
+            cancelled_lines.sudo().with_context(force_unlink=True).unlink()
 
         # 3. Xóa đơn đã giao hết + Cập nhật stock cho các đơn còn lại
         lines = self.search([])
@@ -603,7 +608,7 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến + km. Không bỏ sót."""
         delivered_count = len(delivered_lines)
         if delivered_lines:
             _logger.info('Removing %d fully delivered lines.', delivered_count)
-            delivered_lines.sudo().unlink()
+            delivered_lines.sudo().with_context(force_unlink=True).unlink()
 
         _logger.info('Refresh: +%d new, -%d cancelled, -%d delivered, %d stock updated.',
                       new_count, cancelled_count, delivered_count, updated_count)
