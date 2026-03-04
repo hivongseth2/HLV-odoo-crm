@@ -92,9 +92,8 @@ class DeliveryTripWizard(models.TransientModel):
 
             if wiz.total_orders >= 9 and ready_count == wiz.total_orders:
                 suggestions.append('✅ Đủ tải + đủ hàng → Xuất phát ngay!')
-                suggestions.append('💡 Nên dùng xe tải lớn cho chuyến này.')
             elif wiz.total_orders < 9:
-                suggestions.append(f'⏳ Chỉ có {wiz.total_orders} đơn, nên chờ gom thêm hoặc chọn 3 đơn gần nhất giao trước 10h.')
+                suggestions.append(f'⏳ Chỉ có {wiz.total_orders} đơn, nên chờ gom thêm.')
             if shortage_count > 0:
                 suggestions.append(f'⚠ Có {shortage_count} đơn thiếu/chờ hàng — xem xét bỏ ra.')
             if partial_count > 0:
@@ -195,7 +194,9 @@ class DeliveryTripWizard(models.TransientModel):
         }
 
     def action_ai_suggest_groups(self):
-        """Gọi GPT để gom nhóm đơn hàng tối ưu."""
+        """Gọi GPT để gom nhóm đơn hàng tối ưu.
+        Kết quả: gán ai_group cho mỗi line, hiện tổng kết trong notes.
+        """
         self.ensure_one()
         if not self.line_ids:
             raise UserError(_('Chưa có đơn hàng nào.'))
@@ -226,15 +227,18 @@ class DeliveryTripWizard(models.TransientModel):
             "Bạn là chuyên gia logistics Việt Nam. "
             "Hãy phân nhóm các đơn hàng dưới đây thành các "
             "chuyến giao tối ưu.\n\n"
-            "QUY TẮC:\n"
-            "1. Đơn cùng công ty/khách hàng → cùng nhóm\n"
-            "2. Đơn gần nhau (cùng quận/huyện/tỉnh) → cùng nhóm\n"
-            "3. Đơn có picking status khác nhau vẫn gom được, "
-            "nhưng ưu tiên gom đơn cùng status\n"
-            "4. Mỗi nhóm tối đa 15 đơn\n"
-            "5. Đặt tên nhóm ngắn gọn theo khu vực "
-            "(VD: 'Nhơn Trạch', 'Long Thành', 'Q7-Q8')\n\n"
-            f"ĐƠN HÀNG:\n{json.dumps(order_data, ensure_ascii=False)}\n\n"
+            "QUY TẮC BẮT BUỘC:\n"
+            "1. Đơn cùng công ty/khách hàng → BẮT BUỘC cùng nhóm\n"
+            "2. Đơn cùng quận/huyện/tỉnh → cùng nhóm\n"
+            "3. Đơn ở tỉnh lân cận gom chung: "
+            "VD Đồng Nai + Bình Dương, HCM Q7 + Q8 + Nhà Bè\n"
+            "4. MỖI NHÓM TỐI THIỂU 3 ĐƠN. "
+            "Nếu nhóm chỉ 1-2 đơn → GỘP vào nhóm gần nhất\n"
+            "5. Tối đa 15 đơn/nhóm, tối đa 6 nhóm\n"
+            "6. Tên nhóm ngắn gọn theo khu vực "
+            "(VD: 'Nhơn Trạch - Long Thành', 'HCM Q7-8')\n\n"
+            f"ĐƠN HÀNG ({len(order_data)} đơn):\n"
+            f"{json.dumps(order_data, ensure_ascii=False)}\n\n"
             "TRẢ VỀ JSON: [{\"id\": <wizard_line_id>, "
             "\"group\": \"<tên nhóm>\"}]\n"
             "CHỈ trả về JSON, không giải thích."
@@ -257,7 +261,7 @@ class DeliveryTripWizard(models.TransientModel):
             resp.raise_for_status()
             content = resp.json()['choices'][0]['message']['content']
 
-            # Parse JSON từ response
+            # Parse JSON
             content = content.strip()
             if content.startswith('```'):
                 content = content.split('\n', 1)[1]
@@ -270,31 +274,31 @@ class DeliveryTripWizard(models.TransientModel):
 
         # Gán nhóm
         line_map = {wl.id: wl for wl in self.line_ids}
-        groups_found = set()
         for item in assignments:
             wl = line_map.get(item.get('id'))
             if wl:
-                group_name = item.get('group', '')
-                wl.ai_group = group_name
-                groups_found.add(group_name)
+                wl.ai_group = item.get('group', 'Khác')
 
-        # Chọn nhóm đầu tiên, bỏ chọn các nhóm khác
-        if groups_found:
-            first_group = sorted(groups_found)[0]
-            for wl in self.line_ids:
-                wl.selected = (wl.ai_group == first_group)
+        # Đơn không được gán → 'Khác'
+        for wl in self.line_ids:
+            if not wl.ai_group:
+                wl.ai_group = 'Khác'
 
-        group_summary = []
-        for g in sorted(groups_found):
-            count = len([wl for wl in self.line_ids if wl.ai_group == g])
-            group_summary.append(f'{g}: {count} đơn')
+        # Tổng kết
+        groups = {}
+        for wl in self.line_ids:
+            groups.setdefault(wl.ai_group, []).append(wl)
+
+        summary = []
+        for g in sorted(groups.keys()):
+            summary.append(f'• {g}: {len(groups[g])} đơn')
 
         self.notes = (
-            f"🤖 AI đề xuất {len(groups_found)} nhóm:\n"
-            + '\n'.join(group_summary)
-            + f"\n\n→ Đang chọn nhóm '{first_group}'. "
-            "Tạo chuyến rồi quay lại chọn nhóm tiếp."
-        ) if groups_found else ''
+            f"🤖 AI đề xuất {len(groups)} nhóm:\n"
+            + '\n'.join(summary)
+            + "\n\n→ Nhấn '↪ Chọn Nhóm' để lọc từng nhóm "
+            "rồi tạo chuyến."
+        )
 
         return {
             'type': 'ir.actions.act_window',
@@ -305,27 +309,42 @@ class DeliveryTripWizard(models.TransientModel):
         }
 
     def action_select_group(self):
-        """Chọn tất cả đơn trong cùng nhóm AI."""
+        """Lọc wizard: xóa đơn ngoài nhóm, chỉ giữ 1 nhóm."""
         self.ensure_one()
-        # Lấy các nhóm có sẵn
-        groups = set(wl.ai_group for wl in self.line_ids if wl.ai_group)
-        if not groups:
-            raise UserError(_('Chưa có nhóm AI. Nhấn "AI Gợi Ý" trước.'))
-
-        # Tìm nhóm chưa được tạo trip
-        current_selected = self.line_ids.filtered('selected')
-        current_group = current_selected[0].ai_group if current_selected else ''
-
-        # Chuyển sang nhóm tiếp theo
-        sorted_groups = sorted(groups)
-        try:
-            idx = sorted_groups.index(current_group)
-            next_group = sorted_groups[(idx + 1) % len(sorted_groups)]
-        except ValueError:
-            next_group = sorted_groups[0]
-
+        groups = {}
         for wl in self.line_ids:
-            wl.selected = (wl.ai_group == next_group)
+            if wl.ai_group:
+                groups.setdefault(wl.ai_group, []).append(wl)
+
+        if not groups:
+            raise UserError(_(
+                'Chưa có nhóm AI. Nhấn "🤖 AI Gợi Ý Nhóm" trước.'))
+
+        sorted_groups = sorted(groups.keys())
+
+        # Nếu đang hiện tất cả nhóm → chọn nhóm đầu
+        current_groups = set(wl.ai_group for wl in self.line_ids)
+        if len(current_groups) > 1:
+            next_group = sorted_groups[0]
+        else:
+            # Đang ở 1 nhóm → nhóm kế tiếp
+            current = list(current_groups)[0]
+            try:
+                idx = sorted_groups.index(current)
+                next_group = sorted_groups[
+                    (idx + 1) % len(sorted_groups)]
+            except ValueError:
+                next_group = sorted_groups[0]
+
+        # XÓA đơn không thuộc nhóm → list sạch
+        to_remove = self.line_ids.filtered(
+            lambda wl: wl.ai_group != next_group)
+        to_remove.unlink()
+
+        # Select tất cả còn lại
+        self.line_ids.write({'selected': True})
+
+        self.notes = f"📋 Đang xem nhóm: {next_group} ({len(self.line_ids)} đơn)"
 
         return {
             'type': 'ir.actions.act_window',
