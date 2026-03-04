@@ -413,10 +413,8 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến + km. Không bỏ sót."""
         """Toggle is_selected cho Kanban checkbox."""
         for line in self:
             line.is_selected = not line.is_selected
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'soft_reload',
-        }
+        # Return False = Odoo chỉ reload 1 record, không reload cả trang
+        return False
 
     def action_clear_selection(self):
         """Bỏ chọn tất cả."""

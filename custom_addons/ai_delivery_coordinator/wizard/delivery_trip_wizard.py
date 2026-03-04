@@ -27,11 +27,7 @@ class DeliveryTripWizard(models.TransientModel):
     route_id = fields.Many2one('delivery.route', string='Tuyến giao')
     date = fields.Date(string='Ngày giao', required=True, default=fields.Date.context_today)
     driver_id = fields.Many2one('res.partner', string='Tài xế')
-    vehicle_type = fields.Selection([
-        ('xe_tai_lon', 'Xe tải lớn'),
-        ('xe_van', 'Xe Van'),
-        ('xe_may', 'Xe máy'),
-    ], string='Loại xe', default='xe_van')
+    vehicle_id = fields.Many2one('fleet.vehicle', string='Xe')
     departure_time = fields.Selection([
         ('early_morning', 'Sáng sớm (trước 10h)'),
         ('morning', 'Buổi sáng (10h-12h)'),
@@ -174,7 +170,7 @@ class DeliveryTripWizard(models.TransientModel):
             'date': self.date,
             'route_id': self.route_id.id,
             'driver_id': self.driver_id.id if self.driver_id else False,
-            'vehicle_type': self.vehicle_type,
+            'vehicle_id': self.vehicle_id.id if self.vehicle_id else False,
             'departure_time': self.departure_time,
             'notes': self.notes,
         })
