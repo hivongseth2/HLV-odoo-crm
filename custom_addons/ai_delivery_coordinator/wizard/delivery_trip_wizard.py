@@ -185,9 +185,9 @@ class DeliveryTripWizard(models.TransientModel):
              * math.sin(dlng / 2) ** 2)
         return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-    def _geocode_address(self, address):
+    def _geocode_address(self, query):
         """Geocode địa chỉ bằng Track-Asia Search V2."""
-        if not address:
+        if not query:
             return None, None
         ta_key = self.env['ir.config_parameter'].sudo().get_param(
             'ai_delivery_coordinator.track_asia_api_key')
@@ -195,10 +195,11 @@ class DeliveryTripWizard(models.TransientModel):
             _logger.warning('Track-Asia API Key chưa cấu hình.')
             return None, None
         try:
+            _logger.info('[Track-Asia] Geocoding: "%s"', query)
             resp = requests.get(
                 'https://maps.track-asia.com/api/v2/place/textsearch/json',
                 params={
-                    'query': address,
+                    'query': query,
                     'language': 'vi',
                     'key': ta_key,
                 },
@@ -207,11 +208,14 @@ class DeliveryTripWizard(models.TransientModel):
             data = resp.json()
             if data.get('status') == 'OK' and data.get('results'):
                 loc = data['results'][0]['geometry']['location']
+                name = data['results'][0].get('name', '')
+                _logger.info('[Track-Asia] ✓ "%s" → %s, %s (%s)',
+                             query, loc['lat'], loc['lng'], name)
                 return loc['lat'], loc['lng']
-            _logger.warning('Track-Asia no result: "%s" → %s',
-                            address, data.get('status'))
+            _logger.warning('[Track-Asia] ✗ No result: "%s" → %s',
+                            query, data.get('status'))
         except Exception as e:
-            _logger.warning('Track-Asia geocode error "%s": %s', address, e)
+            _logger.warning('[Track-Asia] ✗ Error "%s": %s', query, e)
         return None, None
 
     def _get_warehouse_coords(self):
@@ -233,25 +237,34 @@ class DeliveryTripWizard(models.TransientModel):
             _logger.warning('Cannot get warehouse coords: %s', e)
         return None, None
 
+    def _build_geocode_query(self, sl):
+        """Tạo query geocode: tên công ty + địa chỉ."""
+        parts = []
+        if sl.partner_id and sl.partner_id.name:
+            parts.append(sl.partner_id.name)
+        if sl.delivery_address:
+            parts.append(sl.delivery_address.strip())
+        return ', '.join(parts)
+
     def _ensure_geocoded(self, schedule_lines):
         """Geocode tất cả line chưa có toạ độ, cập nhật distance_km."""
         to_geocode = schedule_lines.filtered(
             lambda l: not l.delivery_lat and l.delivery_address)
         if not to_geocode:
-            # Chỉ cần tính distance nếu có to_geocode = 0 nhưng có toạ độ
             self._update_distances(schedule_lines)
             return
 
-        # Nhóm theo địa chỉ tránh geocode trùng
-        addr_map = {}
+        # Nhóm theo (partner_name + address) tránh geocode trùng
+        query_map = {}
         for sl in to_geocode:
-            addr = (sl.delivery_address or '').strip()
-            if addr:
-                addr_map.setdefault(addr, []).append(sl)
+            query = self._build_geocode_query(sl)
+            if query:
+                query_map.setdefault(query, []).append(sl)
 
-        _logger.info('Geocoding %d unique addresses via Track-Asia...', len(addr_map))
-        for addr, sls in addr_map.items():
-            lat, lng = self._geocode_address(addr)
+        _logger.info('[Geocode] %d đơn cần geocode, %d query duy nhất',
+                     len(to_geocode), len(query_map))
+        for query, sls in query_map.items():
+            lat, lng = self._geocode_address(query)
             if lat and lng:
                 for sl in sls:
                     sl.sudo().write({
@@ -335,20 +348,24 @@ class DeliveryTripWizard(models.TransientModel):
             "Bạn là chuyên gia logistics Việt Nam.\n"
             f"Hôm nay: {today_str}\n"
             f"Phương tiện: {vehicle_label} "
-            f"(tối đa {capacity} đơn/chuyến).\n\n"
+            f"(mục tiêu ~{capacity} đơn/chuyến).\n\n"
             "Dữ liệu có TOẠ ĐỘ GPS (lat/lng) và "
             "KHOẢNG CÁCH từ kho (dist_km).\n\n"
-            f"CHỌN TỐI ĐA {capacity} đơn cho 1 chuyến.\n\n"
+            f"CHỌN KHOẢNG {capacity} đơn cho 1 chuyến.\n\n"
             "QUY TẮC BẮT BUỘC:\n"
-            "★ Đơn CÙNG PARTNER → BẮT BUỘC chọn tất cả\n"
+            "★ KHÔNG BAO GIỜ tách đơn cùng PARTNER. "
+            "Nếu chọn 1 đơn của 1 công ty → PHẢI chọn TẤT CẢ "
+            "đơn của công ty đó. VD: Marshall 6 đơn → lấy cả 6.\n"
+            "★ Nếu gom hết đơn cùng partner lại mà VƯỢT "
+            f"{capacity} → VẪN ĐƯỢC, ưu tiên gom đủ công ty.\n"
             "★ Đơn cùng toạ độ (< 0.05 độ) → chọn cùng\n\n"
             "ƯU TIÊN:\n"
             "1. stock=ready → ưu tiên\n"
             "2. date gần/quá hạn → ưu tiên\n"
-            "3. Đơn GẦN NHAU (lat/lng + dist_km gần) → gom\n"
+            "3. Đơn GẦN NHAU (lat/lng + dist_km) → gom\n"
             "4. htgh 'có gì giao nấy' → ưu tiên\n"
             "5. htgh 'chờ đủ hàng' + stock!=ready → BỎ QUA\n"
-            "6. Tối ưu tuyến đường: chọn đơn cùng hướng\n\n"
+            "6. Tối ưu tuyến: chọn đơn cùng hướng\n\n"
             f"ĐƠN HÀNG ({len(order_data)} đơn):\n"
             f"{json.dumps(order_data, ensure_ascii=False)}\n\n"
             "TRẢ VỀ JSON:\n"
@@ -421,11 +438,16 @@ class DeliveryTripWizard(models.TransientModel):
         # Geocode nếu cần
         self._ensure_geocoded(self.line_ids.mapped('schedule_line_id'))
 
+        # Dedup: loại bỏ điểm trùng toạ độ
+        seen = set()
         points = []
         for wl in self.line_ids:
             sl = wl.schedule_line_id
             if sl.delivery_lat and sl.delivery_lng:
-                points.append(f"{sl.delivery_lat},{sl.delivery_lng}")
+                key = f"{round(sl.delivery_lat, 5)},{round(sl.delivery_lng, 5)}"
+                if key not in seen:
+                    seen.add(key)
+                    points.append(key)
 
         if not points:
             raise UserError(_('Không có toạ độ. Kiểm tra địa chỉ.'))
