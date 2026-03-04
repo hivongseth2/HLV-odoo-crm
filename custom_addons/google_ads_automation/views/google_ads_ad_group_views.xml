@@ -4,7 +4,7 @@
         <field name="name">google.ads.ad.group.list</field>
         <field name="model">google.ads.ad.group</field>
         <field name="arch" type="xml">
-            <list string="Nhóm Quảng Cáo Google Ads" create="false" edit="false">
+            <list string="Nhóm Quảng Cáo Google Ads" create="false" edit="false" delete="false">
                 <field name="name"/>
                 <field name="campaign_id"/>
                 <field name="type"/>
@@ -12,8 +12,43 @@
                 <field name="impressions"/>
                 <field name="cost"/>
                 <field name="conversions"/>
-                <field name="status" widget="badge" decoration-success="status == 'enabled'" decoration-info="status == 'paused'" decoration-danger="status == 'removed'"/>
+                <field name="status" widget="badge"
+                       decoration-success="status == 'enabled'"
+                       decoration-info="status == 'paused'"
+                       decoration-danger="status == 'removed'"/>
             </list>
+        </field>
+    </record>
+
+    <record id="view_google_ads_ad_group_form" model="ir.ui.view">
+        <field name="name">google.ads.ad.group.form</field>
+        <field name="model">google.ads.ad.group</field>
+        <field name="arch" type="xml">
+            <form string="Nhóm Quảng Cáo Google Ads" create="false" edit="false">
+                <sheet>
+                    <div class="alert alert-info mb-0">
+                        Dữ liệu này được đồng bộ tự động từ Google Ads. Không thể chỉnh sửa thủ công.
+                    </div>
+                    <group>
+                        <group string="Thông Tin Cơ Bản">
+                            <field name="name" readonly="1"/>
+                            <field name="campaign_id" readonly="1"/>
+                            <field name="google_ad_group_id" readonly="1"/>
+                            <field name="type" readonly="1"/>
+                            <field name="status" readonly="1" widget="badge"
+                                   decoration-success="status == 'enabled'"
+                                   decoration-info="status == 'paused'"
+                                   decoration-danger="status == 'removed'"/>
+                        </group>
+                        <group string="Hiệu Suất (Hôm Qua)">
+                            <field name="clicks" readonly="1"/>
+                            <field name="impressions" readonly="1"/>
+                            <field name="cost" readonly="1"/>
+                            <field name="conversions" readonly="1"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
         </field>
     </record>
 

@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_google_ads_campaign_tree" model="ir.ui.view">
+    <record id="view_google_ads_campaign_list" model="ir.ui.view">
         <field name="name">google.ads.campaign.list</field>
         <field name="model">google.ads.campaign</field>
         <field name="arch" type="xml">
-            <list string="Chiến Dịch Google Ads" create="false" edit="false">
+            <list string="Chiến Dịch Google Ads" create="false" edit="false" delete="false">
                 <field name="name"/>
                 <field name="account_id"/>
                 <field name="channel_type"/>
@@ -12,8 +12,43 @@
                 <field name="impressions"/>
                 <field name="cost"/>
                 <field name="conversions"/>
-                <field name="status" widget="badge" decoration-success="status == 'enabled'" decoration-info="status == 'paused'" decoration-danger="status == 'removed'"/>
+                <field name="status" widget="badge"
+                       decoration-success="status == 'enabled'"
+                       decoration-info="status == 'paused'"
+                       decoration-danger="status == 'removed'"/>
             </list>
+        </field>
+    </record>
+
+    <record id="view_google_ads_campaign_form" model="ir.ui.view">
+        <field name="name">google.ads.campaign.form</field>
+        <field name="model">google.ads.campaign</field>
+        <field name="arch" type="xml">
+            <form string="Chiến Dịch Google Ads" create="false" edit="false">
+                <sheet>
+                    <div class="alert alert-info mb-0">
+                        Dữ liệu này được đồng bộ tự động từ Google Ads. Không thể chỉnh sửa thủ công.
+                    </div>
+                    <group>
+                        <group string="Thông Tin Cơ Bản">
+                            <field name="name" readonly="1"/>
+                            <field name="account_id" readonly="1"/>
+                            <field name="google_campaign_id" readonly="1"/>
+                            <field name="channel_type" readonly="1"/>
+                            <field name="status" readonly="1" widget="badge"
+                                   decoration-success="status == 'enabled'"
+                                   decoration-info="status == 'paused'"
+                                   decoration-danger="status == 'removed'"/>
+                        </group>
+                        <group string="Hiệu Suất (Hôm Qua)">
+                            <field name="clicks" readonly="1"/>
+                            <field name="impressions" readonly="1"/>
+                            <field name="cost" readonly="1"/>
+                            <field name="conversions" readonly="1"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
         </field>
     </record>
 
