@@ -54,10 +54,9 @@ class DeliveryTripWizard(models.TransientModel):
         selected_ids = self.env.context.get('default_selected_line_ids', [])
         if selected_ids:
             lines = self.env['delivery.schedule.line'].browse(selected_ids).filtered(
-                lambda l: not l.trip_id
+                lambda l: not l.trip_id and l.stock_status in ('ready', 'partial')
             )
             if lines:
-                # Auto-detect common route
                 routes = lines.mapped('route_id')
                 if len(routes) == 1:
                     res['route_id'] = routes.id
@@ -104,7 +103,7 @@ class DeliveryTripWizard(models.TransientModel):
 
     @api.onchange('route_id')
     def _onchange_route_id(self):
-        """Khi chọn tuyến, load đơn hàng chưa có chuyến thuộc tuyến đó."""
+        """Khi chọn tuyến, load đơn đủ/1 phần hàng chưa có chuyến."""
         self.line_ids = [(5, 0, 0)]
         if not self.route_id:
             return
@@ -112,6 +111,7 @@ class DeliveryTripWizard(models.TransientModel):
         lines = self.env['delivery.schedule.line'].search([
             ('route_id', '=', self.route_id.id),
             ('trip_id', '=', False),
+            ('stock_status', 'in', ('ready', 'partial')),
         ], order='distance_km asc')
 
         wizard_lines = []
@@ -121,6 +121,15 @@ class DeliveryTripWizard(models.TransientModel):
                 'selected': True,
             }))
         self.line_ids = wizard_lines
+
+    def _get_vehicle_capacity(self):
+        """Số đơn tối đa theo loại xe."""
+        if not self.vehicle_id:
+            return 15  # Mặc định ô tô
+        name = (self.vehicle_id.model_id.name or '').lower()
+        if 'xe máy' in name or 'xe_may' in name or 'honda' in name:
+            return 5
+        return 15  # Ô tô / xe tải
 
     def action_suggest_early_morning(self):
         """Gợi ý: chọn 3 đơn gần nhất cho chuyến sáng sớm."""
@@ -227,10 +236,15 @@ class DeliveryTripWizard(models.TransientModel):
                 'km': sl.distance_km or 0,
             })
 
+        capacity = self._get_vehicle_capacity()
+        vehicle_label = 'xe máy' if capacity <= 5 else 'ô tô/xe tải'
+
         prompt = (
             "Bạn là chuyên gia logistics Việt Nam. "
             "Hãy phân nhóm các đơn hàng dưới đây thành các "
             "chuyến giao tối ưu.\n\n"
+            f"PHƯƠNG TIỆN: {vehicle_label} "
+            f"(tối đa {capacity} đơn/chuyến)\n\n"
             "QUY TẮC BẮT BUỘC:\n"
             "1. Đơn cùng công ty/khách hàng → BẮT BUỘC cùng nhóm\n"
             "2. Đơn cùng quận/huyện/tỉnh → cùng nhóm\n"
@@ -238,14 +252,13 @@ class DeliveryTripWizard(models.TransientModel):
             "VD Đồng Nai + Bình Dương, HCM Q7 + Q8 + Nhà Bè\n"
             "4. MỖI NHÓM TỐI THIỂU 3 ĐƠN. "
             "Nếu nhóm chỉ 1-2 đơn → GỘP vào nhóm gần nhất\n"
-            "5. Tối đa 15 đơn/nhóm, tối đa 6 nhóm\n"
+            f"5. Tối đa {capacity} đơn/nhóm\n"
             "6. Tên nhóm ngắn gọn theo khu vực\n"
             "7. Trường 'htgh' là chiến lược giao hàng: "
             "'có gì giao nấy' = giao được ngay dù chưa đủ. "
             "'chờ đủ hàng mới giao' = chỉ giao khi stock=ready. "
-            "Ƭu tiên đơn 'có gì giao nấy' + stock ready/partial\n"
-            "8. Trường 'stock': ready=đủ hàng, partial=thiếu 1 phần, "
-            "shortage=thiếu hàng, waiting=chờ hàng về\n\n"
+            "Ưu tiên đơn 'có gì giao nấy' + stock ready/partial\n"
+            "8. Trường 'stock': ready=đủ hàng, partial=thiếu 1 phần\n\n"
             f"ĐƠN HÀNG ({len(order_data)} đơn):\n"
             f"{json.dumps(order_data, ensure_ascii=False)}\n\n"
             "TRẢ VỀ JSON: [{\"id\": <wizard_line_id>, "
