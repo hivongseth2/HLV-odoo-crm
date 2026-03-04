@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- Product Feed – List View                        -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <record id="view_google_ads_product_feed_list" model="ir.ui.view">
+        <field name="name">google.ads.product.feed.list</field>
+        <field name="model">google.ads.product.feed</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="account_id"/>
+                <field name="line_count"/>
+                <field name="strategy_count"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- Product Feed – Form View                        -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <record id="view_google_ads_product_feed_form" model="ir.ui.view">
+        <field name="name">google.ads.product.feed.form</field>
+        <field name="model">google.ads.product.feed</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_refresh_stock"
+                            string="🔄 Cập Nhật Tồn Kho"
+                            type="object"
+                            class="oe_highlight"/>
+                    <button name="action_add_products_wizard"
+                            string="➕ Thêm Sản Phẩm"
+                            type="object"
+                            class="oe_highlight"/>
+                    <button name="action_view_strategies"
+                            string="📊 Xem Chiến Lược"
+                            type="object"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_strategies"
+                                type="object"
+                                class="oe_stat_button"
+                                icon="fa-cogs">
+                            <field name="strategy_count" widget="statinfo" string="Chiến Lược"/>
+                        </button>
+                    </div>
+
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="account_id"/>
+                        </group>
+                        <group>
+                            <field name="active"/>
+                            <field name="line_count"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page string="Sản Phẩm" icon="fa-cubes">
+                            <field name="line_ids" mode="list">
+                                <list editable="bottom">
+                                    <field name="product_id"/>
+                                    <field name="product_default_code"/>
+                                    <field name="qty_available" decoration-danger="qty_available &lt;= 0"/>
+                                    <field name="virtual_available"/>
+                                    <field name="sale_price"/>
+                                    <field name="cost_price"/>
+                                    <field name="margin_percent"
+                                           decoration-danger="margin_percent &lt; 15"
+                                           decoration-success="margin_percent &gt;= 30"/>
+                                    <field name="avg_daily_sales"/>
+                                    <field name="days_of_stock"
+                                           decoration-danger="days_of_stock &lt; 7"
+                                           decoration-warning="days_of_stock &lt; 30"/>
+                                    <field name="stock_status" widget="badge"
+                                           decoration-danger="stock_status == 'critical'"
+                                           decoration-warning="stock_status == 'low'"
+                                           decoration-success="stock_status == 'normal'"
+                                           decoration-info="stock_status == 'high'"/>
+                                    <field name="campaign_ids" widget="many2many_tags"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Ghi Chú" icon="fa-pencil">
+                            <field name="note" placeholder="Ghi chú về feed này..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- Product Feed – Action                           -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <record id="action_google_ads_product_feed" model="ir.actions.act_window">
+        <field name="name">Product Feed</field>
+        <field name="res_model">google.ads.product.feed</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+</odoo>

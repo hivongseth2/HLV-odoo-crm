@@ -34,6 +34,8 @@ class GoogleAdsAccount(models.Model):
         help='ID của tài khoản Ads bạn muốn quản lý trực tiếp. Định dạng: 1234567890 (không có dấu -)'
     )
 
+    is_demo = fields.Boolean(string='Chế Độ Demo', default=False, help='Bật để test không cần tài khoản thật')
+
     state = fields.Selection([
         ('draft', 'Nháp'),
         ('connected', 'Đã Kết Nối'),
@@ -62,6 +64,11 @@ class GoogleAdsAccount(models.Model):
 
     def action_test_connection(self):
         self.ensure_one()
+        if self.is_demo:
+            self.state = 'connected'
+            self.message_post(body=_("DEMO: Kết nối thành công (Giả lập)"))
+            return True
+        
         client = self._get_google_ads_client()
         customer_service = client.get_service("CustomerService")
         
@@ -305,3 +312,45 @@ class GoogleAdsAccount(models.Model):
             
         except GoogleAdsException as ex:
             raise UserError(_("Không thể lấy dữ liệu mẫu quảng cáo. Lỗi API: %s") % str(ex))
+
+    # ─────────────────────────────────────────────
+    # Mock Data for Testing
+    # ─────────────────────────────────────────────
+    def action_generate_demo_data(self):
+        """Tạo dữ liệu giả lập để test rules"""
+        self.ensure_one()
+        if not self.is_demo:
+            raise UserError(_("Chỉ có thể tạo dữ liệu giả ở chế độ Demo."))
+
+        import random
+        Campaign = self.env['google.ads.campaign']
+        
+        # Tạo 3 chiến dịch giả lập
+        demo_campaigns = [
+            ('Campaign Giày Chạy Bộ - Search', 'SEARCH'),
+            ('Campaign Giày Tây - PMax', 'PERFORMANCE_MAX'),
+            ('Campaign Sale Xả Kho - Search', 'SEARCH'),
+        ]
+
+        for name, ctype in demo_campaigns:
+            google_id = str(random.randint(1000000, 9999999))
+            vals = {
+                'name': name,
+                'account_id': self.id,
+                'google_campaign_id': google_id,
+                'status': 'enabled',
+                'channel_type': ctype,
+                'clicks': random.randint(500, 2000),
+                'impressions': random.randint(10000, 50000),
+                'cost': random.uniform(500.0, 5000.0),
+                'conversions': random.uniform(5.0, 50.0),
+            }
+            existing = Campaign.search([('google_campaign_id', '=', google_id)], limit=1)
+            if existing:
+                existing.write(vals)
+            else:
+                Campaign.create(vals)
+        
+        self.state = 'connected'
+        self.message_post(body=_("Đã tạo 3 chiến dịch giả lập để chạy thử Rules."))
+        return True

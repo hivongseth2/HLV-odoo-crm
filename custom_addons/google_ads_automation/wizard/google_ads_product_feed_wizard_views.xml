@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- Wizard: Thêm Sản Phẩm Vào Feed                  -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <record id="view_google_ads_product_feed_add_wizard_form" model="ir.ui.view">
+        <field name="name">google.ads.product.feed.add.wizard.form</field>
+        <field name="model">google.ads.product.feed.add.wizard</field>
+        <field name="arch" type="xml">
+            <form>
+                <group>
+                    <field name="feed_id" readonly="1"/>
+                    <field name="filter_category_id"/>
+                    <field name="filter_in_stock"/>
+                </group>
+                <separator string="Chọn Sản Phẩm"/>
+                <field name="product_ids" widget="many2many_tags"
+                       options="{'no_create': True}"
+                       domain="[('type', '!=', 'service')]"/>
+                <footer>
+                    <button name="action_add_products"
+                            string="✅ Thêm Sản Phẩm Đã Chọn"
+                            type="object"
+                            class="oe_highlight"/>
+                    <button name="action_add_all_from_category"
+                            string="📦 Thêm Tất Cả Từ Danh Mục"
+                            type="object"/>
+                    <button string="Huỷ" class="oe_link" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+</odoo>

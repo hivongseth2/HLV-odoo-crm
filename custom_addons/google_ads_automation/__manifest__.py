@@ -1,24 +1,29 @@
 {
     "name": "Google Ads Automation",
-    "version": "1.0",
+    "version": "18.0.2.0.0",
     "category": "Marketing",
-    "summary": "Tích hợp và tự động hóa quảng cáo Google Ads",
+    "summary": "Tích hợp và tự động hóa quảng cáo Google Ads dựa trên tồn kho & lợi nhuận",
     "description": """
         Module tích hợp Google Ads API vào Odoo:
         - Quản lý tài khoản Google Ads API (OAuth2)
-        - Đồng bộ chiến dịch
-        - (Tương lai) Tự động hóa đánh giá và tối ưu giá thầu.
+        - Đồng bộ chiến dịch, nhóm quảng cáo, mẫu quảng cáo
+        - Product Feed: Liên kết sản phẩm ↔ campaign
+        - Strategy: Tự động sinh rules dựa trên tồn kho, biên lợi nhuận, hiệu suất
+        - Mutate API: Gửi lệnh pause/enable/adjust lên Google Ads
     """,
-    "author": "Your Company",
-    "depends": ["base", "mail"],
+    "author": "HLV",
+    "depends": ["base", "mail", "stock", "sale"],
     "data": [
         "security/google_ads_security.xml",
         "security/ir.model.access.csv",
         "data/ir_cron_data.xml",
+        "wizard/google_ads_product_feed_wizard_views.xml",
         "views/google_ads_account_views.xml",
         "views/google_ads_campaign_views.xml",
         "views/google_ads_ad_group_views.xml",
         "views/google_ads_ad_views.xml",
+        "views/google_ads_product_feed_views.xml",
+        "views/google_ads_strategy_views.xml",
         "views/google_ads_rule_views.xml",
         "views/menu_views.xml",
     ],

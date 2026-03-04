@@ -6,7 +6,20 @@
               web_icon="google_ads_automation,static/description/icon.png"
               sequence="55"/>
 
-    <!-- Sub menus -->
+    <!-- ── Product Feed & Strategy (mới) ──────── -->
+    <menuitem id="menu_google_ads_product_feed"
+              name="Product Feed"
+              parent="menu_google_ads_root"
+              action="action_google_ads_product_feed"
+              sequence="5"/>
+
+    <menuitem id="menu_google_ads_strategy"
+              name="Chiến Lược Tự Động"
+              parent="menu_google_ads_root"
+              action="action_google_ads_strategy"
+              sequence="7"/>
+
+    <!-- ── Existing menus ─────────────────────── -->
     <menuitem id="menu_google_ads_campaigns"
               name="Chiến Dịch"
               parent="menu_google_ads_root"
