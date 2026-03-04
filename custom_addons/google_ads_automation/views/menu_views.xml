@@ -66,4 +66,10 @@
               parent="menu_google_ads_configuration"
               action="action_google_ads_account"
               sequence="10"/>
+
+    <menuitem id="menu_google_ads_tags"
+              name="Google Tag / GTM"
+              parent="menu_google_ads_configuration"
+              action="action_google_ads_tag"
+              sequence="20"/>
 </odoo>

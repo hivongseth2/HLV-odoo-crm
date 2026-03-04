@@ -7,3 +7,4 @@ from . import google_ads_strategy
 from . import google_ads_rule
 from . import google_ads_rule_log
 from . import google_ads_conversion
+from . import google_ads_tag
