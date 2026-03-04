@@ -76,7 +76,6 @@ class DeliveryTripWizard(models.TransientModel):
             wiz.total_orders = len(selected)
             wiz.total_km = sum(selected.mapped('distance_km'))
 
-            # Ưu tiên
             if wiz.total_orders >= 9:
                 wiz.priority_label = '🔴 Cao — Đủ tải, nên giao ngay!'
             elif wiz.total_orders >= 5:
@@ -84,18 +83,14 @@ class DeliveryTripWizard(models.TransientModel):
             else:
                 wiz.priority_label = '🟢 Thấp — Có thể gom thêm đơn'
 
-            # Gợi ý
             suggestions = []
             ready_count = len(selected.filtered(lambda l: l.stock_status == 'ready'))
             partial_count = len(selected.filtered(lambda l: l.stock_status == 'partial'))
-            shortage_count = len(selected.filtered(lambda l: l.stock_status in ('waiting', 'shortage')))
 
             if wiz.total_orders >= 9 and ready_count == wiz.total_orders:
                 suggestions.append('✅ Đủ tải + đủ hàng → Xuất phát ngay!')
             elif wiz.total_orders < 9:
                 suggestions.append(f'⏳ Chỉ có {wiz.total_orders} đơn, nên chờ gom thêm.')
-            if shortage_count > 0:
-                suggestions.append(f'⚠ Có {shortage_count} đơn thiếu/chờ hàng — xem xét bỏ ra.')
             if partial_count > 0:
                 suggestions.append(f'🟡 Có {partial_count} đơn chỉ đủ 1 phần.')
 
@@ -125,11 +120,11 @@ class DeliveryTripWizard(models.TransientModel):
     def _get_vehicle_capacity(self):
         """Số đơn tối đa theo loại xe."""
         if not self.vehicle_id:
-            return 15  # Mặc định ô tô
+            return 15
         name = (self.vehicle_id.model_id.name or '').lower()
         if 'xe máy' in name or 'xe_may' in name or 'honda' in name:
             return 5
-        return 15  # Ô tô / xe tải
+        return 15
 
     def action_suggest_early_morning(self):
         """Gợi ý: chọn 3 đơn gần nhất cho chuyến sáng sớm."""
@@ -137,17 +132,16 @@ class DeliveryTripWizard(models.TransientModel):
         if not self.line_ids:
             raise UserError(_('Chưa có đơn hàng nào.'))
 
-        # Bỏ chọn hết
-        self.line_ids.write({'selected': False})
-
-        # Chọn 3 đơn gần nhất có đủ hàng
+        # Xóa đơn xa, giữ 3 đơn gần nhất đủ hàng
         candidates = self.line_ids.sorted(key=lambda l: l.distance_km)
-        count = 0
+        keep = self.env['delivery.trip.wizard.line']
         for line in candidates:
-            if line.stock_status in ('ready', 'partial') and count < 3:
-                line.selected = True
-                count += 1
+            if line.stock_status in ('ready', 'partial') and len(keep) < 3:
+                keep |= line
 
+        to_remove = self.line_ids - keep
+        to_remove.unlink()
+        self.line_ids.write({'selected': True})
         self.departure_time = 'early_morning'
         return {
             'type': 'ir.actions.act_window',
@@ -158,10 +152,12 @@ class DeliveryTripWizard(models.TransientModel):
         }
 
     def action_select_ready_only(self):
-        """Chỉ chọn đơn đủ hàng."""
+        """Chỉ giữ đơn đủ hàng, xóa đơn partial."""
         self.ensure_one()
-        for line in self.line_ids:
-            line.selected = line.stock_status == 'ready'
+        to_remove = self.line_ids.filtered(
+            lambda l: l.stock_status != 'ready')
+        to_remove.unlink()
+        self.line_ids.write({'selected': True})
         return {
             'type': 'ir.actions.act_window',
             'res_model': 'delivery.trip.wizard',
@@ -188,7 +184,6 @@ class DeliveryTripWizard(models.TransientModel):
             'notes': self.notes,
         })
 
-        # Gán trip_id cho các schedule lines
         schedule_line_ids = selected.mapped('schedule_line_id')
         schedule_line_ids.write({'trip_id': trip.id})
 
@@ -203,10 +198,11 @@ class DeliveryTripWizard(models.TransientModel):
             'target': 'current',
         }
 
+    # =====================================================
+    # AI Chọn đơn tối ưu cho 1 chuyến
+    # =====================================================
     def action_ai_suggest_groups(self):
-        """Gọi GPT để gom nhóm đơn hàng tối ưu.
-        Kết quả: gán ai_group cho mỗi line, hiện tổng kết trong notes.
-        """
+        """AI tự chọn đơn tốt nhất cho 1 chuyến giao ngay."""
         self.ensure_one()
         if not self.line_ids:
             raise UserError(_('Chưa có đơn hàng nào.'))
@@ -217,22 +213,30 @@ class DeliveryTripWizard(models.TransientModel):
             'ai_delivery_coordinator.openai_model_delivery', 'gpt-4o')
         if not api_key:
             raise UserError(_(
-                'Vui lòng cấu hình OpenAI API Key trong '
-                'Thiết lập > AI Vận Chuyển.'))
+                'Vui lòng cấu hình OpenAI API Key.'))
 
-        # Chuẩn bị dữ liệu
+        # Thu thập dữ liệu
         order_data = []
+        today_str = fields.Date.context_today(self).strftime('%Y-%m-%d')
         for wl in self.line_ids:
             sl = wl.schedule_line_id
+            so = sl.order_id
+            commit_date = ''
+            if so:
+                if hasattr(so, 'commitment_date') and so.commitment_date:
+                    commit_date = so.commitment_date.strftime('%Y-%m-%d')
+                elif so.date_order:
+                    commit_date = so.date_order.strftime('%Y-%m-%d')
+
             order_data.append({
                 'id': wl.id,
-                'order': sl.order_id.name or '',
+                'order': so.name if so else '',
                 'partner': sl.partner_id.name or '',
                 'addr': (sl.delivery_address or '').replace('\n', ', '),
                 'picking': sl.picking_status or '',
                 'stock': sl.stock_status or '',
                 'htgh': (sl.order_htgh or '').strip(),
-                'origin': (sl.order_origin or '').strip(),
+                'date': commit_date,
                 'km': sl.distance_km or 0,
             })
 
@@ -240,30 +244,27 @@ class DeliveryTripWizard(models.TransientModel):
         vehicle_label = 'xe máy' if capacity <= 5 else 'ô tô/xe tải'
 
         prompt = (
-            "Bạn là chuyên gia logistics Việt Nam. "
-            "Hãy phân nhóm các đơn hàng dưới đây thành các "
-            "chuyến giao tối ưu.\n\n"
-            f"PHƯƠNG TIỆN: {vehicle_label} "
-            f"(tối đa {capacity} đơn/chuyến)\n\n"
-            "QUY TẮC BẮT BUỘC:\n"
-            "1. Đơn cùng công ty/khách hàng → BẮT BUỘC cùng nhóm\n"
-            "2. Đơn cùng quận/huyện/tỉnh → cùng nhóm\n"
-            "3. Đơn ở tỉnh lân cận gom chung: "
-            "VD Đồng Nai + Bình Dương, HCM Q7 + Q8 + Nhà Bè\n"
-            "4. MỖI NHÓM TỐI THIỂU 3 ĐƠN. "
-            "Nếu nhóm chỉ 1-2 đơn → GỘP vào nhóm gần nhất\n"
-            f"5. Tối đa {capacity} đơn/nhóm\n"
-            "6. Tên nhóm ngắn gọn theo khu vực\n"
-            "7. Trường 'htgh' là chiến lược giao hàng: "
-            "'có gì giao nấy' = giao được ngay dù chưa đủ. "
-            "'chờ đủ hàng mới giao' = chỉ giao khi stock=ready. "
-            "Ưu tiên đơn 'có gì giao nấy' + stock ready/partial\n"
-            "8. Trường 'stock': ready=đủ hàng, partial=thiếu 1 phần\n\n"
+            "Bạn là chuyên gia logistics Việt Nam.\n"
+            f"Hôm nay: {today_str}\n"
+            f"Phương tiện: {vehicle_label} "
+            f"(tối đa {capacity} đơn/chuyến).\n\n"
+            "TỪ DANH SÁCH BÊN DƯỚI, "
+            f"CHỌN TỐI ĐA {capacity} đơn TỐT NHẤT "
+            "cho 1 chuyến giao NGAY BÂY GIỜ.\n\n"
+            "ƯU TIÊN (theo thứ tự quan trọng):\n"
+            "1. stock=ready (đủ hàng) → chọn trước\n"
+            "2. Đơn GẤP: date gần/quá hạn → chọn trước\n"
+            "3. Đơn cùng CÔNG TY (partner) → gom chung\n"
+            "4. Đơn CÙNG KHU VỰC (quận/huyện/tỉnh) → gom chung\n"
+            "5. htgh chứa 'có gì giao nấy' → ưu tiên giao\n"
+            "6. htgh chứa 'chờ đủ hàng' + stock!=ready → BỎ QUA\n"
+            "7. stock=partial + htgh rỗng → vẫn chọn được\n\n"
             f"ĐƠN HÀNG ({len(order_data)} đơn):\n"
             f"{json.dumps(order_data, ensure_ascii=False)}\n\n"
-            "TRẢ VỀ JSON: [{\"id\": <wizard_line_id>, "
-            "\"group\": \"<tên nhóm>\"}]\n"
-            "CHỈ trả về JSON, không giải thích."
+            "TRẢ VỀ JSON DUY NHẤT:\n"
+            "{\"selected\": [<danh sách id đã chọn>], "
+            "\"reason\": \"<lý do ngắn gọn>\"}\n"
+            "CHỈ JSON, không giải thích."
         )
 
         try:
@@ -283,46 +284,38 @@ class DeliveryTripWizard(models.TransientModel):
             resp.raise_for_status()
             content = resp.json()['choices'][0]['message']['content']
 
-            # Parse JSON
             content = content.strip()
             if content.startswith('```'):
                 content = content.split('\n', 1)[1]
                 content = content.rsplit('```', 1)[0]
-            assignments = json.loads(content)
+            result = json.loads(content)
         except Exception as e:
-            _logger.error('AI Group Error: %s', e)
-            raise UserError(_(
-                'Lỗi khi gọi AI: %s') % str(e))
+            _logger.error('AI Suggest Error: %s', e)
+            raise UserError(_('Lỗi khi gọi AI: %s') % str(e))
 
-        # Gán nhóm
-        line_map = {wl.id: wl for wl in self.line_ids}
-        for item in assignments:
-            wl = line_map.get(item.get('id'))
-            if wl:
-                wl.ai_group = item.get('group', 'Khác')
+        selected_ids = set(result.get('selected', []))
+        reason = result.get('reason', '')
 
-        # Đơn không được gán → 'Khác'
-        for wl in self.line_ids:
-            if not wl.ai_group:
-                wl.ai_group = 'Khác'
+        if not selected_ids:
+            raise UserError(_('AI không chọn được đơn nào.'))
 
-        # Auto-select tất cả đơn
+        # XÓA đơn không được chọn khỏi wizard
+        to_remove = self.line_ids.filtered(
+            lambda wl: wl.id not in selected_ids)
+        to_remove.unlink()
+
+        # Select tất cả còn lại
         self.line_ids.write({'selected': True})
 
-        # Tổng kết
-        groups = {}
-        for wl in self.line_ids:
-            groups.setdefault(wl.ai_group, []).append(wl)
-
-        summary = []
-        for g in sorted(groups.keys()):
-            summary.append(f'• {g}: {len(groups[g])} đơn')
+        # Auto-detect route
+        routes = self.line_ids.mapped('schedule_line_id.route_id')
+        if len(routes) == 1 and routes:
+            self.route_id = routes.id
 
         self.notes = (
-            f"🤖 AI đề xuất {len(groups)} nhóm:\n"
-            + '\n'.join(summary)
-            + "\n\n→ Nhấn '↪ Chọn Nhóm' để lọc từng nhóm "
-            "rồi tạo chuyến."
+            f"🤖 AI đã chọn {len(self.line_ids)}/{len(order_data)} đơn "
+            f"({vehicle_label}, max {capacity}):\n"
+            f"{reason}"
         )
 
         return {
@@ -334,47 +327,5 @@ class DeliveryTripWizard(models.TransientModel):
         }
 
     def action_select_group(self):
-        """Lọc wizard: xóa đơn ngoài nhóm, chỉ giữ 1 nhóm."""
-        self.ensure_one()
-        groups = {}
-        for wl in self.line_ids:
-            if wl.ai_group:
-                groups.setdefault(wl.ai_group, []).append(wl)
-
-        if not groups:
-            raise UserError(_(
-                'Chưa có nhóm AI. Nhấn "🤖 AI Gợi Ý Nhóm" trước.'))
-
-        sorted_groups = sorted(groups.keys())
-
-        # Nếu đang hiện tất cả nhóm → chọn nhóm đầu
-        current_groups = set(wl.ai_group for wl in self.line_ids)
-        if len(current_groups) > 1:
-            next_group = sorted_groups[0]
-        else:
-            # Đang ở 1 nhóm → nhóm kế tiếp
-            current = list(current_groups)[0]
-            try:
-                idx = sorted_groups.index(current)
-                next_group = sorted_groups[
-                    (idx + 1) % len(sorted_groups)]
-            except ValueError:
-                next_group = sorted_groups[0]
-
-        # XÓA đơn không thuộc nhóm → list sạch
-        to_remove = self.line_ids.filtered(
-            lambda wl: wl.ai_group != next_group)
-        to_remove.unlink()
-
-        # Select tất cả còn lại
-        self.line_ids.write({'selected': True})
-
-        self.notes = f"📋 Đang xem nhóm: {next_group} ({len(self.line_ids)} đơn)"
-
-        return {
-            'type': 'ir.actions.act_window',
-            'res_model': 'delivery.trip.wizard',
-            'res_id': self.id,
-            'view_mode': 'form',
-            'target': 'new',
-        }
+        """Alias: chạy lại AI với đơn còn lại."""
+        return self.action_ai_suggest_groups()
