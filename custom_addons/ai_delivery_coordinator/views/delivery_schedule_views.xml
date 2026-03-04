@@ -168,7 +168,9 @@
                             </t>
                             <div class="o_kanban_record_top mb-1">
                                 <div style="display: flex; align-items: center; gap: 6px;">
-                                    <field name="is_selected" widget="boolean"/>
+                                    <button type="object" name="action_toggle_select" class="btn btn-link p-0 border-0" title="Chọn/Bỏ chọn" style="font-size: 1.1em; line-height: 1;">
+                                        <i t-attf-class="fa #{record.is_selected.raw_value ? 'fa-check-square-o text-primary' : 'fa-square-o text-muted'}"/>
+                                    </button>
                                     <strong class="o_kanban_record_title">
                                         <span><field name="order_id"/></span>
                                     </strong>

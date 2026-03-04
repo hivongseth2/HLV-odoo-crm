@@ -180,13 +180,14 @@ class DeliveryScheduleLine(models.Model):
 
     @api.depends('order_id')
     def _compute_picking_status(self):
-        """Hiển thị trạng thái phiếu kho: lấy hàng / đóng gói / xuất kho / giao."""
+        """Trạng thái kho theo chiến lược 3 bước: Pick → Pack → Out.
+        Chỉ tính 'Giao 1 phần' khi có ít nhất 1 phiếu OUT done.
+        """
         for line in self:
             if not line.order_id:
                 line.picking_status = ''
                 continue
 
-            # Tìm tất cả phiếu kho liên quan đến SO
             all_pickings = self.env['stock.picking'].search([
                 ('origin', 'like', line.order_id.name),
                 ('state', '!=', 'cancel'),
@@ -196,47 +197,43 @@ class DeliveryScheduleLine(models.Model):
                 line.picking_status = 'Chưa có phiếu'
                 continue
 
-            # Tổng quan: có phiếu nào đang active (chưa done)?
-            done_pickings = all_pickings.filtered(lambda p: p.state == 'done')
+            # Tách theo loại
+            out_ops = all_pickings.filtered(lambda p: p.picking_type_code == 'outgoing')
             active_pickings = all_pickings.filtered(lambda p: p.state not in ('done', 'cancel'))
 
-            # Nếu tất cả done → đã hoàn tất
+            # Tất cả phiếu done (kể cả pick/pack/out) = Hoàn tất
             if not active_pickings:
                 line.picking_status = 'Hoàn tất'
                 continue
 
-            # Có done lẫn active → giao 1 phần, đang xử lý tiếp
-            has_partial = len(done_pickings) > 0 and len(active_pickings) > 0
+            # Kiểm tra giao 1 phần: CHỈ khi có OUT done
+            out_done = out_ops.filtered(lambda p: p.state == 'done')
+            has_partial_delivery = bool(out_done)
 
-            # Tìm bước hiện tại đang ở đâu (phiếu active đầu tiên)
-            current_step = []
-            for pick in active_pickings.sorted(key=lambda p: p.id):
-                pick_type = pick.picking_type_id.name or ''
-                state_label = {
-                    'draft': 'Nháp',
-                    'waiting': 'Chờ',
-                    'confirmed': 'Chờ xử lý',
-                    'assigned': 'Sẵn sàng',
-                }.get(pick.state, pick.state)
+            # Tìm bước hiện tại (đang xử lý)
+            pick = active_pickings.sorted(key=lambda p: p.id)[0]
+            pick_type = pick.picking_type_id.name or ''
+            state_label = {
+                'draft': 'Nháp',
+                'waiting': 'Chờ',
+                'confirmed': 'Chờ xử lý',
+                'assigned': 'Sẵn sàng',
+            }.get(pick.state, pick.state)
 
-                # Xác định tên bước
-                if pick.picking_type_code == 'internal':
-                    if 'Pick' in pick_type or 'pick' in pick_type:
-                        step_name = 'Lấy hàng'
-                    elif 'Pack' in pick_type or 'pack' in pick_type:
-                        step_name = 'Đóng gói'
-                    else:
-                        step_name = pick_type
-                elif pick.picking_type_code == 'outgoing':
-                    step_name = 'Xuất kho'
+            if pick.picking_type_code == 'internal':
+                if 'Pick' in pick_type or 'pick' in pick_type:
+                    step_name = 'Lấy hàng'
+                elif 'Pack' in pick_type or 'pack' in pick_type:
+                    step_name = 'Đóng gói'
                 else:
                     step_name = pick_type
+            elif pick.picking_type_code == 'outgoing':
+                step_name = 'Xuất kho'
+            else:
+                step_name = pick_type
 
-                current_step.append(f'{step_name}: {state_label}')
-                break  # Chỉ hiện bước đầu tiên đang xử lý
-
-            status = ' | '.join(current_step) if current_step else 'Đang xử lý'
-            if has_partial:
+            status = f'{step_name}: {state_label}'
+            if has_partial_delivery:
                 status = f'Giao 1 phần | {status}'
 
             line.picking_status = status
@@ -411,7 +408,10 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến + km. Không bỏ sót."""
         """Toggle is_selected cho Kanban checkbox."""
         for line in self:
             line.is_selected = not line.is_selected
-        return {'type': 'ir.actions.client', 'tag': 'soft_reload'}
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'soft_reload',
+        }
 
     def action_clear_selection(self):
         """Bỏ chọn tất cả."""
@@ -514,23 +514,48 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến + km. Không bỏ sót."""
     # Tải lại & cập nhật stock + xóa đơn đã giao xong
     # =====================================================
     def action_refresh_unassigned(self):
-        """Cập nhật stock_status + tự xóa đơn đã giao hết."""
-        lines = self.browse(self.env.context.get('active_ids', [])) if self.env.context.get('active_ids') else self
-        if not lines:
-            lines = self.search([])
-        if not lines:
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': _('Thông báo'),
-                    'message': _('Không có đơn hàng nào để cập nhật.'),
-                    'type': 'info',
-                    'sticky': False,
-                    'next': {'type': 'ir.actions.client', 'tag': 'reload'},
-                }
-            }
+        """Fetch đơn mới, xóa đơn hủy/giao xong, cập nhật stock_status."""
+        # 1. Fetch đơn hàng mới (confirmed/sale) chưa có trong kanban
+        existing_order_ids = self.search([]).mapped('order_id').ids
+        schedule = self.env['delivery.schedule'].search([], limit=1)
+        if not schedule:
+            schedule = self.env['delivery.schedule'].create({
+                'name': _('Bảng Điều Phối'),
+                'date': fields.Date.context_today(self),
+            })
 
+        new_orders = self.env['sale.order'].search([
+            ('state', 'in', ('sale', 'done')),
+            ('id', 'not in', existing_order_ids),
+        ])
+
+        new_count = 0
+        for order in new_orders:
+            # Chỉ thêm đơn chưa giao hết
+            is_fully_delivered = all(
+                sol.qty_delivered >= sol.product_uom_qty
+                for sol in order.order_line
+                if sol.product_id and sol.product_id.type == 'consu'
+            )
+            if not is_fully_delivered:
+                self.create({
+                    'schedule_id': schedule.id,
+                    'order_id': order.id,
+                    'assigned_date': fields.Date.context_today(self),
+                })
+                new_count += 1
+
+        # 2. Xóa đơn bị hủy
+        cancelled_lines = self.search([
+            ('order_id.state', 'in', ('cancel',)),
+        ])
+        cancelled_count = len(cancelled_lines)
+        if cancelled_lines:
+            _logger.info('Removing %d cancelled order lines.', cancelled_count)
+            cancelled_lines.sudo().unlink()
+
+        # 3. Xóa đơn đã giao hết + Cập nhật stock cho các đơn còn lại
+        lines = self.search([])
         updated_count = 0
         delivered_lines = self.env['delivery.schedule.line']
 
@@ -539,7 +564,6 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến + km. Không bỏ sót."""
             if not order:
                 continue
 
-            # Kiểm tra đơn đã giao hết chưa
             is_fully_delivered = all(
                 sol.qty_delivered >= sol.product_uom_qty
                 for sol in order.order_line
@@ -576,17 +600,20 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến + km. Không bỏ sót."""
                 line.write({'stock_status': new_status})
                 updated_count += 1
 
-        # Xóa đơn đã giao hết
         delivered_count = len(delivered_lines)
         if delivered_lines:
             _logger.info('Removing %d fully delivered lines.', delivered_count)
             delivered_lines.sudo().unlink()
 
-        _logger.info('Refresh: %d updated, %d delivered removed.', updated_count, delivered_count)
+        _logger.info('Refresh: +%d new, -%d cancelled, -%d delivered, %d stock updated.',
+                      new_count, cancelled_count, delivered_count, updated_count)
 
-        msg = _('Cập nhật %d đơn.') % updated_count
+        msg = _('Tải lại xong! +%d đơn mới') % new_count
+        if cancelled_count:
+            msg += _(', -%d hủy') % cancelled_count
         if delivered_count:
-            msg += _(' Đã xóa %d đơn giao xong.') % delivered_count
+            msg += _(', -%d đã giao') % delivered_count
+        msg += _(', cập nhật %d đơn.') % updated_count
 
         return {
             'type': 'ir.actions.client',
