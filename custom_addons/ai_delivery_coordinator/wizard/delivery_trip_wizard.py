@@ -203,24 +203,33 @@ class DeliveryTripWizard(models.TransientModel):
     # Geocoding
     # =====================================================
     def _geocode_address(self, address):
-        """Geocode 1 địa chỉ bằng Nominatim (OpenStreetMap)."""
+        """Geocode 1 địa chỉ bằng Google Maps Geocoding API."""
         if not address:
+            return None, None
+        gmaps_key = self.env['ir.config_parameter'].sudo().get_param(
+            'ai_delivery_coordinator.google_maps_api_key')
+        if not gmaps_key:
+            _logger.warning('Google Maps API Key chưa được cấu hình.')
             return None, None
         try:
             resp = requests.get(
-                'https://nominatim.openstreetmap.org/search',
+                'https://maps.googleapis.com/maps/api/geocode/json',
                 params={
-                    'q': address + ', Việt Nam',
-                    'format': 'json',
-                    'limit': 1,
-                    'countrycodes': 'vn',
+                    'address': address,
+                    'region': 'vn',
+                    'language': 'vi',
+                    'key': gmaps_key,
                 },
-                headers={'User-Agent': 'OdooDeliveryCoordinator/1.0'},
                 timeout=10,
             )
             data = resp.json()
-            if data:
-                return float(data[0]['lat']), float(data[0]['lon'])
+            if data.get('status') == 'OK' and data.get('results'):
+                loc = data['results'][0]['geometry']['location']
+                return loc['lat'], loc['lng']
+            else:
+                _logger.warning(
+                    'Geocode no result for "%s": %s',
+                    address, data.get('status'))
         except Exception as e:
             _logger.warning('Geocode failed for "%s": %s', address, e)
         return None, None
@@ -238,7 +247,8 @@ class DeliveryTripWizard(models.TransientModel):
             if addr:
                 addr_map.setdefault(addr, []).append(sl)
 
-        _logger.info('Geocoding %d unique addresses...', len(addr_map))
+        _logger.info('Geocoding %d unique addresses via Google Maps...',
+                      len(addr_map))
         for addr, lines_list in addr_map.items():
             lat, lng = self._geocode_address(addr)
             if lat and lng:
@@ -247,7 +257,6 @@ class DeliveryTripWizard(models.TransientModel):
                         'delivery_lat': lat,
                         'delivery_lng': lng,
                     })
-            time.sleep(1.1)  # Nominatim rate limit
 
     # =====================================================
     # Hybrid: Geocode + AI Clustering
