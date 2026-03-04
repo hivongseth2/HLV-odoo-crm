@@ -6,18 +6,26 @@
         <field name="arch" type="xml">
             <form string="Tài Khoản Google Ads">
                 <header>
-                    <button name="action_test_connection" string="Kiểm tra kết nối" type="object" class="oe_highlight" invisible="is_demo"/>
-                    <button name="action_generate_demo_data" string="🛠 Tạo Dữ Liệu Demo" type="object" class="oe_highlight" invisible="not is_demo"/>
-                    <button name="action_sync_all_data" string="Đồng bộ toàn bộ" type="object" invisible="state != 'connected' or is_demo"/>
+                    <button name="action_test_connection" string="Kiểm Tra Kết Nối" type="object" class="oe_highlight" invisible="state == 'connected'"/>
+                    <button name="action_sync_all_data" string="Đồng Bộ Dữ Liệu" type="object" class="oe_highlight" invisible="state != 'connected'"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,connected,error"/>
                 </header>
                 <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Mô tả tài khoản..."/>
+                        </h1>
+                    </div>
                     <group>
-                        <group string="Cấu Hình API">
-                            <field name="name"/>
-                            <field name="is_demo" widget="boolean_toggle"/>
+                        <group string="Cấu Hình Cơ Bản">
+                            <field name="active" widget="boolean_toggle"/>
                             <field name="operating_customer_id" placeholder="vd: 1234567890"/>
                             <field name="login_customer_id" placeholder="vd: 0987654321"/>
+                        </group>
+                        <group string="Thông Tin Xác Thực (OAuth)">
+                            <field name="developer_token" password="True"/>
+                            <field name="client_id" password="True"/>
+                            <field name="client_secret" password="True"/>
                             <field name="refresh_token" password="True"/>
                         </group>
                     </group>
