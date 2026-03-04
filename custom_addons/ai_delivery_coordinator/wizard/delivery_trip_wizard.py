@@ -5,7 +5,6 @@ import logging
 import json
 import math
 import requests
-import time
 
 _logger = logging.getLogger(__name__)
 
@@ -44,11 +43,10 @@ class DeliveryTripWizard(models.TransientModel):
     line_ids = fields.One2many('delivery.trip.wizard.line', 'wizard_id', string='Đơn hàng gợi ý')
     notes = fields.Text(string='Ghi chú')
 
-    # Thống kê
-    total_orders = fields.Integer(string='Tổng đơn được chọn', compute='_compute_stats')
+    total_orders = fields.Integer(string='Tổng đơn', compute='_compute_stats')
     total_km = fields.Float(string='Tổng km', compute='_compute_stats', digits=(10, 1))
     priority_label = fields.Char(string='Mức ưu tiên', compute='_compute_stats')
-    suggestion_text = fields.Text(string='Gợi ý AI', compute='_compute_stats')
+    suggestion_text = fields.Text(string='Gợi ý', compute='_compute_stats')
 
     @api.model
     def default_get(self, fields_list):
@@ -77,50 +75,39 @@ class DeliveryTripWizard(models.TransientModel):
             selected = wiz.line_ids.filtered('selected')
             wiz.total_orders = len(selected)
             wiz.total_km = sum(selected.mapped('distance_km'))
-
             if wiz.total_orders >= 9:
-                wiz.priority_label = '🔴 Cao — Đủ tải, nên giao ngay!'
+                wiz.priority_label = '🔴 Cao — Đủ tải!'
             elif wiz.total_orders >= 5:
                 wiz.priority_label = '🟡 Trung bình'
             else:
-                wiz.priority_label = '🟢 Thấp — Có thể gom thêm đơn'
+                wiz.priority_label = '🟢 Thấp — Gom thêm đơn'
 
             suggestions = []
-            ready_count = len(selected.filtered(lambda l: l.stock_status == 'ready'))
-            partial_count = len(selected.filtered(lambda l: l.stock_status == 'partial'))
-
-            if wiz.total_orders >= 9 and ready_count == wiz.total_orders:
-                suggestions.append('✅ Đủ tải + đủ hàng → Xuất phát ngay!')
+            ready = len(selected.filtered(lambda l: l.stock_status == 'ready'))
+            partial = len(selected.filtered(lambda l: l.stock_status == 'partial'))
+            if wiz.total_orders >= 9 and ready == wiz.total_orders:
+                suggestions.append('✅ Đủ tải + đủ hàng → Xuất phát!')
             elif wiz.total_orders < 9:
-                suggestions.append(f'⏳ Chỉ có {wiz.total_orders} đơn, nên chờ gom thêm.')
-            if partial_count > 0:
-                suggestions.append(f'🟡 Có {partial_count} đơn chỉ đủ 1 phần.')
-
-            wiz.suggestion_text = '\n'.join(suggestions) if suggestions else '📋 Sẵn sàng tạo chuyến.'
+                suggestions.append(f'⏳ {wiz.total_orders} đơn, chờ gom thêm.')
+            if partial > 0:
+                suggestions.append(f'🟡 {partial} đơn đủ 1 phần.')
+            wiz.suggestion_text = '\n'.join(suggestions) or '📋 Sẵn sàng.'
 
     @api.onchange('route_id')
     def _onchange_route_id(self):
-        """Khi chọn tuyến, load đơn đủ/1 phần hàng chưa có chuyến."""
         self.line_ids = [(5, 0, 0)]
         if not self.route_id:
             return
-
         lines = self.env['delivery.schedule.line'].search([
             ('route_id', '=', self.route_id.id),
             ('trip_id', '=', False),
             ('stock_status', 'in', ('ready', 'partial')),
         ], order='distance_km asc')
-
-        wizard_lines = []
-        for line in lines:
-            wizard_lines.append((0, 0, {
-                'schedule_line_id': line.id,
-                'selected': True,
-            }))
-        self.line_ids = wizard_lines
+        self.line_ids = [(0, 0, {
+            'schedule_line_id': l.id, 'selected': True,
+        }) for l in lines]
 
     def _get_vehicle_capacity(self):
-        """Số đơn tối đa theo loại xe."""
         if not self.vehicle_id:
             return 15
         name = (self.vehicle_id.model_id.name or '').lower()
@@ -129,52 +116,32 @@ class DeliveryTripWizard(models.TransientModel):
         return 15
 
     def action_suggest_early_morning(self):
-        """Gợi ý: chọn 3 đơn gần nhất cho chuyến sáng sớm."""
         self.ensure_one()
         if not self.line_ids:
             raise UserError(_('Chưa có đơn hàng nào.'))
-
         candidates = self.line_ids.sorted(key=lambda l: l.distance_km)
         keep = self.env['delivery.trip.wizard.line']
         for line in candidates:
             if line.stock_status in ('ready', 'partial') and len(keep) < 3:
                 keep |= line
-
-        to_remove = self.line_ids - keep
-        to_remove.unlink()
+        (self.line_ids - keep).unlink()
         self.line_ids.write({'selected': True})
         self.departure_time = 'early_morning'
-        return {
-            'type': 'ir.actions.act_window',
-            'res_model': 'delivery.trip.wizard',
-            'res_id': self.id,
-            'view_mode': 'form',
-            'target': 'new',
-        }
+        return self._reload_wizard()
 
     def action_select_ready_only(self):
-        """Chỉ giữ đơn đủ hàng, xóa đơn partial."""
         self.ensure_one()
-        to_remove = self.line_ids.filtered(
-            lambda l: l.stock_status != 'ready')
-        to_remove.unlink()
+        self.line_ids.filtered(lambda l: l.stock_status != 'ready').unlink()
         self.line_ids.write({'selected': True})
-        return {
-            'type': 'ir.actions.act_window',
-            'res_model': 'delivery.trip.wizard',
-            'res_id': self.id,
-            'view_mode': 'form',
-            'target': 'new',
-        }
+        return self._reload_wizard()
 
     def action_create_trip(self):
-        """Tạo chuyến giao từ các đơn đã chọn."""
         self.ensure_one()
         if not self.route_id:
-            raise UserError(_('Vui lòng chọn Tuyến giao trước khi tạo chuyến.'))
+            raise UserError(_('Vui lòng chọn Tuyến giao.'))
         selected = self.line_ids.filtered('selected')
         if not selected:
-            raise UserError(_('Chưa chọn đơn hàng nào cho chuyến giao.'))
+            raise UserError(_('Chưa chọn đơn hàng.'))
 
         trip = self.env['delivery.trip'].create({
             'date': self.date,
@@ -184,13 +151,8 @@ class DeliveryTripWizard(models.TransientModel):
             'departure_time': self.departure_time,
             'notes': self.notes,
         })
-
-        schedule_line_ids = selected.mapped('schedule_line_id')
-        schedule_line_ids.write({'trip_id': trip.id})
-
-        _logger.info('Trip %s created with %d orders for route %s.',
-                      trip.name, len(schedule_line_ids), self.route_id.name)
-
+        selected.mapped('schedule_line_id').write({'trip_id': trip.id})
+        _logger.info('Trip %s created with %d orders.', trip.name, len(selected))
         return {
             'type': 'ir.actions.act_window',
             'res_model': 'delivery.trip',
@@ -199,26 +161,46 @@ class DeliveryTripWizard(models.TransientModel):
             'target': 'current',
         }
 
+    def _reload_wizard(self):
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'delivery.trip.wizard',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
     # =====================================================
-    # Geocoding
+    # Geocoding: Track-Asia API
     # =====================================================
+    @staticmethod
+    def _haversine(lat1, lng1, lat2, lng2):
+        """Khoảng cách (km) giữa 2 toạ độ."""
+        R = 6371
+        dlat = math.radians(lat2 - lat1)
+        dlng = math.radians(lng2 - lng1)
+        a = (math.sin(dlat / 2) ** 2
+             + math.cos(math.radians(lat1))
+             * math.cos(math.radians(lat2))
+             * math.sin(dlng / 2) ** 2)
+        return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
     def _geocode_address(self, address):
-        """Geocode 1 địa chỉ bằng Google Maps Geocoding API."""
+        """Geocode địa chỉ bằng Track-Asia Search V2."""
         if not address:
             return None, None
-        gmaps_key = self.env['ir.config_parameter'].sudo().get_param(
-            'ai_delivery_coordinator.google_maps_api_key')
-        if not gmaps_key:
-            _logger.warning('Google Maps API Key chưa được cấu hình.')
+        ta_key = self.env['ir.config_parameter'].sudo().get_param(
+            'ai_delivery_coordinator.track_asia_api_key')
+        if not ta_key:
+            _logger.warning('Track-Asia API Key chưa cấu hình.')
             return None, None
         try:
             resp = requests.get(
-                'https://maps.googleapis.com/maps/api/geocode/json',
+                'https://maps.track-asia.com/api/v2/place/textsearch/json',
                 params={
-                    'address': address,
-                    'region': 'vn',
+                    'query': address,
                     'language': 'vi',
-                    'key': gmaps_key,
+                    'key': ta_key,
                 },
                 timeout=10,
             )
@@ -226,52 +208,86 @@ class DeliveryTripWizard(models.TransientModel):
             if data.get('status') == 'OK' and data.get('results'):
                 loc = data['results'][0]['geometry']['location']
                 return loc['lat'], loc['lng']
-            else:
-                _logger.warning(
-                    'Geocode no result for "%s": %s',
-                    address, data.get('status'))
+            _logger.warning('Track-Asia no result: "%s" → %s',
+                            address, data.get('status'))
         except Exception as e:
-            _logger.warning('Geocode failed for "%s": %s', address, e)
+            _logger.warning('Track-Asia geocode error "%s": %s', address, e)
+        return None, None
+
+    def _get_warehouse_coords(self):
+        """Lấy toạ độ kho xuất phát."""
+        wh_id = self.env['ir.config_parameter'].sudo().get_param(
+            'ai_delivery_coordinator.warehouse_id')
+        if not wh_id:
+            return None, None
+        try:
+            wh = self.env['stock.warehouse'].sudo().browse(int(wh_id))
+            if wh.exists() and wh.partner_id:
+                partner = wh.partner_id
+                # Thử geocode địa chỉ kho nếu chưa có lat/lng
+                addr = partner.street or partner.contact_address
+                if addr:
+                    lat, lng = self._geocode_address(addr)
+                    return lat, lng
+        except Exception as e:
+            _logger.warning('Cannot get warehouse coords: %s', e)
         return None, None
 
     def _ensure_geocoded(self, schedule_lines):
-        """Đảm bảo tất cả line có lat/lng."""
+        """Geocode tất cả line chưa có toạ độ, cập nhật distance_km."""
         to_geocode = schedule_lines.filtered(
             lambda l: not l.delivery_lat and l.delivery_address)
         if not to_geocode:
+            # Chỉ cần tính distance nếu có to_geocode = 0 nhưng có toạ độ
+            self._update_distances(schedule_lines)
             return
 
+        # Nhóm theo địa chỉ tránh geocode trùng
         addr_map = {}
         for sl in to_geocode:
             addr = (sl.delivery_address or '').strip()
             if addr:
                 addr_map.setdefault(addr, []).append(sl)
 
-        _logger.info('Geocoding %d unique addresses via Google Maps...',
-                      len(addr_map))
-        for addr, lines_list in addr_map.items():
+        _logger.info('Geocoding %d unique addresses via Track-Asia...', len(addr_map))
+        for addr, sls in addr_map.items():
             lat, lng = self._geocode_address(addr)
             if lat and lng:
-                for sl in lines_list:
+                for sl in sls:
                     sl.sudo().write({
                         'delivery_lat': lat,
                         'delivery_lng': lng,
                     })
 
+        # Cập nhật distance từ kho
+        self._update_distances(schedule_lines)
+
+    def _update_distances(self, schedule_lines):
+        """Tính khoảng cách từ kho → mỗi điểm giao."""
+        wh_lat, wh_lng = self._get_warehouse_coords()
+        if not wh_lat or not wh_lng:
+            return
+        for sl in schedule_lines:
+            if sl.delivery_lat and sl.delivery_lng:
+                dist = self._haversine(
+                    wh_lat, wh_lng, sl.delivery_lat, sl.delivery_lng)
+                if abs(sl.distance_km - dist) > 0.5:
+                    sl.sudo().write({'distance_km': round(dist, 1)})
+
     # =====================================================
-    # Hybrid: Geocode + AI Clustering
+    # Hybrid: Geocode + AI phân cụm
     # =====================================================
     def action_ai_suggest_groups(self):
-        """Geocode → AI phân cụm dựa trên toạ độ thực."""
+        """Geocode → tính distance → AI phân cụm."""
         self.ensure_one()
         if not self.line_ids:
             raise UserError(_('Chưa có đơn hàng nào.'))
 
-        # Bước 1: Geocode
+        # Bước 1: Geocode + tính distance
         schedule_lines = self.line_ids.mapped('schedule_line_id')
         self._ensure_geocoded(schedule_lines)
 
-        # Bước 2: Lấy API key
+        # Bước 2: API key
         api_key = self.env['ir.config_parameter'].sudo().get_param(
             'ai_delivery_coordinator.openai_api_key')
         model_name = self.env['ir.config_parameter'].sudo().get_param(
@@ -283,7 +299,7 @@ class DeliveryTripWizard(models.TransientModel):
         capacity = self._get_vehicle_capacity()
         vehicle_label = 'xe máy' if capacity <= 5 else 'ô tô/xe tải'
 
-        # Bước 3: Chuẩn bị dữ liệu có toạ độ
+        # Bước 3: Thu thập dữ liệu có toạ độ + distance
         order_data = []
         no_coords = 0
         for wl in self.line_ids:
@@ -308,31 +324,31 @@ class DeliveryTripWizard(models.TransientModel):
                 'addr': (sl.delivery_address or '').replace('\n', ', '),
                 'lat': round(lat, 5),
                 'lng': round(lng, 5),
+                'dist_km': round(sl.distance_km, 1),
                 'stock': sl.stock_status or '',
                 'htgh': (sl.order_htgh or '').strip(),
                 'date': commit_date,
             })
 
-        # Bước 4: Gọi AI với toạ độ
+        # Bước 4: AI với toạ độ + khoảng cách
         prompt = (
             "Bạn là chuyên gia logistics Việt Nam.\n"
             f"Hôm nay: {today_str}\n"
             f"Phương tiện: {vehicle_label} "
             f"(tối đa {capacity} đơn/chuyến).\n\n"
-            "Dữ liệu có TOẠ ĐỘ GPS (lat/lng). "
-            "Dùng toạ độ để xác định đơn GẦN NHAU.\n\n"
-            "TỪ DANH SÁCH BÊN DƯỚI, "
+            "Dữ liệu có TOẠ ĐỘ GPS (lat/lng) và "
+            "KHOẢNG CÁCH từ kho (dist_km).\n\n"
             f"CHỌN TỐI ĐA {capacity} đơn cho 1 chuyến.\n\n"
             "QUY TẮC BẮT BUỘC:\n"
             "★ Đơn CÙNG PARTNER → BẮT BUỘC chọn tất cả\n"
-            "★ Đơn cùng toạ độ (chênh lệch < 0.1 độ) "
-            "→ chọn cùng nhau\n\n"
+            "★ Đơn cùng toạ độ (< 0.05 độ) → chọn cùng\n\n"
             "ƯU TIÊN:\n"
-            "1. stock=ready (đủ hàng) → chọn trước\n"
-            "2. Đơn GẤP: date gần/quá hạn → chọn trước\n"
-            "3. Đơn GẦN NHAU (lat/lng gần) → gom chung\n"
+            "1. stock=ready → ưu tiên\n"
+            "2. date gần/quá hạn → ưu tiên\n"
+            "3. Đơn GẦN NHAU (lat/lng + dist_km gần) → gom\n"
             "4. htgh 'có gì giao nấy' → ưu tiên\n"
-            "5. htgh 'chờ đủ hàng' + stock!=ready → BỎ QUA\n\n"
+            "5. htgh 'chờ đủ hàng' + stock!=ready → BỎ QUA\n"
+            "6. Tối ưu tuyến đường: chọn đơn cùng hướng\n\n"
             f"ĐƠN HÀNG ({len(order_data)} đơn):\n"
             f"{json.dumps(order_data, ensure_ascii=False)}\n\n"
             "TRẢ VỀ JSON:\n"
@@ -357,7 +373,6 @@ class DeliveryTripWizard(models.TransientModel):
             )
             resp.raise_for_status()
             content = resp.json()['choices'][0]['message']['content']
-
             content = content.strip()
             if content.startswith('```'):
                 content = content.split('\n', 1)[1]
@@ -365,18 +380,15 @@ class DeliveryTripWizard(models.TransientModel):
             result = json.loads(content)
         except Exception as e:
             _logger.error('AI Suggest Error: %s', e)
-            raise UserError(_('Lỗi khi gọi AI: %s') % str(e))
+            raise UserError(_('Lỗi AI: %s') % str(e))
 
         selected_ids = set(result.get('selected', []))
         reason = result.get('reason', '')
-
         if not selected_ids:
             raise UserError(_('AI không chọn được đơn nào.'))
 
-        # Xóa đơn không được chọn
-        to_remove = self.line_ids.filtered(
-            lambda wl: wl.id not in selected_ids)
-        to_remove.unlink()
+        # Xóa đơn không chọn
+        self.line_ids.filtered(lambda wl: wl.id not in selected_ids).unlink()
         self.line_ids.write({'selected': True})
 
         # Auto-detect route
@@ -385,27 +397,17 @@ class DeliveryTripWizard(models.TransientModel):
             self.route_id = routes.id
 
         info = [
-            f"🤖📍 AI + Geocode đã chọn "
+            f"🤖📍 AI + Track-Asia: chọn "
             f"{len(self.line_ids)}/{len(order_data)} đơn "
             f"({vehicle_label}, max {capacity}):",
             reason,
         ]
         if no_coords > 0:
-            info.append(
-                f"⚠ {no_coords} đơn không có toạ độ")
-
+            info.append(f"⚠ {no_coords} đơn không geocode được")
         self.notes = '\n'.join(info)
-
-        return {
-            'type': 'ir.actions.act_window',
-            'res_model': 'delivery.trip.wizard',
-            'res_id': self.id,
-            'view_mode': 'form',
-            'target': 'new',
-        }
+        return self._reload_wizard()
 
     def action_select_group(self):
-        """Chạy lại AI phân cụm."""
         return self.action_ai_suggest_groups()
 
     # =====================================================
@@ -416,38 +418,21 @@ class DeliveryTripWizard(models.TransientModel):
         self.ensure_one()
         if not self.line_ids:
             raise UserError(_('Chưa có đơn hàng nào.'))
-
         # Geocode nếu cần
-        schedule_lines = self.line_ids.mapped('schedule_line_id')
-        self._ensure_geocoded(schedule_lines)
+        self._ensure_geocoded(self.line_ids.mapped('schedule_line_id'))
 
-        # Thu thập toạ độ
         points = []
         for wl in self.line_ids:
             sl = wl.schedule_line_id
             if sl.delivery_lat and sl.delivery_lng:
-                points.append(
-                    f"{sl.delivery_lat},{sl.delivery_lng}")
+                points.append(f"{sl.delivery_lat},{sl.delivery_lng}")
 
         if not points:
-            # Fallback: search by address
-            addrs = [
-                wl.schedule_line_id.delivery_address
-                for wl in self.line_ids
-                if wl.schedule_line_id.delivery_address
-            ]
-            if not addrs:
-                raise UserError(_('Không có địa chỉ để hiển thị.'))
-            url = (
-                'https://www.google.com/maps/search/'
-                + requests.utils.quote(
-                    ' / '.join(addrs[:10])))
+            raise UserError(_('Không có toạ độ. Kiểm tra địa chỉ.'))
         elif len(points) == 1:
             url = f'https://www.google.com/maps?q={points[0]}'
         else:
-            # Google Maps directions qua tất cả điểm
-            url = 'https://www.google.com/maps/dir/'
-            url += '/'.join(points[:25])  # Max 25 waypoints
+            url = 'https://www.google.com/maps/dir/' + '/'.join(points[:25])
 
         return {
             'type': 'ir.actions.act_url',

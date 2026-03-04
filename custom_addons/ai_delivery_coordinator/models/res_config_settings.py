@@ -6,7 +6,7 @@ class ResConfigSettings(models.TransientModel):
 
     openai_api_key = fields.Char(string='OpenAI API Key', config_parameter='ai_delivery_coordinator.openai_api_key')
     openai_model_delivery = fields.Char(string='OpenAI Model', config_parameter='ai_delivery_coordinator.openai_model_delivery', default='gpt-4o')
-    google_maps_api_key = fields.Char(string='Google Maps API Key', config_parameter='ai_delivery_coordinator.google_maps_api_key')
+    track_asia_api_key = fields.Char(string='Track-Asia API Key', config_parameter='ai_delivery_coordinator.track_asia_api_key')
     delivery_warehouse_id = fields.Many2one(
         'stock.warehouse', string='Kho xuất phát (tính khoảng cách)',
         config_parameter='ai_delivery_coordinator.warehouse_id',
