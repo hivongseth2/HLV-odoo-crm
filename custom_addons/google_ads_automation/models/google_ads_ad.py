@@ -13,10 +13,24 @@ class GoogleAdsAd(models.Model):
         ('unknown', 'Không rõ'),
         ('enabled', 'Đang hoạt động'),
         ('paused', 'Tạm dừng'),
-        ('removed', 'Đã xóa')
+        ('removed', 'Đã xóa'),
     ], string='Trạng Thái', default='unknown')
 
-    type = fields.Char(string='Loại Quảng Cáo')
+    type = fields.Selection([
+        ('RESPONSIVE_SEARCH_AD',    'Tìm Kiếm Thích Ứng (RSA)'),
+        ('EXPANDED_TEXT_AD',        'Tìm Kiếm Văn Bản Mở Rộng'),
+        ('RESPONSIVE_DISPLAY_AD',   'Hiển Thị Thích Ứng'),
+        ('IMAGE_AD',                'Quảng Cáo Hình Ảnh'),
+        ('VIDEO_AD',                'Quảng Cáo Video'),
+        ('SHOPPING_PRODUCT_AD',     'Mua Sắm — Sản Phẩm'),
+        ('SHOPPING_SMART_AD',       'Mua Sắm Thông Minh'),
+        ('CALL_AD',                 'Quảng Cáo Cuộc Gọi'),
+        ('DISCOVERY_AD',            'Khám Phá'),
+        ('DISCOVERY_CAROUSEL_AD',   'Khám Phá Dạng Băng Chuyền'),
+        ('PERFORMANCE_MAX',         'Tối Đa Hiệu Suất (PMax)'),
+        ('UNKNOWN',                 'Không rõ'),
+    ], string='Loại Quảng Cáo')
+
     final_urls = fields.Char(string='URL Đích (Final URL)')
 
     # Metrics

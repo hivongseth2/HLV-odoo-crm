@@ -1,6 +1,7 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 import logging
+import random
 
 _logger = logging.getLogger(__name__)
 
@@ -19,18 +20,27 @@ class GoogleAdsAccount(models.Model):
 
     name = fields.Char(string='Tên Tài Khoản', required=True)
     active = fields.Boolean(default=True, string='Kích Hoạt')
-    
-    # API Credentials
-    developer_token = fields.Char(string='Developer Token', required=True, tracking=True)
-    client_id = fields.Char(string='Client ID', required=True)
-    client_secret = fields.Char(string='Client Secret', required=True)
-    refresh_token = fields.Char(string='Refresh Token', required=True)
+
+    # ── Demo Mode ────────────────────────────────
+    is_demo = fields.Boolean(
+        string='Chế Độ Demo',
+        default=False,
+        tracking=True,
+        help='Bật để test mà không cần tài khoản Google Ads thật. '
+             'Hệ thống sẽ tự tạo Campaigns/Ad Groups/Ads giả với metrics ngẫu nhiên.',
+    )
+
+    # API Credentials (không bắt buộc khi is_demo)
+    developer_token = fields.Char(string='Developer Token', tracking=True)
+    client_id = fields.Char(string='Client ID')
+    client_secret = fields.Char(string='Client Secret')
+    refresh_token = fields.Char(string='Refresh Token')
     login_customer_id = fields.Char(
-        string='Login Customer ID (MCC)', 
+        string='Login Customer ID (MCC)',
         help='ID của tài khoản người quản lý (MCC). Định dạng: 1234567890 (không có dấu -)'
     )
     operating_customer_id = fields.Char(
-        string='Operating Customer ID', required=True,
+        string='Operating Customer ID',
         help='ID của tài khoản Ads bạn muốn quản lý trực tiếp. Định dạng: 1234567890 (không có dấu -)'
     )
 
@@ -62,6 +72,25 @@ class GoogleAdsAccount(models.Model):
 
     def action_test_connection(self):
         self.ensure_one()
+
+        # ── Demo shortcut ────────────────────────
+        if self.is_demo:
+            self.state = 'connected'
+            self.message_post(body=_(
+                "[DEMO MODE] Kết nối giả lập thành công! "
+                "Bấm 'Đồng Bộ Dữ Liệu' để tạo Campaigns/Ad Groups/Ads mẫu."
+            ))
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('DEMO — Thành Công'),
+                    'message': _('Đã kết nối ở chế độ Demo. Không cần tài khoản Google Ads thật.'),
+                    'type': 'success',
+                    'sticky': False,
+                }
+            }
+        # ── Real mode ───────────────────────────
         client = self._get_google_ads_client()
         customer_service = client.get_service("CustomerService")
         
@@ -95,20 +124,190 @@ class GoogleAdsAccount(models.Model):
     def action_sync_all_data(self):
         """Đồng bộ toàn bộ Dữ liệu Chiến dịch & Chỉ số hiệu suất"""
         self.ensure_one()
+
+        if self.is_demo:
+            self._demo_seed_all()
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('DEMO — Đồng bộ Hoàn tất'),
+                    'message': _('Đã tạo dữ liệu mẫu: 4 Campaigns, Nhóm QC và Ads tương ứng.'),
+                    'type': 'success',
+                    'sticky': False,
+                }
+            }
+
         self.action_sync_campaigns()
         self.action_sync_ad_groups()
         self.action_sync_ads()
-        
+
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': _('Đồng bộ Hoàn tất'),
-                'message': _('Đã yêu cầu đồng bộ toàn bộ dữ liệu (Chiến dịch, Nhóm QC, Quảng Cáo, Chỉ số).'),
+                'message': _('Đã đồng bộ toàn bộ dữ liệu (Chiến dịch, Nhóm QC, Quảng Cáo, Chỉ số).'),
                 'type': 'success',
                 'sticky': False,
             }
         }
+
+    # ─────────────────────────────────────────────
+    # DEMO MODE — Seed fake data
+    # ─────────────────────────────────────────────
+    def _demo_seed_all(self):
+        """Tạo Campaigns/Ad Groups/Ads giả với metrics ngẫu nhiên"""
+        self.ensure_one()
+        self._demo_seed_campaigns()
+        self._demo_seed_ad_groups()
+        self._demo_seed_ads()
+        self._demo_seed_conversions()
+        self.message_post(body=_(
+            "[DEMO] Đã tạo dữ liệu mẫu: 4 Campaigns, 8 Nhóm QC, 12 Ads, ~15 Lượt Chuyển Đổi từ WooCommerce giả."
+        ))
+
+    def _demo_seed_campaigns(self):
+        """Tạo 4 campaigns giả"""
+        self.ensure_one()
+        Campaign = self.env['google.ads.campaign']
+
+        demo_campaigns = [
+            {'name': '[DEMO] Tìm kiếm — Sản phẩm A', 'status': 'enabled',  'channel': 'SEARCH'},
+            {'name': '[DEMO] Tìm kiếm — Sản phẩm B', 'status': 'enabled',  'channel': 'SEARCH'},
+            {'name': '[DEMO] Display — Remarketing',   'status': 'paused',   'channel': 'DISPLAY'},
+            {'name': '[DEMO] Performance Max',          'status': 'enabled',  'channel': 'PERFORMANCE_MAX'},
+        ]
+
+        for i, c in enumerate(demo_campaigns, start=1):
+            gid = f'DEMO_{self.id}_{i}'
+            existing = Campaign.search([('google_campaign_id', '=', gid)], limit=1)
+            vals = {
+                'name': c['name'],
+                'account_id': self.id,
+                'google_campaign_id': gid,
+                'status': c['status'],
+                'channel_type': c['channel'],
+                'clicks':      random.randint(50,  800),
+                'impressions': random.randint(500, 20000),
+                'cost':        round(random.uniform(100000, 3000000), 0),
+                'conversions': round(random.uniform(0, 25), 1),
+            }
+            if existing:
+                existing.write(vals)
+            else:
+                Campaign.create(vals)
+
+    def _demo_seed_ad_groups(self):
+        """Tạo 2 ad groups cho mỗi campaign demo"""
+        self.ensure_one()
+        Campaign = self.env['google.ads.campaign']
+        AdGroup  = self.env['google.ads.ad.group']
+
+        campaigns = Campaign.search([('google_campaign_id', 'like', f'DEMO_{self.id}_')])
+        for camp in campaigns:
+            for j in range(1, 3):
+                gid = f'{camp.google_campaign_id}_AG{j}'
+                existing = AdGroup.search([('google_ad_group_id', '=', gid)], limit=1)
+                vals = {
+                    'name': f'{camp.name} — Nhóm {j}',
+                    'campaign_id': camp.id,
+                    'google_ad_group_id': gid,
+                    'status': 'enabled',
+                    'type': 'SEARCH_STANDARD',
+                    'clicks':      random.randint(10, 300),
+                    'impressions': random.randint(100, 8000),
+                    'cost':        round(random.uniform(50000, 1000000), 0),
+                    'conversions': round(random.uniform(0, 10), 1),
+                }
+                if existing:
+                    existing.write(vals)
+                else:
+                    AdGroup.create(vals)
+
+    def _demo_seed_ads(self):
+        """Tạo 1-2 ads cho mỗi ad group demo"""
+        self.ensure_one()
+        Campaign = self.env['google.ads.campaign']
+        Ad       = self.env['google.ads.ad']
+
+        campaigns = Campaign.search([('google_campaign_id', 'like', f'DEMO_{self.id}_')])
+        ad_groups = self.env['google.ads.ad.group'].search([
+            ('campaign_id', 'in', campaigns.ids)
+        ])
+        for ag in ad_groups:
+            for k in range(1, 3):
+                gid = f'{ag.google_ad_group_id}_AD{k}'
+                existing = Ad.search([('google_ad_id', '=', gid)], limit=1)
+                vals = {
+                    'name': f'{ag.name} — Mẫu QC {k}',
+                    'ad_group_id': ag.id,
+                    'google_ad_id': gid,
+                    'status': 'enabled',
+                    'type': 'RESPONSIVE_SEARCH_AD',
+                    'final_urls': 'https://example.com/san-pham',
+                    'clicks':      random.randint(5,  150),
+                    'impressions': random.randint(50, 3000),
+                    'cost':        round(random.uniform(20000, 500000), 0),
+                    'conversions': round(random.uniform(0, 5), 1),
+                }
+                if existing:
+                    existing.write(vals)
+                else:
+                    Ad.create(vals)
+
+    def _demo_seed_conversions(self):
+        """Tạo 15 đơn hàng WooCommerce giả phân bổ cho các campaign demo"""
+        from datetime import timedelta
+        self.ensure_one()
+        Conversion = self.env['google.ads.conversion']
+        Campaign = self.env['google.ads.campaign']
+
+        campaigns = Campaign.search([('google_campaign_id', 'like', f'DEMO_{self.id}_')])
+        if not campaigns:
+            return
+
+        fake_products = [
+            'Giày Nam Thể Thao Speed X2', 'Giày Nữ Sneaker Air', 'Dép Quai Hậu Nam',
+            'Ba Lô Du Lịch 45L', 'Túi Xách Nữ Công Sở', 'Ví Nam Da Thật',
+            'Áo Thun Nam Polo', 'Quần Short Thể Thao', 'Nón Lưỡi Trai Basic',
+        ]
+        fake_customers = [
+            'Nguyễn Văn An', 'Trần Thị Bình', 'Lê Hoàng Cường', 'Phạm Minh Đức',
+            'Hoàng Thị Lan', 'Vũ Quốc Tuấn', 'Đặng Thị Mai', 'Bùi Văn Hùng',
+            'Lý Thị Hoa', 'Đinh Văn Khoa',
+        ]
+        statuses = ['completed', 'completed', 'completed', 'processing', 'cancelled']
+        today = fields.Datetime.now()
+
+        for i in range(1, 16):
+            camp = campaigns[i % len(campaigns)]
+            days_ago = random.randint(0, 30)
+            order_date = today - timedelta(days=days_ago)
+            product = random.choice(fake_products)
+            customer = random.choice(fake_customers)
+            status = random.choice(statuses)
+            revenue = round(random.uniform(200000, 3000000), 0) if status != 'cancelled' else 0
+            gclid = f'DEMO_GCLID_{self.id}_{i}_{random.randint(1000, 9999)}'
+
+            order_ref = f'DEMO-WC-{self.id}-{i:04d}'
+            existing = Conversion.search([('order_ref', '=', order_ref)], limit=1)
+            vals = {
+                'source': 'demo',
+                'account_id': self.id,
+                'campaign_id': camp.id,
+                'order_ref': order_ref,
+                'order_date': order_date,
+                'revenue': revenue,
+                'product_names': product,
+                'customer_name': customer,
+                'order_status': status,
+                'gclid': gclid,
+            }
+            if existing:
+                existing.write(vals)
+            else:
+                Conversion.create(vals)
 
     def action_sync_campaigns(self):
         self.ensure_one()

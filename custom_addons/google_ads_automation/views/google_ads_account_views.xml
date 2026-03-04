@@ -6,35 +6,50 @@
         <field name="arch" type="xml">
             <form string="Tài Khoản Google Ads">
                 <header>
-                    <button name="action_test_connection" string="Kiểm Tra Kết Nối" type="object" class="oe_highlight" invisible="state == 'connected'"/>
-                    <button name="action_sync_all_data" string="Đồng Bộ Dữ Liệu" type="object" class="oe_highlight" invisible="state != 'connected'"/>
+                    <button name="action_test_connection" string="Kiểm Tra Kết Nối" type="object"
+                            class="oe_highlight" invisible="state == 'connected'"/>
+                    <button name="action_sync_all_data" string="Đồng Bộ Dữ Liệu" type="object"
+                            class="oe_highlight" invisible="state != 'connected'"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,connected,error"/>
                 </header>
                 <sheet>
+                    <!-- Ribbon DEMO -->
+                    <widget name="web_ribbon" title="DEMO MODE" bg_color="text-bg-warning"
+                            invisible="not is_demo"/>
+
                     <div class="oe_title">
                         <h1>
                             <field name="name" placeholder="Mô tả tài khoản..."/>
                         </h1>
                     </div>
+
                     <group>
-                        <group string="Cấu Hình Cơ Bản">
+                        <group string="Cài Đặt Chung">
                             <field name="active" widget="boolean_toggle"/>
+                            <field name="is_demo" widget="boolean_toggle"/>
+                        </group>
+                        <group string="ID Tài Khoản" invisible="is_demo">
                             <field name="operating_customer_id" placeholder="vd: 1234567890"/>
                             <field name="login_customer_id" placeholder="vd: 0987654321"/>
                         </group>
-                        <group string="Thông Tin Xác Thực (OAuth)">
-                            <field name="developer_token" password="True"/>
-                            <field name="client_id" password="True"/>
-                            <field name="client_secret" password="True"/>
-                            <field name="refresh_token" password="True"/>
-                        </group>
                     </group>
+
+                    <!-- Credentials — ẩn khi demo -->
+                    <group string="Thông Tin Xác Thực (OAuth)" invisible="is_demo">
+                        <field name="developer_token" password="True"/>
+                        <field name="client_id" password="True"/>
+                        <field name="client_secret" password="True"/>
+                        <field name="refresh_token" password="True"/>
+                    </group>
+
+                    <!-- Demo info box -->
+                    <div class="alert alert-info" invisible="not is_demo">
+                        <strong>Chế Độ Demo đang bật</strong><br/>
+                        Không cần điền API credentials. Nhấn <strong>Kiểm Tra Kết Nối</strong>
+                        rồi <strong>Đồng Bộ Dữ Liệu</strong> để tạo 4 Campaigns mẫu với metrics ngẫu nhiên.
+                    </div>
                 </sheet>
-                <div class="oe_chatter">
-                    <field name="message_follower_ids"/>
-                    <field name="activity_ids"/>
-                    <field name="message_ids"/>
-                </div>
+                <chatter/>
             </form>
         </field>
     </record>
@@ -45,8 +60,12 @@
         <field name="arch" type="xml">
             <list string="Tài Khoản Google Ads">
                 <field name="name"/>
+                <field name="is_demo" widget="boolean"/>
                 <field name="operating_customer_id"/>
-                <field name="state"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'connected'"
+                       decoration-warning="state == 'draft'"
+                       decoration-danger="state == 'error'"/>
             </list>
         </field>
     </record>
