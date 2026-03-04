@@ -40,6 +40,7 @@
                                        decoration-info="stock_status == 'waiting'"
                                        decoration-danger="stock_status == 'shortage'"/>
                                 <field name="picking_status"/>
+                                <field name="order_htgh" optional="show"/>
                                 <field name="ai_group" optional="show"/>
                             </list>
                         </field>
