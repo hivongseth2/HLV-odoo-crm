@@ -16,9 +16,9 @@
                             <field name="openai_model_delivery"/>
                         </setting>
                     </block>
-                    <block title="Google Maps" name="google_maps_config">
-                        <setting string="Google Maps API Key" help="API Key cho Geocoding và hiển thị bản đồ">
-                            <field name="google_maps_api_key" password="True"/>
+                    <block title="Track-Asia Geocoding" name="track_asia_config">
+                        <setting string="Track-Asia API Key" help="API Key cho Geocoding địa chỉ giao hàng">
+                            <field name="track_asia_api_key" password="True"/>
                         </setting>
                         <setting string="Kho xuất phát" help="Kho dùng để tính khoảng cách giao hàng">
                             <field name="delivery_warehouse_id"/>
