@@ -2,5 +2,7 @@ from . import google_ads_account
 from . import google_ads_campaign
 from . import google_ads_ad_group
 from . import google_ads_ad
+from . import google_ads_product_feed
+from . import google_ads_strategy
 from . import google_ads_rule
 from . import google_ads_rule_log

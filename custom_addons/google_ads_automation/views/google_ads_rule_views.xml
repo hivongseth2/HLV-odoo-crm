@@ -6,9 +6,11 @@
         <field name="arch" type="xml">
             <form string="Quy Tắc Google Ads">
                 <header>
-                    <button name="run_rule" string="Chạy Thử Ngay" type="object" class="oe_highlight" />
+                    <button name="run_rule" string="▶ Chạy Thử Ngay" type="object" class="oe_highlight"/>
                 </header>
                 <sheet>
+                    <widget name="web_ribbon" title="Tự Sinh" bg_color="text-bg-info"
+                            invisible="not auto_generated"/>
                     <div class="oe_title">
                         <h1>
                             <field name="name" placeholder="Tên quy tắc..."/>
@@ -17,34 +19,44 @@
                     <group>
                         <group string="Cấu Hình Cơ Bản">
                             <field name="active" widget="boolean_toggle"/>
-                            <field name="account_id" />
-                            <field name="target_type" />
-                            <field name="action_type" />
+                            <field name="account_id"/>
+                            <field name="target_type"/>
+                            <field name="auto_generated" readonly="1"/>
+                            <field name="strategy_id" readonly="1"
+                                   invisible="not auto_generated"/>
+                            <field name="product_feed_line_id" readonly="1"
+                                   invisible="not auto_generated"/>
                         </group>
-                        <group string="Điều Kiện (Hôm Qua)">
-                            <field name="condition_field" />
-                            <field name="condition_operator" />
-                            <field name="condition_value" />
+                        <group string="Điều Kiện">
+                            <field name="condition_field"/>
+                            <field name="condition_operator"/>
+                            <field name="condition_value"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Hành Động">
+                            <field name="action_type"/>
+                            <field name="action_value"
+                                   invisible="action_type not in ('increase_budget', 'decrease_budget')"/>
                         </group>
                     </group>
                     <notebook>
-                        <page string="Lịch Sử Chạy">
+                        <page string="Lịch Sử Chạy" icon="fa-history">
                             <field name="log_ids" readonly="1">
                                 <list>
-                                    <field name="run_date" />
-                                    <field name="target_name" />
-                                    <field name="status" />
-                                    <field name="message" />
+                                    <field name="run_date"/>
+                                    <field name="target_name"/>
+                                    <field name="status" widget="badge"
+                                           decoration-success="status == 'success'"
+                                           decoration-warning="status == 'action_taken'"
+                                           decoration-danger="status == 'error'"/>
+                                    <field name="message"/>
                                 </list>
                             </field>
                         </page>
                     </notebook>
                 </sheet>
-                <div class="oe_chatter">
-                    <field name="message_follower_ids"/>
-                    <field name="activity_ids"/>
-                    <field name="message_ids"/>
-                </div>
+                <chatter/>
             </form>
         </field>
     </record>
@@ -55,6 +67,7 @@
         <field name="arch" type="xml">
             <list string="Quy Tắc Tự Động Hóa">
                 <field name="name"/>
+                <field name="auto_generated" widget="boolean"/>
                 <field name="account_id"/>
                 <field name="target_type"/>
                 <field name="condition_field"/>

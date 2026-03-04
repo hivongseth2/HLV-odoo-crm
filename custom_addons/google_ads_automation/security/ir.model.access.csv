@@ -11,3 +11,10 @@ access_google_ads_rule_user,google.ads.rule.user,model_google_ads_rule,group_goo
 access_google_ads_rule_manager,google.ads.rule.manager,model_google_ads_rule,group_google_ads_manager,1,1,1,1
 access_google_ads_rule_log_user,google.ads.rule.log.user,model_google_ads_rule_log,group_google_ads_user,1,0,0,0
 access_google_ads_rule_log_manager,google.ads.rule.log.manager,model_google_ads_rule_log,group_google_ads_manager,1,1,1,1
+access_google_ads_product_feed_user,google.ads.product.feed.user,model_google_ads_product_feed,group_google_ads_user,1,0,0,0
+access_google_ads_product_feed_manager,google.ads.product.feed.manager,model_google_ads_product_feed,group_google_ads_manager,1,1,1,1
+access_google_ads_product_feed_line_user,google.ads.product.feed.line.user,model_google_ads_product_feed_line,group_google_ads_user,1,0,0,0
+access_google_ads_product_feed_line_manager,google.ads.product.feed.line.manager,model_google_ads_product_feed_line,group_google_ads_manager,1,1,1,1
+access_google_ads_strategy_user,google.ads.strategy.user,model_google_ads_strategy,group_google_ads_user,1,0,0,0
+access_google_ads_strategy_manager,google.ads.strategy.manager,model_google_ads_strategy,group_google_ads_manager,1,1,1,1
+access_google_ads_product_feed_add_wizard,google.ads.product.feed.add.wizard,model_google_ads_product_feed_add_wizard,base.group_user,1,1,1,1

@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- Strategy – List View                             -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <record id="view_google_ads_strategy_list" model="ir.ui.view">
+        <field name="name">google.ads.strategy.list</field>
+        <field name="model">google.ads.strategy</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="strategy_type"/>
+                <field name="feed_id"/>
+                <field name="account_id"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'active'"
+                       decoration-warning="state == 'draft'"
+                       decoration-danger="state == 'paused'"/>
+                <field name="is_live" widget="boolean_toggle"/>
+                <field name="rule_count"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- Strategy – Form View                             -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <record id="view_google_ads_strategy_form" model="ir.ui.view">
+        <field name="name">google.ads.strategy.form</field>
+        <field name="model">google.ads.strategy</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_generate_rules"
+                            string="⚡ Sinh Rules Tự Động"
+                            type="object"
+                            class="oe_highlight"
+                            invisible="state == 'active'"/>
+                    <button name="action_activate"
+                            string="▶ Kích Hoạt"
+                            type="object"
+                            class="oe_highlight"
+                            invisible="state == 'active'"/>
+                    <button name="action_pause"
+                            string="⏸ Tạm Dừng"
+                            type="object"
+                            invisible="state != 'active'"/>
+                    <button name="action_draft"
+                            string="↩ Về Nháp"
+                            type="object"
+                            invisible="state == 'draft'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,active"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_rules"
+                                type="object"
+                                class="oe_stat_button"
+                                icon="fa-list">
+                            <field name="rule_count" widget="statinfo" string="Rules"/>
+                        </button>
+                    </div>
+
+                    <widget name="web_ribbon" title="Live" bg_color="text-bg-danger"
+                            invisible="not is_live"/>
+
+                    <group>
+                        <group string="Thông Tin Chung">
+                            <field name="name"/>
+                            <field name="strategy_type"/>
+                            <field name="account_id"/>
+                            <field name="feed_id"/>
+                            <field name="active" invisible="1"/>
+                        </group>
+                        <group string="Chế Độ Chạy">
+                            <field name="is_live" widget="boolean_toggle"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page string="Cấu Hình Ngưỡng" icon="fa-sliders">
+                            <group>
+                                <group string="Tồn Kho">
+                                    <field name="stock_low_threshold"/>
+                                    <field name="stock_high_threshold"/>
+                                    <field name="days_stock_critical"/>
+                                </group>
+                                <group string="Lợi Nhuận &amp; Hiệu Suất">
+                                    <field name="min_margin_percent"/>
+                                    <field name="max_cpa"/>
+                                    <field name="target_roas"/>
+                                </group>
+                            </group>
+                            <group>
+                                <group string="Budget">
+                                    <field name="budget_increase_percent"/>
+                                    <field name="budget_decrease_percent"/>
+                                </group>
+                                <group string="Sản Phẩm Mới">
+                                    <field name="new_product_days"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Rules Tự Sinh" icon="fa-cogs">
+                            <field name="rule_ids" mode="list" readonly="1">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="condition_field"/>
+                                    <field name="condition_operator"/>
+                                    <field name="condition_value"/>
+                                    <field name="action_type"/>
+                                    <field name="active" widget="boolean_toggle"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- Strategy – Action                                -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <record id="action_google_ads_strategy" model="ir.actions.act_window">
+        <field name="name">Chiến Lược Tự Động</field>
+        <field name="res_model">google.ads.strategy</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+</odoo>
