@@ -16,11 +16,8 @@ class DeliveryTrip(models.Model):
     route_id = fields.Many2one('delivery.route', string='Tuyến giao', required=True)
 
     driver_id = fields.Many2one('res.partner', string='Tài xế')
-    vehicle_type = fields.Selection([
-        ('xe_tai_lon', 'Xe tải lớn'),
-        ('xe_van', 'Xe Van'),
-        ('xe_may', 'Xe máy'),
-    ], string='Loại xe', default='xe_van')
+    vehicle_id = fields.Many2one('fleet.vehicle', string='Xe')
+    license_plate = fields.Char(related='vehicle_id.license_plate', string='Biển số', readonly=True)
 
     departure_time = fields.Selection([
         ('early_morning', 'Sáng sớm (trước 10h)'),

@@ -2,6 +2,8 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 import logging
+import json
+import requests
 
 _logger = logging.getLogger(__name__)
 
@@ -16,8 +18,10 @@ class DeliveryTripWizardLine(models.TransientModel):
     partner_id = fields.Many2one('res.partner', related='schedule_line_id.partner_id', string='Khách hàng')
     delivery_address = fields.Char(related='schedule_line_id.delivery_address', string='Địa chỉ')
     stock_status = fields.Selection(related='schedule_line_id.stock_status', string='Tình trạng hàng')
+    picking_status = fields.Char(related='schedule_line_id.picking_status', string='Trạng thái kho')
     distance_km = fields.Float(related='schedule_line_id.distance_km', string='Km')
     selected = fields.Boolean(string='Chọn', default=True)
+    ai_group = fields.Char(string='Nhóm AI')
 
 
 class DeliveryTripWizard(models.TransientModel):
@@ -27,11 +31,7 @@ class DeliveryTripWizard(models.TransientModel):
     route_id = fields.Many2one('delivery.route', string='Tuyến giao')
     date = fields.Date(string='Ngày giao', required=True, default=fields.Date.context_today)
     driver_id = fields.Many2one('res.partner', string='Tài xế')
-    vehicle_type = fields.Selection([
-        ('xe_tai_lon', 'Xe tải lớn'),
-        ('xe_van', 'Xe Van'),
-        ('xe_may', 'Xe máy'),
-    ], string='Loại xe', default='xe_van')
+    vehicle_id = fields.Many2one('fleet.vehicle', string='Xe')
     departure_time = fields.Selection([
         ('early_morning', 'Sáng sớm (trước 10h)'),
         ('morning', 'Buổi sáng (10h-12h)'),
@@ -174,7 +174,7 @@ class DeliveryTripWizard(models.TransientModel):
             'date': self.date,
             'route_id': self.route_id.id,
             'driver_id': self.driver_id.id if self.driver_id else False,
-            'vehicle_type': self.vehicle_type,
+            'vehicle_id': self.vehicle_id.id if self.vehicle_id else False,
             'departure_time': self.departure_time,
             'notes': self.notes,
         })
@@ -192,4 +192,145 @@ class DeliveryTripWizard(models.TransientModel):
             'res_id': trip.id,
             'view_mode': 'form',
             'target': 'current',
+        }
+
+    def action_ai_suggest_groups(self):
+        """Gọi GPT để gom nhóm đơn hàng tối ưu."""
+        self.ensure_one()
+        if not self.line_ids:
+            raise UserError(_('Chưa có đơn hàng nào.'))
+
+        api_key = self.env['ir.config_parameter'].sudo().get_param(
+            'ai_delivery_coordinator.openai_api_key')
+        model_name = self.env['ir.config_parameter'].sudo().get_param(
+            'ai_delivery_coordinator.openai_model_delivery', 'gpt-4o')
+        if not api_key:
+            raise UserError(_(
+                'Vui lòng cấu hình OpenAI API Key trong '
+                'Thiết lập > AI Vận Chuyển.'))
+
+        # Chuẩn bị dữ liệu
+        order_data = []
+        for wl in self.line_ids:
+            sl = wl.schedule_line_id
+            order_data.append({
+                'id': wl.id,
+                'order': sl.order_id.name or '',
+                'partner': sl.partner_id.name or '',
+                'addr': (sl.delivery_address or '').replace('\n', ', '),
+                'picking': sl.picking_status or '',
+                'km': sl.distance_km or 0,
+            })
+
+        prompt = (
+            "Bạn là chuyên gia logistics Việt Nam. "
+            "Hãy phân nhóm các đơn hàng dưới đây thành các "
+            "chuyến giao tối ưu.\n\n"
+            "QUY TẮC:\n"
+            "1. Đơn cùng công ty/khách hàng → cùng nhóm\n"
+            "2. Đơn gần nhau (cùng quận/huyện/tỉnh) → cùng nhóm\n"
+            "3. Đơn có picking status khác nhau vẫn gom được, "
+            "nhưng ưu tiên gom đơn cùng status\n"
+            "4. Mỗi nhóm tối đa 15 đơn\n"
+            "5. Đặt tên nhóm ngắn gọn theo khu vực "
+            "(VD: 'Nhơn Trạch', 'Long Thành', 'Q7-Q8')\n\n"
+            f"ĐƠN HÀNG:\n{json.dumps(order_data, ensure_ascii=False)}\n\n"
+            "TRẢ VỀ JSON: [{\"id\": <wizard_line_id>, "
+            "\"group\": \"<tên nhóm>\"}]\n"
+            "CHỈ trả về JSON, không giải thích."
+        )
+
+        try:
+            resp = requests.post(
+                'https://api.openai.com/v1/chat/completions',
+                headers={
+                    'Authorization': f'Bearer {api_key}',
+                    'Content-Type': 'application/json',
+                },
+                json={
+                    'model': model_name,
+                    'messages': [{'role': 'user', 'content': prompt}],
+                    'temperature': 0.2,
+                },
+                timeout=60,
+            )
+            resp.raise_for_status()
+            content = resp.json()['choices'][0]['message']['content']
+
+            # Parse JSON từ response
+            content = content.strip()
+            if content.startswith('```'):
+                content = content.split('\n', 1)[1]
+                content = content.rsplit('```', 1)[0]
+            assignments = json.loads(content)
+        except Exception as e:
+            _logger.error('AI Group Error: %s', e)
+            raise UserError(_(
+                'Lỗi khi gọi AI: %s') % str(e))
+
+        # Gán nhóm
+        line_map = {wl.id: wl for wl in self.line_ids}
+        groups_found = set()
+        for item in assignments:
+            wl = line_map.get(item.get('id'))
+            if wl:
+                group_name = item.get('group', '')
+                wl.ai_group = group_name
+                groups_found.add(group_name)
+
+        # Chọn nhóm đầu tiên, bỏ chọn các nhóm khác
+        if groups_found:
+            first_group = sorted(groups_found)[0]
+            for wl in self.line_ids:
+                wl.selected = (wl.ai_group == first_group)
+
+        group_summary = []
+        for g in sorted(groups_found):
+            count = len([wl for wl in self.line_ids if wl.ai_group == g])
+            group_summary.append(f'{g}: {count} đơn')
+
+        self.notes = (
+            f"🤖 AI đề xuất {len(groups_found)} nhóm:\n"
+            + '\n'.join(group_summary)
+            + f"\n\n→ Đang chọn nhóm '{first_group}'. "
+            "Tạo chuyến rồi quay lại chọn nhóm tiếp."
+        ) if groups_found else ''
+
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'delivery.trip.wizard',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
+    def action_select_group(self):
+        """Chọn tất cả đơn trong cùng nhóm AI."""
+        self.ensure_one()
+        # Lấy các nhóm có sẵn
+        groups = set(wl.ai_group for wl in self.line_ids if wl.ai_group)
+        if not groups:
+            raise UserError(_('Chưa có nhóm AI. Nhấn "AI Gợi Ý" trước.'))
+
+        # Tìm nhóm chưa được tạo trip
+        current_selected = self.line_ids.filtered('selected')
+        current_group = current_selected[0].ai_group if current_selected else ''
+
+        # Chuyển sang nhóm tiếp theo
+        sorted_groups = sorted(groups)
+        try:
+            idx = sorted_groups.index(current_group)
+            next_group = sorted_groups[(idx + 1) % len(sorted_groups)]
+        except ValueError:
+            next_group = sorted_groups[0]
+
+        for wl in self.line_ids:
+            wl.selected = (wl.ai_group == next_group)
+
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'delivery.trip.wizard',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
         }

@@ -176,6 +176,68 @@ class DeliveryScheduleLine(models.Model):
     order_htgh = fields.Text(related='order_id.x_studio_htgh', string='Hình thức giao hàng')
     distance_km = fields.Float(string='Khoảng cách (km)', digits=(10, 1), help='Ước lượng khoảng cách từ kho đến điểm giao')
     kho_xuat = fields.Char(related='order_id.x_studio_kho_xuat', string='Kho xuất', store=True)
+    picking_status = fields.Char(string='Trạng thái kho', compute='_compute_picking_status')
+
+    @api.depends('order_id')
+    def _compute_picking_status(self):
+        """Trạng thái kho theo chiến lược 3 bước: Pick → Pack → Out.
+        Chỉ tính 'Giao 1 phần' khi có ít nhất 1 phiếu OUT done.
+        """
+        for line in self:
+            if not line.order_id:
+                line.picking_status = ''
+                continue
+
+            all_pickings = self.env['stock.picking'].search([
+                ('origin', 'like', line.order_id.name),
+                ('state', '!=', 'cancel'),
+            ])
+
+            if not all_pickings:
+                line.picking_status = 'Chưa có phiếu'
+                continue
+
+            # Tách theo loại
+            out_ops = all_pickings.filtered(lambda p: p.picking_type_code == 'outgoing')
+            active_pickings = all_pickings.filtered(lambda p: p.state not in ('done', 'cancel'))
+
+            # Tất cả phiếu done (kể cả pick/pack/out) = Hoàn tất
+            if not active_pickings:
+                line.picking_status = 'Hoàn tất'
+                continue
+
+            # Kiểm tra giao 1 phần: CHỈ khi có OUT done
+            out_done = out_ops.filtered(lambda p: p.state == 'done')
+            has_partial_delivery = bool(out_done)
+
+            # Tìm bước hiện tại (đang xử lý)
+            pick = active_pickings.sorted(key=lambda p: p.id)[0]
+            pick_type = pick.picking_type_id.name or ''
+            state_label = {
+                'draft': 'Nháp',
+                'waiting': 'Chờ',
+                'confirmed': 'Chờ xử lý',
+                'assigned': 'Sẵn sàng',
+            }.get(pick.state, pick.state)
+
+            if pick.picking_type_code == 'internal':
+                if 'Pick' in pick_type or 'pick' in pick_type:
+                    step_name = 'Lấy hàng'
+                elif 'Pack' in pick_type or 'pack' in pick_type:
+                    step_name = 'Đóng gói'
+                else:
+                    step_name = pick_type
+            elif pick.picking_type_code == 'outgoing':
+                step_name = 'Xuất kho'
+            else:
+                step_name = pick_type
+
+            status = f'{step_name}: {state_label}'
+            if has_partial_delivery:
+                status = f'Giao 1 phần | {status}'
+
+            line.picking_status = status
+
     po_expected_date = fields.Date(string='Ngày hàng về dự kiến (PO)', compute='_compute_po_expected_date', store=True)
 
     @api.depends('order_id')
@@ -193,15 +255,20 @@ class DeliveryScheduleLine(models.Model):
             record.po_expected_date = po_expected_date
 
     def write(self, vals):
-        for record in self:
-            if record.assigned_date and record.assigned_date < fields.Date.context_today(self):
-                raise models.ValidationError("Không thể sửa đổi đơn hàng trong Lịch trình của ngày quá khứ.")
+        # Cho phép thay đổi các field hệ thống trên đơn cũ
+        safe_fields = {'is_selected', 'stock_status', 'trip_id', 'route_id', 'ai_suggested_route', 'ai_strategy', 'distance_km'}
+        if not safe_fields.issuperset(vals.keys()):
+            for record in self:
+                if record.assigned_date and record.assigned_date < fields.Date.context_today(self):
+                    raise models.ValidationError("Không thể sửa đổi đơn hàng trong Lịch trình của ngày quá khứ.")
         return super().write(vals)
 
     def unlink(self):
-        for record in self:
-            if record.assigned_date and record.assigned_date < fields.Date.context_today(self):
-                raise models.ValidationError("Không thể xóa đơn hàng trong Lịch trình của ngày quá khứ.")
+        # Cho phép xóa từ refresh (context flag)
+        if not self.env.context.get('force_unlink'):
+            for record in self:
+                if record.assigned_date and record.assigned_date < fields.Date.context_today(self):
+                    raise models.ValidationError("Không thể xóa đơn hàng trong Lịch trình của ngày quá khứ.")
         return super().unlink()
 
     # =====================================================
@@ -346,7 +413,8 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến + km. Không bỏ sót."""
         """Toggle is_selected cho Kanban checkbox."""
         for line in self:
             line.is_selected = not line.is_selected
-        return {'type': 'ir.actions.client', 'tag': 'soft_reload'}
+        # Return False = Odoo chỉ reload 1 record, không reload cả trang
+        return False
 
     def action_clear_selection(self):
         """Bỏ chọn tất cả."""
@@ -449,23 +517,48 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến + km. Không bỏ sót."""
     # Tải lại & cập nhật stock + xóa đơn đã giao xong
     # =====================================================
     def action_refresh_unassigned(self):
-        """Cập nhật stock_status + tự xóa đơn đã giao hết."""
-        lines = self.browse(self.env.context.get('active_ids', [])) if self.env.context.get('active_ids') else self
-        if not lines:
-            lines = self.search([])
-        if not lines:
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': _('Thông báo'),
-                    'message': _('Không có đơn hàng nào để cập nhật.'),
-                    'type': 'info',
-                    'sticky': False,
-                    'next': {'type': 'ir.actions.client', 'tag': 'reload'},
-                }
-            }
+        """Fetch đơn mới, xóa đơn hủy/giao xong, cập nhật stock_status."""
+        # 1. Fetch đơn hàng mới (confirmed/sale) chưa có trong kanban
+        existing_order_ids = self.search([]).mapped('order_id').ids
+        schedule = self.env['delivery.schedule'].search([], limit=1)
+        if not schedule:
+            schedule = self.env['delivery.schedule'].create({
+                'name': _('Bảng Điều Phối'),
+                'date': fields.Date.context_today(self),
+            })
 
+        new_orders = self.env['sale.order'].search([
+            ('state', 'in', ('sale', 'done')),
+            ('id', 'not in', existing_order_ids),
+        ])
+
+        new_count = 0
+        for order in new_orders:
+            # Chỉ thêm đơn chưa giao hết
+            is_fully_delivered = all(
+                sol.qty_delivered >= sol.product_uom_qty
+                for sol in order.order_line
+                if sol.product_id and sol.product_id.type == 'consu'
+            )
+            if not is_fully_delivered:
+                self.create({
+                    'schedule_id': schedule.id,
+                    'order_id': order.id,
+                    'assigned_date': fields.Date.context_today(self),
+                })
+                new_count += 1
+
+        # 2. Xóa đơn bị hủy
+        cancelled_lines = self.search([
+            ('order_id.state', 'in', ('cancel',)),
+        ])
+        cancelled_count = len(cancelled_lines)
+        if cancelled_lines:
+            _logger.info('Removing %d cancelled order lines.', cancelled_count)
+            cancelled_lines.sudo().with_context(force_unlink=True).unlink()
+
+        # 3. Xóa đơn đã giao hết + Cập nhật stock cho các đơn còn lại
+        lines = self.search([])
         updated_count = 0
         delivered_lines = self.env['delivery.schedule.line']
 
@@ -474,7 +567,6 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến + km. Không bỏ sót."""
             if not order:
                 continue
 
-            # Kiểm tra đơn đã giao hết chưa
             is_fully_delivered = all(
                 sol.qty_delivered >= sol.product_uom_qty
                 for sol in order.order_line
@@ -511,17 +603,20 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến + km. Không bỏ sót."""
                 line.write({'stock_status': new_status})
                 updated_count += 1
 
-        # Xóa đơn đã giao hết
         delivered_count = len(delivered_lines)
         if delivered_lines:
             _logger.info('Removing %d fully delivered lines.', delivered_count)
-            delivered_lines.sudo().unlink()
+            delivered_lines.sudo().with_context(force_unlink=True).unlink()
 
-        _logger.info('Refresh: %d updated, %d delivered removed.', updated_count, delivered_count)
+        _logger.info('Refresh: +%d new, -%d cancelled, -%d delivered, %d stock updated.',
+                      new_count, cancelled_count, delivered_count, updated_count)
 
-        msg = _('Cập nhật %d đơn.') % updated_count
+        msg = _('Tải lại xong! +%d đơn mới') % new_count
+        if cancelled_count:
+            msg += _(', -%d hủy') % cancelled_count
         if delivered_count:
-            msg += _(' Đã xóa %d đơn giao xong.') % delivered_count
+            msg += _(', -%d đã giao') % delivered_count
+        msg += _(', cập nhật %d đơn.') % updated_count
 
         return {
             'type': 'ir.actions.client',

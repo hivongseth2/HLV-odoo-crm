@@ -35,7 +35,8 @@
                         </group>
                         <group string="Phương tiện">
                             <field name="driver_id"/>
-                            <field name="vehicle_type"/>
+                            <field name="vehicle_id"/>
+                            <field name="license_plate"/>
                             <field name="total_orders"/>
                             <field name="total_km"/>
                             <field name="batch_id"/>
@@ -76,7 +77,7 @@
                 <field name="date"/>
                 <field name="route_id"/>
                 <field name="driver_id"/>
-                <field name="vehicle_type"/>
+                <field name="vehicle_id"/>
                 <field name="departure_time"/>
                 <field name="total_orders"/>
                 <field name="total_km"/>
