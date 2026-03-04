@@ -3,7 +3,9 @@ from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 import logging
 import json
+import math
 import requests
+import time
 
 _logger = logging.getLogger(__name__)
 
@@ -132,7 +134,6 @@ class DeliveryTripWizard(models.TransientModel):
         if not self.line_ids:
             raise UserError(_('Chưa có đơn hàng nào.'))
 
-        # Xóa đơn xa, giữ 3 đơn gần nhất đủ hàng
         candidates = self.line_ids.sorted(key=lambda l: l.distance_km)
         keep = self.env['delivery.trip.wizard.line']
         for line in candidates:
@@ -199,118 +200,193 @@ class DeliveryTripWizard(models.TransientModel):
         }
 
     # =====================================================
-    # AI Chọn đơn tối ưu cho 1 chuyến
+    # Geocoding & Clustering
     # =====================================================
+    @staticmethod
+    def _haversine(lat1, lng1, lat2, lng2):
+        """Khoảng cách (km) giữa 2 toạ độ."""
+        R = 6371  # Bán kính Trái Đất
+        dlat = math.radians(lat2 - lat1)
+        dlng = math.radians(lng2 - lng1)
+        a = (math.sin(dlat / 2) ** 2
+             + math.cos(math.radians(lat1))
+             * math.cos(math.radians(lat2))
+             * math.sin(dlng / 2) ** 2)
+        return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    def _geocode_address(self, address):
+        """Geocode 1 địa chỉ bằng Nominatim (OpenStreetMap)."""
+        if not address:
+            return None, None
+        try:
+            resp = requests.get(
+                'https://nominatim.openstreetmap.org/search',
+                params={
+                    'q': address + ', Việt Nam',
+                    'format': 'json',
+                    'limit': 1,
+                    'countrycodes': 'vn',
+                },
+                headers={'User-Agent': 'OdooDeliveryCoordinator/1.0'},
+                timeout=10,
+            )
+            data = resp.json()
+            if data:
+                return float(data[0]['lat']), float(data[0]['lon'])
+        except Exception as e:
+            _logger.warning('Geocode failed for "%s": %s', address, e)
+        return None, None
+
+    def _ensure_geocoded(self, schedule_lines):
+        """Đảm bảo tất cả line có lat/lng. Geocode nếu chưa có."""
+        to_geocode = schedule_lines.filtered(
+            lambda l: not l.delivery_lat and l.delivery_address)
+        if not to_geocode:
+            return
+
+        # Nhóm theo địa chỉ để tránh geocode trùng
+        addr_map = {}
+        for sl in to_geocode:
+            addr = (sl.delivery_address or '').strip()
+            if addr:
+                addr_map.setdefault(addr, []).append(sl)
+
+        _logger.info('Geocoding %d unique addresses...', len(addr_map))
+        for addr, lines_list in addr_map.items():
+            lat, lng = self._geocode_address(addr)
+            if lat and lng:
+                for sl in lines_list:
+                    sl.sudo().write({
+                        'delivery_lat': lat,
+                        'delivery_lng': lng,
+                    })
+            # Nominatim rate limit: 1 req/sec
+            time.sleep(1.1)
+
+    def _cluster_orders(self, orders_data, capacity, radius_km=30):
+        """Phân cụm đơn hàng theo toạ độ.
+
+        Args:
+            orders_data: list of dict {id, lat, lng, partner_id, ...}
+            capacity: max orders per cluster
+            radius_km: bán kính cụm (km)
+
+        Returns:
+            list of clusters, mỗi cluster là list of order dicts.
+            Cluster đầu tiên = tốt nhất (nhiều đơn, gần nhau).
+        """
+        if not orders_data:
+            return []
+
+        # Bước 1: nhóm theo partner_id (cùng công ty = cùng cụm)
+        partner_groups = {}
+        for o in orders_data:
+            pid = o.get('partner_id', 0)
+            partner_groups.setdefault(pid, []).append(o)
+
+        # Bước 2: tạo "super-nodes" - mỗi node là 1 nhóm partner
+        nodes = []
+        for pid, group in partner_groups.items():
+            # Centroid = trung bình lat/lng
+            lats = [o['lat'] for o in group if o['lat']]
+            lngs = [o['lng'] for o in group if o['lng']]
+            if lats and lngs:
+                clat = sum(lats) / len(lats)
+                clng = sum(lngs) / len(lngs)
+            else:
+                clat, clng = 0, 0
+            nodes.append({
+                'partner_id': pid,
+                'lat': clat,
+                'lng': clng,
+                'orders': group,
+                'count': len(group),
+                'assigned': False,
+            })
+
+        # Bước 3: Greedy clustering
+        # Sắp xếp node theo số đơn giảm dần (ưu tiên gom nhóm lớn)
+        nodes.sort(key=lambda n: -n['count'])
+        clusters = []
+
+        for node in nodes:
+            if node['assigned']:
+                continue
+            # Tạo cụm mới từ node này
+            cluster = list(node['orders'])
+            node['assigned'] = True
+            clat, clng = node['lat'], node['lng']
+
+            # Tìm các node gần nhau để thêm vào cụm
+            candidates = [
+                n for n in nodes
+                if not n['assigned'] and n['lat'] and n['lng']
+            ]
+            candidates.sort(
+                key=lambda n: self._haversine(clat, clng, n['lat'], n['lng']))
+
+            for cand in candidates:
+                dist = self._haversine(clat, clng, cand['lat'], cand['lng'])
+                if dist <= radius_km and len(cluster) + cand['count'] <= capacity:
+                    cluster.extend(cand['orders'])
+                    cand['assigned'] = True
+                    # Cập nhật centroid
+                    all_lats = [o['lat'] for o in cluster if o['lat']]
+                    all_lngs = [o['lng'] for o in cluster if o['lng']]
+                    if all_lats:
+                        clat = sum(all_lats) / len(all_lats)
+                        clng = sum(all_lngs) / len(all_lngs)
+
+            clusters.append(cluster)
+
+        # Sắp xếp cluster: nhiều đơn nhất trước
+        clusters.sort(key=lambda c: -len(c))
+        return clusters
+
     def action_ai_suggest_groups(self):
-        """AI tự chọn đơn tốt nhất cho 1 chuyến giao ngay."""
+        """Phân cụm đơn hàng theo toạ độ + cùng công ty."""
         self.ensure_one()
         if not self.line_ids:
             raise UserError(_('Chưa có đơn hàng nào.'))
 
-        api_key = self.env['ir.config_parameter'].sudo().get_param(
-            'ai_delivery_coordinator.openai_api_key')
-        model_name = self.env['ir.config_parameter'].sudo().get_param(
-            'ai_delivery_coordinator.openai_model_delivery', 'gpt-4o')
-        if not api_key:
-            raise UserError(_(
-                'Vui lòng cấu hình OpenAI API Key.'))
+        # Geocode tất cả đơn chưa có toạ độ
+        schedule_lines = self.line_ids.mapped('schedule_line_id')
+        self._ensure_geocoded(schedule_lines)
 
-        # Thu thập dữ liệu
-        order_data = []
-        today_str = fields.Date.context_today(self).strftime('%Y-%m-%d')
+        # Chuẩn bị dữ liệu
+        orders_data = []
+        no_coords = 0
         for wl in self.line_ids:
             sl = wl.schedule_line_id
-            so = sl.order_id
-            commit_date = ''
-            if so:
-                if hasattr(so, 'commitment_date') and so.commitment_date:
-                    commit_date = so.commitment_date.strftime('%Y-%m-%d')
-                elif so.date_order:
-                    commit_date = so.date_order.strftime('%Y-%m-%d')
-
-            order_data.append({
-                'id': wl.id,
-                'order': so.name if so else '',
-                'partner': sl.partner_id.name or '',
-                'addr': (sl.delivery_address or '').replace('\n', ', '),
-                'picking': sl.picking_status or '',
+            lat = sl.delivery_lat or 0
+            lng = sl.delivery_lng or 0
+            if not lat:
+                no_coords += 1
+            orders_data.append({
+                'wl_id': wl.id,
+                'lat': lat,
+                'lng': lng,
+                'partner_id': sl.partner_id.id if sl.partner_id else 0,
+                'partner_name': sl.partner_id.name or '',
                 'stock': sl.stock_status or '',
-                'htgh': (sl.order_htgh or '').strip(),
-                'date': commit_date,
-                'km': sl.distance_km or 0,
             })
 
         capacity = self._get_vehicle_capacity()
-        vehicle_label = 'xe máy' if capacity <= 5 else 'ô tô/xe tải'
 
-        prompt = (
-            "Bạn là chuyên gia logistics Việt Nam.\n"
-            f"Hôm nay: {today_str}\n"
-            f"Phương tiện: {vehicle_label} "
-            f"(tối đa {capacity} đơn/chuyến).\n\n"
-            "TỪ DANH SÁCH BÊN DƯỚI, "
-            f"CHỌN TỐI ĐA {capacity} đơn TỐT NHẤT "
-            "cho 1 chuyến giao NGAY BÂY GIỜ.\n\n"
-            "QUY TẮC BẮT BUỘC:\n"
-            "★ KHI CHỌN 1 ĐƠN CỦA 1 CÔNG TY (partner), "
-            "PHẢI CHỌN TẤT CẢ ĐƠN CỦA CÔNG TY ĐÓ. "
-            "VD: Marshall có 3 đơn → chọn cả 3, "
-            "KHÔNG được chọn 1 bỏ 2.\n"
-            "★ Đơn cùng ĐỊA CHỈ giao (addr giống nhau) "
-            "→ BẮT BUỘC chọn cùng nhau.\n\n"
-            "ƯU TIÊN (theo thứ tự):\n"
-            "1. stock=ready (đủ hàng) → chọn trước\n"
-            "2. Đơn GẤP: date gần/quá hạn → chọn trước\n"
-            "3. Đơn cùng KHU VỰC (quận/huyện/tỉnh) → gom chung\n"
-            "4. htgh chứa 'có gì giao nấy' → ưu tiên\n"
-            "5. htgh chứa 'chờ đủ hàng' + stock!=ready → BỎ QUA\n"
-            "6. stock=partial + htgh rỗng → vẫn chọn được\n\n"
-            f"ĐƠN HÀNG ({len(order_data)} đơn):\n"
-            f"{json.dumps(order_data, ensure_ascii=False)}\n\n"
-            "TRẢ VỀ JSON DUY NHẤT:\n"
-            "{\"selected\": [<danh sách id đã chọn>], "
-            "\"reason\": \"<lý do ngắn gọn>\"}\n"
-            "CHỈ JSON, không giải thích."
-        )
+        # Phân cụm
+        clusters = self._cluster_orders(orders_data, capacity)
 
-        try:
-            resp = requests.post(
-                'https://api.openai.com/v1/chat/completions',
-                headers={
-                    'Authorization': f'Bearer {api_key}',
-                    'Content-Type': 'application/json',
-                },
-                json={
-                    'model': model_name,
-                    'messages': [{'role': 'user', 'content': prompt}],
-                    'temperature': 0.2,
-                },
-                timeout=60,
-            )
-            resp.raise_for_status()
-            content = resp.json()['choices'][0]['message']['content']
+        if not clusters:
+            raise UserError(_('Không thể phân cụm. Kiểm tra địa chỉ.'))
 
-            content = content.strip()
-            if content.startswith('```'):
-                content = content.split('\n', 1)[1]
-                content = content.rsplit('```', 1)[0]
-            result = json.loads(content)
-        except Exception as e:
-            _logger.error('AI Suggest Error: %s', e)
-            raise UserError(_('Lỗi khi gọi AI: %s') % str(e))
+        # Chọn cụm đầu tiên (lớn nhất)
+        best = clusters[0]
+        best_ids = {o['wl_id'] for o in best}
 
-        selected_ids = set(result.get('selected', []))
-        reason = result.get('reason', '')
-
-        if not selected_ids:
-            raise UserError(_('AI không chọn được đơn nào.'))
-
-        # XÓA đơn không được chọn khỏi wizard
+        # Xóa đơn không thuộc cụm tốt nhất
         to_remove = self.line_ids.filtered(
-            lambda wl: wl.id not in selected_ids)
+            lambda wl: wl.id not in best_ids)
         to_remove.unlink()
-
-        # Select tất cả còn lại
         self.line_ids.write({'selected': True})
 
         # Auto-detect route
@@ -318,11 +394,28 @@ class DeliveryTripWizard(models.TransientModel):
         if len(routes) == 1 and routes:
             self.route_id = routes.id
 
-        self.notes = (
-            f"🤖 AI đã chọn {len(self.line_ids)}/{len(order_data)} đơn "
-            f"({vehicle_label}, max {capacity}):\n"
-            f"{reason}"
-        )
+        # Tổng kết
+        partners = set(o.get('partner_name', '') for o in best)
+        partners_str = ', '.join(sorted(p for p in partners if p)[:5])
+
+        info = [
+            f"📍 Phân cụm: chọn {len(best)}/{len(orders_data)} đơn",
+            f"🏢 Công ty: {partners_str}",
+            f"📦 Sức chứa xe: {capacity} đơn",
+        ]
+        if no_coords > 0:
+            info.append(f"⚠ {no_coords} đơn không geocode được (thiếu địa chỉ)")
+        if len(clusters) > 1:
+            other_summary = []
+            for i, c in enumerate(clusters[1:], 2):
+                names = set(o.get('partner_name', '') for o in c)
+                other_summary.append(
+                    f"  Cụm {i}: {len(c)} đơn "
+                    f"({', '.join(sorted(n for n in names if n)[:3])})")
+            info.append(f"📋 Còn {len(clusters)-1} cụm khác:")
+            info.extend(other_summary[:4])
+
+        self.notes = '\n'.join(info)
 
         return {
             'type': 'ir.actions.act_window',
@@ -333,5 +426,5 @@ class DeliveryTripWizard(models.TransientModel):
         }
 
     def action_select_group(self):
-        """Alias: chạy lại AI với đơn còn lại."""
+        """Alias: chạy lại phân cụm với đơn còn lại."""
         return self.action_ai_suggest_groups()

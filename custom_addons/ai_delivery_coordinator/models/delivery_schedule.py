@@ -207,6 +207,10 @@ class DeliveryScheduleLine(models.Model):
     kho_xuat = fields.Char(related='order_id.x_studio_kho_xuat', string='Kho xuất', store=True)
     picking_status = fields.Char(string='Trạng thái kho', compute='_compute_picking_status')
 
+    # Geocoding
+    delivery_lat = fields.Float(string='Vĩ độ', digits=(10, 7))
+    delivery_lng = fields.Float(string='Kinh độ', digits=(10, 7))
+
     @api.depends('order_id')
     def _compute_picking_status(self):
         """Trạng thái kho theo chiến lược 3 bước: Pick → Pack → Out.
@@ -285,7 +289,11 @@ class DeliveryScheduleLine(models.Model):
 
     def write(self, vals):
         # Cho phép thay đổi các field hệ thống trên đơn cũ
-        safe_fields = {'is_selected', 'stock_status', 'trip_id', 'route_id', 'ai_suggested_route', 'ai_strategy', 'distance_km'}
+        safe_fields = {
+            'is_selected', 'stock_status', 'trip_id', 'route_id',
+            'ai_suggested_route', 'ai_strategy', 'distance_km',
+            'delivery_lat', 'delivery_lng',
+        }
         if not safe_fields.issuperset(vals.keys()):
             for record in self:
                 if record.assigned_date and record.assigned_date < fields.Date.context_today(self):

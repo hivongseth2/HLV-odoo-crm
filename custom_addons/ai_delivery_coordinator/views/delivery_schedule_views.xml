@@ -195,9 +195,9 @@
                                 <div t-if="record.commitment_date.raw_value" class="text-muted" style="font-size: 0.9em; color: #ff9800;">
                                     <i class="fa fa-calendar-check-o"/> Hẹn: <field name="commitment_date"/>
                                 </div>
-                                <!-- Deadline tag -->
-                                <t t-if="record.deadline_label.raw_value">
-                                    <span t-attf-class="badge #{record.deadline_urgency.raw_value == 'overdue' ? 'text-bg-danger' : record.deadline_urgency.raw_value == 'today' ? 'text-bg-warning' : 'text-bg-info'}" style="font-size: 0.8em;">
+                                <!-- Deadline tag (không hiện overdue vì ribbon đã có) -->
+                                <t t-if="record.deadline_label.raw_value and record.deadline_urgency.raw_value != 'overdue'">
+                                    <span t-attf-class="badge #{record.deadline_urgency.raw_value == 'today' ? 'text-bg-warning' : 'text-bg-info'}" style="font-size: 0.8em;">
                                         <i class="fa fa-clock-o"/> <field name="deadline_label"/>
                                     </span>
                                 </t>
