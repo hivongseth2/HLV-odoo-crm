@@ -173,12 +173,12 @@ class GoogleAdsConversionAction(models.Model):
     )
     name = fields.Char(string='Tên Action', required=True)
     action_type = fields.Selection([
-        ('purchase',  '🛒 Mua Hàng'),
-        ('contact',   '📞 Liên Hệ'),
-        ('signup',    '📝 Đăng Ký'),
-        ('lead',      '🎯 Lead Form'),
-        ('pageview',  '👁 Xem Trang'),
-        ('custom',    '⚙️ Tùy Chỉnh'),
+        ('purchase', 'Mua Hàng'),
+        ('contact',  'Liên Hệ'),
+        ('signup',   'Đăng Ký'),
+        ('lead',     'Lead Form'),
+        ('pageview', 'Xem Trang'),
+        ('custom',   'Tùy Chỉnh'),
     ], string='Loại Event', required=True, default='purchase')
     conversion_id = fields.Char(
         string='Conversion ID',

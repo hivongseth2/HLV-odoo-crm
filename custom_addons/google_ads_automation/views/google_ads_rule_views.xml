@@ -6,7 +6,7 @@
         <field name="arch" type="xml">
             <form string="Quy Tắc Google Ads">
                 <header>
-                    <button name="run_rule" string="▶ Chạy Thử Ngay" type="object" class="oe_highlight"/>
+                    <button name="run_rule" string="Chạy Thử Ngay" type="object" class="oe_highlight"/>
                 </header>
                 <sheet>
                     <widget name="web_ribbon" title="Tự Sinh" bg_color="text-bg-info"

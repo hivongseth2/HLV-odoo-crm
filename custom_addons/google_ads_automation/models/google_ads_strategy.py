@@ -25,11 +25,11 @@ class GoogleAdsStrategy(models.Model):
     )
 
     strategy_type = fields.Selection([
-        ('protect_low', '🔴 Bảo vệ hàng sắp hết'),
-        ('push_stock', '🟢 Đẩy hàng tồn kho cao'),
-        ('optimize_profit', '💰 Tối ưu lợi nhuận'),
-        ('push_new', '📈 Đẩy hàng mới'),
-        ('auto_balance', '🔄 Cân bằng tự động'),
+        ('protect_low',   'Bảo Vệ Hàng Sắp Hết'),
+        ('push_stock',    'Đẩy Hàng Tồn Kho Cao'),
+        ('optimize_profit', 'Tối Ưu Lợi Nhuận'),
+        ('push_new',      'Đẩy Hàng Mới Nhập'),
+        ('auto_balance',  'Cân Bằng Tự Động'),
     ], string='Loại Chiến Lược', required=True, default='auto_balance',
         tracking=True,
     )
