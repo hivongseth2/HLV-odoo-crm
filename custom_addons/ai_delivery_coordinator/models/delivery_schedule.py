@@ -351,7 +351,7 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến + km. Không bỏ sót."""
                 {"role": "user", "content": json.dumps(batch_data, ensure_ascii=False)}
             ],
             "temperature": 0.1,
-            "max_completion_tokens": 18000,
+            "max_completion_tokens": 17000,
             "response_format": {"type": "json_object"},
         }
 
