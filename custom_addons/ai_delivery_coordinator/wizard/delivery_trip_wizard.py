@@ -3,7 +3,9 @@ from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 import logging
 import json
+import math
 import requests
+import time
 
 _logger = logging.getLogger(__name__)
 
@@ -76,7 +78,6 @@ class DeliveryTripWizard(models.TransientModel):
             wiz.total_orders = len(selected)
             wiz.total_km = sum(selected.mapped('distance_km'))
 
-            # Ưu tiên
             if wiz.total_orders >= 9:
                 wiz.priority_label = '🔴 Cao — Đủ tải, nên giao ngay!'
             elif wiz.total_orders >= 5:
@@ -84,18 +85,14 @@ class DeliveryTripWizard(models.TransientModel):
             else:
                 wiz.priority_label = '🟢 Thấp — Có thể gom thêm đơn'
 
-            # Gợi ý
             suggestions = []
             ready_count = len(selected.filtered(lambda l: l.stock_status == 'ready'))
             partial_count = len(selected.filtered(lambda l: l.stock_status == 'partial'))
-            shortage_count = len(selected.filtered(lambda l: l.stock_status in ('waiting', 'shortage')))
 
             if wiz.total_orders >= 9 and ready_count == wiz.total_orders:
                 suggestions.append('✅ Đủ tải + đủ hàng → Xuất phát ngay!')
             elif wiz.total_orders < 9:
                 suggestions.append(f'⏳ Chỉ có {wiz.total_orders} đơn, nên chờ gom thêm.')
-            if shortage_count > 0:
-                suggestions.append(f'⚠ Có {shortage_count} đơn thiếu/chờ hàng — xem xét bỏ ra.')
             if partial_count > 0:
                 suggestions.append(f'🟡 Có {partial_count} đơn chỉ đủ 1 phần.')
 
@@ -125,11 +122,11 @@ class DeliveryTripWizard(models.TransientModel):
     def _get_vehicle_capacity(self):
         """Số đơn tối đa theo loại xe."""
         if not self.vehicle_id:
-            return 15  # Mặc định ô tô
+            return 15
         name = (self.vehicle_id.model_id.name or '').lower()
         if 'xe máy' in name or 'xe_may' in name or 'honda' in name:
             return 5
-        return 15  # Ô tô / xe tải
+        return 15
 
     def action_suggest_early_morning(self):
         """Gợi ý: chọn 3 đơn gần nhất cho chuyến sáng sớm."""
@@ -137,17 +134,15 @@ class DeliveryTripWizard(models.TransientModel):
         if not self.line_ids:
             raise UserError(_('Chưa có đơn hàng nào.'))
 
-        # Bỏ chọn hết
-        self.line_ids.write({'selected': False})
-
-        # Chọn 3 đơn gần nhất có đủ hàng
         candidates = self.line_ids.sorted(key=lambda l: l.distance_km)
-        count = 0
+        keep = self.env['delivery.trip.wizard.line']
         for line in candidates:
-            if line.stock_status in ('ready', 'partial') and count < 3:
-                line.selected = True
-                count += 1
+            if line.stock_status in ('ready', 'partial') and len(keep) < 3:
+                keep |= line
 
+        to_remove = self.line_ids - keep
+        to_remove.unlink()
+        self.line_ids.write({'selected': True})
         self.departure_time = 'early_morning'
         return {
             'type': 'ir.actions.act_window',
@@ -158,10 +153,12 @@ class DeliveryTripWizard(models.TransientModel):
         }
 
     def action_select_ready_only(self):
-        """Chỉ chọn đơn đủ hàng."""
+        """Chỉ giữ đơn đủ hàng, xóa đơn partial."""
         self.ensure_one()
-        for line in self.line_ids:
-            line.selected = line.stock_status == 'ready'
+        to_remove = self.line_ids.filtered(
+            lambda l: l.stock_status != 'ready')
+        to_remove.unlink()
+        self.line_ids.write({'selected': True})
         return {
             'type': 'ir.actions.act_window',
             'res_model': 'delivery.trip.wizard',
@@ -188,7 +185,6 @@ class DeliveryTripWizard(models.TransientModel):
             'notes': self.notes,
         })
 
-        # Gán trip_id cho các schedule lines
         schedule_line_ids = selected.mapped('schedule_line_id')
         schedule_line_ids.write({'trip_id': trip.id})
 
@@ -203,67 +199,146 @@ class DeliveryTripWizard(models.TransientModel):
             'target': 'current',
         }
 
+    # =====================================================
+    # Geocoding
+    # =====================================================
+    def _geocode_address(self, address):
+        """Geocode 1 địa chỉ bằng Google Maps Geocoding API."""
+        if not address:
+            return None, None
+        gmaps_key = self.env['ir.config_parameter'].sudo().get_param(
+            'ai_delivery_coordinator.google_maps_api_key')
+        if not gmaps_key:
+            _logger.warning('Google Maps API Key chưa được cấu hình.')
+            return None, None
+        try:
+            resp = requests.get(
+                'https://maps.googleapis.com/maps/api/geocode/json',
+                params={
+                    'address': address,
+                    'region': 'vn',
+                    'language': 'vi',
+                    'key': gmaps_key,
+                },
+                timeout=10,
+            )
+            data = resp.json()
+            if data.get('status') == 'OK' and data.get('results'):
+                loc = data['results'][0]['geometry']['location']
+                return loc['lat'], loc['lng']
+            else:
+                _logger.warning(
+                    'Geocode no result for "%s": %s',
+                    address, data.get('status'))
+        except Exception as e:
+            _logger.warning('Geocode failed for "%s": %s', address, e)
+        return None, None
+
+    def _ensure_geocoded(self, schedule_lines):
+        """Đảm bảo tất cả line có lat/lng."""
+        to_geocode = schedule_lines.filtered(
+            lambda l: not l.delivery_lat and l.delivery_address)
+        if not to_geocode:
+            return
+
+        addr_map = {}
+        for sl in to_geocode:
+            addr = (sl.delivery_address or '').strip()
+            if addr:
+                addr_map.setdefault(addr, []).append(sl)
+
+        _logger.info('Geocoding %d unique addresses via Google Maps...',
+                      len(addr_map))
+        for addr, lines_list in addr_map.items():
+            lat, lng = self._geocode_address(addr)
+            if lat and lng:
+                for sl in lines_list:
+                    sl.sudo().write({
+                        'delivery_lat': lat,
+                        'delivery_lng': lng,
+                    })
+
+    # =====================================================
+    # Hybrid: Geocode + AI Clustering
+    # =====================================================
     def action_ai_suggest_groups(self):
-        """Gọi GPT để gom nhóm đơn hàng tối ưu.
-        Kết quả: gán ai_group cho mỗi line, hiện tổng kết trong notes.
-        """
+        """Geocode → AI phân cụm dựa trên toạ độ thực."""
         self.ensure_one()
         if not self.line_ids:
             raise UserError(_('Chưa có đơn hàng nào.'))
 
+        # Bước 1: Geocode
+        schedule_lines = self.line_ids.mapped('schedule_line_id')
+        self._ensure_geocoded(schedule_lines)
+
+        # Bước 2: Lấy API key
         api_key = self.env['ir.config_parameter'].sudo().get_param(
             'ai_delivery_coordinator.openai_api_key')
         model_name = self.env['ir.config_parameter'].sudo().get_param(
             'ai_delivery_coordinator.openai_model_delivery', 'gpt-4o')
         if not api_key:
-            raise UserError(_(
-                'Vui lòng cấu hình OpenAI API Key trong '
-                'Thiết lập > AI Vận Chuyển.'))
+            raise UserError(_('Vui lòng cấu hình OpenAI API Key.'))
 
-        # Chuẩn bị dữ liệu
-        order_data = []
-        for wl in self.line_ids:
-            sl = wl.schedule_line_id
-            order_data.append({
-                'id': wl.id,
-                'order': sl.order_id.name or '',
-                'partner': sl.partner_id.name or '',
-                'addr': (sl.delivery_address or '').replace('\n', ', '),
-                'picking': sl.picking_status or '',
-                'stock': sl.stock_status or '',
-                'htgh': (sl.order_htgh or '').strip(),
-                'origin': (sl.order_origin or '').strip(),
-                'km': sl.distance_km or 0,
-            })
-
+        today_str = fields.Date.context_today(self).strftime('%Y-%m-%d')
         capacity = self._get_vehicle_capacity()
         vehicle_label = 'xe máy' if capacity <= 5 else 'ô tô/xe tải'
 
+        # Bước 3: Chuẩn bị dữ liệu có toạ độ
+        order_data = []
+        no_coords = 0
+        for wl in self.line_ids:
+            sl = wl.schedule_line_id
+            so = sl.order_id
+            commit_date = ''
+            if so:
+                if hasattr(so, 'commitment_date') and so.commitment_date:
+                    commit_date = so.commitment_date.strftime('%Y-%m-%d')
+                elif so.date_order:
+                    commit_date = so.date_order.strftime('%Y-%m-%d')
+
+            lat = sl.delivery_lat or 0
+            lng = sl.delivery_lng or 0
+            if not lat:
+                no_coords += 1
+
+            order_data.append({
+                'id': wl.id,
+                'order': so.name if so else '',
+                'partner': sl.partner_id.name or '',
+                'addr': (sl.delivery_address or '').replace('\n', ', '),
+                'lat': round(lat, 5),
+                'lng': round(lng, 5),
+                'stock': sl.stock_status or '',
+                'htgh': (sl.order_htgh or '').strip(),
+                'date': commit_date,
+            })
+
+        # Bước 4: Gọi AI với toạ độ
         prompt = (
-            "Bạn là chuyên gia logistics Việt Nam. "
-            "Hãy phân nhóm các đơn hàng dưới đây thành các "
-            "chuyến giao tối ưu.\n\n"
-            f"PHƯƠNG TIỆN: {vehicle_label} "
-            f"(tối đa {capacity} đơn/chuyến)\n\n"
+            "Bạn là chuyên gia logistics Việt Nam.\n"
+            f"Hôm nay: {today_str}\n"
+            f"Phương tiện: {vehicle_label} "
+            f"(tối đa {capacity} đơn/chuyến).\n\n"
+            "Dữ liệu có TOẠ ĐỘ GPS (lat/lng). "
+            "Dùng toạ độ để xác định đơn GẦN NHAU.\n\n"
+            "TỪ DANH SÁCH BÊN DƯỚI, "
+            f"CHỌN TỐI ĐA {capacity} đơn cho 1 chuyến.\n\n"
             "QUY TẮC BẮT BUỘC:\n"
-            "1. Đơn cùng công ty/khách hàng → BẮT BUỘC cùng nhóm\n"
-            "2. Đơn cùng quận/huyện/tỉnh → cùng nhóm\n"
-            "3. Đơn ở tỉnh lân cận gom chung: "
-            "VD Đồng Nai + Bình Dương, HCM Q7 + Q8 + Nhà Bè\n"
-            "4. MỖI NHÓM TỐI THIỂU 3 ĐƠN. "
-            "Nếu nhóm chỉ 1-2 đơn → GỘP vào nhóm gần nhất\n"
-            f"5. Tối đa {capacity} đơn/nhóm\n"
-            "6. Tên nhóm ngắn gọn theo khu vực\n"
-            "7. Trường 'htgh' là chiến lược giao hàng: "
-            "'có gì giao nấy' = giao được ngay dù chưa đủ. "
-            "'chờ đủ hàng mới giao' = chỉ giao khi stock=ready. "
-            "Ưu tiên đơn 'có gì giao nấy' + stock ready/partial\n"
-            "8. Trường 'stock': ready=đủ hàng, partial=thiếu 1 phần\n\n"
+            "★ Đơn CÙNG PARTNER → BẮT BUỘC chọn tất cả\n"
+            "★ Đơn cùng toạ độ (chênh lệch < 0.1 độ) "
+            "→ chọn cùng nhau\n\n"
+            "ƯU TIÊN:\n"
+            "1. stock=ready (đủ hàng) → chọn trước\n"
+            "2. Đơn GẤP: date gần/quá hạn → chọn trước\n"
+            "3. Đơn GẦN NHAU (lat/lng gần) → gom chung\n"
+            "4. htgh 'có gì giao nấy' → ưu tiên\n"
+            "5. htgh 'chờ đủ hàng' + stock!=ready → BỎ QUA\n\n"
             f"ĐƠN HÀNG ({len(order_data)} đơn):\n"
             f"{json.dumps(order_data, ensure_ascii=False)}\n\n"
-            "TRẢ VỀ JSON: [{\"id\": <wizard_line_id>, "
-            "\"group\": \"<tên nhóm>\"}]\n"
-            "CHỈ trả về JSON, không giải thích."
+            "TRẢ VỀ JSON:\n"
+            "{\"selected\": [<các id>], "
+            "\"reason\": \"<lý do>\"}\n"
+            "CHỈ JSON."
         )
 
         try:
@@ -283,47 +358,43 @@ class DeliveryTripWizard(models.TransientModel):
             resp.raise_for_status()
             content = resp.json()['choices'][0]['message']['content']
 
-            # Parse JSON
             content = content.strip()
             if content.startswith('```'):
                 content = content.split('\n', 1)[1]
                 content = content.rsplit('```', 1)[0]
-            assignments = json.loads(content)
+            result = json.loads(content)
         except Exception as e:
-            _logger.error('AI Group Error: %s', e)
-            raise UserError(_(
-                'Lỗi khi gọi AI: %s') % str(e))
+            _logger.error('AI Suggest Error: %s', e)
+            raise UserError(_('Lỗi khi gọi AI: %s') % str(e))
 
-        # Gán nhóm
-        line_map = {wl.id: wl for wl in self.line_ids}
-        for item in assignments:
-            wl = line_map.get(item.get('id'))
-            if wl:
-                wl.ai_group = item.get('group', 'Khác')
+        selected_ids = set(result.get('selected', []))
+        reason = result.get('reason', '')
 
-        # Đơn không được gán → 'Khác'
-        for wl in self.line_ids:
-            if not wl.ai_group:
-                wl.ai_group = 'Khác'
+        if not selected_ids:
+            raise UserError(_('AI không chọn được đơn nào.'))
 
-        # Auto-select tất cả đơn
+        # Xóa đơn không được chọn
+        to_remove = self.line_ids.filtered(
+            lambda wl: wl.id not in selected_ids)
+        to_remove.unlink()
         self.line_ids.write({'selected': True})
 
-        # Tổng kết
-        groups = {}
-        for wl in self.line_ids:
-            groups.setdefault(wl.ai_group, []).append(wl)
+        # Auto-detect route
+        routes = self.line_ids.mapped('schedule_line_id.route_id')
+        if len(routes) == 1 and routes:
+            self.route_id = routes.id
 
-        summary = []
-        for g in sorted(groups.keys()):
-            summary.append(f'• {g}: {len(groups[g])} đơn')
+        info = [
+            f"🤖📍 AI + Geocode đã chọn "
+            f"{len(self.line_ids)}/{len(order_data)} đơn "
+            f"({vehicle_label}, max {capacity}):",
+            reason,
+        ]
+        if no_coords > 0:
+            info.append(
+                f"⚠ {no_coords} đơn không có toạ độ")
 
-        self.notes = (
-            f"🤖 AI đề xuất {len(groups)} nhóm:\n"
-            + '\n'.join(summary)
-            + "\n\n→ Nhấn '↪ Chọn Nhóm' để lọc từng nhóm "
-            "rồi tạo chuyến."
-        )
+        self.notes = '\n'.join(info)
 
         return {
             'type': 'ir.actions.act_window',
@@ -334,47 +405,52 @@ class DeliveryTripWizard(models.TransientModel):
         }
 
     def action_select_group(self):
-        """Lọc wizard: xóa đơn ngoài nhóm, chỉ giữ 1 nhóm."""
+        """Chạy lại AI phân cụm."""
+        return self.action_ai_suggest_groups()
+
+    # =====================================================
+    # Google Maps View
+    # =====================================================
+    def action_view_map(self):
+        """Mở Google Maps hiển thị tất cả điểm giao."""
         self.ensure_one()
-        groups = {}
+        if not self.line_ids:
+            raise UserError(_('Chưa có đơn hàng nào.'))
+
+        # Geocode nếu cần
+        schedule_lines = self.line_ids.mapped('schedule_line_id')
+        self._ensure_geocoded(schedule_lines)
+
+        # Thu thập toạ độ
+        points = []
         for wl in self.line_ids:
-            if wl.ai_group:
-                groups.setdefault(wl.ai_group, []).append(wl)
+            sl = wl.schedule_line_id
+            if sl.delivery_lat and sl.delivery_lng:
+                points.append(
+                    f"{sl.delivery_lat},{sl.delivery_lng}")
 
-        if not groups:
-            raise UserError(_(
-                'Chưa có nhóm AI. Nhấn "🤖 AI Gợi Ý Nhóm" trước.'))
-
-        sorted_groups = sorted(groups.keys())
-
-        # Nếu đang hiện tất cả nhóm → chọn nhóm đầu
-        current_groups = set(wl.ai_group for wl in self.line_ids)
-        if len(current_groups) > 1:
-            next_group = sorted_groups[0]
+        if not points:
+            # Fallback: search by address
+            addrs = [
+                wl.schedule_line_id.delivery_address
+                for wl in self.line_ids
+                if wl.schedule_line_id.delivery_address
+            ]
+            if not addrs:
+                raise UserError(_('Không có địa chỉ để hiển thị.'))
+            url = (
+                'https://www.google.com/maps/search/'
+                + requests.utils.quote(
+                    ' / '.join(addrs[:10])))
+        elif len(points) == 1:
+            url = f'https://www.google.com/maps?q={points[0]}'
         else:
-            # Đang ở 1 nhóm → nhóm kế tiếp
-            current = list(current_groups)[0]
-            try:
-                idx = sorted_groups.index(current)
-                next_group = sorted_groups[
-                    (idx + 1) % len(sorted_groups)]
-            except ValueError:
-                next_group = sorted_groups[0]
-
-        # XÓA đơn không thuộc nhóm → list sạch
-        to_remove = self.line_ids.filtered(
-            lambda wl: wl.ai_group != next_group)
-        to_remove.unlink()
-
-        # Select tất cả còn lại
-        self.line_ids.write({'selected': True})
-
-        self.notes = f"📋 Đang xem nhóm: {next_group} ({len(self.line_ids)} đơn)"
+            # Google Maps directions qua tất cả điểm
+            url = 'https://www.google.com/maps/dir/'
+            url += '/'.join(points[:25])  # Max 25 waypoints
 
         return {
-            'type': 'ir.actions.act_window',
-            'res_model': 'delivery.trip.wizard',
-            'res_id': self.id,
-            'view_mode': 'form',
+            'type': 'ir.actions.act_url',
+            'url': url,
             'target': 'new',
         }

@@ -51,8 +51,9 @@
                 </notebook>
                 <footer>
                     <button name="action_create_trip" type="object" string="📦 Tạo Chuyến" class="btn-primary"/>
-                    <button name="action_ai_suggest_groups" type="object" string="🤖 AI Gợi Ý Nhóm" class="btn-success"/>
-                    <button name="action_select_group" type="object" string="↪ Nhóm Tiếp" class="btn-warning"/>
+                    <button name="action_ai_suggest_groups" type="object" string="🤖 AI Chọn Đơn" class="btn-success"/>
+                    <button name="action_view_map" type="object" string="🗺️ Xem Bản Đồ" class="btn-info"/>
+                    <button name="action_select_group" type="object" string="🔄 AI Chọn Lại" class="btn-warning"/>
                     <button name="action_suggest_early_morning" type="object" string="🌅 3 đơn gần nhất" class="btn-info"/>
                     <button name="action_select_ready_only" type="object" string="✅ Chỉ đủ hàng" class="btn-info"/>
                     <button string="Hủy" class="btn-secondary" special="cancel"/>

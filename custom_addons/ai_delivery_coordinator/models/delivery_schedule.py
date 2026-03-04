@@ -152,6 +152,35 @@ class DeliveryScheduleLine(models.Model):
     order_id = fields.Many2one('sale.order', string='Đơn hàng', required=True, ondelete='cascade')
     partner_id = fields.Many2one('res.partner', related='order_id.partner_id', string='Khách hàng', store=True)
     commitment_date = fields.Datetime(related='order_id.commitment_date', string='Ngày hẹn giao', readonly=True)
+    deadline_label = fields.Char(string='Hạn giao', compute='_compute_deadline_label')
+    deadline_urgency = fields.Selection([
+        ('overdue', 'Quá hạn'),
+        ('today', 'Tới hạn'),
+        ('soon', 'Sắp tới'),
+        ('ok', 'Bình thường'),
+    ], string='Độ gấp', compute='_compute_deadline_label')
+
+    def _compute_deadline_label(self):
+        today = fields.Date.context_today(self)
+        for rec in self:
+            if not rec.commitment_date:
+                rec.deadline_label = ''
+                rec.deadline_urgency = 'ok'
+                continue
+            commit = rec.commitment_date.date()
+            delta = (commit - today).days
+            if delta < 0:
+                rec.deadline_label = f'Quá hạn {abs(delta)} ngày'
+                rec.deadline_urgency = 'overdue'
+            elif delta == 0:
+                rec.deadline_label = 'Tới hạn'
+                rec.deadline_urgency = 'today'
+            elif delta <= 7:
+                rec.deadline_label = f'Tới hẹn: {delta} ngày'
+                rec.deadline_urgency = 'soon'
+            else:
+                rec.deadline_label = ''
+                rec.deadline_urgency = 'ok'
 
     @api.model
     def _read_group_route_ids(self, routes, domain, order=None):
@@ -177,6 +206,10 @@ class DeliveryScheduleLine(models.Model):
     distance_km = fields.Float(string='Khoảng cách (km)', digits=(10, 1), help='Ước lượng khoảng cách từ kho đến điểm giao')
     kho_xuat = fields.Char(related='order_id.x_studio_kho_xuat', string='Kho xuất', store=True)
     picking_status = fields.Char(string='Trạng thái kho', compute='_compute_picking_status')
+
+    # Geocoding
+    delivery_lat = fields.Float(string='Vĩ độ', digits=(10, 7))
+    delivery_lng = fields.Float(string='Kinh độ', digits=(10, 7))
 
     @api.depends('order_id')
     def _compute_picking_status(self):
@@ -256,7 +289,11 @@ class DeliveryScheduleLine(models.Model):
 
     def write(self, vals):
         # Cho phép thay đổi các field hệ thống trên đơn cũ
-        safe_fields = {'is_selected', 'stock_status', 'trip_id', 'route_id', 'ai_suggested_route', 'ai_strategy', 'distance_km'}
+        safe_fields = {
+            'is_selected', 'stock_status', 'trip_id', 'route_id',
+            'ai_suggested_route', 'ai_strategy', 'distance_km',
+            'delivery_lat', 'delivery_lng',
+        }
         if not safe_fields.issuperset(vals.keys()):
             for record in self:
                 if record.assigned_date and record.assigned_date < fields.Date.context_today(self):
@@ -322,7 +359,7 @@ Dùng key ngắn. Mỗi đơn PHẢI có tuyến + km. Không bỏ sót."""
                 {"role": "user", "content": json.dumps(batch_data, ensure_ascii=False)}
             ],
             "temperature": 0.1,
-            "max_tokens": 8000,
+            "max_completion_tokens": 17000,
             "response_format": {"type": "json_object"},
         }
 

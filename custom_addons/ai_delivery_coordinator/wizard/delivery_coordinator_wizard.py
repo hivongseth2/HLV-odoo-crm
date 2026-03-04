@@ -238,7 +238,7 @@ class DeliveryCoordinatorWizard(models.TransientModel):
                 {"role": "user", "content": json.dumps(order_data, ensure_ascii=False)}
             ],
             "temperature": 0.2,
-            "max_tokens": 8000
+            "max_completion_tokens": 18000
         }
 
         response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=90)

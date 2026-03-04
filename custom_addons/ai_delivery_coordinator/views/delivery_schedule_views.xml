@@ -158,6 +158,8 @@
                 <field name="is_selected"/>
                 <field name="kho_xuat"/>
                 <field name="picking_status"/>
+                <field name="deadline_label"/>
+                <field name="deadline_urgency"/>
                 <progressbar field="stock_status" colors='{"ready": "success", "partial": "warning", "waiting": "info", "shortage": "danger"}'/>
                 <templates>
                     <t t-name="kanban-box">
@@ -193,6 +195,12 @@
                                 <div t-if="record.commitment_date.raw_value" class="text-muted" style="font-size: 0.9em; color: #ff9800;">
                                     <i class="fa fa-calendar-check-o"/> Hẹn: <field name="commitment_date"/>
                                 </div>
+                                <!-- Deadline tag (không hiện overdue vì ribbon đã có) -->
+                                <t t-if="record.deadline_label.raw_value and record.deadline_urgency.raw_value != 'overdue'">
+                                    <span t-attf-class="badge #{record.deadline_urgency.raw_value == 'today' ? 'text-bg-warning' : 'text-bg-info'}" style="font-size: 0.8em;">
+                                        <i class="fa fa-clock-o"/> <field name="deadline_label"/>
+                                    </span>
+                                </t>
                                 <!-- Tags từ Sale Order -->
                                 <div class="mt-1">
                                     <field name="order_tag_ids" widget="many2many_tags" options="{'color_field': 'color'}"/>
@@ -296,6 +304,7 @@
             <search>
                 <field name="order_id"/>
                 <field name="partner_id"/>
+                <field name="delivery_address"/>
                 <field name="order_tag_ids"/>
                 <field name="kho_xuat"/>
                 <filter string="Hôm nay" name="filter_today" domain="[('assigned_date', '=', context_today().strftime('%Y-%m-%d'))]"/>
