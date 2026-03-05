@@ -290,24 +290,9 @@ class DeliveryScheduleLine(models.Model):
             record.po_expected_date = po_expected_date
 
     def write(self, vals):
-        # Cho phép thay đổi các field hệ thống trên đơn cũ
-        safe_fields = {
-            'is_selected', 'stock_status', 'trip_id', 'route_id',
-            'ai_suggested_route', 'ai_strategy', 'distance_km',
-            'delivery_lat', 'delivery_lng', 'geocoded_query',
-        }
-        if not safe_fields.issuperset(vals.keys()):
-            for record in self:
-                if record.assigned_date and record.assigned_date < fields.Date.context_today(self):
-                    raise models.ValidationError("Không thể sửa đổi đơn hàng trong Lịch trình của ngày quá khứ.")
         return super().write(vals)
 
     def unlink(self):
-        # Cho phép xóa từ refresh (context flag)
-        if not self.env.context.get('force_unlink'):
-            for record in self:
-                if record.assigned_date and record.assigned_date < fields.Date.context_today(self):
-                    raise models.ValidationError("Không thể xóa đơn hàng trong Lịch trình của ngày quá khứ.")
         return super().unlink()
 
     # =====================================================
