@@ -464,8 +464,9 @@ class DeliveryTripWizard(models.TransientModel):
             raise UserError(_('AI không chọn được đơn nào.'))
 
         # Xóa đơn không chọn
-        self.line_ids.filtered(lambda wl: wl.id not in selected_ids).unlink()
-        self.line_ids.write({'selected': True})
+        # Thay vì xóa, giờ ta giữ lại để view map, chỉ update cờ 'selected'
+        self.line_ids.write({'selected': False})
+        self.line_ids.filtered(lambda wl: wl.id in selected_ids).write({'selected': True})
 
         # Auto-detect route
         routes = self.line_ids.mapped('schedule_line_id.route_id')
@@ -501,7 +502,7 @@ class DeliveryTripWizard(models.TransientModel):
         # Dedup: loại bỏ điểm trùng toạ độ
         seen = set()
         points = []
-        for wl in self.line_ids:
+        for wl in self.line_ids.filtered('selected'):
             sl = wl.schedule_line_id
             if sl.delivery_lat and sl.delivery_lng:
                 key = f"{round(sl.delivery_lat, 5)},{round(sl.delivery_lng, 5)}"
@@ -510,17 +511,16 @@ class DeliveryTripWizard(models.TransientModel):
                     points.append(key)
 
         if not points:
-            raise UserError(_('Không có toạ độ. Kiểm tra địa chỉ.'))
+            raise UserError(_('Các đơn được chọn không có toạ độ nào hợp lệ để hiển thị bản đồ.'))
 
         # Thêm toạ độ kho làm điểm bắt đầu nếu có
         wh_lat, wh_lng = self._get_warehouse_coords()
         if wh_lat and wh_lng:
             points.insert(0, f"{round(wh_lat, 5)},{round(wh_lng, 5)}")
 
-        if len(points) == 1:
-            url = f'https://www.google.com/maps?q={points[0]}'
-        else:
-            url = 'https://www.google.com/maps/dir/' + '/'.join(points[:25])
+        # Build Google Maps URL dạng Directions (Chỉ hỗ trợ tối đa 25 điểm bao gồm cả tuyến)
+        points_str = '/'.join(points[:25])
+        url = f'https://www.google.com/maps/dir/{points_str}'
 
         return {
             'type': 'ir.actions.act_url',
