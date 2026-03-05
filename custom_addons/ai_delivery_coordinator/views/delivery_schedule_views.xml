@@ -237,9 +237,9 @@
                                         </span>
                                     </t>
                                 </div>
-                                <div t-if="record.delivery_lat.raw_value == 0 &amp;&amp; record.delivery_address.raw_value" class="mt-1">
-                                    <span class="badge text-bg-danger" title="Không tìm thấy toạ độ, AI có thể tính sai khoảng cách." style="font-size: 0.75em;">
-                                        <i class="fa fa-warning"/> Lỗi GPS
+                                <div t-if="record.delivery_lat.raw_value == 0" class="mt-1">
+                                    <span class="badge text-bg-danger" title="Chưa có toạ độ hoặc thiếu địa chỉ, AI tính sai khoảng cách." style="font-size: 0.75em;">
+                                        <i class="fa fa-warning"/> Lỗi GPS / Thiếu Địa Chỉ
                                     </span>
                                 </div>
                                 <div t-if="record.ai_suggested_route.raw_value" class="mt-1">
