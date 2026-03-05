@@ -86,8 +86,13 @@ class GoogleAdsTag(models.Model):
         """Kéo dữ liệu Tags/Triggers/Variables từ GTM API về Odoo (GET only)"""
         self.ensure_one()
 
-        # Demo mode → seed fake data
-        if self.account_id and self.account_id.is_demo:
+        # Real mode (hoặc Demo mode nhưng có điền GTM Token) → gọi GTM API v2
+        is_real_sync = not (self.account_id and self.account_id.is_demo)
+        if self.account_id and self.account_id.is_demo and self.gtm_api_token and self.gtm_account_id:
+            is_real_sync = True # Force real sync if credentials are provided in demo mode
+
+        if not is_real_sync:
+            # Thuần Demo mode (chưa điền token) → seed fake data
             self._demo_seed_gtm_items()
             return {
                 'type': 'ir.actions.client',
@@ -100,13 +105,14 @@ class GoogleAdsTag(models.Model):
                 },
             }
 
-        # Real mode → call GTM API v2
+        # Bắt đầu luồng Real API
         if not _requests:
             raise UserError(_('Thiếu thư viện "requests". Chạy: pip install requests'))
         if not self.gtm_account_id or not self.gtm_container_id or not self.gtm_api_token:
-            raise UserError(_(
-                'Vui lòng điền đầy đủ: GTM Account ID, Container ID, và API Token.'
-            ))
+            if self.account_id and self.account_id.is_demo:
+                raise UserError(_('Để test gọi API thật trong chế độ Demo, vui lòng điền đủ: GTM Account ID, Container ID, và API Token.'))
+            else:
+                raise UserError(_('Vui lòng điền đầy đủ: GTM Account ID, Container ID, và API Token.'))
 
         container_num = self.gtm_container_id.replace('GTM-', '')
         base_url = (
