@@ -131,10 +131,10 @@ class GoogleAdsProductFeedLine(models.Model):
 
     # -- Status badge for quick glance --
     stock_status = fields.Selection([
-        ('critical', '🔴 Sắp hết'),
-        ('low', '🟡 Tồn thấp'),
-        ('normal', '🟢 Bình thường'),
-        ('high', '🔵 Tồn cao'),
+        ('critical', 'Sắp Hết Hàng'),
+        ('low',      'Tồn Thấp'),
+        ('normal',   'Bình Thường'),
+        ('high',     'Tồn Cao'),
     ], string='Trạng Thái Tồn', compute='_compute_stock_status', store=True)
 
     @api.depends('product_id', 'product_id.qty_available',

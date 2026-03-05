@@ -34,12 +34,12 @@
             <form>
                 <header>
                     <button name="action_generate_rules"
-                            string="⚡ Sinh Rules Tự Động"
+                            string="Sinh Rules Tự Động"
                             type="object"
                             class="oe_highlight"
                             invisible="state == 'active'"/>
                     <button name="action_activate"
-                            string="▶ Kích Hoạt"
+                            string="Kích Hoạt"
                             type="object"
                             class="oe_highlight"
                             invisible="state == 'active'"/>
