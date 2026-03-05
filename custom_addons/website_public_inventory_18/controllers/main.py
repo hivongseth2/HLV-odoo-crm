@@ -444,6 +444,74 @@ class PublicInventory(http.Controller):
             rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr})
         return {"ok": True, "mode": "warehouses", "rows": rows}
     
+    @http.route(["/search_stock/location_details"], type="json", auth="public", methods=["POST"])
+    def location_details(self, product_id=None, warehouse_id=None):
+        if not _pw_allowed(): return {"ok": False, "error": "access_denied", "locations": []}
+        
+        env = request.env
+        params = request.jsonrequest.get("params") if hasattr(request, "jsonrequest") else {}
+        if params:
+            if product_id is None: product_id = params.get("product_id")
+            if warehouse_id is None: warehouse_id = params.get("warehouse_id")
+            
+        pid = _as_int_or_none(product_id)
+        wid = _as_int_or_none(warehouse_id)
+        
+        if not pid: return {"ok": False, "error": "invalid_product_id", "locations": []}
+        
+        company_ids = _companies_for_context(wid)
+        if not company_ids: company_ids = env.companies.ids
+        
+        Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
+        Product = env["product.product"].sudo().with_context(allowed_company_ids=company_ids)
+        Warehouse = env["stock.warehouse"].sudo().with_context(allowed_company_ids=company_ids)
+        
+        product = Product.browse(pid).exists()
+        if not product: return {"ok": False, "error": "product_not_found", "locations": []}
+        
+        domain = [
+            ("product_id", "=", pid),
+            ("location_id.usage", "=", "internal"),
+            ("quantity", ">", 0)
+        ]
+        
+        if wid:
+            wh = Warehouse.browse(wid).exists()
+            if wh:
+                domain.append(("location_id", "child_of", wh.view_location_id.id))
+        else:
+            allowed_whs = _get_allowed_warehouses()
+            if allowed_whs:
+                domain.append(("location_id", "child_of", allowed_whs.mapped('view_location_id').ids))
+                
+        # Group by location to sum quantities if multiple quants exist for same location
+        quants = Quant.read_group(domain, ["location_id", "quantity:sum", "reserved_quantity:sum"], ["location_id"], lazy=False)
+        
+        locations_data = []
+        for q in quants:
+            if not q.get("location_id"):
+                continue
+                
+            qty_total = _rg_sum(q, "quantity")
+            qty_reserved = _rg_sum(q, "reserved_quantity")
+            qty_available = qty_total - qty_reserved
+            
+            locations_data.append({
+                "location_id": q["location_id"][0],
+                "location": q["location_id"][1],
+                "qty": qty_total,
+                "available": qty_available
+            })
+            
+        # Optional: Sort by location name
+        locations_data.sort(key=lambda x: x["location"])
+        
+        return {
+            "ok": True, 
+            "product_name": product.display_name,
+            "locations": locations_data
+        }
+
     @http.route(["/search_stock/suggest"], type="json", auth="public", methods=["POST"])
     def search_suggest(self, q="", combo_search=False):
         if not _pw_allowed(): return {"ok": False, "error": "access_denied", "products": []}
