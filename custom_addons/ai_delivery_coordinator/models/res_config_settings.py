@@ -12,7 +12,7 @@ class ResConfigSettings(models.TransientModel):
         'stock.warehouse', string='Kho xuất phát (tính khoảng cách)',
         config_parameter='ai_delivery_coordinator.warehouse_id',
     )
-    ai_custom_prompt = fields.Text(
+    ai_custom_prompt = fields.Char(
         string='Prompt AI Tùy Chỉnh', 
         config_parameter='ai_delivery_coordinator.ai_custom_prompt',
         default="Bạn là chuyên gia logistics Việt Nam. Hãy phân tuyến giao hàng tối ưu dựa trên Toạ độ GPS, khoảng cách và thông tin chi tiết các món hàng."

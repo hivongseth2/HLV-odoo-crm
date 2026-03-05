@@ -376,6 +376,12 @@ class DeliveryTripWizard(models.TransientModel):
                             prod_name = prod_name[:27] + '...'
                         items_desc.append(f"{prod_name} x{line.product_uom_qty}")
 
+            priority = ''
+            if so:
+                priority = getattr(so, 'priority', '')
+                if not priority:
+                    priority = getattr(so, 'x_studio_priority', '')
+
             order_data.append({
                 'id': wl.id,
                 'order': so.name if so else '',
@@ -387,6 +393,7 @@ class DeliveryTripWizard(models.TransientModel):
                 'stock': sl.stock_status or '',
                 'htgh': (sl.order_htgh or '').strip(),
                 'date': commit_date,
+                'priority': priority,
                 'items_qty': total_qty,
                 'items_detail': ' | '.join(items_desc),
             })
@@ -397,7 +404,7 @@ class DeliveryTripWizard(models.TransientModel):
             f"Hôm nay: {today_str}\n"
             f"Phương tiện: {vehicle_label}.\n\n"
             "Dữ liệu có TOẠ ĐỘ GPS (lat/lng), KHOẢNG CÁCH từ kho (dist_km), "
-            "tổng số lượng (items_qty) và CHI TIẾT MẶT HÀNG (items_detail).\n\n"
+            "tổng số lượng (items_qty), chi tiết hàng (items_detail) và MỨC ƯU TIÊN (priority).\n\n"
             f"CHỌN KHOẢNG {capacity} đơn cho 1 chuyến.\n"
             "Chỉ đạo: Ước lượng thể tích/khối lượng thực tế dựa vào 'items_detail'. (VD: 1000 cái ghế sẽ cồng kềnh hơn 1000 con ốc).\n"
             "Hãy CĂN CỨ VÀO ĐÓ ĐỂ QUYẾT ĐỊNH SỐ ĐƠN (chọn ít đơn lại nếu hàng quá to/nhiều).\n\n"
@@ -408,7 +415,8 @@ class DeliveryTripWizard(models.TransientModel):
             "★ Nếu gom hết đơn cùng partner lại mà VƯỢT "
             f"{capacity} đơn hoặc xe đầy hàng → VẪN ĐƯỢC, ưu tiên gom đủ công ty.\n"
             "★ Đơn cùng toạ độ (< 0.05 độ) → chọn cùng\n\n"
-            "ƯU TIÊN:\n"
+            "ƯU TIÊN CHỌN ĐƠN:\n"
+            "0. priority cao ('high', '1', v.v) → ƯU TIÊN HÀNG ĐẦU\n"
             "1. stock=ready → ưu tiên\n"
             "2. date gần/quá hạn → ưu tiên\n"
             "3. Đơn GẦN NHAU (lat/lng + dist_km) → gom\n"
