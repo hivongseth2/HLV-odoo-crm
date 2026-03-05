@@ -186,36 +186,51 @@ class DeliveryTripWizard(models.TransientModel):
         return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
     def _geocode_address(self, query):
-        """Geocode địa chỉ bằng Track-Asia Search V2."""
+        """Geocode địa chỉ bằng Google Maps Places qua RapidAPI."""
         if not query:
             return None, None
-        ta_key = self.env['ir.config_parameter'].sudo().get_param(
-            'ai_delivery_coordinator.track_asia_api_key')
-        if not ta_key:
-            _logger.warning('Track-Asia API Key chưa cấu hình.')
+        rapidapi_key = self.env['ir.config_parameter'].sudo().get_param(
+            'ai_delivery_coordinator.rapidapi_key')
+        if not rapidapi_key:
+            _logger.warning('RapidAPI Key chưa cấu hình.')
             return None, None
         try:
-            _logger.info('[Track-Asia] Geocoding: "%s"', query)
-            resp = requests.get(
-                'https://maps.track-asia.com/api/v2/place/textsearch/json',
-                params={
-                    'query': query,
-                    'language': 'vi',
-                    'key': ta_key,
+            _logger.info('[Geocode] Searching: "%s"', query)
+            resp = requests.post(
+                'https://google-map-places-new-v2.p.rapidapi.com'
+                '/v1/places:searchText',
+                headers={
+                    'Content-Type': 'application/json',
+                    'X-Goog-FieldMask': (
+                        'places.id,places.displayName,'
+                        'places.formattedAddress,places.location'
+                    ),
+                    'x-rapidapi-host': (
+                        'google-map-places-new-v2.p.rapidapi.com'
+                    ),
+                    'x-rapidapi-key': rapidapi_key,
                 },
-                timeout=10,
+                json={
+                    'textQuery': query,
+                    'languageCode': 'vi',
+                    'maxResultCount': 1,
+                },
+                timeout=15,
             )
             data = resp.json()
-            if data.get('status') == 'OK' and data.get('results'):
-                loc = data['results'][0]['geometry']['location']
-                name = data['results'][0].get('name', '')
-                _logger.info('[Track-Asia] ✓ "%s" → %s, %s (%s)',
-                             query, loc['lat'], loc['lng'], name)
-                return loc['lat'], loc['lng']
-            _logger.warning('[Track-Asia] ✗ No result: "%s" → %s',
-                            query, data.get('status'))
+            places = data.get('places', [])
+            if places:
+                loc = places[0]['location']
+                name = places[0].get('displayName', {}).get('text', '')
+                lat = loc['latitude']
+                lng = loc['longitude']
+                _logger.info(
+                    '[Geocode] ✓ "%s" → %s, %s (%s)',
+                    query, lat, lng, name)
+                return lat, lng
+            _logger.warning('[Geocode] ✗ No result: "%s"', query)
         except Exception as e:
-            _logger.warning('[Track-Asia] ✗ Error "%s": %s', query, e)
+            _logger.warning('[Geocode] ✗ Error "%s": %s', query, e)
         return None, None
 
     def _get_warehouse_coords(self):
