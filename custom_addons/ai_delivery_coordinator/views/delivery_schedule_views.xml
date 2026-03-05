@@ -198,7 +198,7 @@
                                     <i class="fa fa-calendar-check-o"/> Hẹn: <field name="commitment_date"/>
                                 </div>
                                 <!-- Deadline tag (không hiện overdue vì ribbon đã có) -->
-                                <t t-if="record.deadline_label.raw_value and record.deadline_urgency.raw_value != 'overdue'">
+                                <t t-if="record.deadline_label.raw_value &amp;&amp; record.deadline_urgency.raw_value != 'overdue'">
                                     <span t-attf-class="badge #{record.deadline_urgency.raw_value == 'today' ? 'text-bg-warning' : 'text-bg-info'}" style="font-size: 0.8em;">
                                         <i class="fa fa-clock-o"/> <field name="deadline_label"/>
                                     </span>
@@ -226,7 +226,7 @@
                                         </span>
                                     </t>
                                 </div>
-                                <div t-if="record.po_expected_date.raw_value and record.stock_status.raw_value != 'ready'" class="mt-1" style="font-size: 0.9em; color: #d32f2f;">
+                                <div t-if="record.po_expected_date.raw_value &amp;&amp; record.stock_status.raw_value != 'ready'" class="mt-1" style="font-size: 0.9em; color: #d32f2f;">
                                     <i class="fa fa-truck"/> PO Về: <field name="po_expected_date"/>
                                 </div>
                                 <div t-if="record.distance_km.raw_value" class="mt-1" style="font-size: 0.85em;">
@@ -237,7 +237,7 @@
                                         </span>
                                     </t>
                                 </div>
-                                <div t-if="not record.delivery_lat.raw_value and record.delivery_address.raw_value" class="mt-1">
+                                <div t-if="!record.delivery_lat.raw_value &amp;&amp; record.delivery_address.raw_value != ''" class="mt-1">
                                     <span class="badge text-bg-danger" title="Không tìm thấy toạ độ, AI có thể tính sai khoảng cách." style="font-size: 0.75em;">
                                         <i class="fa fa-warning"/> Lỗi GPS
                                     </span>
