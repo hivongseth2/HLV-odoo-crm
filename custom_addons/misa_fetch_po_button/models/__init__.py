@@ -8,4 +8,4 @@ from . import sale_order_misa_sync
 from . import sale_order_misa_id
 from . import crm_tag_misa
 from . import stock_picking_crm_delivery
-from . import product_misa_sync
+# from . import product_misa_sync
