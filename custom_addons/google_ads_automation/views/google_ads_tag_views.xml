@@ -62,6 +62,10 @@
                             <field name="gtm_account_id"
                                    placeholder="123456789"
                                    invisible="tag_type != 'gtm'"/>
+                            <field name="gtm_access_token"
+                                   placeholder="Dạng ya29.a0..."
+                                   password="True"
+                                   invisible="tag_type != 'gtm'"/>
                             <field name="gtm_client_id"
                                    placeholder="xxxxxx.apps.googleusercontent.com"
                                    invisible="tag_type != 'gtm'"/>
