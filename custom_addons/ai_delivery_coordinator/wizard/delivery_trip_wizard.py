@@ -380,7 +380,7 @@ class DeliveryTripWizard(models.TransientModel):
             if so:
                 priority = getattr(so, 'priority', '')
                 if not priority:
-                    priority = getattr(so, 'x_studio_priority', '')
+                    priority = getattr(so, 'x_priority', '')
 
             order_data.append({
                 'id': wl.id,
@@ -426,9 +426,9 @@ class DeliveryTripWizard(models.TransientModel):
             f"ĐƠN HÀNG ({len(order_data)} đơn):\n"
             f"{json.dumps(order_data, ensure_ascii=False)}\n\n"
             "TRẢ VỀ JSON:\n"
-            "{\"thought_process\": \"<giải thích chi tiết tại sao chọn số lượng đơn này, lý do gom nhóm>\",\n"
+            "{\"thought_process\": \"<Dùng TÊN ĐƠN HÀNG (order), tuyệt đối không dùng id. Giải thích cực kỳ ngắn gọn, dùng gạch đầu dòng và emoji để tóm tắt lý do gom chuyến>\",\n"
             "\"selected\": [<các id>], "
-            "\"reason\": \"<tóm tắt lý do ngắn gọn>\"}\n"
+            "\"reason\": \"<Tóm tắt 1 câu ngắn>\"}\n"
             "CHỈ JSON."
         )
 
