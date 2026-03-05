@@ -43,19 +43,19 @@
                         </button>
                         <button class="oe_stat_button" icon="fa-cube"
                                 invisible="gtm_variable_count == 0">
-                            <field name="gtm_variable_count" string="Bien" widget="statinfo"/>
+                            <field name="gtm_variable_count" string="Biến" widget="statinfo"/>
                         </button>
                     </div>
                     <div class="oe_title">
                         <h1><field name="name" placeholder="VD: GTM Production"/></h1>
                     </div>
                     <group>
-                        <group string="Cai Dat Chung">
+                        <group string="Cài Đặt Chung">
                             <field name="account_id"/>
                             <field name="tag_type" widget="radio"/>
                             <field name="active" widget="boolean_toggle"/>
                         </group>
-                        <group string="ID Dinh Danh">
+                        <group string="ID Định Danh">
                             <field name="gtm_container_id"
                                    placeholder="GTM-XXXXXXX"
                                    invisible="tag_type != 'gtm'"/>
@@ -67,20 +67,20 @@
                                    password="True"
                                    invisible="tag_type != 'gtm'"/>
                             <field name="measurement_id"
-                                   placeholder="AW-XXXXXXXXX hoac G-XXXXXXXXXX"
+                                   placeholder="AW-XXXXXXXXX hoặc G-XXXXXXXXXX"
                                    invisible="tag_type != 'gtag'"/>
                         </group>
                     </group>
 
                     <notebook>
-                        <!-- Tab: Thanh Phan GTM da dong bo -->
-                        <page string="Thanh Phan GTM" icon="fa-list"
+                        <!-- Tab: Thành Phần GTM đã đồng bộ -->
+                        <page string="Thành Phần GTM" icon="fa-list"
                               invisible="tag_type != 'gtm'">
                             <div class="alert alert-info" invisible="gtm_tag_count > 0">
-                                Nhan nut "Dong Bo Tu GTM" o tren de keo du lieu Tags, Triggers va Variables tu Google Tag Manager ve Odoo.
+                                Nhấn nút "Đồng Bộ Từ GTM" ở trên để kéo dữ liệu Tags, Triggers và Variables từ Google Tag Manager về Odoo.
                             </div>
                             <field name="gtm_item_ids" readonly="1">
-                                <list string="Thanh Phan GTM" create="false" edit="false" delete="false">
+                                <list string="Thành Phần GTM" create="false" edit="false" delete="false">
                                     <field name="item_type" widget="badge"
                                            decoration-info="item_type == 'tag'"
                                            decoration-success="item_type == 'trigger'"
@@ -112,31 +112,31 @@
                         </page>
 
                         <!-- Tab: Code cho <head> -->
-                        <page string="Code Dan Vao head" icon="fa-code">
+                        <page string="Code Dán Vào head" icon="fa-code">
                             <div class="alert alert-info">
-                                Copy doan code ben duoi va dan vao <code>&lt;head&gt;</code> cua tat ca trang WordPress
-                                (hoac dung plugin <b>WPCode</b>).
+                                Copy đoạn code bên dưới và dán vào <code>&lt;head&gt;</code> của tất cả trang WordPress
+                                (hoặc dùng plugin <b>WPCode</b>).
                             </div>
                             <field name="snippet_head" widget="code" readonly="1"
                                    options="{'mode': 'html'}"/>
                         </page>
 
                         <!-- Tab: Code cho <body> (GTM only) -->
-                        <page string="Code Dan Sau body" icon="fa-code"
+                        <page string="Code Dán Sau body" icon="fa-code"
                               invisible="tag_type != 'gtm'">
                             <div class="alert alert-info">
-                                Copy doan code ben duoi va dan ngay sau the <code>&lt;body&gt;</code> cua WordPress.
+                                Copy đoạn code bên dưới và dán ngay sau thẻ <code>&lt;body&gt;</code> của WordPress.
                             </div>
                             <field name="snippet_body" widget="code" readonly="1"
                                    options="{'mode': 'html'}"/>
                         </page>
 
                         <!-- Tab: WooCommerce Purchase Tracking -->
-                        <page string="Theo Doi Don Hang (WooCommerce)" icon="fa-shopping-cart">
+                        <page string="Theo Dõi Đơn Hàng (WooCommerce)" icon="fa-shopping-cart">
                             <div class="alert alert-warning">
-                                Dan doan PHP nay vao file <code>functions.php</code> cua theme WordPress
-                                hoac dung plugin <b>Code Snippets</b>.
-                                Doan code nay tu dong ban su kien mua hang khi co don thanh cong.
+                                Dán đoạn PHP này vào file <code>functions.php</code> của theme WordPress
+                                hoặc dùng plugin <b>Code Snippets</b>.
+                                Đoạn code này tự động bắn sự kiện mua hàng khi có đơn thành công.
                             </div>
                             <field name="snippet_purchase" widget="code" readonly="1"
                                    options="{'mode': 'php'}"/>
@@ -153,24 +153,24 @@
         <field name="name">google.ads.gtm.item.form</field>
         <field name="model">google.ads.gtm.item</field>
         <field name="arch" type="xml">
-            <form string="Thanh Phan GTM" create="false" edit="false">
+            <form string="Thành Phần GTM" create="false" edit="false">
                 <sheet>
                     <group>
-                        <group string="Thong Tin Chung">
+                        <group string="Thông Tin Chung">
                             <field name="name"/>
                             <field name="item_type"/>
                             <field name="gtm_item_id"/>
                             <field name="tag_config_id"/>
                             <field name="is_paused"/>
                         </group>
-                        <group string="Chi Tiet">
+                        <group string="Chi Tiết">
                             <field name="tag_subtype" invisible="item_type != 'tag'"/>
                             <field name="trigger_subtype" invisible="item_type != 'trigger'"/>
                             <field name="firing_trigger_names" invisible="item_type != 'tag'"/>
                             <field name="last_synced"/>
                         </group>
                     </group>
-                    <group string="Ghi Chu / Tham So">
+                    <group string="Ghi Chú / Tham Số">
                         <field name="notes" nolabel="1"/>
                     </group>
                 </sheet>
