@@ -237,7 +237,7 @@
                                         </span>
                                     </t>
                                 </div>
-                                <div t-if="!record.delivery_lat.raw_value &amp;&amp; record.delivery_address.raw_value != ''" class="mt-1">
+                                <div t-if="record.delivery_lat.raw_value == 0 &amp;&amp; record.delivery_address.raw_value" class="mt-1">
                                     <span class="badge text-bg-danger" title="Không tìm thấy toạ độ, AI có thể tính sai khoảng cách." style="font-size: 0.75em;">
                                         <i class="fa fa-warning"/> Lỗi GPS
                                     </span>
@@ -269,6 +269,11 @@
                         <field name="order_id"/>
                         <field name="partner_id"/>
                         <field name="delivery_address"/>
+                        <label for="delivery_lat" string="Toạ độ GPS"/>
+                        <div class="o_row">
+                            <field name="delivery_lat" placeholder="Vĩ độ (Lat)"/> , 
+                            <field name="delivery_lng" placeholder="Kinh độ (Lng)"/>
+                        </div>
                         <field name="po_expected_date" invisible="po_expected_date == False"/>
                         <field name="stock_status"/>
                         <field name="ai_strategy"/>

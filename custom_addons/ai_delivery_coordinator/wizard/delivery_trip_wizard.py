@@ -263,12 +263,11 @@ class DeliveryTripWizard(models.TransientModel):
 
     def _ensure_geocoded(self, schedule_lines):
         """Geocode tất cả line chưa có toạ độ hoặc đã đổi địa chỉ."""
-        # Lọc ra đơn cần geocode: chưa có toạ độ HOẶC chuỗi query bị thay đổi
         def needs_geocode(l):
             if not l.delivery_address:
                 return False
             query = self._build_geocode_query(l)
-            if not l.delivery_lat or l.geocoded_query != query:
+            if not l.geocoded_query or l.geocoded_query != query:
                 return True
             return False
 
@@ -288,11 +287,17 @@ class DeliveryTripWizard(models.TransientModel):
                      len(to_geocode), len(query_map))
         for query, sls in query_map.items():
             lat, lng = self._geocode_address(query)
-            if lat and lng:
-                for sl in sls:
+            for sl in sls:
+                if lat and lng:
                     sl.sudo().write({
                         'delivery_lat': lat,
                         'delivery_lng': lng,
+                        'geocoded_query': query,
+                    })
+                else:
+                    sl.sudo().write({
+                        'delivery_lat': 0.0,
+                        'delivery_lng': 0.0,
                         'geocoded_query': query,
                     })
 
@@ -399,8 +404,9 @@ class DeliveryTripWizard(models.TransientModel):
             f"ĐƠN HÀNG ({len(order_data)} đơn):\n"
             f"{json.dumps(order_data, ensure_ascii=False)}\n\n"
             "TRẢ VỀ JSON:\n"
-            "{\"selected\": [<các id>], "
-            "\"reason\": \"<lý do>\"}\n"
+            "{\"thought_process\": \"<giải thích chi tiết tại sao chọn số lượng đơn này, lý do gom nhóm>\",\n"
+            "\"selected\": [<các id>], "
+            "\"reason\": \"<tóm tắt lý do ngắn gọn>\"}\n"
             "CHỈ JSON."
         )
 
@@ -431,6 +437,7 @@ class DeliveryTripWizard(models.TransientModel):
 
         selected_ids = set(result.get('selected', []))
         reason = result.get('reason', '')
+        thought_process = result.get('thought_process', '')
         if not selected_ids:
             raise UserError(_('AI không chọn được đơn nào.'))
 
@@ -444,10 +451,11 @@ class DeliveryTripWizard(models.TransientModel):
             self.route_id = routes.id
 
         info = [
-            f"🤖📍 AI + Track-Asia: chọn "
+            f"🤖📍 AI + Geocode: chọn "
             f"{len(self.line_ids)}/{len(order_data)} đơn "
             f"({vehicle_label}, max {capacity}):",
-            reason,
+            f"🧠 Tư duy AI:\n{thought_process}\n" if thought_process else "",
+            f"📌 Kết luận: {reason}",
         ]
         if no_coords > 0:
             info.append(f"⚠ {no_coords} đơn không geocode được")
