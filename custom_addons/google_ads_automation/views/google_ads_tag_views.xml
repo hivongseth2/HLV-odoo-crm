@@ -62,8 +62,15 @@
                             <field name="gtm_account_id"
                                    placeholder="123456789"
                                    invisible="tag_type != 'gtm'"/>
+                            <field name="gtm_client_id"
+                                   placeholder="xxxxxx.apps.googleusercontent.com"
+                                   invisible="tag_type != 'gtm'"/>
+                            <field name="gtm_client_secret"
+                                   placeholder="GOCSPX-xxxxxx"
+                                   password="True"
+                                   invisible="tag_type != 'gtm'"/>
                             <field name="gtm_api_token"
-                                   placeholder="OAuth2 Access Token"
+                                   placeholder="1//0xxxxxx"
                                    password="True"
                                    invisible="tag_type != 'gtm'"/>
                             <field name="measurement_id"
