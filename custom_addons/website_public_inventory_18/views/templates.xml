@@ -333,6 +333,112 @@
                                 <t t-if="r['website_url']"><a t-att-href="r['website_url']" target="_blank" class="text-decoration-none"><i class="fa fa-external-link"></i></a></t>
                               </td>
                             </tr>
+                            <!-- DETAIL ROW (Server-Side Rendered) -->
+                            <tr class="detail-row">
+                                <td colspan="14" style="padding:0; border:none;">
+                                    <t t-set="bk" t-value="r.get('breakdown', {})"/>
+                                    <!-- COMBO LAYOUT -->
+                                    <t t-if="is_combo">
+                                        <div class="p-3 detail-container-mobile">
+                                            <div class="row g-3">
+                                                <t t-foreach="bk.get('rows', [])" t-as="c">
+                                                    <div class="col-12 col-md-12">
+                                                        <div class="card h-100 shadow-sm">
+                                                            <div class="card-header bg-white d-flex align-items-center py-2">
+                                                                <img t-att-src="c['image_url']" class="me-3" style="width:40px; height:40px; object-fit:contain;"/>
+                                                                <div class="flex-grow-1">
+                                                                    <div class="fw-bold text-primary"><t t-esc="c['name']"/></div>
+                                                                    <div class="small text-muted">SL Combo: <b><t t-esc="'{:,.0f}'.format(c['component_qty_in_combo'])"/></b></div>
+                                                                </div>
+                                                            </div>
+                                                            <div class="card-body p-0">
+                                                                <t t-foreach="c.get('warehouses', [])" t-as="w">
+                                                                    <div class="border-bottom p-2">
+                                                                        <div class="fw-bold small mb-1 d-flex justify-content-between align-items-center">
+                                                                            <span><t t-esc="w['warehouse_name']"/></span>
+                                                                            <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 btn-view-location"
+                                                                                    t-att-data-pid="c['child_product_id']" t-att-data-wid="w['warehouse_id']" t-att-data-name="c['name']">
+                                                                                <i class="fa fa-map-marker-alt"></i> Vị trí
+                                                                            </button>
+                                                                        </div>
+                                                                        <div class="d-flex">
+                                                                            <div class="flex-fill text-center border-end">
+                                                                                <div class="small text-muted">Sẵn sàng</div>
+                                                                                <div class="fw-bold text-success"><t t-esc="'{:,.0f}'.format(w['qty_available'])"/></div>
+                                                                            </div>
+                                                                            <div class="flex-fill text-center">
+                                                                                <div class="small text-muted">Thực tế</div>
+                                                                                <div><t t-esc="'{:,.0f}'.format(w['qty_total'])"/></div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </t>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </t>
+                                            </div>
+                                        </div>
+                                    </t>
+                                    
+                                    <!-- REGULAR LAYOUT -->
+                                    <t t-else="">
+                                        <div class="detail-container-mobile">
+                                            <!-- Desktop -->
+                                            <div class="d-none d-md-block p-3 bg-white">
+                                                <table class="table table-sm mb-0 shadow-sm border">
+                                                    <thead class="table-light">
+                                                        <tr>
+                                                            <th class="py-2 ps-3 text-muted fst-italic">Kho hàng</th>
+                                                            <th class="py-2 text-end text-muted fst-italic">Tồn</th>
+                                                            <th class="py-2 text-end text-muted fst-italic">Giữ</th>
+                                                            <th class="py-2 text-end text-muted fst-italic pe-3">Sẵn sàng</th>
+                                                            <th class="py-2 text-center text-muted fst-italic" style="width: 80px;">Vị trí</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <t t-foreach="bk.get('rows', [])" t-as="w">
+                                                            <tr>
+                                                                <td class="ps-3"><t t-esc="w['warehouse_name']"/></td>
+                                                                <td class="text-end"><t t-esc="'{:,.0f}'.format(w['qty_total'])"/></td>
+                                                                <td class="text-end"><t t-esc="'{:,.0f}'.format(w['qty_reserved'])"/></td>
+                                                                <td t-attf-class="text-end pe-3 #{ 'text-success fw-bold' if w['qty_available'] > 0 else 'text-muted' }">
+                                                                    <t t-esc="'{:,.0f}'.format(w['qty_available'])"/>
+                                                                </td>
+                                                                <td class="text-center">
+                                                                    <button type="button" class="btn btn-sm btn-light text-primary btn-view-location border py-0 px-2"
+                                                                            t-att-data-pid="r['id']" t-att-data-wid="w['warehouse_id']" t-att-data-name="r['name']" title="Xem chi tiết vị trí">
+                                                                        <i class="fa fa-map-marker-alt"></i>
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        </t>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <!-- Mobile -->
+                                            <div class="d-md-none">
+                                                <t t-foreach="bk.get('rows', [])" t-as="w">
+                                                     <div class="wh-card">
+                                                       <div class="wh-header d-flex justify-content-between align-items-center">
+                                                           <span><t t-esc="w['warehouse_name']"/></span>
+                                                           <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 btn-view-location"
+                                                                   t-att-data-pid="r['id']" t-att-data-wid="w['warehouse_id']" t-att-data-name="r['name']">
+                                                               <i class="fa fa-map-marker-alt"></i> Vị trí
+                                                           </button>
+                                                       </div>
+                                                       <div class="wh-stats">
+                                                         <div t-attf-class="wh-stat-col #{ 'dim' if w['qty_total']==0 else '' }"><div class="wh-label">Tổng</div><div class="wh-val"><t t-esc="'{:,.0f}'.format(w['qty_total'])"/></div></div>
+                                                         <div t-attf-class="wh-stat-col #{ 'dim' if w['qty_reserved']==0 else '' }"><div class="wh-label">Đã giữ</div><div class="wh-val text-muted"><t t-esc="'{:,.0f}'.format(w['qty_reserved'])"/></div></div>
+                                                         <div class="wh-stat-col highlight"><div class="wh-label">Có thể bán</div><div class="wh-val"><t t-esc="'{:,.0f}'.format(w['qty_available'])"/></div></div>
+                                                       </div>
+                                                     </div>
+                                                </t>
+                                            </div>
+                                        </div>
+                                    </t>
+                                </td>
+                            </tr>
                           </t>
                         </tbody>
                       </table>
@@ -359,6 +465,32 @@
                 </div>
               </t>
             </div>
+
+            <!-- Modal Location Details -->
+            <div class="modal fade" id="locationDetailsModal" tabindex="-1" aria-labelledby="locationDetailsModalLabel" aria-hidden="true" style="z-index: 1060;">
+              <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="locationDetailsModalLabel">Chi tiết vị trí tồn kho</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body p-0">
+                    <div id="locationDetailsProductName" class="bg-light p-2 border-bottom fw-bold text-center text-primary"></div>
+                    <div id="locationDetailsBody" class="p-3">
+                        <div class="text-center py-3">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </section>
 
           <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
@@ -504,21 +636,70 @@
                    var $row = $btn.closest('tr');
                    var $next = $row.next();
 
-                   // Nếu đang mở thì đóng
-                   if ($next.length && $next.hasClass('detail-row') && $next.is(':visible')) {
-                        $next.remove();
-                        $btn.html('<i class="fa fa-plus"></i>');
-                        return;
+                   if ($next.is(':visible')) { 
+                       $next.hide(); 
+                       $btn.html('<i class="fa fa-plus"></i>'); 
+                   } else {
+                       $next.show();
+                       $btn.html('<i class="fa fa-minus"></i>');
                    }
-                   
-                   // Nếu chưa mở thì gọi hàm tải
-                   loadDetailRow($btn);
                 });
 
-                // >>> TỰ ĐỘNG BUNG HẾT KHI VÀO TRANG (AUTO LOAD) <<<
-                // Chạy vòng lặp gọi hàm tải trực tiếp (không dùng click giả lập nữa)
-                $('.btn-expand').each(function() {
-                    loadDetailRow($(this));
+                // --- VIEW LOCATION DETAILS ---
+                $(document).on('click', '.btn-view-location', function(e) {
+                    e.preventDefault();
+                    var pid = $(this).data('pid');
+                    var wid = $(this).data('wid');
+                    var name = $(this).data('name');
+                    
+                    $('#locationDetailsProductName').text(name);
+                    $('#locationDetailsBody').html('<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><div class="mt-2 text-muted">Đang tải...</div></div>');
+                    
+                    var myModalElem = document.getElementById('locationDetailsModal');
+                    // Check if Bootstrap 5 exists, if not, use minimal approach
+                    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                        var myModal = bootstrap.Modal.getInstance(myModalElem) || new bootstrap.Modal(myModalElem);
+                        myModal.show();
+                    } else {
+                        // Fallback if bootstrap JS is not perfectly loaded
+                        $(myModalElem).show().addClass('show');
+                        $(document.body).append('<div class="modal-backdrop fade show" id="customBackdrop"></div>');
+                        $(myModalElem).find('.btn-close, .btn-secondary').off('click').on('click', function() {
+                            $(myModalElem).hide().removeClass('show');
+                            $('#customBackdrop').remove();
+                        });
+                    }
+                    
+                    $.ajax({
+                        url: "/search_stock/location_details",
+                        type: "POST", dataType: "json", contentType: "application/json",
+                        data: JSON.stringify({ jsonrpc: "2.0", method: "call", params: { product_id: pid, warehouse_id: wid }, id: new Date().getTime() }),
+                        success: function(resp) {
+                            var data = resp.result;
+                            if (data && data.ok) {
+                                if (data.locations && data.locations.length > 0) {
+                                    var html = '<table class="table table-sm table-bordered mb-0">';
+                                    html += '<thead class="table-light"><tr><th>Vị trí</th><th class="text-end">Tồn</th><th class="text-end">Sẵn sàng</th></tr></thead><tbody>';
+                                    data.locations.forEach(function(loc) {
+                                        html += '<tr>';
+                                        html += '<td>' + loc.location + '</td>';
+                                        html += '<td class="text-end fw-bold">' + fmt(loc.qty) + '</td>';
+                                        html += '<td class="text-end text-success">' + fmt(loc.available) + '</td>';
+                                        html += '</tr>';
+                                    });
+                                    html += '</tbody></table>';
+                                    $('#locationDetailsBody').html(html);
+                                } else {
+                                    $('#locationDetailsBody').html('<div class="alert alert-warning mb-0 text-center">Không có tồn kho tại các vị trí trong kho này.</div>');
+                                }
+                            } else {
+                                $('#locationDetailsBody').html('<div class="alert alert-danger mb-0 text-center">Lỗi: ' + (data ? data.error : 'Không thể tải dữ liệu') + '</div>');
+                            }
+                        },
+                        error: function() {
+                            $('#locationDetailsBody').html('<div class="alert alert-danger mb-0 text-center">Lỗi kết nối. Vui lòng thử lại.</div>');
+                        }
+                    });
                 });
               });
               
