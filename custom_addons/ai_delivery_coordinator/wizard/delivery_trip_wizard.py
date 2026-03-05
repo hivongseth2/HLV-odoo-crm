@@ -186,36 +186,51 @@ class DeliveryTripWizard(models.TransientModel):
         return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
     def _geocode_address(self, query):
-        """Geocode địa chỉ bằng Track-Asia Search V2."""
+        """Geocode địa chỉ bằng Google Maps Places qua RapidAPI."""
         if not query:
             return None, None
-        ta_key = self.env['ir.config_parameter'].sudo().get_param(
-            'ai_delivery_coordinator.track_asia_api_key')
-        if not ta_key:
-            _logger.warning('Track-Asia API Key chưa cấu hình.')
+        rapidapi_key = self.env['ir.config_parameter'].sudo().get_param(
+            'ai_delivery_coordinator.rapidapi_key')
+        if not rapidapi_key:
+            _logger.warning('RapidAPI Key chưa cấu hình.')
             return None, None
         try:
-            _logger.info('[Track-Asia] Geocoding: "%s"', query)
-            resp = requests.get(
-                'https://maps.track-asia.com/api/v2/place/textsearch/json',
-                params={
-                    'query': query,
-                    'language': 'vi',
-                    'key': ta_key,
+            _logger.info('[Geocode] Searching: "%s"', query)
+            resp = requests.post(
+                'https://google-map-places-new-v2.p.rapidapi.com'
+                '/v1/places:searchText',
+                headers={
+                    'Content-Type': 'application/json',
+                    'X-Goog-FieldMask': (
+                        'places.id,places.displayName,'
+                        'places.formattedAddress,places.location'
+                    ),
+                    'x-rapidapi-host': (
+                        'google-map-places-new-v2.p.rapidapi.com'
+                    ),
+                    'x-rapidapi-key': rapidapi_key,
                 },
-                timeout=10,
+                json={
+                    'textQuery': query,
+                    'languageCode': 'vi',
+                    'maxResultCount': 1,
+                },
+                timeout=15,
             )
             data = resp.json()
-            if data.get('status') == 'OK' and data.get('results'):
-                loc = data['results'][0]['geometry']['location']
-                name = data['results'][0].get('name', '')
-                _logger.info('[Track-Asia] ✓ "%s" → %s, %s (%s)',
-                             query, loc['lat'], loc['lng'], name)
-                return loc['lat'], loc['lng']
-            _logger.warning('[Track-Asia] ✗ No result: "%s" → %s',
-                            query, data.get('status'))
+            places = data.get('places', [])
+            if places:
+                loc = places[0]['location']
+                name = places[0].get('displayName', {}).get('text', '')
+                lat = loc['latitude']
+                lng = loc['longitude']
+                _logger.info(
+                    '[Geocode] ✓ "%s" → %s, %s (%s)',
+                    query, lat, lng, name)
+                return lat, lng
+            _logger.warning('[Geocode] ✗ No result: "%s"', query)
         except Exception as e:
-            _logger.warning('[Track-Asia] ✗ Error "%s": %s', query, e)
+            _logger.warning('[Geocode] ✗ Error "%s": %s', query, e)
         return None, None
 
     def _get_warehouse_coords(self):
@@ -247,9 +262,16 @@ class DeliveryTripWizard(models.TransientModel):
         return ', '.join(parts)
 
     def _ensure_geocoded(self, schedule_lines):
-        """Geocode tất cả line chưa có toạ độ, cập nhật distance_km."""
-        to_geocode = schedule_lines.filtered(
-            lambda l: not l.delivery_lat and l.delivery_address)
+        """Geocode tất cả line chưa có toạ độ hoặc đã đổi địa chỉ."""
+        def needs_geocode(l):
+            if not l.delivery_address:
+                return False
+            query = self._build_geocode_query(l)
+            if not l.geocoded_query or l.geocoded_query != query:
+                return True
+            return False
+
+        to_geocode = schedule_lines.filtered(needs_geocode)
         if not to_geocode:
             self._update_distances(schedule_lines)
             return
@@ -265,11 +287,18 @@ class DeliveryTripWizard(models.TransientModel):
                      len(to_geocode), len(query_map))
         for query, sls in query_map.items():
             lat, lng = self._geocode_address(query)
-            if lat and lng:
-                for sl in sls:
+            for sl in sls:
+                if lat and lng:
                     sl.sudo().write({
                         'delivery_lat': lat,
                         'delivery_lng': lng,
+                        'geocoded_query': query,
+                    })
+                else:
+                    sl.sudo().write({
+                        'delivery_lat': 0.0,
+                        'delivery_lng': 0.0,
+                        'geocoded_query': query,
                     })
 
         # Cập nhật distance từ kho
@@ -300,11 +329,15 @@ class DeliveryTripWizard(models.TransientModel):
         schedule_lines = self.line_ids.mapped('schedule_line_id')
         self._ensure_geocoded(schedule_lines)
 
-        # Bước 2: API key
+        # Bước 2: API key và Cấu hình AI
         api_key = self.env['ir.config_parameter'].sudo().get_param(
             'ai_delivery_coordinator.openai_api_key')
         model_name = self.env['ir.config_parameter'].sudo().get_param(
             'ai_delivery_coordinator.openai_model_delivery', 'gpt-4o')
+        ai_custom_prompt = self.env['ir.config_parameter'].sudo().get_param(
+            'ai_delivery_coordinator.ai_custom_prompt', 
+            'Bạn là chuyên gia logistics Việt Nam. Hãy phân tuyến tối ưu.'
+        )
         if not api_key:
             raise UserError(_('Vui lòng cấu hình OpenAI API Key.'))
 
@@ -330,6 +363,25 @@ class DeliveryTripWizard(models.TransientModel):
             if not lat:
                 no_coords += 1
 
+            # Lấy thông tin chi tiết từng món hàng
+            total_qty = 0
+            items_desc = []
+            if so:
+                for line in so.order_line:
+                    if line.product_uom_qty > 0:
+                        total_qty += line.product_uom_qty
+                        # Rút gọn tên SP để tiết kiệm token
+                        prod_name = line.product_id.name or line.name or 'A'
+                        if len(prod_name) > 30:
+                            prod_name = prod_name[:27] + '...'
+                        items_desc.append(f"{prod_name} x{line.product_uom_qty}")
+
+            priority = ''
+            if so:
+                priority = getattr(so, 'priority', '')
+                if not priority:
+                    priority = getattr(so, 'x_priority', '')
+
             order_data.append({
                 'id': wl.id,
                 'order': so.name if so else '',
@@ -341,25 +393,30 @@ class DeliveryTripWizard(models.TransientModel):
                 'stock': sl.stock_status or '',
                 'htgh': (sl.order_htgh or '').strip(),
                 'date': commit_date,
+                'priority': priority,
+                'items_qty': total_qty,
+                'items_detail': ' | '.join(items_desc),
             })
 
         # Bước 4: AI với toạ độ + khoảng cách
         prompt = (
-            "Bạn là chuyên gia logistics Việt Nam.\n"
+            f"{ai_custom_prompt}\n"
             f"Hôm nay: {today_str}\n"
-            f"Phương tiện: {vehicle_label} "
-            f"(mục tiêu ~{capacity} đơn/chuyến).\n\n"
-            "Dữ liệu có TOẠ ĐỘ GPS (lat/lng) và "
-            "KHOẢNG CÁCH từ kho (dist_km).\n\n"
-            f"CHỌN KHOẢNG {capacity} đơn cho 1 chuyến.\n\n"
+            f"Phương tiện: {vehicle_label}.\n\n"
+            "Dữ liệu có TOẠ ĐỘ GPS (lat/lng), KHOẢNG CÁCH từ kho (dist_km), "
+            "tổng số lượng (items_qty), chi tiết hàng (items_detail) và MỨC ƯU TIÊN (priority).\n\n"
+            f"CHỌN KHOẢNG {capacity} đơn cho 1 chuyến.\n"
+            "Chỉ đạo: Ước lượng thể tích/khối lượng thực tế dựa vào 'items_detail'. (VD: 1000 cái ghế sẽ cồng kềnh hơn 1000 con ốc).\n"
+            "Hãy CĂN CỨ VÀO ĐÓ ĐỂ QUYẾT ĐỊNH SỐ ĐƠN (chọn ít đơn lại nếu hàng quá to/nhiều).\n\n"
             "QUY TẮC BẮT BUỘC:\n"
             "★ KHÔNG BAO GIỜ tách đơn cùng PARTNER. "
             "Nếu chọn 1 đơn của 1 công ty → PHẢI chọn TẤT CẢ "
             "đơn của công ty đó. VD: Marshall 6 đơn → lấy cả 6.\n"
             "★ Nếu gom hết đơn cùng partner lại mà VƯỢT "
-            f"{capacity} → VẪN ĐƯỢC, ưu tiên gom đủ công ty.\n"
+            f"{capacity} đơn hoặc xe đầy hàng → VẪN ĐƯỢC, ưu tiên gom đủ công ty.\n"
             "★ Đơn cùng toạ độ (< 0.05 độ) → chọn cùng\n\n"
-            "ƯU TIÊN:\n"
+            "ƯU TIÊN CHỌN ĐƠN:\n"
+            "0. priority cao ('high', '1', v.v) → ƯU TIÊN HÀNG ĐẦU\n"
             "1. stock=ready → ưu tiên\n"
             "2. date gần/quá hạn → ưu tiên\n"
             "3. Đơn GẦN NHAU (lat/lng + dist_km) → gom\n"
@@ -369,8 +426,9 @@ class DeliveryTripWizard(models.TransientModel):
             f"ĐƠN HÀNG ({len(order_data)} đơn):\n"
             f"{json.dumps(order_data, ensure_ascii=False)}\n\n"
             "TRẢ VỀ JSON:\n"
-            "{\"selected\": [<các id>], "
-            "\"reason\": \"<lý do>\"}\n"
+            "{\"thought_process\": \"<Vẽ 1 sơ đồ ASCII hoặc Bảng ASCII ngắn gọn minh hoạ việc gom cụm địa lý hoặc tải trọng. Dùng TÊN ĐƠN (order), không dùng id. Giải thích tóm tắt bằng bullet point và emoji, Giải thích cực kỳ ngắn gọn, dùng gạch đầu dòng và emoji để tóm tắt lý do gom chuyến>\",\n"
+            "\"selected\": [<các id>], "
+            "\"reason\": \"<Tóm tắt 1 câu ngắn>\"}\n"
             "CHỈ JSON."
         )
 
@@ -401,6 +459,7 @@ class DeliveryTripWizard(models.TransientModel):
 
         selected_ids = set(result.get('selected', []))
         reason = result.get('reason', '')
+        thought_process = result.get('thought_process', '')
         if not selected_ids:
             raise UserError(_('AI không chọn được đơn nào.'))
 
@@ -414,10 +473,11 @@ class DeliveryTripWizard(models.TransientModel):
             self.route_id = routes.id
 
         info = [
-            f"🤖📍 AI + Track-Asia: chọn "
+            f"🤖📍 AI + Geocode: chọn "
             f"{len(self.line_ids)}/{len(order_data)} đơn "
             f"({vehicle_label}, max {capacity}):",
-            reason,
+            f"🧠 Tư duy AI:\n{thought_process}\n" if thought_process else "",
+            f"📌 Kết luận: {reason}",
         ]
         if no_coords > 0:
             info.append(f"⚠ {no_coords} đơn không geocode được")
@@ -451,7 +511,13 @@ class DeliveryTripWizard(models.TransientModel):
 
         if not points:
             raise UserError(_('Không có toạ độ. Kiểm tra địa chỉ.'))
-        elif len(points) == 1:
+
+        # Thêm toạ độ kho làm điểm bắt đầu nếu có
+        wh_lat, wh_lng = self._get_warehouse_coords()
+        if wh_lat and wh_lng:
+            points.insert(0, f"{round(wh_lat, 5)},{round(wh_lng, 5)}")
+
+        if len(points) == 1:
             url = f'https://www.google.com/maps?q={points[0]}'
         else:
             url = 'https://www.google.com/maps/dir/' + '/'.join(points[:25])

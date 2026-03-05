@@ -198,7 +198,7 @@
                                     <i class="fa fa-calendar-check-o"/> Hẹn: <field name="commitment_date"/>
                                 </div>
                                 <!-- Deadline tag (không hiện overdue vì ribbon đã có) -->
-                                <t t-if="record.deadline_label.raw_value and record.deadline_urgency.raw_value != 'overdue'">
+                                <t t-if="record.deadline_label.raw_value &amp;&amp; record.deadline_urgency.raw_value != 'overdue'">
                                     <span t-attf-class="badge #{record.deadline_urgency.raw_value == 'today' ? 'text-bg-warning' : 'text-bg-info'}" style="font-size: 0.8em;">
                                         <i class="fa fa-clock-o"/> <field name="deadline_label"/>
                                     </span>
@@ -226,7 +226,7 @@
                                         </span>
                                     </t>
                                 </div>
-                                <div t-if="record.po_expected_date.raw_value and record.stock_status.raw_value != 'ready'" class="mt-1" style="font-size: 0.9em; color: #d32f2f;">
+                                <div t-if="record.po_expected_date.raw_value &amp;&amp; record.stock_status.raw_value != 'ready'" class="mt-1" style="font-size: 0.9em; color: #d32f2f;">
                                     <i class="fa fa-truck"/> PO Về: <field name="po_expected_date"/>
                                 </div>
                                 <div t-if="record.distance_km.raw_value" class="mt-1" style="font-size: 0.85em;">
@@ -243,6 +243,11 @@
                                 <div t-if="record.kho_xuat.raw_value" class="mt-1" style="font-size: 0.85em;">
                                     <i class="fa fa-warehouse" title="Kho xuất"/>
                                     <span class="badge text-bg-secondary"><field name="kho_xuat"/></span>
+                                </div>
+                                <div t-if="record.delivery_lat.raw_value == 0" class="mt-1">
+                                    <span class="badge text-bg-danger" title="Chưa có toạ độ hoặc thiếu địa chỉ, AI tính sai khoảng cách." style="font-size: 0.75em;">
+                                        <i class="fa fa-warning"/> Lỗi GPS / Thiếu Địa Chỉ
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -264,6 +269,11 @@
                         <field name="order_id"/>
                         <field name="partner_id"/>
                         <field name="delivery_address"/>
+                        <label for="delivery_lat" string="Toạ độ GPS"/>
+                        <div class="o_row">
+                            <field name="delivery_lat" placeholder="Vĩ độ (Lat)"/> , 
+                            <field name="delivery_lng" placeholder="Kinh độ (Lng)"/>
+                        </div>
                         <field name="po_expected_date" invisible="po_expected_date == False"/>
                         <field name="stock_status"/>
                         <field name="ai_strategy"/>
