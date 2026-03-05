@@ -354,6 +354,11 @@ class DeliveryTripWizard(models.TransientModel):
             if not lat:
                 no_coords += 1
 
+            # Tính toán khối lượng hàng hóa (cơ bản)
+            total_qty = 0
+            if so:
+                total_qty = sum(line.product_uom_qty for line in so.order_line if line.product_uom_qty > 0)
+
             order_data.append({
                 'id': wl.id,
                 'order': so.name if so else '',
@@ -365,23 +370,24 @@ class DeliveryTripWizard(models.TransientModel):
                 'stock': sl.stock_status or '',
                 'htgh': (sl.order_htgh or '').strip(),
                 'date': commit_date,
+                'items_qty': total_qty,
             })
 
         # Bước 4: AI với toạ độ + khoảng cách
         prompt = (
             "Bạn là chuyên gia logistics Việt Nam.\n"
             f"Hôm nay: {today_str}\n"
-            f"Phương tiện: {vehicle_label} "
-            f"(mục tiêu ~{capacity} đơn/chuyến).\n\n"
-            "Dữ liệu có TOẠ ĐỘ GPS (lat/lng) và "
-            "KHOẢNG CÁCH từ kho (dist_km).\n\n"
-            f"CHỌN KHOẢNG {capacity} đơn cho 1 chuyến.\n\n"
+            f"Phương tiện: {vehicle_label}.\n\n"
+            "Dữ liệu có TOẠ ĐỘ GPS (lat/lng), KHOẢNG CÁCH từ kho (dist_km), "
+            "và SỐ LƯỢNG HÀNG (items_qty).\n\n"
+            f"CHỌN KHOẢNG {capacity} đơn cho 1 chuyến.\n"
+            "Hãy CĂN CỨ VÀO items_qty ĐỂ QUYẾT ĐỊNH SỐ ĐƠN (nếu đơn có items_qty rất lớn, chọn ít đơn lại).\n\n"
             "QUY TẮC BẮT BUỘC:\n"
             "★ KHÔNG BAO GIỜ tách đơn cùng PARTNER. "
             "Nếu chọn 1 đơn của 1 công ty → PHẢI chọn TẤT CẢ "
             "đơn của công ty đó. VD: Marshall 6 đơn → lấy cả 6.\n"
             "★ Nếu gom hết đơn cùng partner lại mà VƯỢT "
-            f"{capacity} → VẪN ĐƯỢC, ưu tiên gom đủ công ty.\n"
+            f"{capacity} đơn hoặc xe đầy hàng → VẪN ĐƯỢC, ưu tiên gom đủ công ty.\n"
             "★ Đơn cùng toạ độ (< 0.05 độ) → chọn cùng\n\n"
             "ƯU TIÊN:\n"
             "1. stock=ready → ưu tiên\n"
@@ -475,7 +481,13 @@ class DeliveryTripWizard(models.TransientModel):
 
         if not points:
             raise UserError(_('Không có toạ độ. Kiểm tra địa chỉ.'))
-        elif len(points) == 1:
+
+        # Thêm toạ độ kho làm điểm bắt đầu nếu có
+        wh_lat, wh_lng = self._get_warehouse_coords()
+        if wh_lat and wh_lng:
+            points.insert(0, f"{round(wh_lat, 5)},{round(wh_lng, 5)}")
+
+        if len(points) == 1:
             url = f'https://www.google.com/maps?q={points[0]}'
         else:
             url = 'https://www.google.com/maps/dir/' + '/'.join(points[:25])
