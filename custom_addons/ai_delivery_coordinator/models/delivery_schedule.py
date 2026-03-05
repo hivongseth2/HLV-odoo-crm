@@ -139,6 +139,7 @@ class DeliverySchedule(models.Model):
 class DeliveryScheduleLine(models.Model):
     _name = 'delivery.schedule.line'
     _description = 'Chi tiết đơn hàng trong Lịch trình'
+    _rec_name = 'order_id'
 
     schedule_id = fields.Many2one('delivery.schedule', string='Lịch trình', ondelete='set null', index=True)
     assigned_date = fields.Date(string='Ngày giao (Gán cứng)', default=fields.Date.context_today)

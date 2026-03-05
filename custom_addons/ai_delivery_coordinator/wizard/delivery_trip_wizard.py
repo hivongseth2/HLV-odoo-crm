@@ -426,7 +426,7 @@ class DeliveryTripWizard(models.TransientModel):
             f"ĐƠN HÀNG ({len(order_data)} đơn):\n"
             f"{json.dumps(order_data, ensure_ascii=False)}\n\n"
             "TRẢ VỀ JSON:\n"
-            "{\"thought_process\": \"<Dùng TÊN ĐƠN HÀNG (order), tuyệt đối không dùng id. Giải thích cực kỳ ngắn gọn, dùng gạch đầu dòng và emoji để tóm tắt lý do gom chuyến>\",\n"
+            "{\"thought_process\": \"<Vẽ 1 sơ đồ ASCII hoặc Bảng ASCII ngắn gọn minh hoạ việc gom cụm địa lý hoặc tải trọng. Dùng TÊN ĐƠN (order), không dùng id. Giải thích tóm tắt bằng bullet point và emoji, Giải thích cực kỳ ngắn gọn, dùng gạch đầu dòng và emoji để tóm tắt lý do gom chuyến>\",\n"
             "\"selected\": [<các id>], "
             "\"reason\": \"<Tóm tắt 1 câu ngắn>\"}\n"
             "CHỈ JSON."
