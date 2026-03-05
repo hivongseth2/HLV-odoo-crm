@@ -210,6 +210,7 @@ class DeliveryScheduleLine(models.Model):
     # Geocoding
     delivery_lat = fields.Float(string='Vĩ độ', digits=(10, 7))
     delivery_lng = fields.Float(string='Kinh độ', digits=(10, 7))
+    geocoded_query = fields.Char(string='Chuỗi đã Geocode')
 
     @api.depends('order_id')
     def _compute_picking_status(self):
@@ -292,7 +293,7 @@ class DeliveryScheduleLine(models.Model):
         safe_fields = {
             'is_selected', 'stock_status', 'trip_id', 'route_id',
             'ai_suggested_route', 'ai_strategy', 'distance_km',
-            'delivery_lat', 'delivery_lng',
+            'delivery_lat', 'delivery_lng', 'geocoded_query',
         }
         if not safe_fields.issuperset(vals.keys()):
             for record in self:

@@ -262,9 +262,17 @@ class DeliveryTripWizard(models.TransientModel):
         return ', '.join(parts)
 
     def _ensure_geocoded(self, schedule_lines):
-        """Geocode tất cả line chưa có toạ độ, cập nhật distance_km."""
-        to_geocode = schedule_lines.filtered(
-            lambda l: not l.delivery_lat and l.delivery_address)
+        """Geocode tất cả line chưa có toạ độ hoặc đã đổi địa chỉ."""
+        # Lọc ra đơn cần geocode: chưa có toạ độ HOẶC chuỗi query bị thay đổi
+        def needs_geocode(l):
+            if not l.delivery_address:
+                return False
+            query = self._build_geocode_query(l)
+            if not l.delivery_lat or l.geocoded_query != query:
+                return True
+            return False
+
+        to_geocode = schedule_lines.filtered(needs_geocode)
         if not to_geocode:
             self._update_distances(schedule_lines)
             return
@@ -285,6 +293,7 @@ class DeliveryTripWizard(models.TransientModel):
                     sl.sudo().write({
                         'delivery_lat': lat,
                         'delivery_lng': lng,
+                        'geocoded_query': query,
                     })
 
         # Cập nhật distance từ kho

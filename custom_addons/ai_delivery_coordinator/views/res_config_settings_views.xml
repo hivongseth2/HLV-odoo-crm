@@ -16,9 +16,12 @@
                             <field name="openai_model_delivery"/>
                         </setting>
                     </block>
-                    <block title="Geocoding (RapidAPI)" name="rapidapi_config">
+                    <block title="Geocoding &amp; Routing" name="rapidapi_config">
                         <setting string="RapidAPI Key" help="API Key cho Google Maps Geocoding qua RapidAPI">
                             <field name="rapidapi_key" password="True"/>
+                        </setting>
+                        <setting string="Track-Asia API Key" help="Dự phòng hoặc tính khoảnh cách">
+                            <field name="track_asia_api_key" password="True"/>
                         </setting>
                         <setting string="Kho xuất phát" help="Kho dùng để tính khoảng cách giao hàng">
                             <field name="delivery_warehouse_id"/>
