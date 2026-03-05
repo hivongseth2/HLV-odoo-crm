@@ -15,6 +15,9 @@
                         <setting string="Model" help="VD: gpt-4o">
                             <field name="openai_model_delivery"/>
                         </setting>
+                        <setting string="Prompt Chỉ đạo AI" help="Thêm các chỉ dẫn riêng biệt cho AI (VD: xe máy chỉ chở được ghế nhỏ, xe tải chở bàn lớn...)">
+                            <field name="ai_custom_prompt"/>
+                        </setting>
                     </block>
                     <block title="Geocoding &amp; Routing" name="rapidapi_config">
                         <setting string="RapidAPI Key" help="API Key cho Google Maps Geocoding qua RapidAPI">

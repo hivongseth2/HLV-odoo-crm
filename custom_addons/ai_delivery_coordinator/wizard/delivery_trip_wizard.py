@@ -329,11 +329,15 @@ class DeliveryTripWizard(models.TransientModel):
         schedule_lines = self.line_ids.mapped('schedule_line_id')
         self._ensure_geocoded(schedule_lines)
 
-        # Bước 2: API key
+        # Bước 2: API key và Cấu hình AI
         api_key = self.env['ir.config_parameter'].sudo().get_param(
             'ai_delivery_coordinator.openai_api_key')
         model_name = self.env['ir.config_parameter'].sudo().get_param(
             'ai_delivery_coordinator.openai_model_delivery', 'gpt-4o')
+        ai_custom_prompt = self.env['ir.config_parameter'].sudo().get_param(
+            'ai_delivery_coordinator.ai_custom_prompt', 
+            'Bạn là chuyên gia logistics Việt Nam. Hãy phân tuyến tối ưu.'
+        )
         if not api_key:
             raise UserError(_('Vui lòng cấu hình OpenAI API Key.'))
 
@@ -359,10 +363,18 @@ class DeliveryTripWizard(models.TransientModel):
             if not lat:
                 no_coords += 1
 
-            # Tính toán khối lượng hàng hóa (cơ bản)
+            # Lấy thông tin chi tiết từng món hàng
             total_qty = 0
+            items_desc = []
             if so:
-                total_qty = sum(line.product_uom_qty for line in so.order_line if line.product_uom_qty > 0)
+                for line in so.order_line:
+                    if line.product_uom_qty > 0:
+                        total_qty += line.product_uom_qty
+                        # Rút gọn tên SP để tiết kiệm token
+                        prod_name = line.product_id.name or line.name or 'A'
+                        if len(prod_name) > 30:
+                            prod_name = prod_name[:27] + '...'
+                        items_desc.append(f"{prod_name} x{line.product_uom_qty}")
 
             order_data.append({
                 'id': wl.id,
@@ -376,17 +388,19 @@ class DeliveryTripWizard(models.TransientModel):
                 'htgh': (sl.order_htgh or '').strip(),
                 'date': commit_date,
                 'items_qty': total_qty,
+                'items_detail': ' | '.join(items_desc),
             })
 
         # Bước 4: AI với toạ độ + khoảng cách
         prompt = (
-            "Bạn là chuyên gia logistics Việt Nam.\n"
+            f"{ai_custom_prompt}\n"
             f"Hôm nay: {today_str}\n"
             f"Phương tiện: {vehicle_label}.\n\n"
             "Dữ liệu có TOẠ ĐỘ GPS (lat/lng), KHOẢNG CÁCH từ kho (dist_km), "
-            "và SỐ LƯỢNG HÀNG (items_qty).\n\n"
+            "tổng số lượng (items_qty) và CHI TIẾT MẶT HÀNG (items_detail).\n\n"
             f"CHỌN KHOẢNG {capacity} đơn cho 1 chuyến.\n"
-            "Hãy CĂN CỨ VÀO items_qty ĐỂ QUYẾT ĐỊNH SỐ ĐƠN (nếu đơn có items_qty rất lớn, chọn ít đơn lại).\n\n"
+            "Chỉ đạo: Ước lượng thể tích/khối lượng thực tế dựa vào 'items_detail'. (VD: 1000 cái ghế sẽ cồng kềnh hơn 1000 con ốc).\n"
+            "Hãy CĂN CỨ VÀO ĐÓ ĐỂ QUYẾT ĐỊNH SỐ ĐƠN (chọn ít đơn lại nếu hàng quá to/nhiều).\n\n"
             "QUY TẮC BẮT BUỘC:\n"
             "★ KHÔNG BAO GIỜ tách đơn cùng PARTNER. "
             "Nếu chọn 1 đơn của 1 công ty → PHẢI chọn TẤT CẢ "
