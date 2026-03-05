@@ -227,36 +227,30 @@ class StockExportWizard(models.TransientModel):
         khach_hang = ""
         if so and so.partner_id:
             khach_hang = so.partner_id.name
-            # Use SO Partner REF for 'Ma doi tuong' as requested
+            # Ưu tiên company_registry, nếu không có mới lấy ref
             # Robust check: Commercial Partner -> Parent -> Partner -> Current Value
             p_ref = False
-            cp = so.partner_id.commercial_partner_id
             
-            # DEBUG LOG
+            # DEBUG LOG (Đã cập nhật log để xem cả company_registry)
             _logger.info(f"DEBUG EXPORT: SO {so.name} - Partner {so.partner_id.name} (ID: {so.partner_id.id})")
-            _logger.info(f"--- Commercial Partner: {so.partner_id.commercial_partner_id.name} (Ref: {so.partner_id.commercial_partner_id.ref})")
-            _logger.info(f"--- Parent: {so.partner_id.parent_id.name if so.partner_id.parent_id else 'None'} (Ref: {so.partner_id.parent_id.ref if so.partner_id.parent_id else 'None'})")
-            _logger.info(f"--- Self Ref: {so.partner_id.ref}")
+            _logger.info(f"--- Commercial Partner: {so.partner_id.commercial_partner_id.name} (Reg: {so.partner_id.commercial_partner_id.company_registry}, Ref: {so.partner_id.commercial_partner_id.ref})")
+            _logger.info(f"--- Parent: {so.partner_id.parent_id.name if so.partner_id.parent_id else 'None'} (Reg: {so.partner_id.parent_id.company_registry if so.partner_id.parent_id else 'None'}, Ref: {so.partner_id.parent_id.ref if so.partner_id.parent_id else 'None'})")
+            _logger.info(f"--- Self Reg: {so.partner_id.company_registry} - Self Ref: {so.partner_id.ref}")
 
             # Check Commercial Partner (Company)
-
-
-
-            if cp and (cp.company_registry or cp.ref):
-                p_ref = cp.company_registry or cp.ref
+            if so.partner_id.commercial_partner_id and (so.partner_id.commercial_partner_id.company_registry or so.partner_id.commercial_partner_id.ref):
+                p_ref = so.partner_id.commercial_partner_id.company_registry or so.partner_id.commercial_partner_id.ref
             # Check Parent Company directly
             elif so.partner_id.parent_id and (so.partner_id.parent_id.company_registry or so.partner_id.parent_id.ref):
                 p_ref = so.partner_id.parent_id.company_registry or so.partner_id.parent_id.ref
             # Check Partner itself
             elif so.partner_id.company_registry or so.partner_id.ref:
                 p_ref = so.partner_id.company_registry or so.partner_id.ref
-
+            
             if p_ref:
                 partner_code = p_ref
             else:
-                _logger.info("--- NO REF OR REGISTRY FOUND!")
-
-                
+                _logger.info("--- NO COMPANY REGISTRY OR REF FOUND!")
                 
             # --- SHOPEE OVERRIDE LOGIC ---
             if hasattr(so, 'shopee_shop_id') and so.shopee_shop_id:
