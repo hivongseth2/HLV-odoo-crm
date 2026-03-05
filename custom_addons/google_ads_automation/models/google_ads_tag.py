@@ -69,9 +69,18 @@ class GoogleAdsTag(models.Model):
         string='GTM Account ID',
         help='Lấy từ GTM > Admin > Account Settings (dạng số)',
     )
+    gtm_client_id = fields.Char(
+        string='Mã ứng dụng (Client ID)',
+        help='Lấy từ Google Cloud Console (OAuth 2.0 Client IDs) hoặc OAuth Playground',
+    )
+    gtm_client_secret = fields.Char(
+        string='Mật khẩu ứng dụng (Client Secret)',
+        password=True,
+    )
     gtm_api_token = fields.Char(
-        string='API Token / Access Token',
-        help='OAuth2 access token để gọi GTM API (read-only scope)',
+        string='Refresh Token',
+        password=True,
+        help='OAuth2 Refresh Token (Sống vĩnh viễn, dùng để tự lấy Access Token mới)',
     )
 
     @api.depends('gtm_item_ids', 'gtm_item_ids.item_type')
@@ -108,11 +117,31 @@ class GoogleAdsTag(models.Model):
         # Bắt đầu luồng Real API
         if not _requests:
             raise UserError(_('Thiếu thư viện "requests". Chạy: pip install requests'))
-        if not self.gtm_account_id or not self.gtm_container_id or not self.gtm_api_token:
+        if not self.gtm_account_id or not self.gtm_container_id or not self.gtm_api_token or not self.gtm_client_id or not self.gtm_client_secret:
             if self.account_id and self.account_id.is_demo:
-                raise UserError(_('Để test gọi API thật trong chế độ Demo, vui lòng điền đủ: GTM Account ID, Container ID, và API Token.'))
+                raise UserError(_('Để test gọi API thật trong chế độ Demo, vui lòng điền đủ: GTM Account ID, Container ID, Client ID, Secret, và Refresh Token.'))
             else:
-                raise UserError(_('Vui lòng điền đầy đủ: GTM Account ID, Container ID, và API Token.'))
+                raise UserError(_('Vui lòng điền đầy đủ: GTM Account ID, Container ID, Client ID, Secret, và Refresh Token.'))
+
+        # 1. Đổi Refresh Token lấy Access Token mới
+        token_url = 'https://oauth2.googleapis.com/token'
+        token_data = {
+            'client_id': self.gtm_client_id,
+            'client_secret': self.gtm_client_secret,
+            'refresh_token': self.gtm_api_token,
+            'grant_type': 'refresh_token',
+        }
+        try:
+            token_resp = _requests.post(token_url, data=token_data, timeout=10)
+            token_resp.raise_for_status()
+            access_token = token_resp.json().get('access_token')
+            if not access_token:
+                raise UserError(_('Không lấy được Access Token từ Google. Hãy kiểm tra lại Refresh Token và Client ID/Secret.'))
+        except _requests.exceptions.RequestException as e:
+            err_msg = str(e)
+            if hasattr(e, 'response') and e.response is not None:
+                err_msg += f" - {e.response.text}"
+            raise UserError(_('Lỗi khi xin Access Token mới: %s') % err_msg)
 
         container_num = self.gtm_container_id.replace('GTM-', '')
         base_url = (
@@ -120,7 +149,7 @@ class GoogleAdsTag(models.Model):
             f'/accounts/{self.gtm_account_id}'
             f'/containers/{container_num}'
         )
-        headers = {'Authorization': f'Bearer {self.gtm_api_token}'}
+        headers = {'Authorization': f'Bearer {access_token}'}
 
         # Lấy workspace mặc định
         try:
