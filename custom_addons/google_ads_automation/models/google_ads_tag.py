@@ -1,7 +1,14 @@
 from odoo import api, fields, models, _
+from odoo.exceptions import UserError
 import logging
+import json
 
 _logger = logging.getLogger(__name__)
+
+try:
+    import requests as _requests
+except ImportError:
+    _requests = None
 
 
 class GoogleAdsTag(models.Model):
@@ -41,6 +48,246 @@ class GoogleAdsTag(models.Model):
         'google.ads.conversion.action',
         'tag_id', string='Conversion Actions',
     )
+
+    # ── Dữ liệu GTM đã đồng bộ ─────────────────
+    gtm_item_ids = fields.One2many(
+        'google.ads.gtm.item',
+        'tag_config_id', string='Thành Phần GTM',
+    )
+    gtm_tag_count = fields.Integer(
+        string='Số Tags', compute='_compute_gtm_counts',
+    )
+    gtm_trigger_count = fields.Integer(
+        string='Số Triggers', compute='_compute_gtm_counts',
+    )
+    gtm_variable_count = fields.Integer(
+        string='Số Biến', compute='_compute_gtm_counts',
+    )
+
+    # ── GTM API credentials (chỉ cần cho Real mode) ──
+    gtm_account_id = fields.Char(
+        string='GTM Account ID',
+        help='Lấy từ GTM > Admin > Account Settings (dạng số)',
+    )
+    gtm_api_token = fields.Char(
+        string='API Token / Access Token',
+        help='OAuth2 access token để gọi GTM API (read-only scope)',
+    )
+
+    @api.depends('gtm_item_ids', 'gtm_item_ids.item_type')
+    def _compute_gtm_counts(self):
+        for rec in self:
+            items = rec.gtm_item_ids
+            rec.gtm_tag_count = len(items.filtered(lambda i: i.item_type == 'tag'))
+            rec.gtm_trigger_count = len(items.filtered(lambda i: i.item_type == 'trigger'))
+            rec.gtm_variable_count = len(items.filtered(lambda i: i.item_type == 'variable'))
+
+    def action_sync_from_gtm(self):
+        """Kéo dữ liệu Tags/Triggers/Variables từ GTM API về Odoo (GET only)"""
+        self.ensure_one()
+
+        # Demo mode → seed fake data
+        if self.account_id and self.account_id.is_demo:
+            self._demo_seed_gtm_items()
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('DEMO — Đồng Bộ GTM Hoàn Tất'),
+                    'message': _('Đã tạo dữ liệu mẫu: Tags, Triggers, Variables.'),
+                    'type': 'success',
+                    'sticky': False,
+                },
+            }
+
+        # Real mode → call GTM API v2
+        if not _requests:
+            raise UserError(_('Thiếu thư viện "requests". Chạy: pip install requests'))
+        if not self.gtm_account_id or not self.gtm_container_id or not self.gtm_api_token:
+            raise UserError(_(
+                'Vui lòng điền đầy đủ: GTM Account ID, Container ID, và API Token.'
+            ))
+
+        container_num = self.gtm_container_id.replace('GTM-', '')
+        base_url = (
+            f'https://www.googleapis.com/tagmanager/v2'
+            f'/accounts/{self.gtm_account_id}'
+            f'/containers/{container_num}'
+        )
+        headers = {'Authorization': f'Bearer {self.gtm_api_token}'}
+
+        # Lấy workspace mặc định
+        try:
+            ws_resp = _requests.get(f'{base_url}/workspaces', headers=headers, timeout=15)
+            ws_resp.raise_for_status()
+            workspaces = ws_resp.json().get('workspace', [])
+            if not workspaces:
+                raise UserError(_('Không tìm thấy Workspace nào trong GTM Container.'))
+            ws_id = workspaces[0]['workspaceId']
+        except _requests.exceptions.RequestException as e:
+            raise UserError(_('Lỗi kết nối GTM API: %s') % str(e))
+
+        ws_url = f'{base_url}/workspaces/{ws_id}'
+        now = fields.Datetime.now()
+
+        # Fetch Tags
+        self._fetch_gtm_endpoint(ws_url, 'tags', 'tag', headers, now)
+        # Fetch Triggers
+        self._fetch_gtm_endpoint(ws_url, 'triggers', 'trigger', headers, now)
+        # Fetch Variables
+        self._fetch_gtm_endpoint(ws_url, 'variables', 'variable', headers, now)
+
+        self.message_post(body=_(
+            'Đã đồng bộ từ GTM: %d Tags, %d Triggers, %d Biến'
+        ) % (self.gtm_tag_count, self.gtm_trigger_count, self.gtm_variable_count))
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Đồng Bộ GTM Hoàn Tất'),
+                'message': _('%d Tags, %d Triggers, %d Biến') % (
+                    self.gtm_tag_count, self.gtm_trigger_count, self.gtm_variable_count,
+                ),
+                'type': 'success',
+                'sticky': False,
+            },
+        }
+
+    def _fetch_gtm_endpoint(self, ws_url, endpoint, item_type, headers, now):
+        """GET dữ liệu từ 1 endpoint GTM API và lưu vào Odoo"""
+        GtmItem = self.env['google.ads.gtm.item']
+        try:
+            resp = _requests.get(f'{ws_url}/{endpoint}', headers=headers, timeout=15)
+            resp.raise_for_status()
+            items = resp.json().get(endpoint.rstrip('s'), resp.json().get(endpoint, []))
+            if isinstance(items, dict):
+                items = [items]
+        except Exception as e:
+            _logger.warning('GTM API %s error: %s', endpoint, e)
+            return
+
+        for item in items:
+            gtm_id = item.get('tagId') or item.get('triggerId') or item.get('variableId', '')
+            name = item.get('name', 'Không tên')
+            existing = GtmItem.search([
+                ('tag_config_id', '=', self.id),
+                ('gtm_item_id', '=', str(gtm_id)),
+                ('item_type', '=', item_type),
+            ], limit=1)
+
+            vals = {
+                'tag_config_id': self.id,
+                'gtm_item_id': str(gtm_id),
+                'name': name,
+                'item_type': item_type,
+                'is_paused': item.get('paused', False),
+                'notes': json.dumps(item.get('parameter', []), ensure_ascii=False, indent=2)[:2000] if item.get('parameter') else '',
+                'last_synced': now,
+            }
+
+            # Map subtypes
+            if item_type == 'tag':
+                tag_type_map = {
+                    'ua': 'ua', 'gaawc': 'ga4_config', 'gaawe': 'ga4_event',
+                    'awct': 'awct', 'sp': 'aw_remarketing', 'html': 'html',
+                }
+                vals['tag_subtype'] = tag_type_map.get(item.get('type', ''), 'other')
+                # Lấy trigger names
+                trigger_refs = item.get('firingTriggerId', [])
+                if trigger_refs:
+                    triggers = GtmItem.search([
+                        ('tag_config_id', '=', self.id),
+                        ('item_type', '=', 'trigger'),
+                        ('gtm_item_id', 'in', [str(t) for t in trigger_refs]),
+                    ])
+                    vals['firing_trigger_names'] = ', '.join(triggers.mapped('name')) if triggers else ''
+
+            elif item_type == 'trigger':
+                trigger_type_map = {
+                    'pageview': 'pageview', 'click': 'click',
+                    'formSubmission': 'form_submit', 'timer': 'timer',
+                    'scrollDepth': 'scroll_depth', 'customEvent': 'custom_event',
+                    'historyChange': 'history_change', 'domReady': 'dom_ready',
+                    'windowLoaded': 'window_loaded',
+                }
+                vals['trigger_subtype'] = trigger_type_map.get(item.get('type', ''), 'other')
+
+            if existing:
+                existing.write(vals)
+            else:
+                GtmItem.create(vals)
+
+    def _demo_seed_gtm_items(self):
+        """Tạo dữ liệu GTM mẫu cho demo mode"""
+        self.ensure_one()
+        GtmItem = self.env['google.ads.gtm.item']
+        now = fields.Datetime.now()
+
+        demo_data = [
+            # ── Tags ──
+            {'gtm_item_id': 'T1', 'name': 'GA4 Config — Cấu Hình Chính',
+             'item_type': 'tag', 'tag_subtype': 'ga4_config',
+             'firing_trigger_names': 'All Pages', 'is_paused': False},
+            {'gtm_item_id': 'T2', 'name': 'GA4 Event — Mua Hàng (Purchase)',
+             'item_type': 'tag', 'tag_subtype': 'ga4_event',
+             'firing_trigger_names': 'Purchase Success', 'is_paused': False},
+            {'gtm_item_id': 'T3', 'name': 'Google Ads — Conversion Tracking',
+             'item_type': 'tag', 'tag_subtype': 'awct',
+             'firing_trigger_names': 'Purchase Success', 'is_paused': False},
+            {'gtm_item_id': 'T4', 'name': 'Google Ads — Remarketing',
+             'item_type': 'tag', 'tag_subtype': 'aw_remarketing',
+             'firing_trigger_names': 'All Pages', 'is_paused': False},
+            {'gtm_item_id': 'T5', 'name': 'Facebook Pixel',
+             'item_type': 'tag', 'tag_subtype': 'html',
+             'firing_trigger_names': 'All Pages', 'is_paused': False},
+            {'gtm_item_id': 'T6', 'name': 'Hotjar Tracking Code',
+             'item_type': 'tag', 'tag_subtype': 'html',
+             'firing_trigger_names': 'All Pages', 'is_paused': True},
+
+            # ── Triggers ──
+            {'gtm_item_id': 'TR1', 'name': 'All Pages',
+             'item_type': 'trigger', 'trigger_subtype': 'pageview'},
+            {'gtm_item_id': 'TR2', 'name': 'Purchase Success',
+             'item_type': 'trigger', 'trigger_subtype': 'custom_event',
+             'notes': 'Event name: purchase'},
+            {'gtm_item_id': 'TR3', 'name': 'Add To Cart Click',
+             'item_type': 'trigger', 'trigger_subtype': 'click',
+             'notes': 'CSS Selector: .add-to-cart-button'},
+            {'gtm_item_id': 'TR4', 'name': 'Form Liên Hệ Submit',
+             'item_type': 'trigger', 'trigger_subtype': 'form_submit',
+             'notes': 'Form ID: contact-form'},
+            {'gtm_item_id': 'TR5', 'name': 'Cuộn Trang 50%',
+             'item_type': 'trigger', 'trigger_subtype': 'scroll_depth',
+             'notes': 'Vertical: 50%'},
+            {'gtm_item_id': 'TR6', 'name': 'DOM Ready',
+             'item_type': 'trigger', 'trigger_subtype': 'dom_ready'},
+
+            # ── Variables ──
+            {'gtm_item_id': 'V1', 'name': 'GA4 Measurement ID',
+             'item_type': 'variable', 'notes': 'G-XXXXXXXXXX'},
+            {'gtm_item_id': 'V2', 'name': 'Google Ads Conversion ID',
+             'item_type': 'variable', 'notes': 'AW-XXXXXXXXX'},
+            {'gtm_item_id': 'V3', 'name': 'Transaction Value',
+             'item_type': 'variable', 'notes': 'DataLayer: ecommerce.value'},
+            {'gtm_item_id': 'V4', 'name': 'Transaction ID',
+             'item_type': 'variable', 'notes': 'DataLayer: ecommerce.transaction_id'},
+        ]
+
+        for d in demo_data:
+            existing = GtmItem.search([
+                ('tag_config_id', '=', self.id),
+                ('gtm_item_id', '=', d['gtm_item_id']),
+            ], limit=1)
+            vals = {
+                'tag_config_id': self.id,
+                'last_synced': now,
+                **d,
+            }
+            if existing:
+                existing.write(vals)
+            else:
+                GtmItem.create(vals)
 
     # ── Generated snippets (computed) ────────────
     snippet_head = fields.Text(
