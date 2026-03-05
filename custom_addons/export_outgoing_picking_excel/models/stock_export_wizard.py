@@ -228,22 +228,24 @@ class StockExportWizard(models.TransientModel):
         if so and so.partner_id:
             khach_hang = so.partner_id.name
             # Ưu tiên company_registry, nếu không có mới lấy ref
-            # Robust check: Commercial Partner -> Parent -> Partner -> Current Value
+            # Thứ tự ưu tiên mới: Parent (để lấy DOTHANH) -> Commercial Partner -> Partner
             p_ref = False
             
-            # DEBUG LOG (Đã cập nhật log để xem cả company_registry)
+            # DEBUG LOG
             _logger.info(f"DEBUG EXPORT: SO {so.name} - Partner {so.partner_id.name} (ID: {so.partner_id.id})")
             _logger.info(f"--- Commercial Partner: {so.partner_id.commercial_partner_id.name} (Reg: {so.partner_id.commercial_partner_id.company_registry}, Ref: {so.partner_id.commercial_partner_id.ref})")
             _logger.info(f"--- Parent: {so.partner_id.parent_id.name if so.partner_id.parent_id else 'None'} (Reg: {so.partner_id.parent_id.company_registry if so.partner_id.parent_id else 'None'}, Ref: {so.partner_id.parent_id.ref if so.partner_id.parent_id else 'None'})")
             _logger.info(f"--- Self Reg: {so.partner_id.company_registry} - Self Ref: {so.partner_id.ref}")
 
-            # Check Commercial Partner (Company)
-            if so.partner_id.commercial_partner_id and (so.partner_id.commercial_partner_id.company_registry or so.partner_id.commercial_partner_id.ref):
-                p_ref = so.partner_id.commercial_partner_id.company_registry or so.partner_id.commercial_partner_id.ref
-            # Check Parent Company directly
-            elif so.partner_id.parent_id and (so.partner_id.parent_id.company_registry or so.partner_id.parent_id.ref):
+            # Ưu tiên 1: Check Parent Company directly (Sẽ bắt được chữ DOTHANH ở đây và dừng lại)
+            if so.partner_id.parent_id and (so.partner_id.parent_id.company_registry or so.partner_id.parent_id.ref):
                 p_ref = so.partner_id.parent_id.company_registry or so.partner_id.parent_id.ref
-            # Check Partner itself
+                
+            # Ưu tiên 2: Check Commercial Partner (Nếu Parent không có mới kiểm tra tới đây)
+            elif so.partner_id.commercial_partner_id and (so.partner_id.commercial_partner_id.company_registry or so.partner_id.commercial_partner_id.ref):
+                p_ref = so.partner_id.commercial_partner_id.company_registry or so.partner_id.commercial_partner_id.ref
+                
+            # Ưu tiên 3: Check Partner itself (Chính nó)
             elif so.partner_id.company_registry or so.partner_id.ref:
                 p_ref = so.partner_id.company_registry or so.partner_id.ref
             
