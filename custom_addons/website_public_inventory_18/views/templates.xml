@@ -630,12 +630,12 @@
                             if (data && data.ok) {
                                 if (data.locations && data.locations.length > 0) {
                                     var html = '<table class="table table-sm table-bordered mb-0">';
-                                    html += '<thead class="table-light"><tr><th>Vị trí</th><th class="text-end">Tồn</th><th class="text-end">Sẵn sàng</th></tr></thead><tbody>';
+                                    html += '<thead class="table-light"><tr><th class="text-center">Vị trí</th><th class="text-center">Tồn</th><th class="text-center">Sẵn sàng</th></tr></thead><tbody>';
                                     data.locations.forEach(function(loc) {
                                         html += '<tr>';
-                                        html += '<td>' + loc.location + '</td>';
-                                        html += '<td class="text-end fw-bold">' + fmt(loc.qty) + '</td>';
-                                        html += '<td class="text-end text-success">' + fmt(loc.available) + '</td>';
+                                        html += '<td class="text-center">' + loc.location + '</td>';
+                                        html += '<td class="text-center fw-bold">' + fmt(loc.qty) + '</td>';
+                                        html += '<td class="text-center text-success">' + fmt(loc.available) + '</td>';
                                         html += '</tr>';
                                     });
                                     html += '</tbody></table>';
