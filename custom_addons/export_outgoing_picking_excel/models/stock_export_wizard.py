@@ -83,13 +83,15 @@ class StockExportWizard(models.TransientModel):
     def _partner_code(self, partner):
         if not partner:
             return ""
-        # Prioritize Commercial Partner Ref, then Partner Ref, then company_registry
-        ref = partner.commercial_partner_id.ref or partner.ref
+        
+        # Ưu tiên 1: Lấy Company Registry (của công ty mẹ hoặc chính nó)
+        ref = partner.commercial_partner_id.company_registry or partner.company_registry
+        
+        # Ưu tiên 2: Nếu không có Registry, mới tìm đến Partner Ref
         if not ref:
-            ref = partner.commercial_partner_id.company_registry or partner.company_registry
-        if ref:
-            return ref
-        return ""
+            ref = partner.commercial_partner_id.ref or partner.ref
+            
+        return ref or ""
 
     def _find_sale_order(self, move, picking):
         # 1) Từ sale_line_id trực tiếp
