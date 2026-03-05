@@ -607,6 +607,10 @@ class CustomBarcodeScanController(http.Controller):
                     # Nếu reservation = 0, ta cho phép điền vào (vì logic Redirect đã chọn nó làm ứng viên).
                     _logger.info(f"Target line {target_ml.id} is packed ({is_packed.name}) and reaches Reserved Qty ({reserved_qty}). Skipping.")
                     target_ml = None
+                elif target_ml.result_package_id and reserved_qty == 0 and target_ml.qty_done > 0:
+                    # [FIX-2024] Dòng đã đóng gói xong (ko dự kiến) thì không tự động độn thêm khi scan hàng lẻ.
+                    _logger.info(f"Target line {target_ml.id} is already fully packed with no reserved qty. Skipping.")
+                    target_ml = None
                 else:
                     _logger.info(f"Target line {target_ml.id} is valid (Space: {target_ml.qty_done}/{reserved_qty} | Move: {mv_done}/{mv.product_uom_qty}). Keeping it.")
 
