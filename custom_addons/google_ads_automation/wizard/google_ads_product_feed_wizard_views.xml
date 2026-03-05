@@ -20,7 +20,7 @@
                        domain="[('type', '!=', 'service')]"/>
                 <footer>
                     <button name="action_add_products"
-                            string="✅ Thêm Sản Phẩm Đã Chọn"
+                            string="Thêm Sản Phẩm Đã Chọn"
                             type="object"
                             class="oe_highlight"/>
                     <button name="action_add_all_from_category"
