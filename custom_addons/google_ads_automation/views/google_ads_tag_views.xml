@@ -71,17 +71,6 @@
                                    placeholder="Dạng ya29.a0..."
                                    password="True"
                                    invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"/>
-                            <field name="gtm_client_id"
-                                   placeholder="xxxxxx.apps.googleusercontent.com"
-                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"/>
-                            <field name="gtm_client_secret"
-                                   placeholder="GOCSPX-xxxxxx"
-                                   password="True"
-                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"/>
-                            <field name="gtm_api_token"
-                                   placeholder="1//0xxxxxx"
-                                   password="True"
-                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"/>
                                    
                             <!-- Fields for Service Account -->
                             <field name="gtm_service_account_json"
