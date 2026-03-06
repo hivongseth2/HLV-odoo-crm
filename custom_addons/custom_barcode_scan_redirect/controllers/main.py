@@ -777,28 +777,32 @@ class CustomBarcodeScanController(http.Controller):
                 
                 if add_qty > 0:
                     # [NEW] Kiểm tra tồn kho khả dụng/thực tế TẠI VỊ TRÍ ĐÓ trước khi cho phép qty_done tăng thêm
-                    # Nếu vượt reserve, chứng tỏ món hàng này chưa được xí trước ở vị trí này.
-                    if current_qty + add_qty > ml_reserved_qty:
-                        excess_qty = (current_qty + add_qty) - ml_reserved_qty
-                        
-                        # Bỏ qua kiểm tra nếu vị trí nguồn là location ảo (loại bỏ qua tồn kho)
-                        if ml.location_id.usage == 'internal':
-                            try:
-                                quant = request.env['stock.quant'].sudo().search([
-                                    ('product_id', '=', move.product_id.id),
-                                    ('location_id', '=', ml.location_id.id)
-                                ], limit=1)
-                                
-                                # Lấy ra số lượng vật lý tồn thật ở vị trí này.
-                                # Không trừ reserved_quantity vì hệ thống có thể đã reserve số hàng này cho CA phiếu này, 
-                                # nếu trừ đi thì lượng thực tế sẽ = 0 (bị hiểu lầm là hết hàng)
-                                available_in_loc = quant.quantity if quant else 0
-                                
-                                # Ngăn chặn nếu số lượng cần thêm lớn hơn lượng tồn kho thực tế ở vị trí này
-                                if excess_qty > available_in_loc + 0.001:
-                                    return {"error": f"⚠️ Vị trí {ml.location_id.display_name} không có đủ tồn thực tế! (Quét dư: {excess_qty}, Tồn thật vị trí này: {available_in_loc})"}
-                            except Exception as e:
-                                _logger.error(f"Lỗi khi kiểm tra tồn kho: {e}")
+                    # Bỏ qua kiểm tra nếu vị trí nguồn là location ảo (loại bỏ qua tồn kho)
+                    if ml.location_id.usage == 'internal':
+                        try:
+                            quant = request.env['stock.quant'].sudo().search([
+                                ('product_id', '=', move.product_id.id),
+                                ('location_id', '=', ml.location_id.id)
+                            ], limit=1)
+                            
+                            # Lấy ra số lượng vật lý tồn thật ở vị trí này.
+                            available_in_loc = quant.quantity if quant else 0
+                            
+                            # Kiểm tra TỔNG số lượng đã lấy của CẢ PHIẾU tại vị trí này (kể cả những cái đã đóng gói)
+                            # để xem việc quét thêm add_qty có làm vỡ kho không.
+                            domain = [
+                                ('picking_id', '=', move.picking_id.id),
+                                ('product_id', '=', move.product_id.id),
+                                ('location_id', '=', ml.location_id.id),
+                                ('state', 'not in', ['done', 'cancel'])
+                            ]
+                            all_lines_in_loc = request.env['stock.move.line'].search(domain)
+                            total_done_in_loc = sum(l.qty_done for l in all_lines_in_loc)
+                            
+                            if total_done_in_loc + add_qty > available_in_loc + 0.001:
+                                return {"error": f"⚠️ Vị trí {ml.location_id.display_name} không đủ tồn! (Đã lấy: {total_done_in_loc}, Muốn lấy thêm: {add_qty}. Kho chỉ có: {available_in_loc})"}
+                        except Exception as e:
+                            _logger.error(f"Lỗi khi kiểm tra tồn kho: {e}")
                 
                     new_qty = current_qty + add_qty
                     ml.write({'qty_done': new_qty})
