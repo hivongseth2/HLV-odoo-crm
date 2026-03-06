@@ -77,6 +77,14 @@ export class DeliveryPlannerDashboard extends Component {
         if (po > so) return 'text-danger fw-bold';
         return 'text-success';
     }
+
+    formatCurrency(value) {
+        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+    }
+
+    formatQty(value) {
+        return parseFloat(Number(value).toFixed(2));
+    }
 }
 
 registry.category("actions").add("hlv_sale_delivery_planning.dashboard", DeliveryPlannerDashboard);

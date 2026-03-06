@@ -92,7 +92,7 @@
                                                             <t t-esc="line.product_id ? line.product_id[1] : 'Unknown'"/>
                                                         </td>
                                                         <td class="text-end pe-3 fw-bold text-danger">
-                                                            <t t-esc="parseFloat((line.product_uom_qty - line.qty_delivered).toFixed(2))"/>
+                                                            <t t-esc="this.formatQty(line.product_uom_qty - line.qty_delivered)"/>
                                                         </td>
                                                     </tr>
                                                 </t>
@@ -107,7 +107,7 @@
                                 <div class="card-footer bg-white border-top d-flex justify-content-between align-items-center p-3">
                                     <div class="text-muted small"><i class="fa fa-money me-1"></i> Tổng giá trị đơn:</div>
                                     <div class="fw-bold text-primary fs-5">
-                                        <t t-esc="Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(so.amount_total)"/>
+                                        <t t-esc="this.formatCurrency(so.amount_total)"/>
                                     </div>
                                 </div>
                             </div>
