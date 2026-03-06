@@ -150,6 +150,9 @@ class GoogleAdsTag(models.Model):
                 final_access_token = token_resp.json().get('access_token')
                 if not final_access_token:
                     raise UserError(_('Không lấy được Access Token tự động từ Google. Hãy kiểm tra lại Refresh Token và Client ID/Secret.'))
+                
+                # Cập nhật lại ô Access Token thủ công trên giao diện để user thấy
+                self.gtm_access_token = final_access_token
             except _requests.exceptions.RequestException as e:
                 err_msg = str(e)
                 if hasattr(e, 'response') and e.response is not None:
