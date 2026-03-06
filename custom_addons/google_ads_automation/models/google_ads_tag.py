@@ -333,7 +333,25 @@ class GoogleAdsTag(models.Model):
             
             match_count = event_dict.get(actual_event_name, 0)
             
-            # Fallback nếu không tìm thấy theo eventName parameter thì thử tìm theo tên Tag (tag.name)
+            # ── HARDCODED MAPS: Xử lý râu ông nọ cắm cằm bà kia (Custom GTM config) ──
+            # Nếu tên event trên GTM không giống với tên event chuẩn của Google Analytics
+            if match_count == 0:
+                hardcode_map = {
+                    'Them_vao_gio': 'add_to_cart',
+                    'GA4_Them_vao_gio_hang': 'add_to_cart', # Đề phòng người dùng set theo cả tên tag
+                    'Mua_ngay': 'purchase', # Giả định Mua_ngay bắn event mua hàng
+                    'Mua_tra_gop': 'purchase',
+                    'GA4_Mua_ngay': 'purchase',
+                    'GA4_Mua_tra_gop': 'purchase'
+                }
+                
+                mapped_name = hardcode_map.get(actual_event_name) or hardcode_map.get(tag.name)
+                if mapped_name:
+                    match_count = event_dict.get(mapped_name, 0)
+                    if match_count > 0:
+                         actual_event_name = f"{actual_event_name} -> {mapped_name}"
+            
+            # Fallback cuối: thử tìm theo tên Tag (tag.name)
             if match_count == 0:
                 match_count = event_dict.get(tag.name, 0)
             
