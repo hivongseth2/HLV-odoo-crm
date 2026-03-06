@@ -73,6 +73,35 @@ export class DeliveryPlannerDashboard extends Component {
                 so.pickings = so.pickings || [];
                 so.lines = so.lines || [];
                 so.pos = so.pos || [];
+
+                // Map of name -> node for finding parent
+                const nodeByName = {};
+                so.flows.forEach(flow => {
+                    (flow.nodes || []).forEach(node => {
+                        nodeByName[node.name] = node;
+                    });
+                });
+
+                // Assign persistent visual link info
+                const colorClasses = ['info', 'warning', 'danger', 'primary', 'success', 'dark'];
+                let colorIdx = 0;
+
+                so.flows.forEach(flow => {
+                    (flow.nodes || []).forEach(node => {
+                        const parentName = node.return_of || node.backorder_of;
+                        if (parentName && nodeByName[parentName]) {
+                            const parentNode = nodeByName[parentName];
+                            node.parent_seq = parentNode.global_seq;
+
+                            if (!parentNode.link_color) {
+                                parentNode.link_color = colorClasses[colorIdx % colorClasses.length];
+                                colorIdx++;
+                            }
+                            node.link_color = parentNode.link_color;
+                        }
+                    });
+                });
+
                 return so;
             });
             this.state.totalCount = result.total_count || 0;
@@ -298,4 +327,4 @@ export class DeliveryPlannerDashboard extends Component {
     }
 }
 
-registry.category("actions").add("hlv_sale_delivery_planning_dashboard", DeliveryPlannerDashboard);
+registry.category("actions").add("hlv_sale_delivery_planning.dashboard", DeliveryPlannerDashboard);

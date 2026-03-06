@@ -246,6 +246,16 @@
                                                                  t-on-mouseenter="() => this.onPickingHover(picking.name)"
                                                                  t-on-mouseleave="() => this.onPickingLeave()"
                                                                  t-on-click="() => this.openPicking(picking.id)">
+                                                                <!-- Status checkmarks and link indicator -->
+                                                                <span t-if="picking.link_color" class="position-absolute top-0 start-0 translate-middle badge rounded-pill border border-light shadow-sm" t-attf-class="bg-{{picking.link_color}}" style="font-size: 0.65rem; z-index: 5;">
+                                                                    <t t-if="picking.return_of or picking.backorder_of">
+                                                                        <i class="fa fa-link"></i> Nối <t t-if="picking.parent_seq">[<t t-esc="picking.parent_seq"/>]</t>
+                                                                    </t>
+                                                                    <t t-else="">
+                                                                        <i class="fa fa-link"></i> Gốc
+                                                                    </t>
+                                                                </span>
+                                                                
                                                                 <div class="small fw-bold text-truncate mb-1" 
                                                                      t-att-class="picking.state == 'done' ? 'text-secondary' : 'text-danger'">
                                                                     <span t-if="picking.global_seq > 0" class="badge bg-secondary me-1" title="Thứ tự thời gian"><t t-esc="picking.global_seq"/></span><t t-esc="picking.type_name"/>
@@ -306,6 +316,16 @@
                                                                  t-on-mouseenter="() => this.onPickingHover(picking.name)"
                                                                  t-on-mouseleave="() => this.onPickingLeave()"
                                                                  t-on-click="() => this.openPicking(picking.id)">
+                                                                <!-- Status checkmarks and link indicator -->
+                                                                <span t-if="picking.link_color" class="position-absolute top-0 start-0 translate-middle badge rounded-pill border border-light shadow-sm" t-attf-class="bg-{{picking.link_color}}" style="font-size: 0.65rem; z-index: 5;">
+                                                                    <t t-if="picking.return_of or picking.backorder_of">
+                                                                        <i class="fa fa-link"></i> Nối <t t-if="picking.parent_seq">[<t t-esc="picking.parent_seq"/>]</t>
+                                                                    </t>
+                                                                    <t t-else="">
+                                                                        <i class="fa fa-link"></i> Gốc
+                                                                    </t>
+                                                                </span>
+                                                                
                                                                 <div class="small fw-bold text-truncate mb-1" 
                                                                      t-att-class="{
                                                                          'text-secondary': picking.state == 'done',
