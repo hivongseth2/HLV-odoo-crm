@@ -36,7 +36,7 @@
 
                     <!-- Credentials — ẩn khi demo -->
                     <group string="Thông Tin Xác Thực" invisible="is_demo">
-                        <group string="OAuth 2.0 (Dành cho Google Ads & GTM Test)">
+                        <group string="OAuth 2.0 (Dành cho Google Ads &amp; GTM Test)">
                             <field name="developer_token" password="True"/>
                             <field name="client_id" password="True"/>
                             <field name="client_secret" password="True"/>
