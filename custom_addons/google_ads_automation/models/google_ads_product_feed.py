@@ -51,6 +51,16 @@ class GoogleAdsProductFeed(models.Model):
         for rec in self:
             active_ping = 'bg-success' if rec.active else 'bg-danger'
             
+            # Inventory Status Distribution
+            critical = len(rec.line_ids.filtered(lambda l: l.stock_status == 'critical'))
+            low = len(rec.line_ids.filtered(lambda l: l.stock_status == 'low'))
+            normal = len(rec.line_ids.filtered(lambda l: l.stock_status == 'normal'))
+            
+            total = rec.line_count or 1
+            crit_p = (critical / total) * 100
+            low_p = (low / total) * 100
+            norm_p = (normal / total) * 100
+            
             html = f"""
                 <div class="o_hero_header" style="background: linear-gradient(135deg, #F59E0B 0%, #B45309 100%);">
                     <div class="status_badge">
@@ -71,8 +81,22 @@ class GoogleAdsProductFeed(models.Model):
                             <p class="text-white-50 mt-2 mb-0 fw-medium">
                                 <i class="fa fa-briefcase me-1"></i> Account: 
                                 <span class="text-white fw-bold">{rec.account_id.name or '—'}</span>
-                                <span class="ms-3 pe-2"><i class="fa fa-list-ol me-1"></i> Quy Mô: <span class="text-white">{rec.line_count}</span> sản phẩm</span>
                             </p>
+                        </div>
+                        <div class="col-md-5">
+                            <div class="o_visual_box">
+                                <span class="o_visual_label">Inventory Distribution</span>
+                                <div class="progress mb-2" style="height: 12px;">
+                                    <div class="progress-bar bg-danger" style="width: {crit_p}%" title="Critical: {critical}"></div>
+                                    <div class="progress-bar bg-warning" style="width: {low_p}%" title="Low: {low}"></div>
+                                    <div class="progress-bar bg-success" style="width: {norm_p}%" title="Normal: {normal}"></div>
+                                </div>
+                                <div class="d-flex justify-content-between x-small text-white-50" style="font-size: 10px;">
+                                    <span><i class="fa fa-circle text-danger me-1"></i> Critical ({critical})</span>
+                                    <span><i class="fa fa-circle text-warning me-1"></i> Low ({low})</span>
+                                    <span><i class="fa fa-circle text-success me-1"></i> Healthy ({normal})</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

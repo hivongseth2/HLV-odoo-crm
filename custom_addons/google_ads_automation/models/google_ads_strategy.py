@@ -122,6 +122,10 @@ class GoogleAdsStrategy(models.Model):
             status_ping = 'bg-success' if rec.state == 'active' else 'bg-warning' if rec.state == 'draft' else 'bg-danger'
             live_badge = Markup('<span class="badge text-bg-danger shadow-sm mb-1 px-3">LIVE MODE</span><br/>') if rec.is_live else ''
             
+            # Strategy Rule Visualization
+            max_rules_expected = 10
+            rule_progress = min((rec.rule_count / max_rules_expected) * 100, 100) if max_rules_expected > 0 else 0
+            
             html = f"""
                 <div class="o_hero_header" style="background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);">
                     <div class="status_badge text-end">
@@ -145,6 +149,21 @@ class GoogleAdsStrategy(models.Model):
                                 <span class="text-white fw-bold">{rec.strategy_type}</span>
                                 <span class="ms-3 pe-2"><i class="fa fa-cubes me-1"></i> Feed: <span class="text-white">{rec.feed_id.name or '—'}</span></span>
                             </p>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="o_visual_box">
+                                <span class="o_visual_label">Rule Execution Density</span>
+                                <div class="o_metric_row">
+                                    <span class="o_metric_title">Active Automation Rules</span>
+                                    <span class="o_metric_value">{rec.rule_count}</span>
+                                </div>
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar bg-info" style="width: {rule_progress}%"></div>
+                                </div>
+                                <div class="mt-2 x-small text-white-50" style="font-size: 10px;">
+                                    <i class="fa fa-info-circle me-1"></i> Rules are generated based on strategy logic.
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
