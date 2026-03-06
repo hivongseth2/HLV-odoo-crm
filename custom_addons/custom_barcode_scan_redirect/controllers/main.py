@@ -788,10 +788,9 @@ class CustomBarcodeScanController(http.Controller):
                             # Lấy ra số lượng vật lý tồn thật ở vị trí này.
                             available_in_loc = quant.quantity if quant else 0
                             
-                            # Kiểm tra TỔNG số lượng đã lấy của CẢ PHIẾU tại vị trí này (kể cả những cái đã đóng gói)
+                            # Kiểm tra TỔNG số lượng đã lấy TƯƠNG ĐƯƠNG TRÊN TẤT CẢ CÁC PHIẾU CHƯA HOÀN THÀNH
                             # để xem việc quét thêm add_qty có làm vỡ kho không.
                             domain = [
-                                ('picking_id', '=', move.picking_id.id),
                                 ('product_id', '=', move.product_id.id),
                                 ('location_id', '=', ml.location_id.id),
                                 ('state', 'not in', ['done', 'cancel'])
@@ -800,7 +799,7 @@ class CustomBarcodeScanController(http.Controller):
                             total_done_in_loc = sum(l.qty_done for l in all_lines_in_loc)
                             
                             if total_done_in_loc + add_qty > available_in_loc + 0.001:
-                                return {"error": f"⚠️ Vị trí {ml.location_id.display_name} không đủ tồn! (Đã lấy: {total_done_in_loc}, Muốn lấy thêm: {add_qty}. Kho chỉ có: {available_in_loc})"}
+                                return {"error": f"⚠️ Vị trí {ml.location_id.display_name} không đủ tồn! (Hệ thống đang quét: {total_done_in_loc}, Muốn lấy thêm: {add_qty}. Kho chỉ có: {available_in_loc})"}
                         except Exception as e:
                             _logger.error(f"Lỗi khi kiểm tra tồn kho: {e}")
                 
