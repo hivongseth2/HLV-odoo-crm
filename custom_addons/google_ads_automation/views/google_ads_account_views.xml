@@ -34,10 +34,10 @@
                         </group>
                     </group>
 
-                    <!-- Credentials — ẩn khi demo -->
-                    <group string="Thông Tin Xác Thực" invisible="is_demo">
+                    <!-- Credentials — luôn hiện một phần để GTM có thể truy cập -->
+                    <group string="Thông Tin Xác Thực">
                         <group string="OAuth 2.0 (Dành cho Google Ads &amp; GTM Test)">
-                            <field name="developer_token" password="True"/>
+                            <field name="developer_token" password="True" invisible="is_demo"/>
                             <field name="client_id" password="True"/>
                             <field name="client_secret" password="True"/>
                             <field name="refresh_token" password="True"/>
