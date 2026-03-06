@@ -44,33 +44,17 @@
                     <field name="state" widget="statusbar" statusbar_visible="draft,active"/>
                 </header>
                 <sheet>
-                    <div class="o_hero_header" style="background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);">
-                        <div class="status_badge text-end">
-                            <span t-if="is_live" class="badge text-bg-danger shadow-sm mb-1 px-3">LIVE MODE</span><br/>
-                            <span t-attf-class="o_status_ping #{'bg-success' if state == 'active' else 'bg-warning' if state == 'draft' else 'bg-danger'}"></span>
-                            <span class="badge text-bg-light fw-bold shadow-sm" t-esc="state_label or state"></span>
-                        </div>
-                        <div class="row align-items-center">
-                            <div class="col-auto">
-                                <div class="bg-white p-3 rounded-4 shadow-sm text-sky-600">
-                                    <i class="fa fa-cogs fa-4x text-info"></i>
-                                </div>
-                            </div>
-                            <div class="col">
-                                <span class="badge rounded-pill text-bg-info mb-2 px-3 py-2 text-white">AUTOMATION STRATEGY</span>
-                                <h1 class="text-white mt-1">
-                                    <field name="name" placeholder="Tên chiến lược..."/>
-                                </h1>
-                                <p class="text-white-50 mt-2 mb-0 fw-medium">
-                                    <i class="fa fa-tasks me-1"></i> Loại: 
-                                    <field name="strategy_type" class="text-white fw-bold"/>
-                                    <span class="ms-3 pe-2"><i class="fa fa-cubes me-1"></i> Feed: <field name="feed_id" class="text-white"/></span>
-                                </p>
-                            </div>
+                    <field name="hero_header_html" widget="html" readonly="1"/>
+
+                    <div class="row align-items-center mb-4 px-3" style="margin-top: -80px; position: relative; z-index: 10;">
+                        <div class="col-lg-6">
+                             <h1 class="text-white">
+                                <field name="name" placeholder="Tên chiến lược..." class="oe_inline"/>
+                            </h1>
                         </div>
                     </div>
 
-                    <div class="o_kpi_dashboard mt-n4">
+                    <div class="o_kpi_dashboard">
                          <div class="o_kpi_tile shadow-lg border-0 bg-white">
                             <span class="o_kpi_label">RULES HIỆN CÓ</span>
                             <span class="o_kpi_value text-info"><field name="rule_count"/></span>

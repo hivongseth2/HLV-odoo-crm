@@ -1,5 +1,6 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
+from markupsafe import Markup
 import logging
 import random
 
@@ -76,6 +77,49 @@ class GoogleAdsAccount(models.Model):
                 rec.account_roas = (rec.total_conversions * 500000) / rec.total_spend
             else:
                 rec.account_roas = 0.0
+
+    state_label = fields.Char(compute='_compute_state_label')
+
+    @api.depends('state')
+    def _compute_state_label(self):
+        selection = dict(self._fields['state'].selection)
+        for rec in self:
+            rec.state_label = selection.get(rec.state, rec.state)
+
+    hero_header_html = fields.Html(compute='_compute_hero_header_html')
+
+    def _compute_hero_header_html(self):
+        for rec in self:
+            state_color = 'bg-success' if rec.state == 'connected' else 'bg-warning' if rec.state == 'draft' else 'bg-danger'
+            demo_badge = Markup('<span class="ms-3 badge text-bg-warning">MODO DEMO</span>') if rec.is_demo else ''
+            
+            html = f"""
+                <div class="o_hero_header">
+                    <div class="status_badge">
+                        <span class="o_status_ping {state_color}"></span>
+                        <span class="badge text-bg-light fw-bold shadow-sm">{rec.state_label}</span>
+                    </div>
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <div class="bg-white p-3 rounded-4 shadow-sm">
+                                <i class="fa fa-google fa-4x text-primary"></i>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <span class="badge rounded-pill text-bg-primary mb-2 px-3 py-2">GOOGLE ADS API HUB</span>
+                            <h1 class="text-white mt-1">
+                                {rec.name}
+                            </h1>
+                            <p class="text-white-50 mt-2 mb-0 fw-medium">
+                                <i class="fa fa-id-card-o me-1"></i> Customer ID: 
+                                <span class="text-white fw-bold">{rec.operating_customer_id or '—'}</span>
+                                {demo_badge}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            """
+            rec.hero_header_html = Markup(html)
 
     def _get_google_ads_client(self):
         """Build Google Ads Client from credentials"""

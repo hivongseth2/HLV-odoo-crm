@@ -70,6 +70,48 @@ class GoogleAdsCampaign(models.Model):
             else:
                 rec.roas = 0.0
 
+    status_label = fields.Char(compute='_compute_status_label')
+
+    @api.depends('status')
+    def _compute_status_label(self):
+        selection = dict(self._fields['status'].selection)
+        for rec in self:
+            rec.status_label = selection.get(rec.status, rec.status)
+
+    hero_header_html = fields.Html(compute='_compute_hero_header_html')
+
+    def _compute_hero_header_html(self):
+        for rec in self:
+            status_color = 'bg-success' if rec.status == 'enabled' else 'bg-warning' if rec.status == 'paused' else 'bg-danger'
+            
+            html = f"""
+                <div class="o_hero_header" style="background: linear-gradient(135deg, #10B981 0%, #065F46 100%);">
+                    <div class="status_badge">
+                        <span class="o_status_ping {status_color}"></span>
+                        <span class="badge text-bg-light fw-bold shadow-sm">{rec.status_label}</span>
+                    </div>
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <div class="bg-white p-3 rounded-4 shadow-sm text-success">
+                                <i class="fa fa-bullhorn fa-4x"></i>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <span class="badge rounded-pill text-bg-success mb-2 px-3 py-2">GOOGLE ADS CAMPAIGN</span>
+                            <h1 class="text-white mt-1">
+                                {rec.name}
+                            </h1>
+                            <p class="text-white-50 mt-2 mb-0 fw-medium">
+                                <i class="fa fa-id-badge me-1"></i> Campaign ID: 
+                                <span class="text-white fw-bold">{rec.google_campaign_id or '—'}</span>
+                                <span class="ms-3 pe-2"><i class="fa fa-google me-1"></i> Account: <span class="text-white">{rec.account_id.name or '—'}</span></span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            """
+            rec.hero_header_html = Markup(html)
+
     _sql_constraints = [
         ('google_campaign_id_uniq', 'unique(google_campaign_id)', 'Google Campaign ID phải là duy nhất!'),
     ]

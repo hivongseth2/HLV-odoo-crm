@@ -13,28 +13,13 @@
                     <field name="state" widget="statusbar" statusbar_visible="draft,connected,error"/>
                 </header>
                 <sheet>
-                    <div class="o_hero_header">
-                        <div class="status_badge">
-                            <span t-attf-class="o_status_ping #{'bg-success' if state == 'connected' else 'bg-warning' if state == 'draft' else 'bg-danger'}"></span>
-                            <span class="badge text-bg-light fw-bold shadow-sm" t-esc="state_label or state"></span>
-                        </div>
-                        <div class="row align-items-center">
-                            <div class="col-auto">
-                                <div class="bg-white p-3 rounded-4 shadow-sm">
-                                    <i class="fa fa-google fa-4x text-primary"></i>
-                                </div>
-                            </div>
-                            <div class="col">
-                                <span class="badge rounded-pill text-bg-primary mb-2 px-3 py-2">GOOGLE ADS API HUB</span>
-                                <h1 class="text-white mt-1">
-                                    <field name="name" placeholder="Tên Tài Khoản..."/>
-                                </h1>
-                                <p class="text-white-50 mt-2 mb-0 fw-medium">
-                                    <i class="fa fa-id-card-o me-1"></i> Customer ID: 
-                                    <field name="operating_customer_id" class="text-white fw-bold"/>
-                                    <span t-if="is_demo" class="ms-3 badge text-bg-warning">MODO DEMO</span>
-                                </p>
-                            </div>
+                    <field name="hero_header_html" widget="html" readonly="1"/>
+                    
+                    <div class="row align-items-center mb-4 px-3" style="margin-top: -80px; position: relative; z-index: 10;">
+                        <div class="col-lg-6">
+                             <h1 class="text-white">
+                                <field name="name" placeholder="Tên Tài Khoản..." class="oe_inline"/>
+                            </h1>
                         </div>
                     </div>
 
