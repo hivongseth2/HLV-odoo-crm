@@ -70,21 +70,37 @@ class SaleOrder(models.Model):
                                     'url': f'/web/content/{att.id}?download=true'
                                 })
                 
-                # Tìm dự phòng bằng Regex link trong nội dung text/html
+                # Tìm file đính kèm trực tiếp nếu có .webm
                 if msg.body:
                     import re
-                    urls = re.findall(r'href=[\'"]?([^\'" >]+\.webm)', msg.body) or re.findall(r'(\/web\/content\/[0-9]+.*?\.webm)', msg.body)
-                    if urls:
-                        if msg.res_id not in att_by_picking:
-                            att_by_picking[msg.res_id] = []
-                        for i, url in enumerate(urls):
-                            clean_url = url.replace('&amp;', '&')
-                            if not any(u['url'] == clean_url for u in att_by_picking[msg.res_id]):
-                                att_by_picking[msg.res_id].append({
-                                    'id': f"log_{msg.id}_{i}",
-                                    'name': 'Video Log',
-                                    'url': clean_url if not clean_url.startswith('http') else clean_url
-                                })
+                    # Nếu có specific text
+                    if 'Video đóng gói' in msg.body or 'video' in msg.body.lower():
+                        urls = re.findall(r'href=[\'"]([^\'"]+)[\'"]', msg.body)
+                        if urls:
+                            if msg.res_id not in att_by_picking:
+                                att_by_picking[msg.res_id] = []
+                            for i, url in enumerate(urls):
+                                clean_url = url.replace('&amp;', '&')
+                                if not any(u['url'] == clean_url for u in att_by_picking[msg.res_id]):
+                                    att_by_picking[msg.res_id].append({
+                                        'id': f"log_{msg.id}_{i}",
+                                        'name': 'Video Đóng Gói',
+                                        'url': clean_url if not clean_url.startswith('http') else clean_url
+                                    })
+                    # Tìm dự phòng bằng Regex link .webm thẳng trong nội dung html
+                    else:
+                        urls = re.findall(r'(\/web\/content\/[0-9]+.*?\.webm)', msg.body)
+                        if urls:
+                            if msg.res_id not in att_by_picking:
+                                att_by_picking[msg.res_id] = []
+                            for i, url in enumerate(urls):
+                                clean_url = url.replace('&amp;', '&')
+                                if not any(u['url'] == clean_url for u in att_by_picking[msg.res_id]):
+                                    att_by_picking[msg.res_id].append({
+                                        'id': f"log_{msg.id}_{i}",
+                                        'name': 'Video Log',
+                                        'url': clean_url if not clean_url.startswith('http') else clean_url
+                                    })
 
         # --- PRE-COMPUTE QTY AVAILABLE ---
         product_qty_cache = {}
@@ -128,6 +144,9 @@ class SaleOrder(models.Model):
             has_pending = False
             has_delivered = False
             is_fully_ready = True
+            
+            total_pending = 0
+            total_avail = 0
 
             so_lines_data = []
             for line in so.order_line:
@@ -148,11 +167,23 @@ class SaleOrder(models.Model):
                         pending_qty = line.product_uom_qty - line.qty_delivered
                         if pending_qty > 0:
                             has_pending = True
+                            total_pending += pending_qty
+                            if qty_avail > 0:
+                                total_avail += min(qty_avail, pending_qty)
                             if qty_avail < pending_qty:
                                 is_fully_ready = False
                         
                         if line.qty_delivered > 0:
                             has_delivered = True
+
+            stock_status = 'ready'
+            if has_pending:
+                if is_fully_ready:
+                    stock_status = 'ready'
+                elif total_avail > 0:
+                    stock_status = 'partial_ready'
+                else:
+                    stock_status = 'out_of_stock'
 
             real_delivery_status = 'unknown'
             st = [l for l in so_lines_data if l.get('product_type') != 'service']
@@ -165,43 +196,26 @@ class SaleOrder(models.Model):
             elif not has_pending and len(st) > 0:
                 real_delivery_status = 'full'
             
-            # Cấu trúc luồng Phiếu Kho: Bán (Outbound) và ghép Phiếu Trả làm con (Return)
+            # Sắp xếp phẳng picking theo Dòng Thời Gian Xử Lý (Ngày, ID) thay vì Nhóm Loại
             flat_pickings = []
-            out_groups = {}
-            pickings_dict = {}
+            sorted_pickings = sorted(so.picking_ids, key=lambda p: (p.date_done or p.scheduled_date or p.create_date, p.id))
             
-            for p in so.picking_ids.sorted(key=lambda x: (x.picking_type_id.sequence, x.id)):
+            for p in sorted_pickings:
                 videos = att_by_picking.get(p.id, [])
                 p_data = {
                     'id': p.id,
                     'name': p.name,
                     'state': p.state,
                     'type_name': p.picking_type_id.name or '',
-                    'code': p.picking_type_id.code or '',
+                    'code': p.picking_type_id.code or '', # Code indicates in/out/internal
                     'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
                     'backorder_of': p.backorder_id.name if p.backorder_id else False,
                     'return_of_id': p.return_id.id if p.return_id else False,
                     'return_of': p.return_id.name if p.return_id else False,
                     'videos': videos,
-                    'returns': [], # Chứa danh sách các phiếu IN trả lại cho phiếu này
                 }
                 flat_pickings.append(p_data)
-                pickings_dict[p.id] = p_data
                 
-            # Xây dựng cây quan hệ Mẹ - Con (Giao xong - Khách Trả)
-            for p_data in flat_pickings:
-                # Nếu có return_of_id và origin picking nằm trong bộ của SO này
-                if p_data['return_of_id'] and p_data['return_of_id'] in pickings_dict:
-                    pickings_dict[p_data['return_of_id']]['returns'].append(p_data)
-                else:
-                    # Các phiếu gốc / Không phải return sẽ giữ nguyên làm luồng chính OUT
-                    t_name = p_data['type_name'] or 'Unknown'
-                    if t_name not in out_groups:
-                        out_groups[t_name] = []
-                    out_groups[t_name].append(p_data)
-                
-            out_by_type = [{'type_name': k, 'pickings': v} for k, v in out_groups.items()]
-            
             result.append({
                 'id': so.id,
                 'name': so.name,
@@ -213,11 +227,11 @@ class SaleOrder(models.Model):
                 'state': so.state,
                 'delivery_status': so.delivery_status,
                 'real_delivery_status': real_delivery_status,
+                'stock_status': stock_status,
                 'is_fully_ready': is_fully_ready,
                 'picking_warehouse_ids': picking_warehouse_ids,
                 'pos': po_data,
                 'pickings': flat_pickings,
-                'out_by_type': out_by_type,
                 'lines': so_lines_data,
             })
             

@@ -169,6 +169,25 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     // --- Translations ---
+    translateDeliveryStatus(status) {
+        const trans = {
+            'unknown': 'Chưa cập nhật',
+            'pending': 'Chưa giao',
+            'partial': 'Giao 1 phần',
+            'full': 'Đã giao đủ'
+        };
+        return trans[status] || (status ? status.toUpperCase() : '');
+    }
+
+    translateStockStatus(status) {
+        const trans = {
+            'out_of_stock': 'Không có hàng',
+            'partial_ready': 'Có hàng 1 phần',
+            'ready': 'Đủ hàng xuất'
+        };
+        return trans[status] || (status ? status.toUpperCase() : '');
+    }
+
     translateSOStatus(status) {
         const trans = {
             'draft': 'Báo giá',
@@ -176,9 +195,6 @@ export class DeliveryPlannerDashboard extends Component {
             'sale': 'Đơn hàng',
             'done': 'Khóa',
             'cancel': 'Đã hủy',
-            'pending': 'Chưa giao',
-            'partial': 'Giao 1 phần',
-            'full': 'Đã giao đủ'
         };
         return trans[status] || (status ? status.toUpperCase() : '');
     }
@@ -218,10 +234,18 @@ export class DeliveryPlannerDashboard extends Component {
         return 'text-bg-light border text-dark';
     }
 
-    getSOStatusBadgeClass(deliveryStatus) {
-        if (deliveryStatus === 'full') return 'text-bg-success';
-        if (deliveryStatus === 'partial') return 'text-bg-warning';
-        return 'text-bg-danger';
+    getDeliveryStatusBadgeClass(status) {
+        if (status === 'full') return 'text-bg-success';
+        if (status === 'partial') return 'text-bg-warning';
+        if (status === 'pending') return 'text-bg-secondary';
+        return 'text-bg-light border text-dark';
+    }
+
+    getStockStatusBadgeClass(status) {
+        if (status === 'ready') return 'text-bg-primary';
+        if (status === 'partial_ready') return 'text-bg-warning';
+        if (status === 'out_of_stock') return 'text-bg-danger';
+        return 'text-bg-light border text-dark';
     }
 
     getPickingStatusBadgeClass(state) {
@@ -248,8 +272,10 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     getSOCardColorClass(so) {
-        if (so.is_fully_ready) return 'border-success-soft';
-        return 'border-danger-soft';
+        if (so.real_delivery_status === 'full') return 'border-success border-2 shadow-sm';
+        if (so.stock_status === 'ready') return 'border-primary border-2 shadow-sm';
+        if (so.stock_status === 'partial_ready') return 'border-warning border-2 shadow-sm';
+        return 'border-danger border-2 shadow-sm';
     }
 
     // --- Drawer Actions ---
