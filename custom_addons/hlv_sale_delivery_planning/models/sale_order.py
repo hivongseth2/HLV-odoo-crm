@@ -35,12 +35,12 @@ class SaleOrder(models.Model):
         all_picking_ids = sales.mapped('picking_ids').ids
         att_by_picking = {}
         if all_picking_ids:
-            # Tìm trong Attachments thông thường
-            attachments = self.env['ir.attachment'].sudo().search([
+            # 2.1. Tìm trong Attachments thông thường trực thuộc stock.picking
+            picking_attachments = self.env['ir.attachment'].sudo().search([
                 ('res_model', '=', 'stock.picking'),
                 ('res_id', 'in', all_picking_ids)
             ])
-            for att in attachments:
+            for att in picking_attachments:
                 if att.name and (att.name.lower().endswith(('.webm', '.mp4')) or 'video' in (att.mimetype or '')):
                     if att.res_id not in att_by_picking:
                         att_by_picking[att.res_id] = []
@@ -50,38 +50,41 @@ class SaleOrder(models.Model):
                         'url': f'/web/content/{att.id}?download=true'
                     })
                     
-            # 2.2. Tìm thêm trong nội dung tin nhắn của OdooBot/Log Note
+            # 2.2. Tìm trong Message Attachments (qua Chatter/Log note)
             messages = self.env['mail.message'].sudo().search([
                 ('model', '=', 'stock.picking'),
-                ('res_id', 'in', all_picking_ids),
-                ('body', 'ilike', '.webm')
+                ('res_id', 'in', all_picking_ids)
             ])
-            import re
+            
             for msg in messages:
-                urls = []
-                # 1. Tìm href URL trực tiếp
-                href_match = re.findall(r'href=[\'"]?([^\'" >]+\.webm)', msg.body)
-                if href_match:
-                    urls.extend(href_match)
+                # Tìm trong danh sách đính kèm của message
+                if msg.attachment_ids:
+                    for att in msg.attachment_ids:
+                        if att.name and (att.name.lower().endswith(('.webm', '.mp4')) or 'video' in (att.mimetype or '')):
+                            if msg.res_id not in att_by_picking:
+                                att_by_picking[msg.res_id] = []
+                            if not any(a['url'] == f'/web/content/{att.id}?download=true' for a in att_by_picking[msg.res_id]):
+                                att_by_picking[msg.res_id].append({
+                                    'id': att.id,
+                                    'name': att.name,
+                                    'url': f'/web/content/{att.id}?download=true'
+                                })
                 
-                # 2. Tìm tất cả tên file có đuôi .webm xuất hiện trong body, rồi tìm attachment id
-                filenames = re.findall(r'([A-Za-z0-9_\-\.]+\.webm)', msg.body)
-                if filenames:
-                    atts = self.env['ir.attachment'].sudo().search([('name', 'in', filenames)])
-                    for att in atts:
-                        urls.append(f'/web/content/{att.id}?download=true')
-                
-                if urls:
-                    if msg.res_id not in att_by_picking:
-                        att_by_picking[msg.res_id] = []
-                    for i, url in enumerate(urls):
-                        # Loại bỏ trùng lặp url
-                        if not any(u['url'] == url for u in att_by_picking[msg.res_id]):
-                            att_by_picking[msg.res_id].append({
-                                'id': f"{msg.id}_{i}", # Dùng ID message + index
-                                'name': 'Video Khách/Bot',
-                                'url': url if not url.startswith('http') else url
-                            })
+                # Tìm dự phòng bằng Regex link trong nội dung text/html
+                if msg.body:
+                    import re
+                    urls = re.findall(r'href=[\'"]?([^\'" >]+\.webm)', msg.body) or re.findall(r'(\/web\/content\/[0-9]+.*?\.webm)', msg.body)
+                    if urls:
+                        if msg.res_id not in att_by_picking:
+                            att_by_picking[msg.res_id] = []
+                        for i, url in enumerate(urls):
+                            clean_url = url.replace('&amp;', '&')
+                            if not any(u['url'] == clean_url for u in att_by_picking[msg.res_id]):
+                                att_by_picking[msg.res_id].append({
+                                    'id': f"log_{msg.id}_{i}",
+                                    'name': 'Video Log',
+                                    'url': clean_url if not clean_url.startswith('http') else clean_url
+                                })
 
         # --- PRE-COMPUTE QTY AVAILABLE ---
         product_qty_cache = {}
@@ -162,15 +165,13 @@ class SaleOrder(models.Model):
             elif not has_pending and len(st) > 0:
                 real_delivery_status = 'full'
             
-            # Cấu trúc luồng Phiếu Kho: Bán (Outbound) và Trả (Return)
+            # Cấu trúc luồng Phiếu Kho: Bán (Outbound) và ghép Phiếu Trả làm con (Return)
             flat_pickings = []
             out_groups = {}
-            ret_groups = {}
+            pickings_dict = {}
             
             for p in so.picking_ids.sorted(key=lambda x: (x.picking_type_id.sequence, x.id)):
-                # Lấy video từ file đính kèm (Sử dụng dict để tránh query N+1)
                 videos = att_by_picking.get(p.id, [])
-
                 p_data = {
                     'id': p.id,
                     'name': p.name,
@@ -179,29 +180,27 @@ class SaleOrder(models.Model):
                     'code': p.picking_type_id.code or '',
                     'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
                     'backorder_of': p.backorder_id.name if p.backorder_id else False,
-                    'return_of': getattr(p, 'return_id', False) and p.return_id.name or False,
+                    'return_of_id': p.return_id.id if p.return_id else False,
+                    'return_of': p.return_id.name if p.return_id else False,
                     'videos': videos,
+                    'returns': [], # Chứa danh sách các phiếu IN trả lại cho phiếu này
                 }
                 flat_pickings.append(p_data)
+                pickings_dict[p.id] = p_data
                 
-                t_name = p_data['type_name'] or 'Unknown'
-                # Nếu là phiếu trả hàng (return_of != False hoặc code là incoming/return)
-                is_return = bool(p_data['return_of'])
-                if getattr(p.picking_type_id, 'code', '') == 'incoming' and not getattr(po, 'id', False):
-                    # Nếu SO lại đi Nhập kho -> Có thể do cấn trừ Trả hàng
-                    is_return = True
-
-                if is_return:
-                    if t_name not in ret_groups:
-                        ret_groups[t_name] = []
-                    ret_groups[t_name].append(p_data)
+            # Xây dựng cây quan hệ Mẹ - Con (Giao xong - Khách Trả)
+            for p_data in flat_pickings:
+                # Nếu có return_of_id và origin picking nằm trong bộ của SO này
+                if p_data['return_of_id'] and p_data['return_of_id'] in pickings_dict:
+                    pickings_dict[p_data['return_of_id']]['returns'].append(p_data)
                 else:
+                    # Các phiếu gốc / Không phải return sẽ giữ nguyên làm luồng chính OUT
+                    t_name = p_data['type_name'] or 'Unknown'
                     if t_name not in out_groups:
                         out_groups[t_name] = []
                     out_groups[t_name].append(p_data)
                 
             out_by_type = [{'type_name': k, 'pickings': v} for k, v in out_groups.items()]
-            ret_by_type = [{'type_name': k, 'pickings': v} for k, v in ret_groups.items()]
             
             result.append({
                 'id': so.id,
@@ -219,7 +218,6 @@ class SaleOrder(models.Model):
                 'pos': po_data,
                 'pickings': flat_pickings,
                 'out_by_type': out_by_type,
-                'ret_by_type': ret_by_type,
                 'lines': so_lines_data,
             })
             
