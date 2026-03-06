@@ -57,6 +57,27 @@ class SaleOrder(models.Model):
                     is_fully_ready = False
                     break
             
+            # Gom nhóm Picking theo loại (Pick -> Pack -> Out)
+            flat_pickings = []
+            picking_groups = {}
+            for p in so.picking_ids.sorted(key=lambda x: (x.picking_type_id.sequence, x.id)):
+                p_data = {
+                    'id': p.id,
+                    'name': p.name,
+                    'state': p.state,
+                    'type_name': p.picking_type_id.name or '',
+                    'code': p.picking_type_id.code or '',
+                    'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
+                }
+                flat_pickings.append(p_data)
+                
+                t_name = p_data['type_name'] or 'Unknown'
+                if t_name not in picking_groups:
+                    picking_groups[t_name] = []
+                picking_groups[t_name].append(p_data)
+                
+            pickings_by_type = [{'type_name': k, 'pickings': v} for k, v in picking_groups.items()]
+            
             result.append({
                 'id': so.id,
                 'name': so.name,
@@ -69,14 +90,8 @@ class SaleOrder(models.Model):
                 'delivery_status': so.delivery_status,
                 'is_fully_ready': is_fully_ready,
                 'pos': po_data,
-                'pickings': [{
-                    'id': p.id,
-                    'name': p.name,
-                    'state': p.state,
-                    'type_name': p.picking_type_id.name or '',
-                    'code': p.picking_type_id.code or '',
-                    'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
-                } for p in so.picking_ids.sorted(key=lambda x: x.id, reverse=False)],
+                'pickings': flat_pickings,
+                'pickings_by_type': pickings_by_type,
                 'lines': so_lines_data,
             })
             

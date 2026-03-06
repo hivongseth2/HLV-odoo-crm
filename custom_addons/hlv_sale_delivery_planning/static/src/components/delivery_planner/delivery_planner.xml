@@ -131,28 +131,31 @@
                                             </t>
                                         </div>
                                         
-                                        <div t-if="so.pickings and so.pickings.length > 0">
+                                        <div t-if="so.pickings_by_type and so.pickings_by_type.length > 0">
                                             <h6 class="text-uppercase text-secondary small fw-bold mb-2 mt-2 px-1"><i class="fa fa-sitemap me-1"></i> Luồng Xử Lý Kho</h6>
                                             <div class="d-flex align-items-center overflow-auto pb-2 mb-3 gap-2 px-1 border-0" style="white-space: nowrap;">
-                                                <t t-foreach="so.pickings" t-as="picking" t-key="picking.id">
-                                                    
-                                                    <!-- Sơ đồ Bước -->
-                                                    <div class="card shadow-sm border cursor-pointer text-center p-2 rounded" 
-                                                         style="min-width: 130px; border-color: #dee2e6;"
-                                                         t-att-class="picking.state == 'done' ? 'bg-light opacity-75' : 'bg-white border-primary'"
-                                                         t-on-click="() => this.openPicking(picking.id)">
-                                                        <div class="small fw-bold text-truncate mb-1" t-att-class="picking.state == 'done' ? 'text-secondary' : 'text-primary'"><t t-esc="picking.type_name"/></div>
-                                                        <span class="badge w-100 mb-1" t-att-class="this.getPickingStatusBadgeClass(picking.state)">
-                                                            <t t-esc="this.translatePickingStatus(picking.state)"/>
-                                                        </span>
-                                                        <div class="small fw-bold" t-att-class="picking.state == 'done' ? 'text-muted' : 'text-dark'"><t t-esc="picking.name"/></div>
+                                                <t t-foreach="so.pickings_by_type" t-as="type_group" t-key="type_group.type_name">
+                                                    <!-- Cột chứa các phiếu cùng loại bước -->
+                                                    <div class="d-flex flex-column gap-2 justify-content-center">
+                                                        <t t-foreach="type_group.pickings" t-as="picking" t-key="picking.id">
+                                                            <!-- Sơ đồ Bước -->
+                                                            <div class="card shadow-sm border cursor-pointer text-center p-2 rounded" 
+                                                                 style="min-width: 140px; border-color: #dee2e6;"
+                                                                 t-att-class="picking.state == 'done' ? 'bg-light opacity-75' : 'bg-white border-primary'"
+                                                                 t-on-click="() => this.openPicking(picking.id)">
+                                                                <div class="small fw-bold text-truncate mb-1" t-att-class="picking.state == 'done' ? 'text-secondary' : 'text-primary'"><t t-esc="picking.type_name"/></div>
+                                                                <span class="badge w-100 mb-1" t-att-class="this.getPickingStatusBadgeClass(picking.state)">
+                                                                    <t t-esc="this.translatePickingStatus(picking.state)"/>
+                                                                </span>
+                                                                <div class="small fw-bold" t-att-class="picking.state == 'done' ? 'text-muted' : 'text-dark'"><t t-esc="picking.name"/></div>
+                                                            </div>
+                                                        </t>
                                                     </div>
                                                     
-                                                    <!-- Mũi tên liên kết -->
-                                                    <div t-if="picking_index &lt; so.pickings.length - 1" class="text-muted mx-1">
+                                                    <!-- Mũi tên liên kết giữa các bước -->
+                                                    <div t-if="type_group_index &lt; so.pickings_by_type.length - 1" class="text-muted mx-1 d-flex align-items-center h-100">
                                                         <i class="fa fa-long-arrow-right fa-lg"></i>
                                                     </div>
-                                                    
                                                 </t>
                                             </div>
                                         </div>
