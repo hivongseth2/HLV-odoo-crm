@@ -287,128 +287,99 @@ class SaleOrder(models.Model):
                 }
                 flat_pickings.append(p_data)
             
-            # Cấu trúc luồng Phiếu Kho: Phân Nhánh Chuỗi Flow cho UI (Cho Card X)
+            # Cấu trúc luồng Phiếu Kho: Trục Ngang (Main Timeline) và Trục Dọc (Branches)
             all_so_pickings = so.picking_ids
-            def get_next_transfers(p):
-                # Filter out the return pickings from the downstream moves
-                downstream = p.move_ids.move_dest_ids.picking_id
-                if hasattr(p, 'return_ids'):
-                    return downstream.filtered(lambda x: x not in p.return_ids)
-                else:
-                    return downstream.filtered(lambda x: not (hasattr(x, 'return_id') and x.return_id.id == p.id))
-                
-            next_picking_ids = set()
+            branch_ids = set()
+            
+            # 1. Tìm Returns & Stors (Luồng dọc 1)
+            return_ps_dict = {}
+            stor_ps_dict = {}
             for p in all_so_pickings:
-                for np in get_next_transfers(p):
-                    if np in all_so_pickings:
-                        next_picking_ids.add(np.id)
-                
-                # Cập nhật next_picking_ids để không gom Phiếu Trả về nhánh Gốc (Root)
-                if hasattr(p, 'return_ids'):
+                if hasattr(p, 'return_ids') and p.return_ids:
                     for rp in p.return_ids:
                         if rp in all_so_pickings:
-                            next_picking_ids.add(rp.id)
+                            return_ps_dict.setdefault(p.id, []).append(rp)
+                            branch_ids.add(rp.id)
                 else:
-                    # Nếu model không có return_ids, tìm ngược
                     for rp in all_so_pickings.filtered(lambda x: hasattr(x, 'return_id') and x.return_id.id == p.id):
-                        next_picking_ids.add(rp.id)
+                        return_ps_dict.setdefault(p.id, []).append(rp)
+                        branch_ids.add(rp.id)
                         
-            root_pickings = all_so_pickings.filtered(lambda p: p.id not in next_picking_ids and not p.backorder_id)
-            if not root_pickings and all_so_pickings:
-                root_pickings = all_so_pickings.filtered(lambda p: not p.backorder_id)
-                if not root_pickings:
-                    root_pickings = all_so_pickings
+            # Càn quét STORs
+            for rp_list in return_ps_dict.values():
+                for rp in rp_list:
+                    stors = rp.move_ids.move_dest_ids.picking_id.filtered(lambda x: x in all_so_pickings)
+                    for stor in stors:
+                        stor_ps_dict.setdefault(rp.id, []).append(stor)
+                        branch_ids.add(stor.id)
+                        
+            # 2. Tìm Backorders (Luồng dọc 2)
+            backorder_ps_dict = {}
+            for p in all_so_pickings:
+                if p.backorder_id and p.backorder_id in all_so_pickings:
+                    curr = p
+                    # Tìm gốc của Backorder trên Trục Ngang
+                    while curr.backorder_id and curr.backorder_id in all_so_pickings:
+                        curr = curr.backorder_id
+                    root_bo = curr
+                    backorder_ps_dict.setdefault(root_bo.id, []).append(p)
+                    branch_ids.add(p.id)
                     
-            def build_flat_flow(current_p, current_chain):
-                videos = att_by_picking.get(current_p.id, [])
+            # 3. Gom Trục Ngang (Main Timeline)
+            main_pickings = all_so_pickings.filtered(lambda x: x.id not in branch_ids)
+            main_pickings = sorted(main_pickings, key=lambda p: (p.date_done or p.scheduled_date or p.create_date, p.id))
+            
+            flows = []
+            for p in main_pickings:
+                videos = att_by_picking.get(p.id, [])
                 p_data = {
-                    'id': current_p.id,
-                    'name': current_p.name,
-                    'state': current_p.state,
-                    'type_name': current_p.picking_type_id.name or '',
-                    'code': current_p.picking_type_id.code or '', # Code indicates in/out/internal
-                    'scheduled_date': current_p.scheduled_date.strftime('%Y-%m-%d') if current_p.scheduled_date else False,
-                    'backorder_of': current_p.backorder_id.name if current_p.backorder_id else False,
-                    'return_of_id': current_p.return_id.id if hasattr(current_p, 'return_id') and current_p.return_id else False,
-                    'return_of': current_p.return_id.name if hasattr(current_p, 'return_id') and current_p.return_id else False,
+                    'id': p.id,
+                    'name': p.name,
+                    'state': p.state,
+                    'type_name': p.picking_type_id.name or '',
+                    'code': p.picking_type_id.code or '', # Code indicates in/out/internal
+                    'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
+                    'return_of_id': False,
+                    'return_of': False,
                     'videos': videos,
                     'returns': [],
                     'backorders': []
                 }
                 
-                # Phiếu Cắt Từ (Backorders) - Xếp dọc cùng với Phiếu Gốc
-                backorders = all_so_pickings.filtered(lambda x: x.backorder_id == current_p)
-                for bo in backorders:
-                    if bo.id != current_p.id:
-                        p_data['backorders'].append({
-                            'id': bo.id,
-                            'name': bo.name,
-                            'state': bo.state,
-                            'type_name': bo.picking_type_id.name or '',
-                            'backorder_of': bo.backorder_id.name if bo.backorder_id else False,
-                            'videos': att_by_picking.get(bo.id, [])
+                # Append BACKORDERS 
+                for bo in backorder_ps_dict.get(p.id, []):
+                    p_data['backorders'].append({
+                        'id': bo.id,
+                        'name': bo.name,
+                        'state': bo.state,
+                        'type_name': bo.picking_type_id.name or '',
+                        'backorder_of': bo.backorder_id.name,
+                        'videos': att_by_picking.get(bo.id, [])
+                    })
+                p_data['backorders'].sort(key=lambda x: x['id'])
+                
+                # Append RETURNS
+                for rp in return_ps_dict.get(p.id, []):
+                    stors = []
+                    for stor in stor_ps_dict.get(rp.id, []):
+                        stors.append({
+                            'id': stor.id,
+                            'name': stor.name,
+                            'state': stor.state,
+                            'type_name': stor.picking_type_id.name or '',
+                            'videos': att_by_picking.get(stor.id, [])
                         })
-                
-                # Nối tiếp vào chuỗi (Con thuộc Mẹ)
-                return_ps = []
-                if hasattr(current_p, 'return_ids'):
-                    return_ps = current_p.return_ids.filtered(lambda x: x in all_so_pickings)
-                else:
-                    return_ps = all_so_pickings.filtered(lambda x: hasattr(x, 'return_id') and x.return_id.id == current_p.id)
-                
-                for rp in return_ps:
-                    if rp.id != current_p.id:
-                        # Scan next transfers of Return to find STOR or IN
-                        rp_next = get_next_transfers(rp).filtered(lambda x: x in all_so_pickings)
-                        stors = []
-                        for stor in rp_next:
-                            stors.append({
-                                'id': stor.id,
-                                'name': stor.name,
-                                'state': stor.state,
-                                'type_name': stor.picking_type_id.name or '',
-                                'videos': att_by_picking.get(stor.id, [])
-                            })
-                            
-                        # Thêm thông tin return_of tên phiếu gốc
-                        return_parent_name = current_p.name
-                            
-                        p_data['returns'].append({
-                            'id': rp.id,
-                            'name': rp.name,
-                            'state': rp.state,
-                            'type_name': rp.picking_type_id.name or '',
-                            'return_of_name': return_parent_name,
-                            'videos': att_by_picking.get(rp.id, []),
-                            'stors': stors
-                        })
-                        
-                current_chain.append(p_data)
-                
-                # Điểm dừng và phân nhánh tới Step Xuất Kho tiếp theo qua Mũi Tên Ngang
-                next_ps = get_next_transfers(current_p).filtered(lambda x: x in all_so_pickings)
-                
-                for np in next_ps:
-                    if np.id != current_p.id and np.id not in [x['id'] for x in current_chain]:
-                        build_flat_flow(np, current_chain)
-                        
-                # Tiếp tục đệ quy cho các Step (PACK, OUT) phát sinh từ Backorder
-                for bo in backorders:
-                    bo_next_ps = get_next_transfers(bo).filtered(lambda x: x in all_so_pickings)
-                    for np in bo_next_ps:
-                        if np.id != bo.id and np.id not in [x['id'] for x in current_chain]:
-                            build_flat_flow(np, current_chain)
-                        
-                return current_chain
-
-            flows = []
-            all_chained_ids = set()
-            for root in root_pickings:
-                chain = build_flat_flow(root, [])
-                for x in chain:
-                    if x['id'] not in all_chained_ids:
-                        flows.append(x)
-                        all_chained_ids.add(x['id'])
+                    p_data['returns'].append({
+                        'id': rp.id,
+                        'name': rp.name,
+                        'state': rp.state,
+                        'type_name': rp.picking_type_id.name or '',
+                        'return_of_name': p.name,
+                        'videos': att_by_picking.get(rp.id, []),
+                        'stors': stors
+                    })
+                    
+                flows.append(p_data)
                 
             result.append({
                 'id': so.id,
