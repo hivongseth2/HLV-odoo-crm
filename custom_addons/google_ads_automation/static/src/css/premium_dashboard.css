@@ -132,6 +132,63 @@
 }
 
 /* Progress Bars Customization */
+.o_hero_header .progress {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-radius: 10px;
+}
+
+.o_hero_header .progress-bar {
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Mini Indicator Dots */
+.o_mini_dot {
+    height: 8px;
+    width: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+/* Visualization Containers */
+.o_visual_box {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 15px;
+}
+
+.o_visual_label {
+    font-size: 11px;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.6);
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    display: block;
+}
+
+/* Metric Row */
+.o_metric_row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.o_metric_title {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.o_metric_value {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+}
+
+/* Progress Bars Customization */
 .o_progressbar .o_progress {
     height: 10px !important;
     border-radius: 5px !important;

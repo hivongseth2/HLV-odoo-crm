@@ -93,6 +93,14 @@ class GoogleAdsAccount(models.Model):
             state_color = 'bg-success' if rec.state == 'connected' else 'bg-warning' if rec.state == 'draft' else 'bg-danger'
             demo_badge = Markup('<span class="ms-3 badge text-bg-warning">MODO DEMO</span>') if rec.is_demo else ''
             
+            # Performance visualization
+            max_roas_goal = 5.0
+            roas_progress = min((rec.account_roas / max_roas_goal) * 100, 100) if max_roas_goal > 0 else 0
+            
+            # Simple visualization of campaign count vs active
+            active_camps = len(rec.campaign_ids.filtered(lambda c: c.status == 'enabled'))
+            camp_progress = (active_camps / rec.total_campaigns * 100) if rec.total_campaigns > 0 else 0
+            
             html = f"""
                 <div class="o_hero_header">
                     <div class="status_badge">
@@ -111,10 +119,35 @@ class GoogleAdsAccount(models.Model):
                                 {rec.name}
                             </h1>
                             <p class="text-white-50 mt-2 mb-0 fw-medium">
-                                <i class="fa fa-id-card-o me-1"></i> Customer ID: 
+                                <i class="fa fa-id-card-o me-1"></i> ID: 
                                 <span class="text-white fw-bold">{rec.operating_customer_id or '—'}</span>
                                 {demo_badge}
                             </p>
+                        </div>
+                        <div class="col-md-5">
+                            <div class="o_visual_box">
+                                <span class="o_visual_label">Account Performance Grid</span>
+                                
+                                <div class="mb-3">
+                                    <div class="o_metric_row">
+                                        <span class="o_metric_title">Average Account ROAS</span>
+                                        <span class="o_metric_value">{rec.account_roas:.2f}x</span>
+                                    </div>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar bg-info" style="width: {roas_progress}%"></div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-0">
+                                    <div class="o_metric_row">
+                                        <span class="o_metric_title">Active Campaigns Ratio</span>
+                                        <span class="o_metric_value">{active_camps}/{rec.total_campaigns}</span>
+                                    </div>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar bg-success" style="width: {camp_progress}%"></div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
