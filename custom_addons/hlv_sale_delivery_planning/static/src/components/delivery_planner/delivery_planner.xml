@@ -45,28 +45,41 @@
                                 </div>
                             </div>
 
-                            <!-- Lọc theo ngày hẹn giao -->
-                            <div class="col-md-4">
-                                <label class="form-label small fw-bold text-muted mb-1">Ngày Hẹn Giao</label>
+                            <!-- Tiến độ Giao hàng -->
+                            <div class="col-md-2">
+                                <label class="form-label small fw-bold text-muted mb-1">Tiến Độ Giao</label>
                                 <div class="input-group">
-                                    <span class="input-group-text bg-light">Từ</span>
-                                    <input type="date" class="form-control" t-model="state.filterDateFrom" t-on-change="onFilterChange" />
-                                    <span class="input-group-text bg-light border-start-0 border-end-0">Đến</span>
-                                    <input type="date" class="form-control" t-model="state.filterDateTo" t-on-change="onFilterChange" />
+                                    <span class="input-group-text bg-light px-2"><i class="fa fa-truck text-primary"></i></span>
+                                    <select class="form-select px-1 fw-bold" t-model="state.filterDeliveryStatus" t-on-change="onFilterChange">
+                                        <option value="all">Tất cả</option>
+                                        <option value="unshipped">Chưa giao</option>
+                                        <option value="partial">Giao 1 phần</option>
+                                        <option value="full">Hoàn thành</option>
+                                    </select>
                                 </div>
                             </div>
                             
-                            <!-- Lọc theo trạng thái Đủ/Thiếu hàng -->
+                            <!-- Tình Trạng Kho -->
+                            <div class="col-md-2">
+                                <label class="form-label small fw-bold text-muted mb-1">Tình Trạng Kho</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light px-2"><i class="fa fa-cubes text-warning"></i></span>
+                                    <select class="form-select px-1 fw-bold" t-model="state.filterStockStatus" t-on-change="onFilterChange">
+                                        <option value="all">Tất cả</option>
+                                        <option value="pending">Chờ hàng</option>
+                                        <option value="ready">Sẵn sàng xuất</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Lọc theo ngày hẹn giao -->
                             <div class="col-md-3">
-                                <div class="btn-group w-100" role="group">
-                                    <input type="radio" class="btn-check" name="btnradio_status" id="btnradio1" autocomplete="off" value="all" t-model="state.filterStatus" t-on-change="onFilterChange"/>
-                                    <label class="btn btn-outline-primary" for="btnradio1">Tất cả</label>
-
-                                    <input type="radio" class="btn-check" name="btnradio_status" id="btnradio2" autocomplete="off" value="pending" t-model="state.filterStatus" t-on-change="onFilterChange"/>
-                                    <label class="btn btn-outline-warning" for="btnradio2"><i class="fa fa-clock-o"></i> Thiếu</label>
-
-                                    <input type="radio" class="btn-check" name="btnradio_status" id="btnradio3" autocomplete="off" value="ready" t-model="state.filterStatus" t-on-change="onFilterChange"/>
-                                    <label class="btn btn-outline-success" for="btnradio3"><i class="fa fa-check"></i> Đủ Hàng</label>
+                                <label class="form-label small fw-bold text-muted mb-1">Ngày Hẹn Giao</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light px-2">Từ</span>
+                                    <input type="date" class="form-control px-1" t-model="state.filterDateFrom" t-on-change="onFilterChange" />
+                                    <span class="input-group-text bg-light px-2 border-start-0 border-end-0">Đến</span>
+                                    <input type="date" class="form-control px-1" t-model="state.filterDateTo" t-on-change="onFilterChange" />
                                 </div>
                             </div>
                         </div>
@@ -193,7 +206,7 @@
                                                             </td>
                                                         </tr>
                                                     </t>
-                                                    <tr t-if="so.delivery_status == 'full'">
+                                                    <tr t-if="so.real_delivery_status == 'full'">
                                                         <td colspan="2" class="text-center text-success py-2 fw-bold"><i class="fa fa-star me-1"></i> Đã giao xong toàn bộ</td>
                                                     </tr>
                                                     <tr t-elif="so.is_fully_ready">

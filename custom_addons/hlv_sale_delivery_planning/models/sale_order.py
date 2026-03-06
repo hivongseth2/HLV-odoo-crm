@@ -1,4 +1,5 @@
 from odoo import models, fields, api
+from dateutil.relativedelta import relativedelta
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
@@ -8,14 +9,13 @@ class SaleOrder(models.Model):
         """
         Fetch SOs and matching POs to display on the OWL dashboard.
         """
-        # Fetch Sales Orders that are 'sale' or 'done' but not fully delivered
-        # Since 'delivery_status' is standard if 'sale_stock' is installed, we can use it.
-        # Wait, let's use standard status to be safe. If delivery_status is not there, we can fallback.
-        # But we added 'purchase_stock' which depends on 'sale_stock', so delivery_status is available.
-        
+        # Tránh bỏ sót đơn hàng (Đặc biệt đơn cũ trên 6 tháng hoặc đơn gãy logic status)
+        six_months_ago = fields.Datetime.now() - relativedelta(months=6)
         domain = [
             ('state', 'in', ['sale', 'done']),
-            ('delivery_status', 'in', ['pending', 'partial', 'full'])
+            '|',
+            ('delivery_status', 'in', ['pending', 'partial', False]),
+            ('date_order', '>=', six_months_ago)
         ]
         
         # Add order to prioritize the ones with earlier commitment dates
@@ -87,24 +87,46 @@ class SaleOrder(models.Model):
                     'amount_total': po.amount_total,
                 })
                 
+            # Tính lại delivery status chính xác nhất
+            has_pending = False
+            has_delivered = False
+            is_fully_ready = True
+
             so_lines_data = []
             for line in so.order_line:
                 if not line.display_type:
+                    p_type = line.product_id.type if line.product_id else 'service'
+                    qty_avail = product_availabilities.get((line.product_id.id, so.warehouse_id.id), 0.0) if line.product_id and so.warehouse_id else 0.0
+                    
                     so_lines_data.append({
                         'id': line.id,
                         'product_id': [line.product_id.id, line.product_id.display_name] if line.product_id else False,
                         'product_uom_qty': line.product_uom_qty,
                         'qty_delivered': line.qty_delivered,
-                        'qty_available': product_availabilities.get((line.product_id.id, so.warehouse_id.id), 0.0) if line.product_id and so.warehouse_id else 0.0,
+                        'qty_available': qty_avail,
+                        'product_type': p_type,
                     })
                     
-            # Check if all lines are delivered or have enough stock ready
-            is_fully_ready = True
-            for l in so_lines_data:
-                pending_qty = l['product_uom_qty'] - l['qty_delivered']
-                if pending_qty > 0 and l['qty_available'] < pending_qty:
-                    is_fully_ready = False
-                    break
+                    if p_type != 'service':
+                        pending_qty = line.product_uom_qty - line.qty_delivered
+                        if pending_qty > 0:
+                            has_pending = True
+                            if qty_avail < pending_qty:
+                                is_fully_ready = False
+                        
+                        if line.qty_delivered > 0:
+                            has_delivered = True
+
+            real_delivery_status = 'unknown'
+            st = [l for l in so_lines_data if l.get('product_type') != 'service']
+            if not st:
+                real_delivery_status = 'full'
+            elif has_pending and not has_delivered:
+                real_delivery_status = 'unshipped'
+            elif has_pending and has_delivered:
+                real_delivery_status = 'partial'
+            elif not has_pending and len(st) > 0:
+                real_delivery_status = 'full'
             
             # Gom nhóm Picking theo loại (Pick -> Pack -> Out)
             flat_pickings = []
@@ -142,6 +164,7 @@ class SaleOrder(models.Model):
                 'amount_total': so.amount_total,
                 'state': so.state,
                 'delivery_status': so.delivery_status,
+                'real_delivery_status': real_delivery_status,
                 'is_fully_ready': is_fully_ready,
                 'picking_warehouse_ids': picking_warehouse_ids,
                 'pos': po_data,

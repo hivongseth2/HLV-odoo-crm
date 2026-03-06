@@ -18,7 +18,8 @@ export class DeliveryPlannerDashboard extends Component {
             // Search & Filters
             searchQuery: "",
             filterWarehouseId: "all",
-            filterStatus: "all", // all, ready, pending
+            filterDeliveryStatus: "all",
+            filterStockStatus: "all",
             filterDateFrom: "",
             filterDateTo: "",
 
@@ -73,13 +74,16 @@ export class DeliveryPlannerDashboard extends Component {
             list = list.filter(so => so.picking_warehouse_ids && so.picking_warehouse_ids.includes(wId));
         }
 
-        // 3. Status Filter (Đã đủ hàng vs Còn thiếu vs Hoàn thành)
-        if (this.state.filterStatus === "ready") {
-            list = list.filter(so => so.is_fully_ready && so.delivery_status !== 'full');
-        } else if (this.state.filterStatus === "pending") {
-            list = list.filter(so => !so.is_fully_ready && so.delivery_status !== 'full');
-        } else if (this.state.filterStatus === "full") {
-            list = list.filter(so => so.delivery_status === 'full');
+        // 3. Tiến Độ Giao Hàng
+        if (this.state.filterDeliveryStatus !== "all") {
+            list = list.filter(so => so.real_delivery_status === this.state.filterDeliveryStatus);
+        }
+
+        // 4. Tình Trạng Kho
+        if (this.state.filterStockStatus === "ready") {
+            list = list.filter(so => so.is_fully_ready && so.real_delivery_status !== 'full');
+        } else if (this.state.filterStockStatus === "pending") {
+            list = list.filter(so => !so.is_fully_ready && so.real_delivery_status !== 'full');
         }
 
         // 4. Date Filters (Hẹn Giao - nếu không có lấy Ngày Đặt Hàng)
