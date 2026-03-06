@@ -64,6 +64,12 @@ class SaleOrder(models.Model):
                 'delivery_status': so.delivery_status,
                 'is_fully_ready': not has_pending_lines,
                 'pos': po_data,
+                'pickings': [{
+                    'id': p.id,
+                    'name': p.name,
+                    'state': p.state,
+                    'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
+                } for p in so.picking_ids.sorted(key=lambda x: x.id, reverse=True)],
                 'lines': so_lines_data,
             })
             
