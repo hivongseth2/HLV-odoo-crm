@@ -219,10 +219,10 @@ class GoogleAdsTag(models.Model):
             try:
                 self._fetch_ga4_event_counts(self.ga4_property_id, final_access_token)
             except Exception as e:
-                _logger.error(f"Lỗi kéo báo cáo GA4: {e}")
-                self.message_post(body=_(
-                    '<div style="color:orange">⚠️ Đồng bộ GTM mượt mà nhưng Kéo báo cáo GA4 bị lỗi: %s</div>'
-                ) % str(e))
+                _logger.error(f"Lỗi kéo báo cáo GA4: {e}", exc_info=True)
+                from markupsafe import Markup
+                err_msg = Markup('<div style="background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px; border-radius: 4px; color: #92400e; font-size: 13px;"><b style="display: block; margin-bottom: 4px;">⚠️ Đồng bộ GTM thành công nhưng lỗi khi lấy báo cáo GA4</b><code style="font-family: Consolas, monospace; background-color: rgba(255, 255, 255, 0.5); padding: 2px 4px; border-radius: 3px;">%s</code></div>') % str(e)
+                self.message_post(body=err_msg)
 
         self.message_post(body=_(
             'Đã đồng bộ từ GTM: %d Tags, %d Triggers, %d Biến'
@@ -244,7 +244,10 @@ class GoogleAdsTag(models.Model):
     def _fetch_ga4_event_counts(self, property_id, access_token):
         """Dùng Data API v1 runReport kéo số lượt kích hoạt (events) 30 ngày qua"""
         import requests
+        from markupsafe import Markup
+        import json
         
+        _logger.info(f"Bắt đầu kéo báo cáo GA4 cho property_id={property_id}")
         url = f'https://analyticsdata.googleapis.com/v1beta/properties/{property_id}:runReport'
         headers = {'Authorization': f'Bearer {access_token}', 'Content-Type': 'application/json'}
         payload = {
@@ -253,8 +256,41 @@ class GoogleAdsTag(models.Model):
           "metrics": [{"name": "eventCount"}]
         }
         
+        _logger.info(f"GA4 POST URL: {url}")
+        _logger.info(f"GA4 Payload: {json.dumps(payload)}")
+        
         # Tăng timeout lên 45s vì API Báo cáo của Google Analytics thi thoảng tổng hợp data khá chậm
         resp = requests.post(url, headers=headers, json=payload, timeout=45)
+        
+        _logger.info(f"GA4 Response Status: {resp.status_code}")
+        _logger.info(f"GA4 Response Content: {resp.text}")
+        
+        # Ghi log tóm tắt vào chatter để User dễ debug
+        log_html = f"""
+            <div style="background-color: #f4f6f9; border-left: 4px solid #1f2937; padding: 12px 16px; border-radius: 4px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin: 8px 0;">
+                <h4 style="margin: 0 0 8px 0; color: #1f2937; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">📋 Nhật ký kiểm tra GA4 API</h4>
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                    <tr>
+                        <td style="padding: 4px 0; color: #6b7280; width: 120px;"><b>Property ID:</b></td>
+                        <td style="padding: 4px 0; color: #111827; font-family: monospace;">{property_id}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px 0; color: #6b7280;"><b>Status Code:</b></td>
+                        <td style="padding: 4px 0;">
+                            <span style="display: inline-block; padding: 2px 6px; border-radius: 12px; font-size: 11px; font-weight: 600; {'background-color: #d1fae5; color: #065f46;' if str(resp.status_code).startswith('2') else 'background-color: #fee2e2; color: #991b1b;'}">
+                                {resp.status_code}
+                            </span>
+                        </td>
+                    </tr>
+                </table>
+                <div style="margin-top: 10px;">
+                    <b style="color: #6b7280; font-size: 12px; text-transform: uppercase;">Raw Response:</b>
+                    <pre style="background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 4px; padding: 10px; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; color: #374151; max-height: 250px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; margin-top: 4px;">{Markup.escape(resp.text)}</pre>
+                </div>
+            </div>
+        """
+        self.message_post(body=Markup(log_html))
+        
         resp.raise_for_status()
         data = resp.json()
         
@@ -265,6 +301,8 @@ class GoogleAdsTag(models.Model):
             ev_name = row['dimensionValues'][0]['value']
             ev_count = int(row['metricValues'][0]['value'])
             event_dict[ev_name] = ev_count
+            
+        _logger.info(f"GA4 Parsed Events Map: {event_dict}")
             
         # Nạp số đếm vào các Tag GA4 Event đang có trong Odoo
         ga4_tags = self.gtm_item_ids.filtered(lambda t: t.item_type == 'tag' and t.tag_subtype == 'ga4_event')
