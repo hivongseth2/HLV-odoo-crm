@@ -516,6 +516,12 @@ class CustomBarcodeScanController(http.Controller):
             return {"error": "⚠️ Sản phẩm này đã được quét đủ!"}
         updated_lines = []
         
+        # [NEW QUICK CHECK] Chặn quét nếu kho không đủ hàng (product_type = consu/consu)
+        product = moves[0].product_id
+        loc_id = moves[0].location_id.id
+        if product.type in ['product', 'consu'] and product.with_context(location=loc_id).free_qty <= 0:
+            return {"error": f"⚠️ Sản phẩm {product.display_name} hiện không có tồn kho khả dụng tại {moves[0].location_id.display_name}!"}
+            
         # --- LOGIC MỚI: Xử lý tìm line_id tự động nếu FE gửi lên null ---
         # Lấy line_id cụ thể từ FE nếu có
         target_ml = None
