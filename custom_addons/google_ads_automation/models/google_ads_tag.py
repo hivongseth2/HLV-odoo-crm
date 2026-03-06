@@ -78,10 +78,6 @@ class GoogleAdsTag(models.Model):
         password=True,
         help='OAuth2 access token sống 1 tiếng. Nếu để trống, hệ thống sẽ tự sinh mã mới dựa trên Refresh Token của Tài khoản Google.',
     )
-    gtm_service_account_json = fields.Text(
-        string='File JSON Service Account',
-        help='Mở file .json mà Google Cloud cung cấp, copy toàn bộ chữ bên trong và dán vào đây.',
-    )
     
     # ── GA4 Kho dữ liệu ──
     ga4_property_id = fields.Char(
@@ -133,8 +129,8 @@ class GoogleAdsTag(models.Model):
         final_access_token = False
 
         if self.gtm_auth_type == 'service_account':
-            if not self.gtm_service_account_json:
-                raise UserError(_('Vui lòng dán nội dung file JSON của Service Account vào.'))
+            if not self.account_id.service_account_json:
+                raise UserError(_('Vui lòng dán nội dung file JSON của Service Account vào tab Tài Khoản Google.'))
             try:
                 from google.oauth2 import service_account
                 import google.auth.transport.requests
@@ -143,10 +139,10 @@ class GoogleAdsTag(models.Model):
             
             try:
                 import json
-                sa_info = json.loads(self.gtm_service_account_json)
+                sa_info = json.loads(self.account_id.service_account_json)
                 credentials = service_account.Credentials.from_service_account_info(
                     sa_info,
-                    scopes=['https://www.googleapis.com/auth/tagmanager.readonly']
+                    scopes=['https://www.googleapis.com/auth/tagmanager.readonly', 'https://www.googleapis.com/auth/analytics.readonly']
                 )
                 request = google.auth.transport.requests.Request()
                 credentials.refresh(request)

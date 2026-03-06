@@ -72,11 +72,6 @@
                                    password="True"
                                    invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"/>
                                    
-                            <!-- Fields for Service Account -->
-                            <field name="gtm_service_account_json"
-                                   placeholder='{"type": "service_account", "project_id": ...}'
-                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'service_account'"/>
-                                   
                             <field name="measurement_id"
                                    placeholder="AW-XXXXXXXXX hoặc G-XXXXXXXXXX"
                                    invisible="tag_type != 'gtag'"/>

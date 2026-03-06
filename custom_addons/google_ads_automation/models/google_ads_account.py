@@ -43,6 +43,11 @@ class GoogleAdsAccount(models.Model):
         string='Operating Customer ID',
         help='ID của tài khoản Ads bạn muốn quản lý trực tiếp. Định dạng: 1234567890 (không có dấu -)'
     )
+    
+    service_account_json = fields.Text(
+        string='File JSON Service Account',
+        help='Dành cho các kết nối liên quan đến Google Analytics, GTM, v.v.',
+    )
 
     state = fields.Selection([
         ('draft', 'Nháp'),
