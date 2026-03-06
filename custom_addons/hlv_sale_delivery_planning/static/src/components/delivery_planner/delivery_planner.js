@@ -56,7 +56,14 @@ export class DeliveryPlannerDashboard extends Component {
                     offset: (this.state.currentPage - 1) * this.state.itemsPerPage,
                 }
             );
-            this.state.saleOrders = result.orders || [];
+            const fetchedOrders = result.orders || [];
+            this.state.saleOrders = fetchedOrders.map(so => {
+                so.flows = so.flows || [];
+                so.pickings = so.pickings || [];
+                so.lines = so.lines || [];
+                so.pos = so.pos || [];
+                return so;
+            });
             this.state.totalCount = result.total_count || 0;
             if (this.state.warehouses.length === 0) {
                 this.state.warehouses = result.warehouses || [];

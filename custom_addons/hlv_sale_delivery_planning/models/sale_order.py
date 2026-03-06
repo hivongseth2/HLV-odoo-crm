@@ -271,8 +271,28 @@ class SaleOrder(models.Model):
                 real_delivery_status = 'partial'
             elif not has_pending and len(st) > 0:
                 real_delivery_status = 'full'
+                
+            # Mảng phẳng (Cho Side Drawer Timeline Y)
+            flat_pickings = []
+            sorted_pickings = sorted(so.picking_ids, key=lambda p: (p.date_done or p.scheduled_date or p.create_date, p.id))
             
-            # Cấu trúc luồng Phiếu Kho: Phân Nhánh Chuỗi Flow cho UI
+            for p in sorted_pickings:
+                videos = att_by_picking.get(p.id, [])
+                p_data = {
+                    'id': p.id,
+                    'name': p.name,
+                    'state': p.state,
+                    'type_name': p.picking_type_id.name or '',
+                    'code': p.picking_type_id.code or '',
+                    'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
+                    'backorder_of': p.backorder_id.name if p.backorder_id else False,
+                    'return_of_id': p.return_id.id if p.return_id else False,
+                    'return_of': p.return_id.name if p.return_id else False,
+                    'videos': videos,
+                }
+                flat_pickings.append(p_data)
+            
+            # Cấu trúc luồng Phiếu Kho: Phân Nhánh Chuỗi Flow cho UI (Cho Card X)
             all_so_pickings = so.picking_ids
             def get_next_transfers(p):
                 return p.move_ids.move_dest_ids.picking_id.filtered(lambda x: x not in p.return_ids)
@@ -352,6 +372,7 @@ class SaleOrder(models.Model):
                 'picking_warehouse_ids': picking_warehouse_ids,
                 'pos': po_data,
                 'flows': flows,
+                'pickings': flat_pickings,
                 'lines': so_lines_data,
             })
             
