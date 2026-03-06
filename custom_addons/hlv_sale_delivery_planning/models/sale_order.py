@@ -287,7 +287,7 @@ class SaleOrder(models.Model):
                 }
                 flat_pickings.append(p_data)
             
-            # Cấu trúc luồng Phiếu Kho: Trục Ngang (Main Timeline) và Trục Dọc (Branches)
+            # Cấu trúc luồng Phiếu Kho: Phân Loại Theo Giai Đoạn (Nhóm theo picking_type)
             all_so_pickings = so.picking_ids
             branch_ids = set()
             
@@ -313,73 +313,75 @@ class SaleOrder(models.Model):
                         stor_ps_dict.setdefault(rp.id, []).append(stor)
                         branch_ids.add(stor.id)
                         
-            # 2. Tìm Backorders (Luồng dọc 2)
-            backorder_ps_dict = {}
-            for p in all_so_pickings:
-                if p.backorder_id and p.backorder_id in all_so_pickings:
-                    curr = p
-                    # Tìm gốc của Backorder trên Trục Ngang
-                    while curr.backorder_id and curr.backorder_id in all_so_pickings:
-                        curr = curr.backorder_id
-                    root_bo = curr
-                    backorder_ps_dict.setdefault(root_bo.id, []).append(p)
-                    branch_ids.add(p.id)
-                    
-            # 3. Gom Trục Ngang (Main Timeline)
+            # 2. Nhóm các phiếu còn lại (Main Pickings) theo Picking Type
             main_pickings = all_so_pickings.filtered(lambda x: x.id not in branch_ids)
-            main_pickings = sorted(main_pickings, key=lambda p: (p.date_done or p.scheduled_date or p.create_date, p.id))
+            
+            grouped_by_type = {}
+            for p in main_pickings:
+                pt = p.picking_type_id
+                if pt not in grouped_by_type:
+                    grouped_by_type[pt] = []
+                grouped_by_type[pt].append(p)
+                
+            def get_pt_sort_key(pt):
+                code_rank = 0
+                if pt.code == 'incoming': code_rank = 1
+                elif pt.code == 'internal': code_rank = 2
+                elif pt.code == 'outgoing': code_rank = 3
+                else: code_rank = 4
+                return (code_rank, getattr(pt, 'sequence', 99), pt.id)
+                
+            sorted_pts = sorted(grouped_by_type.keys(), key=get_pt_sort_key)
             
             flows = []
-            for p in main_pickings:
-                videos = att_by_picking.get(p.id, [])
-                p_data = {
-                    'id': p.id,
-                    'name': p.name,
-                    'state': p.state,
-                    'type_name': p.picking_type_id.name or '',
-                    'code': p.picking_type_id.code or '', # Code indicates in/out/internal
-                    'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
-                    'return_of_id': False,
-                    'return_of': False,
-                    'videos': videos,
-                    'returns': [],
-                    'backorders': []
+            for pt in sorted_pts:
+                pickings_in_type = grouped_by_type[pt]
+                # Sort pickings inside the column by date
+                pickings_in_type = sorted(pickings_in_type, key=lambda p: (p.scheduled_date or p.create_date, p.id))
+                
+                pt_data = {
+                    'type_id': pt.id,
+                    'type_name': pt.name,
+                    'code': pt.code,
+                    'pickings': [],
+                    'returns': []
                 }
                 
-                # Append BACKORDERS 
-                for bo in backorder_ps_dict.get(p.id, []):
-                    p_data['backorders'].append({
-                        'id': bo.id,
-                        'name': bo.name,
-                        'state': bo.state,
-                        'type_name': bo.picking_type_id.name or '',
-                        'backorder_of': bo.backorder_id.name,
-                        'videos': att_by_picking.get(bo.id, [])
-                    })
-                p_data['backorders'].sort(key=lambda x: x['id'])
-                
-                # Append RETURNS
-                for rp in return_ps_dict.get(p.id, []):
-                    stors = []
-                    for stor in stor_ps_dict.get(rp.id, []):
-                        stors.append({
-                            'id': stor.id,
-                            'name': stor.name,
-                            'state': stor.state,
-                            'type_name': stor.picking_type_id.name or '',
-                            'videos': att_by_picking.get(stor.id, [])
-                        })
-                    p_data['returns'].append({
-                        'id': rp.id,
-                        'name': rp.name,
-                        'state': rp.state,
-                        'type_name': rp.picking_type_id.name or '',
-                        'return_of_name': p.name,
-                        'videos': att_by_picking.get(rp.id, []),
-                        'stors': stors
-                    })
+                for p in pickings_in_type:
+                    p_data = {
+                        'id': p.id,
+                        'name': p.name,
+                        'state': p.state,
+                        'type_name': pt.name,
+                        'code': pt.code,
+                        'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
+                        'backorder_of': p.backorder_id.name if p.backorder_id else False,
+                        'videos': att_by_picking.get(p.id, [])
+                    }
+                    pt_data['pickings'].append(p_data)
                     
-                flows.append(p_data)
+                    # Thêm Returns tương ứng của Picking gốc này
+                    for rp in return_ps_dict.get(p.id, []):
+                        stors = []
+                        for stor in stor_ps_dict.get(rp.id, []):
+                            stors.append({
+                                'id': stor.id,
+                                'name': stor.name,
+                                'state': stor.state,
+                                'type_name': stor.picking_type_id.name or '',
+                                'videos': att_by_picking.get(stor.id, [])
+                            })
+                        pt_data['returns'].append({
+                            'id': rp.id,
+                            'name': rp.name,
+                            'state': rp.state,
+                            'type_name': rp.picking_type_id.name or '',
+                            'return_of_name': p.name,
+                            'videos': att_by_picking.get(rp.id, []),
+                            'stors': stors
+                        })
+                        
+                flows.append(pt_data)
                 
             result.append({
                 'id': so.id,
