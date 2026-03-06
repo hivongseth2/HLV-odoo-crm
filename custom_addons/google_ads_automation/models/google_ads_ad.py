@@ -39,6 +39,31 @@ class GoogleAdsAd(models.Model):
     cost = fields.Float(string='Chi Phí', default=0.0)
     conversions = fields.Float(string='Lượt Chuyển Đổi', default=0.0)
 
+    # Computed Metrics for UI
+    conversion_rate = fields.Float(
+        string='Tỷ Lệ Chuyển Đổi (%)', 
+        compute='_compute_performance_metrics', store=False
+    )
+    roas = fields.Float(
+        string='ROAS', 
+        compute='_compute_performance_metrics', store=False,
+        help='Mặc định lấy Conversions * 500k / Cost (Giả định demo)'
+    )
+    
+    @api.depends('clicks', 'conversions', 'cost')
+    def _compute_performance_metrics(self):
+        for rec in self:
+            if rec.clicks > 0:
+                rec.conversion_rate = (rec.conversions / rec.clicks) * 100
+            else:
+                rec.conversion_rate = 0.0
+                
+            if rec.cost > 0:
+                # Giả định doanh thu 500k cho demo
+                rec.roas = (rec.conversions * 500000) / rec.cost
+            else:
+                rec.roas = 0.0
+
     _sql_constraints = [
         ('google_ad_id_uniq', 'unique(google_ad_id)', 'Google Ad ID phải là duy nhất!'),
     ]

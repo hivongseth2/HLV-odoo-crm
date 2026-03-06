@@ -17,7 +17,7 @@
                         </h1>
                     </div>
                     <group>
-                        <group string="Cấu Hình Cơ Bản">
+                        <group string="1. Cấu Hình Cơ Bản">
                             <field name="active" widget="boolean_toggle"/>
                             <field name="account_id"/>
                             <field name="target_type"/>
@@ -27,19 +27,33 @@
                             <field name="product_feed_line_id" readonly="1"
                                    invisible="not auto_generated"/>
                         </group>
-                        <group string="Điều Kiện">
-                            <field name="condition_field"/>
-                            <field name="condition_operator"/>
-                            <field name="condition_value"/>
-                        </group>
                     </group>
-                    <group>
-                        <group string="Hành Động">
-                            <field name="action_type"/>
-                            <field name="action_value"
-                                   invisible="action_type not in ('increase_budget', 'decrease_budget')"/>
-                        </group>
-                    </group>
+                    
+                    <div class="row mt-4">
+                        <!-- Cột: Điều kiện (IF) -->
+                        <div class="col-6" style="border-right: 2px dashed #e2e8f0; padding-right: 20px;">
+                            <h2 class="text-primary mb-3">
+                                <i class="fa fa-filter"></i> NẾU (Điều kiện)
+                            </h2>
+                            <group>
+                                <field name="condition_field" string="Trường dữ liệu"/>
+                                <field name="condition_operator" string="Toán tử so sánh"/>
+                                <field name="condition_value" string="Giá trị ngưỡng"/>
+                            </group>
+                        </div>
+                        
+                        <!-- Cột: Hành động (THEN) -->
+                        <div class="col-6" style="padding-left: 20px;">
+                            <h2 class="text-success mb-3">
+                                <i class="fa fa-bolt"></i> THÌ (Hành động)
+                            </h2>
+                            <group>
+                                <field name="action_type" string="Thực thi thao tác"/>
+                                <field name="action_value" string="Tham số phụ"
+                                       invisible="action_type not in ('increase_budget', 'decrease_budget')"/>
+                            </group>
+                        </div>
+                    </div>
                     <notebook>
                         <page string="Lịch Sử Chạy" icon="fa-history">
                             <field name="log_ids" readonly="1">
@@ -79,10 +93,57 @@
         </field>
     </record>
 
+    <record id="view_google_ads_rule_kanban" model="ir.ui.view">
+        <field name="name">google.ads.rule.kanban</field>
+        <field name="model">google.ads.rule</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="action_type" class="o_kanban_mobile" records_draggable="false" quick_create="false">
+                <field name="name"/>
+                <field name="active"/>
+                <field name="action_type"/>
+                <field name="condition_field"/>
+                <field name="condition_operator"/>
+                <field name="condition_value"/>
+                <field name="auto_generated"/>
+                <templates>
+                    <t t-name="kanban-box">
+                        <div t-attf-class="oe_kanban_global_click oe_kanban_card">
+                            <div class="o_kanban_record_top">
+                                <div class="o_kanban_record_headings">
+                                    <strong class="o_kanban_record_title fs-5">
+                                        <field name="name"/>
+                                    </strong>
+                                </div>
+                            </div>
+                            <div class="o_kanban_record_body mt-2 mb-2">
+                                <span class="badge text-bg-info" t-if="record.auto_generated.raw_value">
+                                    <i class="fa fa-robot me-1"/> Tự Sinh
+                                </span>
+                                <div class="mt-2 text-muted" style="font-size: 0.9em;">
+                                    <strong>IF:</strong> <field name="condition_field"/> <field name="condition_operator"/> <field name="condition_value"/>
+                                </div>
+                                <div class="text-success" style="font-size: 0.9em;">
+                                    <strong>THEN:</strong> <field name="action_type"/>
+                                </div>
+                            </div>
+                            <div class="o_kanban_record_bottom mt-auto">
+                                <div class="oe_kanban_bottom_left">
+                                </div>
+                                <div class="oe_kanban_bottom_right">
+                                    <field name="active" widget="boolean_toggle"/>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
     <record id="action_google_ads_rule" model="ir.actions.act_window">
         <field name="name">Quy Tắc Tự Động</field>
         <field name="res_model">google.ads.rule</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">kanban,list,form</field>
     </record>
 
     <record id="action_google_ads_rule_log" model="ir.actions.act_window">

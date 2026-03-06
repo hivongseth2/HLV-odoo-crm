@@ -8,13 +8,18 @@
                 <field name="name"/>
                 <field name="account_id"/>
                 <field name="channel_type"/>
-                <field name="clicks"/>
-                <field name="impressions"/>
-                <field name="cost"/>
-                <field name="conversions"/>
+                <field name="clicks" sum="Tổng Click" optional="show"/>
+                <field name="cost" sum="Tổng Chi Phí" optional="show"/>
+                <field name="conversions" sum="Tổng Đơn" optional="show"/>
+                <field name="conversion_rate" widget="progressbar" string="Tỷ Lệ CĐ (%)" optional="show"/>
+                <field name="roas" string="ROAS" widget="badge" 
+                       decoration-success="roas &gt;= 3" 
+                       decoration-danger="roas &lt; 1" 
+                       decoration-warning="roas &gt;= 1 and roas &lt; 3"
+                       optional="show"/>
                 <field name="status" widget="badge"
                        decoration-success="status == 'enabled'"
-                       decoration-info="status == 'paused'"
+                       decoration-muted="status == 'paused'"
                        decoration-danger="status == 'removed'"/>
             </list>
         </field>
@@ -45,6 +50,11 @@
                             <field name="impressions" readonly="1"/>
                             <field name="cost" readonly="1"/>
                             <field name="conversions" readonly="1"/>
+                            <field name="conversion_rate" widget="progressbar"/>
+                            <field name="roas" readonly="1" widget="badge"
+                                   decoration-success="roas &gt;= 3" 
+                                   decoration-danger="roas &lt; 1" 
+                                   decoration-warning="roas &gt;= 1 and roas &lt; 3"/>
                         </group>
                     </group>
                 </sheet>

@@ -84,6 +84,13 @@ class GoogleAdsTag(models.Model):
         string='GA4 Property ID',
         help='Dãy số ID của thuộc tính thẻ GA4 (Ví dụ: 312345678). Dùng để kéo Báo Cáo.',
     )
+    
+    # ── Dashboard Analytics ──
+    ga4_dashboard_html = fields.Html(
+        string='Báo cáo GA4', 
+        compute='_compute_ga4_dashboard', 
+        store=False, sanitize=False
+    )
 
     @api.depends('gtm_item_ids', 'gtm_item_ids.item_type')
     def _compute_gtm_counts(self):
@@ -625,6 +632,71 @@ function hlv_gtag_purchase_event($order_id) {{
     </script>
     <?php
 }}"""
+
+
+    @api.depends('gtm_item_ids.ga4_event_count', 'gtm_item_ids.item_type', 'gtm_item_ids.tag_subtype')
+    def _compute_ga4_dashboard(self):
+        """Render giao diện Dashboard Đồ Thị (Horizontal Bar Chart) từ dữ liệu Event Count"""
+        for rec in self:
+            ga4_tags = rec.gtm_item_ids.filtered(lambda t: t.item_type == 'tag' and (t.tag_subtype == 'ga4_event' or 'GA4' in (t.name or '').upper()))
+            
+            if not ga4_tags:
+                rec.ga4_dashboard_html = """
+                    <div style="padding: 20px; text-align: center; color: #6b7280; background-color: #f9fafb; border-radius: 8px; border: 1px dashed #d1d5db;">
+                        <i class="fa fa-bar-chart fa-3x" style="color: #e5e7eb; margin-bottom: 10px;"></i>
+                        <p style="margin: 0; font-family: sans-serif;">Chưa có dữ liệu sự kiện GA4 nào được đồng bộ.</p>
+                    </div>
+                """
+                continue
+
+            # Sort by count desc
+            sorted_tags = sorted(ga4_tags, key=lambda t: t.ga4_event_count, reverse=True)
+            max_count = max(sorted_tags[0].ga4_event_count, 1) # Prevent div by 0
+
+            html_lines = []
+            html_lines.append("""
+            <div style="background-color: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 20px; font-family: 'Inter', 'Segoe UI', sans-serif; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="margin: 0; color: #111827; font-size: 16px; font-weight: 600;">📊 Lưu Lượng Sự Kiện (30 Ngày Qua)</h3>
+                    <span style="font-size: 12px; color: #6b7280; font-weight: 500; background: #f3f4f6; padding: 4px 10px; border-radius: 12px;">Được đồng bộ từ Google Analytics 4</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+            """)
+
+            for tag in sorted_tags:
+                count = tag.ga4_event_count
+                percentage = min(int((count / max_count) * 100), 100) if max_count > 0 else 0
+                
+                # Màu sắc gradient tùy mức độ
+                if percentage > 75:
+                    bar_color = "linear-gradient(90deg, #3b82f6 0%, #2563eb 100%)" # Blue
+                elif percentage > 40:
+                    bar_color = "linear-gradient(90deg, #60a5fa 0%, #3b82f6 100%)" # Light Blue
+                elif percentage > 10:
+                    bar_color = "linear-gradient(90deg, #93c5fd 0%, #60a5fa 100%)" # Paler Blue
+                else:
+                    bar_color = "#e5e7eb" # Gray for very low/0
+
+                html_lines.append(f"""
+                    <div style="position: relative; width: 100%;">
+                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px;">
+                            <span style="color: #374151; font-size: 13px; font-weight: 500; width: 40%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{tag.name}">{tag.name}</span>
+                            <span style="color: #111827; font-size: 13px; font-weight: 600;">{count:,} <span style="font-weight: 400; color: #6b7280; font-size: 11px;">lượt</span></span>
+                        </div>
+                        <div style="width: 100%; height: 8px; background-color: #f3f4f6; border-radius: 4px; overflow: hidden;">
+                            <div style="height: 100%; width: {percentage}%; background: {bar_color}; border-radius: 4px; transition: width 0.5s ease-in-out;"></div>
+                        </div>
+                    </div>
+                """)
+
+            html_lines.append("""
+                </div>
+            </div>
+            """)
+            
+            rec.ga4_dashboard_html = "\n".join(html_lines)
+
+
 
 
 class GoogleAdsConversionAction(models.Model):
