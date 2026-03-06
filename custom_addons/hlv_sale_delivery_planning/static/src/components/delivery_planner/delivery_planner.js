@@ -24,6 +24,7 @@ export class DeliveryPlannerDashboard extends Component {
             filterDateTo: "",
             filterPODateFrom: "",
             filterPODateTo: "",
+            filterPOStatus: "all",
 
             // Stats
             dashboardStats: { total: 0, ready: 0, partial: 0, out_of_stock: 0 },
@@ -59,6 +60,7 @@ export class DeliveryPlannerDashboard extends Component {
                     filter_date_to: this.state.filterDateTo,
                     filter_po_date_from: this.state.filterPODateFrom,
                     filter_po_date_to: this.state.filterPODateTo,
+                    filter_po_status: this.state.filterPOStatus,
                     limit: this.state.itemsPerPage,
                     offset: (this.state.currentPage - 1) * this.state.itemsPerPage,
                 }

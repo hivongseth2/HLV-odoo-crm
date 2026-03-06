@@ -140,6 +140,22 @@
                                     <input type="date" class="form-control px-1" title="Đến Ngày" t-model="state.filterPODateTo" t-on-change="onFilterChange" />
                                 </div>
                             </div>
+
+                            <!-- Trạng Thái Lệnh Mua (PO) -->
+                            <div class="col-md-3 mt-md-0 mt-3">
+                                <label class="form-label small fw-bold text-muted mb-1">Trạng Thái (PO)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light px-2"><i class="fa fa-file-text-o text-info"></i></span>
+                                    <select class="form-select px-1 fw-bold" t-model="state.filterPOStatus" t-on-change="onFilterChange">
+                                        <option value="all">Tất cả TT</option>
+                                        <option value="draft">Bản nháp / Yêu cầu</option>
+                                        <option value="sent">Đã gửi yêu cầu</option>
+                                        <option value="purchase">Đơn mua (Xác nhận)</option>
+                                        <option value="done">Hoàn thành / KHÓA</option>
+                                        <option value="cancel">Đã hủy</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
 
                         <div t-if="!state.saleOrders.length" class="alert alert-info shadow-sm d-flex align-items-center p-4" role="alert">
@@ -230,7 +246,7 @@
                                                                  t-on-click="() => this.openPicking(picking.id)">
                                                                 <div class="small fw-bold text-truncate mb-1" 
                                                                      t-att-class="picking.state == 'done' ? 'text-secondary' : 'text-danger'">
-                                                                    <t t-esc="picking.type_name"/>
+                                                                    <span t-if="picking.global_seq > 0" class="badge bg-secondary me-1" title="Thứ tự thời gian"><t t-esc="picking.global_seq"/></span><t t-esc="picking.type_name"/>
                                                                 </div>
                                                                 <span class="badge w-100 mb-1" t-att-class="this.getPickingStatusBadgeClass(picking.state)">
                                                                     <t t-esc="this.translatePickingStatus(picking.state)"/>
@@ -281,7 +297,7 @@
                                                                          'text-secondary': picking.state == 'done',
                                                                          'text-primary': picking.state != 'done'
                                                                      }">
-                                                                    <t t-esc="picking.type_name"/>
+                                                                    <span t-if="picking.global_seq > 0" class="badge bg-info text-white me-1" title="Thứ tự thời gian"><t t-esc="picking.global_seq"/></span><t t-esc="picking.type_name"/>
                                                                 </div>
                                                                 <span class="badge w-100 mb-1" t-att-class="this.getPickingStatusBadgeClass(picking.state)">
                                                                     <t t-esc="this.translatePickingStatus(picking.state)"/>

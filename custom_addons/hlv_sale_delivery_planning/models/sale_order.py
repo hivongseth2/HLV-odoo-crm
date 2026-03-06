@@ -5,7 +5,7 @@ class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
     @api.model
-    def get_delivery_dashboard_data(self, search_query='', filter_warehouse_id='all', filter_delivery_status='all', filter_stock_status='all', filter_date_from='', filter_date_to='', filter_po_date_from='', filter_po_date_to='', limit=12, offset=0):
+    def get_delivery_dashboard_data(self, search_query='', filter_warehouse_id='all', filter_delivery_status='all', filter_stock_status='all', filter_date_from='', filter_date_to='', filter_po_date_from='', filter_po_date_to='', filter_po_status='all', limit=12, offset=0):
         """
         Fetch SOs and matching POs to display on the OWL dashboard.
         """
@@ -33,12 +33,14 @@ class SaleOrder(models.Model):
         sales = self.search(domain, order='commitment_date asc, date_order desc')
         
         # --- LỌC THEO NGÀY PO (MEMORY FILTER DỰA VÀO PURCHASE ORDER) ---
-        if filter_po_date_from or filter_po_date_to:
+        if filter_po_date_from or filter_po_date_to or filter_po_status != 'all':
             po_domain = [('origin', 'in', sales.mapped('name'))]
             if filter_po_date_from:
                 po_domain.append(('date_planned', '>=', filter_po_date_from))
             if filter_po_date_to:
                 po_domain.append(('date_planned', '<=', filter_po_date_to + ' 23:59:59'))
+            if filter_po_status != 'all':
+                po_domain.append(('state', '=', filter_po_status))
             matching_pos = self.env['purchase.order'].search_read(po_domain, ['origin'])
             origins = list(set([po['origin'] for po in matching_pos if po['origin']]))
             sales = sales.filtered(lambda s: s.name in origins)
@@ -348,6 +350,11 @@ class SaleOrder(models.Model):
             
             flows = []
             path_counter = 1
+            
+            # Tính số thứ tự Chronological cho từng thẻ kho
+            sorted_all_pickings = sorted(all_so_pickings.filtered(lambda p: p.state == 'done' and p.date_done), key=lambda p: p.date_done)
+            sorted_pending = sorted(all_so_pickings.filtered(lambda p: p.state != 'done'), key=lambda p: p.scheduled_date or p.create_date)
+            picking_seq_map = {p.id: idx + 1 for idx, p in enumerate(sorted_all_pickings + sorted_pending)}
 
             def build_path_nodes(path_pickings):
                 nodes = []
@@ -358,6 +365,7 @@ class SaleOrder(models.Model):
                         'state': p.state,
                         'type_name': p.picking_type_id.name or '',
                         'code': p.picking_type_id.code or '',
+                        'global_seq': picking_seq_map.get(p.id, 0),
                         'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
                         'backorder_of': p.backorder_id.name if p.backorder_id else False,
                         'return_of': p.return_id.name if hasattr(p, 'return_id') and p.return_id else False,
@@ -365,27 +373,29 @@ class SaleOrder(models.Model):
                     })
                 return nodes
 
-            def get_paths(picking):
+            def get_paths(picking, allowed_pickings):
                 # Tìm các phiếu tiếp theo nhận hàng từ phiếu hiện tại
-                next_pickings = picking.move_ids.mapped('move_dest_ids.picking_id').filtered(lambda x: x in all_so_pickings and x.id != picking.id)
+                next_pickings = picking.move_ids.mapped('move_dest_ids.picking_id').filtered(
+                    lambda x: x in allowed_pickings and x.id != picking.id
+                )
                 if not next_pickings:
                     return [[picking]]
                 
                 paths = []
                 for np in next_pickings:
-                    # Chặn vòng lặp vô hạn (Mặc dù Odoo hiếm khi xảy ra cyclic pickings)
-                    for sub_path in get_paths(np):
+                    # Chặn vòng lặp vô hạn
+                    for sub_path in get_paths(np, allowed_pickings):
                         if picking not in sub_path:
                             paths.append([picking] + sub_path)
                 
-                # Nếu không có path hợp lệ do logic ngắt vòng lặp
                 if not paths:
                     return [[picking]]
                 return paths
 
             # --- 3. Generate Paths từ Xuất Kho Roots
+            outbound_allowed = all_so_pickings - all_returns_and_stors
             for root in sorted(main_roots, key=lambda x: (x.scheduled_date or x.create_date, x.id)):
-                paths = get_paths(root)
+                paths = get_paths(root, outbound_allowed)
                 for path in paths:
                     flows.append({
                         'id': f'path_{so.id}_{path_counter}',
@@ -395,8 +405,10 @@ class SaleOrder(models.Model):
                     path_counter += 1
                     
             # --- 4. Generate Paths từ Trả Hàng Roots
+            # Đối với Trả hàng, allowed là danh sách return và stors nội bộ liên quan
+            return_allowed = all_returns_and_stors
             for root in sorted(list(return_roots), key=lambda x: (x.scheduled_date or x.create_date, x.id)):
-                paths = get_paths(root)
+                paths = get_paths(root, return_allowed)
                 for path in paths:
                     flows.append({
                         'id': f'path_{so.id}_{path_counter}',
@@ -431,5 +443,6 @@ class SaleOrder(models.Model):
         return {
             'orders': result,
             'warehouses': warehouses,
-            'total_count': total_count
+            'total_count': total_count,
+            'dashboard_stats': dashboard_stats
         }
