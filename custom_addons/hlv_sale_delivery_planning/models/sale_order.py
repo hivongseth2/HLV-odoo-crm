@@ -46,6 +46,7 @@ class SaleOrder(models.Model):
                         'product_id': [line.product_id.id, line.product_id.display_name] if line.product_id else False,
                         'product_uom_qty': line.product_uom_qty,
                         'qty_delivered': line.qty_delivered,
+                        'qty_available': line.product_id.with_context(warehouse=so.warehouse_id.id).qty_available if line.product_id and so.warehouse_id else 0.0,
                     })
                     
             # Check if all lines are delivered

@@ -19,13 +19,15 @@ export class DeliveryPlannerDashboard extends Component {
             searchQuery: "",
             filterWarehouseId: "all",
             filterStatus: "all", // all, ready, pending
+            filterDateFrom: "",
+            filterDateTo: "",
 
             // Pagination
             currentPage: 1,
             itemsPerPage: 12,
 
-            // Modal
-            isModalOpen: false,
+            // Drawer
+            isDrawerOpen: false,
             selectedOrder: null,
         });
 
@@ -76,6 +78,18 @@ export class DeliveryPlannerDashboard extends Component {
             list = list.filter(so => so.is_fully_ready);
         } else if (this.state.filterStatus === "pending") {
             list = list.filter(so => !so.is_fully_ready);
+        }
+
+        // 4. Date Filters (Hẹn Giao)
+        if (this.state.filterDateFrom) {
+            const dFrom = new Date(this.state.filterDateFrom);
+            list = list.filter(so => so.commitment_date && new Date(so.commitment_date) >= dFrom);
+        }
+
+        if (this.state.filterDateTo) {
+            const dTo = new Date(this.state.filterDateTo);
+            dTo.setHours(23, 59, 59, 999);
+            list = list.filter(so => so.commitment_date && new Date(so.commitment_date) <= dTo);
         }
 
         return list;
@@ -163,14 +177,14 @@ export class DeliveryPlannerDashboard extends Component {
         return 'border-danger-soft';
     }
 
-    // --- Modal Actions ---
-    openOverviewModal(so) {
+    // --- Drawer Actions ---
+    openOverviewDrawer(so) {
         this.state.selectedOrder = so;
-        this.state.isModalOpen = true;
+        this.state.isDrawerOpen = true;
     }
 
-    closeOverviewModal() {
-        this.state.isModalOpen = false;
+    closeOverviewDrawer() {
+        this.state.isDrawerOpen = false;
         this.state.selectedOrder = null;
     }
 }
