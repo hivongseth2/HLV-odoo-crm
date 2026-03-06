@@ -5,7 +5,7 @@ class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
     @api.model
-    def get_delivery_dashboard_data(self, search_query='', filter_warehouse_id='all', filter_delivery_status='all', filter_stock_status='all', filter_date_from='', filter_date_to='', limit=12, offset=0):
+    def get_delivery_dashboard_data(self, search_query='', filter_warehouse_id='all', filter_delivery_status='all', filter_stock_status='all', filter_date_from='', filter_date_to='', filter_po_date_from='', filter_po_date_to='', limit=12, offset=0):
         """
         Fetch SOs and matching POs to display on the OWL dashboard.
         """
@@ -32,61 +32,77 @@ class SaleOrder(models.Model):
         # Add order to prioritize the ones with earlier commitment dates
         sales = self.search(domain, order='commitment_date asc, date_order desc')
         
-        # --- LỌC BỘ NHỚ THEO STATUS KHO & PHÂN TRANG KÉP ---
-        # --- LỌC BỘ NHỚ THEO STATUS KHO & PHÂN TRANG KÉP ---
-        matched_sale_ids = []
+        # --- LỌC THEO NGÀY PO (MEMORY FILTER DỰA VÀO PURCHASE ORDER) ---
+        if filter_po_date_from or filter_po_date_to:
+            po_domain = [('origin', 'in', sales.mapped('name'))]
+            if filter_po_date_from:
+                po_domain.append(('date_planned', '>=', filter_po_date_from))
+            if filter_po_date_to:
+                po_domain.append(('date_planned', '<=', filter_po_date_to + ' 23:59:59'))
+            matching_pos = self.env['purchase.order'].search_read(po_domain, ['origin'])
+            origins = list(set([po['origin'] for po in matching_pos if po['origin']]))
+            sales = sales.filtered(lambda s: s.name in origins)
         
-        if filter_stock_status == 'all':
-            matched_sale_ids = sales.ids
-        else:
-            # Chỉ lấy các product/warehouses cần thiết cho 1 lượt cache để tính stock status
-            product_qty_cache = {}
-            for so in sales:
-                if so.warehouse_id:
-                    w_id = so.warehouse_id.id
-                    if w_id not in product_qty_cache:
-                        product_qty_cache[w_id] = set()
-                    for line in so.order_line:
-                        if not line.display_type and line.product_id:
-                            product_qty_cache[w_id].add(line.product_id.id)
-                            
-            product_availabilities = {}
-            for w_id, prod_ids in product_qty_cache.items():
-                if prod_ids:
-                    prods = self.env['product.product'].browse(list(prod_ids)).with_context(warehouse=w_id)
-                    for p in prods:
-                        product_availabilities[(p.id, w_id)] = p.qty_available
-                        
-            # Lọc trong bộ nhớ theo filter custom
-            for so in sales:
-                has_pending = False
-                is_fully_ready = True
-                total_pending = 0
-                total_avail = 0
-                
+        # --- TÍNH TOÁN STOCK KHẢ DỤNG CHO TOÀN BỘ SALES ĐỂ LÀM DASHBOARD STATS ---
+        product_qty_cache = {}
+        for so in sales:
+            if so.warehouse_id:
+                w_id = so.warehouse_id.id
+                if w_id not in product_qty_cache:
+                    product_qty_cache[w_id] = set()
                 for line in so.order_line:
-                    if not line.display_type and line.product_id and line.product_id.type != 'service':
-                        pending_qty = line.product_uom_qty - line.qty_delivered
-                        if pending_qty > 0:
-                            has_pending = True
-                            total_pending += pending_qty
-                            qty_avail = product_availabilities.get((line.product_id.id, so.warehouse_id.id), 0.0)
-                            if qty_avail > 0:
-                                total_avail += min(qty_avail, pending_qty)
-                            if qty_avail < pending_qty:
-                                is_fully_ready = False
-                
-                stock_status = 'ready'
-                if has_pending:
-                    if is_fully_ready:
-                        stock_status = 'ready'
-                    elif total_avail > 0:
-                        stock_status = 'partial_ready'
-                    else:
-                        stock_status = 'out_of_stock'
+                    if not line.display_type and line.product_id:
+                        product_qty_cache[w_id].add(line.product_id.id)
                         
-                if stock_status == filter_stock_status:
-                    matched_sale_ids.append(so.id)
+        product_availabilities = {}
+        for w_id, prod_ids in product_qty_cache.items():
+            if prod_ids:
+                prods = self.env['product.product'].browse(list(prod_ids)).with_context(warehouse=w_id)
+                for p in prods:
+                    product_availabilities[(p.id, w_id)] = p.qty_available
+                    
+        # Lọc trong bộ nhớ theo filter custom & Tính KPI
+        matched_sale_ids = []
+        dashboard_stats = {'total': 0, 'ready': 0, 'partial': 0, 'out_of_stock': 0}
+        
+        for so in sales:
+            has_pending = False
+            is_fully_ready = True
+            total_pending = 0
+            total_avail = 0
+            
+            for line in so.order_line:
+                if not line.display_type and line.product_id and line.product_id.type != 'service':
+                    pending_qty = line.product_uom_qty - line.qty_delivered
+                    if pending_qty > 0:
+                        has_pending = True
+                        total_pending += pending_qty
+                        qty_avail = product_availabilities.get((line.product_id.id, so.warehouse_id.id), 0.0)
+                        if qty_avail > 0:
+                            total_avail += min(qty_avail, pending_qty)
+                        if qty_avail < pending_qty:
+                            is_fully_ready = False
+            
+            stock_status = 'ready'
+            if has_pending:
+                if is_fully_ready:
+                    stock_status = 'ready'
+                elif total_avail > 0:
+                    stock_status = 'partial_ready'
+                else:
+                    stock_status = 'out_of_stock'
+                    
+            # Tăng biến đếm Dashboard
+            dashboard_stats['total'] += 1
+            if stock_status == 'ready':
+                dashboard_stats['ready'] += 1
+            elif stock_status == 'partial_ready':
+                dashboard_stats['partial'] += 1
+            else:
+                dashboard_stats['out_of_stock'] += 1
+                    
+            if filter_stock_status == 'all' or stock_status == filter_stock_status:
+                matched_sale_ids.append(so.id)
                     
         total_count = len(matched_sale_ids)
         page_sale_ids = matched_sale_ids[int(offset):int(offset) + int(limit)]
@@ -287,13 +303,13 @@ class SaleOrder(models.Model):
                 }
                 flat_pickings.append(p_data)
             
-            # Cấu trúc luồng Phiếu Kho: Phân Loại Theo Giai Đoạn (Nhóm theo picking_type)
+            # Cấu trúc luồng Phiếu Kho: Phân Loại Tuyến Đường (Path-based Flow)
             all_so_pickings = so.picking_ids
-            branch_ids = set()
             
-            # 1. Tìm Returns & Stors (Luồng dọc 1)
+            # --- 1. Lọc Return Pickings (Các phiếu Nhập từ khách)
             return_ps_dict = {}
             stor_ps_dict = {}
+            branch_ids = set()
             for p in all_so_pickings:
                 if hasattr(p, 'return_ids') and p.return_ids:
                     for rp in p.return_ids:
@@ -305,83 +321,89 @@ class SaleOrder(models.Model):
                         return_ps_dict.setdefault(p.id, []).append(rp)
                         branch_ids.add(rp.id)
                         
-            # Càn quét STORs
+            # Càn quét STORs (Phiếu lưu kho nội bộ sau khi Nhập)
             for rp_list in return_ps_dict.values():
                 for rp in rp_list:
                     stors = rp.move_ids.move_dest_ids.picking_id.filtered(lambda x: x in all_so_pickings)
                     for stor in stors:
                         stor_ps_dict.setdefault(rp.id, []).append(stor)
                         branch_ids.add(stor.id)
-                        
-            # 2. Nhóm các phiếu còn lại (Main Pickings) theo Picking Type
-            main_pickings = all_so_pickings.filtered(lambda x: x.id not in branch_ids)
-            
-            grouped_by_type = {}
-            for p in main_pickings:
-                pt = p.picking_type_id
-                if pt not in grouped_by_type:
-                    grouped_by_type[pt] = []
-                grouped_by_type[pt].append(p)
-                
-            def get_pt_sort_key(pt):
-                code_rank = 0
-                if pt.code == 'incoming': code_rank = 1
-                elif pt.code == 'internal': code_rank = 2
-                elif pt.code == 'outgoing': code_rank = 3
-                else: code_rank = 4
-                return (code_rank, getattr(pt, 'sequence', 99), pt.id)
-                
-            sorted_pts = sorted(grouped_by_type.keys(), key=get_pt_sort_key)
+
+            all_returns_and_stors = set()
+            return_roots = set()
+            for rp_list in return_ps_dict.values():
+                for rp in rp_list:
+                    return_roots.add(rp)
+                    all_returns_and_stors.add(rp)
+            for stor_list in stor_ps_dict.values():
+                for stor in stor_list:
+                    all_returns_and_stors.add(stor)
+
+            # --- 2. Tìm Roots của luồng Xuất (Main Delivery)
+            # Root là những phiếu KHÔNG nhận hàng từ bất kỳ phiếu nào khác trong SO này (trừ Return)
+            main_roots = all_so_pickings.filtered(
+                lambda x: x not in all_returns_and_stors and \
+                not any(m.picking_id in all_so_pickings and m.picking_id not in all_returns_and_stors and m.picking_id != x for m in x.move_ids.mapped('move_orig_ids'))
+            )
             
             flows = []
-            for pt in sorted_pts:
-                pickings_in_type = grouped_by_type[pt]
-                # Sort pickings inside the column by date
-                pickings_in_type = sorted(pickings_in_type, key=lambda p: (p.scheduled_date or p.create_date, p.id))
-                
-                pt_data = {
-                    'type_id': pt.id,
-                    'type_name': pt.name,
-                    'code': pt.code,
-                    'pickings': [],
-                    'returns': []
-                }
-                
-                for p in pickings_in_type:
-                    p_data = {
+            path_counter = 1
+
+            def build_path_nodes(path_pickings):
+                nodes = []
+                for p in path_pickings:
+                    nodes.append({
                         'id': p.id,
                         'name': p.name,
                         'state': p.state,
-                        'type_name': pt.name,
-                        'code': pt.code,
+                        'type_name': p.picking_type_id.name or '',
+                        'code': p.picking_type_id.code or '',
                         'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
                         'backorder_of': p.backorder_id.name if p.backorder_id else False,
+                        'return_of': p.return_id.name if hasattr(p, 'return_id') and p.return_id else False,
                         'videos': att_by_picking.get(p.id, [])
-                    }
-                    pt_data['pickings'].append(p_data)
+                    })
+                return nodes
+
+            def get_paths(picking):
+                # Tìm các phiếu tiếp theo nhận hàng từ phiếu hiện tại
+                next_pickings = picking.move_ids.mapped('move_dest_ids.picking_id').filtered(lambda x: x in all_so_pickings and x.id != picking.id)
+                if not next_pickings:
+                    return [[picking]]
+                
+                paths = []
+                for np in next_pickings:
+                    # Chặn vòng lặp vô hạn (Mặc dù Odoo hiếm khi xảy ra cyclic pickings)
+                    for sub_path in get_paths(np):
+                        if picking not in sub_path:
+                            paths.append([picking] + sub_path)
+                
+                # Nếu không có path hợp lệ do logic ngắt vòng lặp
+                if not paths:
+                    return [[picking]]
+                return paths
+
+            # --- 3. Generate Paths từ Xuất Kho Roots
+            for root in sorted(main_roots, key=lambda x: (x.scheduled_date or x.create_date, x.id)):
+                paths = get_paths(root)
+                for path in paths:
+                    flows.append({
+                        'id': f'path_{so.id}_{path_counter}',
+                        'is_return': False,
+                        'nodes': build_path_nodes(path)
+                    })
+                    path_counter += 1
                     
-                    # Thêm Returns tương ứng của Picking gốc này
-                    for rp in return_ps_dict.get(p.id, []):
-                        stors = []
-                        for stor in stor_ps_dict.get(rp.id, []):
-                            stors.append({
-                                'id': stor.id,
-                                'name': stor.name,
-                                'state': stor.state,
-                                'type_name': stor.picking_type_id.name or '',
-                                'videos': att_by_picking.get(stor.id, [])
-                            })
-                        pt_data['returns'].append({
-                            'id': rp.id,
-                            'name': rp.name,
-                            'state': rp.state,
-                            'type_name': rp.picking_type_id.name or '',
-                            'return_of_name': p.name,
-                            'videos': att_by_picking.get(rp.id, []),
-                            'stors': stors
-                        })
-                        
-                flows.append(pt_data)
+            # --- 4. Generate Paths từ Trả Hàng Roots
+            for root in sorted(list(return_roots), key=lambda x: (x.scheduled_date or x.create_date, x.id)):
+                paths = get_paths(root)
+                for path in paths:
+                    flows.append({
+                        'id': f'path_{so.id}_{path_counter}',
+                        'is_return': True,
+                        'nodes': build_path_nodes(path)
+                    })
+                    path_counter += 1
                 
             result.append({
                 'id': so.id,

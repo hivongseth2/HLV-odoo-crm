@@ -22,6 +22,11 @@ export class DeliveryPlannerDashboard extends Component {
             filterStockStatus: "all",
             filterDateFrom: "",
             filterDateTo: "",
+            filterPODateFrom: "",
+            filterPODateTo: "",
+
+            // Stats
+            dashboardStats: { total: 0, ready: 0, partial: 0, out_of_stock: 0 },
 
             // Pagination
             currentPage: 1,
@@ -52,10 +57,14 @@ export class DeliveryPlannerDashboard extends Component {
                     filter_stock_status: this.state.filterStockStatus,
                     filter_date_from: this.state.filterDateFrom,
                     filter_date_to: this.state.filterDateTo,
+                    filter_po_date_from: this.state.filterPODateFrom,
+                    filter_po_date_to: this.state.filterPODateTo,
                     limit: this.state.itemsPerPage,
                     offset: (this.state.currentPage - 1) * this.state.itemsPerPage,
                 }
             );
+
+            this.state.dashboardStats = result.dashboard_stats || { total: 0, ready: 0, partial: 0, out_of_stock: 0 };
             const fetchedOrders = result.orders || [];
             this.state.saleOrders = fetchedOrders.map(so => {
                 so.flows = so.flows || [];
