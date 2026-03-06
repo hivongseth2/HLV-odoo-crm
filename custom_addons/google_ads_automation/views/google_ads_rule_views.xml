@@ -4,71 +4,102 @@
         <field name="name">google.ads.rule.form</field>
         <field name="model">google.ads.rule</field>
         <field name="arch" type="xml">
-            <form string="Quy Tắc Google Ads">
+            <form string="Quy Tắc Google Ads" class="o_google_ads_premium_form">
                 <header>
-                    <button name="run_rule" string="Chạy Thử Ngay" type="object" class="oe_highlight"/>
+                    <button name="run_rule" string="Kích Hoạt Quy Tắc Ngay" type="object" class="btn-primary"/>
+                    <field name="active" widget="statusbar" statusbar_visible="True,False"/>
                 </header>
                 <sheet>
-                    <widget name="web_ribbon" title="Tự Sinh" bg_color="text-bg-info"
-                            invisible="not auto_generated"/>
-                    <div class="oe_title">
-                        <h1>
-                            <field name="name" placeholder="Tên quy tắc..."/>
-                        </h1>
-                    </div>
-                    <group>
-                        <group string="1. Cấu Hình Cơ Bản">
+                    <div class="o_hero_header" style="background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);">
+                        <div class="status_badge">
                             <field name="active" widget="boolean_toggle"/>
-                            <field name="account_id"/>
-                            <field name="target_type"/>
-                            <field name="auto_generated" readonly="1"/>
-                            <field name="strategy_id" readonly="1"
-                                   invisible="not auto_generated"/>
-                            <field name="product_feed_line_id" readonly="1"
-                                   invisible="not auto_generated"/>
-                        </group>
-                    </group>
-                    
-                    <div class="row mt-4">
-                        <!-- Cột: Điều kiện (IF) -->
-                        <div class="col-6" style="border-right: 2px dashed #e2e8f0; padding-right: 20px;">
-                            <h2 class="text-primary mb-3">
-                                <i class="fa fa-filter"></i> NẾU (Điều kiện)
-                            </h2>
-                            <group>
-                                <field name="condition_field" string="Trường dữ liệu"/>
-                                <field name="condition_operator" string="Toán tử so sánh"/>
-                                <field name="condition_value" string="Giá trị ngưỡng"/>
-                            </group>
                         </div>
-                        
-                        <!-- Cột: Hành động (THEN) -->
-                        <div class="col-6" style="padding-left: 20px;">
-                            <h2 class="text-success mb-3">
-                                <i class="fa fa-bolt"></i> THÌ (Hành động)
-                            </h2>
-                            <group>
-                                <field name="action_type" string="Thực thi thao tác"/>
-                                <field name="action_value" string="Tham số phụ"
-                                       invisible="action_type not in ('increase_budget', 'decrease_budget')"/>
-                            </group>
+                        <div class="row align-items-center">
+                            <div class="col-auto">
+                                <div class="bg-white p-3 rounded-4 shadow-sm text-indigo">
+                                    <i class="fa fa-bolt fa-4x text-primary"></i>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <span class="badge rounded-pill text-bg-indigo mb-2 px-3 py-2">AUTOMATION RULE</span>
+                                <h1 class="text-white mt-1">
+                                    <field name="name" placeholder="Tên quy tắc..."/>
+                                </h1>
+                                <p class="text-white-50 mt-2 mb-0 fw-medium">
+                                    <i class="fa fa-crosshairs me-1"></i> Mục Tiêu: 
+                                    <field name="target_type" class="text-white fw-bold"/>
+                                    <span t-if="auto_generated" class="ms-3 badge text-bg-info"><i class="fa fa-robot me-1"></i> TỰ SINH</span>
+                                </p>
+                            </div>
                         </div>
                     </div>
-                    <notebook>
-                        <page string="Lịch Sử Chạy" icon="fa-history">
-                            <field name="log_ids" readonly="1">
-                                <list>
-                                    <field name="run_date"/>
-                                    <field name="target_name"/>
-                                    <field name="status" widget="badge"
-                                           decoration-success="status == 'success'"
-                                           decoration-warning="status == 'action_taken'"
-                                           decoration-danger="status == 'error'"/>
-                                    <field name="message"/>
-                                </list>
-                            </field>
-                        </page>
-                    </notebook>
+
+                    <div class="o_premium_card mb-4 mt-n4 shadow-lg border-0">
+                        <div class="row align-items-center">
+                            <div class="col-md-5">
+                                <div class="o_logic_builder">
+                                    <span class="o_logic_tag">IF</span>
+                                    <div class="d-flex flex-column flex-grow-1">
+                                        <field name="condition_field" class="fw-bold text-primary"/>
+                                        <div class="d-flex align-items-center gap-2 mt-1">
+                                            <field name="condition_operator" class="text-muted small"/>
+                                            <field name="condition_value" class="badge text-bg-light border"/>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-2 text-center text-muted">
+                                <i class="fa fa-long-arrow-right fa-2x"></i>
+                            </div>
+                            <div class="col-md-5">
+                                <div class="o_logic_builder" style="border-left-color: #10B981;">
+                                    <span class="o_logic_tag bg-success">THEN</span>
+                                    <div class="d-flex flex-column flex-grow-1">
+                                        <field name="action_type" class="fw-bold text-success"/>
+                                        <field name="action_value" class="text-muted small mt-1" 
+                                               invisible="action_type not in ('increase_budget', 'decrease_budget')"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-6">
+                            <div class="o_premium_card">
+                                <h5 class="text-secondary fw-bold mb-3"><i class="fa fa-cog me-2"></i>Liên Kết Hệ Thống</h5>
+                                <group>
+                                    <field name="account_id" readonly="1"/>
+                                    <field name="strategy_id" readonly="1" invisible="not strategy_id"/>
+                                    <field name="product_feed_line_id" readonly="1" invisible="not product_feed_line_id"/>
+                                </group>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                             <div class="o_premium_card bg-light border-0">
+                                <h5 class="text-secondary fw-bold mb-3"><i class="fa fa-terminal me-2"></i>Thông Tin Kỹ Thuật</h5>
+                                <p class="text-muted small">Quy tắc này được thực thi tự động qua Cron Job hoặc kích hoạt thủ công. Trạng thái hoạt động quyết định việc áp dụng lên Google Ads.</p>
+                                <field name="auto_generated" readonly="1"/>
+                             </div>
+                        </div>
+                    </div>
+
+                    <div class="o_premium_card mt-4 p-0 overflow-hidden">
+                        <div class="bg-light p-3 border-bottom d-flex justify-content-between align-items-center">
+                            <h5 class="m-0 fw-bold"><i class="fa fa-history me-2"></i>Lịch Sử Thực Thi</h5>
+                        </div>
+                        <field name="log_ids" readonly="1">
+                            <list class="table-hover">
+                                <field name="run_date"/>
+                                <field name="target_name"/>
+                                <field name="status" widget="badge"
+                                       decoration-success="status == 'success'"
+                                       decoration-warning="status == 'action_taken'"
+                                       decoration-danger="status == 'error'"/>
+                                <field name="message"/>
+                            </list>
+                        </field>
+                    </div>
                 </sheet>
                 <chatter/>
             </form>

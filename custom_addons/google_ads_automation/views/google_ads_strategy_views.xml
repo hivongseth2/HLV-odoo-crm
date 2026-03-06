@@ -31,89 +31,114 @@
         <field name="name">google.ads.strategy.form</field>
         <field name="model">google.ads.strategy</field>
         <field name="arch" type="xml">
-            <form>
+            <form string="Chiến Lược Tự Động" class="o_google_ads_premium_form">
                 <header>
-                    <button name="action_generate_rules"
-                            string="Sinh Rules Tự Động"
-                            type="object"
-                            class="oe_highlight"
-                            invisible="state == 'active'"/>
-                    <button name="action_activate"
-                            string="Kích Hoạt"
-                            type="object"
-                            class="oe_highlight"
-                            invisible="state == 'active'"/>
-                    <button name="action_pause"
-                            string="⏸ Tạm Dừng"
-                            type="object"
-                            invisible="state != 'active'"/>
-                    <button name="action_draft"
-                            string="↩ Về Nháp"
-                            type="object"
-                            invisible="state == 'draft'"/>
+                    <button name="action_generate_rules" string="Sinh Rules Tự Động" type="object"
+                            class="btn-primary" invisible="state == 'active'"/>
+                    <button name="action_activate" string="Kích Hoạt Chiến Lược" type="object"
+                            class="btn-success" invisible="state == 'active'"/>
+                    <button name="action_pause" string="⏸ Tạm Dừng" type="object"
+                            class="btn-secondary" invisible="state != 'active'"/>
+                     <button name="action_draft" string="↩ Về Nháp" type="object"
+                            class="btn-link text-muted" invisible="state == 'draft'"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,active"/>
                 </header>
                 <sheet>
-                    <div class="oe_button_box" name="button_box">
-                        <button name="action_view_rules"
-                                type="object"
-                                class="oe_stat_button"
-                                icon="fa-list">
-                            <field name="rule_count" widget="statinfo" string="Rules"/>
-                        </button>
+                    <div class="o_hero_header" style="background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);">
+                        <div class="status_badge text-end">
+                            <span t-if="is_live" class="badge text-bg-danger shadow-sm mb-1 px-3">LIVE MODE</span><br/>
+                            <span t-attf-class="o_status_ping #{'bg-success' if state == 'active' else 'bg-warning' if state == 'draft' else 'bg-danger'}"></span>
+                            <span class="badge text-bg-light fw-bold shadow-sm" t-esc="state_label or state"></span>
+                        </div>
+                        <div class="row align-items-center">
+                            <div class="col-auto">
+                                <div class="bg-white p-3 rounded-4 shadow-sm text-sky-600">
+                                    <i class="fa fa-cogs fa-4x text-info"></i>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <span class="badge rounded-pill text-bg-info mb-2 px-3 py-2 text-white">AUTOMATION STRATEGY</span>
+                                <h1 class="text-white mt-1">
+                                    <field name="name" placeholder="Tên chiến lược..."/>
+                                </h1>
+                                <p class="text-white-50 mt-2 mb-0 fw-medium">
+                                    <i class="fa fa-tasks me-1"></i> Loại: 
+                                    <field name="strategy_type" class="text-white fw-bold"/>
+                                    <span class="ms-3 pe-2"><i class="fa fa-cubes me-1"></i> Feed: <field name="feed_id" class="text-white"/></span>
+                                </p>
+                            </div>
+                        </div>
                     </div>
 
-                    <widget name="web_ribbon" title="Live" bg_color="text-bg-danger"
-                            invisible="not is_live"/>
-
-                    <group>
-                        <group string="Thông Tin Chung">
-                            <field name="name"/>
-                            <field name="strategy_type"/>
-                            <field name="account_id"/>
-                            <field name="feed_id"/>
-                            <field name="active" invisible="1"/>
-                        </group>
-                        <group string="Chế Độ Chạy">
-                            <field name="is_live" widget="boolean_toggle"/>
-                        </group>
-                    </group>
+                    <div class="o_kpi_dashboard mt-n4">
+                         <div class="o_kpi_tile shadow-lg border-0 bg-white">
+                            <span class="o_kpi_label">RULES HIỆN CÓ</span>
+                            <span class="o_kpi_value text-info"><field name="rule_count"/></span>
+                        </div>
+                        <div class="o_kpi_tile shadow-lg border-0 bg-white">
+                            <span class="o_kpi_label">TÀI KHOẢN ĐÍCH</span>
+                            <span class="o_kpi_value text-secondary" style="font-size: 14px; padding-top: 10px;"><field name="account_id"/></span>
+                        </div>
+                    </div>
 
                     <notebook>
-                        <page string="Cấu Hình Ngưỡng" icon="fa-sliders">
-                            <group>
-                                <group string="Tồn Kho">
-                                    <field name="stock_low_threshold"/>
-                                    <field name="stock_high_threshold"/>
-                                    <field name="days_stock_critical"/>
-                                </group>
-                                <group string="Lợi Nhuận &amp; Hiệu Suất">
-                                    <field name="min_margin_percent"/>
-                                    <field name="max_cpa"/>
-                                    <field name="target_roas"/>
-                                </group>
-                            </group>
-                            <group>
-                                <group string="Budget">
-                                    <field name="budget_increase_percent"/>
-                                    <field name="budget_decrease_percent"/>
-                                </group>
-                                <group string="Sản Phẩm Mới">
-                                    <field name="new_product_days"/>
-                                </group>
-                            </group>
+                        <page string="Cấu Hình Thông Minh" icon="fa-sliders">
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <div class="o_premium_card h-100">
+                                        <h5 class="text-primary fw-bold mb-4 border-bottom pb-2"><i class="fa fa-archive me-2"></i>Ngưỡng Tồn Kho</h5>
+                                        <group>
+                                            <field name="stock_low_threshold"/>
+                                            <field name="stock_high_threshold"/>
+                                            <field name="days_stock_critical"/>
+                                        </group>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="o_premium_card h-100">
+                                        <h5 class="text-success fw-bold mb-4 border-bottom pb-2"><i class="fa fa-line-chart me-2"></i>Chỉ Số Hiệu Suất</h5>
+                                        <group>
+                                            <field name="min_margin_percent"/>
+                                            <field name="max_cpa"/>
+                                            <field name="target_roas"/>
+                                        </group>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mt-4">
+                                <div class="col-md-6">
+                                    <div class="o_premium_card h-100 bg-light border-0">
+                                        <h5 class="text-indigo fw-bold mb-4 border-bottom pb-2"><i class="fa fa-money me-2"></i>Thay Đổi Budget</h5>
+                                        <group>
+                                            <field name="budget_increase_percent"/>
+                                            <field name="budget_decrease_percent"/>
+                                        </group>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="o_premium_card h-100 bg-light border-0">
+                                        <h5 class="text-warning fw-bold mb-4 border-bottom pb-2"><i class="fa fa-star me-2"></i>Ưu Tiên Sản Phẩm</h5>
+                                        <group>
+                                            <field name="new_product_days"/>
+                                            <field name="is_live" widget="boolean_toggle"/>
+                                        </group>
+                                    </div>
+                                </div>
+                            </div>
                         </page>
-                        <page string="Rules Tự Sinh" icon="fa-cogs">
-                            <field name="rule_ids" mode="list" readonly="1">
-                                <list>
-                                    <field name="name"/>
-                                    <field name="condition_field"/>
-                                    <field name="condition_operator"/>
-                                    <field name="condition_value"/>
-                                    <field name="action_type"/>
-                                    <field name="active" widget="boolean_toggle"/>
-                                </list>
-                            </field>
+                        <page string="Danh Sách Rules" icon="fa-terminal">
+                            <div class="o_premium_card mt-3 p-0 overflow-hidden border-0">
+                                <field name="rule_ids" mode="list" readonly="1">
+                                    <list decoration-muted="not active">
+                                        <field name="name" class="fw-bold"/>
+                                        <field name="condition_field"/>
+                                        <field name="condition_operator"/>
+                                        <field name="condition_value" class="badge text-bg-light"/>
+                                        <field name="action_type" class="text-success"/>
+                                        <field name="active" widget="boolean_toggle"/>
+                                    </list>
+                                </field>
+                            </div>
                         </page>
                     </notebook>
                 </sheet>

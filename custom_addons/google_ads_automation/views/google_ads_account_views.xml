@@ -4,54 +4,89 @@
         <field name="name">google.ads.account.form</field>
         <field name="model">google.ads.account</field>
         <field name="arch" type="xml">
-            <form string="Tài Khoản Google Ads">
+            <form string="Tài Khoản Google Ads" class="o_google_ads_premium_form">
                 <header>
-                    <button name="action_test_connection" string="Kiểm Tra Kết Nối" type="object"
-                            class="oe_highlight" invisible="state == 'connected'"/>
-                    <button name="action_sync_all_data" string="Đồng Bộ Dữ Liệu" type="object"
-                            class="oe_highlight" invisible="state != 'connected'"/>
+                    <button name="action_test_connection" string="Kết Nối API" type="object"
+                            class="btn-primary" invisible="state == 'connected'"/>
+                    <button name="action_sync_all_data" string="Đồng Bộ Ngay" type="object"
+                            class="btn-success" invisible="state != 'connected'"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,connected,error"/>
                 </header>
                 <sheet>
-                    <!-- Ribbon DEMO -->
-                    <widget name="web_ribbon" title="DEMO MODE" bg_color="text-bg-warning"
-                            invisible="not is_demo"/>
-
-                    <div class="oe_title">
-                        <h1>
-                            <field name="name" placeholder="Mô tả tài khoản..."/>
-                        </h1>
+                    <div class="o_hero_header">
+                        <div class="status_badge">
+                            <span t-attf-class="o_status_ping #{'bg-success' if state == 'connected' else 'bg-warning' if state == 'draft' else 'bg-danger'}"></span>
+                            <span class="badge text-bg-light fw-bold shadow-sm" t-esc="state_label or state"></span>
+                        </div>
+                        <div class="row align-items-center">
+                            <div class="col-auto">
+                                <div class="bg-white p-3 rounded-4 shadow-sm">
+                                    <i class="fa fa-google fa-4x text-primary"></i>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <span class="badge rounded-pill text-bg-primary mb-2 px-3 py-2">GOOGLE ADS API HUB</span>
+                                <h1 class="text-white mt-1">
+                                    <field name="name" placeholder="Tên Tài Khoản..."/>
+                                </h1>
+                                <p class="text-white-50 mt-2 mb-0 fw-medium">
+                                    <i class="fa fa-id-card-o me-1"></i> Customer ID: 
+                                    <field name="operating_customer_id" class="text-white fw-bold"/>
+                                    <span t-if="is_demo" class="ms-3 badge text-bg-warning">MODO DEMO</span>
+                                </p>
+                            </div>
+                        </div>
                     </div>
 
-                    <group>
-                        <group string="Cài Đặt Chung">
-                            <field name="active" widget="boolean_toggle"/>
-                            <field name="is_demo" widget="boolean_toggle"/>
-                        </group>
-                        <group string="ID Tài Khoản" invisible="is_demo">
-                            <field name="operating_customer_id" placeholder="vd: 1234567890"/>
-                            <field name="login_customer_id" placeholder="vd: 0987654321"/>
-                        </group>
-                    </group>
+                    <div class="o_kpi_dashboard">
+                        <div class="o_kpi_tile shadow-sm border-0">
+                            <span class="o_kpi_label">SỐ CHIẾN DỊCH</span>
+                            <span class="o_kpi_value text-primary"><field name="total_campaigns"/></span>
+                        </div>
+                        <div class="o_kpi_tile shadow-sm border-0">
+                            <span class="o_kpi_label">TỔNG CHI PHÍ</span>
+                            <span class="o_kpi_value text-danger"><field name="total_spend" widget="monetary"/></span>
+                        </div>
+                        <div class="o_kpi_tile shadow-sm border-0">
+                            <span class="o_kpi_label">CHUYỂN ĐỔI</span>
+                            <span class="o_kpi_value text-success"><field name="total_conversions"/></span>
+                        </div>
+                        <div class="o_kpi_tile shadow-sm border-0">
+                            <span class="o_kpi_label">ROAS TB</span>
+                            <span class="o_kpi_value text-info"><field name="account_roas" widget="badge" decoration-success="account_roas &gt;= 3"/></span>
+                        </div>
+                    </div>
 
-                    <!-- Credentials — luôn hiện một phần để GTM có thể truy cập -->
-                    <group string="Thông Tin Xác Thực">
-                        <group string="OAuth 2.0 (Dành cho Google Ads &amp; GTM Test)">
-                            <field name="developer_token" password="True" invisible="is_demo"/>
-                            <field name="client_id" password="True"/>
-                            <field name="client_secret" password="True"/>
-                            <field name="refresh_token" password="True"/>
-                        </group>
-                        <group string="Service Account (Dành cho GTM/GA4 Production)">
-                            <field name="service_account_json" placeholder='{"type": "service_account", "project_id": ...}'/>
-                        </group>
-                    </group>
-
-                    <!-- Demo info box -->
-                    <div class="alert alert-info" invisible="not is_demo">
-                        <strong>Chế Độ Demo đang bật</strong><br/>
-                        Không cần điền API credentials. Nhấn <strong>Kiểm Tra Kết Nối</strong>
-                        rồi <strong>Đồng Bộ Dữ Liệu</strong> để tạo 4 Campaigns mẫu với metrics ngẫu nhiên.
+                    <div class="row">
+                        <div class="col-lg-8">
+                            <div class="o_premium_card h-100">
+                                <h4 class="mb-4 text-primary fw-bold"><i class="fa fa-key me-2"></i>Cài Đặt Xác Thực (Credentials)</h4>
+                                <group>
+                                    <group string="OAuth 2.0" class="border-0">
+                                        <field name="client_id" password="True"/>
+                                        <field name="client_secret" password="True"/>
+                                        <field name="refresh_token" password="True"/>
+                                        <field name="developer_token" password="True" invisible="is_demo"/>
+                                    </group>
+                                    <group string="Service Account" class="border-0">
+                                        <field name="service_account_json" placeholder='{"type": "service_account", ...}'/>
+                                    </group>
+                                </group>
+                            </div>
+                        </div>
+                        <div class="col-lg-4">
+                            <div class="o_premium_card h-100 bg-light border-0">
+                                <h4 class="mb-4 text-secondary fw-bold"><i class="fa fa-sliders me-2"></i>Chế Độ &amp; ID</h4>
+                                <group>
+                                    <field name="is_demo" widget="boolean_toggle"/>
+                                    <field name="active" widget="boolean_toggle"/>
+                                    <field name="login_customer_id" placeholder="MCC ID" invisible="is_demo"/>
+                                </group>
+                                <div t-if="is_demo" class="alert alert-warning mt-4 border-0 shadow-sm rounded-3">
+                                    <i class="fa fa-info-circle me-1"></i> <b>Chế độ Demo đang bật.</b> Tài khoản này sẽ sử dụng dữ liệu giả lập để thử nghiệm.
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </sheet>
                 <chatter/>
