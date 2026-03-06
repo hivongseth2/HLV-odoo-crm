@@ -9,11 +9,9 @@ class SaleOrder(models.Model):
         """
         Fetch SOs and matching POs to display on the OWL dashboard.
         """
-        # Tránh bỏ sót đơn hàng (Đặc biệt đơn cũ trên 6 tháng hoặc đơn gãy logic status)
-        six_months_ago = fields.Datetime.now() - relativedelta(months=6)
+        # Bỏ qua giới hạn 6 tháng để tìm đầy đủ 10k đơn hàng
         domain = [
-            ('state', 'in', ['sale', 'done']),
-            ('date_order', '>=', six_months_ago)
+            ('state', 'in', ['sale', 'done'])
         ]
         
         if filter_delivery_status != 'all':
@@ -295,15 +293,27 @@ class SaleOrder(models.Model):
             # Cấu trúc luồng Phiếu Kho: Phân Nhánh Chuỗi Flow cho UI (Cho Card X)
             all_so_pickings = so.picking_ids
             def get_next_transfers(p):
-                return p.move_ids.move_dest_ids.picking_id.filtered(lambda x: x not in p.return_ids)
+                # Filter out the return pickings from the downstream moves
+                downstream = p.move_ids.move_dest_ids.picking_id
+                if hasattr(p, 'return_ids'):
+                    return downstream.filtered(lambda x: x not in p.return_ids)
+                else:
+                    return downstream.filtered(lambda x: not (hasattr(x, 'return_id') and x.return_id.id == p.id))
                 
             next_picking_ids = set()
             for p in all_so_pickings:
                 for np in get_next_transfers(p):
                     if np in all_so_pickings:
                         next_picking_ids.add(np.id)
-                for rp in p.return_ids:
-                    if rp in all_so_pickings:
+                
+                # Cập nhật next_picking_ids để không gom Phiếu Trả về nhánh Gốc (Root)
+                if hasattr(p, 'return_ids'):
+                    for rp in p.return_ids:
+                        if rp in all_so_pickings:
+                            next_picking_ids.add(rp.id)
+                else:
+                    # Nếu model không có return_ids, tìm ngược
+                    for rp in all_so_pickings.filtered(lambda x: hasattr(x, 'return_id') and x.return_id.id == p.id):
                         next_picking_ids.add(rp.id)
                         
             root_pickings = all_so_pickings.filtered(lambda p: p.id not in next_picking_ids and not p.backorder_id)
@@ -322,13 +332,19 @@ class SaleOrder(models.Model):
                     'code': current_p.picking_type_id.code or '', # Code indicates in/out/internal
                     'scheduled_date': current_p.scheduled_date.strftime('%Y-%m-%d') if current_p.scheduled_date else False,
                     'backorder_of': current_p.backorder_id.name if current_p.backorder_id else False,
-                    'return_of': current_p.return_id.name if current_p.return_id else False,
+                    'return_of_id': current_p.return_id.id if hasattr(current_p, 'return_id') and current_p.return_id else False,
+                    'return_of': current_p.return_id.name if hasattr(current_p, 'return_id') and current_p.return_id else False,
                     'videos': videos,
                     'returns': []
                 }
                 
                 # Nối tiếp vào chuỗi (Con thuộc Mẹ)
-                return_ps = current_p.return_ids.filtered(lambda x: x in all_so_pickings)
+                return_ps = []
+                if hasattr(current_p, 'return_ids'):
+                    return_ps = current_p.return_ids.filtered(lambda x: x in all_so_pickings)
+                else:
+                    return_ps = all_so_pickings.filtered(lambda x: hasattr(x, 'return_id') and x.return_id.id == current_p.id)
+                
                 for rp in return_ps:
                     if rp.id != current_p.id:
                         p_data['returns'].append({
@@ -348,7 +364,6 @@ class SaleOrder(models.Model):
                 for np in (next_ps | backorders):
                     if np.id != current_p.id and np.id not in [x['id'] for x in current_chain]:
                         build_flat_flow(np, current_chain)
-                        break # Flatten 1 tuyến linear theo yêu cầu Frontend
                         
                 return current_chain
 
