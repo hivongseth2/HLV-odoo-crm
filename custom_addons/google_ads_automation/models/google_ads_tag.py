@@ -338,7 +338,11 @@ class GoogleAdsTag(models.Model):
                 match_count = event_dict.get(tag.name, 0)
             
             if match_count == 0:
-                debug_logs.append(f"Tag: {tag.name} | Cố tìm event: {actual_event_name} | KHÔNG MATCH | Notes: {tag.notes[:100]}...")
+                debug_logs.append(f"Tag: {tag.name} | Cố tìm event: {actual_event_name} | KHÔNG MATCH | Xem log server để thấy full JSON")
+                _logger.warning(f"====== GA4 TAG MISMATCH: {tag.name} ======")
+                _logger.warning(f"GTM NOTES JSON FULL:")
+                _logger.warning(tag.notes)
+                _logger.warning("===========================================")
             else:
                 debug_logs.append(f"Tag: {tag.name} | MATCH THÀNH CÔNG event: {actual_event_name} | Số lượng: {match_count}")
                 
