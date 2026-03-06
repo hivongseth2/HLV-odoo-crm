@@ -49,8 +49,29 @@ class SaleOrder(models.Model):
                         'url': f'/web/content/{att.id}?download=true'
                     })
 
+        # --- PRE-COMPUTE QTY AVAILABLE ---
+        product_qty_cache = {}
+        for so in sales:
+            if so.warehouse_id:
+                w_id = so.warehouse_id.id
+                if w_id not in product_qty_cache:
+                    product_qty_cache[w_id] = set()
+                for line in so.order_line:
+                    if not line.display_type and line.product_id:
+                        product_qty_cache[w_id].add(line.product_id.id)
+                        
+        product_availabilities = {}
+        for w_id, prod_ids in product_qty_cache.items():
+            if prod_ids:
+                prods = self.env['product.product'].browse(list(prod_ids)).with_context(warehouse=w_id)
+                for p in prods:
+                    product_availabilities[(p.id, w_id)] = p.qty_available
+
         result = []
         for so in sales:
+            # Lọc kho theo Phiếu Kho thay vì chỉ đơn thuần SO
+            picking_warehouse_ids = list(set([p.picking_type_id.warehouse_id.id for p in so.picking_ids if p.picking_type_id and p.picking_type_id.warehouse_id]))
+
             # Find POs by origin (Sử dụng dict để tránh query N+1)
             pos = po_by_origin.get(so.name, [])
             
@@ -74,7 +95,7 @@ class SaleOrder(models.Model):
                         'product_id': [line.product_id.id, line.product_id.display_name] if line.product_id else False,
                         'product_uom_qty': line.product_uom_qty,
                         'qty_delivered': line.qty_delivered,
-                        'qty_available': line.product_id.with_context(warehouse=so.warehouse_id.id).qty_available if line.product_id and so.warehouse_id else 0.0,
+                        'qty_available': product_availabilities.get((line.product_id.id, so.warehouse_id.id), 0.0) if line.product_id and so.warehouse_id else 0.0,
                     })
                     
             # Check if all lines are delivered or have enough stock ready
@@ -92,19 +113,6 @@ class SaleOrder(models.Model):
                 # Lấy video từ file đính kèm (Sử dụng dict để tránh query N+1)
                 videos = att_by_picking.get(p.id, [])
 
-                # Truy xuất liên kết - Chỉ lấy 1 move đầu tiên làm đại diện cho cả Phiếu mượt mà
-                dest_picks = []
-                orig_picks = []
-                return_of = []
-                if p.move_ids:
-                    first_move = p.move_ids[0]
-                    if first_move.move_dest_ids:
-                        dest_picks = list(set([m.picking_id.name for m in first_move.move_dest_ids if m.picking_id]))
-                    if first_move.move_orig_ids:
-                        orig_picks = list(set([m.picking_id.name for m in first_move.move_orig_ids if m.picking_id]))
-                    if first_move.origin_returned_move_id and first_move.origin_returned_move_id.picking_id:
-                        return_of = [first_move.origin_returned_move_id.picking_id.name]
-
                 p_data = {
                     'id': p.id,
                     'name': p.name,
@@ -112,9 +120,6 @@ class SaleOrder(models.Model):
                     'type_name': p.picking_type_id.name or '',
                     'code': p.picking_type_id.code or '',
                     'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
-                    'dest_picks': dest_picks,
-                    'orig_picks': orig_picks,
-                    'return_of': return_of,
                     'backorder_of': p.backorder_id.name if p.backorder_id else False,
                     'videos': videos,
                 }
@@ -138,6 +143,7 @@ class SaleOrder(models.Model):
                 'state': so.state,
                 'delivery_status': so.delivery_status,
                 'is_fully_ready': is_fully_ready,
+                'picking_warehouse_ids': picking_warehouse_ids,
                 'pos': po_data,
                 'pickings': flat_pickings,
                 'pickings_by_type': pickings_by_type,

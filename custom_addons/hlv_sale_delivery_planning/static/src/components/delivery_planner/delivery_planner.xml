@@ -149,14 +149,8 @@
                                                                 </span>
                                                                 <div class="small fw-bold" t-att-class="picking.state == 'done' ? 'text-muted' : 'text-dark'"><t t-esc="picking.name"/></div>
                                                                 
-                                                                <!-- Return connection -->
-                                                                <div t-if="picking.return_of and picking.return_of.length > 0" class="text-danger mt-1 text-truncate" style="font-size: 0.70rem;" t-att-title="'Trả lệnh: ' + picking.return_of.join(', ')"><i class="fa fa-undo"></i> Cho: <t t-esc="picking.return_of[0]"/></div>
-                                                                
                                                                 <!-- Backorder connection -->
                                                                 <div t-elif="picking.backorder_of" class="text-muted mt-1 text-truncate" style="font-size: 0.70rem;" t-att-title="'Cắt từ: ' + picking.backorder_of"><i class="fa fa-files-o"></i> Từ: <t t-esc="picking.backorder_of"/></div>
-                                                                
-                                                                <!-- Source connection -->
-                                                                <div t-elif="picking.orig_picks and picking.orig_picks.length > 0" class="text-muted mt-1 text-truncate" style="font-size: 0.70rem;" t-att-title="'Lấy từ: ' + picking.orig_picks.join(', ')"><i class="fa fa-level-up fa-rotate-90"></i> Từ: <t t-esc="picking.orig_picks[0]"/></div>
                                                                 
                                                                 <!-- Video Badge -->
                                                                 <div t-if="picking.videos and picking.videos.length > 0" class="mt-1 d-flex flex-wrap justify-content-center gap-1">
@@ -330,14 +324,8 @@
                                                 <div class="small fw-bold mb-1" t-att-class="picking.state == 'done' ? 'text-secondary' : 'text-primary'"><t t-esc="picking.type_name"/></div>
                                                 <div class="fw-bold" t-att-class="picking.state == 'done' ? 'text-muted' : 'text-dark'"><i class="fa fa-barcode text-muted me-1"></i> <t t-esc="picking.name"/></div>
                                                 
-                                                <!-- Return connection -->
-                                                <div t-if="picking.return_of and picking.return_of.length > 0" class="small mt-1 text-danger"><i class="fa fa-undo me-1"></i> Trả cho lệnh: <t t-esc="picking.return_of.join(', ')"/></div>
-                                                
                                                 <!-- Backorder connection -->
-                                                <div t-elif="picking.backorder_of" class="small mt-1 text-muted"><i class="fa fa-files-o me-1"></i> Phiếu cắt ngang từ: <t t-esc="picking.backorder_of"/></div>
-                                                
-                                                <!-- Source connection -->
-                                                <div t-elif="picking.orig_picks and picking.orig_picks.length > 0" class="small mt-1 text-muted"><i class="fa fa-level-up fa-rotate-90 me-1"></i> Nguồn lấy hàng từ: <t t-esc="picking.orig_picks.join(', ')"/></div>
+                                                <div t-if="picking.backorder_of" class="small mt-1 text-muted"><i class="fa fa-files-o me-1"></i> Phiếu cắt ngang từ: <t t-esc="picking.backorder_of"/></div>
 
                                                 <div class="small text-muted mt-1" t-if="picking.scheduled_date"><i class="fa fa-clock-o me-1"></i> Lịch giao: <t t-esc="picking.scheduled_date"/></div>
                                                 
