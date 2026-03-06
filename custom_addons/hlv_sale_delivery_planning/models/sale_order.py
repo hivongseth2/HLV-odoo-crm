@@ -16,8 +16,6 @@ class SaleOrder(models.Model):
         
         if filter_delivery_status != 'all':
             domain += [('delivery_status', '=', filter_delivery_status)]
-        else:
-            domain += ['|', ('delivery_status', 'in', ['pending', 'partial', False]), ('delivery_status', '=', False)]
             
         if filter_warehouse_id != 'all':
             domain += [('warehouse_id', '=', int(filter_warehouse_id))]
@@ -35,14 +33,13 @@ class SaleOrder(models.Model):
         sales = self.search(domain, order='commitment_date asc, date_order desc')
         
         # --- LỌC BỘ NHỚ THEO STATUS KHO & PHÂN TRANG KÉP ---
+        # --- LỌC BỘ NHỚ THEO STATUS KHO & PHÂN TRANG KÉP ---
         matched_sale_ids = []
         
         if filter_stock_status == 'all':
             matched_sale_ids = sales.ids
         else:
             # Chỉ lấy các product/warehouses cần thiết cho 1 lượt cache để tính stock status
-            # Chạy loop đánh giá cho đến khi đủ page thì thôi để tăng tốc? KHÔNG, phải lấy đủ để đếm số trang.
-            # Tối ưu: Nếu filter_stock_status dc dùng, build full qty cache.
             product_qty_cache = {}
             for so in sales:
                 if so.warehouse_id:
@@ -60,7 +57,7 @@ class SaleOrder(models.Model):
                     for p in prods:
                         product_availabilities[(p.id, w_id)] = p.qty_available
                         
-            # Lọc trong bộ nhớ
+            # Lọc trong bộ nhớ theo filter custom
             for so in sales:
                 has_pending = False
                 is_fully_ready = True
@@ -93,7 +90,7 @@ class SaleOrder(models.Model):
                     
         total_count = len(matched_sale_ids)
         page_sale_ids = matched_sale_ids[int(offset):int(offset) + int(limit)]
-        page_sales = self.browse(page_sale_ids)
+        page_sales = self.env['sale.order'].browse(page_sale_ids)
 
         # --- BATCH QUERIES OPTIMIZATION CHỈ CHO TRANG HIỆN TẠI ---
         sale_names = page_sales.mapped('name')
@@ -335,8 +332,22 @@ class SaleOrder(models.Model):
                     'return_of_id': current_p.return_id.id if hasattr(current_p, 'return_id') and current_p.return_id else False,
                     'return_of': current_p.return_id.name if hasattr(current_p, 'return_id') and current_p.return_id else False,
                     'videos': videos,
-                    'returns': []
+                    'returns': [],
+                    'backorders': []
                 }
+                
+                # Phiếu Cắt Từ (Backorders) - Xếp dọc cùng với Phiếu Gốc
+                backorders = all_so_pickings.filtered(lambda x: x.backorder_id == current_p)
+                for bo in backorders:
+                    if bo.id != current_p.id:
+                        p_data['backorders'].append({
+                            'id': bo.id,
+                            'name': bo.name,
+                            'state': bo.state,
+                            'type_name': bo.picking_type_id.name or '',
+                            'backorder_of': bo.backorder_id.name if bo.backorder_id else False,
+                            'videos': att_by_picking.get(bo.id, [])
+                        })
                 
                 # Nối tiếp vào chuỗi (Con thuộc Mẹ)
                 return_ps = []
@@ -347,29 +358,57 @@ class SaleOrder(models.Model):
                 
                 for rp in return_ps:
                     if rp.id != current_p.id:
+                        # Scan next transfers of Return to find STOR or IN
+                        rp_next = get_next_transfers(rp).filtered(lambda x: x in all_so_pickings)
+                        stors = []
+                        for stor in rp_next:
+                            stors.append({
+                                'id': stor.id,
+                                'name': stor.name,
+                                'state': stor.state,
+                                'type_name': stor.picking_type_id.name or '',
+                                'videos': att_by_picking.get(stor.id, [])
+                            })
+                            
+                        # Thêm thông tin return_of tên phiếu gốc
+                        return_parent_name = current_p.name
+                            
                         p_data['returns'].append({
                             'id': rp.id,
                             'name': rp.name,
                             'state': rp.state,
                             'type_name': rp.picking_type_id.name or '',
-                            'videos': att_by_picking.get(rp.id, [])
+                            'return_of_name': return_parent_name,
+                            'videos': att_by_picking.get(rp.id, []),
+                            'stors': stors
                         })
                         
                 current_chain.append(p_data)
                 
-                # Điểm dừng và phân nhánh tới Step Xuất Kho tiếp theo
+                # Điểm dừng và phân nhánh tới Step Xuất Kho tiếp theo qua Mũi Tên Ngang
                 next_ps = get_next_transfers(current_p).filtered(lambda x: x in all_so_pickings)
-                backorders = all_so_pickings.filtered(lambda x: x.backorder_id == current_p)
                 
-                for np in (next_ps | backorders):
+                for np in next_ps:
                     if np.id != current_p.id and np.id not in [x['id'] for x in current_chain]:
                         build_flat_flow(np, current_chain)
+                        
+                # Tiếp tục đệ quy cho các Step (PACK, OUT) phát sinh từ Backorder
+                for bo in backorders:
+                    bo_next_ps = get_next_transfers(bo).filtered(lambda x: x in all_so_pickings)
+                    for np in bo_next_ps:
+                        if np.id != bo.id and np.id not in [x['id'] for x in current_chain]:
+                            build_flat_flow(np, current_chain)
                         
                 return current_chain
 
             flows = []
+            all_chained_ids = set()
             for root in root_pickings:
-                flows.append(build_flat_flow(root, []))
+                chain = build_flat_flow(root, [])
+                for x in chain:
+                    if x['id'] not in all_chained_ids:
+                        flows.append(x)
+                        all_chained_ids.add(x['id'])
                 
             result.append({
                 'id': so.id,
