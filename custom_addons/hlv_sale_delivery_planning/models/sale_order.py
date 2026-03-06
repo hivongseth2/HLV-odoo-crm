@@ -49,8 +49,13 @@ class SaleOrder(models.Model):
                         'qty_available': line.product_id.with_context(warehouse=so.warehouse_id.id).qty_available if line.product_id and so.warehouse_id else 0.0,
                     })
                     
-            # Check if all lines are delivered
-            has_pending_lines = any(l['product_uom_qty'] > l['qty_delivered'] for l in so_lines_data)
+            # Check if all lines are delivered or have enough stock ready
+            is_fully_ready = True
+            for l in so_lines_data:
+                pending_qty = l['product_uom_qty'] - l['qty_delivered']
+                if pending_qty > 0 and l['qty_available'] < pending_qty:
+                    is_fully_ready = False
+                    break
             
             result.append({
                 'id': so.id,
@@ -62,14 +67,16 @@ class SaleOrder(models.Model):
                 'amount_total': so.amount_total,
                 'state': so.state,
                 'delivery_status': so.delivery_status,
-                'is_fully_ready': not has_pending_lines,
+                'is_fully_ready': is_fully_ready,
                 'pos': po_data,
                 'pickings': [{
                     'id': p.id,
                     'name': p.name,
                     'state': p.state,
+                    'type_name': p.picking_type_id.name or '',
+                    'code': p.picking_type_id.code or '',
                     'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
-                } for p in so.picking_ids.sorted(key=lambda x: x.id, reverse=True)],
+                } for p in so.picking_ids.sorted(key=lambda x: x.id, reverse=False)],
                 'lines': so_lines_data,
             })
             
