@@ -316,6 +316,42 @@ export class DeliveryPlannerDashboard extends Component {
         return 'border-danger border-2 shadow-sm';
     }
 
+    // --- Hover Interactions cho Liên kết Return/Backorder ---
+    onPickingHover(pickingName) {
+        const safeName = pickingName.split('/').join('-');
+
+        // Highlight chính nó và các node con (Các phiếu return từ nó)
+        const childNodes = document.querySelectorAll(`.linked-return-${safeName}`);
+        childNodes.forEach(node => {
+            node.classList.add('shadow', 'border-warning', 'bg-warning', 'bg-opacity-10');
+            node.style.transform = 'scale(1.05)';
+        });
+
+        // Nếu nó bè Phiếu Con (return_of / backorder_of) -> Highlight Thẻ Cha 
+        const pickingElement = document.querySelector(`[data-picking-name="${safeName}"]`);
+        if (pickingElement) {
+            // Check nếu chính thẻ này là thẻ con (có return_of)
+            const parentClassMatches = Array.from(pickingElement.classList).find(cls => cls.startsWith('linked-return-'));
+            if (parentClassMatches) {
+                const parentName = parentClassMatches.replace('linked-return-', '');
+                const parentNode = document.querySelector(`.original-picking-${parentName}`);
+                if (parentNode) {
+                    parentNode.classList.add('shadow', 'border-warning', 'bg-warning', 'bg-opacity-10');
+                    parentNode.style.transform = 'scale(1.05)';
+                }
+            }
+        }
+    }
+
+    onPickingLeave() {
+        // Gỡ bỏ toàn bộ hiệu ứng Highlight
+        const allHighlighted = document.querySelectorAll('.picking-node');
+        allHighlighted.forEach(node => {
+            node.classList.remove('shadow', 'border-warning', 'bg-warning', 'bg-opacity-10');
+            node.style.transform = 'scale(1)';
+        });
+    }
+
     // --- Drawer Actions ---
     openOverviewDrawer(so) {
         this.state.selectedOrder = so;

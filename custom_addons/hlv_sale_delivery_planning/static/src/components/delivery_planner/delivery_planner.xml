@@ -263,13 +263,7 @@
                                                                 <span class="badge w-100 mb-1" t-att-class="this.getPickingStatusBadgeClass(picking.state)">
                                                                     <t t-esc="this.translatePickingStatus(picking.state)"/>
                                                                 </span>
-                                                                <!-- Status checkmark on top right corner -->
-                                                                <span t-if="picking.state == 'done'" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success" title="Hoàn Thành">
-                                                                    <i class="fa fa-check"></i>
-                                                                </span>
-                                                                <span t-if="picking.state == 'cancel'" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" title="Đã Hủy">
-                                                                    <i class="fa fa-times"></i>
-                                                                </span>
+                                                                <!-- Status checkmark removed from picking card -->
                                                                 <div class="small fw-bold" t-att-class="picking.state == 'done' ? 'text-muted' : 'text-dark'"><t t-esc="picking.name"/></div>
                                                                 
                                                                 <!-- Backorder / Return label -->
@@ -319,10 +313,10 @@
                                                                 <!-- Status checkmarks and link indicator -->
                                                                 <span t-if="picking.link_color" class="position-absolute top-0 start-0 translate-middle badge rounded-pill border border-light shadow-sm" t-attf-class="bg-{{picking.link_color}}" style="font-size: 0.65rem; z-index: 5;">
                                                                     <t t-if="picking.return_of or picking.backorder_of">
-                                                                        <i class="fa fa-link"></i> Nối <t t-if="picking.parent_seq">[<t t-esc="picking.parent_seq"/>]</t>
+                                                                        <i class="fa fa-link"></i>  <t t-if="picking.parent_seq">[<t t-esc="picking.parent_seq"/>]</t>
                                                                     </t>
                                                                     <t t-else="">
-                                                                        <i class="fa fa-link"></i> Gốc
+                                                                        <i class="fa fa-link"></i> Trả
                                                                     </t>
                                                                 </span>
                                                                 
@@ -336,13 +330,7 @@
                                                                 <span class="badge w-100 mb-1" t-att-class="this.getPickingStatusBadgeClass(picking.state)">
                                                                     <t t-esc="this.translatePickingStatus(picking.state)"/>
                                                                 </span>
-                                                                <!-- Status checkmark on top right corner -->
-                                                                <span t-if="picking.state == 'done'" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success" title="Hoàn Thành">
-                                                                    <i class="fa fa-check"></i>
-                                                                </span>
-                                                                <span t-if="picking.state == 'cancel'" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" title="Đã Hủy">
-                                                                    <i class="fa fa-times"></i>
-                                                                </span>
+                                                                <!-- Status checkmark removed from picking card -->
                                                                 <div class="small fw-bold" t-att-class="picking.state == 'done' ? 'text-muted' : 'text-dark'"><t t-esc="picking.name"/></div>
                                                                 
                                                                 <!-- Backorder / Return label -->
