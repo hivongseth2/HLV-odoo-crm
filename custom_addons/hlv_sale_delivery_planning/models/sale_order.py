@@ -50,7 +50,7 @@ class SaleOrder(models.Model):
                         'url': f'/web/content/{att.id}?download=true'
                     })
                     
-            # Tìm thêm trong nội dung tin nhắn của OdooBot/Log Note
+            # 2.2. Tìm thêm trong nội dung tin nhắn của OdooBot/Log Note
             messages = self.env['mail.message'].sudo().search([
                 ('model', '=', 'stock.picking'),
                 ('res_id', 'in', all_picking_ids),
@@ -58,17 +58,28 @@ class SaleOrder(models.Model):
             ])
             import re
             for msg in messages:
-                # Tìm tất cả link file .webm từ thẻ <a> hoặc text
-                urls = re.findall(r'href=[\'"]?([^\'" >]+.webm)', msg.body) or re.findall(r'(\/web\/content\/[0-9]+.*\.webm)', msg.body)
+                urls = []
+                # 1. Tìm href URL trực tiếp
+                href_match = re.findall(r'href=[\'"]?([^\'" >]+\.webm)', msg.body)
+                if href_match:
+                    urls.extend(href_match)
+                
+                # 2. Tìm tất cả tên file có đuôi .webm xuất hiện trong body, rồi tìm attachment id
+                filenames = re.findall(r'([A-Za-z0-9_\-\.]+\.webm)', msg.body)
+                if filenames:
+                    atts = self.env['ir.attachment'].sudo().search([('name', 'in', filenames)])
+                    for att in atts:
+                        urls.append(f'/web/content/{att.id}?download=true')
+                
                 if urls:
                     if msg.res_id not in att_by_picking:
                         att_by_picking[msg.res_id] = []
-                    for url in urls:
-                        # Tránh duplicate nếu attachment đã cover
-                        if not any(url in a['url'] for a in att_by_picking[msg.res_id]):
+                    for i, url in enumerate(urls):
+                        # Loại bỏ trùng lặp url
+                        if not any(u['url'] == url for u in att_by_picking[msg.res_id]):
                             att_by_picking[msg.res_id].append({
-                                'id': msg.id, # Dùng tạm id message
-                                'name': 'Video Log',
+                                'id': f"{msg.id}_{i}", # Dùng ID message + index
+                                'name': 'Video Khách/Bot',
                                 'url': url if not url.startswith('http') else url
                             })
 
@@ -151,9 +162,11 @@ class SaleOrder(models.Model):
             elif not has_pending and len(st) > 0:
                 real_delivery_status = 'full'
             
-            # Gom nhóm Picking theo loại (Pick -> Pack -> Out)
+            # Cấu trúc luồng Phiếu Kho: Bán (Outbound) và Trả (Return)
             flat_pickings = []
-            picking_groups = {}
+            out_groups = {}
+            ret_groups = {}
+            
             for p in so.picking_ids.sorted(key=lambda x: (x.picking_type_id.sequence, x.id)):
                 # Lấy video từ file đính kèm (Sử dụng dict để tránh query N+1)
                 videos = att_by_picking.get(p.id, [])
@@ -172,11 +185,23 @@ class SaleOrder(models.Model):
                 flat_pickings.append(p_data)
                 
                 t_name = p_data['type_name'] or 'Unknown'
-                if t_name not in picking_groups:
-                    picking_groups[t_name] = []
-                picking_groups[t_name].append(p_data)
+                # Nếu là phiếu trả hàng (return_of != False hoặc code là incoming/return)
+                is_return = bool(p_data['return_of'])
+                if getattr(p.picking_type_id, 'code', '') == 'incoming' and not getattr(po, 'id', False):
+                    # Nếu SO lại đi Nhập kho -> Có thể do cấn trừ Trả hàng
+                    is_return = True
+
+                if is_return:
+                    if t_name not in ret_groups:
+                        ret_groups[t_name] = []
+                    ret_groups[t_name].append(p_data)
+                else:
+                    if t_name not in out_groups:
+                        out_groups[t_name] = []
+                    out_groups[t_name].append(p_data)
                 
-            pickings_by_type = [{'type_name': k, 'pickings': v} for k, v in picking_groups.items()]
+            out_by_type = [{'type_name': k, 'pickings': v} for k, v in out_groups.items()]
+            ret_by_type = [{'type_name': k, 'pickings': v} for k, v in ret_groups.items()]
             
             result.append({
                 'id': so.id,
@@ -193,7 +218,8 @@ class SaleOrder(models.Model):
                 'picking_warehouse_ids': picking_warehouse_ids,
                 'pos': po_data,
                 'pickings': flat_pickings,
-                'pickings_by_type': pickings_by_type,
+                'out_by_type': out_by_type,
+                'ret_by_type': ret_by_type,
                 'lines': so_lines_data,
             })
             
