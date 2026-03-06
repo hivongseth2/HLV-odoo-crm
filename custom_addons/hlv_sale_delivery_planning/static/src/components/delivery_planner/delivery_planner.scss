@@ -1,0 +1,30 @@
+.hlv_delivery_planner_dashboard {
+    background-color: #f0f2f5;
+    min-height: 100vh;
+    padding-bottom: 50px;
+
+    .card {
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        
+        &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(0,0,0,0.08);
+        }
+
+        /* Color Coding based on Status */
+        &.border-danger-soft {
+            border-top: 4px solid #dc3545 !important;
+            .card-header { background-color: #fff5f5 !important; }
+        }
+        &.border-success-soft {
+            border-top: 4px solid #198754 !important;
+            .card-header { background-color: #f0fdf4 !important; }
+        }
+    }
+
+    .modal-backdrop.show {
+        opacity: 0.5;
+    }
+}

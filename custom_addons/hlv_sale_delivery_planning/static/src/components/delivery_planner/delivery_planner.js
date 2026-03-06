@@ -23,6 +23,10 @@ export class DeliveryPlannerDashboard extends Component {
             // Pagination
             currentPage: 1,
             itemsPerPage: 12,
+
+            // Modal
+            isModalOpen: false,
+            selectedOrder: null,
         });
 
         onWillStart(async () => {
@@ -152,6 +156,22 @@ export class DeliveryPlannerDashboard extends Component {
 
     formatQty(value) {
         return parseFloat(Number(value).toFixed(2));
+    }
+
+    getSOCardColorClass(so) {
+        if (so.is_fully_ready) return 'border-success-soft';
+        return 'border-danger-soft';
+    }
+
+    // --- Modal Actions ---
+    openOverviewModal(so) {
+        this.state.selectedOrder = so;
+        this.state.isModalOpen = true;
+    }
+
+    closeOverviewModal() {
+        this.state.isModalOpen = false;
+        this.state.selectedOrder = null;
     }
 }
 
