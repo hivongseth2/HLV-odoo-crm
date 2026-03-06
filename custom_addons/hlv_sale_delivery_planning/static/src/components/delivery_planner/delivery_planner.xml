@@ -246,7 +246,7 @@
                                                                      style="min-width: 140px;"
                                                                      t-att-class="ret.state == 'done' ? 'bg-light opacity-75' : 'bg-white'"
                                                                      t-on-click="() => this.openPicking(ret.id)">
-                                                                    <div class="small fw-bold text-truncate mb-1 text-danger"><i class="fa fa-undo"></i> Lấy lại về Kho</div>
+                                                                    <div class="small fw-bold text-truncate mb-1 text-danger"><i class="fa fa-undo"></i> Lấy lại từ: <t t-esc="ret.return_of_name or 'Khách'"/></div>
                                                                     <span class="badge w-100 mb-1" t-att-class="this.getPickingStatusBadgeClass(ret.state)">
                                                                         <t t-esc="this.translatePickingStatus(ret.state)"/>
                                                                     </span>
@@ -261,6 +261,29 @@
                                                                         </t>
                                                                     </div>
                                                                 </div>
+                                                                
+                                                                <!-- Nếu Phiếu Trả đi qua Trạm Kiểm Tra / Nhập Kho (STOR) -->
+                                                                <t t-if="ret.stors and ret.stors.length > 0">
+                                                                    <t t-foreach="ret.stors" t-as="stor" t-key="stor.id">
+                                                                        <!-- Mũi tên chỉ xuống tiếp -->
+                                                                        <div class="text-danger my-1"><i class="fa fa-long-arrow-down fa-lg"></i></div>
+                                                                        <!-- Phiếu Chuyển Tồn Kho (Stor) -->
+                                                                        <div class="card shadow-sm border border-2 cursor-pointer text-center p-2 rounded border-danger" 
+                                                                             style="min-width: 140px;"
+                                                                             t-att-class="stor.state == 'done' ? 'bg-light opacity-75' : 'bg-white'"
+                                                                             t-on-click="() => this.openPicking(stor.id)">
+                                                                            <div class="small fw-bold text-truncate mb-1 text-danger"><i class="fa fa-download"></i> <t t-esc="stor.type_name"/></div>
+                                                                            <span class="badge w-100 mb-1" t-att-class="this.getPickingStatusBadgeClass(stor.state)">
+                                                                                <t t-esc="this.translatePickingStatus(stor.state)"/>
+                                                                            </span>
+                                                                            <div class="small fw-bold text-dark"><t t-esc="stor.name"/></div>
+                                                                        </div>
+                                                                    </t>
+                                                                </t>
+                                                                
+                                                                <!-- Mũi tên và Icon báo hiệu kết thúc Trả Về Kho -->
+                                                                <div class="text-danger my-1"><i class="fa fa-long-arrow-down fa-lg"></i></div>
+                                                                <div class="small fw-bold text-danger pb-1"><i class="fa fa-building fa-lg mb-1 d-block"></i> Nhập Lại Kho</div>
                                                             </t>
                                                         </t>
                                                     </div>

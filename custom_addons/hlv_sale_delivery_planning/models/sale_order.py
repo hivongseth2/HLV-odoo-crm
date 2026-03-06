@@ -358,12 +358,29 @@ class SaleOrder(models.Model):
                 
                 for rp in return_ps:
                     if rp.id != current_p.id:
+                        # Scan next transfers of Return to find STOR or IN
+                        rp_next = get_next_transfers(rp).filtered(lambda x: x in all_so_pickings)
+                        stors = []
+                        for stor in rp_next:
+                            stors.append({
+                                'id': stor.id,
+                                'name': stor.name,
+                                'state': stor.state,
+                                'type_name': stor.picking_type_id.name or '',
+                                'videos': att_by_picking.get(stor.id, [])
+                            })
+                            
+                        # Thêm thông tin return_of tên phiếu gốc
+                        return_parent_name = current_p.name
+                            
                         p_data['returns'].append({
                             'id': rp.id,
                             'name': rp.name,
                             'state': rp.state,
                             'type_name': rp.picking_type_id.name or '',
-                            'videos': att_by_picking.get(rp.id, [])
+                            'return_of_name': return_parent_name,
+                            'videos': att_by_picking.get(rp.id, []),
+                            'stors': stors
                         })
                         
                 current_chain.append(p_data)
@@ -374,6 +391,13 @@ class SaleOrder(models.Model):
                 for np in next_ps:
                     if np.id != current_p.id and np.id not in [x['id'] for x in current_chain]:
                         build_flat_flow(np, current_chain)
+                        
+                # Tiếp tục đệ quy cho các Step (PACK, OUT) phát sinh từ Backorder
+                for bo in backorders:
+                    bo_next_ps = get_next_transfers(bo).filtered(lambda x: x in all_so_pickings)
+                    for np in bo_next_ps:
+                        if np.id != bo.id and np.id not in [x['id'] for x in current_chain]:
+                            build_flat_flow(np, current_chain)
                         
                 return current_chain
 
