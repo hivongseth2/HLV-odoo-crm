@@ -21,10 +21,38 @@ class SaleOrder(models.Model):
         # Add order to prioritize the ones with earlier commitment dates
         sales = self.search(domain, order='commitment_date asc, date_order desc')
         
+        # --- BATCH QUERIES OPTIMIZATION ---
+        # 1. Lấy tất cả POs cho list SO name
+        sale_names = sales.mapped('name')
+        all_pos = self.env['purchase.order'].search([('origin', 'in', sale_names)]) if sale_names else []
+        po_by_origin = {}
+        for po in all_pos:
+            if po.origin not in po_by_origin:
+                po_by_origin[po.origin] = []
+            po_by_origin[po.origin].append(po)
+            
+        # 2. Lấy tất cả Video Attachment cho list Picking ID
+        all_picking_ids = sales.mapped('picking_ids').ids
+        att_by_picking = {}
+        if all_picking_ids:
+            attachments = self.env['ir.attachment'].sudo().search([
+                ('res_model', '=', 'stock.picking'),
+                ('res_id', 'in', all_picking_ids)
+            ])
+            for att in attachments:
+                if att.name and (att.name.lower().endswith(('.webm', '.mp4')) or 'video' in (att.mimetype or '')):
+                    if att.res_id not in att_by_picking:
+                        att_by_picking[att.res_id] = []
+                    att_by_picking[att.res_id].append({
+                        'id': att.id,
+                        'name': att.name,
+                        'url': f'/web/content/{att.id}?download=true'
+                    })
+
         result = []
         for so in sales:
-            # Find POs by origin
-            pos = self.env['purchase.order'].search([('origin', '=', so.name)])
+            # Find POs by origin (Sử dụng dict để tránh query N+1)
+            pos = po_by_origin.get(so.name, [])
             
             po_data = []
             for po in pos:
@@ -61,24 +89,21 @@ class SaleOrder(models.Model):
             flat_pickings = []
             picking_groups = {}
             for p in so.picking_ids.sorted(key=lambda x: (x.picking_type_id.sequence, x.id)):
-                # Lấy video từ file đính kèm
-                attachments = self.env['ir.attachment'].sudo().search([
-                    ('res_model', '=', 'stock.picking'),
-                    ('res_id', '=', p.id)
-                ])
-                videos = []
-                for att in attachments:
-                    if att.name and (att.name.lower().endswith(('.webm', '.mp4')) or 'video' in (att.mimetype or '')):
-                        videos.append({
-                            'id': att.id,
-                            'name': att.name,
-                            'url': f'/web/content/{att.id}?download=true'
-                        })
+                # Lấy video từ file đính kèm (Sử dụng dict để tránh query N+1)
+                videos = att_by_picking.get(p.id, [])
 
-                # Truy xuất liên kết
-                dest_picks = [n for n in set(p.move_ids.mapped('move_dest_ids.picking_id.name')) if n]
-                orig_picks = [n for n in set(p.move_ids.mapped('move_orig_ids.picking_id.name')) if n]
-                return_of = [n for n in set(p.move_ids.mapped('origin_returned_move_id.picking_id.name')) if n]
+                # Truy xuất liên kết - Chỉ lấy 1 move đầu tiên làm đại diện cho cả Phiếu mượt mà
+                dest_picks = []
+                orig_picks = []
+                return_of = []
+                if p.move_ids:
+                    first_move = p.move_ids[0]
+                    if first_move.move_dest_ids:
+                        dest_picks = list(set([m.picking_id.name for m in first_move.move_dest_ids if m.picking_id]))
+                    if first_move.move_orig_ids:
+                        orig_picks = list(set([m.picking_id.name for m in first_move.move_orig_ids if m.picking_id]))
+                    if first_move.origin_returned_move_id and first_move.origin_returned_move_id.picking_id:
+                        return_of = [first_move.origin_returned_move_id.picking_id.name]
 
                 p_data = {
                     'id': p.id,
