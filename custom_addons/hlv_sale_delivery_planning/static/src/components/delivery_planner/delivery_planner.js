@@ -59,6 +59,7 @@ export class DeliveryPlannerDashboard extends Component {
             const fetchedOrders = result.orders || [];
             this.state.saleOrders = fetchedOrders.map(so => {
                 so.flows = so.flows || [];
+                so.pickings = so.pickings || [];
                 so.lines = so.lines || [];
                 so.pos = so.pos || [];
                 return so;
