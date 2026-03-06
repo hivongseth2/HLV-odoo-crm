@@ -31,10 +31,11 @@ class SaleOrder(models.Model):
                 po_by_origin[po.origin] = []
             po_by_origin[po.origin].append(po)
             
-        # 2. Lấy tất cả Video Attachment cho list Picking ID
+        # 2. Lấy tất cả Video Attachment và Message cho list Picking ID
         all_picking_ids = sales.mapped('picking_ids').ids
         att_by_picking = {}
         if all_picking_ids:
+            # Tìm trong Attachments thông thường
             attachments = self.env['ir.attachment'].sudo().search([
                 ('res_model', '=', 'stock.picking'),
                 ('res_id', 'in', all_picking_ids)
@@ -48,6 +49,28 @@ class SaleOrder(models.Model):
                         'name': att.name,
                         'url': f'/web/content/{att.id}?download=true'
                     })
+                    
+            # Tìm thêm trong nội dung tin nhắn của OdooBot/Log Note
+            messages = self.env['mail.message'].sudo().search([
+                ('model', '=', 'stock.picking'),
+                ('res_id', 'in', all_picking_ids),
+                ('body', 'ilike', '.webm')
+            ])
+            import re
+            for msg in messages:
+                # Tìm tất cả link file .webm từ thẻ <a> hoặc text
+                urls = re.findall(r'href=[\'"]?([^\'" >]+.webm)', msg.body) or re.findall(r'(\/web\/content\/[0-9]+.*\.webm)', msg.body)
+                if urls:
+                    if msg.res_id not in att_by_picking:
+                        att_by_picking[msg.res_id] = []
+                    for url in urls:
+                        # Tránh duplicate nếu attachment đã cover
+                        if not any(url in a['url'] for a in att_by_picking[msg.res_id]):
+                            att_by_picking[msg.res_id].append({
+                                'id': msg.id, # Dùng tạm id message
+                                'name': 'Video Log',
+                                'url': url if not url.startswith('http') else url
+                            })
 
         # --- PRE-COMPUTE QTY AVAILABLE ---
         product_qty_cache = {}
@@ -143,6 +166,7 @@ class SaleOrder(models.Model):
                     'code': p.picking_type_id.code or '',
                     'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
                     'backorder_of': p.backorder_id.name if p.backorder_id else False,
+                    'return_of': getattr(p, 'return_id', False) and p.return_id.name or False,
                     'videos': videos,
                 }
                 flat_pickings.append(p_data)
