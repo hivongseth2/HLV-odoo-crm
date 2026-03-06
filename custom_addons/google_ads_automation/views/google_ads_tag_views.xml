@@ -82,6 +82,12 @@
                     </group>
 
                     <notebook>
+                        <!-- Tab: Báo Cáo Sự Kiện (GA4 Dashboard) -->
+                        <page string="Báo Cáo Sự Kiện (GA4)" icon="fa-bar-chart"
+                              invisible="tag_type != 'gtm'">
+                            <field name="ga4_dashboard_html" widget="html" nolabel="1" readonly="1"/>
+                        </page>
+
                         <!-- Tab: Thành Phần GTM đã đồng bộ -->
                         <page string="Thành Phần GTM" icon="fa-list"
                               invisible="tag_type != 'gtm'">
