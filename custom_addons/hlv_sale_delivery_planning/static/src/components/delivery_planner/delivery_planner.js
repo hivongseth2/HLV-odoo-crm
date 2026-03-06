@@ -19,13 +19,15 @@ export class DeliveryPlannerDashboard extends Component {
             searchQuery: "",
             filterWarehouseId: "all",
             filterStatus: "all", // all, ready, pending
+            filterDateFrom: "",
+            filterDateTo: "",
 
             // Pagination
             currentPage: 1,
             itemsPerPage: 12,
 
-            // Modal
-            isModalOpen: false,
+            // Drawer
+            isDrawerOpen: false,
             selectedOrder: null,
         });
 
@@ -71,11 +73,25 @@ export class DeliveryPlannerDashboard extends Component {
             list = list.filter(so => so.warehouse_id && so.warehouse_id[0] === wId);
         }
 
-        // 3. Status Filter (Đã đủ hàng vs Còn thiếu)
+        // 3. Status Filter (Đã đủ hàng vs Còn thiếu vs Hoàn thành)
         if (this.state.filterStatus === "ready") {
-            list = list.filter(so => so.is_fully_ready);
+            list = list.filter(so => so.is_fully_ready && so.delivery_status !== 'full');
         } else if (this.state.filterStatus === "pending") {
-            list = list.filter(so => !so.is_fully_ready);
+            list = list.filter(so => !so.is_fully_ready && so.delivery_status !== 'full');
+        } else if (this.state.filterStatus === "full") {
+            list = list.filter(so => so.delivery_status === 'full');
+        }
+
+        // 4. Date Filters (Hẹn Giao)
+        if (this.state.filterDateFrom) {
+            const dFrom = new Date(this.state.filterDateFrom);
+            list = list.filter(so => so.commitment_date && new Date(so.commitment_date) >= dFrom);
+        }
+
+        if (this.state.filterDateTo) {
+            const dTo = new Date(this.state.filterDateTo);
+            dTo.setHours(23, 59, 59, 999);
+            list = list.filter(so => so.commitment_date && new Date(so.commitment_date) <= dTo);
         }
 
         return list;
@@ -128,18 +144,81 @@ export class DeliveryPlannerDashboard extends Component {
         });
     }
 
+    openPicking(pickingId) {
+        this.actionService.doAction({
+            type: "ir.actions.act_window",
+            res_model: "stock.picking",
+            res_id: pickingId,
+            views: [[false, "form"]],
+            target: "current",
+        });
+    }
+
+    openVideo(url) {
+        window.open(url, '_blank');
+    }
+
+    // --- Translations ---
+    translateSOStatus(status) {
+        const trans = {
+            'draft': 'Báo giá',
+            'sent': 'Đã gửi',
+            'sale': 'Đơn hàng',
+            'done': 'Khóa',
+            'cancel': 'Đã hủy',
+            'pending': 'Chưa giao',
+            'partial': 'Giao 1 phần',
+            'full': 'Đã giao đủ'
+        };
+        return trans[status] || (status ? status.toUpperCase() : '');
+    }
+
+    translatePOStatus(status) {
+        const trans = {
+            'draft': 'Nháp',
+            'sent': 'Đã gửi',
+            'to approve': 'Chờ duyệt',
+            'purchase': 'Đơn Mua',
+            'done': 'Khóa',
+            'cancel': 'Đã hủy',
+            'pending': 'Chờ nhận',
+            'partial': 'Nhận 1 phần',
+            'full': 'Đã nhận đủ'
+        };
+        return trans[status] || (status ? status.toUpperCase() : '');
+    }
+
+    translatePickingStatus(state) {
+        const trans = {
+            'draft': 'Nháp',
+            'waiting': 'Chờ QĐ',
+            'confirmed': 'Chờ hàng',
+            'assigned': 'Sẵn sàng',
+            'done': 'Hoàn thành',
+            'cancel': 'Hủy'
+        };
+        return trans[state] || (state ? state.toUpperCase() : '');
+    }
+
     getPOStatusBadgeClass(state, receiptStatus) {
         if (state === 'cancel') return 'text-bg-secondary';
         if (receiptStatus === 'full') return 'text-bg-success';
-        if (receiptStatus === 'partial') return 'text-bg-warning';
-        if (state === 'purchase' || state === 'done') return 'text-bg-info';
-        return 'text-bg-light text-dark';
+        if (receiptStatus === 'partial') return 'text-bg-info';
+        if (state === 'purchase' || state === 'done') return 'text-bg-primary';
+        return 'text-bg-light border text-dark';
     }
 
     getSOStatusBadgeClass(deliveryStatus) {
         if (deliveryStatus === 'full') return 'text-bg-success';
         if (deliveryStatus === 'partial') return 'text-bg-warning';
-        return 'text-bg-info';
+        return 'text-bg-danger';
+    }
+
+    getPickingStatusBadgeClass(state) {
+        if (state === 'done') return 'text-bg-success';
+        if (state === 'assigned') return 'text-bg-primary';
+        if (state === 'cancel') return 'text-bg-secondary';
+        return 'text-bg-warning';
     }
 
     getDatesComparisonClass(soDate, poDate) {
@@ -163,14 +242,14 @@ export class DeliveryPlannerDashboard extends Component {
         return 'border-danger-soft';
     }
 
-    // --- Modal Actions ---
-    openOverviewModal(so) {
+    // --- Drawer Actions ---
+    openOverviewDrawer(so) {
         this.state.selectedOrder = so;
-        this.state.isModalOpen = true;
+        this.state.isDrawerOpen = true;
     }
 
-    closeOverviewModal() {
-        this.state.isModalOpen = false;
+    closeOverviewDrawer() {
+        this.state.isDrawerOpen = false;
         this.state.selectedOrder = null;
     }
 }
