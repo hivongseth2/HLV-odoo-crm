@@ -84,7 +84,7 @@
                             </div>
                         </div>
 
-                        <div t-if="!this.filteredOrders.length" class="alert alert-info shadow-sm d-flex align-items-center p-4" role="alert">
+                        <div t-if="!state.saleOrders.length" class="alert alert-info shadow-sm d-flex align-items-center p-4" role="alert">
                             <i class="fa fa-info-circle fa-2x me-3"></i> 
                             <div>
                                 <h5 class="mb-1">Không có dữ liệu!</h5>
@@ -320,8 +320,8 @@
                     <div t-if="this.totalPages > 1" class="d-flex justify-content-between align-items-center mt-5 mb-4 bg-white p-3 rounded shadow-sm border">
                         <div class="text-muted small">
                             Hiển thị <span class="fw-bold"><t t-esc="(state.currentPage - 1) * state.itemsPerPage + 1"/></span> - 
-                            <span class="fw-bold"><t t-esc="Math.min(state.currentPage * state.itemsPerPage, this.filteredOrders.length)"/></span> 
-                            trong số <span class="fw-bold text-dark"><t t-esc="this.filteredOrders.length"/></span> đơn hàng
+                            <span class="fw-bold"><t t-esc="Math.min(state.currentPage * state.itemsPerPage, state.totalCount)"/></span> 
+                            trong số <span class="fw-bold text-dark"><t t-esc="state.totalCount"/></span> đơn hàng
                         </div>
                         <nav aria-label="Page navigation">
                             <ul class="pagination mb-0">
