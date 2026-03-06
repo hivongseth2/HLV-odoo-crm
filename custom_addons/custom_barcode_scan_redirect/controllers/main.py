@@ -516,6 +516,12 @@ class CustomBarcodeScanController(http.Controller):
             return {"error": "⚠️ Sản phẩm này đã được quét đủ!"}
         updated_lines = []
         
+        # [NEW QUICK CHECK] Chặn quét nếu kho không đủ hàng (product_type = consu/consu)
+        product = moves[0].product_id
+        loc_id = moves[0].location_id.id
+        if product.type in ['product', 'consu'] and product.with_context(location=loc_id).qty_available <= 0:
+            return {"error": f"⚠️ Sản phẩm {product.display_name} hiện không có tồn kho thực tế tại {moves[0].location_id.display_name}!"}
+            
         # --- LOGIC MỚI: Xử lý tìm line_id tự động nếu FE gửi lên null ---
         # Lấy line_id cụ thể từ FE nếu có
         target_ml = None
@@ -606,6 +612,10 @@ class CustomBarcodeScanController(http.Controller):
                     # Chỉ coi là FULL nếu có đặt reservation (>0) và đã đạt mức đó.
                     # Nếu reservation = 0, ta cho phép điền vào (vì logic Redirect đã chọn nó làm ứng viên).
                     _logger.info(f"Target line {target_ml.id} is packed ({is_packed.name}) and reaches Reserved Qty ({reserved_qty}). Skipping.")
+                    target_ml = None
+                elif target_ml.result_package_id and reserved_qty == 0 and target_ml.qty_done > 0:
+                    # [FIX-2024] Dòng đã đóng gói xong (ko dự kiến) thì không tự động độn thêm khi scan hàng lẻ.
+                    _logger.info(f"Target line {target_ml.id} is already fully packed with no reserved qty. Skipping.")
                     target_ml = None
                 else:
                     _logger.info(f"Target line {target_ml.id} is valid (Space: {target_ml.qty_done}/{reserved_qty} | Move: {mv_done}/{mv.product_uom_qty}). Keeping it.")
@@ -766,6 +776,33 @@ class CustomBarcodeScanController(http.Controller):
                     add_qty = min(delta, move_remain) if move_remain > 0 else delta
                 
                 if add_qty > 0:
+                    # [NEW] Kiểm tra tồn kho khả dụng/thực tế TẠI VỊ TRÍ ĐÓ trước khi cho phép qty_done tăng thêm
+                    # Bỏ qua kiểm tra nếu vị trí nguồn là location ảo (loại bỏ qua tồn kho)
+                    if ml.location_id.usage == 'internal':
+                        try:
+                            quant = request.env['stock.quant'].sudo().search([
+                                ('product_id', '=', move.product_id.id),
+                                ('location_id', '=', ml.location_id.id)
+                            ], limit=1)
+                            
+                            # Lấy ra số lượng vật lý tồn thật ở vị trí này.
+                            available_in_loc = quant.quantity if quant else 0
+                            
+                            # Kiểm tra TỔNG số lượng đã lấy TƯƠNG ĐƯƠNG TRÊN TẤT CẢ CÁC PHIẾU CHƯA HOÀN THÀNH
+                            # để xem việc quét thêm add_qty có làm vỡ kho không.
+                            domain = [
+                                ('product_id', '=', move.product_id.id),
+                                ('location_id', '=', ml.location_id.id),
+                                ('state', 'not in', ['done', 'cancel'])
+                            ]
+                            all_lines_in_loc = request.env['stock.move.line'].search(domain)
+                            total_done_in_loc = sum(l.qty_done for l in all_lines_in_loc)
+                            
+                            if total_done_in_loc + add_qty > available_in_loc + 0.001:
+                                return {"error": f"⚠️ Vị trí {ml.location_id.display_name} không đủ tồn! (Hệ thống đang quét: {total_done_in_loc}, Muốn lấy thêm: {add_qty}. Kho chỉ có: {available_in_loc})"}
+                        except Exception as e:
+                            _logger.error(f"Lỗi khi kiểm tra tồn kho: {e}")
+                
                     new_qty = current_qty + add_qty
                     ml.write({'qty_done': new_qty})
                     

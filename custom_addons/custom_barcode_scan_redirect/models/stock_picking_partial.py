@@ -104,40 +104,20 @@ class StockPickingPartial(models.Model):
                 _logger.info(f"   -> Loose ML {loose_ml.id} has {available}. Taking {take_qty}")
                 
                 # Logic đưa vào pack
-                # [FIX-2024] Split demand correctly if the line has reserved qty > what we pack
-                demand = getattr(loose_ml, 'reserved_qty', 0) or getattr(loose_ml, 'reserved_uom_qty', 0) or getattr(loose_ml, 'product_uom_qty', 0) or 0
-                if take_qty == available and demand <= available:
-                    # Lấy hết dòng lẻ và không dư demand -> Gán luôn vào pack
+                if take_qty == available:
+                    # Lấy hết dòng lẻ -> Gán luôn vào pack
                     loose_ml.sudo().with_context(skip_qty_validation=True).write({
                         'result_package_id': new_package.id
                     })
                 else:
-                    # Lấy 1 phần qty HOẶC cần tách demand -> Tách qty_done vào pack và giữ phần thừa lại
-                    copied_vals = {
+                    # Lấy 1 phần -> Tách ra
+                    loose_ml.sudo().with_context(skip_qty_validation=True).copy({
                         'qty_done': take_qty,
                         'result_package_id': new_package.id,
-                    }
-                    if hasattr(loose_ml, 'reserved_qty'):
-                        copied_vals['reserved_qty'] = take_qty
-                    elif hasattr(loose_ml, 'reserved_uom_qty'):
-                        copied_vals['reserved_uom_qty'] = take_qty
-                    elif hasattr(loose_ml, 'product_uom_qty'):
-                        copied_vals['product_uom_qty'] = take_qty
-
-                    loose_ml.sudo().with_context(skip_qty_validation=True).copy(copied_vals)
-                    
-                    update_vals = {
+                    })
+                    loose_ml.sudo().with_context(skip_qty_validation=True).write({
                         'qty_done': available - take_qty
-                    }
-                    if hasattr(loose_ml, 'reserved_qty') and getattr(loose_ml, 'reserved_qty', 0) > 0:
-                        update_vals['reserved_qty'] = max(0, loose_ml.reserved_qty - take_qty)
-                    elif hasattr(loose_ml, 'reserved_uom_qty') and loose_ml.reserved_uom_qty > 0:
-                        update_vals['reserved_uom_qty'] = max(0, loose_ml.reserved_uom_qty - take_qty)
-                    elif hasattr(loose_ml, 'product_uom_qty') and loose_ml.product_uom_qty > 0:
-                        update_vals['product_uom_qty'] = max(0, loose_ml.product_uom_qty - take_qty)
-
-                    loose_ml.sudo().with_context(skip_qty_validation=True).write(update_vals)
-
+                    })
                 
                 qty_needed -= take_qty
             
@@ -157,36 +137,18 @@ class StockPickingPartial(models.Model):
                      take_qty = min(qty_needed, available)
                      
                      if take_qty > 0:
-                        demand = getattr(ref_ml, 'reserved_qty', 0) or getattr(ref_ml, 'reserved_uom_qty', 0) or getattr(ref_ml, 'product_uom_qty', 0) or 0
-                        if take_qty == available and demand <= available:
+                        if take_qty == available:
                             ref_ml.sudo().with_context(skip_qty_validation=True).write({
                                 'result_package_id': new_package.id
                             })
                         else:
-                            copied_vals = {
+                            ref_ml.sudo().with_context(skip_qty_validation=True).copy({
                                 'qty_done': take_qty,
                                 'result_package_id': new_package.id,
-                            }
-                            if hasattr(ref_ml, 'reserved_qty'):
-                                copied_vals['reserved_qty'] = take_qty
-                            elif hasattr(ref_ml, 'reserved_uom_qty'):
-                                copied_vals['reserved_uom_qty'] = take_qty
-                            elif hasattr(ref_ml, 'product_uom_qty'):
-                                copied_vals['product_uom_qty'] = take_qty
-
-                            ref_ml.sudo().with_context(skip_qty_validation=True).copy(copied_vals)
-                            
-                            update_vals = {
+                            })
+                            ref_ml.sudo().with_context(skip_qty_validation=True).write({
                                 'qty_done': available - take_qty
-                            }
-                            if hasattr(ref_ml, 'reserved_qty') and getattr(ref_ml, 'reserved_qty', 0) > 0:
-                                update_vals['reserved_qty'] = max(0, ref_ml.reserved_qty - take_qty)
-                            elif hasattr(ref_ml, 'reserved_uom_qty') and ref_ml.reserved_uom_qty > 0:
-                                update_vals['reserved_uom_qty'] = max(0, ref_ml.reserved_uom_qty - take_qty)
-                            elif hasattr(ref_ml, 'product_uom_qty') and ref_ml.product_uom_qty > 0:
-                                update_vals['product_uom_qty'] = max(0, ref_ml.product_uom_qty - take_qty)
-
-                            ref_ml.sudo().with_context(skip_qty_validation=True).write(update_vals)
+                            })
         
         # [NEW] Trả về thông tin đồng bộ (Global Packed Qty) để frontend tự sửa
         sync_info = []
