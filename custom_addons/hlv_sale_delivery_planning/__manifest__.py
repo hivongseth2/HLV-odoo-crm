@@ -11,7 +11,9 @@
     ],
     'assets': {
         'web.assets_backend': [
-            'hlv_sale_delivery_planning/static/src/components/delivery_planner/**/*',
+            'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner.scss',
+            'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner.xml',
+            'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner.js',
         ],
     },
     'installable': True,
