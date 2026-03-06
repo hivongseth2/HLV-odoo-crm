@@ -306,18 +306,28 @@ class GoogleAdsTag(models.Model):
             
         # Nạp số đếm vào các Tag GA4 Event đang có trong Odoo
         ga4_tags = self.gtm_item_ids.filtered(lambda t: t.item_type == 'tag' and t.tag_subtype == 'ga4_event')
+        
+        # Mảng debug tạm thời để in ra chatter
+        debug_logs = []
+        
         for tag in ga4_tags:
             # GTM Tag name có thể khác Event Name trong GA4.
-            # Ta cần tìm Parameter 'eventName' trong cấu hình Tag (đã lưu dưới dạng JSON trong field 'notes')
             actual_event_name = tag.name
             if tag.notes:
                 try:
                     params = json.loads(tag.notes)
                     for p in params:
                         # GTM API trả về format: {"type": "template", "key": "eventName", "value": "add_to_cart"}
-                        if p.get('key') == 'eventName' and p.get('value'):
+                        # Có thể key là 'eventName', 'name', hoặc tùy trường hợp
+                        if p.get('key') in ('eventName', 'name') and p.get('value'):
                             actual_event_name = p.get('value')
                             break
+                        # Nếu parameter "eventParameters" chứa danh sách các param con, thử tìm
+                        if p.get('key') == 'eventParameters' and getattr(p.get('list'), '__iter__', False):
+                            for sub_p in p['list']:
+                                if isinstance(sub_p, dict) and sub_p.get('type') == 'map':
+                                    map_items = sub_p.get('map', [])
+                                    # ... logic quét sâu hơn nếu bị giấu trong biến (ít xảy ra)
                 except Exception:
                     pass
             
@@ -326,8 +336,18 @@ class GoogleAdsTag(models.Model):
             # Fallback nếu không tìm thấy theo eventName parameter thì thử tìm theo tên Tag (tag.name)
             if match_count == 0:
                 match_count = event_dict.get(tag.name, 0)
+            
+            if match_count == 0:
+                debug_logs.append(f"Tag: {tag.name} | Cố tìm event: {actual_event_name} | KHÔNG MATCH | Notes: {tag.notes[:100]}...")
+            else:
+                debug_logs.append(f"Tag: {tag.name} | MATCH THÀNH CÔNG event: {actual_event_name} | Số lượng: {match_count}")
                 
             tag.ga4_event_count = match_count
+            
+        if debug_logs:
+            debug_html = "<br/>".join(debug_logs)
+            self.message_post(body=Markup(f'<div style="font-size: 11px; font-family: monospace; background: #eee; padding: 5px;"><b>(Debug) Kết quả map sự kiện:</b><br/>{Markup.escape(debug_html)}</div>'))
+
 
     def _fetch_gtm_endpoint(self, ws_url, endpoint, item_type, headers, now):
         """GET dữ liệu từ 1 endpoint GTM API và lưu vào Odoo"""
