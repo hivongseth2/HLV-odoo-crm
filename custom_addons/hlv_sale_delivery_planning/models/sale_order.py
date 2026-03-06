@@ -33,13 +33,13 @@ class SaleOrder(models.Model):
         sales = self.search(domain, order='commitment_date asc, date_order desc')
         
         # --- LỌC THEO NGÀY PO (MEMORY FILTER DỰA VÀO PURCHASE ORDER) ---
-        if filter_po_date_from or filter_po_date_to or filter_po_status != 'all':
+        if filter_po_date_from or filter_po_date_to or (filter_po_status and filter_po_status != 'all'):
             po_domain = [('origin', 'in', sales.mapped('name'))]
             if filter_po_date_from:
                 po_domain.append(('date_planned', '>=', filter_po_date_from))
             if filter_po_date_to:
                 po_domain.append(('date_planned', '<=', filter_po_date_to + ' 23:59:59'))
-            if filter_po_status != 'all':
+            if filter_po_status and filter_po_status != 'all':
                 po_domain.append(('state', '=', filter_po_status))
             matching_pos = self.env['purchase.order'].search_read(po_domain, ['origin'])
             origins = list(set([po['origin'] for po in matching_pos if po['origin']]))
@@ -393,7 +393,9 @@ class SaleOrder(models.Model):
                 return paths
 
             # --- 3. Generate Paths từ Xuất Kho Roots
-            outbound_allowed = all_so_pickings - all_returns_and_stors
+            # Ép all_returns_and_stors về dạng RecordSet để trừ
+            all_returns = self.env['stock.picking'].browse([p.id for p in all_returns_and_stors])
+            outbound_allowed = all_so_pickings - all_returns
             for root in sorted(main_roots, key=lambda x: (x.scheduled_date or x.create_date, x.id)):
                 paths = get_paths(root, outbound_allowed)
                 for path in paths:
