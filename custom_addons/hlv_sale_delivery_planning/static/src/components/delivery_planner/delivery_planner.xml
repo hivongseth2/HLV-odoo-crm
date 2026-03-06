@@ -241,8 +241,8 @@
                                                         <t t-foreach="flow.nodes" t-as="picking" t-key="picking.id">
                                                             <div class="card shadow-sm border border-2 cursor-pointer text-center p-2 rounded picking-node" 
                                                                  style="min-width: 140px; transition: all 0.3s ease;"
-                                                                 t-attf-class="{{ picking.state == 'done' ? 'bg-light opacity-75 border-secondary' : 'bg-white border-danger' }} {{ 'linked-return-' + picking.return_of.replace('/', '-') if picking.return_of else '' }}"
-                                                                 t-att-data-picking-name="picking.name.replace('/', '-')"
+                                                                 t-attf-class="{{ picking.state == 'done' ? 'bg-light opacity-75 border-secondary' : 'bg-white border-danger' }} {{ picking.return_of ? 'linked-return-' + picking.return_of.replace(/\\//g, '-') : '' }}"
+                                                                 t-att-data-picking-name="picking.name.replace(/\\//g, '-')"
                                                                  t-on-mouseenter="() => this.onPickingHover(picking.name)"
                                                                  t-on-mouseleave="() => this.onPickingLeave()"
                                                                  t-on-click="() => this.openPicking(picking.id)">
@@ -311,8 +311,8 @@
                                                         <t t-foreach="flow.nodes" t-as="picking" t-key="picking.id">
                                                             <div class="card shadow-sm border border-2 cursor-pointer text-center p-2 rounded picking-node" 
                                                                  style="min-width: 140px; transition: all 0.3s ease;"
-                                                                 t-attf-class="{{ picking.state == 'done' ? 'bg-light opacity-75 border-secondary' : 'bg-white border-primary' }} {{ 'original-picking-' + picking.name.replace('/', '-') }}"
-                                                                 t-att-data-picking-name="picking.name.replace('/', '-')"
+                                                                 t-attf-class="{{ picking.state == 'done' ? 'bg-light opacity-75 border-secondary' : 'bg-white border-primary' }} {{ 'original-picking-' + picking.name.replace(/\\//g, '-') }}"
+                                                                 t-att-data-picking-name="picking.name.replace(/\\//g, '-')"
                                                                  t-on-mouseenter="() => this.onPickingHover(picking.name)"
                                                                  t-on-mouseleave="() => this.onPickingLeave()"
                                                                  t-on-click="() => this.openPicking(picking.id)">
