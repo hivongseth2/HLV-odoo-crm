@@ -29,22 +29,17 @@
         <field name="name">google.ads.ad.group.form</field>
         <field name="model">google.ads.ad.group</field>
         <field name="arch" type="xml">
-            <form string="Nhóm Quảng Cáo Google Ads" create="false" edit="false">
+            <form string="Nhóm Quảng Cáo Google Ads" create="false" edit="false" class="o_google_ads_premium_form">
                 <sheet>
-                    <div class="alert alert-info mb-0">
-                        Dữ liệu này được đồng bộ tự động từ Google Ads. Không thể chỉnh sửa thủ công.
-                    </div>
-                    <group>
-                        <group string="Thông Tin Cơ Bản">
-                            <field name="name" readonly="1"/>
-                            <field name="campaign_id" readonly="1"/>
+                    <field name="hero_header_html" widget="html" readonly="1"/>
+                    
+                    <div class="o_premium_card border-0 bg-light-subtle mb-4" style="margin-top: -40px; position: relative; z-index: 10;">
+                        <group string="Thông Tin Kỹ Thuật">
                             <field name="google_ad_group_id" readonly="1"/>
-                            <field name="type" readonly="1"/>
-                            <field name="status" readonly="1" widget="badge"
-                                   decoration-success="status == 'enabled'"
-                                   decoration-info="status == 'paused'"
-                                   decoration-danger="status == 'removed'"/>
                         </group>
+                    </div>
+
+                    <group>
                         <group string="Hiệu Suất Quảng Cáo">
                             <field name="clicks" readonly="1"/>
                             <field name="impressions" readonly="1"/>

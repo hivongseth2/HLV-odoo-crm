@@ -23,16 +23,19 @@
         <field name="name">google.ads.tag.form</field>
         <field name="model">google.ads.tag</field>
         <field name="arch" type="xml">
-            <form string="Cấu Hình Google Tag">
+            <form string="Cấu Hình Google Tag" class="o_google_ads_premium_form">
                 <header>
                     <button name="action_sync_from_gtm"
                             string="Đồng Bộ Từ GTM"
                             type="object"
                             class="oe_highlight"
                             invisible="tag_type != 'gtm'"/>
+                    <field name="active" invisible="1"/>
                 </header>
                 <sheet>
-                    <div class="oe_button_box" name="button_box">
+                    <field name="hero_header_html" widget="html" readonly="1"/>
+                    
+                    <div class="oe_button_box" name="button_box" style="margin-top: -40px; position: relative; z-index: 10;">
                         <button class="oe_stat_button" icon="fa-tags"
                                 invisible="gtm_tag_count == 0">
                             <field name="gtm_tag_count" string="Tags" widget="statinfo"/>
@@ -46,14 +49,11 @@
                             <field name="gtm_variable_count" string="Biến" widget="statinfo"/>
                         </button>
                     </div>
-                    <div class="oe_title">
-                        <h1><field name="name" placeholder="VD: GTM Production"/></h1>
-                    </div>
+
                     <group>
                         <group string="Cài Đặt Chung">
-                            <field name="account_id"/>
+                            <field name="account_id" readonly="active == True"/>
                             <field name="tag_type" widget="radio"/>
-                            <field name="active" widget="boolean_toggle"/>
                         </group>
                         <group string="ID Định Danh">
                             <field name="gtm_container_id"

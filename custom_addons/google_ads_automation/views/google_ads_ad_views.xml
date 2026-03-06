@@ -29,23 +29,28 @@
         <field name="name">google.ads.ad.form</field>
         <field name="model">google.ads.ad</field>
         <field name="arch" type="xml">
-            <form string="Mẫu Quảng Cáo Google Ads" create="false" edit="false">
+            <form string="Mẫu Quảng Cáo Google Ads" create="false" edit="false" class="o_google_ads_premium_form">
                 <sheet>
-                    <div class="alert alert-info mb-0">
-                        Dữ liệu này được đồng bộ tự động từ Google Ads. Không thể chỉnh sửa thủ công.
+                    <field name="hero_header_html" widget="html" readonly="1"/>
+                    
+                    <div class="o_premium_card border-0 bg-light-subtle mb-4" style="margin-top: -40px; position: relative; z-index: 10;">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <group string="Thông Tin Kỹ Thuật">
+                                    <field name="google_ad_id" readonly="1"/>
+                                    <field name="final_urls" widget="url" readonly="1"/>
+                                </group>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <div class="p-3">
+                                    <span class="text-muted small d-block mb-1">Dữ liệu đồng bộ từ Google Ads</span>
+                                    <i class="fa fa-refresh me-1 text-primary"></i> <span class="fw-bold">Auto-sync Active</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
+
                     <group>
-                        <group string="Thông Tin Cơ Bản">
-                            <field name="name" readonly="1"/>
-                            <field name="ad_group_id" readonly="1"/>
-                            <field name="google_ad_id" readonly="1"/>
-                            <field name="type" readonly="1"/>
-                            <field name="final_urls" readonly="1"/>
-                            <field name="status" readonly="1" widget="badge"
-                                   decoration-success="status == 'enabled'"
-                                   decoration-info="status == 'paused'"
-                                   decoration-danger="status == 'removed'"/>
-                        </group>
                         <group string="Hiệu Suất Quảng Cáo">
                             <field name="clicks" readonly="1"/>
                             <field name="impressions" readonly="1"/>

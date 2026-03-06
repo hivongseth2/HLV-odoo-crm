@@ -1,8 +1,73 @@
-from odoo import api, fields, models
+from odoo import api, fields, models, _
+from markupsafe import Markup
 
 class GoogleAdsAd(models.Model):
     _name = 'google.ads.ad'
     _description = 'Mẫu Quảng Cáo'
+
+    hero_header_html = fields.Html(compute='_compute_hero_header_html')
+
+    def _compute_hero_header_html(self):
+        for rec in self:
+            status_color = 'bg-success' if rec.status == 'enabled' else 'bg-warning' if rec.status == 'paused' else 'bg-danger'
+            
+            # Visualization logic
+            cr_width = min(rec.conversion_rate * 5, 100) if rec.conversion_rate > 0 else 0
+            roas_width = min(rec.roas * 20, 100) if rec.roas > 0 else 0
+            
+            html = f"""
+                <div class="o_hero_header" style="background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);">
+                    <div class="status_badge">
+                        <span class="o_status_ping {status_color}"></span>
+                        <span class="badge text-bg-light fw-bold shadow-sm">{dict(self._fields['status'].selection).get(rec.status, rec.status)}</span>
+                    </div>
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <div class="bg-white p-3 rounded-4 shadow-sm text-primary">
+                                <i class="fa fa-newspaper-o fa-4x"></i>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <span class="badge rounded-pill text-bg-primary mb-2 px-3 py-2">GOOGLE AD CONTENT</span>
+                            <h1 class="text-white mt-1">
+                                {rec.name}
+                            </h1>
+                            <div class="d-flex align-items-center text-white-50 mt-2 mb-0 fw-medium">
+                                <div>
+                                    <i class="fa fa-folder-open me-1"></i> Ad Group: <span class="text-white">{rec.ad_group_id.name or '—'}</span>
+                                </div>
+                                <div class="ms-4">
+                                    <i class="fa fa-info-circle me-1"></i> Type: <span class="text-white">{dict(self._fields['type'].selection).get(rec.type, rec.type)}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="o_visual_box">
+                                <span class="o_visual_label">Ad Interaction Insight</span>
+                                <div class="mb-2">
+                                    <div class="o_metric_row">
+                                        <span class="o_metric_title">Conversion Rate</span>
+                                        <span class="o_metric_value">{rec.conversion_rate:.2f}%</span>
+                                    </div>
+                                    <div class="progress" style="height: 6px;">
+                                        <div class="progress-bar bg-warning" style="width: {cr_width}%"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="o_metric_row">
+                                        <span class="o_metric_title">Estimated ROAS</span>
+                                        <span class="o_metric_value">{rec.roas:.1f}x</span>
+                                    </div>
+                                    <div class="progress" style="height: 6px;">
+                                        <div class="progress-bar bg-info" style="width: {roas_width}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            """
+            rec.hero_header_html = Markup(html)
 
     name = fields.Char(string='Tên/Tiêu Đề Quảng Cáo')
     ad_group_id = fields.Many2one('google.ads.ad.group', string='Nhóm Quảng Cáo', required=True, ondelete='cascade')

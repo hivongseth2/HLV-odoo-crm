@@ -1,5 +1,6 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
+from markupsafe import Markup
 import logging
 import json
 
@@ -16,6 +17,66 @@ class GoogleAdsTag(models.Model):
     _description = 'Cấu Hình Google Tag / GTM'
     _inherit = ['mail.thread']
     _rec_name = 'name'
+
+    hero_header_html = fields.Html(compute='_compute_hero_header_html')
+
+    def _compute_hero_header_html(self):
+        for rec in self:
+            active_ping = 'bg-success' if rec.active else 'bg-danger'
+            tag_type_label = dict(self._fields['tag_type'].selection).get(rec.tag_type, rec.tag_type)
+            
+            # GTM Health logic
+            total_items = rec.gtm_tag_count + rec.gtm_trigger_count + rec.gtm_variable_count
+            max_items = 50
+            health_progress = min((total_items / max_items) * 100, 100) if max_items > 0 else 0
+            
+            html = f"""
+                <div class="o_hero_header" style="background: linear-gradient(135deg, #4F46E5 0%, #312E81 100%);">
+                    <div class="status_badge">
+                        <span class="o_status_ping {active_ping}"></span>
+                        <span class="badge text-bg-light fw-bold shadow-sm">{'ACTIVE' if rec.active else 'INACTIVE'}</span>
+                    </div>
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <div class="bg-white p-3 rounded-4 shadow-sm text-indigo-600">
+                                <i class="fa fa-tags fa-4x text-indigo"></i>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <span class="badge rounded-pill text-bg-indigo mb-2 px-3 py-2 text-white fw-bold">TRACKING CONFIGURATION</span>
+                            <h1 class="text-white mt-1">
+                                {rec.name}
+                            </h1>
+                            <div class="d-flex align-items-center text-white-50 mt-2 mb-0 fw-medium">
+                                <div>
+                                    <i class="fa fa-code me-1"></i> Type: <span class="text-white">{tag_type_label}</span>
+                                </div>
+                                <div class="ms-4">
+                                    <i class="fa fa-globe me-1"></i> Account: <span class="text-white">{rec.account_id.name or '—'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="o_visual_box">
+                                <span class="o_visual_label">GTM Container Density</span>
+                                <div class="o_metric_row">
+                                    <span class="o_metric_title">Synchronized Items</span>
+                                    <span class="o_metric_value">{total_items} items</span>
+                                </div>
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar bg-info" style="width: {health_progress}%"></div>
+                                </div>
+                                <div class="mt-2 d-flex justify-content-between text-white-50" style="font-size: 10px;">
+                                    <span><i class="fa fa-tag me-1"></i> {rec.gtm_tag_count} Tags</span>
+                                    <span><i class="fa fa-bolt me-1"></i> {rec.gtm_trigger_count} Trigs</span>
+                                    <span><i class="fa fa-cube me-1"></i> {rec.gtm_variable_count} Vars</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            """
+            rec.hero_header_html = Markup(html)
 
     name = fields.Char(string='Tên Cấu Hình', required=True)
     account_id = fields.Many2one(
