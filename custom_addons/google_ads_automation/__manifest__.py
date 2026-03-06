@@ -29,6 +29,11 @@
         "views/google_ads_tag_views.xml",
         "views/menu_views.xml",
     ],
+    "assets": {
+        "web.assets_backend": [
+            "google_ads_automation/static/src/css/premium_dashboard.css",
+        ],
+    },
     "installable": True,
     "application": True,
     "license": "LGPL-3",

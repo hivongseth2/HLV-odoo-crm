@@ -24,75 +24,89 @@
         <field name="name">google.ads.product.feed.form</field>
         <field name="model">google.ads.product.feed</field>
         <field name="arch" type="xml">
-            <form>
+            <form string="Product Feed" class="o_google_ads_premium_form">
                 <header>
-                    <button name="action_refresh_stock"
-                            string="🔄 Cập Nhật Tồn Kho"
-                            type="object"
-                            class="oe_highlight"/>
-                    <button name="action_add_products_wizard"
-                            string="➕ Thêm Sản Phẩm"
-                            type="object"
-                            class="oe_highlight"/>
-                    <button name="action_view_strategies"
-                            string="📊 Xem Chiến Lược"
-                            type="object"/>
+                    <button name="action_refresh_stock" string="Cập Nhật Tồn Kho" type="object" class="btn-primary"/>
+                    <button name="action_add_products_wizard" string="Thêm Sản Phẩm" type="object" class="btn-success"/>
+                    <button name="action_view_strategies" string="Cấu Hình Chiến Lược" type="object" class="btn-secondary"/>
+                    <field name="active" widget="statusbar" statusbar_visible="True,False"/>
                 </header>
                 <sheet>
-                    <div class="oe_button_box" name="button_box">
-                        <button name="action_view_strategies"
-                                type="object"
-                                class="oe_stat_button"
-                                icon="fa-cogs">
-                            <field name="strategy_count" widget="statinfo" string="Chiến Lược"/>
-                        </button>
+                    <div class="o_hero_header" style="background: linear-gradient(135deg, #F59E0B 0%, #B45309 100%);">
+                        <div class="status_badge">
+                            <field name="active" widget="boolean_toggle"/>
+                        </div>
+                        <div class="row align-items-center">
+                            <div class="col-auto">
+                                <div class="bg-white p-3 rounded-4 shadow-sm text-amber-600">
+                                    <i class="fa fa-cubes fa-4x text-warning"></i>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <span class="badge rounded-pill text-bg-warning mb-2 px-3 py-2 text-white fw-bold">INVENTORY FEED</span>
+                                <h1 class="text-white mt-1">
+                                    <field name="name" placeholder="Tên Feed sản phẩm..."/>
+                                </h1>
+                                <p class="text-white-50 mt-2 mb-0 fw-medium">
+                                    <i class="fa fa-briefcase me-1"></i> Tài Khoản: 
+                                    <field name="account_id" class="text-white fw-bold"/>
+                                    <span class="ms-3 pe-2"><i class="fa fa-list-ol me-1"></i> Quy Mô: <field name="line_count" class="text-white"/> sản phẩm</span>
+                                </p>
+                            </div>
+                        </div>
                     </div>
 
-                    <group>
-                        <group>
-                            <field name="name"/>
-                            <field name="account_id"/>
-                        </group>
-                        <group>
-                            <field name="active"/>
-                            <field name="line_count"/>
-                        </group>
-                    </group>
+                    <div class="o_kpi_dashboard mt-n4">
+                        <div class="o_kpi_tile shadow-lg border-0 bg-white">
+                            <span class="o_kpi_label">CHIẾN LƯỢC ĐANG CHẠY</span>
+                            <span class="o_kpi_value text-amber"><field name="strategy_count"/></span>
+                        </div>
+                        <div class="o_kpi_tile shadow-lg border-0 bg-white">
+                            <span class="o_kpi_label">TRẠNG THÁI FEED</span>
+                            <span class="o_kpi_value text-success" style="font-size: 14px; padding-top: 10px;">
+                                <i class="fa fa-check-circle me-1"></i> Hoạt Động
+                            </span>
+                        </div>
+                    </div>
 
                     <notebook>
-                        <page string="Sản Phẩm" icon="fa-cubes">
-                            <field name="line_ids" mode="list">
-                                <list editable="bottom" limit="50">
-                                    <field name="product_default_code" optional="show"/>
-                                    <field name="product_id"/>
-                                    <field name="qty_available" string="Tồn Thực" 
-                                           decoration-danger="qty_available &lt;= 0"
-                                           decoration-warning="qty_available &gt; 0 and qty_available &lt; 10"
-                                           sum="Tổng Tồn"/>
-                                    <field name="avg_daily_sales" string="Tốc Độ Bán / Ngày"
-                                           decoration-info="avg_daily_sales &gt; 5"
-                                           sum="Tổng Tốc Độ"/>
-                                    <field name="stock_status" string="Tình Trạng Kho" widget="badge"
-                                           decoration-danger="stock_status == 'critical'"
-                                           decoration-warning="stock_status == 'low'"
-                                           decoration-success="stock_status == 'normal'"
-                                           decoration-info="stock_status == 'high'"/>
-                                    <field name="days_of_stock" string="Số Ngày Tồn (Ước)"
-                                           decoration-danger="days_of_stock &lt; 7"
-                                           decoration-warning="days_of_stock &gt;= 7 and days_of_stock &lt; 20"
-                                           optional="show"/>
-                                    <field name="sale_price" optional="show"/>
-                                    <field name="margin_percent" string="Biên LN (%)" widget="badge"
-                                           decoration-danger="margin_percent &lt; 15"
-                                           decoration-warning="margin_percent &gt;= 15 and margin_percent &lt; 25"
-                                           decoration-success="margin_percent &gt;= 25"
-                                           optional="show"/>
-                                    <field name="campaign_ids" widget="many2many_tags" optional="show"/>
-                                </list>
-                            </field>
+                        <page string="Danh Mục Sản Phẩm" icon="fa-th-list">
+                            <div class="o_premium_card p-0 mt-3 border-0 shadow-sm overflow-hidden">
+                                <field name="line_ids" mode="list">
+                                    <list editable="bottom" limit="50" class="table-hover">
+                                        <field name="product_default_code" optional="show" class="fw-bold"/>
+                                        <field name="product_id"/>
+                                        <field name="qty_available" string="Tồn Thực" 
+                                               decoration-danger="qty_available &lt;= 0"
+                                               decoration-warning="qty_available &gt; 0 and qty_available &lt; 10"
+                                               sum="Tổng Tồn" class="text-end"/>
+                                        <field name="avg_daily_sales" string="Vận Tốc"
+                                               decoration-info="avg_daily_sales &gt; 5"
+                                               sum="Tổng Vận Tốc" class="text-end"/>
+                                        <field name="stock_status" string="Tình Trạng" widget="badge"
+                                               decoration-danger="stock_status == 'critical'"
+                                               decoration-warning="stock_status == 'low'"
+                                               decoration-success="stock_status == 'normal'"
+                                               decoration-info="stock_status == 'high'"/>
+                                        <field name="days_of_stock" string="Dự Kiến Tồn"
+                                               decoration-danger="days_of_stock &lt; 7"
+                                               decoration-warning="days_of_stock &gt;= 7 and days_of_stock &lt; 20"
+                                               optional="show" class="text-end"/>
+                                        <field name="margin_percent" string="LN (%)" widget="badge"
+                                               decoration-danger="margin_percent &lt; 15"
+                                               decoration-warning="margin_percent &gt;= 15 and margin_percent &lt; 25"
+                                               decoration-success="margin_percent &gt;= 25"
+                                               optional="show"/>
+                                        <field name="campaign_ids" widget="many2many_tags" optional="show"/>
+                                    </list>
+                                </field>
+                            </div>
                         </page>
-                        <page string="Ghi Chú" icon="fa-pencil">
-                            <field name="note" placeholder="Ghi chú về feed này..."/>
+                        <page string="Ghi Chú &amp; Lịch Sử" icon="fa-file-text-o">
+                            <div class="o_premium_card border-0 bg-light">
+                                <h5 class="text-secondary fw-bold mb-3">Ghi chú quản lý</h5>
+                                <field name="note" placeholder="Nhập ghi chú quan trọng về Feed sản phẩm này..." class="border-0 bg-transparent"/>
+                            </div>
                         </page>
                     </notebook>
                 </sheet>

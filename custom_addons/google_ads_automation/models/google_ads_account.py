@@ -55,6 +55,28 @@ class GoogleAdsAccount(models.Model):
         ('error', 'Lỗi')
     ], string='Trạng Thái', default='draft', tracking=True)
 
+    # ── KPI Dashboard Fields (Computed) ─────────
+    campaign_ids = fields.One2many('google.ads.campaign', 'account_id', string='Chiến Dịch')
+    
+    total_spend = fields.Float(string='Tổng Chi Phí', compute='_compute_account_kpis')
+    total_conversions = fields.Float(string='Tổng Chuyển Đổi', compute='_compute_account_kpis')
+    total_campaigns = fields.Integer(string='Số Chiến Dịch', compute='_compute_account_kpis')
+    account_roas = fields.Float(string='ROAS Trung Bình', compute='_compute_account_kpis')
+
+    @api.depends('campaign_ids', 'campaign_ids.cost', 'campaign_ids.conversions')
+    def _compute_account_kpis(self):
+        for rec in self:
+            camps = rec.campaign_ids
+            rec.total_campaigns = len(camps)
+            rec.total_spend = sum(camps.mapped('cost'))
+            rec.total_conversions = sum(camps.mapped('conversions'))
+            
+            # Simple ROAS: (Total Conversions * 500k) / Total Spend
+            if rec.total_spend > 0:
+                rec.account_roas = (rec.total_conversions * 500000) / rec.total_spend
+            else:
+                rec.account_roas = 0.0
+
     def _get_google_ads_client(self):
         """Build Google Ads Client from credentials"""
         self.ensure_one()

@@ -29,34 +29,78 @@
         <field name="name">google.ads.campaign.form</field>
         <field name="model">google.ads.campaign</field>
         <field name="arch" type="xml">
-            <form string="Chiến Dịch Google Ads" create="false" edit="false">
+            <form string="Chiến Dịch Google Ads" create="false" edit="false" class="o_google_ads_premium_form">
                 <sheet>
-                    <div class="alert alert-info mb-0">
-                        Dữ liệu này được đồng bộ tự động từ Google Ads. Không thể chỉnh sửa thủ công.
+                    <div class="o_hero_header" style="background: linear-gradient(135deg, #10B981 0%, #065F46 100%);">
+                        <div class="status_badge">
+                            <span t-attf-class="o_status_ping #{'bg-success' if status == 'enabled' else 'bg-warning' if status == 'paused' else 'bg-danger'}"></span>
+                            <span class="badge text-bg-light fw-bold shadow-sm" t-esc="status_label or status"></span>
+                        </div>
+                        <div class="row align-items-center">
+                            <div class="col-auto">
+                                <div class="bg-white p-3 rounded-4 shadow-sm text-success">
+                                    <i class="fa fa-bullhorn fa-4x"></i>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <span class="badge rounded-pill text-bg-success mb-2 px-3 py-2">GOOGLE ADS CAMPAIGN</span>
+                                <h1 class="text-white mt-1">
+                                    <field name="name" readonly="1"/>
+                                </h1>
+                                <p class="text-white-50 mt-2 mb-0 fw-medium">
+                                    <i class="fa fa-id-badge me-1"></i> Campaign ID: 
+                                    <field name="google_campaign_id" class="text-white fw-bold"/>
+                                    <span class="ms-3 pe-2"><i class="fa fa-google me-1"></i> Account: <field name="account_id" class="text-white"/></span>
+                                </p>
+                            </div>
+                        </div>
                     </div>
-                    <group>
-                        <group string="Thông Tin Cơ Bản">
-                            <field name="name" readonly="1"/>
-                            <field name="account_id" readonly="1"/>
-                            <field name="google_campaign_id" readonly="1"/>
-                            <field name="channel_type" readonly="1"/>
-                            <field name="status" readonly="1" widget="badge"
-                                   decoration-success="status == 'enabled'"
-                                   decoration-info="status == 'paused'"
-                                   decoration-danger="status == 'removed'"/>
-                        </group>
-                        <group string="Hiệu Suất (Hôm Qua)">
-                            <field name="clicks" readonly="1"/>
-                            <field name="impressions" readonly="1"/>
-                            <field name="cost" readonly="1"/>
-                            <field name="conversions" readonly="1"/>
-                            <field name="conversion_rate" widget="progressbar"/>
-                            <field name="roas" readonly="1" widget="badge"
-                                   decoration-success="roas &gt;= 3" 
-                                   decoration-danger="roas &lt; 1" 
-                                   decoration-warning="roas &gt;= 1 and roas &lt; 3"/>
-                        </group>
-                    </group>
+
+                    <div class="o_kpi_dashboard">
+                        <div class="o_kpi_tile shadow-sm border-0">
+                            <span class="o_kpi_label">LƯỢT NHẤP</span>
+                            <span class="o_kpi_value text-primary"><field name="clicks"/></span>
+                        </div>
+                        <div class="o_kpi_tile shadow-sm border-0">
+                            <span class="o_kpi_label">CHI PHÍ</span>
+                            <span class="o_kpi_value text-danger"><field name="cost" widget="monetary"/></span>
+                        </div>
+                        <div class="o_kpi_tile shadow-sm border-0">
+                            <span class="o_kpi_label">CHUYỂN ĐỔI</span>
+                            <span class="o_kpi_value text-success"><field name="conversions"/></span>
+                        </div>
+                        <div class="o_kpi_tile shadow-sm border-0">
+                            <span class="o_kpi_label">ROAS</span>
+                            <span class="o_kpi_value text-info"><field name="roas" widget="badge" decoration-success="roas &gt;= 3"/></span>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-7">
+                            <div class="o_premium_card h-100">
+                                <h4 class="mb-4 text-success fw-bold"><i class="fa fa-line-chart me-2"></i>Chi Tiết Hiệu Suất</h4>
+                                <group>
+                                    <field name="impressions"/>
+                                    <field name="conversion_rate" widget="progressbar"/>
+                                    <field name="channel_type"/>
+                                </group>
+                            </div>
+                        </div>
+                        <div class="col-lg-5">
+                            <div class="o_premium_card h-100 bg-light border-0">
+                                <h4 class="mb-4 text-secondary fw-bold"><i class="fa fa-info-circle me-2"></i>Trạng Thái Đồng Bộ</h4>
+                                <div class="alert alert-info border-0 shadow-sm rounded-3">
+                                    <i class="fa fa-refresh me-1"></i> Dữ liệu này được đồng bộ tự động từ Google Ads.
+                                </div>
+                                <group>
+                                    <field name="status" widget="badge"
+                                           decoration-success="status == 'enabled'"
+                                           decoration-warning="status == 'paused'"
+                                           decoration-danger="status == 'removed'"/>
+                                </group>
+                            </div>
+                        </div>
+                    </div>
                 </sheet>
             </form>
         </field>
