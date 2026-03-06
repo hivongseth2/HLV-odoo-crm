@@ -150,7 +150,7 @@
                                                                 <div class="small fw-bold" t-att-class="picking.state == 'done' ? 'text-muted' : 'text-dark'"><t t-esc="picking.name"/></div>
                                                                 
                                                                 <!-- Backorder connection -->
-                                                                <div t-elif="picking.backorder_of" class="text-muted mt-1 text-truncate" style="font-size: 0.70rem;" t-att-title="'Cắt từ: ' + picking.backorder_of"><i class="fa fa-files-o"></i> Từ: <t t-esc="picking.backorder_of"/></div>
+                                                                <div t-if="picking.backorder_of" class="text-muted mt-1 text-truncate" style="font-size: 0.70rem;" t-att-title="'Cắt từ: ' + picking.backorder_of"><i class="fa fa-files-o"></i> Từ: <t t-esc="picking.backorder_of"/></div>
                                                                 
                                                                 <!-- Video Badge -->
                                                                 <div t-if="picking.videos and picking.videos.length > 0" class="mt-1 d-flex flex-wrap justify-content-center gap-1">
