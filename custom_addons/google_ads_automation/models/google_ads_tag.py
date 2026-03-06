@@ -253,7 +253,8 @@ class GoogleAdsTag(models.Model):
           "metrics": [{"name": "eventCount"}]
         }
         
-        resp = requests.post(url, headers=headers, json=payload, timeout=15)
+        # Tăng timeout lên 45s vì API Báo cáo của Google Analytics thi thoảng tổng hợp data khá chậm
+        resp = requests.post(url, headers=headers, json=payload, timeout=45)
         resp.raise_for_status()
         data = resp.json()
         
