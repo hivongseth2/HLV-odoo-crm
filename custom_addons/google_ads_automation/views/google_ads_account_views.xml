@@ -75,9 +75,61 @@
         </field>
     </record>
 
+    <record id="view_google_ads_account_kanban" model="ir.ui.view">
+        <field name="name">google.ads.account.kanban</field>
+        <field name="model">google.ads.account</field>
+        <field name="arch" type="xml">
+            <kanban class="o_kanban_mobile" sample="1">
+                <field name="name"/>
+                <field name="operating_customer_id"/>
+                <field name="state"/>
+                <field name="is_demo"/>
+                <templates>
+                    <t t-name="kanban-box">
+                        <div t-attf-class="oe_kanban_global_click oe_kanban_card">
+                            <div class="o_kanban_record_top">
+                                <div class="o_kanban_record_headings">
+                                    <strong class="o_kanban_record_title fs-4">
+                                        <i class="fa fa-briefcase text-primary me-2"/>
+                                        <field name="name"/>
+                                    </strong>
+                                </div>
+                                <div class="o_kanban_record_state">
+                                    <field name="state" widget="badge" 
+                                           decoration-success="state == 'connected'"
+                                           decoration-warning="state == 'draft'"
+                                           decoration-danger="state == 'error'"/>
+                                </div>
+                            </div>
+                            <div class="o_kanban_record_bottom mt-3">
+                                <div class="oe_kanban_bottom_left text-muted">
+                                    <span t-if="record.operating_customer_id.raw_value" title="Mã Khách Hàng (Customer ID)">
+                                        <i class="fa fa-google text-danger me-1"/> <field name="operating_customer_id"/>
+                                    </span>
+                                </div>
+                                <div class="oe_kanban_bottom_right">
+                                    <span t-if="record.is_demo.raw_value" class="badge text-bg-warning">DEMO</span>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
     <record id="action_google_ads_account" model="ir.actions.act_window">
         <field name="name">Tài Khoản Google Ads</field>
         <field name="res_model">google.ads.account</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Tạo một Tài Khoản Google Ads mới
+            </p>
+            <p>
+                Module quản lý và tự động hóa toàn bộ dữ liệu từ Google Ads. 
+                Bạn cũng có thể bật chế độ DEMO để trải nghiệm an toàn.
+            </p>
+        </field>
     </record>
 </odoo>
