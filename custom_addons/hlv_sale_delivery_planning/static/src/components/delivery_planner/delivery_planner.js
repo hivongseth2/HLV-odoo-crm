@@ -67,10 +67,10 @@ export class DeliveryPlannerDashboard extends Component {
             );
         }
 
-        // 2. Warehouse Filter
+        // 2. Warehouse Filter (Lọc theo kho của Picking)
         if (this.state.filterWarehouseId !== "all") {
             const wId = parseInt(this.state.filterWarehouseId);
-            list = list.filter(so => so.warehouse_id && so.warehouse_id[0] === wId);
+            list = list.filter(so => so.picking_warehouse_ids && so.picking_warehouse_ids.includes(wId));
         }
 
         // 3. Status Filter (Đã đủ hàng vs Còn thiếu vs Hoàn thành)
@@ -82,16 +82,22 @@ export class DeliveryPlannerDashboard extends Component {
             list = list.filter(so => so.delivery_status === 'full');
         }
 
-        // 4. Date Filters (Hẹn Giao)
+        // 4. Date Filters (Hẹn Giao - nếu không có lấy Ngày Đặt Hàng)
         if (this.state.filterDateFrom) {
             const dFrom = new Date(this.state.filterDateFrom);
-            list = list.filter(so => so.commitment_date && new Date(so.commitment_date) >= dFrom);
+            list = list.filter(so => {
+                const dDate = so.commitment_date ? new Date(so.commitment_date) : (so.date_order ? new Date(so.date_order) : null);
+                return dDate && dDate >= dFrom;
+            });
         }
 
         if (this.state.filterDateTo) {
             const dTo = new Date(this.state.filterDateTo);
             dTo.setHours(23, 59, 59, 999);
-            list = list.filter(so => so.commitment_date && new Date(so.commitment_date) <= dTo);
+            list = list.filter(so => {
+                const dDate = so.commitment_date ? new Date(so.commitment_date) : (so.date_order ? new Date(so.date_order) : null);
+                return dDate && dDate <= dTo;
+            });
         }
 
         return list;

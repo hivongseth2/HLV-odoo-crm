@@ -21,10 +21,59 @@ class SaleOrder(models.Model):
         # Add order to prioritize the ones with earlier commitment dates
         sales = self.search(domain, order='commitment_date asc, date_order desc')
         
+        # --- BATCH QUERIES OPTIMIZATION ---
+        # 1. Lấy tất cả POs cho list SO name
+        sale_names = sales.mapped('name')
+        all_pos = self.env['purchase.order'].search([('origin', 'in', sale_names)]) if sale_names else []
+        po_by_origin = {}
+        for po in all_pos:
+            if po.origin not in po_by_origin:
+                po_by_origin[po.origin] = []
+            po_by_origin[po.origin].append(po)
+            
+        # 2. Lấy tất cả Video Attachment cho list Picking ID
+        all_picking_ids = sales.mapped('picking_ids').ids
+        att_by_picking = {}
+        if all_picking_ids:
+            attachments = self.env['ir.attachment'].sudo().search([
+                ('res_model', '=', 'stock.picking'),
+                ('res_id', 'in', all_picking_ids)
+            ])
+            for att in attachments:
+                if att.name and (att.name.lower().endswith(('.webm', '.mp4')) or 'video' in (att.mimetype or '')):
+                    if att.res_id not in att_by_picking:
+                        att_by_picking[att.res_id] = []
+                    att_by_picking[att.res_id].append({
+                        'id': att.id,
+                        'name': att.name,
+                        'url': f'/web/content/{att.id}?download=true'
+                    })
+
+        # --- PRE-COMPUTE QTY AVAILABLE ---
+        product_qty_cache = {}
+        for so in sales:
+            if so.warehouse_id:
+                w_id = so.warehouse_id.id
+                if w_id not in product_qty_cache:
+                    product_qty_cache[w_id] = set()
+                for line in so.order_line:
+                    if not line.display_type and line.product_id:
+                        product_qty_cache[w_id].add(line.product_id.id)
+                        
+        product_availabilities = {}
+        for w_id, prod_ids in product_qty_cache.items():
+            if prod_ids:
+                prods = self.env['product.product'].browse(list(prod_ids)).with_context(warehouse=w_id)
+                for p in prods:
+                    product_availabilities[(p.id, w_id)] = p.qty_available
+
         result = []
         for so in sales:
-            # Find POs by origin
-            pos = self.env['purchase.order'].search([('origin', '=', so.name)])
+            # Lọc kho theo Phiếu Kho thay vì chỉ đơn thuần SO
+            picking_warehouse_ids = list(set([p.picking_type_id.warehouse_id.id for p in so.picking_ids if p.picking_type_id and p.picking_type_id.warehouse_id]))
+
+            # Find POs by origin (Sử dụng dict để tránh query N+1)
+            pos = po_by_origin.get(so.name, [])
             
             po_data = []
             for po in pos:
@@ -46,7 +95,7 @@ class SaleOrder(models.Model):
                         'product_id': [line.product_id.id, line.product_id.display_name] if line.product_id else False,
                         'product_uom_qty': line.product_uom_qty,
                         'qty_delivered': line.qty_delivered,
-                        'qty_available': line.product_id.with_context(warehouse=so.warehouse_id.id).qty_available if line.product_id and so.warehouse_id else 0.0,
+                        'qty_available': product_availabilities.get((line.product_id.id, so.warehouse_id.id), 0.0) if line.product_id and so.warehouse_id else 0.0,
                     })
                     
             # Check if all lines are delivered or have enough stock ready
@@ -61,24 +110,8 @@ class SaleOrder(models.Model):
             flat_pickings = []
             picking_groups = {}
             for p in so.picking_ids.sorted(key=lambda x: (x.picking_type_id.sequence, x.id)):
-                # Lấy video từ file đính kèm
-                attachments = self.env['ir.attachment'].sudo().search([
-                    ('res_model', '=', 'stock.picking'),
-                    ('res_id', '=', p.id)
-                ])
-                videos = []
-                for att in attachments:
-                    if att.name and (att.name.lower().endswith(('.webm', '.mp4')) or 'video' in (att.mimetype or '')):
-                        videos.append({
-                            'id': att.id,
-                            'name': att.name,
-                            'url': f'/web/content/{att.id}?download=true'
-                        })
-
-                # Truy xuất liên kết
-                dest_picks = [n for n in set(p.move_ids.mapped('move_dest_ids.picking_id.name')) if n]
-                orig_picks = [n for n in set(p.move_ids.mapped('move_orig_ids.picking_id.name')) if n]
-                return_of = [n for n in set(p.move_ids.mapped('origin_returned_move_id.picking_id.name')) if n]
+                # Lấy video từ file đính kèm (Sử dụng dict để tránh query N+1)
+                videos = att_by_picking.get(p.id, [])
 
                 p_data = {
                     'id': p.id,
@@ -87,9 +120,6 @@ class SaleOrder(models.Model):
                     'type_name': p.picking_type_id.name or '',
                     'code': p.picking_type_id.code or '',
                     'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
-                    'dest_picks': dest_picks,
-                    'orig_picks': orig_picks,
-                    'return_of': return_of,
                     'backorder_of': p.backorder_id.name if p.backorder_id else False,
                     'videos': videos,
                 }
@@ -113,6 +143,7 @@ class SaleOrder(models.Model):
                 'state': so.state,
                 'delivery_status': so.delivery_status,
                 'is_fully_ready': is_fully_ready,
+                'picking_warehouse_ids': picking_warehouse_ids,
                 'pos': po_data,
                 'pickings': flat_pickings,
                 'pickings_by_type': pickings_by_type,
