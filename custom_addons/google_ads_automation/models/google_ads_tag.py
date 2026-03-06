@@ -307,10 +307,26 @@ class GoogleAdsTag(models.Model):
         # Nạp số đếm vào các Tag GA4 Event đang có trong Odoo
         ga4_tags = self.gtm_item_ids.filtered(lambda t: t.item_type == 'tag' and t.tag_subtype == 'ga4_event')
         for tag in ga4_tags:
-            # GTM Tag tên thường chính là tên Event trong GA4 (hoặc tìm trong note)
-            # Khá tricky vì GTM tag name có thể khác Event Name. Ở đây ta coi như map 1-1 theo tên trước
-            # (Nếu Odoo quản lý gắt thì anh dev sẽ bắt chước Parameter 'eventName' của Tag đó).
-            match_count = event_dict.get(tag.name, 0)
+            # GTM Tag name có thể khác Event Name trong GA4.
+            # Ta cần tìm Parameter 'eventName' trong cấu hình Tag (đã lưu dưới dạng JSON trong field 'notes')
+            actual_event_name = tag.name
+            if tag.notes:
+                try:
+                    params = json.loads(tag.notes)
+                    for p in params:
+                        # GTM API trả về format: {"type": "template", "key": "eventName", "value": "add_to_cart"}
+                        if p.get('key') == 'eventName' and p.get('value'):
+                            actual_event_name = p.get('value')
+                            break
+                except Exception:
+                    pass
+            
+            match_count = event_dict.get(actual_event_name, 0)
+            
+            # Fallback nếu không tìm thấy theo eventName parameter thì thử tìm theo tên Tag (tag.name)
+            if match_count == 0:
+                match_count = event_dict.get(tag.name, 0)
+                
             tag.ga4_event_count = match_count
 
     def _fetch_gtm_endpoint(self, ws_url, endpoint, item_type, headers, now):
