@@ -115,6 +115,17 @@ export class DeliveryPlannerDashboard extends Component {
         await this.fetchData();
     }
 
+    async setStockFilter(status) {
+        if (this.state.filterStockStatus === status) {
+            // Nếu click lại chính Tab đó thì bỏ lọc (Về Tất Cả)
+            this.state.filterStockStatus = 'all';
+        } else {
+            this.state.filterStockStatus = status;
+        }
+        this.state.currentPage = 1;
+        await this.fetchData();
+    }
+
     async onSearchKeyup(ev) {
         if (ev.key === "Enter") {
             this.state.currentPage = 1;
@@ -156,12 +167,37 @@ export class DeliveryPlannerDashboard extends Component {
         window.open(url, '_blank');
     }
 
+    // --- PO Status Formatting (Receipt Based) ---
+    getPOStatusClass(receiptStatus) {
+        switch (receiptStatus) {
+            case "pending":
+                return "bg-secondary"; // Chưa nhận
+            case "partial":
+                return "bg-warning text-dark"; // Nhận 1 phần
+            case "full":
+                return "bg-success"; // Nhận đủ
+            default:
+                return "bg-light text-muted border";
+        }
+    }
+
+    translatePOStatus(receiptStatus) {
+        const trans = {
+            partial: "Nhận 1 phần",
+            pending: "Chưa nhận",
+            full: "Đã nhận đủ",
+            unknown: "Không rõ"
+        };
+        return trans[receiptStatus] || "Mới Tạo / Hủy";
+    }
+
     // --- Translations ---
     translateDeliveryStatus(status) {
         const trans = {
             'unknown': 'Chưa cập nhật',
             'pending': 'Chưa giao',
             'partial': 'Giao 1 phần',
+            'pending_partial': 'Chưa & Giao 1 phần',
             'full': 'Đã giao đủ'
         };
         return trans[status] || (status ? status.toUpperCase() : '');
@@ -183,21 +219,6 @@ export class DeliveryPlannerDashboard extends Component {
             'sale': 'Đơn hàng',
             'done': 'Khóa',
             'cancel': 'Đã hủy',
-        };
-        return trans[status] || (status ? status.toUpperCase() : '');
-    }
-
-    translatePOStatus(status) {
-        const trans = {
-            'draft': 'Nháp',
-            'sent': 'Đã gửi',
-            'to approve': 'Chờ duyệt',
-            'purchase': 'Đơn Mua',
-            'done': 'Khóa',
-            'cancel': 'Đã hủy',
-            'pending': 'Chờ nhận',
-            'partial': 'Nhận 1 phần',
-            'full': 'Đã nhận đủ'
         };
         return trans[status] || (status ? status.toUpperCase() : '');
     }

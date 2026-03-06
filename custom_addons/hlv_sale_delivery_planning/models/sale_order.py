@@ -14,7 +14,9 @@ class SaleOrder(models.Model):
             ('state', 'in', ['sale', 'done'])
         ]
         
-        if filter_delivery_status != 'all':
+        if filter_delivery_status == 'pending_partial':
+            domain += [('delivery_status', 'in', ['pending', 'partial'])]
+        elif filter_delivery_status != 'all':
             domain += [('delivery_status', '=', filter_delivery_status)]
             
         if filter_warehouse_id != 'all':
@@ -40,7 +42,7 @@ class SaleOrder(models.Model):
             if filter_po_date_to:
                 po_domain.append(('date_planned', '<=', filter_po_date_to + ' 23:59:59'))
             if filter_po_status and filter_po_status != 'all':
-                po_domain.append(('state', '=', filter_po_status))
+                po_domain.append(('receipt_status', '=', filter_po_status))
             matching_pos = self.env['purchase.order'].search_read(po_domain, ['origin'])
             origins = list(set([po['origin'] for po in matching_pos if po['origin']]))
             sales = sales.filtered(lambda s: s.name in origins)
@@ -85,7 +87,6 @@ class SaleOrder(models.Model):
                         if qty_avail < pending_qty:
                             is_fully_ready = False
             
-            stock_status = 'ready'
             if has_pending:
                 if is_fully_ready:
                     stock_status = 'ready'
@@ -93,6 +94,8 @@ class SaleOrder(models.Model):
                     stock_status = 'partial_ready'
                 else:
                     stock_status = 'out_of_stock'
+            else:
+                stock_status = 'delivered'
                     
             # Tăng biến đếm Dashboard
             dashboard_stats['total'] += 1
@@ -100,7 +103,7 @@ class SaleOrder(models.Model):
                 dashboard_stats['ready'] += 1
             elif stock_status == 'partial_ready':
                 dashboard_stats['partial'] += 1
-            else:
+            elif stock_status == 'out_of_stock':
                 dashboard_stats['out_of_stock'] += 1
                     
             if filter_stock_status == 'all' or stock_status == filter_stock_status:
@@ -265,7 +268,6 @@ class SaleOrder(models.Model):
                         if line.qty_delivered > 0:
                             has_delivered = True
 
-            stock_status = 'ready'
             if has_pending:
                 if is_fully_ready:
                     stock_status = 'ready'
@@ -273,6 +275,8 @@ class SaleOrder(models.Model):
                     stock_status = 'partial_ready'
                 else:
                     stock_status = 'out_of_stock'
+            else:
+                stock_status = 'delivered'
 
             real_delivery_status = 'unknown'
             st = [l for l in so_lines_data if l.get('product_type') != 'service']
