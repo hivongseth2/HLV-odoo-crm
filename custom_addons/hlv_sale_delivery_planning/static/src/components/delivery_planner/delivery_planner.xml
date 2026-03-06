@@ -162,6 +162,9 @@
                                                                 </span>
                                                                 <div class="small fw-bold" t-att-class="picking.state == 'done' ? 'text-muted' : 'text-dark'"><t t-esc="picking.name"/></div>
                                                                 
+                                                                <!-- Return connection -->
+                                                                <div t-if="picking.return_of" class="text-danger mt-1 text-truncate" style="font-size: 0.70rem;" t-att-title="'Trả lệnh: ' + picking.return_of"><i class="fa fa-undo"></i> Cho: <t t-esc="picking.return_of"/></div>
+                                                                
                                                                 <!-- Backorder connection -->
                                                                 <div t-if="picking.backorder_of" class="text-muted mt-1 text-truncate" style="font-size: 0.70rem;" t-att-title="'Cắt từ: ' + picking.backorder_of"><i class="fa fa-files-o"></i> Từ: <t t-esc="picking.backorder_of"/></div>
                                                                 
@@ -336,6 +339,9 @@
                                             <div>
                                                 <div class="small fw-bold mb-1" t-att-class="picking.state == 'done' ? 'text-secondary' : 'text-primary'"><t t-esc="picking.type_name"/></div>
                                                 <div class="fw-bold" t-att-class="picking.state == 'done' ? 'text-muted' : 'text-dark'"><i class="fa fa-barcode text-muted me-1"></i> <t t-esc="picking.name"/></div>
+                                                
+                                                <!-- Return connection -->
+                                                <div t-if="picking.return_of" class="small mt-1 text-danger"><i class="fa fa-undo me-1"></i> Trả cho lệnh: <t t-esc="picking.return_of"/></div>
                                                 
                                                 <!-- Backorder connection -->
                                                 <div t-if="picking.backorder_of" class="small mt-1 text-muted"><i class="fa fa-files-o me-1"></i> Phiếu cắt ngang từ: <t t-esc="picking.backorder_of"/></div>
