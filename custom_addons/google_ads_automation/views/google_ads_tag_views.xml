@@ -62,24 +62,38 @@
                             <field name="gtm_account_id"
                                    placeholder="123456789"
                                    invisible="tag_type != 'gtm'"/>
+                            <field name="gtm_auth_type"
+                                   widget="radio"
+                                   invisible="tag_type != 'gtm'"/>
+                                   
+                            <!-- Fields for OAuth2 -->
                             <field name="gtm_access_token"
                                    placeholder="Dạng ya29.a0..."
                                    password="True"
-                                   invisible="tag_type != 'gtm'"/>
+                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"/>
                             <field name="gtm_client_id"
                                    placeholder="xxxxxx.apps.googleusercontent.com"
-                                   invisible="tag_type != 'gtm'"/>
+                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"/>
                             <field name="gtm_client_secret"
                                    placeholder="GOCSPX-xxxxxx"
                                    password="True"
-                                   invisible="tag_type != 'gtm'"/>
+                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"/>
                             <field name="gtm_api_token"
                                    placeholder="1//0xxxxxx"
                                    password="True"
-                                   invisible="tag_type != 'gtm'"/>
+                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"/>
+                                   
+                            <!-- Fields for Service Account -->
+                            <field name="gtm_service_account_json"
+                                   placeholder='{"type": "service_account", "project_id": ...}'
+                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'service_account'"/>
+                                   
                             <field name="measurement_id"
                                    placeholder="AW-XXXXXXXXX hoặc G-XXXXXXXXXX"
                                    invisible="tag_type != 'gtag'"/>
+                            <field name="ga4_property_id"
+                                   placeholder="Ví dụ: 312345678"
+                                   invisible="tag_type != 'gtm'"/>
                         </group>
                     </group>
 
@@ -101,6 +115,8 @@
                                            invisible="item_type != 'tag'"/>
                                     <field name="trigger_subtype"
                                            invisible="item_type != 'trigger'"/>
+                                    <field name="ga4_event_count"
+                                           invisible="item_type != 'tag' or tag_subtype != 'ga4_event'"/>
                                     <field name="firing_trigger_names"
                                            invisible="item_type != 'tag'"/>
                                     <field name="is_paused" widget="boolean_toggle"/>

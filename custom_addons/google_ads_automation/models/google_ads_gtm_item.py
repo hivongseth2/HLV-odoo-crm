@@ -56,6 +56,13 @@ class GoogleAdsGtmItem(models.Model):
         ('other',            'Khác'),
     ], string='Loại Trigger')
 
+    # ── Dữ liệu Kéo Về (GA4 Data) ───────────
+    ga4_event_count = fields.Integer(
+        string='Số Lượt Kích Hoạt (30 Ngày)',
+        help='Tổng số lần kích hoạt sự kiện này trên GA4 trong 30 ngày qua (chỉ dành cho Tag GA4 Event)',
+        default=0,
+    )
+
     # ── Trạng thái ───────────────────────────────
     is_paused = fields.Boolean(string='Tạm Dừng', default=False)
     firing_trigger_names = fields.Char(
