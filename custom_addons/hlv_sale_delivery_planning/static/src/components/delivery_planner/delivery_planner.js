@@ -26,6 +26,7 @@ export class DeliveryPlannerDashboard extends Component {
             // Pagination
             currentPage: 1,
             itemsPerPage: 12,
+            totalCount: 0,
 
             // Drawer
             isDrawerOpen: false,
@@ -43,11 +44,23 @@ export class DeliveryPlannerDashboard extends Component {
             const result = await this.orm.call(
                 "sale.order",
                 "get_delivery_dashboard_data",
-                []
+                [],
+                {
+                    search_query: this.state.searchQuery.trim(),
+                    filter_warehouse_id: this.state.filterWarehouseId,
+                    filter_delivery_status: this.state.filterDeliveryStatus,
+                    filter_stock_status: this.state.filterStockStatus,
+                    filter_date_from: this.state.filterDateFrom,
+                    filter_date_to: this.state.filterDateTo,
+                    limit: this.state.itemsPerPage,
+                    offset: (this.state.currentPage - 1) * this.state.itemsPerPage,
+                }
             );
             this.state.saleOrders = result.orders || [];
-            this.state.warehouses = result.warehouses || [];
-            this.state.currentPage = 1; // Reset to page 1 on fetch
+            this.state.totalCount = result.total_count || 0;
+            if (this.state.warehouses.length === 0) {
+                this.state.warehouses = result.warehouses || [];
+            }
         } catch (error) {
             console.error("Lỗi khi tải dữ liệu bảng điều phối:", error);
         } finally {
@@ -56,82 +69,39 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     // --- Computed Filters & Pagination ---
-    get filteredOrders() {
-        let list = this.state.saleOrders;
-        const query = this.state.searchQuery.toLowerCase().trim();
-
-        // 1. Text Search
-        if (query) {
-            list = list.filter(so =>
-                so.name.toLowerCase().includes(query) ||
-                (so.partner_id && so.partner_id[1].toLowerCase().includes(query))
-            );
-        }
-
-        // 2. Warehouse Filter (Lọc theo kho của Picking)
-        if (this.state.filterWarehouseId !== "all") {
-            const wId = parseInt(this.state.filterWarehouseId);
-            list = list.filter(so => so.picking_warehouse_ids && so.picking_warehouse_ids.includes(wId));
-        }
-
-        // 3. Tiến Độ Giao Hàng
-        if (this.state.filterDeliveryStatus !== "all") {
-            list = list.filter(so => so.real_delivery_status === this.state.filterDeliveryStatus);
-        }
-
-        // 4. Tình Trạng Kho
-        if (this.state.filterStockStatus === "ready") {
-            list = list.filter(so => so.is_fully_ready && so.real_delivery_status !== 'full');
-        } else if (this.state.filterStockStatus === "pending") {
-            list = list.filter(so => !so.is_fully_ready && so.real_delivery_status !== 'full');
-        }
-
-        // 4. Date Filters (Hẹn Giao - nếu không có lấy Ngày Đặt Hàng)
-        if (this.state.filterDateFrom) {
-            const dFrom = new Date(this.state.filterDateFrom);
-            list = list.filter(so => {
-                const dDate = so.commitment_date ? new Date(so.commitment_date) : (so.date_order ? new Date(so.date_order) : null);
-                return dDate && dDate >= dFrom;
-            });
-        }
-
-        if (this.state.filterDateTo) {
-            const dTo = new Date(this.state.filterDateTo);
-            dTo.setHours(23, 59, 59, 999);
-            list = list.filter(so => {
-                const dDate = so.commitment_date ? new Date(so.commitment_date) : (so.date_order ? new Date(so.date_order) : null);
-                return dDate && dDate <= dTo;
-            });
-        }
-
-        return list;
-    }
-
     get totalPages() {
-        return Math.ceil(this.filteredOrders.length / this.state.itemsPerPage) || 1;
+        return Math.ceil(this.state.totalCount / this.state.itemsPerPage) || 1;
     }
 
     get paginatedOrders() {
-        const start = (this.state.currentPage - 1) * this.state.itemsPerPage;
-        const end = start + this.state.itemsPerPage;
-        return this.filteredOrders.slice(start, end);
+        return this.state.saleOrders;
     }
 
     // --- Actions ---
-    nextPage() {
+    async nextPage() {
         if (this.state.currentPage < this.totalPages) {
             this.state.currentPage++;
+            await this.fetchData();
         }
     }
 
-    prevPage() {
+    async prevPage() {
         if (this.state.currentPage > 1) {
             this.state.currentPage--;
+            await this.fetchData();
         }
     }
 
-    onFilterChange() {
-        this.state.currentPage = 1; // reset page on filter
+    async onFilterChange() {
+        this.state.currentPage = 1;
+        await this.fetchData();
+    }
+
+    async onSearchKeyup(ev) {
+        if (ev.key === "Enter") {
+            this.state.currentPage = 1;
+            await this.fetchData();
+        }
     }
 
     openSaleOrder(soId) {
