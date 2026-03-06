@@ -95,6 +95,12 @@ class GoogleAdsTag(models.Model):
         string='File JSON Service Account',
         help='Mở file .json mà Google Cloud cung cấp, copy toàn bộ chữ bên trong và dán vào đây.',
     )
+    
+    # ── GA4 Kho dữ liệu ──
+    ga4_property_id = fields.Char(
+        string='GA4 Property ID',
+        help='Dãy số ID của thuộc tính thẻ GA4 (Ví dụ: 312345678). Dùng để kéo Báo Cáo.',
+    )
 
     @api.depends('gtm_item_ids', 'gtm_item_ids.item_type')
     def _compute_gtm_counts(self):
@@ -224,6 +230,16 @@ class GoogleAdsTag(models.Model):
         self._fetch_gtm_endpoint(ws_url, 'triggers', 'trigger', headers, now)
         # Fetch Variables
         self._fetch_gtm_endpoint(ws_url, 'variables', 'variable', headers, now)
+        
+        # ── Kéo Thêm Dữ liệu Thực Tế Từ GA4 Data API ──
+        if self.ga4_property_id:
+            try:
+                self._fetch_ga4_event_counts(self.ga4_property_id, final_access_token)
+            except Exception as e:
+                _logger.error(f"Lỗi kéo báo cáo GA4: {e}")
+                self.message_post(body=_(
+                    '<div style="color:orange">⚠️ Đồng bộ GTM mượt mà nhưng Kéo báo cáo GA4 bị lỗi: %s</div>'
+                ) % str(e))
 
         self.message_post(body=_(
             'Đã đồng bộ từ GTM: %d Tags, %d Triggers, %d Biến'
@@ -233,7 +249,7 @@ class GoogleAdsTag(models.Model):
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': _('Đồng Bộ GTM Hoàn Tất'),
+                'title': _('Đồng Bộ GTM & GA4 Hoàn Tất'),
                 'message': _('%d Tags, %d Triggers, %d Biến') % (
                     self.gtm_tag_count, self.gtm_trigger_count, self.gtm_variable_count,
                 ),
@@ -241,6 +257,39 @@ class GoogleAdsTag(models.Model):
                 'sticky': False,
             },
         }
+
+    def _fetch_ga4_event_counts(self, property_id, access_token):
+        """Dùng Data API v1 runReport kéo số lượt kích hoạt (events) 30 ngày qua"""
+        import requests
+        
+        url = f'https://analyticsdata.googleapis.com/v1beta/properties/{property_id}:runReport'
+        headers = {'Authorization': f'Bearer {access_token}', 'Content-Type': 'application/json'}
+        payload = {
+          "dateRanges": [{"startDate": "30daysAgo", "endDate": "today"}],
+          "dimensions": [{"name": "eventName"}],
+          "metrics": [{"name": "eventCount"}]
+        }
+        
+        resp = requests.post(url, headers=headers, json=payload, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        
+        rows = data.get('rows', [])
+        # Tạo từ điển tên event -> số đếm
+        event_dict = {}
+        for row in rows:
+            ev_name = row['dimensionValues'][0]['value']
+            ev_count = int(row['metricValues'][0]['value'])
+            event_dict[ev_name] = ev_count
+            
+        # Nạp số đếm vào các Tag GA4 Event đang có trong Odoo
+        ga4_tags = self.gtm_item_ids.filtered(lambda t: t.item_type == 'tag' and t.tag_subtype == 'ga4_event')
+        for tag in ga4_tags:
+            # GTM Tag tên thường chính là tên Event trong GA4 (hoặc tìm trong note)
+            # Khá tricky vì GTM tag name có thể khác Event Name. Ở đây ta coi như map 1-1 theo tên trước
+            # (Nếu Odoo quản lý gắt thì anh dev sẽ bắt chước Parameter 'eventName' của Tag đó).
+            match_count = event_dict.get(tag.name, 0)
+            tag.ga4_event_count = match_count
 
     def _fetch_gtm_endpoint(self, ws_url, endpoint, item_type, headers, now):
         """GET dữ liệu từ 1 endpoint GTM API và lưu vào Odoo"""
