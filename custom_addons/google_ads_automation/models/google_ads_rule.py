@@ -1,5 +1,6 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
+from markupsafe import Markup
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -79,6 +80,41 @@ class GoogleAdsRule(models.Model):
     log_ids = fields.One2many(
         'google.ads.rule.log', 'rule_id', string='Lịch Sử Chạy',
     )
+
+    hero_header_html = fields.Html(compute='_compute_hero_header_html')
+
+    def _compute_hero_header_html(self):
+        for rec in self:
+            status_ping = 'bg-success' if rec.active else 'bg-danger'
+            status_text = _('ACTIVE') if rec.active else _('INACTIVE')
+            
+            html = f"""
+                <div class="o_hero_header" style="background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);">
+                    <div class="status_badge text-end">
+                        <span class="o_status_ping {status_ping}"></span>
+                        <span class="badge text-bg-light fw-bold shadow-sm">{status_text}</span>
+                    </div>
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <div class="bg-white p-3 rounded-4 shadow-sm text-indigo-600">
+                                <i class="fa fa-terminal fa-4x text-primary"></i>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <span class="badge rounded-pill text-bg-indigo mb-2 px-3 py-2 text-white fw-bold">AUTOMATION RULE</span>
+                            <h1 class="text-white mt-1">
+                                {rec.name}
+                            </h1>
+                            <p class="text-white-50 mt-2 mb-0 fw-medium">
+                                <i class="fa fa-bullseye me-1"></i> Target: 
+                                <span class="text-white fw-bold">{rec.target_type}</span>
+                                <span class="ms-3 pe-2"><i class="fa fa-google me-1"></i> Account: <span class="text-white">{rec.account_id.name or '—'}</span></span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            """
+            rec.hero_header_html = Markup(html)
 
     # ─────────────────────────────────────────────
     # Core: Run Rule

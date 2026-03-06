@@ -1,5 +1,6 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
+from markupsafe import Markup
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -105,6 +106,50 @@ class GoogleAdsStrategy(models.Model):
     def _compute_rule_count(self):
         for rec in self:
             rec.rule_count = len(rec.rule_ids)
+
+    state_label = fields.Char(compute='_compute_state_label')
+
+    @api.depends('state')
+    def _compute_state_label(self):
+        selection = dict(self._fields['state'].selection)
+        for rec in self:
+            rec.state_label = selection.get(rec.state, rec.state)
+
+    hero_header_html = fields.Html(compute='_compute_hero_header_html')
+
+    def _compute_hero_header_html(self):
+        for rec in self:
+            status_ping = 'bg-success' if rec.state == 'active' else 'bg-warning' if rec.state == 'draft' else 'bg-danger'
+            live_badge = Markup('<span class="badge text-bg-danger shadow-sm mb-1 px-3">LIVE MODE</span><br/>') if rec.is_live else ''
+            
+            html = f"""
+                <div class="o_hero_header" style="background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);">
+                    <div class="status_badge text-end">
+                        {live_badge}
+                        <span class="o_status_ping {status_ping}"></span>
+                        <span class="badge text-bg-light fw-bold shadow-sm">{rec.state_label}</span>
+                    </div>
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <div class="bg-white p-3 rounded-4 shadow-sm text-sky-600">
+                                <i class="fa fa-cogs fa-4x text-info"></i>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <span class="badge rounded-pill text-bg-info mb-2 px-3 py-2 text-white">AUTOMATION STRATEGY</span>
+                            <h1 class="text-white mt-1">
+                                {rec.name}
+                            </h1>
+                            <p class="text-white-50 mt-2 mb-0 fw-medium">
+                                <i class="fa fa-tasks me-1"></i> Loại: 
+                                <span class="text-white fw-bold">{rec.strategy_type}</span>
+                                <span class="ms-3 pe-2"><i class="fa fa-cubes me-1"></i> Feed: <span class="text-white">{rec.feed_id.name or '—'}</span></span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            """
+            rec.hero_header_html = Markup(html)
 
     # ─────────────────────────────────────────────
     # Lifecycle

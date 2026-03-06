@@ -1,5 +1,6 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
+from markupsafe import Markup
 from datetime import timedelta
 import logging
 
@@ -43,6 +44,40 @@ class GoogleAdsProductFeed(models.Model):
             rec.strategy_count = self.env['google.ads.strategy'].search_count([
                 ('feed_id', '=', rec.id),
             ])
+
+    hero_header_html = fields.Html(compute='_compute_hero_header_html')
+
+    def _compute_hero_header_html(self):
+        for rec in self:
+            active_ping = 'bg-success' if rec.active else 'bg-danger'
+            
+            html = f"""
+                <div class="o_hero_header" style="background: linear-gradient(135deg, #F59E0B 0%, #B45309 100%);">
+                    <div class="status_badge">
+                        <span class="o_status_ping {active_ping}"></span>
+                        <span class="badge text-bg-light fw-bold shadow-sm">{'ACTIVE' if rec.active else 'INACTIVE'}</span>
+                    </div>
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <div class="bg-white p-3 rounded-4 shadow-sm text-amber-600">
+                                <i class="fa fa-cubes fa-4x text-warning"></i>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <span class="badge rounded-pill text-bg-warning mb-2 px-3 py-2 text-white fw-bold">INVENTORY FEED</span>
+                            <h1 class="text-white mt-1">
+                                {rec.name}
+                            </h1>
+                            <p class="text-white-50 mt-2 mb-0 fw-medium">
+                                <i class="fa fa-briefcase me-1"></i> Account: 
+                                <span class="text-white fw-bold">{rec.account_id.name or '—'}</span>
+                                <span class="ms-3 pe-2"><i class="fa fa-list-ol me-1"></i> Quy Mô: <span class="text-white">{rec.line_count}</span> sản phẩm</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            """
+            rec.hero_header_html = Markup(html)
 
     # -----------------------------------------------------------------
     # Actions
