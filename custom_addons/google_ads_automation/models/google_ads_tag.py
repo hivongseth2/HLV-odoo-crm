@@ -599,6 +599,41 @@ function hlv_gtm_purchase_event($order_id) {{
 /* Conversion Label: {action.conversion_label} */
 /* Conversion ID: {action.conversion_id} */"""
 
+    def _make_gtag_snippet(self):
+        mid = self.measurement_id or 'AW-XXXXXXXXX'
+        return f"""<!-- Google tag (gtag.js) — Dán vào <head> WordPress -->
+<script async src="https://www.googletagmanager.com/gtag/js?id={mid}"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){{dataLayer.push(arguments);}}
+  gtag('js', new Date());
+  gtag('config', '{mid}');
+</script>"""
+
+    def _make_gtag_purchase_snippet(self):
+        mid = self.measurement_id or 'AW-XXXXXXXXX'
+        actions = self.conversion_action_ids.filtered(
+            lambda a: a.action_type == 'purchase'
+        )
+        label = actions[0].conversion_label if actions else 'CONVERSION_LABEL'
+        return f"""<?php
+// Dán vào functions.php — Theo dõi đơn hàng với gtag trực tiếp
+add_action('woocommerce_thankyou', 'hlv_gtag_purchase_event', 10, 1);
+function hlv_gtag_purchase_event($order_id) {{
+    $order = wc_get_order($order_id);
+    ?>
+    <script>
+      gtag('event', 'conversion', {{
+        'send_to': '{mid}/{label}',
+        'value': <?php echo $order->get_total(); ?>,
+        'currency': '<?php echo $order->get_currency(); ?>',
+        'transaction_id': '<?php echo $order_id; ?>'
+      }});
+    </script>
+    <?php
+}}"""
+
+
     @api.depends('gtm_item_ids.ga4_event_count', 'gtm_item_ids.item_type', 'gtm_item_ids.tag_subtype')
     def _compute_ga4_dashboard(self):
         """Render giao diện Dashboard Đồ Thị (Horizontal Bar Chart) từ dữ liệu Event Count"""
@@ -662,41 +697,6 @@ function hlv_gtm_purchase_event($order_id) {{
             rec.ga4_dashboard_html = "\n".join(html_lines)
 
 
-class GoogleAdsConversionAction(models.Model):
-
-    def _make_gtag_snippet(self):
-        mid = self.measurement_id or 'AW-XXXXXXXXX'
-        return f"""<!-- Google tag (gtag.js) — Dán vào <head> WordPress -->
-<script async src="https://www.googletagmanager.com/gtag/js?id={mid}"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){{dataLayer.push(arguments);}}
-  gtag('js', new Date());
-  gtag('config', '{mid}');
-</script>"""
-
-    def _make_gtag_purchase_snippet(self):
-        mid = self.measurement_id or 'AW-XXXXXXXXX'
-        actions = self.conversion_action_ids.filtered(
-            lambda a: a.action_type == 'purchase'
-        )
-        label = actions[0].conversion_label if actions else 'CONVERSION_LABEL'
-        return f"""<?php
-// Dán vào functions.php — Theo dõi đơn hàng với gtag trực tiếp
-add_action('woocommerce_thankyou', 'hlv_gtag_purchase_event', 10, 1);
-function hlv_gtag_purchase_event($order_id) {{
-    $order = wc_get_order($order_id);
-    ?>
-    <script>
-      gtag('event', 'conversion', {{
-        'send_to': '{mid}/{label}',
-        'value': <?php echo $order->get_total(); ?>,
-        'currency': '<?php echo $order->get_currency(); ?>',
-        'transaction_id': '<?php echo $order_id; ?>'
-      }});
-    </script>
-    <?php
-}}"""
 
 
 class GoogleAdsConversionAction(models.Model):
