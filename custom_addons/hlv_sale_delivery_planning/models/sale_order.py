@@ -48,17 +48,28 @@ class SaleOrder(models.Model):
                         'qty_delivered': line.qty_delivered,
                     })
                     
+            # Check if all lines are delivered
+            has_pending_lines = any(l['product_uom_qty'] > l['qty_delivered'] for l in so_lines_data)
+            
             result.append({
                 'id': so.id,
                 'name': so.name,
                 'partner_id': [so.partner_id.id, so.partner_id.name] if so.partner_id else False,
+                'warehouse_id': [so.warehouse_id.id, so.warehouse_id.name] if so.warehouse_id else False,
                 'commitment_date': so.commitment_date.strftime('%Y-%m-%d %H:%M:%S') if so.commitment_date else False,
                 'date_order': so.date_order.strftime('%Y-%m-%d %H:%M:%S') if so.date_order else False,
                 'amount_total': so.amount_total,
                 'state': so.state,
                 'delivery_status': so.delivery_status,
+                'is_fully_ready': not has_pending_lines,
                 'pos': po_data,
                 'lines': so_lines_data,
             })
             
-        return result
+        # Get active warehouses for filter
+        warehouses = self.env['stock.warehouse'].search_read([], ['id', 'name'])
+            
+        return {
+            'orders': result,
+            'warehouses': warehouses
+        }
