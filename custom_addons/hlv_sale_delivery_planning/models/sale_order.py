@@ -15,7 +15,7 @@ class SaleOrder(models.Model):
         
         domain = [
             ('state', 'in', ['sale', 'done']),
-            ('delivery_status', 'in', ['pending', 'partial'])
+            ('delivery_status', 'in', ['pending', 'partial', 'full'])
         ]
         
         # Add order to prioritize the ones with earlier commitment dates
@@ -61,6 +61,25 @@ class SaleOrder(models.Model):
             flat_pickings = []
             picking_groups = {}
             for p in so.picking_ids.sorted(key=lambda x: (x.picking_type_id.sequence, x.id)):
+                # Lấy video từ file đính kèm
+                attachments = self.env['ir.attachment'].sudo().search([
+                    ('res_model', '=', 'stock.picking'),
+                    ('res_id', '=', p.id)
+                ])
+                videos = []
+                for att in attachments:
+                    if att.name and (att.name.lower().endswith(('.webm', '.mp4')) or 'video' in (att.mimetype or '')):
+                        videos.append({
+                            'id': att.id,
+                            'name': att.name,
+                            'url': f'/web/content/{att.id}?download=true'
+                        })
+
+                # Truy xuất liên kết
+                dest_picks = [n for n in set(p.move_ids.mapped('move_dest_ids.picking_id.name')) if n]
+                orig_picks = [n for n in set(p.move_ids.mapped('move_orig_ids.picking_id.name')) if n]
+                return_of = [n for n in set(p.move_ids.mapped('origin_returned_move_id.picking_id.name')) if n]
+
                 p_data = {
                     'id': p.id,
                     'name': p.name,
@@ -68,6 +87,11 @@ class SaleOrder(models.Model):
                     'type_name': p.picking_type_id.name or '',
                     'code': p.picking_type_id.code or '',
                     'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
+                    'dest_picks': dest_picks,
+                    'orig_picks': orig_picks,
+                    'return_of': return_of,
+                    'backorder_of': p.backorder_id.name if p.backorder_id else False,
+                    'videos': videos,
                 }
                 flat_pickings.append(p_data)
                 

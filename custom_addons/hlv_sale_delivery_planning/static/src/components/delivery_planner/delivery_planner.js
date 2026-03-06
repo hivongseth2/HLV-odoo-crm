@@ -73,11 +73,13 @@ export class DeliveryPlannerDashboard extends Component {
             list = list.filter(so => so.warehouse_id && so.warehouse_id[0] === wId);
         }
 
-        // 3. Status Filter (Đã đủ hàng vs Còn thiếu)
+        // 3. Status Filter (Đã đủ hàng vs Còn thiếu vs Hoàn thành)
         if (this.state.filterStatus === "ready") {
-            list = list.filter(so => so.is_fully_ready);
+            list = list.filter(so => so.is_fully_ready && so.delivery_status !== 'full');
         } else if (this.state.filterStatus === "pending") {
-            list = list.filter(so => !so.is_fully_ready);
+            list = list.filter(so => !so.is_fully_ready && so.delivery_status !== 'full');
+        } else if (this.state.filterStatus === "full") {
+            list = list.filter(so => so.delivery_status === 'full');
         }
 
         // 4. Date Filters (Hẹn Giao)
@@ -150,6 +152,10 @@ export class DeliveryPlannerDashboard extends Component {
             views: [[false, "form"]],
             target: "current",
         });
+    }
+
+    openVideo(url) {
+        window.open(url, '_blank');
     }
 
     // --- Translations ---
