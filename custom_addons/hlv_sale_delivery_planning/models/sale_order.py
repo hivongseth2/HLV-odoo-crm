@@ -16,8 +16,6 @@ class SaleOrder(models.Model):
         
         if filter_delivery_status != 'all':
             domain += [('delivery_status', '=', filter_delivery_status)]
-        else:
-            domain += ['|', ('delivery_status', 'in', ['pending', 'partial', False]), ('delivery_status', '=', False)]
             
         if filter_warehouse_id != 'all':
             domain += [('warehouse_id', '=', int(filter_warehouse_id))]
@@ -380,8 +378,13 @@ class SaleOrder(models.Model):
                 return current_chain
 
             flows = []
+            all_chained_ids = set()
             for root in root_pickings:
-                flows.append(build_flat_flow(root, []))
+                chain = build_flat_flow(root, [])
+                for x in chain:
+                    if x['id'] not in all_chained_ids:
+                        flows.append(x)
+                        all_chained_ids.add(x['id'])
                 
             result.append({
                 'id': so.id,
