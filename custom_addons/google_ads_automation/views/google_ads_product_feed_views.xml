@@ -62,26 +62,32 @@
                     <notebook>
                         <page string="Sản Phẩm" icon="fa-cubes">
                             <field name="line_ids" mode="list">
-                                <list editable="bottom">
+                                <list editable="bottom" limit="50">
+                                    <field name="product_default_code" optional="show"/>
                                     <field name="product_id"/>
-                                    <field name="product_default_code"/>
-                                    <field name="qty_available" decoration-danger="qty_available &lt;= 0"/>
-                                    <field name="virtual_available"/>
-                                    <field name="sale_price"/>
-                                    <field name="cost_price"/>
-                                    <field name="margin_percent"
-                                           decoration-danger="margin_percent &lt; 15"
-                                           decoration-success="margin_percent &gt;= 30"/>
-                                    <field name="avg_daily_sales"/>
-                                    <field name="days_of_stock"
-                                           decoration-danger="days_of_stock &lt; 7"
-                                           decoration-warning="days_of_stock &lt; 30"/>
-                                    <field name="stock_status" widget="badge"
+                                    <field name="qty_available" string="Tồn Thực" 
+                                           decoration-danger="qty_available &lt;= 0"
+                                           decoration-warning="qty_available &gt; 0 and qty_available &lt; 10"
+                                           sum="Tổng Tồn"/>
+                                    <field name="avg_daily_sales" string="Tốc Độ Bán / Ngày"
+                                           decoration-info="avg_daily_sales &gt; 5"
+                                           sum="Tổng Tốc Độ"/>
+                                    <field name="stock_status" string="Tình Trạng Kho" widget="badge"
                                            decoration-danger="stock_status == 'critical'"
                                            decoration-warning="stock_status == 'low'"
                                            decoration-success="stock_status == 'normal'"
                                            decoration-info="stock_status == 'high'"/>
-                                    <field name="campaign_ids" widget="many2many_tags"/>
+                                    <field name="days_of_stock" string="Số Ngày Tồn (Ước)"
+                                           decoration-danger="days_of_stock &lt; 7"
+                                           decoration-warning="days_of_stock &gt;= 7 and days_of_stock &lt; 20"
+                                           optional="show"/>
+                                    <field name="sale_price" optional="show"/>
+                                    <field name="margin_percent" string="Biên LN (%)" widget="badge"
+                                           decoration-danger="margin_percent &lt; 15"
+                                           decoration-warning="margin_percent &gt;= 15 and margin_percent &lt; 25"
+                                           decoration-success="margin_percent &gt;= 25"
+                                           optional="show"/>
+                                    <field name="campaign_ids" widget="many2many_tags" optional="show"/>
                                 </list>
                             </field>
                         </page>
