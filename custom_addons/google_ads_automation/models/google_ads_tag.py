@@ -65,6 +65,10 @@ class GoogleAdsTag(models.Model):
     )
 
     # ── GTM API credentials (chỉ cần cho Real mode) ──
+    gtm_auth_type = fields.Selection([
+        ('oauth', 'OAuth 2.0 (Token)'),
+        ('service_account', 'Service Account (JSON)'),
+    ], string='Kiểu Xác Thực', default='oauth')
     gtm_account_id = fields.Char(
         string='GTM Account ID',
         help='Lấy từ GTM > Admin > Account Settings (dạng số)',
@@ -86,6 +90,10 @@ class GoogleAdsTag(models.Model):
         string='Access Token (Thủ Công)',
         password=True,
         help='OAuth2 access token sống 1 tiếng. Ưu tiên dùng nếu chưa cấu hình Refresh Token.',
+    )
+    gtm_service_account_json = fields.Text(
+        string='File JSON Service Account',
+        help='Mở file .json mà Google Cloud cung cấp, copy toàn bộ chữ bên trong và dán vào đây.',
     )
 
     @api.depends('gtm_item_ids', 'gtm_item_ids.item_type')
@@ -128,36 +136,62 @@ class GoogleAdsTag(models.Model):
             
         if not self.gtm_account_id or not self.gtm_container_id:
             raise UserError(_('Vui lòng điền tối thiểu: GTM Account ID và Container ID.'))
-            
-        if not self.gtm_access_token and not (self.gtm_api_token and self.gtm_client_id and self.gtm_client_secret):
-             raise UserError(_('Vui lòng điền [Access Token (Thủ Công)] HOẶC ĐỦ BỘ [Client ID + Secret + Refresh Token (Tự Động)].'))
 
-        # Lấy Access Token cuối cùng để gọi API
-        final_access_token = self.gtm_access_token
+        final_access_token = False
 
-        # Nếu cấu hình đủ bộ Refresh Token => Bỏ qua Access Token thủ công, ưu tiên lấy Token mới
-        if self.gtm_api_token and self.gtm_client_id and self.gtm_client_secret:
-            token_url = 'https://oauth2.googleapis.com/token'
-            token_data = {
-                'client_id': self.gtm_client_id,
-                'client_secret': self.gtm_client_secret,
-                'refresh_token': self.gtm_api_token,
-                'grant_type': 'refresh_token',
-            }
+        if self.gtm_auth_type == 'service_account':
+            if not self.gtm_service_account_json:
+                raise UserError(_('Vui lòng dán nội dung file JSON của Service Account vào.'))
             try:
-                token_resp = _requests.post(token_url, data=token_data, timeout=10)
-                token_resp.raise_for_status()
-                final_access_token = token_resp.json().get('access_token')
-                if not final_access_token:
-                    raise UserError(_('Không lấy được Access Token tự động từ Google. Hãy kiểm tra lại Refresh Token và Client ID/Secret.'))
-                
-                # Cập nhật lại ô Access Token thủ công trên giao diện để user thấy
+                from google.oauth2 import service_account
+                import google.auth.transport.requests
+            except ImportError:
+                raise UserError(_('Thiếu thư viện "google-auth". Vui lòng chạy lệnh: pip install google-auth'))
+            
+            try:
+                import json
+                sa_info = json.loads(self.gtm_service_account_json)
+                credentials = service_account.Credentials.from_service_account_info(
+                    sa_info,
+                    scopes=['https://www.googleapis.com/auth/tagmanager.readonly']
+                )
+                request = google.auth.transport.requests.Request()
+                credentials.refresh(request)
+                final_access_token = credentials.token
                 self.gtm_access_token = final_access_token
-            except _requests.exceptions.RequestException as e:
-                err_msg = str(e)
-                if hasattr(e, 'response') and e.response is not None:
-                    err_msg += f" - {e.response.text}"
-                raise UserError(_('Lỗi khi xin Access Token mới tự động: %s') % err_msg)
+            except Exception as e:
+                raise UserError(_('Lỗi xác thực Service Account: %s') % str(e))
+                
+        else:
+            # OAuth2 Flow
+            if not self.gtm_access_token and not (self.gtm_api_token and self.gtm_client_id and self.gtm_client_secret):
+                 raise UserError(_('Vui lòng điền [Access Token (Thủ Công)] HOẶC ĐỦ BỘ [Client ID + Secret + Refresh Token (Tự Động)].'))
+
+            final_access_token = self.gtm_access_token
+
+            # Nếu cấu hình đủ bộ Refresh Token => Bỏ qua Access Token thủ công, ưu tiên lấy Token mới
+            if self.gtm_api_token and self.gtm_client_id and self.gtm_client_secret:
+                token_url = 'https://oauth2.googleapis.com/token'
+                token_data = {
+                    'client_id': self.gtm_client_id,
+                    'client_secret': self.gtm_client_secret,
+                    'refresh_token': self.gtm_api_token,
+                    'grant_type': 'refresh_token',
+                }
+                try:
+                    token_resp = _requests.post(token_url, data=token_data, timeout=10)
+                    token_resp.raise_for_status()
+                    final_access_token = token_resp.json().get('access_token')
+                    if not final_access_token:
+                        raise UserError(_('Không lấy được Access Token tự động từ Google. Hãy kiểm tra lại Refresh Token và Client ID/Secret.'))
+                    
+                    # Cập nhật lại ô Access Token thủ công trên giao diện để user thấy
+                    self.gtm_access_token = final_access_token
+                except _requests.exceptions.RequestException as e:
+                    err_msg = str(e)
+                    if hasattr(e, 'response') and e.response is not None:
+                        err_msg += f" - {e.response.text}"
+                    raise UserError(_('Lỗi khi xin Access Token mới tự động: %s') % err_msg)
 
         if not final_access_token:
             raise UserError(_('Không có Access Token hợp lệ để gọi GTM API.'))
