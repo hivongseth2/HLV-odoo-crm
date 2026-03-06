@@ -260,7 +260,7 @@ export class DeliveryPlannerDashboard extends Component {
     getPickingStatusBadgeClass(state) {
         if (state === 'done') return 'text-bg-success';
         if (state === 'assigned') return 'text-bg-primary';
-        if (state === 'cancel') return 'text-bg-secondary';
+        if (state === 'cancel') return 'text-bg-secondary opacity-50';
         return 'text-bg-warning';
     }
 
@@ -295,8 +295,7 @@ export class DeliveryPlannerDashboard extends Component {
 
     closeOverviewDrawer() {
         this.state.isDrawerOpen = false;
-        this.state.selectedOrder = null;
     }
 }
 
-registry.category("actions").add("hlv_sale_delivery_planning.dashboard", DeliveryPlannerDashboard);
+registry.category("actions").add("hlv_sale_delivery_planning_dashboard", DeliveryPlannerDashboard);
