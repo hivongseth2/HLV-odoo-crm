@@ -105,35 +105,35 @@ class GoogleAdsAccount(models.Model):
                 <div class="o_hero_header">
                     <div class="status_badge">
                         <span class="o_status_ping {state_color}"></span>
-                        <span class="badge text-bg-light fw-bold shadow-sm">{rec.state_label}</span>
+                        <span class="badge text-bg-light fw-bold shadow-sm border">{rec.state_label}</span>
                     </div>
                     <div class="row align-items-center">
                         <div class="col-auto">
-                            <div class="bg-white p-3 rounded-4 shadow-sm">
-                                <i class="fa fa-google fa-4x text-primary"></i>
+                            <div class="bg-light p-3 rounded-4 border text-primary">
+                                <i class="fa fa-google fa-4x"></i>
                             </div>
                         </div>
                         <div class="col">
-                            <span class="badge rounded-pill text-bg-primary mb-2 px-3 py-2">GOOGLE ADS API HUB</span>
-                            <h1 class="text-white mt-1">
+                            <span class="o_logic_tag mb-2 d-inline-block bg-primary">GOOGLE ADS API HUB</span>
+                            <h1 class="mt-1 text-primary">
                                 {rec.name}
                             </h1>
-                            <p class="text-white-50 mt-2 mb-0 fw-medium">
+                            <p class="text-muted mt-2 mb-0 fw-medium">
                                 <i class="fa fa-id-card-o me-1"></i> ID: 
-                                <span class="text-white fw-bold">{rec.operating_customer_id or '—'}</span>
+                                <span class="text-dark fw-bold">{rec.operating_customer_id or '—'}</span>
                                 {demo_badge}
                             </p>
                         </div>
                         <div class="col-md-5">
                             <div class="o_visual_box">
-                                <span class="o_visual_label">Account Performance Grid</span>
+                                <span class="o_visual_label mb-3">Account Performance Grid</span>
                                 
                                 <div class="mb-3">
                                     <div class="o_metric_row">
                                         <span class="o_metric_title">Average Account ROAS</span>
-                                        <span class="o_metric_value">{rec.account_roas:.2f}x</span>
+                                        <span class="o_metric_value text-info">{rec.account_roas:.2f}x</span>
                                     </div>
-                                    <div class="progress" style="height: 8px;">
+                                    <div class="progress mt-1" style="height: 8px;">
                                         <div class="progress-bar bg-info" style="width: {roas_progress}%"></div>
                                     </div>
                                 </div>
@@ -141,9 +141,9 @@ class GoogleAdsAccount(models.Model):
                                 <div class="mb-0">
                                     <div class="o_metric_row">
                                         <span class="o_metric_title">Active Campaigns Ratio</span>
-                                        <span class="o_metric_value">{active_camps}/{rec.total_campaigns}</span>
+                                        <span class="o_metric_value text-success">{active_camps}/{rec.total_campaigns}</span>
                                     </div>
-                                    <div class="progress" style="height: 8px;">
+                                    <div class="progress mt-1" style="height: 8px;">
                                         <div class="progress-bar bg-success" style="width: {camp_progress}%"></div>
                                     </div>
                                 </div>

@@ -62,36 +62,34 @@ class GoogleAdsProductFeed(models.Model):
             norm_p = (normal / total) * 100
             
             html = f"""
-                <div class="o_hero_header" style="background: linear-gradient(135deg, #F59E0B 0%, #B45309 100%);">
+                <div class="o_hero_header">
                     <div class="status_badge">
                         <span class="o_status_ping {active_ping}"></span>
-                        <span class="badge text-bg-light fw-bold shadow-sm">{'ACTIVE' if rec.active else 'INACTIVE'}</span>
+                        <span class="badge text-bg-light fw-bold shadow-sm border">{'ACTIVE' if rec.active else 'INACTIVE'}</span>
                     </div>
                     <div class="row align-items-center">
                         <div class="col-auto">
-                            <div class="bg-white p-3 rounded-4 shadow-sm text-amber-600">
-                                <i class="fa fa-cubes fa-4x text-warning"></i>
+                            <div class="bg-light p-3 rounded-4 border text-warning">
+                                <i class="fa fa-cubes fa-4x"></i>
                             </div>
                         </div>
                         <div class="col">
-                            <span class="badge rounded-pill text-bg-warning mb-2 px-3 py-2 text-white fw-bold">INVENTORY FEED</span>
-                            <h1 class="text-white mt-1">
-                                {rec.name}
-                            </h1>
-                            <p class="text-white-50 mt-2 mb-0 fw-medium">
+                            <span class="o_logic_tag mb-2 d-inline-block bg-warning text-dark">INVENTORY FEED</span>
+                            
+                            <p class="text-muted mt-2 mb-0 fw-medium">
                                 <i class="fa fa-briefcase me-1"></i> Account: 
-                                <span class="text-white fw-bold">{rec.account_id.name or '—'}</span>
+                                <span class="text-dark fw-bold">{rec.account_id.name or '—'}</span>
                             </p>
                         </div>
                         <div class="col-md-5">
                             <div class="o_visual_box">
                                 <span class="o_visual_label">Inventory Distribution</span>
-                                <div class="progress mb-2" style="height: 12px;">
+                                <div class="progress mb-2 mt-2" style="height: 12px;">
                                     <div class="progress-bar bg-danger" style="width: {crit_p}%" title="Critical: {critical}"></div>
                                     <div class="progress-bar bg-warning" style="width: {low_p}%" title="Low: {low}"></div>
                                     <div class="progress-bar bg-success" style="width: {norm_p}%" title="Normal: {normal}"></div>
                                 </div>
-                                <div class="d-flex justify-content-between x-small text-white-50" style="font-size: 10px;">
+                                <div class="d-flex justify-content-between text-muted mt-3" style="font-size: 11px;">
                                     <span><i class="fa fa-circle text-danger me-1"></i> Critical ({critical})</span>
                                     <span><i class="fa fa-circle text-warning me-1"></i> Low ({low})</span>
                                     <span><i class="fa fa-circle text-success me-1"></i> Healthy ({normal})</span>

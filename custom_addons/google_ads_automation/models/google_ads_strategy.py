@@ -127,40 +127,38 @@ class GoogleAdsStrategy(models.Model):
             rule_progress = min((rec.rule_count / max_rules_expected) * 100, 100) if max_rules_expected > 0 else 0
             
             html = f"""
-                <div class="o_hero_header" style="background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);">
+                <div class="o_hero_header">
                     <div class="status_badge text-end">
                         {live_badge}
                         <span class="o_status_ping {status_ping}"></span>
-                        <span class="badge text-bg-light fw-bold shadow-sm">{rec.state_label}</span>
+                        <span class="badge text-bg-light fw-bold shadow-sm border">{rec.state_label}</span>
                     </div>
                     <div class="row align-items-center">
                         <div class="col-auto">
-                            <div class="bg-white p-3 rounded-4 shadow-sm text-sky-600">
-                                <i class="fa fa-cogs fa-4x text-info"></i>
+                            <div class="bg-light p-3 rounded-4 border text-info">
+                                <i class="fa fa-cogs fa-4x"></i>
                             </div>
                         </div>
                         <div class="col">
-                            <span class="badge rounded-pill text-bg-info mb-2 px-3 py-2 text-white">AUTOMATION STRATEGY</span>
-                            <h1 class="text-white mt-1">
-                                {rec.name}
-                            </h1>
-                            <p class="text-white-50 mt-2 mb-0 fw-medium">
+                            <span class="o_logic_tag mb-2 d-inline-block bg-info text-dark">AUTOMATION STRATEGY</span>
+                            
+                            <p class="text-muted mt-2 mb-0 fw-medium">
                                 <i class="fa fa-tasks me-1"></i> Loại: 
-                                <span class="text-white fw-bold">{rec.strategy_type}</span>
-                                <span class="ms-3 pe-2"><i class="fa fa-cubes me-1"></i> Feed: <span class="text-white">{rec.feed_id.name or '—'}</span></span>
+                                <span class="text-dark fw-bold">{rec.strategy_type}</span>
+                                <span class="ms-3 pe-2"><i class="fa fa-cubes me-1"></i> Feed: <span class="text-dark">{rec.feed_id.name or '—'}</span></span>
                             </p>
                         </div>
                         <div class="col-md-4">
                             <div class="o_visual_box">
-                                <span class="o_visual_label">Rule Execution Density</span>
+                                <span class="o_visual_label mb-3">Rule Execution Density</span>
                                 <div class="o_metric_row">
                                     <span class="o_metric_title">Active Automation Rules</span>
                                     <span class="o_metric_value">{rec.rule_count}</span>
                                 </div>
-                                <div class="progress" style="height: 8px;">
+                                <div class="progress mb-2 mt-2" style="height: 8px;">
                                     <div class="progress-bar bg-info" style="width: {rule_progress}%"></div>
                                 </div>
-                                <div class="mt-2 x-small text-white-50" style="font-size: 10px;">
+                                <div class="mt-2 text-muted" style="font-size: 11px;">
                                     <i class="fa fa-info-circle me-1"></i> Rules are generated based on strategy logic.
                                 </div>
                             </div>

@@ -35,7 +35,7 @@
                 <sheet>
                     <field name="hero_header_html" widget="html" readonly="1"/>
                     
-                    <div class="oe_button_box" name="button_box" style="margin-top: -40px; position: relative; z-index: 10;">
+                    <div class="oe_button_box" name="button_box" >
                         <button class="oe_stat_button" icon="fa-tags"
                                 invisible="gtm_tag_count == 0">
                             <field name="gtm_tag_count" string="Tags" widget="statinfo"/>

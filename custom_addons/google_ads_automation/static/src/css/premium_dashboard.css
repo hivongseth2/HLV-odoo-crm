@@ -1,32 +1,41 @@
-/* Google Ads Automation: Premium UI Design System */
+/* Google Ads Automation: Premium UI Design System (Shipper Style) */
 
 :root {
-    --google-blue: #4285F4;
-    --google-red: #EA4335;
-    --google-yellow: #FBBC05;
-    --google-green: #34A853;
-    --saas-bg: #F8FAFC;
-    --card-bg: rgba(255, 255, 255, 0.9);
-    --glass-border: rgba(255, 255, 255, 0.2);
-    --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+    --primary-color: #2c3e50;
+    /* Navy Blue */
+    --secondary-color: #6c757d;
+    /* Gray */
+    --success-color: #28a745;
+    /* Green */
+    --danger-color: #dc3545;
+    /* Red */
+    --warning-color: #ffc107;
+    /* Yellow */
+    --info-color: #17a2b8;
+    /* Cyan */
+    --light-bg: #f8f9fa;
+    --white: #ffffff;
+    --border-color: #e9ecef;
+    --text-color: #343a40;
+    --text-muted: #6c757d;
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-/* Glassmorphism Styles for Cards */
+/* Base Form Styling overrides */
+.o_google_ads_premium_form {
+    background-color: var(--light-bg) !important;
+}
+
+/* Flat Modern Cards */
 .o_premium_card {
-    background: var(--card-bg);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    box-shadow: var(--glass-shadow);
+    background: var(--white);
+    border-radius: 12px;
+    box-shadow: var(--shadow-md);
     padding: 24px;
     margin-bottom: 24px;
-    transition: all 0.3s ease;
-}
-
-.o_premium_card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.12);
+    border: 1px solid var(--border-color);
+    transition: all 0.2s ease;
 }
 
 /* KPI Hero Tiles */
@@ -39,41 +48,45 @@
 
 .o_kpi_tile {
     padding: 20px;
-    background: #fff;
+    background: var(--white);
     border-radius: 12px;
-    border: 1px solid #edf2f7;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
     text-align: center;
 }
 
 .o_kpi_value {
     font-size: 28px;
     font-weight: 700;
-    color: #1a202c;
+    color: var(--primary-color);
     display: block;
 }
 
 .o_kpi_label {
     font-size: 13px;
-    color: #718096;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    margin-top: 4px;
 }
 
-/* Hero Section (Command Center) */
+/* Hero Section (Command Center) - Now Flat/Clean */
 .o_hero_header {
-    background: linear-gradient(135deg, #4285F4 0%, #1e40af 100%);
-    color: white;
-    padding: 40px;
-    border-radius: 20px;
+    background: var(--white);
+    color: var(--text-color);
+    padding: 30px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
     margin-bottom: 30px;
     position: relative;
-    overflow: hidden;
+    box-shadow: var(--shadow-sm);
 }
 
 .o_hero_header h1 {
-    font-size: 2.5rem !important;
-    font-weight: 800 !important;
+    font-size: 1.75rem !important;
+    font-weight: 700 !important;
     margin: 0 !important;
+    color: var(--primary-color) !important;
 }
 
 .o_hero_header .status_badge {
@@ -84,30 +97,40 @@
 
 /* Pulse Animation for Status */
 .o_status_ping {
-    height: 12px;
-    width: 12px;
-    background-color: #10B981;
+    height: 10px;
+    width: 10px;
+    background-color: var(--success-color);
     border-radius: 50%;
     display: inline-block;
-    margin-right: 8px;
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    margin-right: 6px;
+    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
     animation: p_pulse 2s infinite;
+}
+
+.o_status_ping.bg-warning {
+    background-color: var(--warning-color);
+    box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.7);
+}
+
+.o_status_ping.bg-danger {
+    background-color: var(--danger-color);
+    box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
 }
 
 @keyframes p_pulse {
     0% {
         transform: scale(0.95);
-        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
     }
 
     70% {
         transform: scale(1);
-        box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+        box-shadow: 0 0 0 6px rgba(40, 167, 69, 0);
     }
 
     100% {
         transform: scale(0.95);
-        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
     }
 }
 
@@ -116,30 +139,36 @@
     display: flex;
     align-items: center;
     gap: 15px;
-    background: #f8fafc;
+    background: var(--light-bg);
     padding: 15px;
     border-radius: 10px;
-    border-left: 5px solid #4285f4;
+    border-left: 4px solid var(--primary-color);
+    border-top: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .o_logic_tag {
-    background: #4285f4;
-    color: white;
+    background: var(--primary-color);
+    color: var(--white);
     padding: 4px 12px;
     border-radius: 6px;
     font-weight: 600;
     font-size: 12px;
 }
 
-/* Progress Bars Customization */
+/* Flat Progress Bars */
 .o_hero_header .progress {
-    background: rgba(255, 255, 255, 0.1) !important;
-    border-radius: 10px;
+    background-color: var(--border-color) !important;
+    border-radius: 6px;
+    box-shadow: none;
+    overflow: hidden;
 }
 
 .o_hero_header .progress-bar {
-    border-radius: 10px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    border-radius: 6px;
+    box-shadow: none;
+    transition: width 0.4s ease;
 }
 
 /* Mini Indicator Dots */
@@ -150,12 +179,11 @@
     display: inline-block;
 }
 
-/* Visualization Containers */
+/* Visualization Containers (Flat Style) */
 .o_visual_box {
-    background: rgba(0, 0, 0, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-    border-radius: 12px;
+    background: var(--light-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
     padding: 15px;
 }
 
@@ -163,9 +191,9 @@
     font-size: 11px;
     text-transform: uppercase;
     font-weight: 700;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-muted);
     letter-spacing: 0.5px;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
     display: block;
 }
 
@@ -179,21 +207,20 @@
 
 .o_metric_title {
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--text-color);
 }
 
 .o_metric_value {
     font-size: 13px;
     font-weight: 700;
-    color: #fff;
+    color: var(--primary-color);
 }
 
-/* Progress Bars Customization */
-.o_progressbar .o_progress {
-    height: 10px !important;
-    border-radius: 5px !important;
+/* Helper Text */
+.text-white-50 {
+    color: var(--text-muted) !important;
 }
 
-.o_progressbar .o_progress_bar {
-    background: linear-gradient(90deg, #60a5fa, #2563eb) !important;
+.text-white {
+    color: var(--text-color) !important;
 }

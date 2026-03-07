@@ -90,56 +90,54 @@ class GoogleAdsCampaign(models.Model):
             cr_width = min(rec.conversion_rate * 5, 100) if rec.conversion_rate > 0 else 0 # 20% CR = 100% width
             
             html = f"""
-                <div class="o_hero_header" style="background: linear-gradient(135deg, #10B981 0%, #065F46 100%);">
+                <div class="o_hero_header">
                     <div class="status_badge">
                         <span class="o_status_ping {status_color}"></span>
-                        <span class="badge text-bg-light fw-bold shadow-sm">{rec.status_label}</span>
+                        <span class="badge text-bg-light fw-bold shadow-sm border">{rec.status_label}</span>
                     </div>
                     <div class="row align-items-center">
                         <div class="col-auto">
-                            <div class="bg-white p-3 rounded-4 shadow-sm text-success">
+                            <div class="bg-light p-3 rounded-4 border text-success">
                                 <i class="fa fa-bullhorn fa-4x"></i>
                             </div>
                         </div>
                         <div class="col">
-                            <span class="badge rounded-pill text-bg-success mb-2 px-3 py-2">GOOGLE ADS CAMPAIGN</span>
-                            <h1 class="text-white mt-1">
-                                {rec.name}
-                            </h1>
-                            <div class="d-flex align-items-center text-white-50 mt-2 mb-0 fw-medium">
+                            <span class="o_logic_tag mb-2 d-inline-block bg-success">GOOGLE ADS CAMPAIGN</span>
+                            
+                            <div class="d-flex align-items-center text-muted mt-2 mb-0 fw-medium">
                                 <div>
-                                    <i class="fa fa-id-badge me-1"></i> ID: <span class="text-white fw-bold">{rec.google_campaign_id or '—'}</span>
+                                    <i class="fa fa-id-badge me-1"></i> ID: <span class="text-dark fw-bold">{rec.google_campaign_id or '—'}</span>
                                 </div>
                                 <div class="ms-4">
-                                    <i class="fa fa-google me-1"></i> Account: <span class="text-white">{rec.account_id.name or '—'}</span>
+                                    <i class="fa fa-google me-1"></i> Account: <span class="text-dark">{rec.account_id.name or '—'}</span>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <!-- Visual Data Representation -->
-                            <div class="bg-black bg-opacity-25 p-3 rounded-3 text-white">
+                            <div class="o_visual_box">
                                 <div class="mb-2 d-flex justify-content-between align-items-end">
-                                    <small class="text-white-50 fw-bold uppercase">Visualized Performance</small>
+                                    <span class="o_visual_label mb-0">Visualized Performance</span>
                                     <span class="badge text-bg-success border-0 shadow-sm">Real-time</span>
                                 </div>
                                 
-                                <div class="mb-2">
-                                    <div class="d-flex justify-content-between small mb-1">
-                                        <span>ROAS Performance</span>
-                                        <span class="fw-bold">{rec.roas:.1f}x</span>
+                                <div class="mb-2 mt-3">
+                                    <div class="o_metric_row">
+                                        <span class="o_metric_title">ROAS Performance</span>
+                                        <span class="o_metric_value">{rec.roas:.1f}x</span>
                                     </div>
-                                    <div class="progress" style="height: 6px; background: rgba(255,255,255,0.1);">
-                                        <div class="progress-bar bg-info shadow-sm" role="progressbar" style="width: {roas_width}%; border-radius: 3px;" aria-valuenow="{roas_width}" aria-valuemin="0" aria-valuemax="100"></div>
+                                    <div class="progress" style="height: 6px;">
+                                        <div class="progress-bar bg-info shadow-sm" role="progressbar" style="width: {roas_width}%;" aria-valuenow="{roas_width}" aria-valuemin="0" aria-valuemax="100"></div>
                                     </div>
                                 </div>
                                 
-                                <div>
-                                    <div class="d-flex justify-content-between small mb-1">
-                                        <span>Conv. Rate</span>
-                                        <span class="fw-bold">{rec.conversion_rate:.2f}%</span>
+                                <div class="mt-3">
+                                    <div class="o_metric_row">
+                                        <span class="o_metric_title">Conv. Rate</span>
+                                        <span class="o_metric_value">{rec.conversion_rate:.2f}%</span>
                                     </div>
-                                    <div class="progress" style="height: 6px; background: rgba(255,255,255,0.1);">
-                                        <div class="progress-bar bg-warning shadow-sm" role="progressbar" style="width: {cr_width}%; border-radius: 3px;" aria-valuenow="{cr_width}" aria-valuemin="0" aria-valuemax="100"></div>
+                                    <div class="progress" style="height: 6px;">
+                                        <div class="progress-bar bg-warning shadow-sm" role="progressbar" style="width: {cr_width}%;" aria-valuenow="{cr_width}" aria-valuemin="0" aria-valuemax="100"></div>
                                     </div>
                                 </div>
                             </div>

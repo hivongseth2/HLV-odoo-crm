@@ -33,7 +33,7 @@
                 <sheet>
                     <field name="hero_header_html" widget="html" readonly="1"/>
                     
-                    <div class="o_premium_card border-0 bg-light-subtle mb-4" style="margin-top: -40px; position: relative; z-index: 10;">
+                    <div class="o_premium_card border-0 bg-light-subtle mb-4" >
                         <group string="Thông Tin Kỹ Thuật">
                             <field name="google_ad_group_id" readonly="1"/>
                         </group>

@@ -16,49 +16,47 @@ class GoogleAdsAd(models.Model):
             roas_width = min(rec.roas * 20, 100) if rec.roas > 0 else 0
             
             html = f"""
-                <div class="o_hero_header" style="background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);">
+                <div class="o_hero_header">
                     <div class="status_badge">
                         <span class="o_status_ping {status_color}"></span>
-                        <span class="badge text-bg-light fw-bold shadow-sm">{dict(self._fields['status'].selection).get(rec.status, rec.status)}</span>
+                        <span class="badge text-bg-light fw-bold shadow-sm border">{dict(self._fields['status'].selection).get(rec.status, rec.status)}</span>
                     </div>
                     <div class="row align-items-center">
                         <div class="col-auto">
-                            <div class="bg-white p-3 rounded-4 shadow-sm text-primary">
+                            <div class="bg-light p-3 rounded-4 border text-primary">
                                 <i class="fa fa-newspaper-o fa-4x"></i>
                             </div>
                         </div>
                         <div class="col">
-                            <span class="badge rounded-pill text-bg-primary mb-2 px-3 py-2">GOOGLE AD CONTENT</span>
-                            <h1 class="text-white mt-1">
-                                {rec.name}
-                            </h1>
-                            <div class="d-flex align-items-center text-white-50 mt-2 mb-0 fw-medium">
+                            <span class="o_logic_tag mb-2 d-inline-block bg-primary">GOOGLE AD CONTENT</span>
+                            
+                            <div class="d-flex align-items-center text-muted mt-2 mb-0 fw-medium">
                                 <div>
-                                    <i class="fa fa-folder-open me-1"></i> Ad Group: <span class="text-white">{rec.ad_group_id.name or '—'}</span>
+                                    <i class="fa fa-folder-open me-1"></i> Ad Group: <span class="text-dark">{rec.ad_group_id.name or '—'}</span>
                                 </div>
                                 <div class="ms-4">
-                                    <i class="fa fa-info-circle me-1"></i> Type: <span class="text-white">{dict(self._fields['type'].selection).get(rec.type, rec.type)}</span>
+                                    <i class="fa fa-info-circle me-1"></i> Type: <span class="text-dark">{dict(self._fields['type'].selection).get(rec.type, rec.type)}</span>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="o_visual_box">
-                                <span class="o_visual_label">Ad Interaction Insight</span>
-                                <div class="mb-2">
+                                <span class="o_visual_label mb-3">Ad Interaction Insight</span>
+                                <div class="mb-3">
                                     <div class="o_metric_row">
                                         <span class="o_metric_title">Conversion Rate</span>
-                                        <span class="o_metric_value">{rec.conversion_rate:.2f}%</span>
+                                        <span class="o_metric_value text-warning">{rec.conversion_rate:.2f}%</span>
                                     </div>
-                                    <div class="progress" style="height: 6px;">
+                                    <div class="progress mt-1" style="height: 6px;">
                                         <div class="progress-bar bg-warning" style="width: {cr_width}%"></div>
                                     </div>
                                 </div>
-                                <div>
+                                <div class="mb-0">
                                     <div class="o_metric_row">
                                         <span class="o_metric_title">Estimated ROAS</span>
-                                        <span class="o_metric_value">{rec.roas:.1f}x</span>
+                                        <span class="o_metric_value text-info">{rec.roas:.1f}x</span>
                                     </div>
-                                    <div class="progress" style="height: 6px;">
+                                    <div class="progress mt-1" style="height: 6px;">
                                         <div class="progress-bar bg-info" style="width: {roas_width}%"></div>
                                     </div>
                                 </div>

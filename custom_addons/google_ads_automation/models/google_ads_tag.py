@@ -31,45 +31,43 @@ class GoogleAdsTag(models.Model):
             health_progress = min((total_items / max_items) * 100, 100) if max_items > 0 else 0
             
             html = f"""
-                <div class="o_hero_header" style="background: linear-gradient(135deg, #4F46E5 0%, #312E81 100%);">
+                <div class="o_hero_header">
                     <div class="status_badge">
                         <span class="o_status_ping {active_ping}"></span>
-                        <span class="badge text-bg-light fw-bold shadow-sm">{'ACTIVE' if rec.active else 'INACTIVE'}</span>
+                        <span class="badge text-bg-light fw-bold shadow-sm border">{'ACTIVE' if rec.active else 'INACTIVE'}</span>
                     </div>
                     <div class="row align-items-center">
                         <div class="col-auto">
-                            <div class="bg-white p-3 rounded-4 shadow-sm text-indigo-600">
-                                <i class="fa fa-tags fa-4x text-indigo"></i>
+                            <div class="bg-light p-3 rounded-4 border text-primary">
+                                <i class="fa fa-tags fa-4x"></i>
                             </div>
                         </div>
                         <div class="col">
-                            <span class="badge rounded-pill text-bg-indigo mb-2 px-3 py-2 text-white fw-bold">TRACKING CONFIGURATION</span>
-                            <h1 class="text-white mt-1">
-                                {rec.name}
-                            </h1>
-                            <div class="d-flex align-items-center text-white-50 mt-2 mb-0 fw-medium">
+                            <span class="o_logic_tag mb-2 d-inline-block bg-primary">TRACKING CONFIGURATION</span>
+                            
+                            <div class="d-flex align-items-center text-muted mt-2 mb-0 fw-medium">
                                 <div>
-                                    <i class="fa fa-code me-1"></i> Type: <span class="text-white">{tag_type_label}</span>
+                                    <i class="fa fa-code me-1"></i> Type: <span class="text-dark">{tag_type_label}</span>
                                 </div>
                                 <div class="ms-4">
-                                    <i class="fa fa-globe me-1"></i> Account: <span class="text-white">{rec.account_id.name or '—'}</span>
+                                    <i class="fa fa-globe me-1"></i> Account: <span class="text-dark">{rec.account_id.name or '—'}</span>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="o_visual_box">
-                                <span class="o_visual_label">GTM Container Density</span>
+                                <span class="o_visual_label mb-3">GTM Container Density</span>
                                 <div class="o_metric_row">
                                     <span class="o_metric_title">Synchronized Items</span>
-                                    <span class="o_metric_value">{total_items} items</span>
+                                    <span class="o_metric_value text-primary">{total_items} items</span>
                                 </div>
-                                <div class="progress" style="height: 8px;">
+                                <div class="progress mt-2 mb-2" style="height: 8px;">
                                     <div class="progress-bar bg-info" style="width: {health_progress}%"></div>
                                 </div>
-                                <div class="mt-2 d-flex justify-content-between text-white-50" style="font-size: 10px;">
-                                    <span><i class="fa fa-tag me-1"></i> {rec.gtm_tag_count} Tags</span>
-                                    <span><i class="fa fa-bolt me-1"></i> {rec.gtm_trigger_count} Trigs</span>
-                                    <span><i class="fa fa-cube me-1"></i> {rec.gtm_variable_count} Vars</span>
+                                <div class="mt-2 d-flex justify-content-between text-muted" style="font-size: 11px;">
+                                    <span><i class="fa fa-tag me-1 text-primary"></i> {rec.gtm_tag_count} Tags</span>
+                                    <span><i class="fa fa-bolt me-1 text-warning"></i> {rec.gtm_trigger_count} Trigs</span>
+                                    <span><i class="fa fa-cube me-1 text-info"></i> {rec.gtm_variable_count} Vars</span>
                                 </div>
                             </div>
                         </div>
@@ -703,8 +701,8 @@ function hlv_gtag_purchase_event($order_id) {{
             
             if not ga4_tags:
                 rec.ga4_dashboard_html = """
-                    <div style="padding: 20px; text-align: center; color: #6b7280; background-color: #f9fafb; border-radius: 8px; border: 1px dashed #d1d5db;">
-                        <i class="fa fa-bar-chart fa-3x" style="color: #e5e7eb; margin-bottom: 10px;"></i>
+                    <div style="padding: 20px; text-align: center; color: #6c757d; background-color: #f8f9fa; border-radius: 12px; border: 1px dashed #dee2e6;">
+                        <i class="fa fa-bar-chart fa-3x" style="color: #dee2e6; margin-bottom: 10px;"></i>
                         <p style="margin: 0; font-family: sans-serif;">Chưa có dữ liệu sự kiện GA4 nào được đồng bộ.</p>
                     </div>
                 """
@@ -716,10 +714,10 @@ function hlv_gtag_purchase_event($order_id) {{
 
             html_lines = []
             html_lines.append("""
-            <div style="background-color: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 20px; font-family: 'Inter', 'Segoe UI', sans-serif; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+            <div style="background-color: #ffffff; border-radius: 12px; padding: 20px; font-family: 'Inter', 'Segoe UI', sans-serif;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h3 style="margin: 0; color: #111827; font-size: 16px; font-weight: 600;">📊 Lưu Lượng Sự Kiện (30 Ngày Qua)</h3>
-                    <span style="font-size: 12px; color: #6b7280; font-weight: 500; background: #f3f4f6; padding: 4px 10px; border-radius: 12px;">Được đồng bộ từ Google Analytics 4</span>
+                    <h3 style="margin: 0; color: #2c3e50; font-size: 16px; font-weight: 600;"><i class="fa fa-bar-chart me-2" style="color: #2c3e50;"></i> Lưu Lượng Sự Kiện (30 Ngày Qua)</h3>
+                    <span class="badge text-bg-light border text-muted px-2 py-1">Đồng bộ từ Google Analytics 4</span>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 12px;">
             """)
@@ -728,24 +726,24 @@ function hlv_gtag_purchase_event($order_id) {{
                 count = tag.ga4_event_count
                 percentage = min(int((count / max_count) * 100), 100) if max_count > 0 else 0
                 
-                # Màu sắc gradient tùy mức độ
+                # Màu sắc phẳng tùy mức độ (Flat colors)
                 if percentage > 75:
-                    bar_color = "linear-gradient(90deg, #3b82f6 0%, #2563eb 100%)" # Blue
+                    bar_color = "#2c3e50" # Primary Navy
                 elif percentage > 40:
-                    bar_color = "linear-gradient(90deg, #60a5fa 0%, #3b82f6 100%)" # Light Blue
+                    bar_color = "#17a2b8" # Info Cyan
                 elif percentage > 10:
-                    bar_color = "linear-gradient(90deg, #93c5fd 0%, #60a5fa 100%)" # Paler Blue
+                    bar_color = "#ffc107" # Warning Yellow
                 else:
-                    bar_color = "#e5e7eb" # Gray for very low/0
+                    bar_color = "#e9ecef" # Light Gray for low
 
                 html_lines.append(f"""
                     <div style="position: relative; width: 100%;">
                         <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px;">
-                            <span style="color: #374151; font-size: 13px; font-weight: 500; width: 40%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{tag.name}">{tag.name}</span>
-                            <span style="color: #111827; font-size: 13px; font-weight: 600;">{count:,} <span style="font-weight: 400; color: #6b7280; font-size: 11px;">lượt</span></span>
+                            <span style="color: #495057; font-size: 13px; font-weight: 500; width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{tag.name}">{tag.name}</span>
+                            <span style="color: #212529; font-size: 13px; font-weight: 600;">{count:,} <span style="font-weight: 400; color: #6c757d; font-size: 11px;">lượt</span></span>
                         </div>
-                        <div style="width: 100%; height: 8px; background-color: #f3f4f6; border-radius: 4px; overflow: hidden;">
-                            <div style="height: 100%; width: {percentage}%; background: {bar_color}; border-radius: 4px; transition: width 0.5s ease-in-out;"></div>
+                        <div style="width: 100%; height: 6px; background-color: #e9ecef; border-radius: 4px; overflow: hidden;">
+                            <div style="height: 100%; width: {percentage}%; background-color: {bar_color}; border-radius: 4px; transition: width 0.5s ease-in-out;"></div>
                         </div>
                     </div>
                 """)
