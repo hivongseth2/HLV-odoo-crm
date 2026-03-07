@@ -29,9 +29,7 @@ class GoogleAdsAdGroup(models.Model):
                         </div>
                         <div class="col">
                             <span class="o_logic_tag mb-2 d-inline-block bg-primary">GOOGLE AD GROUP</span>
-                            <h1 class="mt-1">
-                                {rec.name}
-                            </h1>
+                            
                             <div class="d-flex align-items-center text-muted mt-2 mb-0 fw-medium">
                                 <div>
                                     <i class="fa fa-bullhorn me-1"></i> Campaign: <span class="text-dark">{rec.campaign_id.name or '—'}</span>

@@ -103,9 +103,7 @@ class GoogleAdsCampaign(models.Model):
                         </div>
                         <div class="col">
                             <span class="o_logic_tag mb-2 d-inline-block bg-success">GOOGLE ADS CAMPAIGN</span>
-                            <h1 class="mt-1">
-                                {rec.name}
-                            </h1>
+                            
                             <div class="d-flex align-items-center text-muted mt-2 mb-0 fw-medium">
                                 <div>
                                     <i class="fa fa-id-badge me-1"></i> ID: <span class="text-dark fw-bold">{rec.google_campaign_id or '—'}</span>

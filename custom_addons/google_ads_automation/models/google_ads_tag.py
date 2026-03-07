@@ -44,9 +44,7 @@ class GoogleAdsTag(models.Model):
                         </div>
                         <div class="col">
                             <span class="o_logic_tag mb-2 d-inline-block bg-primary">TRACKING CONFIGURATION</span>
-                            <h1 class="mt-1">
-                                {rec.name}
-                            </h1>
+                            
                             <div class="d-flex align-items-center text-muted mt-2 mb-0 fw-medium">
                                 <div>
                                     <i class="fa fa-code me-1"></i> Type: <span class="text-dark">{tag_type_label}</span>

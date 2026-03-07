@@ -141,9 +141,7 @@ class GoogleAdsStrategy(models.Model):
                         </div>
                         <div class="col">
                             <span class="o_logic_tag mb-2 d-inline-block bg-info text-dark">AUTOMATION STRATEGY</span>
-                            <h1 class="mt-1">
-                                {rec.name}
-                            </h1>
+                            
                             <p class="text-muted mt-2 mb-0 fw-medium">
                                 <i class="fa fa-tasks me-1"></i> Loại: 
                                 <span class="text-dark fw-bold">{rec.strategy_type}</span>

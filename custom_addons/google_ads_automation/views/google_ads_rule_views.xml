@@ -12,12 +12,10 @@
                 <sheet>
                     <field name="hero_header_html" widget="html" readonly="1"/>
 
-                    <div class="row align-items-center mb-4 px-3" style="margin-top: -80px; position: relative; z-index: 10;">
-                        <div class="col-lg-6">
-                             <h1 class="text-white">
-                                <field name="name" placeholder="Tên quy tắc..." class="oe_inline"/>
-                            </h1>
-                        </div>
+                    <div class="oe_title mb-3 border-bottom pb-2">
+                        <h1 class="d-flex align-items-center">
+                            <field name="name" placeholder="Tên quy tắc..." class="oe_inline"/>
+                        </h1>
                     </div>
 
                     <div class="o_premium_card mb-4 mt-n4 shadow-lg border-0">

@@ -75,9 +75,7 @@ class GoogleAdsProductFeed(models.Model):
                         </div>
                         <div class="col">
                             <span class="o_logic_tag mb-2 d-inline-block bg-warning text-dark">INVENTORY FEED</span>
-                            <h1 class="mt-1">
-                                {rec.name}
-                            </h1>
+                            
                             <p class="text-muted mt-2 mb-0 fw-medium">
                                 <i class="fa fa-briefcase me-1"></i> Account: 
                                 <span class="text-dark fw-bold">{rec.account_id.name or '—'}</span>
