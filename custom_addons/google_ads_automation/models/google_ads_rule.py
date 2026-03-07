@@ -89,26 +89,26 @@ class GoogleAdsRule(models.Model):
             status_text = _('ACTIVE') if rec.active else _('INACTIVE')
             
             html = f"""
-                <div class="o_hero_header" style="background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);">
+                <div class="o_hero_header">
                     <div class="status_badge text-end">
                         <span class="o_status_ping {status_ping}"></span>
-                        <span class="badge text-bg-light fw-bold shadow-sm">{status_text}</span>
+                        <span class="badge text-bg-light fw-bold shadow-sm border">{status_text}</span>
                     </div>
                     <div class="row align-items-center">
                         <div class="col-auto">
-                            <div class="bg-white p-3 rounded-4 shadow-sm text-indigo-600">
-                                <i class="fa fa-terminal fa-4x text-primary"></i>
+                            <div class="bg-light p-3 rounded-4 border text-primary">
+                                <i class="fa fa-terminal fa-4x"></i>
                             </div>
                         </div>
                         <div class="col">
-                            <span class="badge rounded-pill text-bg-indigo mb-2 px-3 py-2 text-white fw-bold">AUTOMATION RULE</span>
-                            <h1 class="text-white mt-1">
+                            <span class="o_logic_tag mb-2 d-inline-block bg-primary">AUTOMATION RULE</span>
+                            <h1 class="mt-1">
                                 {rec.name}
                             </h1>
-                            <p class="text-white-50 mt-2 mb-0 fw-medium">
+                            <p class="text-muted mt-2 mb-0 fw-medium">
                                 <i class="fa fa-bullseye me-1"></i> Target: 
-                                <span class="text-white fw-bold">{rec.target_type}</span>
-                                <span class="ms-3 pe-2"><i class="fa fa-google me-1"></i> Account: <span class="text-white">{rec.account_id.name or '—'}</span></span>
+                                <span class="text-dark fw-bold">{rec.target_type}</span>
+                                <span class="ms-3 pe-2"><i class="fa fa-google me-1"></i> Account: <span class="text-dark">{rec.account_id.name or '—'}</span></span>
                             </p>
                         </div>
                     </div>

@@ -37,10 +37,10 @@
                             class="btn-primary" invisible="state == 'active'"/>
                     <button name="action_activate" string="Kích Hoạt Chiến Lược" type="object"
                             class="btn-success" invisible="state == 'active'"/>
-                    <button name="action_pause" string="⏸ Tạm Dừng" type="object"
-                            class="btn-secondary" invisible="state != 'active'"/>
-                     <button name="action_draft" string="↩ Về Nháp" type="object"
-                            class="btn-link text-muted" invisible="state == 'draft'"/>
+                    <button name="action_pause" string="Tạm Dừng" type="object"
+                            invisible="state != 'active'" class="btn-warning" icon="fa-pause"/>
+                     <button name="action_draft" string="Về Nháp" type="object"
+                            invisible="state == 'draft'" class="btn-secondary" icon="fa-undo"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,active"/>
                 </header>
                 <sheet>
