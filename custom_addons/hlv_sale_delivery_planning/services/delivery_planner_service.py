@@ -256,19 +256,31 @@ class DeliveryPlannerService(models.AbstractModel):
                 'amount_total': po.amount_total,
             })
             
+        # Calculate packed quantity per product for this SO
+        qty_packed_map = {} # {product_name: qty}
+        for pack in so_packages_dict.get(so.id, []):
+            for prod_name, qty in pack.get('product_map', {}).items():
+                qty_packed_map[prod_name] = qty_packed_map.get(prod_name, 0.0) + qty
+
         has_pending = False
         has_delivered = False
         is_fully_ready = True
         so_lines_data = []
         for line in so.order_line:
             if not line.display_type:
+                p_name = line.product_id.display_name if line.product_id else 'Unknown'
                 p_type = line.product_id.type if line.product_id else 'service'
                 qty_avail = product_availabilities.get((line.product_id.id, so.warehouse_id.id), 0.0) if line.product_id and so.warehouse_id else 0.0
+                qty_packed = qty_packed_map.get(p_name, 0.0)
+                
                 so_lines_data.append({
                     'id': line.id,
-                    'product_id': [line.product_id.id, line.product_id.display_name] if line.product_id else False,
-                    'product_uom_qty': line.product_uom_qty, 'qty_delivered': line.qty_delivered,
-                    'qty_available': qty_avail, 'product_type': p_type,
+                    'product_id': [line.product_id.id, p_name] if line.product_id else False,
+                    'product_uom_qty': line.product_uom_qty, 
+                    'qty_delivered': line.qty_delivered,
+                    'qty_packed': qty_packed,
+                    'qty_available': qty_avail, 
+                    'product_type': p_type,
                 })
                 if p_type != 'service':
                     pending_qty = line.product_uom_qty - line.qty_delivered

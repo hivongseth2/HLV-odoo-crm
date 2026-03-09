@@ -269,19 +269,20 @@
                                             </t>
                                         </div>
                                         
-                                        <!-- Danh Sách Kiện Hàng Đã Đóng (Packages) -->
+                                        <!-- Danh Sách Kiện Hàng Đã Đóng (Packages) dạng Hộp -->
                                         <div t-if="so.packages and so.packages.length > 0" class="mb-3 px-1">
                                             <h6 class="text-uppercase text-secondary small fw-bold mb-2"><i class="fa fa-cubes me-1"></i> Thông Tin Kiện Hàng (<t t-esc="so.packages.length"/>)</h6>
-                                            <div class="d-flex flex-column gap-2">
+                                            <div class="d-flex flex-wrap gap-2 package-grid">
                                                 <t t-foreach="so.packages" t-as="pack" t-key="pack.id">
-                                                    <div class="badge bg-light text-dark border shadow-sm p-2 text-start d-flex flex-column w-100" t-att-title="pack.products_desc">
-                                                        <div class="d-flex justify-content-between align-items-center mb-1">
-                                                            <strong class="text-primary"><i class="fa fa-qrcode text-secondary me-1"></i> <t t-esc="pack.name"/></strong>
-                                                            <span class="text-muted fw-normal" t-if="pack.total > 0">Kiện <t t-esc="pack.sequence"/>/<t t-esc="pack.total"/></span>
+                                                    <div class="package-box-container position-relative" t-att-title="pack.name + ': ' + pack.products_desc">
+                                                        <div class="package-box d-flex flex-column align-items-center justify-content-center border rounded shadow-sm bg-white p-2">
+                                                            <i class="fa fa-archive fa-2x text-primary mb-1"></i>
+                                                            <span class="fw-bold small">#<t t-esc="pack.sequence"/></span>
                                                         </div>
-                                                        <div class="text-muted fw-normal" style="font-size: 0.75rem; white-space: normal; line-break: anywhere;">
-                                                            <t t-esc="pack.products_desc"/>
-                                                        </div>
+                                                        <!-- Mini Tooltip Label -->
+                                                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-dark shadow-sm" style="font-size: 0.6rem; z-index: 5;">
+                                                            <t t-esc="pack.name.slice(-4)"/>
+                                                        </span>
                                                     </div>
                                                 </t>
                                             </div>
@@ -448,9 +449,21 @@
                                                                 <td class="ps-3 text-truncate" style="max-width: 200px;" t-att-title="line.product_id ? line.product_id[1] : 'Unknown'">
                                                                     <t t-esc="line.product_id ? line.product_id[1] : 'Unknown'"/>
                                                                 </td>
-                                                                <td class="text-end pe-3 fw-bold" t-att-class="line.qty_available &gt;= (line.product_uom_qty - line.qty_delivered) ? 'text-success' : 'text-danger'">
-                                                                    <t t-esc="this.formatQty(line.product_uom_qty - line.qty_delivered)"/>
-                                                                    <i t-if="line.qty_available &gt;= (line.product_uom_qty - line.qty_delivered)" class="fa fa-check ms-1" title="Kho đã có đủ"></i>
+                                                                 <td class="text-end pe-3 fw-bold">
+                                                                    <div t-att-class="line.qty_available &gt;= (line.product_uom_qty - line.qty_delivered) ? 'text-success' : 'text-danger'">
+                                                                        <t t-esc="this.formatQty(line.product_uom_qty - line.qty_delivered)"/>
+                                                                        <i t-if="line.qty_available &gt;= (line.product_uom_qty - line.qty_delivered)" class="fa fa-check ms-1" title="Kho đã có đủ"></i>
+                                                                    </div>
+                                                                    <div t-if="line.qty_packed > 0" class="mt-1">
+                                                                        <span class="badge rounded-pill bg-info text-dark" style="font-size: 0.65rem;" t-att-title="'Đã đóng gói: ' + line.qty_packed">
+                                                                            <i class="fa fa-cube me-1"></i>Đóng: <t t-esc="this.formatQty(line.qty_packed)"/>
+                                                                        </span>
+                                                                    </div>
+                                                                    <div t-else="" class="mt-1">
+                                                                        <span class="badge rounded-pill bg-light text-muted border" style="font-size: 0.65rem;">
+                                                                            <i class="fa fa-cube me-1 opacity-50"></i>Chưa đóng
+                                                                        </span>
+                                                                    </div>
                                                                 </td>
                                                             </tr>
                                                         </t>
@@ -545,20 +558,28 @@
                         <thead class="table-light">
                             <tr>
                                 <th class="text-start">Sản phẩm</th>
-                                <th width="70">Chốt Bán</th>
-                                <th width="70">Kho Hiện Có</th>
-                                <th width="70">Đã Giao</th>
-                                <th width="70">Còn Bị Thiếu</th>
+                                 <th width="70">Chốt Bán</th>
+                                 <th width="70">Đóng Gói</th>
+                                 <th width="70">Kho Hiện Có</th>
+                                 <th width="70">Đã Giao</th>
+                                 <th width="70">Còn Bị Thiếu</th>
                             </tr>
                         </thead>
                         <tbody>
                             <t t-foreach="state.selectedOrder.lines" t-as="line" t-key="line.id">
                                 <tr t-att-class="line.product_uom_qty > line.qty_delivered ? 'table-warning' : 'table-success'">
                                     <td class="text-start"><t t-esc="line.product_id ? line.product_id[1] : 'Unknown'"/></td>
-                                    <td class="fw-bold"><t t-esc="this.formatQty(line.product_uom_qty)"/></td>
-                                    <td t-att-class="line.qty_available > 0 ? 'text-success fw-bold' : 'text-danger'">
-                                        <t t-esc="this.formatQty(line.qty_available)"/>
-                                    </td>
+                                     <td class="fw-bold"><t t-esc="this.formatQty(line.product_uom_qty)"/></td>
+                                     <td t-att-class="line.qty_packed &gt;= line.product_uom_qty ? 'text-success fw-bold' : (line.qty_packed &gt; 0 ? 'text-info fw-bold' : 'text-muted')">
+                                         <t t-if="line.qty_packed &gt; 0">
+                                             <i class="fa fa-cube me-1"></i><t t-esc="this.formatQty(line.qty_packed)"/>
+                                             <i t-if="line.qty_packed &gt;= line.product_uom_qty" class="fa fa-check-circle ms-1"></i>
+                                         </t>
+                                         <t t-else="">0</t>
+                                     </td>
+                                     <td t-att-class="line.qty_available > 0 ? 'text-success fw-bold' : 'text-danger'">
+                                         <t t-esc="this.formatQty(line.qty_available)"/>
+                                     </td>
                                     <td class="text-primary"><t t-esc="this.formatQty(line.qty_delivered)"/></td>
                                     <td class="text-danger fw-bold"><t t-esc="this.formatQty(line.product_uom_qty - line.qty_delivered)"/></td>
                                 </tr>
