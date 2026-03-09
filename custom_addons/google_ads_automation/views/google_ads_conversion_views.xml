@@ -5,7 +5,7 @@
         <field name="name">google.ads.conversion.list</field>
         <field name="model">google.ads.conversion</field>
         <field name="arch" type="xml">
-            <list string="Lượt Chuyển Đổi" create="false" edit="false">
+            <list string="Lượt Chuyển Đổi">
                 <field name="order_date"/>
                 <field name="order_ref"/>
                 <field name="campaign_id"/>
@@ -28,23 +28,23 @@
         <field name="name">google.ads.conversion.form</field>
         <field name="model">google.ads.conversion</field>
         <field name="arch" type="xml">
-            <form string="Lượt Chuyển Đổi" create="false" edit="false">
+            <form string="Lượt Chuyển Đổi">
                 <sheet>
                     <div class="oe_button_box" name="button_box"/>
                     <group>
                         <group string="Thông Tin Đơn Hàng">
-                            <field name="order_ref" readonly="1"/>
-                            <field name="order_date" readonly="1"/>
-                            <field name="customer_name" readonly="1"/>
-                            <field name="product_names" readonly="1"/>
-                            <field name="revenue" readonly="1"/>
-                            <field name="order_status" readonly="1"/>
+                            <field name="order_ref"/>
+                            <field name="order_date"/>
+                            <field name="customer_name"/>
+                            <field name="product_names"/>
+                            <field name="revenue"/>
+                            <field name="order_status"/>
                         </group>
                         <group string="Liên Kết Google Ads">
-                            <field name="account_id" readonly="1"/>
-                            <field name="campaign_id" readonly="1"/>
-                            <field name="gclid" readonly="1"/>
-                            <field name="source" readonly="1"/>
+                            <field name="account_id"/>
+                            <field name="campaign_id"/>
+                            <field name="gclid"/>
+                            <field name="source"/>
                             <field name="roas" readonly="1"/>
                         </group>
                     </group>

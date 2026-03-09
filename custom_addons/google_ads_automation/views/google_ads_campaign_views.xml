@@ -4,7 +4,7 @@
         <field name="name">google.ads.campaign.list</field>
         <field name="model">google.ads.campaign</field>
         <field name="arch" type="xml">
-            <list string="Chiến Dịch Google Ads" create="false" edit="false" delete="false">
+            <list string="Chiến Dịch Google Ads">
                 <field name="name"/>
                 <field name="account_id"/>
                 <field name="channel_type"/>
@@ -29,7 +29,7 @@
         <field name="name">google.ads.campaign.form</field>
         <field name="model">google.ads.campaign</field>
         <field name="arch" type="xml">
-            <form string="Chiến Dịch Google Ads" create="false" edit="false" class="o_google_ads_premium_form">
+            <form string="Chiến Dịch Google Ads" class="o_google_ads_premium_form">
                 <sheet>
                     <field name="hero_header_html" widget="html" readonly="1"/>
                     
@@ -57,9 +57,11 @@
                             <div class="o_premium_card h-100">
                                 <h4 class="mb-4 text-success fw-bold"><i class="fa fa-line-chart me-2"></i>Chi Tiết Hiệu Suất</h4>
                                 <group>
+                                    <field name="product_id" options="{'no_create': True}"/>
                                     <field name="impressions"/>
                                     <field name="conversion_rate" widget="progressbar"/>
                                     <field name="channel_type"/>
+                                    <field name="google_campaign_id" placeholder="VD: 123456789 (Bắt buộc)"/>
                                 </group>
                             </div>
                         </div>

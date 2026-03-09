@@ -8,6 +8,7 @@ class GoogleAdsCampaign(models.Model):
     name = fields.Char(string='Tên Chiến Dịch', required=True)
     account_id = fields.Many2one('google.ads.account', string='Tài Khoản Google Ads', required=True, ondelete='cascade')
     google_campaign_id = fields.Char(string='Google Campaign ID', required=True, index=True)
+    product_id = fields.Many2one('product.template', string='Sản Phẩm', ondelete='set null', help='Sản phẩm chính được quảng cáo trong chiến dịch này')
 
     status = fields.Selection([
         ('unspecified', 'Chưa xác định'),

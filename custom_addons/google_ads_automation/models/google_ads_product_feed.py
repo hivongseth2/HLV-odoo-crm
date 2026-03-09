@@ -146,18 +146,38 @@ class GoogleAdsProductFeed(models.Model):
             ('status', '=', 'enabled')
         ])
         
+        if not campaigns:
+            raise UserError(_("Không tìm thấy Chiến dịch nào đang 'Hoạt động' trong tài khoản '%s'. "
+                              "Anh vui lòng nhấn 'Đồng bộ dữ liệu' ở Tài khoản Google Ads trước.") % self.account_id.name)
+
         for line in self.line_ids:
-            sku = line.product_default_code
+            sku = (line.product_default_code or '').strip()
             if not sku:
                 continue
             
-            # Tìm các campaign có chứa SKU trong tên (Case-insensitive)
-            matched = campaigns.filtered(lambda c: sku.lower() in (c.name or '').lower())
+            # Tìm các campaign có chứa SKU trong tên (Case-insensitive, bỏ qua khoảng trắng thừa)
+            matched = campaigns.filtered(lambda c: sku.lower() in (c.name or '').lower().replace(' ', ''))
+            
+            # Nếu không tìm thấy, thử match chính xác hơn hoặc lỏng hơn
+            if not matched:
+                matched = campaigns.filtered(lambda c: sku.lower() in (c.name or '').lower())
+
             if matched:
                 # Thêm vào Many2many (link)
                 line.campaign_ids = [fields.Command.link(c.id) for c in matched]
+                # Gắn sản phẩm trực tiếp vào Campaign (để Campaign biết mình đang QC cái gì)
+                matched.write({'product_id': line.product_id.id})
                 count += 1
         
+        if count == 0:
+            # Lấy ví dụ 1 SKU và 1 Campaign để báo lỗi cho dễ hiểu
+            sample_sku = next((l.product_default_code for l in self.line_ids if l.product_default_code), "N/A")
+            sample_camp = campaigns[0].name if campaigns else "N/A"
+            raise UserError(_("Không tìm thấy sự khớp nhau nào giữa SKU sản phẩm và tên Chiến dịch.\n\n"
+                              "Ví dụ: SKU '%s' không xuất hiện trong tên chiến dịch '%s'.\n"
+                              "Hệ thống yêu cầu Tên Chiến dịch phải chứa Mã sản phẩm (ví dụ: 'Giày_Bitis_%s') để tự động nhận diện.") 
+                            % (sample_sku, sample_camp, sample_sku))
+
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',

@@ -2,6 +2,7 @@ from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 from markupsafe import Markup
 import logging
+from datetime import timedelta
 
 _logger = logging.getLogger(__name__)
 
@@ -196,28 +197,39 @@ class GoogleAdsRule(models.Model):
         self.ensure_one()
         field = self.condition_field
 
-        # Product-aware fields — lấy từ Feed Line
+        # Product-aware fields — lấy từ Feed Line hoặc trực tiếp từ Product trên Campaign/AdGroup
         if field in ('stock_qty', 'margin_percent', 'days_of_stock', 'avg_daily_sales', 'is_new_product'):
+            product = False
             feed_line = self.product_feed_line_id
-            if not feed_line:
+            
+            if feed_line:
+                product = feed_line  # feed_line has the same field names as what we use below
+            elif hasattr(rec, 'product_id') and rec.product_id:
+                # Nếu không có feed_line, ta lấy thông tin từ Product template của Campaign
+                product = rec.product_id
+            
+            if not product:
                 return 0
 
             if field == 'stock_qty':
-                return feed_line.qty_available
+                return product.qty_available
             elif field == 'margin_percent':
-                return feed_line.margin_percent
+                # Nếu là product template, ta tự tính margin
+                if hasattr(product, 'margin_percent'):
+                    return product.margin_percent
+                return (product.list_price - product.standard_price) / product.list_price * 100 if product.list_price > 0 else 0
             elif field == 'days_of_stock':
-                return feed_line.days_of_stock
+                if hasattr(product, 'days_of_stock'):
+                    return product.days_of_stock
+                # Fallback calculation if possible or return 0
+                return 0
             elif field == 'avg_daily_sales':
-                return feed_line.avg_daily_sales
+                return product.avg_daily_sales if hasattr(product, 'avg_daily_sales') else 0
             elif field == 'is_new_product':
-                # SP mới = tạo trong vòng N ngày
-                days = 30
-                if self.strategy_id:
-                    days = self.strategy_id.new_product_days or 30
-                from datetime import timedelta
+                days = self.strategy_id.new_product_days if self.strategy_id else 30
                 cutoff = fields.Date.today() - timedelta(days=days)
-                return 1 if feed_line.product_id.create_date.date() >= cutoff else 0
+                create_date = product.create_date.date() if hasattr(product.create_date, 'date') else product.create_date
+                return 1 if create_date >= cutoff else 0
 
         # Google Ads metrics
         if field == 'cpa':
