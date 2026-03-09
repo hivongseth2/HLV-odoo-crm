@@ -266,14 +266,18 @@ export class DeliveryPlannerDashboard extends Component {
             return this.translatePickingState(group.picking_state);
         }
 
-        // Logic: Nếu đơn đã giao xong (OUT done) -> "Đã giao khách"
-        if (so.is_delivered) {
+        // Logic: Nếu có bất kỳ kiện nào trong group đã đến 'Partners/Customers' -> "Đã giao khách"
+        const hasDeliveredPack = (group.packages || []).some(p =>
+            (p.location_name || "").includes("Partners/Customers")
+        );
+
+        if (hasDeliveredPack) {
             return "Đã giao khách";
         }
 
-        // Nếu là phiếu đóng gói xong mà chưa giao -> "Đã đóng gói" 
+        // Nếu là phiếu đóng gói xong or phiếu OUT xong mà chưa giao đến khách -> "Đã đóng gói" 
         const lowerName = (group.picking_name || "").toLowerCase();
-        if (lowerName.includes("pack") || lowerName.includes("đóng gói")) {
+        if (lowerName.includes("pack") || lowerName.includes("đóng gói") || lowerName.includes("đầu ra")) {
             return "Đã đóng gói";
         }
 
