@@ -76,14 +76,29 @@ class DeliveryPlannerService(models.AbstractModel):
         all_picking_ids = sales.mapped('picking_ids').ids
         packed_qty_by_so = {}
         if all_picking_ids:
-            packed_groups = self.env['stock.move.line']._read_group(
-                [('picking_id', 'in', all_picking_ids), ('result_package_id', '!=', False), ('state', '!=', 'cancel')],
-                ['picking_id'],
-                ['quantity:sum']
-            )
-            for picking, qty in packed_groups:
-                if picking.sale_id:
-                    packed_qty_by_so[picking.sale_id.id] = packed_qty_by_so.get(picking.sale_id.id, 0) + float(qty)
+            # Lấy tất cả move lines có kiện hàng để tự khử trùng theo SO
+            mls = self.env['stock.move.line'].sudo().search([
+                ('picking_id', 'in', all_picking_ids),
+                ('result_package_id', '!=', False),
+                ('state', '!=', 'cancel')
+            ])
+            # Group by SO and Package
+            so_pack_data = {} # {so_id: {package_id: qty}}
+            for ml in mls:
+                so_id = ml.picking_id.sale_id.id if ml.picking_id.sale_id else False
+                if not so_id: continue
+                
+                p_id = ml.result_package_id.id
+                if so_id not in so_pack_data: so_pack_data[so_id] = {}
+                
+                # Chỉ lấy số lượng ở phiếu đầu tiên nó xuất hiện (thường là PACK)
+                # Hoặc cộng dồn nếu 1 kiện được đóng thêm hàng ở các bước khác nhau (hiếm gặp nhưng an toàn)
+                # Ở đây mình gán qty theo kiện. Nếu kiện đó đã có qty rồi thì không cộng thêm từ phiếu OUT nữa
+                if p_id not in so_pack_data[so_id]:
+                    so_pack_data[so_id][p_id] = float(ml.quantity)
+            
+            for so_id, packs in so_pack_data.items():
+                packed_qty_by_so[so_id] = sum(packs.values())
 
         matched_sale_ids = []
         dashboard_stats = {
@@ -108,10 +123,6 @@ class DeliveryPlannerService(models.AbstractModel):
             
             for line in so.order_line:
                 if not line.display_type and line.product_id and line.product_id.type != 'service':
-                    # Loại trừ Kit khỏi logic pending giao hàng trực tiếp
-                    is_kit = line.product_id.product_tmpl_id.id in kit_tmpl_ids
-                    if is_kit: continue
-                    
                     total_storable_qty += line.product_uom_qty
                     pending_qty = line.product_uom_qty - line.qty_delivered
                     if pending_qty > 0:
@@ -250,20 +261,44 @@ class DeliveryPlannerService(models.AbstractModel):
             content['products_desc'] = " | ".join([f"{name} (x{int(qty) if qty.is_integer() else qty})" for name, qty in content['product_map'].items() if qty > 0])
 
         pickings_objs = self.env['stock.picking'].sudo().browse(all_picking_ids)
-        picking_state_map = {p.id: p.state for p in pickings_objs}
+        # Lấy thêm picking_type_code để ưu tiên hiển thị kiện ở bước 'internal' (PACK) hơn là 'outgoing' (OUT)
+        picking_info_map = {p.id: {'state': p.state, 'code': p.picking_type_id.code} for p in pickings_objs}
         
         picking_to_so = {picking.id: so.id for so in page_sales for picking in so.picking_ids}
         
         # Grouping by SO -> Picking -> PackageName
         so_picking_packs = {}
-        for ml in move_lines:
+        # Theo dõi kiện đã xuất hiện trong SO nào để khử trùng
+        package_seen_in_so = {} # {so_id: set(package_names)}
+        
+        # Sắp xếp move_lines theo thứ tự ưu tiên loại hình phiếu: internal > outgoing > incoming
+        # Điều này giúp vòng lặp bên dưới gán kiện vào phiếu 'quan trọng' nhất trước
+        def picking_priority(ml):
+            info = picking_info_map.get(ml['picking_id'][0], {})
+            code = info.get('code', 'outgoing')
+            priority = {'internal': 0, 'outgoing': 1, 'incoming': 2}
+            return priority.get(code, 9)
+
+        sorted_move_lines = sorted(move_lines, key=picking_priority)
+
+        for ml in sorted_move_lines:
             so_id = picking_to_so.get(ml['picking_id'][0])
             if not so_id: continue
             
+            pname = ml['result_package_id'][1]
+            if so_id not in package_seen_in_so:
+                package_seen_in_so[so_id] = {} # {pname: first_pick_id}
+            
+            # Nếu kiện này đã được gán cho 1 phiếu khác trong cùng SO, bỏ qua các phiếu sau
+            if pname in package_seen_in_so[so_id]:
+                if package_seen_in_so[so_id][pname] != ml['picking_id'][0]:
+                    continue
+            else:
+                package_seen_in_so[so_id][pname] = ml['picking_id'][0]
+
             pick_id = ml['picking_id'][0]
             pick_name = ml['picking_id'][1]
             pid = ml['result_package_id'][0]
-            pname = ml['result_package_id'][1]
             
             if so_id not in so_picking_packs:
                 so_picking_packs[so_id] = {}
@@ -273,11 +308,11 @@ class DeliveryPlannerService(models.AbstractModel):
                 so_holding_packs[pick_id] = {
                     'picking_id': pick_id,
                     'picking_name': pick_name,
-                    'picking_state': picking_state_map.get(pick_id, 'unknown'),
+                    'picking_state': picking_info_map.get(pick_id, {}).get('state', 'unknown'),
                     'packages_dict': {}
                 }
             
-            # Pack details (ensure unique by name within the picking/SO context)
+            # Pack details
             if pname not in so_picking_packs[so_id][pick_id]['packages_dict']:
                 pack_info = pack_dict.get(pid, {'id': pid, 'name': pname, 'location_name': '', 'pack_sequence': 0, 'pack_total': 0})
                 so_picking_packs[so_id][pick_id]['packages_dict'][pname] = {
@@ -298,20 +333,20 @@ class DeliveryPlannerService(models.AbstractModel):
         final_so_packages = {}
         for so_id, pickings_dict in so_picking_packs.items():
             sorted_groups = []
-            # Sort pickings by creation/ID or something logical (default order from SO pickings)
             so = page_sales.filtered(lambda x: x.id == so_id)
+            # Hiển thị theo thứ tự thời gian của các phiếu kho thực tế trong SO
             for p in so.picking_ids:
                 if p.id in pickings_dict:
                     group = pickings_dict[p.id]
-                    # Format product desc for each pack
                     pack_list = []
                     for pname, content in group['packages_dict'].items():
                         content['products_desc'] = " | ".join([f"{name} (x{int(qty) if qty.is_integer() else qty})" for name, qty in content['product_map'].items() if qty > 0])
                         pack_list.append(content)
                     
-                    group['packages'] = sorted(pack_list, key=lambda x: (x.get('sequence') or 0, x['name']))
-                    del group['packages_dict']
-                    sorted_groups.append(group)
+                    if pack_list:
+                        group['packages'] = sorted(pack_list, key=lambda x: (x.get('sequence') or 0, x['name']))
+                        del group['packages_dict']
+                        sorted_groups.append(group)
             
             final_so_packages[so_id] = sorted_groups
             
