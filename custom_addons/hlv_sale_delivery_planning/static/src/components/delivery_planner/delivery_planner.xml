@@ -315,7 +315,7 @@
                                                                     <i class="fa fa-file-text-o me-1" title="Phiếu xuất"></i> <t t-esc="group.picking_name"/>
                                                                 </span>
                                                                 <span t-attf-class="ms-2 badge rounded-pill #{this.getPickingStateBadgeClass(group.picking_state)}" style="font-size: 0.65rem;">
-                                                                    <t t-esc="this.translatePickingState(group.picking_state, group.picking_code, group.picking_name)"/>
+                                                                    <t t-esc="this.formatPackageGroupStatus(so, group)"/>
                                                                 </span>
                                                                 <hr class="flex-grow-1 ms-2 my-0 opacity-25"/>
                                                             </div>

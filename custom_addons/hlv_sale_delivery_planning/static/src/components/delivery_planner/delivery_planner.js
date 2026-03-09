@@ -249,20 +249,35 @@ export class DeliveryPlannerDashboard extends Component {
         return trans[status] || (status ? status.toUpperCase() : '');
     }
 
-    translatePickingState(state, code = 'outgoing', name = '') {
-        const lowerName = (name || "").toLowerCase();
-        let isOut = code === 'outgoing' || lowerName.includes("out") || lowerName.includes("đầu ra");
-        let isPack = code === 'internal' || lowerName.includes("pack");
-
+    translatePickingState(state) {
         const trans = {
             'draft': 'Nháp',
             'waiting': 'Chờ phiếu khác',
             'confirmed': 'Chờ hàng',
             'assigned': 'Sẵn sàng',
-            'done': isOut ? 'Đã giao khách' : (isPack ? 'Đã đóng gói' : 'Hoàn thành'),
+            'done': 'Hoàn thành',
             'cancel': 'Đã hủy'
         };
         return trans[state] || state;
+    }
+
+    formatPackageGroupStatus(so, group) {
+        if (group.picking_state !== 'done') {
+            return this.translatePickingState(group.picking_state);
+        }
+
+        // Logic: Nếu đơn đã giao xong (OUT done) -> "Đã giao khách"
+        if (so.is_delivered) {
+            return "Đã giao khách";
+        }
+
+        // Nếu là phiếu đóng gói xong mà chưa giao -> "Đã đóng gói" 
+        const lowerName = (group.picking_name || "").toLowerCase();
+        if (lowerName.includes("pack") || lowerName.includes("đóng gói")) {
+            return "Đã đóng gói";
+        }
+
+        return "Hoàn thành";
     }
 
     getPickingStateBadgeClass(state) {

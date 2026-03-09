@@ -459,6 +459,7 @@ class DeliveryPlannerService(models.AbstractModel):
             'delivery_status': so.delivery_status, 'real_delivery_status': real_delivery_status,
             'stock_status': stock_status, 'is_fully_ready': is_fully_ready,
             'packing_status': packing_status,
+            'is_delivered': any(p.picking_type_id.code == 'outgoing' and p.state == 'done' for p in so.picking_ids),
             'picking_warehouse_ids': picking_warehouse_ids,
             'pos': po_data, 'flows': flows, 'pickings': flat_pickings, 'lines': so_lines_data,
             'packages': package_groups,
