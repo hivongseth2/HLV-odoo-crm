@@ -192,7 +192,6 @@ class GoogleAdsStrategy(models.Model):
     def action_generate_rules(self):
         """Sinh rules tự động dựa trên strategy_type + product feed"""
         for strategy in self:
-            # Xoá rules cũ do hệ thống tạo
             strategy.rule_ids.filtered(lambda r: r.auto_generated).unlink()
 
             lines = strategy.feed_id.line_ids
@@ -207,6 +206,14 @@ class GoogleAdsStrategy(models.Model):
                                   "Anh vui lòng chọn 'Chiến Dịch Liên Kết' cho các sản phẩm trong Product Feed trước khi sinh Rule.") 
                                 % strategy.feed_id.name)
 
+            _logger.info("Generating rules for strategy: %s (Type: %s, Feed: %s)", strategy.name, strategy.strategy_type, strategy.feed_id.name)
+            
+            # Báo cáo chi tiết quá trình qua chatter
+            log_lines = [
+                _("<b>Bắt đầu sinh Rule cho chiến lược: %s</b>") % strategy.name,
+                _("— Tổng số sản phẩm trong Feed: %s") % len(lines)
+            ]
+
             method_name = f'_generate_rules_{strategy.strategy_type}'
             method = getattr(strategy, method_name, None)
             if method:
@@ -218,13 +225,21 @@ class GoogleAdsStrategy(models.Model):
             strategy.invalidate_recordset(['rule_ids'])
             
             generated_rules = strategy.rule_ids.filtered(lambda r: r.auto_generated)
+            
             if not generated_rules:
-                raise UserError(_("Không có Rule nào được sinh ra. Anh vui lòng kiểm tra xem các sản phẩm trong Feed '%s' đã được gán 'Chiến Dịch Liên Kết' chưa.") % strategy.feed_id.name)
+                msg = _("Không có Rule nào được sinh ra. Anh vui lòng kiểm tra xem các sản phẩm trong Feed '%s' đã được gán 'Chiến Dịch Liên Kết' chưa.") % strategy.feed_id.name
+                log_lines.append(f"<span class='text-danger'>{msg}</span>")
+                strategy.message_post(body=Markup("<br/>".join(log_lines)))
+                raise UserError(msg)
 
-            strategy.message_post(
-                body=_("Đã sinh %s rules tự động cho chiến lược '%s'. (Số sản phẩm có liên kết campaign: %s)")
-                     % (len(generated_rules), strategy.name, len(linked_lines))
-            )
+            # Thêm chi tiết các rule đã sinh vào chatter
+            log_lines.append(_("— Số sản phẩm có liên kết campaign: %s") % len(linked_lines))
+            log_lines.append(_("— <b>Đã sinh %s rules thành công.</b>") % len(generated_rules))
+            
+            for rule in generated_rules:
+                log_lines.append(_("   + [Rule ID: %s] %s") % (rule.id, rule.name))
+
+            strategy.message_post(body=Markup("<br/>".join(log_lines)))
 
     # ── protect_low ──────────────────────────────
     def _generate_rules_protect_low(self, lines):
@@ -233,6 +248,7 @@ class GoogleAdsStrategy(models.Model):
         Rule = self.env['google.ads.rule']
 
         for line in lines.filtered(lambda l: l.campaign_ids):
+            _logger.info("— Creating 'Protect Low' rule for product: %s", line.product_id.name)
             Rule.create({
                 'name': _("[Auto] Pause khi hết hàng — %s") % line.product_id.name,
                 'auto_generated': True,
@@ -254,6 +270,7 @@ class GoogleAdsStrategy(models.Model):
         Rule = self.env['google.ads.rule']
 
         for line in lines.filtered(lambda l: l.campaign_ids):
+            _logger.info("— Creating 'Push Stock' rules for product: %s", line.product_id.name)
             # Rule 1: enable nếu đang pause mà tồn kho cao
             Rule.create({
                 'name': _("[Auto] Enable đẩy hàng tồn — %s") % line.product_id.name,
@@ -291,6 +308,7 @@ class GoogleAdsStrategy(models.Model):
         Rule = self.env['google.ads.rule']
 
         for line in lines.filtered(lambda l: l.campaign_ids):
+            _logger.info("— Creating 'Optimize Profit' rules for product: %s", line.product_id.name)
             # Rule 1: CPA vượt max → Pause
             Rule.create({
                 'name': _("[Auto] Pause CPA cao — %s") % line.product_id.name,
@@ -327,6 +345,7 @@ class GoogleAdsStrategy(models.Model):
         Rule = self.env['google.ads.rule']
 
         for line in lines.filtered(lambda l: l.campaign_ids):
+            _logger.info("— Creating 'Push New' rule for product: %s", line.product_id.name)
             Rule.create({
                 'name': _("[Auto] Enable hàng mới — %s") % line.product_id.name,
                 'auto_generated': True,
