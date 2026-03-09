@@ -25,6 +25,7 @@ export class DeliveryPlannerDashboard extends Component {
             filterPODateFrom: "",
             filterPODateTo: "",
             filterPOStatus: "all",
+            filterPackingStatus: "all",
 
             // Stats
             dashboardStats: { total: 0, ready: 0, partial: 0, out_of_stock: 0 },
@@ -61,6 +62,7 @@ export class DeliveryPlannerDashboard extends Component {
                     filter_po_date_from: this.state.filterPODateFrom,
                     filter_po_date_to: this.state.filterPODateTo,
                     filter_po_status: this.state.filterPOStatus,
+                    filter_packing_status: this.state.filterPackingStatus,
                     limit: this.state.itemsPerPage,
                     offset: (this.state.currentPage - 1) * this.state.itemsPerPage,
                 }
@@ -155,6 +157,16 @@ export class DeliveryPlannerDashboard extends Component {
         await this.fetchData();
     }
 
+    async setPackingFilter(status) {
+        if (this.state.filterPackingStatus === status) {
+            this.state.filterPackingStatus = 'all';
+        } else {
+            this.state.filterPackingStatus = status;
+        }
+        this.state.currentPage = 1;
+        await this.fetchData();
+    }
+
     async onSearchKeyup(ev) {
         if (ev.key === "Enter") {
             this.state.currentPage = 1;
@@ -241,6 +253,16 @@ export class DeliveryPlannerDashboard extends Component {
         return trans[status] || (status ? status.toUpperCase() : '');
     }
 
+    translatePackingStatus(status) {
+        const trans = {
+            'waiting_stock': 'Chờ Hàng Đóng',
+            'unpacked': 'Chưa Đóng Gói (Có Hàng)',
+            'partial_packed': 'Đã Đóng 1 Phần',
+            'fully_packed': 'Đã Đóng Đủ Kiện'
+        };
+        return trans[status] || (status ? status.toUpperCase() : '');
+    }
+
     translateSOStatus(status) {
         const trans = {
             'draft': 'Báo giá',
@@ -283,6 +305,14 @@ export class DeliveryPlannerDashboard extends Component {
         if (status === 'ready') return 'text-bg-primary';
         if (status === 'partial_ready') return 'text-bg-warning';
         if (status === 'out_of_stock') return 'text-bg-danger';
+        return 'text-bg-light border text-dark';
+    }
+
+    getPackingStatusBadgeClass(status) {
+        if (status === 'fully_packed') return 'text-bg-success';
+        if (status === 'partial_packed') return 'text-bg-info';
+        if (status === 'unpacked') return 'text-bg-warning';
+        if (status === 'waiting_stock') return 'text-bg-danger mb-opacity-75';
         return 'text-bg-light border text-dark';
     }
 

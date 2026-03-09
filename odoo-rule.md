@@ -359,6 +359,33 @@ class MyModel(models.Model):
   - Hạn chế tối đa việc write ngược lại Parent trong vòng lặp create của Child. 
   - Sử dụng computed fields `store=True` cẩn thận với trigger phù hợp.
 
+11.6. Vận hành RecordSet Logic vs Python Sets (Odoo Backend)
+- **Lỗi**: `AttributeError: 'set' object has no attribute '_name'` (Khi gọi hàm trên RecordSet bị lỗi Exception Handle request trong `odoo.http`).
+- **Nguyên nhân**: Khi thao tác với RecordSet, nếu dùng hàm `set(A) - set(B)` của Python thuần, Object trả về sẽ là một kiểu dữ liệu `set` chứ **Không phải** là 1 `RecordSet` độc quyền của Odoo. Do đó, các phương thức sau đó như `.mapped('id')` hay gọi field trực tiếp sẽ sinh ra AttributeError.
+- **Giải pháp**:
+  - KHÔNG DÙNG: `res = set(picking_ids) - set(return_ids)`
+  - SỬ DỤNG PHÉP TOÁN RECORDSET: `res = picking_ids - return_ids`
+  - NẾU phải dùng Set (do list ID): Bọc lại thành RecordSet bằng `env['model.name'].browse(list_of_ids)` trước khi trả về.
+
+11.7. Cú pháp Javascript Trong Khối OWL Templates Odoo 18
+- **Lỗi**: `OwlError: Failed to compile template "ModelName.Dashboard": Missing } in template expression`
+- **Nguyên nhân**: Ở Odoo 17 trở xuống với QWeb, bên trong `t-attf-class` Odoo cho phép chạy hàm `if ... else ...` của Python. Ở Odoo 18+ OWL, bên trong Block Expression `{{ ... }}` là **Thuần JavaScript Expression**.
+- **Giải pháp**: Không được dùng Python logic. Phải đổi sang Toán tử 3 ngôi (Ternary Operator) của JS.
+  - ❌ SAI (Python Syntax): `t-attf-class="{{ picking.state == 'done' ? 'bg-light' : 'bg-white' }} {{ 'linked-return' if picking.return_of else '' }}"`
+  - ✅ ĐÚNG (JS Syntax): `t-attf-class="{{ picking.state == 'done' ? 'bg-light' : 'bg-white' }} {{ picking.return_of ? 'linked-return' : '' }}"`
+
+11.8. Trình biên dịch OWL Tokenizer và Regex (JavaScript RegExp)
+- **Lỗi**: `Uncaught Promise > OwlError: Tokenizer error: could not tokenize 'picking.backorder_of.replace(/\//g, '-')'`
+- **Nguyên nhân**: Trình biên dịch (XML Template Compiler) OWL đôi khi gặp lỗi Parse (nhầm lẫn Cấu Trúc Đóng/Mở Thẻ) khi bắt gặp cú pháp Dấu gạch chéo kép `/\//g` của phương thức Regular Expression nội suy ở thẻ `{{ }}`.
+- **Giải pháp**: Xài cách an toàn là dùng kết hợp String Transform Array.
+  - ❌ RỦI RO LỖI TEMPLATE: `.replace(/\//g, '-')`
+  - ✅ BAO AN TOÀN TRONG OWL: `.split('/').join('-')`
+
+11.9. Đăng ký Component OWL vào XML Action Registry
+- **Lỗi**: `KeyNotFoundError: Cannot find key "my_module.dashboard" in the "actions" registry` hoặc Odoo bị Trắng Trang Client Action.
+- **Nguyên nhân**: Tên định danh String khai báo trong method `registry.category("actions").add(...)` ở File Javascript KHÔNG TRÙNG KHỚP với thuộc tính `tag="my_module.dashboard"` của Thẻ cấu hình Bản ghi `<record model="ir.actions.client">` trong XML. (Thường sai dấu `.` và `_`).
+- **Giải pháp**: Mở Dual Screen cả file JS và file XML ra để dò đối chiếu từng ký tự 1-1 cách chuẩn nhất. Đặc biệt Odoo 18 rất nhạy cảm với Cú pháp Đăng ký Node này. Cú pháp bắt buộc thường là `module_name.component_name`.
+
 13. Tài liệu kỹ thuật (TECHNICAL.md)
 Mỗi custom module **phải có** file `TECHNICAL.md` đặt trong thư mục gốc của module. File này giúp AI và developer xác định nhanh cấu trúc và tránh trùng lập code khi mở rộng.
 

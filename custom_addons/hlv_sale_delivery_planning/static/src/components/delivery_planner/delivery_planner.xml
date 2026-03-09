@@ -66,6 +66,53 @@
                                 </div>
                             </div>
                         </div>
+                        <!-- KPI Đóng Gói / Kiện Hàng -->
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-3">
+                                <div class="card bg-white text-dark shadow-sm border-0 h-100 kpi-card" style="cursor: pointer;" t-on-click="() => this.setPackingFilter('waiting_stock')" t-att-class="state.filterPackingStatus === 'waiting_stock' ? 'ring-2 ring-danger' : ''">
+                                    <div class="card-body d-flex align-items-center p-3" title="Chưa đủ hàng để đóng kiện">
+                                        <div class="rounded-circle bg-danger bg-opacity-10 p-3 me-3 text-danger"><i class="fa fa-clock-o fa-fw fa-2x"></i></div>
+                                        <div>
+                                            <h6 class="text-uppercase fw-bold text-muted mb-1 small opacity-75">Chờ Cấp Hàng</h6>
+                                            <h3 class="mb-0 fw-bold"><t t-esc="state.dashboardStats.packing_waiting || 0"/></h3>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-white text-dark shadow-sm border-0 h-100 kpi-card" style="cursor: pointer;" t-on-click="() => this.setPackingFilter('unpacked')" t-att-class="state.filterPackingStatus === 'unpacked' ? 'ring-2 ring-warning' : ''">
+                                    <div class="card-body d-flex align-items-center p-3" title="Có Hàng Nằm Chờ Đóng Gói">
+                                        <div class="rounded-circle bg-warning bg-opacity-10 p-3 me-3 text-warning"><i class="fa fa-cubes fa-fw fa-2x"></i></div>
+                                        <div>
+                                            <h6 class="text-uppercase fw-bold text-muted mb-1 small opacity-75">Hàng Chờ Đóng</h6>
+                                            <h3 class="mb-0 fw-bold"><t t-esc="state.dashboardStats.packing_unpacked || 0"/></h3>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-white text-dark shadow-sm border-0 h-100 kpi-card" style="cursor: pointer;" t-on-click="() => this.setPackingFilter('partial_packed')" t-att-class="state.filterPackingStatus === 'partial_packed' ? 'ring-2 ring-info' : ''">
+                                    <div class="card-body d-flex align-items-center p-3" title="Đã Đóng 1 Phần Đơn">
+                                        <div class="rounded-circle bg-info bg-opacity-10 p-3 me-3 text-info"><i class="fa fa-cube fa-fw fa-2x"></i></div>
+                                        <div>
+                                            <h6 class="text-uppercase fw-bold text-muted mb-1 small opacity-75">Đóng 1 Phần</h6>
+                                            <h3 class="mb-0 fw-bold"><t t-esc="state.dashboardStats.packing_partial || 0"/></h3>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-white text-dark shadow-sm border-0 h-100 kpi-card" style="cursor: pointer;" t-on-click="() => this.setPackingFilter('fully_packed')" t-att-class="state.filterPackingStatus === 'fully_packed' ? 'ring-2 ring-success' : ''">
+                                    <div class="card-body d-flex align-items-center p-3" title="Đã Đóng Đủ Kiện Sẵn Sàng Giao">
+                                        <div class="rounded-circle bg-success bg-opacity-10 p-3 me-3 text-success"><i class="fa fa-check-square-o fa-fw fa-2x"></i></div>
+                                        <div>
+                                            <h6 class="text-uppercase fw-bold text-muted mb-1 small opacity-75">Đã Đủ Kiện</h6>
+                                            <h3 class="mb-0 fw-bold"><t t-esc="state.dashboardStats.packing_fully || 0"/></h3>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <!-- Thanh Công Cụ (Kho, Tìm kiếm, Lọc trạng thái, Hẹn giao) -->
                         <div class="row g-3 mb-4 bg-white p-3 rounded shadow-sm border align-items-end">
                             <!-- Ô tìm kiếm -->
@@ -172,9 +219,10 @@
                                 <div class="card h-100 border-1" t-att-class="this.getSOCardColorClass(so)">
                                     <div class="card-header d-flex justify-content-between align-items-center py-3 border-bottom-1">
                                         <div>
-                                            <div class="d-flex align-items-center gap-2 mb-2">
+                                            <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
                                                 <span class="badge" t-att-class="this.getDeliveryStatusBadgeClass(so.real_delivery_status)"><t t-esc="this.translateDeliveryStatus(so.real_delivery_status)"/></span>
                                                 <span class="badge" t-att-class="this.getStockStatusBadgeClass(so.stock_status)" t-if="so.real_delivery_status != 'full'"><t t-esc="this.translateStockStatus(so.stock_status)"/></span>
+                                                <span class="badge" t-att-class="this.getPackingStatusBadgeClass(so.packing_status)" t-if="so.packing_status != 'unknown'"><i class="fa fa-cube me-1"></i><t t-esc="this.translatePackingStatus(so.packing_status)"/></span>
                                             </div>
                                             <h5 class="card-title mb-1 text-primary cursor-pointer o_form_uri" t-on-click="() => this.openSaleOrder(so.id)">
                                                 <i class="fa fa-shopping-cart text-muted me-1"></i> <t t-esc="so.name"/>
@@ -219,6 +267,25 @@
                                                     </div>
                                                 </button>
                                             </t>
+                                        </div>
+                                        
+                                        <!-- Danh Sách Kiện Hàng Đã Đóng (Packages) dạng Hộp -->
+                                        <div t-if="so.packages and so.packages.length > 0" class="mb-3 px-1">
+                                            <h6 class="text-uppercase text-secondary small fw-bold mb-2"><i class="fa fa-cubes me-1"></i> Thông Tin Kiện Hàng (<t t-esc="so.packages.length"/>)</h6>
+                                            <div class="d-flex flex-wrap gap-2 package-grid">
+                                                <t t-foreach="so.packages" t-as="pack" t-key="pack.id">
+                                                    <div class="package-box-container position-relative" t-att-title="pack.name + ': ' + pack.products_desc">
+                                                        <div class="package-box d-flex flex-column align-items-center justify-content-center border rounded shadow-sm bg-white p-2">
+                                                            <i class="fa fa-archive fa-2x text-primary mb-1"></i>
+                                                            <span class="fw-bold small">#<t t-esc="pack.sequence"/></span>
+                                                        </div>
+                                                        <!-- Mini Tooltip Label -->
+                                                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-dark shadow-sm" style="font-size: 0.6rem; z-index: 5;">
+                                                            <t t-esc="pack.name.slice(-4)"/>
+                                                        </span>
+                                                    </div>
+                                                </t>
+                                            </div>
                                         </div>
                                         
                                         <!-- LUỒNG XỬ LÝ KHO NGANG 1 CHIỀU THEO TỪNG PATH -->
@@ -382,9 +449,21 @@
                                                                 <td class="ps-3 text-truncate" style="max-width: 200px;" t-att-title="line.product_id ? line.product_id[1] : 'Unknown'">
                                                                     <t t-esc="line.product_id ? line.product_id[1] : 'Unknown'"/>
                                                                 </td>
-                                                                <td class="text-end pe-3 fw-bold" t-att-class="line.qty_available &gt;= (line.product_uom_qty - line.qty_delivered) ? 'text-success' : 'text-danger'">
-                                                                    <t t-esc="this.formatQty(line.product_uom_qty - line.qty_delivered)"/>
-                                                                    <i t-if="line.qty_available &gt;= (line.product_uom_qty - line.qty_delivered)" class="fa fa-check ms-1" title="Kho đã có đủ"></i>
+                                                                 <td class="text-end pe-3 fw-bold">
+                                                                    <div t-att-class="line.qty_available &gt;= (line.product_uom_qty - line.qty_delivered) ? 'text-success' : 'text-danger'">
+                                                                        <t t-esc="this.formatQty(line.product_uom_qty - line.qty_delivered)"/>
+                                                                        <i t-if="line.qty_available &gt;= (line.product_uom_qty - line.qty_delivered)" class="fa fa-check ms-1" title="Kho đã có đủ"></i>
+                                                                    </div>
+                                                                    <div t-if="line.qty_packed > 0" class="mt-1">
+                                                                        <span class="badge rounded-pill bg-info text-dark" style="font-size: 0.65rem;" t-att-title="'Đã đóng gói: ' + line.qty_packed">
+                                                                            <i class="fa fa-cube me-1"></i>Đóng: <t t-esc="this.formatQty(line.qty_packed)"/>
+                                                                        </span>
+                                                                    </div>
+                                                                    <div t-else="" class="mt-1">
+                                                                        <span class="badge rounded-pill bg-light text-muted border" style="font-size: 0.65rem;">
+                                                                            <i class="fa fa-cube me-1 opacity-50"></i>Chưa đóng
+                                                                        </span>
+                                                                    </div>
                                                                 </td>
                                                             </tr>
                                                         </t>
@@ -479,20 +558,28 @@
                         <thead class="table-light">
                             <tr>
                                 <th class="text-start">Sản phẩm</th>
-                                <th width="70">Chốt Bán</th>
-                                <th width="70">Kho Hiện Có</th>
-                                <th width="70">Đã Giao</th>
-                                <th width="70">Còn Bị Thiếu</th>
+                                 <th width="70">Chốt Bán</th>
+                                 <th width="70">Đóng Gói</th>
+                                 <th width="70">Kho Hiện Có</th>
+                                 <th width="70">Đã Giao</th>
+                                 <th width="70">Còn Bị Thiếu</th>
                             </tr>
                         </thead>
                         <tbody>
                             <t t-foreach="state.selectedOrder.lines" t-as="line" t-key="line.id">
                                 <tr t-att-class="line.product_uom_qty > line.qty_delivered ? 'table-warning' : 'table-success'">
                                     <td class="text-start"><t t-esc="line.product_id ? line.product_id[1] : 'Unknown'"/></td>
-                                    <td class="fw-bold"><t t-esc="this.formatQty(line.product_uom_qty)"/></td>
-                                    <td t-att-class="line.qty_available > 0 ? 'text-success fw-bold' : 'text-danger'">
-                                        <t t-esc="this.formatQty(line.qty_available)"/>
-                                    </td>
+                                     <td class="fw-bold"><t t-esc="this.formatQty(line.product_uom_qty)"/></td>
+                                     <td t-att-class="line.qty_packed &gt;= line.product_uom_qty ? 'text-success fw-bold' : (line.qty_packed &gt; 0 ? 'text-info fw-bold' : 'text-muted')">
+                                         <t t-if="line.qty_packed &gt; 0">
+                                             <i class="fa fa-cube me-1"></i><t t-esc="this.formatQty(line.qty_packed)"/>
+                                             <i t-if="line.qty_packed &gt;= line.product_uom_qty" class="fa fa-check-circle ms-1"></i>
+                                         </t>
+                                         <t t-else="">0</t>
+                                     </td>
+                                     <td t-att-class="line.qty_available > 0 ? 'text-success fw-bold' : 'text-danger'">
+                                         <t t-esc="this.formatQty(line.qty_available)"/>
+                                     </td>
                                     <td class="text-primary"><t t-esc="this.formatQty(line.qty_delivered)"/></td>
                                     <td class="text-danger fw-bold"><t t-esc="this.formatQty(line.product_uom_qty - line.qty_delivered)"/></td>
                                 </tr>
