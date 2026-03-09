@@ -115,7 +115,9 @@ class DeliveryPlannerService(models.AbstractModel):
                 stock_status = 'delivered'
 
             packed_qty = packed_qty_by_so.get(so.id, 0.0)
-            if packed_qty >= total_storable_qty and total_storable_qty > 0:
+            if not has_pending:
+                packing_status = 'fully_packed'
+            elif packed_qty >= total_storable_qty and total_storable_qty > 0:
                 packing_status = 'fully_packed'
             elif packed_qty > 0:
                 packing_status = 'partial_packed'

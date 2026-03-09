@@ -222,7 +222,7 @@
                                             <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
                                                 <span class="badge" t-att-class="this.getDeliveryStatusBadgeClass(so.real_delivery_status)"><t t-esc="this.translateDeliveryStatus(so.real_delivery_status)"/></span>
                                                 <span class="badge" t-att-class="this.getStockStatusBadgeClass(so.stock_status)" t-if="so.real_delivery_status != 'full'"><t t-esc="this.translateStockStatus(so.stock_status)"/></span>
-                                                <span class="badge" t-att-class="this.getPackingStatusBadgeClass(so.packing_status)" t-if="so.packing_status != 'unknown'"><i class="fa fa-cube me-1"></i><t t-esc="this.translatePackingStatus(so.packing_status)"/></span>
+                                                <span class="badge" t-att-class="this.getPackingStatusBadgeClass(so.packing_status)" t-if="so.real_delivery_status != 'full' and so.packing_status != 'unknown'"><i class="fa fa-cube me-1"></i><t t-esc="this.translatePackingStatus(so.packing_status)"/></span>
                                             </div>
                                             <h5 class="card-title mb-1 text-primary cursor-pointer o_form_uri" t-on-click="() => this.openSaleOrder(so.id)">
                                                 <i class="fa fa-shopping-cart text-muted me-1"></i> <t t-esc="so.name"/>
@@ -277,12 +277,8 @@
                                                     <div class="package-box-container position-relative" t-att-title="pack.name + ': ' + pack.products_desc">
                                                         <div class="package-box d-flex flex-column align-items-center justify-content-center border rounded shadow-sm bg-white p-2">
                                                             <i class="fa fa-archive fa-2x text-primary mb-1"></i>
-                                                            <span class="fw-bold small">#<t t-esc="pack.sequence"/></span>
+                                                            <span class="fw-bold small">Kiện #<t t-esc="pack.sequence"/></span>
                                                         </div>
-                                                        <!-- Mini Tooltip Label -->
-                                                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-dark shadow-sm" style="font-size: 0.6rem; z-index: 5;">
-                                                            <t t-esc="pack.name.slice(-4)"/>
-                                                        </span>
                                                     </div>
                                                 </t>
                                             </div>
