@@ -1,7 +1,7 @@
 # Tài liệu Kỹ thuật - Google Ads Automation
 
 **Module:** `google_ads_automation`  
-**Version:** 18.0.3.0.0
+**Version:** 18.0.2.0.1
 
 **Mục đích:** Tích hợp toàn diện Odoo với hệ sinh thái Google Ads, bao gồm:
 1. **Theo dõi Chuyển Đổi & Cấu Hình GTM (Conversion Tracking & Tag Management):** Quản lý thẻ GTM, theo dõi đơn hàng WooCommerce và đồng bộ cấu hình GTM.

@@ -105,7 +105,10 @@ class GoogleAdsStrategy(models.Model):
     @api.depends('rule_ids')
     def _compute_rule_count(self):
         for rec in self:
-            rec.rule_count = len(rec.rule_ids)
+            # Count both active and inactive rules (active_test=False)
+            # because in 'Draft' state, rules are generated as inactive.
+            rules = rec.with_context(active_test=False).rule_ids
+            rec.rule_count = len(rules)
 
     state_label = fields.Char(compute='_compute_state_label')
 
