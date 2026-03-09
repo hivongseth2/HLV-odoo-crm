@@ -57,6 +57,7 @@
                             <div class="o_premium_card h-100">
                                 <h4 class="mb-4 text-success fw-bold"><i class="fa fa-line-chart me-2"></i>Chi Tiết Hiệu Suất</h4>
                                 <group>
+                                    <field name="product_id" options="{'no_create': True}"/>
                                     <field name="impressions"/>
                                     <field name="conversion_rate" widget="progressbar"/>
                                     <field name="channel_type"/>

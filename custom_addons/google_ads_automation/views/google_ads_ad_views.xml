@@ -39,6 +39,7 @@
                                 <group string="Thông Tin Kỹ Thuật">
                                     <field name="name" class="oe_inline fw-bold" placeholder="Tên Quảng Cáo..."/>
                                     <field name="ad_group_id" options="{'no_create': True}"/>
+                                    <field name="product_id" options="{'no_create': True}"/>
                                     <field name="google_ad_id" placeholder="VD: 123456789 (Bắt buộc)"/>
                                     <field name="final_urls" widget="url"/>
                                 </group>

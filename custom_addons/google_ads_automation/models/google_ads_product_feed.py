@@ -165,6 +165,8 @@ class GoogleAdsProductFeed(models.Model):
             if matched:
                 # Thêm vào Many2many (link)
                 line.campaign_ids = [fields.Command.link(c.id) for c in matched]
+                # Gắn sản phẩm trực tiếp vào Campaign (để Campaign biết mình đang QC cái gì)
+                matched.write({'product_id': line.product_id.id})
                 count += 1
         
         if count == 0:

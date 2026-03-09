@@ -37,6 +37,7 @@
                         <group string="Thông Tin Kỹ Thuật">
                             <field name="name" class="oe_inline fw-bold" placeholder="Tên Nhóm..."/>
                             <field name="campaign_id" options="{'no_create': True}"/>
+                            <field name="product_id" options="{'no_create': True}"/>
                             <field name="google_ad_group_id" placeholder="VD: 123456789 (Bắt buộc)"/>
                         </group>
                     </div>
