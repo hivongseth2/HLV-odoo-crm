@@ -62,7 +62,6 @@
                                 <group>
                                     <field name="product_ids" widget="many2many_tags" readonly="1"/>
                                     <field name="impressions"/>
-                                </group>
                                     <field name="conversion_rate" widget="progressbar"/>
                                     <field name="channel_type"/>
                                     <field name="google_campaign_id" placeholder="VD: 123456789 (Bắt buộc)"/>
