@@ -314,7 +314,7 @@
                                                                 <span class="badge bg-secondary bg-opacity-10 text-primary border border-secondary border-opacity-25 py-1 px-2 small">
                                                                     <i class="fa fa-file-text-o me-1"></i> <t t-esc="group.picking_name"/>
                                                                 </span>
-                                                                <span t-attf-class="ms-2 badge rounded-pill #{this.getPickingStateBadgeClass(group.picking_state)}" style="font-size: 0.65rem;">
+                                                                <span t-attf-class="ms-2 badge  text-bg-info  rounded-pill #{this.getPickingStateBadgeClass(group.picking_state)}" style="font-size: 0.65rem;">
                                                                     <t t-esc="this.translatePickingState(group.picking_state)"/>
                                                                 </span>
                                                                 <hr class="flex-grow-1 ms-2 my-0 opacity-25"/>
