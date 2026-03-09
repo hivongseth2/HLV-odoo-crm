@@ -56,9 +56,13 @@
                         <div class="col-lg-7">
                             <div class="o_premium_card h-100">
                                 <h4 class="mb-4 text-success fw-bold"><i class="fa fa-line-chart me-2"></i>Chi Tiết Hiệu Suất</h4>
+                                <div class="alert alert-info border-0 shadow-sm rounded-3 mb-4">
+                                    <i class="fa fa-info-circle me-1"></i> Sản phẩm được tự động liệt kê dựa trên các dòng trong <b>Product Feed</b> có chọn chiến dịch này.
+                                </div>
                                 <group>
-                                    <field name="product_ids" widget="many2many_tags" options="{'no_create': True}"/>
+                                    <field name="product_ids" widget="many2many_tags" readonly="1"/>
                                     <field name="impressions"/>
+                                </group>
                                     <field name="conversion_rate" widget="progressbar"/>
                                     <field name="channel_type"/>
                                     <field name="google_campaign_id" placeholder="VD: 123456789 (Bắt buộc)"/>

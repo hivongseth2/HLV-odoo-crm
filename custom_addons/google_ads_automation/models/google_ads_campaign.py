@@ -8,9 +8,22 @@ class GoogleAdsCampaign(models.Model):
     name = fields.Char(string='Tên Chiến Dịch', required=True)
     account_id = fields.Many2one('google.ads.account', string='Tài Khoản Google Ads', required=True, ondelete='cascade')
     google_campaign_id = fields.Char(string='Google Campaign ID', required=True, index=True)
-    product_ids = fields.Many2many('product.template', 'google_ads_campaign_product_rel', 
-                                   'campaign_id', 'product_id', string='Sản Phẩm', 
-                                   help='Các sản phẩm được quảng cáo trong chiến dịch này')
+    feed_line_ids = fields.Many2many(
+        'google.ads.product.feed.line', 'google_ads_feed_line_campaign_rel',
+        'campaign_id', 'feed_line_id',
+        string='Dòng Feed Liên Kết', readonly=True,
+    )
+    product_ids = fields.Many2many(
+        'product.template', string='Sản Phẩm', 
+        compute='_compute_product_ids', store=True,
+        help='Các sản phẩm được quảng cáo trong chiến dịch này (tự động lấy từ Product Feed)'
+    )
+
+    @api.depends('feed_line_ids.product_id')
+    def _compute_product_ids(self):
+        for rec in self:
+            rec.product_ids = rec.feed_line_ids.mapped('product_id')
+
 
     status = fields.Selection([
         ('unspecified', 'Chưa xác định'),
@@ -151,61 +164,9 @@ class GoogleAdsCampaign(models.Model):
             rec.hero_header_html = Markup(html)
             
     def write(self, vals):
-        if self.env.context.get('skip_ads_sync'):
-            return super().write(vals)
-
-        # Lưu lại trạng thái sản phẩm trước khi cập nhật
-        old_products = {c.id: c.product_ids.ids for c in self}
-        res = super().write(vals)
-        
-        if 'product_ids' in vals:
-            for campaign in self:
-                if not campaign.account_id:
-                    continue
-                
-                # Tìm Feed đang active của account này
-                feed = self.env['google.ads.product.feed'].sudo().search([
-                    ('account_id', '=', campaign.account_id.id),
-                    ('active', '=', True)
-                ], limit=1)
-                
-                if not feed:
-                    continue
-                
-                new_prod_ids = campaign.product_ids.ids
-                prev_prod_ids = old_products.get(campaign.id, [])
-                
-                # Sản phẩm mới được thêm trực tiếp vào Campaign
-                added_ids = set(new_prod_ids) - set(prev_prod_ids)
-                for prod_id in added_ids:
-                    line = self.env['google.ads.product.feed.line'].sudo().search([
-                        ('feed_id', '=', feed.id),
-                        ('product_id', '=', prod_id)
-                    ], limit=1)
-                    if line:
-                        if campaign.id not in line.campaign_ids.ids:
-                            line.with_context(skip_ads_sync=True).write({
-                                'campaign_ids': [fields.Command.link(campaign.id)]
-                            })
-                    else:
-                        self.env['google.ads.product.feed.line'].sudo().with_context(skip_ads_sync=True).create({
-                            'feed_id': feed.id,
-                            'product_id': prod_id,
-                            'campaign_ids': [fields.Command.link(campaign.id)]
-                        })
-                
-                # Sản phẩm bị gỡ khỏi Campaign
-                removed_ids = set(prev_prod_ids) - set(new_prod_ids)
-                for prod_id in removed_ids:
-                    line = self.env['google.ads.product.feed.line'].sudo().search([
-                        ('feed_id', '=', feed.id),
-                        ('product_id', '=', prod_id)
-                    ], limit=1)
-                    if line and campaign.id in line.campaign_ids.ids:
-                        line.with_context(skip_ads_sync=True).write({
-                            'campaign_ids': [fields.Command.unlink(campaign.id)]
-                        })
-        return res
+        # Odoo 18 automation: product_ids is now computed via feed_line_ids.
+        # No manual sync logic needed here.
+        return super().write(vals)
 
     _sql_constraints = [
         ('google_campaign_id_uniq', 'unique(google_campaign_id)', 'Google Campaign ID phải là duy nhất!'),

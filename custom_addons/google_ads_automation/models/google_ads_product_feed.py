@@ -323,45 +323,10 @@ class GoogleAdsProductFeedLine(models.Model):
             else:
                 line.stock_status = 'normal'
     def write(self, vals):
-        if self.env.context.get('skip_ads_sync'):
-            return super().write(vals)
-            
-        if 'campaign_ids' in vals:
-            # Lưu lại trạng thái trước khi cập nhật
-            pre_sync = {line.id: line.campaign_ids.ids for line in self}
-            res = super().write(vals)
-            
-            for line in self:
-                old_ids = pre_sync.get(line.id, [])
-                new_ids = line.campaign_ids.ids
-                prod_id = line.product_id.id
-                
-                # Campaign được thêm mới vào dòng này
-                added_ids = set(new_ids) - set(old_ids)
-                if added_ids:
-                    camps = self.env['google.ads.campaign'].sudo().browse(list(added_ids))
-                    camps.with_context(skip_ads_sync=True).write({
-                        'product_ids': [fields.Command.link(prod_id)]
-                    })
-                
-                # Campaign bị gỡ khỏi dòng này
-                removed_ids = set(old_ids) - set(new_ids)
-                if removed_ids:
-                    camps = self.env['google.ads.campaign'].sudo().browse(list(removed_ids))
-                    camps.with_context(skip_ads_sync=True).write({
-                        'product_ids': [fields.Command.unlink(prod_id)]
-                    })
-            return res
-            
+        # Product-Campaign linking is now handled by computed field on Campaign.
+        # No manual sync needed here.
         return super().write(vals)
 
     @api.model_create_multi
     def create(self, vals_list):
-        lines = super().create(vals_list)
-        if not self.env.context.get('skip_ads_sync'):
-            for line in lines:
-                if line.campaign_ids and line.product_id:
-                    line.campaign_ids.sudo().with_context(skip_ads_sync=True).write({
-                        'product_ids': [fields.Command.link(line.product_id.id)]
-                    })
-        return lines
+        return super().create(vals_list)
