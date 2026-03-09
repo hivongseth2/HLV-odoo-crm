@@ -31,15 +31,16 @@ hlv_sale_delivery_planning/
 - **Truy cập CSDL**: Luôn áp dụng phân trang (Pagination) ở cấp độ Backend Server thay vì tải All và chẻ page ở Client.
 
 ## 4. Luồng xử lý chính
-1. **Khởi tạo Component**: Nút *Điều phối Giao hàng* kích hoạt Action `ir.actions.client` gọi OWL Component `hlv_sale_delivery_planning.dashboard`.
 2. **Fetch Data**: Component gọi hàm RPC `get_delivery_dashboard_data` từ frontend về backend.
 3. **Chuyển tiếp Logic (Proxy)**: Hàm trong `sale_order.py` ngay lập tức bypass arguments sang Service `self.env['hlv.delivery.planner.service'].get_dashboard_data(...)`.
 4. **Xử lý Dữ liệu**:
    - `_build_search_domain()`: Gom bộ lọc, tìm `sale.order` khớp.
    - `_process_order_batch()`: Lấy thông tin PO liên quan thông qua field `origin`. Tính Stock Status, Delivery Status.
-   - `_build_flow_nodes()`: Truy vết Delivery `picking` (Outbound) và Receipt `picking` (Backorder, Return) thành Cây (Nodes Flow) liên thông bằng `parent_seq`, `return_of`.
+    - `_build_flow_nodes()`: Truy vết Delivery `picking` (Outbound) và Receipt `picking` (Backorder, Return) thành Cây (Nodes Flow) liên thông bằng `parent_seq`, `return_of`.
+    - `_fetch_packages_for_sales()`: Bóc tách dữ liệu từ `hlv_pack_sequence` để lấy mã Kiện, Số thứ tự kiện và danh sách sản phẩm bên trong từng thùng hàng.
+    - `_calculate_po_and_stock_status()`: Mở rộng tính toán **Packing Status** (Đã đóng gói đủ, Đang đóng gói 1 phần, Chờ hàng về kho).
 5. **Trả kết quả**: Service trả về Dictionary/List cho Model -> Model trả về JSON cho OWL Component.
-6. **Hiển thị**: OWL re-render lại cấu trúc cây, đổ màu Color Indexing và Highlight hover.
+6. **Hiển thị**: OWL re-render cấu trúc cây, đổ màu Color Indexing, Highlight hover và hiển thị **Package Item Cards**.
 
 ## 5. Hướng dẫn Mở rộng
 - Nếu cần **thêm Bộ Lọc (Filter)**: Thêm trường Parameter ở JS RPC, sau đó xuống cập nhật hàm `_build_search_domain()` ở Service. Không cần đụng vào Core Sale Order.

@@ -5,26 +5,81 @@
 
     .card {
         border-radius: 12px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
-        
+
         &:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 15px rgba(0,0,0,0.08);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.08);
         }
 
         /* Color Coding based on Status */
         &.border-danger-soft {
             border-top: 4px solid #dc3545 !important;
-            .card-header { background-color: #fff5f5 !important; }
+
+            .card-header {
+                background-color: #fff5f5 !important;
+            }
         }
+
         &.border-success-soft {
             border-top: 4px solid #198754 !important;
-            .card-header { background-color: #f0fdf4 !important; }
+
+            .card-header {
+                background-color: #f0fdf4 !important;
+            }
         }
     }
 
     .modal-backdrop.show {
         opacity: 0.5;
+    }
+
+    /* KPI Card Rings & Active State */
+    .kpi-card {
+        border: 2px solid transparent !important;
+
+        &.ring-2 {
+            border-width: 2px !important;
+            transform: scale(1.02);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
+        }
+
+        &.ring-danger {
+            border-color: #dc3545 !important;
+        }
+
+        &.ring-warning {
+            border-color: #ffc107 !important;
+        }
+
+        &.ring-info {
+            border-color: #0dcaf0 !important;
+        }
+
+        &.ring-success {
+            border-color: #198754 !important;
+        }
+    }
+
+    /* Package Item Styles */
+    .package-item-container {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+
+        .package-badge {
+            transition: all 0.2s ease;
+
+            &:hover {
+                border-color: #0d6efd !important;
+                background-color: #f8f9fa !important;
+            }
+        }
+    }
+
+    /* Accessibility for status indicators */
+    .mb-opacity-75 {
+        opacity: 0.75;
     }
 }
