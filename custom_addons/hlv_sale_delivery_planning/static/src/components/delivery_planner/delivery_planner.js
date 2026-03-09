@@ -38,6 +38,10 @@ export class DeliveryPlannerDashboard extends Component {
             // Drawer
             isDrawerOpen: false,
             selectedOrder: null,
+
+            // Package Modal
+            isPackageModalOpen: false,
+            selectedPackage: null,
         });
 
         onWillStart(async () => {
@@ -428,11 +432,28 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.selectedPackage = null;
     }
 
-    async printPackageLabel(packageId) {
-        if (!packageId) return;
-        await this.actionService.doAction("hlv_pack_sequence.action_report_single_package_label", {
-            additionalContext: { active_ids: [packageId] },
+    async printPackageLabel(pack) {
+        if (!pack || !pack.picking_id) return;
+
+        await this.actionService.doAction("hlv_pack_sequence.action_report_package_labels", {
+            additionalContext: {
+                active_ids: [pack.picking_id],
+                active_model: 'stock.picking'
+            },
         });
+    }
+
+    formatPackageLocation(locationName) {
+        if (!locationName) {
+            return "khu vực đóng gói";
+        }
+        if (locationName.includes("Partners/Customers")) {
+            return "đã giao khách";
+        }
+        if (locationName.includes("/OUT") || locationName.includes("đầu ra")) {
+            return "chờ xuất kho";
+        }
+        return locationName;
     }
 
     // --- Filter Helpers ---

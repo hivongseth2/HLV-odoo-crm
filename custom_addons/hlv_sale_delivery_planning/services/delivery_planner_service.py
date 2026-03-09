@@ -318,6 +318,7 @@ class DeliveryPlannerService(models.AbstractModel):
                 so_picking_packs[so_id][pick_id]['packages_dict'][pname] = {
                     'id': pid,
                     'name': pname,
+                    'picking_id': pick_id,
                     'location_name': pack_info.get('location_name') or '',
                     'sequence': pack_info.get('pack_sequence') or 0,
                     'total': pack_info.get('pack_total') or 0,
