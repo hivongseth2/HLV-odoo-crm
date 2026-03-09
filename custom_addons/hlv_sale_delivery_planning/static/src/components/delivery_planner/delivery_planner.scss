@@ -108,6 +108,34 @@
         }
     }
 
+    /* Modal Package Details Styling */
+    .modal-content {
+        border-radius: 15px;
+        overflow: hidden;
+
+        .modal-header {
+            border-bottom: 0;
+            padding: 20px;
+        }
+
+        .modal-body {
+            border-bottom-left-radius: 15px;
+            border-bottom-right-radius: 15px;
+        }
+
+        .table {
+            border-radius: 8px;
+            overflow: hidden;
+
+            thead th {
+                background-color: #f8f9fa;
+                border-top: 0;
+                font-weight: 600;
+                color: #495057;
+            }
+        }
+    }
+
     /* Accessibility for status indicators */
     .mb-opacity-75 {
         opacity: 0.75;

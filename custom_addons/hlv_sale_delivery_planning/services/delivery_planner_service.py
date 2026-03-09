@@ -134,10 +134,11 @@ class DeliveryPlannerService(models.AbstractModel):
             elif stock_status == 'partial_ready': dashboard_stats['partial'] += 1
             elif stock_status == 'out_of_stock': dashboard_stats['out_of_stock'] += 1
 
-            if packing_status == 'fully_packed': dashboard_stats['packing_fully'] += 1
-            elif packing_status == 'partial_packed': dashboard_stats['packing_partial'] += 1
-            elif packing_status == 'unpacked': dashboard_stats['packing_unpacked'] += 1
-            elif packing_status == 'waiting_stock': dashboard_stats['packing_waiting'] += 1
+            if has_pending:
+                if packing_status == 'fully_packed': dashboard_stats['packing_fully'] += 1
+                elif packing_status == 'partial_packed': dashboard_stats['packing_partial'] += 1
+                elif packing_status == 'unpacked': dashboard_stats['packing_unpacked'] += 1
+                elif packing_status == 'waiting_stock': dashboard_stats['packing_waiting'] += 1
                 
             if (filter_stock_status == 'all' or stock_status == filter_stock_status) and \
                (filter_packing_status == 'all' or packing_status == filter_packing_status):
