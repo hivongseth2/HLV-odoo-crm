@@ -137,6 +137,37 @@ class GoogleAdsProductFeed(models.Model):
             'context': {'default_feed_id': self.id, 'default_account_id': self.account_id.id},
         }
 
+    def action_auto_link_campaigns(self):
+        """Tự động tìm và link Campaign nếu tên Campaign chứa Mã SP (SKU)"""
+        self.ensure_one()
+        count = 0
+        campaigns = self.env['google.ads.campaign'].search([
+            ('account_id', '=', self.account_id.id),
+            ('status', '=', 'enabled')
+        ])
+        
+        for line in self.line_ids:
+            sku = line.product_default_code
+            if not sku:
+                continue
+            
+            # Tìm các campaign có chứa SKU trong tên (Case-insensitive)
+            matched = campaigns.filtered(lambda c: sku.lower() in (c.name or '').lower())
+            if matched:
+                # Thêm vào Many2many (link)
+                line.campaign_ids = [fields.Command.link(c.id) for c in matched]
+                count += 1
+        
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Thành công'),
+                'message': _('Đã tự động liên kết chiến dịch cho %s sản phẩm dựa trên SKU.') % count,
+                'sticky': False,
+            }
+        }
+
 
 class GoogleAdsProductFeedLine(models.Model):
     _name = 'google.ads.product.feed.line'
