@@ -42,6 +42,9 @@ export class DeliveryPlannerDashboard extends Component {
             // Package Modal
             isPackageModalOpen: false,
             selectedPackage: null,
+
+            // UI State
+            collapsedSections: new Set(), // Track collapsed section keys
         });
 
         onWillStart(async () => {
@@ -282,6 +285,33 @@ export class DeliveryPlannerDashboard extends Component {
         }
 
         return "Hoàn thành";
+    }
+
+    getPackageGroupBadgeClass(so, group) {
+        if (group.picking_state !== 'done') {
+            return this.getPickingStateBadgeClass(group.picking_state);
+        }
+
+        const status = this.formatPackageGroupStatus(so, group);
+        if (status === "Đã giao khách") {
+            return "bg-success text-white"; // Green
+        }
+        if (status === "Đã đóng gói") {
+            return "bg-primary text-white"; // Blue
+        }
+        return "bg-success text-white"; // Hoàn thành default
+    }
+
+    toggleSection(sectionKey) {
+        if (this.state.collapsedSections.has(sectionKey)) {
+            this.state.collapsedSections.delete(sectionKey);
+        } else {
+            this.state.collapsedSections.add(sectionKey);
+        }
+    }
+
+    isSectionCollapsed(sectionKey) {
+        return this.state.collapsedSections.has(sectionKey);
     }
 
     getPickingStateBadgeClass(state) {
