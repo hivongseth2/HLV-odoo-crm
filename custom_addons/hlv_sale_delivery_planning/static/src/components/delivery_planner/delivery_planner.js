@@ -450,7 +450,7 @@ export class DeliveryPlannerDashboard extends Component {
         if (locationName.includes("Partners/Customers")) {
             return "đã giao khách";
         }
-        if (locationName.includes("/OUT")) {
+        if (locationName.includes("/OUT") || locationName.includes("đầu ra")) {
             return "chờ xuất kho";
         }
         return locationName;
