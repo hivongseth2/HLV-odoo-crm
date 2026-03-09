@@ -309,7 +309,7 @@
                                             <div class="d-flex flex-wrap gap-2 package-grid">
                                                 <t t-foreach="so.packages" t-as="pack" t-key="pack.id">
                                                     <div class="package-box-container position-relative" t-att-title="'Bấm để xem chi tiết: ' + pack.name" t-on-click="() => this.openPackageDetails(pack)">
-                                                        <div class="package-box d-flex flex-column align-items-center justify-content-center border rounded shadow-sm bg-white p-2">
+                                                        <div class="package-box d-flex flex-column align-items-center justify-content-center border rounded shadow-sm bg-white p-1">
                                                             <i class="fa fa-archive fa-2x text-primary mb-1"></i>
                                                             <span class="fw-bold small text-truncate w-100 px-1 text-center"><t t-esc="pack.name"/></span>
                                                         </div>

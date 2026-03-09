@@ -406,7 +406,7 @@ export class DeliveryPlannerDashboard extends Component {
 
     async printPackageLabel(packageId) {
         if (!packageId) return;
-        await this.actionService.doAction("hlv_pack_sequence.report_package_label_document", {
+        await this.actionService.doAction("hlv_pack_sequence.action_report_single_package_label", {
             additionalContext: { active_ids: [packageId] },
         });
     }

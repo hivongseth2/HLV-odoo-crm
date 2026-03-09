@@ -214,23 +214,27 @@ class DeliveryPlannerService(models.AbstractModel):
             }
         
         pack_contents = {}
+        # Dùng name làm key để gộp kiện trùng tên (cho trường hợp 1 kiện chứa hàng từ nhiều picking hoặc bị tách ID)
         for ml in move_lines:
             pid = ml['result_package_id'][0]
-            if pid not in pack_contents:
-                pack_info = pack_dict.get(pid, {'id': pid, 'name': ml['result_package_id'][1], 'location_name': '', 'pack_sequence': 0, 'pack_total': 0})
-                pack_contents[pid] = {
-                    'id': pid,
-                    'name': pack_info.get('name') or ml['result_package_id'][1],
+            pack_info = pack_dict.get(pid, {'id': pid, 'name': ml['result_package_id'][1], 'location_name': '', 'pack_sequence': 0, 'pack_total': 0})
+            pname = pack_info.get('name') or ml['result_package_id'][1]
+            
+            if pname not in pack_contents:
+                pack_contents[pname] = {
+                    'id': pid, # Giữ ID đầu tiên để phục vụ việc in ấn
+                    'name': pname,
                     'location_name': pack_info.get('location_name') or '',
                     'sequence': pack_info.get('pack_sequence') or 0,
                     'total': pack_info.get('pack_total') or 0,
                     'product_map': {}
                 }
+            
             prod_name = ml['product_id'][1] if ml['product_id'] else 'Unknown'
             qty = float(ml['quantity']) if ml.get('quantity') else 0.0
-            pack_contents[pid]['product_map'][prod_name] = pack_contents[pid]['product_map'].get(prod_name, 0.0) + qty
+            pack_contents[pname]['product_map'][prod_name] = pack_contents[pname]['product_map'].get(prod_name, 0.0) + qty
 
-        for pid, content in pack_contents.items():
+        for pname, content in pack_contents.items():
             content['products_desc'] = " | ".join([f"{name} (x{int(qty) if qty.is_integer() else qty})" for name, qty in content['product_map'].items() if qty > 0])
 
         picking_to_so = {picking.id: so.id for so in page_sales for picking in so.picking_ids}
@@ -240,13 +244,15 @@ class DeliveryPlannerService(models.AbstractModel):
             so_id = picking_to_so.get(ml['picking_id'][0])
             if so_id:
                 pid = ml['result_package_id'][0]
+                pname = ml['result_package_id'][1]
                 if so_id not in packages_by_so:
                     packages_by_so[so_id] = {}
-                packages_by_so[so_id][pid] = pack_contents[pid]
+                # Gộp theo pname cho từng SO
+                packages_by_so[so_id][pname] = pack_contents[pname]
 
         final_so_packages = {}
         for so_id, p_dict in packages_by_so.items():
-            # Use name property or fallback to ID-based sorting
+            # Sắp xếp theo sequence và sau đó là tên kiện
             final_so_packages[so_id] = sorted(list(p_dict.values()), key=lambda x: (x.get('sequence') or 0, x['name']))
             
         return final_so_packages
