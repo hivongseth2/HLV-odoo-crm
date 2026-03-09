@@ -3,8 +3,13 @@ from odoo.exceptions import UserError
 from markupsafe import Markup
 from datetime import timedelta
 import logging
+import re
 
 _logger = logging.getLogger(__name__)
+
+def clean_str(s):
+    if not s: return ""
+    return re.sub(r'[^a-zA-Z0-9]', '', s).lower()
 
 
 class GoogleAdsProductFeed(models.Model):
@@ -152,39 +157,47 @@ class GoogleAdsProductFeed(models.Model):
 
         for line in self.line_ids:
             sku = (line.product_default_code or '').strip()
-            if not sku:
+            name = (line.product_id.name or '').strip()
+            if not sku and not name:
                 continue
             
-            # Tìm các campaign có chứa SKU trong tên (Case-insensitive, bỏ qua khoảng trắng thừa)
-            matched = campaigns.filtered(lambda c: sku.lower() in (c.name or '').lower().replace(' ', ''))
+            matched = self.env['google.ads.campaign'].browse()
             
-            # Nếu không tìm thấy, thử match chính xác hơn hoặc lỏng hơn
-            if not matched:
-                matched = campaigns.filtered(lambda c: sku.lower() in (c.name or '').lower())
-
+            # 1. Match bằng SKU (Tìm trong tên Campaign - dùng clean_str để bỏ qua dấu gạch, khoảng trắng)
+            if sku:
+                c_sku = clean_str(sku)
+                matched |= campaigns.filtered(lambda c: c_sku in clean_str(c.name))
+            
+            # 2. Match bằng Tên Sản phẩm (Nếu chưa có SKU match)
+            if not matched and name:
+                # Thử tìm tên sản phẩm trong tên campaign
+                matched |= campaigns.filtered(lambda c: name.lower() in (c.name or '').lower())
+                
             if matched:
                 # Thêm vào Many2many (link)
                 line.campaign_ids = [fields.Command.link(c.id) for c in matched]
-                # Gắn sản phẩm trực tiếp vào Campaign (để Campaign biết mình đang QC cái gì)
+                # Gắn sản phẩm trực tiếp vào Campaign
                 matched.write({'product_ids': [fields.Command.link(line.product_id.id)]})
                 count += 1
         
+        message = _('Đã tự động liên kết thành công cho %s sản phẩm.') % count
+        title = _('Thành công')
+        type = 'success'
+        
         if count == 0:
-            # Lấy ví dụ 1 SKU và 1 Campaign để báo lỗi cho dễ hiểu
-            sample_sku = next((l.product_default_code for l in self.line_ids if l.product_default_code), "N/A")
-            sample_camp = campaigns[0].name if campaigns else "N/A"
-            raise UserError(_("Không tìm thấy sự khớp nhau nào giữa SKU sản phẩm và tên Chiến dịch.\n\n"
-                              "Ví dụ: SKU '%s' không xuất hiện trong tên chiến dịch '%s'.\n"
-                              "Hệ thống yêu cầu Tên Chiến dịch phải chứa Mã sản phẩm (ví dụ: 'Giày_Bitis_%s') để tự động nhận diện.") 
-                            % (sample_sku, sample_camp, sample_sku))
+            title = _('Thông báo')
+            message = _('Không tìm thấy Chiến dịch nào khớp với SKU hoặc Tên sản phẩm trong Feed này. '
+                        'Anh vui lòng kiểm tra lại tên Chiến dịch hoặc gán thủ công ở cột "Chiến Dịch Liên Kết".')
+            type = 'warning'
 
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': _('Thành công'),
-                'message': _('Đã tự động liên kết chiến dịch cho %s sản phẩm dựa trên SKU.') % count,
-                'sticky': False,
+                'title': title,
+                'message': message,
+                'type': type,
+                'sticky': count == 0,
             }
         }
 
@@ -337,5 +350,4 @@ class GoogleAdsProductFeedLine(models.Model):
                 removed = old_campaigns - new_campaigns
                 if removed:
                     removed.write({'product_ids': [fields.Command.unlink(prod_id)]})
-                return res
-        return super().write(vals)
+        return res
