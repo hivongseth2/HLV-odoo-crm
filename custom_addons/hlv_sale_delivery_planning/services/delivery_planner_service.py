@@ -237,7 +237,9 @@ class DeliveryPlannerService(models.AbstractModel):
         for pname, content in pack_contents.items():
             content['products_desc'] = " | ".join([f"{name} (x{int(qty) if qty.is_integer() else qty})" for name, qty in content['product_map'].items() if qty > 0])
 
-        picking_data = {p.id: {'id': p.id, 'name': p.name} for so in page_sales for p in so.picking_ids}
+        pickings_objs = self.env['stock.picking'].sudo().browse(all_picking_ids)
+        picking_state_map = {p.id: p.state for p in pickings_objs}
+        
         picking_to_so = {picking.id: so.id for so in page_sales for picking in so.picking_ids}
         
         # Grouping by SO -> Picking -> PackageName
@@ -253,10 +255,13 @@ class DeliveryPlannerService(models.AbstractModel):
             
             if so_id not in so_picking_packs:
                 so_picking_packs[so_id] = {}
-            if pick_id not in so_picking_packs[so_id]:
-                so_picking_packs[so_id][pick_id] = {
+            
+            so_holding_packs = so_picking_packs[so_id]
+            if pick_id not in so_holding_packs:
+                so_holding_packs[pick_id] = {
                     'picking_id': pick_id,
                     'picking_name': pick_name,
+                    'picking_state': picking_state_map.get(pick_id, 'unknown'),
                     'packages_dict': {}
                 }
             
@@ -326,10 +331,21 @@ class DeliveryPlannerService(models.AbstractModel):
         has_delivered = False
         is_fully_ready = True
         so_lines_data = []
+        
+        # Nhận diện Kit để xử lý logic giao hàng (Kit không giao trực tiếp)
+        product_templates = so.order_line.mapped('product_id.product_tmpl_id')
+        kits = self.env['mrp.bom'].sudo().search([
+            ('product_tmpl_id', 'in', product_templates.ids),
+            ('type', '=', 'phantom')
+        ])
+        kit_tmpl_ids = set(kits.mapped('product_tmpl_id').ids)
+
         for line in so.order_line:
             if not line.display_type:
                 p_name = line.product_id.display_name if line.product_id else 'Unknown'
                 p_type = line.product_id.type if line.product_id else 'service'
+                is_kit = line.product_id.product_tmpl_id.id in kit_tmpl_ids
+                
                 qty_avail = product_availabilities.get((line.product_id.id, so.warehouse_id.id), 0.0) if line.product_id and so.warehouse_id else 0.0
                 qty_packed = qty_packed_map.get(p_name, 0.0)
                 
@@ -341,8 +357,11 @@ class DeliveryPlannerService(models.AbstractModel):
                     'qty_packed': qty_packed,
                     'qty_available': qty_avail, 
                     'product_type': p_type,
+                    'is_kit': is_kit,
                 })
-                if p_type != 'service':
+                
+                # Logic: Service và Kit không tính vào pending giao hàng trực tiếp
+                if p_type != 'service' and not is_kit:
                     pending_qty = line.product_uom_qty - line.qty_delivered
                     if pending_qty > 0:
                         has_pending = True

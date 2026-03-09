@@ -245,6 +245,30 @@ export class DeliveryPlannerDashboard extends Component {
         return trans[status] || (status ? status.toUpperCase() : '');
     }
 
+    translatePickingState(state) {
+        const trans = {
+            'draft': 'Nháp',
+            'waiting': 'Chờ phiếu khác',
+            'confirmed': 'Chờ hàng',
+            'assigned': 'Sẵn sàng',
+            'done': 'Đã giao khách',
+            'cancel': 'Đã hủy'
+        };
+        return trans[state] || state;
+    }
+
+    getPickingStateBadgeClass(state) {
+        const mapping = {
+            'draft': 'bg-light text-dark',
+            'waiting': 'bg-warning text-dark',
+            'confirmed': 'bg-info text-white',
+            'assigned': 'bg-primary text-white',
+            'done': 'bg-success text-white',
+            'cancel': 'bg-danger text-white'
+        };
+        return mapping[state] || 'bg-secondary text-white';
+    }
+
     translateStockStatus(status) {
         const trans = {
             'out_of_stock': 'Không có hàng',

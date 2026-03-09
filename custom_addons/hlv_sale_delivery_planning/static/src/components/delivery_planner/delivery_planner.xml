@@ -308,19 +308,24 @@
                                             <h6 class="text-uppercase text-secondary small fw-bold mb-3"><i class="fa fa-cubes me-1"></i> Thông Tin Kiện Hàng (<t t-esc="so.total_packages_count"/>)</h6>
                                             <div class="package-groups">
                                                 <t t-foreach="so.packages" t-as="group" t-key="group.picking_id">
-                                                    <div class="picking-package-group mb-3">
-                                                        <div class="d-flex align-items-center mb-2">
-                                                            <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 py-1 px-2 small">
-                                                                <i class="fa fa-file-text-o me-1"></i> <t t-esc="group.picking_name"/>
-                                                            </span>
-                                                            <hr class="flex-grow-1 ms-2 my-0 opacity-25"/>
+                                                    <div class="picking-package-group mb-3 pb-3 border-bottom">
+                                                        <div class="d-flex align-items-center justify-content-between mb-2">
+                                                            <div class="d-flex align-items-center flex-grow-1">
+                                                                <span class="badge bg-secondary bg-opacity-10 text-primary border border-secondary border-opacity-25 py-1 px-2 small">
+                                                                    <i class="fa fa-file-text-o me-1"></i> <t t-esc="group.picking_name"/>
+                                                                </span>
+                                                                <span t-attf-class="ms-2 badge rounded-pill #{this.getPickingStateBadgeClass(group.picking_state)}" style="font-size: 0.65rem;">
+                                                                    <t t-esc="this.translatePickingState(group.picking_state)"/>
+                                                                </span>
+                                                                <hr class="flex-grow-1 ms-2 my-0 opacity-25"/>
+                                                            </div>
                                                         </div>
                                                         <div class="d-flex flex-wrap gap-2 package-grid">
                                                             <t t-foreach="group.packages" t-as="pack" t-key="pack.id">
                                                                 <div class="package-box-container position-relative" t-att-title="'Bấm để xem chi tiết: ' + pack.name" t-on-click="() => this.openPackageDetails(pack)">
                                                                     <div class="package-box d-flex flex-column align-items-center justify-content-center border rounded shadow-sm bg-white p-1" style="min-width: 85px;">
                                                                         <i class="fa fa-archive fa-2x text-primary mb-1"></i>
-                                                                        <span class="small text-truncate w-100 px-1 text-center" style="font-size: 0.75rem;"><t t-esc="pack.name"/></span>
+                                                                        <span class="small text-truncate w-100 px-1 text-center" style="font-size: 0.60rem;"><t t-esc="pack.name"/></span>
                                                                     </div>
                                                                 </div>
                                                             </t>
@@ -610,7 +615,16 @@
                         <tbody>
                             <t t-foreach="state.selectedOrder.lines" t-as="line" t-key="line.id">
                                 <tr t-att-class="line.product_uom_qty > line.qty_delivered ? 'table-warning' : 'table-success'">
-                                    <td class="text-start"><t t-esc="line.product_id ? line.product_id[1] : 'Unknown'"/></td>
+                                    <td class="text-start">
+                                        <div class="d-flex flex-column">
+                                            <span><t t-esc="line.product_id ? line.product_id[1] : 'Unknown'"/></span>
+                                            <t t-if="line.is_kit">
+                                                <span class="badge bg-warning bg-opacity-25 text-warning-emphasis border border-warning border-opacity-50 align-self-start mt-1" style="font-size: 10px;">
+                                                    <i class="fa fa-gift me-1"></i> Combo (Kit)
+                                                </span>
+                                            </t>
+                                        </div>
+                                    </td>
                                      <td class="fw-bold"><t t-esc="this.formatQty(line.product_uom_qty)"/></td>
                                      <td t-att-class="line.qty_packed &gt;= line.product_uom_qty ? 'text-success fw-bold' : (line.qty_packed &gt; 0 ? 'text-info fw-bold' : 'text-muted')">
                                          <t t-if="line.qty_packed &gt; 0">
@@ -623,7 +637,14 @@
                                          <t t-esc="this.formatQty(line.qty_available)"/>
                                      </td>
                                     <td class="text-primary"><t t-esc="this.formatQty(line.qty_delivered)"/></td>
-                                    <td class="text-danger fw-bold"><t t-esc="this.formatQty(line.product_uom_qty - line.qty_delivered)"/></td>
+                                    <td t-attf-class="fw-bold #{(!line.is_kit &amp;&amp; (line.product_uom_qty - line.qty_delivered) &gt; 0) ? 'text-danger' : 'text-muted opacity-50'}">
+                                        <t t-if="line.is_kit">
+                                            <span class="small">-</span>
+                                        </t>
+                                        <t t-else="">
+                                            <t t-esc="this.formatQty(line.product_uom_qty - line.qty_delivered)"/>
+                                        </t>
+                                    </td>
                                 </tr>
                             </t>
                         </tbody>
