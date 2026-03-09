@@ -324,7 +324,7 @@
                                                                 <span class="badge bg-secondary bg-opacity-10 text-primary border border-secondary border-opacity-25 py-1 px-2 small">
                                                                     <i class="fa fa-file-text-o me-1" title="Phiếu xuất"></i> <t t-esc="group.picking_name"/>
                                                                 </span>
-                                                                <span t-attf-class="ms-2 text-bg-primary badge rounded-pill #{this.getPackageGroupBadgeClass(so, group)}" style="font-size: 0.65rem;">
+                                                                <span t-attf-class="ms-2 badge rounded-pill #{this.getPackageGroupBadgeClass(so, group)}" style="font-size: 0.65rem;">
                                                                     <t t-esc="this.formatPackageGroupStatus(so, group)"/>
                                                                 </span>
                                                                 <hr class="flex-grow-1 ms-2 my-0 opacity-25"/>
@@ -494,8 +494,8 @@
                                                     </t>
                                                 </div>
                                             </t>
+                                            </div>
                                         </div>
-
                                         <h6 class="text-uppercase text-secondary small fw-bold mb-2 mt-2 px-1"><i class="fa fa-cubes me-1" title="Chờ hàng"></i> Sản Phẩm Đang Chờ</h6>
                                         <div class="table-responsive bg-white rounded shadow-sm border mb-3">
                                             <table class="table table-sm table-borderless table-hover mb-0 small">
