@@ -315,7 +315,7 @@
                                                                     <i class="fa fa-file-text-o me-1" title="Phiếu xuất"></i> <t t-esc="group.picking_name"/>
                                                                 </span>
                                                                 <span t-attf-class="ms-2 badge rounded-pill #{this.getPickingStateBadgeClass(group.picking_state)}" style="font-size: 0.65rem;">
-                                                                    <t t-esc="this.translatePickingState(group.picking_state, group.picking_code)"/>
+                                                                    <t t-esc="this.translatePickingState(group.picking_state, group.picking_code, group.picking_name)"/>
                                                                 </span>
                                                                 <hr class="flex-grow-1 ms-2 my-0 opacity-25"/>
                                                             </div>
@@ -375,7 +375,7 @@
                                                                     <span t-if="picking.global_seq > 0" class="badge bg-secondary me-1" title="Thứ tự thời gian"><t t-esc="picking.global_seq"/></span><t t-esc="picking.type_name"/>
                                                                 </div>
                                                                 <span class="badge w-100 mb-1" t-att-class="this.getPickingStatusBadgeClass(picking.state)">
-                                                                    <t t-esc="this.translatePickingStatus(picking.state, picking.code)"/>
+                                                                    <t t-esc="this.translatePickingStatus(picking.state, picking.code, picking.name)"/>
                                                                 </span>
                                                                 <!-- Status checkmark removed from picking card -->
                                                                 <div class="small fw-bold" t-att-class="picking.state == 'done' ? 'text-muted' : 'text-dark'"><t t-esc="picking.name"/></div>
@@ -707,7 +707,7 @@
                                             </div>
                                             <div class="text-end">
                                                 <span class="badge" t-att-class="this.getPickingStatusBadgeClass(picking.state)">
-                                                    <t t-esc="this.translatePickingStatus(picking.state, picking.code)"/>
+                                                    <t t-esc="this.translatePickingStatus(picking.state, picking.code, picking.name)"/>
                                                 </span>
                                             </div>
                                         </div>

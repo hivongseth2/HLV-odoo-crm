@@ -249,13 +249,17 @@ export class DeliveryPlannerDashboard extends Component {
         return trans[status] || (status ? status.toUpperCase() : '');
     }
 
-    translatePickingState(state, code = 'outgoing') {
+    translatePickingState(state, code = 'outgoing', name = '') {
+        const lowerName = (name || "").toLowerCase();
+        let isOut = code === 'outgoing' || lowerName.includes("out") || lowerName.includes("Đầu ra");
+        let isPack = code === 'internal' || lowerName.includes("pack");
+
         const trans = {
             'draft': 'Nháp',
             'waiting': 'Chờ phiếu khác',
             'confirmed': 'Chờ hàng',
             'assigned': 'Sẵn sàng',
-            'done': code === 'outgoing' ? 'Đã giao khách' : (code === 'internal' ? 'Đã đóng gói' : 'Hoàn thành'),
+            'done': isOut ? 'Đã giao khách' : (isPack ? 'Đã đóng gói' : 'Hoàn thành'),
             'cancel': 'Đã hủy'
         };
         return trans[state] || state;
@@ -303,13 +307,17 @@ export class DeliveryPlannerDashboard extends Component {
         return trans[status] || (status ? status.toUpperCase() : '');
     }
 
-    translatePickingStatus(state, code = 'outgoing') {
+    translatePickingStatus(state, code = 'outgoing', name = '') {
+        const lowerName = (name || "").toLowerCase();
+        let isOut = code === 'outgoing' || lowerName.includes("out") || lowerName.includes("Đầu ra");
+        let isPack = code === 'internal' || lowerName.includes("pack");
+
         const trans = {
             'draft': 'Nháp',
             'waiting': 'Chờ QĐ',
             'confirmed': 'Chờ hàng',
             'assigned': 'Sẵn sàng',
-            'done': code === 'outgoing' ? 'Đã giao khách' : (code === 'internal' ? 'Đã đóng gói' : 'Hoàn thành'),
+            'done': isOut ? 'Đã giao khách' : (isPack ? 'Đã đóng gói' : 'Hoàn thành'),
             'cancel': 'Hủy'
         };
         return trans[state] || (state ? state.toUpperCase() : '');
@@ -421,7 +429,7 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.isDrawerOpen = false;
     }
 
-    // --- Package Modal Actions ---
+    // --- Package Modal Actions
     openPackageDetails(pack) {
         this.state.selectedPackage = pack;
         this.state.isPackageModalOpen = true;
