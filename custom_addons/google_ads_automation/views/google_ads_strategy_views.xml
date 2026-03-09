@@ -53,11 +53,11 @@
                     </div>
 
                     <div class="o_kpi_dashboard">
-                         <div class="o_kpi_tile shadow-lg border-0 bg-white">
+                         <div class="o_kpi_tile border-0 bg-white">
                             <span class="o_kpi_label">RULES HIỆN CÓ</span>
                             <span class="o_kpi_value text-info"><field name="rule_count"/></span>
                         </div>
-                        <div class="o_kpi_tile shadow-lg border-0 bg-white">
+                        <div class="o_kpi_tile border-0 bg-white">
                             <span class="o_kpi_label">TRẠNG THÁI</span>
                             <span class="o_kpi_value text-secondary" style="font-size: 14px; padding-top: 10px;">
                                 <field name="state" invisible="1"/>
