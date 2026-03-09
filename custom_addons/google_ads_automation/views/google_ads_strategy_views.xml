@@ -131,7 +131,7 @@
                         </page>
                         <page string="Danh Sách Rules" icon="fa-terminal">
                             <div class="o_premium_card mt-3 p-0 overflow-hidden border-0">
-                                <field name="rule_ids" mode="list" readonly="1">
+                                <field name="rule_ids" mode="list" readonly="1" context="{'active_test': False}">
                                     <list decoration-muted="not active">
                                         <field name="name" class="fw-bold"/>
                                         <field name="condition_field"/>

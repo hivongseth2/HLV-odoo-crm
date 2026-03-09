@@ -173,8 +173,13 @@ class GoogleAdsStrategy(models.Model):
     # ─────────────────────────────────────────────
     def action_activate(self):
         for rec in self:
-            if not rec.rule_ids:
+            # Kiểm tra xem đã có rule nào chưa (kể cả rule đang ẩn)
+            rules = rec.with_context(active_test=False).rule_ids
+            if not rules:
                 rec.action_generate_rules()
+            else:
+                # Kích hoạt tất cả rules hiện có
+                rules.write({'active': True})
             rec.state = 'active'
 
     def action_pause(self):
@@ -192,7 +197,8 @@ class GoogleAdsStrategy(models.Model):
     def action_generate_rules(self):
         """Sinh rules tự động dựa trên strategy_type + product feed"""
         for strategy in self:
-            strategy.rule_ids.filtered(lambda r: r.auto_generated).unlink()
+            # Xoá rules cũ (kể cả rule đang ẩn)
+            strategy.with_context(active_test=False).rule_ids.filtered(lambda r: r.auto_generated).unlink()
 
             lines = strategy.feed_id.line_ids
             if not lines:
