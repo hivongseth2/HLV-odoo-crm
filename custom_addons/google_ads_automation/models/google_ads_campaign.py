@@ -151,8 +151,11 @@ class GoogleAdsCampaign(models.Model):
             rec.hero_header_html = Markup(html)
             
     def write(self, vals):
+        if self.env.context.get('skip_ads_sync'):
+            return super().write(vals)
+
         # Lưu lại trạng thái sản phẩm trước khi cập nhật
-        old_products = {c.id: c.product_ids for c in self}
+        old_products = {c.id: c.product_ids.ids for c in self}
         res = super().write(vals)
         
         if 'product_ids' in vals:
@@ -161,7 +164,7 @@ class GoogleAdsCampaign(models.Model):
                     continue
                 
                 # Tìm Feed đang active của account này
-                feed = self.env['google.ads.product.feed'].search([
+                feed = self.env['google.ads.product.feed'].sudo().search([
                     ('account_id', '=', campaign.account_id.id),
                     ('active', '=', True)
                 ], limit=1)
@@ -169,35 +172,39 @@ class GoogleAdsCampaign(models.Model):
                 if not feed:
                     continue
                 
-                new_products = campaign.product_ids
-                prev_products = old_products.get(campaign.id, self.env['product.template'])
+                new_prod_ids = campaign.product_ids.ids
+                prev_prod_ids = old_products.get(campaign.id, [])
                 
-                # Sản phẩm mới được thêm vào Campaign
-                added_prods = new_products - prev_products
-                for prod in added_prods:
-                    line = self.env['google.ads.product.feed.line'].search([
+                # Sản phẩm mới được thêm trực tiếp vào Campaign
+                added_ids = set(new_prod_ids) - set(prev_prod_ids)
+                for prod_id in added_ids:
+                    line = self.env['google.ads.product.feed.line'].sudo().search([
                         ('feed_id', '=', feed.id),
-                        ('product_id', '=', prod.id)
+                        ('product_id', '=', prod_id)
                     ], limit=1)
                     if line:
                         if campaign.id not in line.campaign_ids.ids:
-                            line.write({'campaign_ids': [fields.Command.link(campaign.id)]})
+                            line.with_context(skip_ads_sync=True).write({
+                                'campaign_ids': [fields.Command.link(campaign.id)]
+                            })
                     else:
-                        self.env['google.ads.product.feed.line'].create({
+                        self.env['google.ads.product.feed.line'].sudo().with_context(skip_ads_sync=True).create({
                             'feed_id': feed.id,
-                            'product_id': prod.id,
+                            'product_id': prod_id,
                             'campaign_ids': [fields.Command.link(campaign.id)]
                         })
                 
                 # Sản phẩm bị gỡ khỏi Campaign
-                removed_prods = prev_products - new_products
-                for prod in removed_prods:
-                    line = self.env['google.ads.product.feed.line'].search([
+                removed_ids = set(prev_prod_ids) - set(new_prod_ids)
+                for prod_id in removed_ids:
+                    line = self.env['google.ads.product.feed.line'].sudo().search([
                         ('feed_id', '=', feed.id),
-                        ('product_id', '=', prod.id)
+                        ('product_id', '=', prod_id)
                     ], limit=1)
                     if line and campaign.id in line.campaign_ids.ids:
-                        line.write({'campaign_ids': [fields.Command.unlink(campaign.id)]})
+                        line.with_context(skip_ads_sync=True).write({
+                            'campaign_ids': [fields.Command.unlink(campaign.id)]
+                        })
         return res
 
     _sql_constraints = [
