@@ -21,9 +21,9 @@ export class DeliveryPlannerDashboard extends Component {
             filterDeliveryStatus: "all",
             filterStockStatus: "all",
             filterDateFrom: "",
-            filterDateTo: "",
-            filterPODateFrom: "",
-            filterPODateTo: "",
+            filterDateTo: null,
+            filterPODateFrom: null,
+            filterPODateTo: null,
             filterPOStatus: "all",
             filterPackingStatus: "all",
 
@@ -390,6 +390,17 @@ export class DeliveryPlannerDashboard extends Component {
 
     closeOverviewDrawer() {
         this.state.isDrawerOpen = false;
+    }
+
+    // --- Package Modal Actions ---
+    openPackageDetails(pack) {
+        this.state.selectedPackage = pack;
+        this.state.isPackageModalOpen = true;
+    }
+
+    closePackageDetails() {
+        this.state.isPackageModalOpen = false;
+        this.state.selectedPackage = null;
     }
 }
 

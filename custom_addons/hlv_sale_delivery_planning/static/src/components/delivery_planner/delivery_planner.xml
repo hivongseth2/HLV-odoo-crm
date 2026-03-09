@@ -274,7 +274,7 @@
                                             <h6 class="text-uppercase text-secondary small fw-bold mb-2"><i class="fa fa-cubes me-1"></i> Thông Tin Kiện Hàng (<t t-esc="so.packages.length"/>)</h6>
                                             <div class="d-flex flex-wrap gap-2 package-grid">
                                                 <t t-foreach="so.packages" t-as="pack" t-key="pack.id">
-                                                    <div class="package-box-container position-relative" t-att-title="pack.name + ': ' + pack.products_desc">
+                                                    <div class="package-box-container position-relative" t-att-title="'Bấm để xem chi tiết hàng trong kiện: ' + pack.name" t-on-click="() => this.openPackageDetails(pack)">
                                                         <div class="package-box d-flex flex-column align-items-center justify-content-center border rounded shadow-sm bg-white p-2">
                                                             <i class="fa fa-archive fa-2x text-primary mb-1"></i>
                                                             <span class="fw-bold small">Kiện #<t t-esc="pack.sequence"/></span>
@@ -654,6 +654,47 @@
                 <div class="p-3 bg-white border-top d-flex justify-content-between align-items-center" style="position: absolute; bottom: 0; width: 100%;">
                     <div class="text-muted small"><strong>Trị giá: </strong> <span class="text-primary fs-6 fw-bold"><t t-esc="this.formatCurrency(state.selectedOrder.amount_total)"/></span></div>
                     <button type="button" class="btn btn-primary" t-on-click="() => { this.openSaleOrder(state.selectedOrder.id); this.closeOverviewDrawer(); }">Mở Đơn Bán</button>
+                </div>
+            </div>
+
+            <!-- Modal Chi Tiết Kiện Hàng (Package Details) -->
+            <div t-if="state.isPackageModalOpen" class="modal show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5); z-index: 1060;">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content shadow-lg border-0">
+                        <div class="modal-header bg-dark text-white p-3">
+                            <h5 class="modal-title m-0"><i class="fa fa-archive me-2"></i> Chi Tiết Kiện: <t t-esc="state.selectedPackage.name"/></h5>
+                            <button type="button" class="btn-close btn-close-white" t-on-click="closePackageDetails"></button>
+                        </div>
+                        <div class="modal-body p-4 bg-light">
+                            <div class="bg-white rounded p-3 border shadow-sm mb-3">
+                                <div class="small text-muted text-uppercase fw-bold mb-2">Thứ tự đóng gói</div>
+                                <div class="fs-5 fw-bold text-primary"><i class="fa fa-sort-amount-asc me-2"></i> Kiện thứ <t t-esc="state.selectedPackage.sequence"/></div>
+                            </div>
+
+                            <h6 class="text-muted text-uppercase small mb-3 fw-bold"><i class="fa fa-list me-1"></i> Danh sách hàng trong kiện</h6>
+                            <div class="table-responsive rounded border bg-white">
+                                <table class="table table-sm table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-3">Sản phẩm</th>
+                                            <th class="text-end pe-3" width="80">SL đóng</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <t t-foreach="Object.entries(state.selectedPackage.product_map)" t-as="entry" t-key="entry[0]">
+                                            <tr>
+                                                <td class="ps-3"><t t-esc="entry[0]"/></td>
+                                                <td class="text-end pe-3 fw-bold text-primary"><t t-esc="this.formatQty(entry[1])"/></td>
+                                            </tr>
+                                        </t>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="modal-footer bg-light border-top p-2">
+                            <button type="button" class="btn btn-secondary" t-on-click="closePackageDetails">Đóng</button>
+                        </div>
+                    </div>
                 </div>
             </div>
             
