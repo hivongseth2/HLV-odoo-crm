@@ -214,9 +214,12 @@ class GoogleAdsStrategy(models.Model):
             else:
                 raise UserError(_("Chưa hỗ trợ chiến lược: %s") % strategy.strategy_type)
 
+            # BẮT BUỘC: Xoá cache để Odoo load lại danh sách rule mới vừa create
+            strategy.invalidate_recordset(['rule_ids'])
+            
             generated_rules = strategy.rule_ids.filtered(lambda r: r.auto_generated)
             if not generated_rules:
-                raise UserError(_("Không có Rule nào được sinh ra. Có thể do điều kiện lọc hoặc cấu hình chưa phù hợp."))
+                raise UserError(_("Không có Rule nào được sinh ra. Anh vui lòng kiểm tra xem các sản phẩm trong Feed '%s' đã được gán 'Chiến Dịch Liên Kết' chưa.") % strategy.feed_id.name)
 
             strategy.message_post(
                 body=_("Đã sinh %s rules tự động cho chiến lược '%s'. (Số sản phẩm có liên kết campaign: %s)")
