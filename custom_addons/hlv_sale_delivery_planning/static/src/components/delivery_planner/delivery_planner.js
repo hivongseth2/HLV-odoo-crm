@@ -249,13 +249,13 @@ export class DeliveryPlannerDashboard extends Component {
         return trans[status] || (status ? status.toUpperCase() : '');
     }
 
-    translatePickingState(state) {
+    translatePickingState(state, code = 'outgoing') {
         const trans = {
             'draft': 'Nháp',
             'waiting': 'Chờ phiếu khác',
             'confirmed': 'Chờ hàng',
             'assigned': 'Sẵn sàng',
-            'done': 'Đã giao khách',
+            'done': code === 'outgoing' ? 'Đã giao khách' : (code === 'internal' ? 'Đã đóng gói' : 'Hoàn thành'),
             'cancel': 'Đã hủy'
         };
         return trans[state] || state;
@@ -303,13 +303,13 @@ export class DeliveryPlannerDashboard extends Component {
         return trans[status] || (status ? status.toUpperCase() : '');
     }
 
-    translatePickingStatus(state) {
+    translatePickingStatus(state, code = 'outgoing') {
         const trans = {
             'draft': 'Nháp',
             'waiting': 'Chờ QĐ',
             'confirmed': 'Chờ hàng',
             'assigned': 'Sẵn sàng',
-            'done': 'Hoàn thành',
+            'done': code === 'outgoing' ? 'Đã giao khách' : (code === 'internal' ? 'Đã đóng gói' : 'Hoàn thành'),
             'cancel': 'Hủy'
         };
         return trans[state] || (state ? state.toUpperCase() : '');
@@ -450,7 +450,7 @@ export class DeliveryPlannerDashboard extends Component {
         if (locationName.includes("Partners/Customers")) {
             return "đã giao khách";
         }
-        if (locationName.includes("/OUT") || locationName.includes("đầu ra")) {
+        if (locationName.includes("/OUT") || locationName.includes("Đầu ra")) {
             return "chờ xuất kho";
         }
         return locationName;
