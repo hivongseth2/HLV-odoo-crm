@@ -363,7 +363,7 @@
                                                                 <!-- Status checkmarks and link indicator -->
                                                                 <span t-if="picking.link_color" class="position-absolute top-0 start-0 translate-middle badge rounded-pill border border-light shadow-sm" t-attf-class="bg-{{picking.link_color}}" style="font-size: 0.65rem; z-index: 5;">
                                                                     <t t-if="picking.return_of or picking.backorder_of">
-                                                                        <i class="fa fa-link" title="Liên kết"></i> Nối <t t-if="picking.parent_seq">[<t t-esc="picking.parent_seq"/>]</t>
+                                                                        <i class="fa fa-link" title="Liên kết"></i> Trả của: <t t-if="picking.parent_seq">[<t t-esc="picking.parent_seq"/>]</t>
                                                                     </t>
                                                                     <t t-else="">
                                                                         <i class="fa fa-link" title="Gốc"></i> Gốc
