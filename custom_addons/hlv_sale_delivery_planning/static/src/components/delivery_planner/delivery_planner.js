@@ -18,7 +18,7 @@ export class DeliveryPlannerDashboard extends Component {
             // Search & Filters
             searchQuery: "",
             filterWarehouseId: "all",
-            filterDeliveryStatus: "all",
+            filterDeliveryStatus: "pending_partial",
             filterStockStatus: "all",
             filterDateFrom: "",
             filterDateTo: null,
@@ -44,7 +44,7 @@ export class DeliveryPlannerDashboard extends Component {
             selectedPackage: null,
 
             // UI State
-            collapsedSections: new Set(), // Track collapsed section keys
+            collapsedSections: new Set(['packages', 'flows', 'pending_products']), // Default collapsed
         });
 
         onWillStart(async () => {

@@ -35,6 +35,8 @@ class DeliveryPlannerService(models.AbstractModel):
         domain = [('state', 'in', ['sale', 'done'])]
         if filter_delivery_status == 'pending_partial':
             domain += [('delivery_status', 'in', ['pending', 'partial'])]
+        elif filter_delivery_status == 'unshipped':
+            domain += [('delivery_status', '=', 'pending')]
         elif filter_delivery_status != 'all':
             domain += [('delivery_status', '=', filter_delivery_status)]
         if filter_warehouse_id != 'all':
