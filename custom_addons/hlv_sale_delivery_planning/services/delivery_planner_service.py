@@ -92,6 +92,14 @@ class DeliveryPlannerService(models.AbstractModel):
         }
         so_status_dict = {}
         
+        # Nhận diện Kit toàn cục cho các đơn trong danh sách (KPI calculation)
+        all_product_tmpl_ids = sales.mapped('order_line.product_id.product_tmpl_id').ids
+        kits = self.env['mrp.bom'].sudo().search([
+            ('product_tmpl_id', 'in', all_product_tmpl_ids),
+            ('type', '=', 'phantom')
+        ])
+        kit_tmpl_ids = set(kits.mapped('product_tmpl_id').ids)
+
         for so in sales:
             has_pending = False
             is_fully_ready = True
@@ -100,6 +108,10 @@ class DeliveryPlannerService(models.AbstractModel):
             
             for line in so.order_line:
                 if not line.display_type and line.product_id and line.product_id.type != 'service':
+                    # Loại trừ Kit khỏi logic pending giao hàng trực tiếp
+                    is_kit = line.product_id.product_tmpl_id.id in kit_tmpl_ids
+                    if is_kit: continue
+                    
                     total_storable_qty += line.product_uom_qty
                     pending_qty = line.product_uom_qty - line.qty_delivered
                     if pending_qty > 0:
