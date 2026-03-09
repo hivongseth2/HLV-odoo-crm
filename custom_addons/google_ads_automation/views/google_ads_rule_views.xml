@@ -7,7 +7,7 @@
             <form string="Quy Tắc Google Ads" class="o_google_ads_premium_form">
                 <header>
                     <button name="run_rule" string="Kích Hoạt Quy Tắc Ngay" type="object" class="btn-primary"/>
-                    <field name="active" widget="statusbar" statusbar_visible="True,False"/>
+                    <field name="active" widget="boolean_toggle"/>
                 </header>
                 <sheet>
                     <field name="hero_header_html" widget="html" readonly="1"/>

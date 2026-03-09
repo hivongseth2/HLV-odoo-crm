@@ -4,7 +4,7 @@
         <field name="name">google.ads.ad.group.list</field>
         <field name="model">google.ads.ad.group</field>
         <field name="arch" type="xml">
-            <list string="Nhóm Quảng Cáo Google Ads" create="false" edit="false" delete="false">
+            <list string="Nhóm Quảng Cáo Google Ads">
                 <field name="name"/>
                 <field name="campaign_id"/>
                 <field name="type"/>
@@ -29,13 +29,15 @@
         <field name="name">google.ads.ad.group.form</field>
         <field name="model">google.ads.ad.group</field>
         <field name="arch" type="xml">
-            <form string="Nhóm Quảng Cáo Google Ads" create="false" edit="false" class="o_google_ads_premium_form">
+            <form string="Nhóm Quảng Cáo Google Ads" class="o_google_ads_premium_form">
                 <sheet>
                     <field name="hero_header_html" widget="html" readonly="1"/>
                     
                     <div class="o_premium_card border-0 bg-light-subtle mb-4" >
                         <group string="Thông Tin Kỹ Thuật">
-                            <field name="google_ad_group_id" readonly="1"/>
+                            <field name="name" class="oe_inline fw-bold" placeholder="Tên Nhóm..."/>
+                            <field name="campaign_id" options="{'no_create': True}"/>
+                            <field name="google_ad_group_id" placeholder="VD: 123456789 (Bắt buộc)"/>
                         </group>
                     </div>
 
