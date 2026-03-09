@@ -305,10 +305,12 @@ class DeliveryPlannerService(models.AbstractModel):
             
             so_holding_packs = so_picking_packs[so_id]
             if pick_id not in so_holding_packs:
+                info = picking_info_map.get(pick_id, {})
                 so_holding_packs[pick_id] = {
                     'picking_id': pick_id,
                     'picking_name': pick_name,
-                    'picking_state': picking_info_map.get(pick_id, {}).get('state', 'unknown'),
+                    'picking_state': info.get('state', 'unknown'),
+                    'picking_code': info.get('code', 'outgoing'),
                     'packages_dict': {}
                 }
             
