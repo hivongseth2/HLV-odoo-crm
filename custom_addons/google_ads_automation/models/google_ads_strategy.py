@@ -221,16 +221,25 @@ class GoogleAdsStrategy(models.Model):
             else:
                 raise UserError(_("Chưa hỗ trợ chiến lược: %s") % strategy.strategy_type)
 
-            # BẮT BUỘC: Xoá cache để Odoo load lại danh sách rule mới vừa create
-            strategy.invalidate_recordset(['rule_ids'])
-            
-            generated_rules = strategy.rule_ids.filtered(lambda r: r.auto_generated)
+            # BẮT BUỘC: Dùng active_test=False vì nếu Strategy đang ở 'draft', 
+            # Rule sẽ được tạo với active=False và search bình thường sẽ không thấy.
+            RuleModel = self.env['google.ads.rule'].with_context(active_test=False)
+            generated_rules = RuleModel.search([
+                ('strategy_id', '=', strategy.id),
+                ('auto_generated', '=', True)
+            ])
             
             if not generated_rules:
                 msg = _("Không có Rule nào được sinh ra. Anh vui lòng kiểm tra xem các sản phẩm trong Feed '%s' đã được gán 'Chiến Dịch Liên Kết' chưa.") % strategy.feed_id.name
                 log_lines.append(f"<span class='text-danger'>{msg}</span>")
                 strategy.message_post(body=Markup("<br/>".join(log_lines)))
+                # Chỉ raise error khi thực sự không tạo được gì (để tránh rollback oan)
                 raise UserError(msg)
+
+            # Kiểm tra trạng thái Kích hoạt
+            inactive_rules = generated_rules.filtered(lambda r: not r.active)
+            if inactive_rules:
+                log_lines.append(_("<i class='fa fa-warning text-warning'></i> <b>Lưu ý:</b> Có %s rules được tạo ở trạng thái <b>Chưa kích hoạt</b> (do Chiến lược đang ở 'Nháp').") % len(inactive_rules))
 
             # Thêm chi tiết các rule đã sinh vào chatter
             log_lines.append(_("— Số sản phẩm có liên kết campaign: %s") % len(linked_lines))
