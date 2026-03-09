@@ -492,7 +492,7 @@
                                                 <tbody>
                                                     <t t-if="so.lines and so.lines.length > 0">
                                                         <t t-foreach="so.lines" t-as="line" t-key="line.id">
-                                                            <tr t-if="!line.is_kit &amp;&amp; line.product_uom_qty > line.qty_delivered">
+                                                            <tr t-if="line.product_uom_qty > line.qty_delivered">
                                                                 <td class="ps-3 text-truncate" style="max-width: 200px;" t-att-title="line.product_id ? line.product_id[1] : 'Unknown'">
                                                                     <t t-esc="line.product_id ? line.product_id[1] : 'Unknown'"/>
                                                                 </td>
