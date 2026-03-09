@@ -40,6 +40,15 @@
                         </h1>
                     </div>
 
+                    <div class="o_premium_card mb-4 mt-3">
+                        <h5 class="text-primary fw-bold mb-3 border-bottom pb-2">
+                            <i class="fa fa-google me-2"></i>Liên Kết Tài Khoản
+                        </h5>
+                        <group>
+                            <field name="account_id" options="{'no_create': True}" placeholder="Chọn tài khoản Google Ads..."/>
+                        </group>
+                    </div>
+
                     <div class="o_kpi_dashboard">
                         <div class="o_kpi_tile shadow-lg border-0 bg-white">
                             <span class="o_kpi_label">CHIẾN LƯỢC ĐANG CHẠY</span>
