@@ -58,9 +58,30 @@
                             <span class="o_kpi_value text-info"><field name="rule_count"/></span>
                         </div>
                         <div class="o_kpi_tile shadow-lg border-0 bg-white">
-                            <span class="o_kpi_label">TÀI KHOẢN ĐÍCH</span>
-                            <span class="o_kpi_value text-secondary" style="font-size: 14px; padding-top: 10px;"><field name="account_id"/></span>
+                            <span class="o_kpi_label">TRẠNG THÁI</span>
+                            <span class="o_kpi_value text-secondary" style="font-size: 14px; padding-top: 10px;">
+                                <field name="state" invisible="1"/>
+                                <span invisible="state != 'draft'" class="badge text-bg-secondary">Bản Nháp</span>
+                                <span invisible="state != 'active'" class="badge text-bg-success">Đang Chạy</span>
+                                <span invisible="state != 'paused'" class="badge text-bg-warning">Tạm Dừng</span>
+                            </span>
                         </div>
+                    </div>
+
+                    <div class="o_premium_card mb-4 mt-3">
+                        <h5 class="text-primary fw-bold mb-3 border-bottom pb-2">
+                            <i class="fa fa-info-circle me-2"></i>Thông Tin Cấu Hình
+                        </h5>
+                        <group>
+                            <group>
+                                <field name="account_id" options="{'no_create': True}"/>
+                                <field name="feed_id" options="{'no_create': True}"/>
+                            </group>
+                            <group>
+                                <field name="strategy_type"/>
+                                <field name="sequence" groups="base.group_no_one"/>
+                            </group>
+                        </group>
                     </div>
 
                     <notebook>

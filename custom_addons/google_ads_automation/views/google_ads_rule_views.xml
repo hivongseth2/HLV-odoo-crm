@@ -53,7 +53,8 @@
                             <div class="o_premium_card">
                                 <h5 class="text-secondary fw-bold mb-3"><i class="fa fa-cog me-2"></i>Liên Kết Hệ Thống</h5>
                                 <group>
-                                    <field name="account_id" readonly="1"/>
+                                    <field name="account_id" options="{'no_create': True}" readonly="auto_generated"/>
+                                    <field name="target_type"/>
                                     <field name="strategy_id" readonly="1" invisible="not strategy_id"/>
                                     <field name="product_feed_line_id" readonly="1" invisible="not product_feed_line_id"/>
                                 </group>
