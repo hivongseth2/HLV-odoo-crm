@@ -166,7 +166,7 @@ class GoogleAdsProductFeed(models.Model):
                 # Thêm vào Many2many (link)
                 line.campaign_ids = [fields.Command.link(c.id) for c in matched]
                 # Gắn sản phẩm trực tiếp vào Campaign (để Campaign biết mình đang QC cái gì)
-                matched.write({'product_id': line.product_id.id})
+                matched.write({'product_ids': [fields.Command.link(line.product_id.id)]})
                 count += 1
         
         if count == 0:
@@ -309,3 +309,33 @@ class GoogleAdsProductFeedLine(models.Model):
                 line.stock_status = 'high'
             else:
                 line.stock_status = 'normal'
+    @api.model_create_multi
+    def create(self, vals_list):
+        lines = super().create(vals_list)
+        for line in lines:
+            if line.campaign_ids and line.product_id:
+                line.campaign_ids.write({'product_ids': [fields.Command.link(line.product_id.id)]})
+        return lines
+
+    def write(self, vals):
+        if 'campaign_ids' in vals:
+            # Lấy tập hợp campaign cũ và mới để xử lý đồng bộ
+            for line in self:
+                old_campaigns = line.campaign_ids
+                res = super(GoogleAdsProductFeedLine, line).write(vals)
+                new_campaigns = line.campaign_ids
+                
+                # Sản phẩm này
+                prod_id = line.product_id.id
+                
+                # Thêm cho các campaign mới được gán
+                added = new_campaigns - old_campaigns
+                if added:
+                    added.write({'product_ids': [fields.Command.link(prod_id)]})
+                
+                # Xóa cho các campaign bị gỡ bỏ
+                removed = old_campaigns - new_campaigns
+                if removed:
+                    removed.write({'product_ids': [fields.Command.unlink(prod_id)]})
+                return res
+        return super().write(vals)

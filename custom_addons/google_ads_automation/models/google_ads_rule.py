@@ -199,37 +199,45 @@ class GoogleAdsRule(models.Model):
 
         # Product-aware fields — lấy từ Feed Line hoặc trực tiếp từ Product trên Campaign/AdGroup
         if field in ('stock_qty', 'margin_percent', 'days_of_stock', 'avg_daily_sales', 'is_new_product'):
-            product = False
             feed_line = self.product_feed_line_id
             
             if feed_line:
-                product = feed_line  # feed_line has the same field names as what we use below
-            elif hasattr(rec, 'product_id') and rec.product_id:
-                # Nếu không có feed_line, ta lấy thông tin từ Product template của Campaign
-                product = rec.product_id
-            
-            if not product:
-                return 0
+                # Trường hợp có Feed Line cụ thể (Rule sinh từ Strategy)
+                product = feed_line
+                if field == 'stock_qty': return product.qty_available
+                elif field == 'margin_percent': return product.margin_percent
+                elif field == 'days_of_stock': return product.days_of_stock
+                elif field == 'avg_daily_sales': return product.avg_daily_sales
+                elif field == 'is_new_product':
+                    days = self.strategy_id.new_product_days if self.strategy_id else 30
+                    cutoff = fields.Date.today() - timedelta(days=days)
+                    create_date = product.product_id.create_date.date()
+                    return 1 if create_date >= cutoff else 0
 
-            if field == 'stock_qty':
-                return product.qty_available
-            elif field == 'margin_percent':
-                # Nếu là product template, ta tự tính margin
-                if hasattr(product, 'margin_percent'):
-                    return product.margin_percent
-                return (product.list_price - product.standard_price) / product.list_price * 100 if product.list_price > 0 else 0
-            elif field == 'days_of_stock':
-                if hasattr(product, 'days_of_stock'):
-                    return product.days_of_stock
-                # Fallback calculation if possible or return 0
-                return 0
-            elif field == 'avg_daily_sales':
-                return product.avg_daily_sales if hasattr(product, 'avg_daily_sales') else 0
-            elif field == 'is_new_product':
-                days = self.strategy_id.new_product_days if self.strategy_id else 30
-                cutoff = fields.Date.today() - timedelta(days=days)
-                create_date = product.create_date.date() if hasattr(product.create_date, 'date') else product.create_date
-                return 1 if create_date >= cutoff else 0
+            elif hasattr(rec, 'product_ids') and rec.product_ids:
+                # Trường hợp Rule thủ công đánh vào Campaign có nhiều SP
+                products = rec.product_ids
+                if field == 'stock_qty':
+                    # Lấy tổng tồn kho của các SP trong campaign này
+                    return sum(p.qty_available for p in products)
+                elif field == 'margin_percent':
+                    # Lấy trung bình cộng biên lợi nhuận
+                    margins = [(p.list_price - p.standard_price) / p.list_price * 100 for p in products if p.list_price > 0]
+                    return sum(margins) / len(margins) if margins else 0
+                elif field == 'days_of_stock':
+                    # Lấy số ngày tồn thấp nhất (nguy hiểm nhất)
+                    active_days = [p.qty_available / p.avg_daily_sales for p in products if hasattr(p, 'avg_daily_sales') and p.avg_daily_sales > 0]
+                    return min(active_days) if active_days else 9999
+                elif field == 'avg_daily_sales':
+                    return sum(p.avg_daily_sales for p in products if hasattr(p, 'avg_daily_sales'))
+                elif field == 'is_new_product':
+                    # Rule thỏa mãn nếu CÓ BẤT KỲ sản phẩm nào là mới
+                    days = self.strategy_id.new_product_days if self.strategy_id else 30
+                    cutoff = fields.Date.today() - timedelta(days=days)
+                    return 1 if any(p.create_date.date() >= cutoff for p in products) else 0
+            
+            return 0
+
 
         # Google Ads metrics
         if field == 'cpa':

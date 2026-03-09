@@ -70,7 +70,8 @@ class GoogleAdsAd(models.Model):
     name = fields.Char(string='Tên/Tiêu Đề Quảng Cáo')
     ad_group_id = fields.Many2one('google.ads.ad.group', string='Nhóm Quảng Cáo', required=True, ondelete='cascade')
     google_ad_id = fields.Char(string='Google Ad ID', required=True, index=True)
-    product_id = fields.Many2one('product.template', string='Sản Phẩm', ondelete='set null')
+    product_ids = fields.Many2many('product.template', 'google_ads_ad_product_rel', 
+                                    'ad_id', 'product_id', string='Sản Phẩm')
 
     status = fields.Selection([
         ('unspecified', 'Chưa xác định'),
