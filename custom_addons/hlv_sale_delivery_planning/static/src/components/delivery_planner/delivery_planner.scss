@@ -1,0 +1,143 @@
+.hlv_delivery_planner_dashboard {
+    background-color: #f0f2f5;
+    min-height: 100vh;
+    padding-bottom: 50px;
+
+    .card {
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+        &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.08);
+        }
+
+        /* Color Coding based on Status */
+        &.border-danger-soft {
+            border-top: 4px solid #dc3545 !important;
+
+            .card-header {
+                background-color: #fff5f5 !important;
+            }
+        }
+
+        &.border-success-soft {
+            border-top: 4px solid #198754 !important;
+
+            .card-header {
+                background-color: #f0fdf4 !important;
+            }
+        }
+    }
+
+    .modal-backdrop.show {
+        opacity: 0.5;
+    }
+
+    /* KPI Card Rings & Active State */
+    .kpi-card {
+        border: 2px solid transparent !important;
+
+        &.ring-2 {
+            border-width: 2px !important;
+            transform: scale(1.02);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
+        }
+
+        &.ring-danger {
+            border-color: #dc3545 !important;
+        }
+
+        &.ring-warning {
+            border-color: #ffc107 !important;
+        }
+
+        &.ring-info {
+            border-color: #0dcaf0 !important;
+        }
+
+        &.ring-success {
+            border-color: #198754 !important;
+        }
+    }
+
+    /* Package Item Styles (Upgraded to Boxes) */
+    .package-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .package-box-container {
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+
+        .package-box {
+            width: 85px;
+            height: 75px;
+            background: #ffffff;
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+
+            i {
+                color: #0d6efd;
+                transition: transform 0.3s ease;
+            }
+
+            span {
+                color: #6c757d;
+                font-size: 0.75rem;
+            }
+        }
+
+        &:hover {
+            transform: translateY(-5px);
+
+            .package-box {
+                border-color: #0d6efd;
+                box-shadow: 0 5px 15px rgba(13, 110, 253, 0.2);
+                background-color: #f0f7ff;
+
+                i {
+                    transform: scale(1.15);
+                    color: #0a58ca;
+                }
+            }
+        }
+    }
+
+    /* Modal Package Details Styling */
+    .modal-content {
+        border-radius: 15px;
+        overflow: hidden;
+
+        .modal-header {
+            border-bottom: 0;
+            padding: 20px;
+        }
+
+        .modal-body {
+            border-bottom-left-radius: 15px;
+            border-bottom-right-radius: 15px;
+        }
+
+        .table {
+            border-radius: 8px;
+            overflow: hidden;
+
+            thead th {
+                background-color: #f8f9fa;
+                border-top: 0;
+                font-weight: 600;
+                color: #495057;
+            }
+        }
+    }
+
+    /* Accessibility for status indicators */
+    .mb-opacity-75 {
+        opacity: 0.75;
+    }
+}
