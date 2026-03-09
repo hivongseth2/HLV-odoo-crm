@@ -237,23 +237,66 @@ class DeliveryPlannerService(models.AbstractModel):
         for pname, content in pack_contents.items():
             content['products_desc'] = " | ".join([f"{name} (x{int(qty) if qty.is_integer() else qty})" for name, qty in content['product_map'].items() if qty > 0])
 
+        picking_data = {p.id: {'id': p.id, 'name': p.name} for so in page_sales for p in so.picking_ids}
         picking_to_so = {picking.id: so.id for so in page_sales for picking in so.picking_ids}
-        packages_by_so = {}
         
+        # Grouping by SO -> Picking -> PackageName
+        so_picking_packs = {}
         for ml in move_lines:
             so_id = picking_to_so.get(ml['picking_id'][0])
-            if so_id:
-                pid = ml['result_package_id'][0]
-                pname = ml['result_package_id'][1]
-                if so_id not in packages_by_so:
-                    packages_by_so[so_id] = {}
-                # Gộp theo pname cho từng SO
-                packages_by_so[so_id][pname] = pack_contents[pname]
+            if not so_id: continue
+            
+            pick_id = ml['picking_id'][0]
+            pick_name = ml['picking_id'][1]
+            pid = ml['result_package_id'][0]
+            pname = ml['result_package_id'][1]
+            
+            if so_id not in so_picking_packs:
+                so_picking_packs[so_id] = {}
+            if pick_id not in so_picking_packs[so_id]:
+                so_picking_packs[so_id][pick_id] = {
+                    'picking_id': pick_id,
+                    'picking_name': pick_name,
+                    'packages_dict': {}
+                }
+            
+            # Pack details (ensure unique by name within the picking/SO context)
+            if pname not in so_picking_packs[so_id][pick_id]['packages_dict']:
+                pack_info = pack_dict.get(pid, {'id': pid, 'name': pname, 'location_name': '', 'pack_sequence': 0, 'pack_total': 0})
+                so_picking_packs[so_id][pick_id]['packages_dict'][pname] = {
+                    'id': pid,
+                    'name': pname,
+                    'location_name': pack_info.get('location_name') or '',
+                    'sequence': pack_info.get('pack_sequence') or 0,
+                    'total': pack_info.get('pack_total') or 0,
+                    'product_map': {}
+                }
+            
+            p_content = so_picking_packs[so_id][pick_id]['packages_dict'][pname]
+            prod_name = ml['product_id'][1] if ml['product_id'] else 'Unknown'
+            qty = float(ml['quantity']) if ml.get('quantity') else 0.0
+            p_content['product_map'][prod_name] = p_content['product_map'].get(prod_name, 0.0) + qty
 
+        # Final formatting and sorting
         final_so_packages = {}
-        for so_id, p_dict in packages_by_so.items():
-            # Sắp xếp theo sequence và sau đó là tên kiện
-            final_so_packages[so_id] = sorted(list(p_dict.values()), key=lambda x: (x.get('sequence') or 0, x['name']))
+        for so_id, pickings_dict in so_picking_packs.items():
+            sorted_groups = []
+            # Sort pickings by creation/ID or something logical (default order from SO pickings)
+            so = page_sales.filtered(lambda x: x.id == so_id)
+            for p in so.picking_ids:
+                if p.id in pickings_dict:
+                    group = pickings_dict[p.id]
+                    # Format product desc for each pack
+                    pack_list = []
+                    for pname, content in group['packages_dict'].items():
+                        content['products_desc'] = " | ".join([f"{name} (x{int(qty) if qty.is_integer() else qty})" for name, qty in content['product_map'].items() if qty > 0])
+                        pack_list.append(content)
+                    
+                    group['packages'] = sorted(pack_list, key=lambda x: (x.get('sequence') or 0, x['name']))
+                    del group['packages_dict']
+                    sorted_groups.append(group)
+            
+            final_so_packages[so_id] = sorted_groups
             
         return final_so_packages
 
@@ -271,9 +314,13 @@ class DeliveryPlannerService(models.AbstractModel):
             
         # Calculate packed quantity per product for this SO
         qty_packed_map = {} # {product_name: qty}
-        for pack in so_packages_dict.get(so.id, []):
-            for prod_name, qty in pack.get('product_map', {}).items():
-                qty_packed_map[prod_name] = qty_packed_map.get(prod_name, 0.0) + qty
+        total_packages_count = 0
+        package_groups = so_packages_dict.get(so.id, [])
+        for group in package_groups:
+            for pack in group.get('packages', []):
+                total_packages_count += 1
+                for prod_name, qty in pack.get('product_map', {}).items():
+                    qty_packed_map[prod_name] = qty_packed_map.get(prod_name, 0.0) + qty
 
         has_pending = False
         has_delivered = False
@@ -345,7 +392,8 @@ class DeliveryPlannerService(models.AbstractModel):
             'packing_status': packing_status,
             'picking_warehouse_ids': picking_warehouse_ids,
             'pos': po_data, 'flows': flows, 'pickings': flat_pickings, 'lines': so_lines_data,
-            'packages': so_packages_dict.get(so.id, []),
+            'packages': package_groups,
+            'total_packages_count': total_packages_count,
         }
 
     def _build_flow_nodes(self, so, att_by_picking):
