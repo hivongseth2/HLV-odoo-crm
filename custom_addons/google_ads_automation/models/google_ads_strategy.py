@@ -221,10 +221,12 @@ class GoogleAdsStrategy(models.Model):
             else:
                 raise UserError(_("Chưa hỗ trợ chiến lược: %s") % strategy.strategy_type)
 
-            # BẮT BUỘC: Xoá cache để Odoo load lại danh sách rule mới vừa create
-            strategy.invalidate_recordset(['rule_ids'])
-            
-            generated_rules = strategy.rule_ids.filtered(lambda r: r.auto_generated)
+            # BẮT BUỘC: Dùng search trực tiếp vào DB thay vì cache RuleIds (One2many) 
+            # để đảm bảo lấy được các bản ghi vừa được create ở trên.
+            generated_rules = self.env['google.ads.rule'].search([
+                ('strategy_id', '=', strategy.id),
+                ('auto_generated', '=', True)
+            ])
             
             if not generated_rules:
                 msg = _("Không có Rule nào được sinh ra. Anh vui lòng kiểm tra xem các sản phẩm trong Feed '%s' đã được gán 'Chiến Dịch Liên Kết' chưa.") % strategy.feed_id.name
