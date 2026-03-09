@@ -294,12 +294,12 @@ export class DeliveryPlannerDashboard extends Component {
 
         const status = this.formatPackageGroupStatus(so, group);
         if (status === "Đã giao khách") {
-            return "bg-success text-white"; // Green
+            return "bg-success text-bg-success"; // Green
         }
         if (status === "Đã đóng gói") {
-            return "bg-primary text-white"; // Blue
+            return "bg-info text-bg-info"; // Blue
         }
-        return "bg-success text-white"; // Hoàn thành default
+        return "bg-primary text-bg-primary"; // Hoàn thành default
     }
 
     toggleSection(sectionKey) {
