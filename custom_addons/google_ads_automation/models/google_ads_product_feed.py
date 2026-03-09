@@ -148,11 +148,11 @@ class GoogleAdsProductFeed(models.Model):
         count = 0
         campaigns = self.env['google.ads.campaign'].search([
             ('account_id', '=', self.account_id.id),
-            ('status', '=', 'enabled')
+            ('status', 'in', ['enabled', 'paused', 'unknown'])
         ])
         
         if not campaigns:
-            raise UserError(_("Không tìm thấy Chiến dịch nào đang 'Hoạt động' trong tài khoản '%s'. "
+            raise UserError(_("Không tìm thấy Chiến dịch nào khớp trong tài khoản '%s'. "
                               "Anh vui lòng nhấn 'Đồng bộ dữ liệu' ở Tài khoản Google Ads trước.") % self.account_id.name)
 
         for line in self.line_ids:
@@ -174,10 +174,8 @@ class GoogleAdsProductFeed(models.Model):
                 matched |= campaigns.filtered(lambda c: name.lower() in (c.name or '').lower())
                 
             if matched:
-                # Thêm vào Many2many (link)
+                # Thêm vào Many2many (link) - trigger recompute of product_ids on campaign
                 line.campaign_ids = [fields.Command.link(c.id) for c in matched]
-                # Gắn sản phẩm trực tiếp vào Campaign
-                matched.write({'product_ids': [fields.Command.link(line.product_id.id)]})
                 count += 1
         
         message = _('Đã tự động liên kết thành công cho %s sản phẩm.') % count
