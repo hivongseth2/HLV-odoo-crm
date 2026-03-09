@@ -251,7 +251,7 @@ export class DeliveryPlannerDashboard extends Component {
 
     translatePickingState(state, code = 'outgoing', name = '') {
         const lowerName = (name || "").toLowerCase();
-        let isOut = code === 'outgoing' || lowerName.includes("out") || lowerName.includes("Đầu ra");
+        let isOut = code === 'outgoing' || lowerName.includes("out") || lowerName.includes("đầu ra");
         let isPack = code === 'internal' || lowerName.includes("pack");
 
         const trans = {
@@ -307,17 +307,13 @@ export class DeliveryPlannerDashboard extends Component {
         return trans[status] || (status ? status.toUpperCase() : '');
     }
 
-    translatePickingStatus(state, code = 'outgoing', name = '') {
-        const lowerName = (name || "").toLowerCase();
-        let isOut = code === 'outgoing' || lowerName.includes("out") || lowerName.includes("Đầu ra");
-        let isPack = code === 'internal' || lowerName.includes("pack");
-
+    translatePickingStatus(state) {
         const trans = {
             'draft': 'Nháp',
             'waiting': 'Chờ QĐ',
             'confirmed': 'Chờ hàng',
             'assigned': 'Sẵn sàng',
-            'done': isOut ? 'Đã giao khách' : (isPack ? 'Đã đóng gói' : 'Hoàn thành'),
+            'done': 'Hoàn thành',
             'cancel': 'Hủy'
         };
         return trans[state] || (state ? state.toUpperCase() : '');
