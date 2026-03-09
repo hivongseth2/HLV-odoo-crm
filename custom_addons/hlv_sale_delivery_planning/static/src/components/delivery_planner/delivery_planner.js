@@ -443,6 +443,19 @@ export class DeliveryPlannerDashboard extends Component {
         });
     }
 
+    formatPackageLocation(locationName) {
+        if (!locationName) {
+            return "khu vực đóng gói";
+        }
+        if (locationName.includes("Partners/Customers")) {
+            return "đã giao khách";
+        }
+        if (locationName.includes("/OUT")) {
+            return "chờ xuất kho";
+        }
+        return locationName;
+    }
+
     // --- Filter Helpers ---
     get hasActiveFilters() {
         return this.state.searchQuery ||

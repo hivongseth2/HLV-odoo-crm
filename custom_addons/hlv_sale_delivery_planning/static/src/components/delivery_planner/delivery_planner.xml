@@ -743,7 +743,7 @@
                                 <div class="col-6">
                                     <div class="bg-white rounded p-3 border shadow-sm h-100">
                                         <div class="small text-muted text-uppercase fw-bold mb-1">Vị trí hiện tại</div>
-                                        <div class="fw-bold text-success"><i class="fa fa-map-marker me-2" title="Vị trí"></i> <t t-esc="state.selectedPackage.location_name || 'Không rõ'"/></div>
+                                        <div class="fw-bold text-success"><i class="fa fa-map-marker me-2" title="Vị trí"></i> <t t-esc="this.formatPackageLocation(state.selectedPackage.location_name)"/></div>
                                     </div>
                                 </div>
                             </div>
