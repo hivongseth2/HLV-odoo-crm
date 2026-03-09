@@ -429,7 +429,7 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.isDrawerOpen = false;
     }
 
-    // --- Package Modal Actions ---
+    // --- Package Modal Actions
     openPackageDetails(pack) {
         this.state.selectedPackage = pack;
         this.state.isPackageModalOpen = true;
