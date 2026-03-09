@@ -28,6 +28,7 @@
                 <header>
                     <button name="action_refresh_stock" string="Cập Nhật Tồn Kho" type="object" class="btn-primary"/>
                     <button name="action_add_products_wizard" string="Thêm Sản Phẩm" type="object" class="btn-success"/>
+                    <button name="action_auto_link_campaigns" string="Auto-Link Campaign" type="object" class="btn-info" icon="fa-magic" help="Tự động tìm chiến dịch dựa trên SKU sản phẩm"/>
                     <button name="action_view_strategies" string="Cấu Hình Chiến Lược" type="object" class="btn-secondary"/>
                     <field name="active" invisible="1"/>
                 </header>

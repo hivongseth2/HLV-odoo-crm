@@ -200,6 +200,13 @@ class GoogleAdsStrategy(models.Model):
                 raise UserError(_("Feed '%s' chưa có sản phẩm nào. "
                                   "Hãy thêm sản phẩm trước.") % strategy.feed_id.name)
 
+            # Kiểm tra xem có bao nhiêu sản phẩm đã có link Campaign
+            linked_lines = lines.filtered(lambda l: l.campaign_ids)
+            if not linked_lines:
+                raise UserError(_("Không có sản phẩm nào trong Feed '%s' được liên kết với Chiến dịch Google Ads. "
+                                  "Anh vui lòng chọn 'Chiến Dịch Liên Kết' cho các sản phẩm trong Product Feed trước khi sinh Rule.") 
+                                % strategy.feed_id.name)
+
             method_name = f'_generate_rules_{strategy.strategy_type}'
             method = getattr(strategy, method_name, None)
             if method:
@@ -207,9 +214,13 @@ class GoogleAdsStrategy(models.Model):
             else:
                 raise UserError(_("Chưa hỗ trợ chiến lược: %s") % strategy.strategy_type)
 
+            generated_rules = strategy.rule_ids.filtered(lambda r: r.auto_generated)
+            if not generated_rules:
+                raise UserError(_("Không có Rule nào được sinh ra. Có thể do điều kiện lọc hoặc cấu hình chưa phù hợp."))
+
             strategy.message_post(
-                body=_("Đã sinh %s rules tự động cho chiến lược '%s'.")
-                     % (len(strategy.rule_ids.filtered('auto_generated')), strategy.name)
+                body=_("Đã sinh %s rules tự động cho chiến lược '%s'. (Số sản phẩm có liên kết campaign: %s)")
+                     % (len(generated_rules), strategy.name, len(linked_lines))
             )
 
     # ── protect_low ──────────────────────────────
