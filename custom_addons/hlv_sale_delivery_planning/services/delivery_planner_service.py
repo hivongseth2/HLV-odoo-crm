@@ -79,7 +79,7 @@ class DeliveryPlannerService(models.AbstractModel):
             packed_groups = self.env['stock.move.line']._read_group(
                 [('picking_id', 'in', all_picking_ids), ('result_package_id', '!=', False), ('state', '!=', 'cancel')],
                 ['picking_id'],
-                ['qty_done:sum']
+                ['quantity:sum']
             )
             for picking, qty in packed_groups:
                 if picking.sale_id:
@@ -194,7 +194,7 @@ class DeliveryPlannerService(models.AbstractModel):
             ('picking_id', 'in', all_picking_ids),
             ('result_package_id', '!=', False),
             ('state', '!=', 'cancel')
-        ], ['picking_id', 'result_package_id', 'product_id', 'qty_done'])
+        ], ['picking_id', 'result_package_id', 'product_id', 'quantity'])
 
         if not move_lines: return {}
 
@@ -221,7 +221,7 @@ class DeliveryPlannerService(models.AbstractModel):
                     'product_map': {}
                 }
             prod_name = ml['product_id'][1] if ml['product_id'] else 'Unknown'
-            qty = float(ml['qty_done']) if ml.get('qty_done') else 0.0
+            qty = float(ml['quantity']) if ml.get('quantity') else 0.0
             pack_contents[pid]['product_map'][prod_name] = pack_contents[pid]['product_map'].get(prod_name, 0.0) + qty
 
         for pid, content in pack_contents.items():
