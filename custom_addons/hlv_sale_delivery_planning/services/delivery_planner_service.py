@@ -139,7 +139,7 @@ class DeliveryPlannerService(models.AbstractModel):
             for line in so.order_line:
                 if not line.display_type and line.product_id and line.product_id.type != 'service':
                     total_storable_qty += line.product_uom_qty
-                        pending_qty = line.product_uom_qty - line.qty_delivered
+                    pending_qty = line.product_uom_qty - line.qty_delivered
                     if pending_qty > 0:
                         has_pending = True
                         total_pending += pending_qty
