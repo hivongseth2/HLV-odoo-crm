@@ -310,7 +310,7 @@
                                                 <t t-foreach="so.packages" t-as="group" t-key="group.picking_id">
                                                     <div class="picking-package-group mb-3">
                                                         <div class="d-flex align-items-center mb-2">
-                                                            <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 py-1 px-2 small">
+                                                            <span class="badge bg-secondary bg-opacity-10 text-primary border border-secondary border-opacity-25 py-1 px-2 small">
                                                                 <i class="fa fa-file-text-o me-1"></i> <t t-esc="group.picking_name"/>
                                                             </span>
                                                             <hr class="flex-grow-1 ms-2 my-0 opacity-25"/>
@@ -320,7 +320,7 @@
                                                                 <div class="package-box-container position-relative" t-att-title="'Bấm để xem chi tiết: ' + pack.name" t-on-click="() => this.openPackageDetails(pack)">
                                                                     <div class="package-box d-flex flex-column align-items-center justify-content-center border rounded shadow-sm bg-white p-1" style="min-width: 85px;">
                                                                         <i class="fa fa-archive fa-2x text-primary mb-1"></i>
-                                                                        <span class="small text-truncate w-100 px-1 text-center" style="font-size: 0.75rem;"><t t-esc="pack.name"/></span>
+                                                                        <span class="small text-truncate w-100 px-1 text-center" style="font-size: 0.60rem;"><t t-esc="pack.name"/></span>
                                                                     </div>
                                                                 </div>
                                                             </t>
