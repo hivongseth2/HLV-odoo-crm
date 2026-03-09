@@ -166,36 +166,44 @@
                 <field name="rule_count"/>
                 <templates>
                     <t t-name="kanban-box">
-                        <div t-attf-class="oe_kanban_global_click oe_kanban_card">
-                            <div class="o_kanban_record_top">
-                                <div class="o_kanban_record_headings">
-                                    <strong class="o_kanban_record_title fs-5">
-                                        <i class="fa fa-cogs text-primary me-2"/>
+                        <div t-attf-class="oe_kanban_global_click o_premium_kanban_card">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="d-flex flex-column">
+                                    <span class="o_kanban_header_title mb-1">
                                         <field name="name"/>
-                                    </strong>
-                                </div>
-                                <div class="o_kanban_record_state">
-                                    <span t-if="record.is_live.raw_value" class="badge text-bg-danger">LIVE</span>
-                                    <span t-else="" class="badge text-bg-secondary">Thử/Nháp</span>
-                                </div>
-                            </div>
-                            <div class="o_kanban_record_body mt-3 text-muted">
-                                <div><i class="fa fa-cubes me-1"/> Feed: <field name="feed_id"/></div>
-                                <div><i class="fa fa-google me-1"/> Tài Khoản: <field name="account_id"/></div>
-                                <div><i class="fa fa-tasks me-1"/> Kiểu: <field name="strategy_type"/></div>
-                            </div>
-                            <div class="o_kanban_record_bottom mt-3">
-                                <div class="oe_kanban_bottom_left">
-                                    <span class="badge rounded-pill text-bg-info">
-                                        <t t-esc="record.rule_count.value"/> rules
                                     </span>
+                                    <div class="d-flex gap-1">
+                                        <span class="o_kanban_tech_pill">
+                                            <field name="strategy_type"/>
+                                        </span>
+                                        <span t-if="record.is_live.raw_value" class="badge text-bg-danger rounded-pill" style="font-size: 9px; padding: 2px 6px;">LIVE</span>
+                                        <span t-else="" class="badge text-bg-secondary rounded-pill" style="font-size: 9px; padding: 2px 6px;">TEST</span>
+                                    </div>
                                 </div>
-                                <div class="oe_kanban_bottom_right">
-                                    <field name="state" widget="badge"
-                                           decoration-success="state == 'active'"
-                                           decoration-warning="state == 'draft'"
-                                           decoration-danger="state == 'paused'"/>
+                                <div class="bg-light p-2 rounded-3 border">
+                                    <i class="fa fa-cogs text-primary"></i>
                                 </div>
+                            </div>
+
+                            <div class="o_kanban_main_content">
+                                <div class="o_kanban_info_row">
+                                    <i class="fa fa-cubes"></i>
+                                    <span>Feed: <b><field name="feed_id"/></b></span>
+                                </div>
+                                <div class="o_kanban_info_row">
+                                    <i class="fa fa-google"></i>
+                                    <span>Account: <field name="account_id"/></span>
+                                </div>
+                            </div>
+
+                            <div class="o_kanban_footer">
+                                <span class="badge rounded-pill text-bg-info shadow-sm" style="font-size: 11px; padding: 4px 10px;">
+                                    <t t-esc="record.rule_count.value"/> rules active
+                                </span>
+                                <field name="state" widget="badge" 
+                                       decoration-success="state == 'active'" 
+                                       decoration-warning="state == 'draft'" 
+                                       decoration-danger="state == 'paused'"/>
                             </div>
                         </div>
                     </t>

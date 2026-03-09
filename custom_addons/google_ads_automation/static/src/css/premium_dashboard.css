@@ -224,3 +224,72 @@
 .text-white {
     color: var(--text-color) !important;
 }
+
+/* Premium Kanban Specifics */
+.o_premium_kanban_card {
+    border: 1px solid var(--border-color) !important;
+    border-radius: 12px !important;
+    padding: 18px !important;
+    background: var(--white) !important;
+    box-shadow: var(--shadow-sm) !important;
+    transition: all 0.2s ease !important;
+    margin-bottom: 12px !important;
+}
+
+.o_premium_kanban_card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md) !important;
+    border-color: var(--info-color) !important;
+}
+
+.o_kanban_header_title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.o_kanban_tech_pill {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--light-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.o_kanban_main_content {
+    border-top: 1px solid var(--border-color);
+    padding-top: 12px;
+    margin-top: 12px;
+}
+
+.o_kanban_info_row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.o_kanban_info_row i {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--light-bg);
+    border-radius: 4px;
+    color: var(--info-color);
+    font-size: 11px;
+}
+
+.o_kanban_footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border-color);
+}
