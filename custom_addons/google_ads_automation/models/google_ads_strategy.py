@@ -97,6 +97,7 @@ class GoogleAdsStrategy(models.Model):
     # ────────────────────────────────────────────
     rule_ids = fields.One2many(
         'google.ads.rule', 'strategy_id', string='Rules Tự Sinh',
+        context={'active_test': False},
     )
     rule_count = fields.Integer(
         string='Số Rules', compute='_compute_rule_count',
