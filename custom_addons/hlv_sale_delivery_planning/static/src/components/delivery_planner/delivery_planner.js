@@ -236,7 +236,8 @@ export class DeliveryPlannerDashboard extends Component {
     translateDeliveryStatus(status) {
         const trans = {
             'unknown': 'Chưa cập nhật',
-            'pending': 'Chưa giao',
+            'pending': 'CHƯA GIAO',
+            'unshipped': 'CHƯA GIAO',
             'partial': 'Giao 1 phần',
             'pending_partial': 'Chưa & Giao 1 phần',
             'full': 'Đã giao đủ'
@@ -401,6 +402,42 @@ export class DeliveryPlannerDashboard extends Component {
     closePackageDetails() {
         this.state.isPackageModalOpen = false;
         this.state.selectedPackage = null;
+    }
+
+    async printPackageLabel(packageId) {
+        if (!packageId) return;
+        await this.actionService.doAction("hlv_pack_sequence.report_package_label_document", {
+            additionalContext: { active_ids: [packageId] },
+        });
+    }
+
+    // --- Filter Helpers ---
+    get hasActiveFilters() {
+        return this.state.searchQuery ||
+            this.state.filterWarehouseId !== "all" ||
+            this.state.filterDeliveryStatus !== "all" ||
+            this.state.filterStockStatus !== "all" ||
+            this.state.filterDateFrom ||
+            this.state.filterDateTo ||
+            this.state.filterPODateFrom ||
+            this.state.filterPODateTo ||
+            this.state.filterPOStatus !== "all" ||
+            this.state.filterPackingStatus !== "all";
+    }
+
+    resetFilters() {
+        this.state.searchQuery = "";
+        this.state.filterWarehouseId = "all";
+        this.state.filterDeliveryStatus = "all";
+        this.state.filterStockStatus = "all";
+        this.state.filterDateFrom = "";
+        this.state.filterDateTo = null;
+        this.state.filterPODateFrom = null;
+        this.state.filterPODateTo = null;
+        this.state.filterPOStatus = "all";
+        this.state.filterPackingStatus = "all";
+        this.state.currentPage = 1;
+        this.fetchData();
     }
 }
 

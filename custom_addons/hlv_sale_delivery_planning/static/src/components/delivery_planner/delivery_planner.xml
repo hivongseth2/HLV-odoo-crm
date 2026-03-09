@@ -113,7 +113,41 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- Thanh Công Cụ (Kho, Tìm kiếm, Lọc trạng thái, Hẹn giao) -->
+                    <!-- Active Filters Bar -->
+                    <div t-if="this.hasActiveFilters" class="mb-4 d-flex flex-wrap align-items-center gap-2 px-3 py-2 bg-light rounded border border-info border-opacity-25 w-100 shadow-sm mx-auto" style="max-width: 98%;">
+                        <span class="text-secondary small fw-bold me-2"><i class="fa fa-filter me-1"></i> Bộ lọc đang chọn:</span>
+                        
+                        <span t-if="state.searchQuery" class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
+                            Tìm: "<t t-esc="state.searchQuery"/>"
+                            <i class="fa fa-times cursor-pointer ms-1" t-on-click="() => { state.searchQuery = ''; this.fetchData(); }"></i>
+                        </span>
+
+                        <span t-if="state.filterWarehouseId !== 'all'" class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
+                            Kho: <t t-esc="state.warehouses.find(w => w.id == state.filterWarehouseId)?.name"/>
+                            <i class="fa fa-times cursor-pointer ms-1" t-on-click="() => { state.filterWarehouseId = 'all'; this.fetchData(); }"></i>
+                        </span>
+
+                        <span t-if="state.filterPackingStatus !== 'all'" class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
+                            Đóng gói: <t t-esc="this.translatePackingStatus(state.filterPackingStatus)"/>
+                            <i class="fa fa-times cursor-pointer ms-1" t-on-click="() => { state.filterPackingStatus = 'all'; this.fetchData(); }"></i>
+                        </span>
+
+                        <span t-if="state.filterDeliveryStatus !== 'all'" class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
+                            Giao hàng: <t t-esc="this.translateDeliveryStatus(state.filterDeliveryStatus)"/>
+                            <i class="fa fa-times cursor-pointer ms-1" t-on-click="() => { state.filterDeliveryStatus = 'all'; this.fetchData(); }"></i>
+                        </span>
+
+                        <span t-if="state.filterStockStatus !== 'all'" class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
+                            Tồn kho: <t t-esc="this.translateStockStatus(state.filterStockStatus)"/>
+                            <i class="fa fa-times cursor-pointer ms-1" t-on-click="() => { state.filterStockStatus = 'all'; this.fetchData(); }"></i>
+                        </span>
+                        
+                        <button class="btn btn-sm btn-outline-danger border-0 fw-bold ms-auto" t-on-click="resetFilters">
+                            <i class="fa fa-trash-o me-1"></i> Xóa tất cả bộ lọc
+                        </button>
+                    </div>
+
+                    <!-- Thanh Công Cụ (Kho, Tìm kiếm, Lọc trạng thái, Hẹn giao) -->
                         <div class="row g-3 mb-4 bg-white p-3 rounded shadow-sm border align-items-end">
                             <!-- Ô tìm kiếm -->
                             <div class="col-md-3">
@@ -274,10 +308,10 @@
                                             <h6 class="text-uppercase text-secondary small fw-bold mb-2"><i class="fa fa-cubes me-1"></i> Thông Tin Kiện Hàng (<t t-esc="so.packages.length"/>)</h6>
                                             <div class="d-flex flex-wrap gap-2 package-grid">
                                                 <t t-foreach="so.packages" t-as="pack" t-key="pack.id">
-                                                    <div class="package-box-container position-relative" t-att-title="'Bấm để xem chi tiết hàng trong kiện: ' + pack.name" t-on-click="() => this.openPackageDetails(pack)">
+                                                    <div class="package-box-container position-relative" t-att-title="'Bấm để xem chi tiết: ' + pack.name" t-on-click="() => this.openPackageDetails(pack)">
                                                         <div class="package-box d-flex flex-column align-items-center justify-content-center border rounded shadow-sm bg-white p-2">
                                                             <i class="fa fa-archive fa-2x text-primary mb-1"></i>
-                                                            <span class="fw-bold small">Kiện #<t t-esc="pack.sequence"/></span>
+                                                            <span class="fw-bold small text-truncate w-100 px-1 text-center"><t t-esc="pack.name"/></span>
                                                         </div>
                                                     </div>
                                                 </t>
@@ -661,17 +695,32 @@
             <div t-if="state.isPackageModalOpen" class="modal show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5); z-index: 1060;">
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content shadow-lg border-0">
-                        <div class="modal-header bg-dark text-white p-3">
-                            <h5 class="modal-title m-0"><i class="fa fa-archive me-2"></i> Chi Tiết Kiện: <t t-esc="state.selectedPackage.name"/></h5>
+                        <div class="modal-header bg-light text-white p-3">
+                            <h5 class="modal-title m-0 "><i class="fa fa-archive me-2"></i> Chi Tiết Kiện: <t t-esc="state.selectedPackage.name"/></h5>
                             <button type="button" class="btn-close btn-close-white" t-on-click="closePackageDetails"></button>
                         </div>
                         <div class="modal-body p-4 bg-light">
-                            <div class="bg-white rounded p-3 border shadow-sm mb-3">
-                                <div class="small text-muted text-uppercase fw-bold mb-2">Thứ tự đóng gói</div>
-                                <div class="fs-5 fw-bold text-primary"><i class="fa fa-sort-amount-asc me-2"></i> Kiện thứ <t t-esc="state.selectedPackage.sequence"/></div>
+                            <div class="row g-3 mb-4">
+                                <div class="col-6">
+                                    <div class="bg-white rounded p-3 border shadow-sm h-100">
+                                        <div class="small text-muted text-uppercase fw-bold mb-1">Thứ tự đóng gói</div>
+                                        <div class="fw-bold text-primary"><i class="fa fa-sort-amount-asc me-2"></i> Kiện thứ <t t-esc="state.selectedPackage.sequence"/> / <t t-esc="state.selectedPackage.total"/></div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="bg-white rounded p-3 border shadow-sm h-100">
+                                        <div class="small text-muted text-uppercase fw-bold mb-1">Vị trí hiện tại</div>
+                                        <div class="fw-bold text-success"><i class="fa fa-map-marker me-2"></i> <t t-esc="state.selectedPackage.location_name || 'Không rõ'"/></div>
+                                    </div>
+                                </div>
                             </div>
 
-                            <h6 class="text-muted text-uppercase small mb-3 fw-bold"><i class="fa fa-list me-1"></i> Danh sách hàng trong kiện</h6>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="text-muted text-uppercase small m-0 fw-bold"><i class="fa fa-list me-1"></i> Danh sách hàng trong kiện</h6>
+                                <button class="btn btn-primary btn-sm rounded-pill shadow-sm px-3" t-on-click="() => this.printPackageLabel(state.selectedPackage.id)">
+                                    <i class="fa fa-print me-2"></i> In Tem Kiện
+                                </button>
+                            </div>
                             <div class="table-responsive rounded border bg-white">
                                 <table class="table table-sm table-hover mb-0">
                                     <thead class="table-light">

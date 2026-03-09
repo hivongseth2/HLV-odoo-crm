@@ -197,7 +197,7 @@ class DeliveryPlannerService(models.AbstractModel):
             ('picking_id', 'in', all_picking_ids),
             ('result_package_id', '!=', False),
             ('state', '!=', 'cancel')
-        ], ['picking_id', 'result_package_id', 'product_id', 'quantity'])
+        ], ['picking_id', 'result_package_id', 'product_id', 'quantity', 'location_dest_id'])
 
         if not move_lines: return {}
 
@@ -206,7 +206,9 @@ class DeliveryPlannerService(models.AbstractModel):
         pack_dict = {}
         for p in packages:
             pack_dict[p.id] = {
-                'id': p.id, 'name': p.name,
+                'id': p.id,
+                'name': p.name,
+                'location_name': p.location_id.display_name if p.location_id else '',
                 'pack_sequence': getattr(p, 'pack_sequence', 0),
                 'pack_total': getattr(p, 'pack_total', 0)
             }
@@ -215,10 +217,11 @@ class DeliveryPlannerService(models.AbstractModel):
         for ml in move_lines:
             pid = ml['result_package_id'][0]
             if pid not in pack_contents:
-                pack_info = pack_dict.get(pid, {'id': pid, 'name': ml['result_package_id'][1], 'pack_sequence': 0, 'pack_total': 0})
+                pack_info = pack_dict.get(pid, {'id': pid, 'name': ml['result_package_id'][1], 'location_name': '', 'pack_sequence': 0, 'pack_total': 0})
                 pack_contents[pid] = {
                     'id': pid,
                     'name': pack_info.get('name') or ml['result_package_id'][1],
+                    'location_name': pack_info.get('location_name') or '',
                     'sequence': pack_info.get('pack_sequence') or 0,
                     'total': pack_info.get('pack_total') or 0,
                     'product_map': {}
@@ -243,7 +246,8 @@ class DeliveryPlannerService(models.AbstractModel):
 
         final_so_packages = {}
         for so_id, p_dict in packages_by_so.items():
-            final_so_packages[so_id] = sorted(list(p_dict.values()), key=lambda x: x['sequence'] or 0)
+            # Use name property or fallback to ID-based sorting
+            final_so_packages[so_id] = sorted(list(p_dict.values()), key=lambda x: (x.get('sequence') or 0, x['name']))
             
         return final_so_packages
 
