@@ -63,7 +63,17 @@ export function translatePackingStatus(status) {
         unpacked:      'Có Hàng Chưa Đóng Gói',
         partial_packed:'Đã Đóng 1 Phần',        // backward compatibility
         fully_packed:  'Đã Đóng Gói Đủ',
-        delivered:     'Đã Giao Xong',
+        delivered:     'Đã Giao Đủ',
+    };
+    return trans[status] || (status ? status.toUpperCase() : '');
+}
+
+export function translateInternalProgressStatus(status) {
+    const trans = {
+        picking:   'Lấy Hàng',
+        packing:   'Đóng Gói',
+        mixed:     'Nhiều Trạng Thái',
+        delivered: 'Đã Giao Đủ',
     };
     return trans[status] || (status ? status.toUpperCase() : '');
 }

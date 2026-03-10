@@ -276,7 +276,7 @@
 
                                 <t t-if="so.real_delivery_status == 'full'">
                                     <tr><td colspan="2" class="text-center text-success py-2 fw-bold">
-                                        <i class="fa fa-star me-1"></i> Đã giao xong toàn bộ
+                                        <i class="fa fa-star me-1"></i> Đã giao đủ toàn bộ
                                     </td></tr>
                                 </t>
                                 <t t-elif="so.stock_status == 'ready'">

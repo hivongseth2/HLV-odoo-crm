@@ -54,8 +54,8 @@ export class DeliveryPlannerDashboard extends Component {
             collapsedSections: new Set(['packages', 'flows', 'pending_products']), // Default collapsed
 
             // View Mode
-            viewMode: 'list',               // 'list' | 'kanban'
-            kanbanGroupBy: 'delivery_status', // 'delivery_status' | 'stock_status' | 'packing_status'
+            viewMode: 'kanban',               // 'list' | 'kanban'
+            kanbanGroupBy: 'packing_status', // 'packing_status' | 'internal_progress' | 'delivery_status' | 'stock_status'
             draggedSoId: null,
             dragOverColumn: null,
             kanbanColumnOrder: {},           // { colValue: [soId, ...] } — thứ tự DnD client-side
@@ -197,6 +197,12 @@ export class DeliveryPlannerDashboard extends Component {
     // --- Kanban Column Definitions ---
     get kanbanColumnDefs() {
         switch (this.state.kanbanGroupBy) {
+            case 'internal_progress': return [
+                { value: 'picking',   label: 'Lấy Hàng',         badgeClass: 'bg-danger',            textClass: 'text-danger',   iconClass: 'fa fa-hand-paper-o',      progressClass: 'bg-danger' },
+                { value: 'packing',   label: 'Đóng Gói',         badgeClass: 'bg-warning text-dark', textClass: 'text-warning',  iconClass: 'fa fa-cube',              progressClass: 'bg-warning' },
+                { value: 'mixed',     label: 'Nhiều Trạng Thái', badgeClass: 'bg-info',              textClass: 'text-info',     iconClass: 'fa fa-random',            progressClass: 'bg-info' },
+                { value: 'delivered', label: 'Đã Giao Đủ',       badgeClass: 'bg-success',           textClass: 'text-success',  iconClass: 'fa fa-check-circle',      progressClass: 'bg-success' },
+            ];
             case 'delivery_status': return [
                 { value: 'pending',  label: 'Chưa Giao',    badgeClass: 'bg-danger',             textClass: 'text-danger',   iconClass: 'fa fa-clock-o',        progressClass: 'bg-danger' },
                 { value: 'partial',  label: 'Giao 1 Phần',  badgeClass: 'bg-warning text-dark',  textClass: 'text-warning',  iconClass: 'fa fa-truck',          progressClass: 'bg-warning' },
@@ -220,6 +226,7 @@ export class DeliveryPlannerDashboard extends Component {
     _allOrdersForColumn(colValue) {
         const dim = this.state.kanbanGroupBy;
         const fieldMap = {
+            internal_progress: 'internal_progress_status',
             delivery_status: 'real_delivery_status',
             stock_status:    'stock_status',
             packing_status:  'packing_status',
@@ -294,6 +301,7 @@ export class DeliveryPlannerDashboard extends Component {
 
         const dim = this.state.kanbanGroupBy;
         const fieldMap = {
+            internal_progress: 'internal_progress_status',
             delivery_status: 'real_delivery_status',
             stock_status:    'stock_status',
             packing_status:  'packing_status',

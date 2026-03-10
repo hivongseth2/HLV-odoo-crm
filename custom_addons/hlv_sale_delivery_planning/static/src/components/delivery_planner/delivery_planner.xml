@@ -27,16 +27,16 @@
                             <!-- Toggle dạng xem -->
                             <div class="btn-group btn-group-sm" role="group" aria-label="View mode">
                                 <button class="btn"
-                                        title="Dạng danh sách"
-                                        t-att-class="state.viewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'"
-                                        t-on-click="() => this.setViewMode('list')">
-                                    <i class="fa fa-th-large" title="Danh sách"></i>
-                                </button>
-                                <button class="btn"
                                         title="Dạng Kanban"
                                         t-att-class="state.viewMode === 'kanban' ? 'btn-primary' : 'btn-outline-secondary'"
                                         t-on-click="() => this.setViewMode('kanban')">
                                     <i class="fa fa-columns" title="Kanban"></i>
+                                </button>
+                                <button class="btn"
+                                        title="Dạng danh sách"
+                                        t-att-class="state.viewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'"
+                                        t-on-click="() => this.setViewMode('list')">
+                                    <i class="fa fa-th-large" title="Danh sách"></i>
                                 </button>
                             </div>
                             <button class="btn btn-primary shadow-sm"

@@ -72,7 +72,7 @@
     <t t-name="hlv_sale_delivery_planning.KPIPackingCards">
         <div class="row g-3 mb-4">
             <div class="col-md-4">
-                <div class="card bg-white text-dark shadow-sm border-0 h-100 kpi-card"
+                <div class="card bg-white text-dark shadow-sm border-1 h-100 kpi-card"
                      style="cursor: pointer;"
                      t-on-click="() => this.setPackingFilter('waiting_stock')"
                      t-att-class="state.filterPackingStatus === 'waiting_stock' ? 'ring-2 ring-danger' : ''">
@@ -88,7 +88,7 @@
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="card bg-white text-dark shadow-sm border-0 h-100 kpi-card"
+                <div class="card bg-white text-dark shadow-sm border-1 h-100 kpi-card"
                      style="cursor: pointer;"
                      t-on-click="() => this.setPackingFilter('unpacked')"
                      t-att-class="state.filterPackingStatus === 'unpacked' ? 'ring-2 ring-warning' : ''">
@@ -104,7 +104,7 @@
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="card bg-white text-dark shadow-sm border-0 h-100 kpi-card"
+                <div class="card bg-white text-dark shadow-sm border-1 h-100 kpi-card"
                      style="cursor: pointer;"
                      t-on-click="() => this.setPackingFilter('fully_packed')"
                      t-att-class="state.filterPackingStatus === 'fully_packed' ? 'ring-2 ring-success' : ''">

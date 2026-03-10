@@ -183,10 +183,23 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             else:
                 # Còn phần có thể đóng nhưng chưa đóng hết.
                 packing_status = 'unpacked'
+
+            # Tien do noi bo: xu ly truong hop 1 don co nhieu nhom line o cac trang thai khac nhau.
+            if real_delivery_status == 'full':
+                internal_progress_status = 'delivered'
+            elif total_avail <= 0:
+                internal_progress_status = 'picking'
+            elif has_delivered or total_avail < total_pending:
+                internal_progress_status = 'mixed'
+            else:
+                # Da co hang de thao tac noi bo -> dong goi (gom ca cho giao va dong goi dang xu ly).
+                internal_progress_status = 'packing'
+
             so_status_dict[so.id] = {
                 'stock_status': stock_status,
                 'packing_status': packing_status,
                 'real_delivery_status': real_delivery_status,
+                'internal_progress_status': internal_progress_status,
             }
 
             dashboard_stats['total'] += 1

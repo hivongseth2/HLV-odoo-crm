@@ -18,6 +18,18 @@
 
             <div class="btn-group btn-group-sm ms-1" role="group" aria-label="Kanban group by">
                 <button class="btn"
+                        t-att-class="state.kanbanGroupBy === 'packing_status' ? 'btn-info' : 'btn-outline-info'"
+                        t-on-click="() => this.setKanbanGroupBy('packing_status')">
+                    <i class="fa fa-cube me-1" title="Đóng gói"/>
+                    Đóng gói
+                </button>
+                <button class="btn"
+                        t-att-class="state.kanbanGroupBy === 'internal_progress' ? 'btn-dark' : 'btn-outline-dark'"
+                        t-on-click="() => this.setKanbanGroupBy('internal_progress')">
+                    <i class="fa fa-tasks me-1" title="Tiến độ nội bộ"/>
+                    Tiến độ nội bộ
+                </button>
+                <button class="btn"
                         t-att-class="state.kanbanGroupBy === 'delivery_status' ? 'btn-primary' : 'btn-outline-primary'"
                         t-on-click="() => this.setKanbanGroupBy('delivery_status')">
                     <i class="fa fa-truck me-1" title="Tiến độ giao"/>
@@ -28,12 +40,6 @@
                         t-on-click="() => this.setKanbanGroupBy('stock_status')">
                     <i class="fa fa-cubes me-1" title="Tình trạng kho"/>
                     Tình trạng kho
-                </button>
-                <button class="btn"
-                        t-att-class="state.kanbanGroupBy === 'packing_status' ? 'btn-info' : 'btn-outline-info'"
-                        t-on-click="() => this.setKanbanGroupBy('packing_status')">
-                    <i class="fa fa-cube me-1" title="Đóng gói"/>
-                    Đóng gói
                 </button>
             </div>
 
@@ -170,7 +176,7 @@
                     <span class="badge"
                           style="font-size: 0.62rem; padding: 2px 5px;"
                           t-att-class="this.getPackingStatusBadgeClass(so.packing_status)"
-                          t-if="so.packing_status and so.packing_status !== 'unknown'">
+                          t-if="so.packing_status and so.packing_status !== 'unknown' and so.real_delivery_status !== 'full'">
                         <i class="fa fa-cube" style="font-size:0.6rem;" title="Đóng gói"></i>
                         <t t-esc="this.translatePackingStatus(so.packing_status)"/>
                     </span>
