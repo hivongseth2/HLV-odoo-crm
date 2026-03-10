@@ -13,6 +13,7 @@ class SaleOrder(models.Model):
     misa_id = fields.Char(string="MISA ID")                  # ví dụ: "27264"
     misa_form_layout_id = fields.Integer(default=37)         # theo payload mẫu của bạn
     misa_form_type = fields.Integer(default=4)               # theo URL mẫu: .../SaleOrder/37/4
+    misa_shipping_address = fields.Char(string="MISA Shipping Address", copy=False, index=True)
     
     
 
@@ -207,21 +208,6 @@ class SaleOrder(models.Model):
             return []
         tax = self.env['odoo.utils']._get_or_create_vn_vat(rate, use='sale')
         return [tax.id] if tax else []
-
-    def _sync_shipping_address_to_pickings(self, shipping_address, update_done=False):
-        """Ghi snapshot ShippingAddress từ MISA vào picking để không bị đổi theo partner."""
-        self.ensure_one()
-        addr = (shipping_address or '').strip()
-        if not addr:
-            return
-
-        pickings = self.picking_ids.filtered(lambda p: p.state != 'cancel')
-        if not update_done:
-            pickings = pickings.filtered(lambda p: p.state != 'done')
-
-        if pickings:
-            pickings.sudo().write({'x_misa_shipping_address': addr})
-
 
     def action_resync_from_misa_hard(self):
         self.ensure_one()
@@ -572,6 +558,7 @@ class SaleOrder(models.Model):
             'origin': origin,
             'warehouse_id': old_wh.id or False,
             'misa_id': str(misa_order_id) if misa_order_id else False,
+            'misa_shipping_address': shipping_address_raw or False,
             'partner_shipping_id': shipping_id,
             'partner_invoice_id': shipping_id,
             'x_studio_zns': zns
@@ -886,9 +873,6 @@ class SaleOrder(models.Model):
             ], limit=1)
             picking.name = f"{desired}-{picking.id}" if exists else desired
 
-        # Snapshot địa chỉ giao hàng để phiếu kho không bị đổi theo partner/contact về sau.
-        new_so._sync_shipping_address_to_pickings(shipping_address_raw)
-
         # Toast + log
         # new_so.message_post(body=_("Đồng bộ (xoá & tạo lại) thành công: %s") % (delivery_no or order_no))
         new_so.message_post(body=f"Đồng bộ (xoá & tạo lại) thành công: {delivery_no or order_no}")
@@ -1193,8 +1177,10 @@ class SaleOrder(models.Model):
             vals_header_upd['x_studio_httt'] = owner_date['httt']
         if owner_date.get('htgh'):
             vals_header_upd['x_studio_htgh'] = owner_date['htgh']
-        if owner_date.get('ShippingAddress'):
-            vals_header_upd['x_studio_a_ch_giao_hng'] = owner_date['ShippingAddress']
+        shipping_address_raw = (data.get('ShippingAddress') or owner_date.get('ShippingAddress') or '').strip()
+        if shipping_address_raw:
+            vals_header_upd['x_studio_a_ch_giao_hng'] = shipping_address_raw
+            vals_header_upd['misa_shipping_address'] = shipping_address_raw
         # Auto-set CRM Delivery flag nếu DeliveryPartnerID = 3000 (Tự vận chuyển)
         if owner_date.get('is_crm_delivery'):
             vals_header_upd['x_studio_crm_elivery'] = True
@@ -1262,8 +1248,6 @@ class SaleOrder(models.Model):
                 })
                 _logger.info("✅ Partial Resync: Updated shipping/invoice address to %s", delivery_contact.display_name)
 
-            # Cập nhật snapshot ShippingAddress trực tiếp lên picking mở.
-            self._sync_shipping_address_to_pickings(data.get('ShippingAddress'))
         except Exception as e_addr:
             _logger.warning("❌ Partial Resync: Failed to update address: %s", e_addr)
 

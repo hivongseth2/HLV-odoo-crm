@@ -13,11 +13,12 @@ _logger = logging.getLogger(__name__)
 class StockPickingCrmDelivery(models.Model):
     _inherit = 'stock.picking'
 
-    # Snapshot địa chỉ giao hàng từ MISA tại thời điểm đồng bộ,
-    # không phụ thuộc vào related field từ partner để tránh thay đổi lịch sử.
+    # Hiển thị địa chỉ giao hàng MISA từ sale.order (cột snapshot trên SO).
     x_misa_shipping_address = fields.Char(
         string='MISA Shipping Address',
-        copy=False,
+        related='sale_id.misa_shipping_address',
+        readonly=True,
+        store=True,
         index=True,
     )
 
