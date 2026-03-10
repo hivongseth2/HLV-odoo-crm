@@ -35,6 +35,8 @@ class DeliveryPlannerService(models.AbstractModel):
         domain = [('state', 'in', ['sale', 'done'])]
         if filter_delivery_status == 'pending_partial':
             domain += [('delivery_status', 'in', ['pending', 'partial'])]
+        elif filter_delivery_status == 'unshipped':
+            domain += [('delivery_status', '=', 'pending')]
         elif filter_delivery_status != 'all':
             domain += [('delivery_status', '=', filter_delivery_status)]
         if filter_warehouse_id != 'all':
@@ -71,7 +73,20 @@ class DeliveryPlannerService(models.AbstractModel):
         for w_id, prod_ids in product_qty_cache.items():
             if prod_ids:
                 prods = self.env['product.product'].browse(list(prod_ids)).with_context(warehouse=w_id)
-                for p in prods: product_availabilities[(p.id, w_id)] = p.qty_available
+                # Odoo 18: free_qty = qty_available - reserved_quantity
+                for p in prods: product_availabilities[(p.id, w_id)] = p.free_qty
+
+        # Map to store reserved qty per SO line for accurate availability check
+        line_reserved_qty = {}
+        all_order_lines = sales.mapped('order_line').filtered(lambda l: not l.display_type and l.product_id and l.product_id.type != 'service')
+        if all_order_lines:
+            moves = self.env['stock.move'].sudo().search_read([
+                ('sale_line_id', 'in', all_order_lines.ids),
+                ('state', 'not in', ('cancel', 'done'))
+            ], ['sale_line_id', 'quantity'])
+            for m in moves:
+                s_id = m['sale_line_id'][0]
+                line_reserved_qty[s_id] = line_reserved_qty.get(s_id, 0.0) + m['quantity']
 
         all_picking_ids = sales.mapped('picking_ids').ids
         packed_qty_by_so = {}
@@ -128,7 +143,11 @@ class DeliveryPlannerService(models.AbstractModel):
                     if pending_qty > 0:
                         has_pending = True
                         total_pending += pending_qty
-                        qty_avail = product_availabilities.get((line.product_id.id, so.warehouse_id.id), 0.0)
+                        # Tồn khả dụng cho đơn này = Tồn tự do hệ thống + Số lượng đơn này đang giữ
+                        base_free = product_availabilities.get((line.product_id.id, so.warehouse_id.id), 0.0)
+                        reserved_here = line_reserved_qty.get(line.id, 0.0)
+                        qty_avail = base_free + reserved_here
+                        
                         if qty_avail > 0: total_avail += min(qty_avail, pending_qty)
                         if qty_avail < pending_qty: is_fully_ready = False
                             
@@ -396,7 +415,11 @@ class DeliveryPlannerService(models.AbstractModel):
                 p_type = line.product_id.type if line.product_id else 'service'
                 is_kit = line.product_id.product_tmpl_id.id in kit_tmpl_ids
                 
-                qty_avail = product_availabilities.get((line.product_id.id, so.warehouse_id.id), 0.0) if line.product_id and so.warehouse_id else 0.0
+                # Tồn khả dụng cho đơn này = Tồn tự do hệ thống + Số lượng đơn này đang giữ
+                base_free = product_availabilities.get((line.product_id.id, so.warehouse_id.id), 0.0) if line.product_id and so.warehouse_id else 0.0
+                reserved_here = sum(line.move_ids.filtered(lambda m: m.state not in ('cancel', 'done')).mapped('quantity'))
+                qty_avail = base_free + reserved_here
+                
                 qty_packed = qty_packed_map.get(p_name, 0.0)
                 
                 so_lines_data.append({

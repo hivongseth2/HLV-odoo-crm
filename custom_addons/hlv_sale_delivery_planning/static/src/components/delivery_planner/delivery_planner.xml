@@ -172,6 +172,17 @@
                                 </div>
                             </div>
 
+                            <!-- Lọc theo ngày hẹn giao SO -->
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold text-muted mb-1">Ngày Hẹn Giao (SO)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light px-2" title="Từ Ngày"><i class="fa fa-calendar text-primary"></i></span>
+                                    <input type="date" class="form-control px-1" title="Từ Ngày" t-model="state.filterDateFrom" t-on-change="onFilterChange" />
+                                    <span class="input-group-text bg-light px-2 border-start-0 border-end-0">~</span>
+                                    <input type="date" class="form-control px-1" title="Đến Ngày" t-model="state.filterDateTo" t-on-change="onFilterChange" />
+                                </div>
+                            </div>
+
                             <!-- Tiến độ Giao hàng -->
                             <div class="col-md-2">
                                 <label class="form-label small fw-bold text-muted mb-1">Tiến Độ Giao</label>
@@ -198,17 +209,6 @@
                                         <option value="partial_ready">Có hàng 1 phần</option>
                                         <option value="ready">Đủ hàng xuất</option>
                                     </select>
-                                </div>
-                            </div>
-
-                            <!-- Lọc theo ngày hẹn giao SO -->
-                            <div class="col-md-3">
-                                <label class="form-label small fw-bold text-muted mb-1">Ngày Hẹn Giao (SO)</label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light px-2" title="Từ Ngày"><i class="fa fa-calendar text-primary"></i></span>
-                                    <input type="date" class="form-control px-1" title="Từ Ngày" t-model="state.filterDateFrom" t-on-change="onFilterChange" />
-                                    <span class="input-group-text bg-light px-2 border-start-0 border-end-0">~</span>
-                                    <input type="date" class="form-control px-1" title="Đến Ngày" t-model="state.filterDateTo" t-on-change="onFilterChange" />
                                 </div>
                             </div>
 
@@ -276,8 +276,8 @@
                                         </div>
                                     </div>
                                     <div class="card-body pt-2 pb-0">
-                                        <div class="d-flex justify-content-between align-items-center mb-2 px-1">
-                                        <div class="d-flex align-items-center justify-content-between mb-2 px-1 cursor-pointer toggle-section-header" t-on-click="() => this.toggleSection('pos')">
+                                        <div >
+                                        <div class="d-flex align-items-center justify-content-between mb-2 mt-2 px-1 cursor-pointer toggle-section-header" t-on-click="() => this.toggleSection('pos')">
                                             <h6 class="text-uppercase text-secondary small fw-bold mb-0">
                                                 <i class="fa fa-list me-1" title="Danh sách"></i> Đơn Mua Liên Quan
                                             </h6>
@@ -496,7 +496,13 @@
                                             </t>
                                             </div>
                                         </div>
-                                        <h6 class="text-uppercase text-secondary small fw-bold mb-2 mt-2 px-1"><i class="fa fa-cubes me-1" title="Chờ hàng"></i> Sản Phẩm Đang Chờ</h6>
+                                        <div class="d-flex align-items-center justify-content-between mb-2 mt-2 px-1 cursor-pointer toggle-section-header" t-on-click="() => this.toggleSection('pending_products')">
+                                            <h6 class="text-uppercase text-secondary small fw-bold mb-0">
+                                                <i class="fa fa-cubes me-1" title="Chờ hàng"></i> Sản Phẩm Đang Chờ
+                                            </h6>
+                                            <i t-attf-class="fa #{this.isSectionCollapsed('pending_products') ? 'fa-chevron-right' : 'fa-chevron-down'} text-muted small"></i>
+                                        </div>
+                                        <div t-attf-class="#{this.isSectionCollapsed('pending_products') ? 'd-none' : ''}">
                                         <div class="table-responsive bg-white rounded shadow-sm border mb-3">
                                             <table class="table table-sm table-borderless table-hover mb-0 small">
                                                 <thead class="table-light border-bottom">
@@ -554,6 +560,7 @@
                                                     </t>
                                                 </tbody>
                                             </table>
+                                        </div>
                                         </div>
 
                                     </div>
