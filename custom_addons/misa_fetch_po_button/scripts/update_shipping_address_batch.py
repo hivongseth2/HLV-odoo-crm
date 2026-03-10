@@ -157,6 +157,7 @@ class ShippingAddressUpdater:
         SaleOrder = self.env['sale.order']
         
         domain = [
+            ('state', 'in', ['sale']),
             ('delivery_status', '!=', 'full'),
         ]
         
