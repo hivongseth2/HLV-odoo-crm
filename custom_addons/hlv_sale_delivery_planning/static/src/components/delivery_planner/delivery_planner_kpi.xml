@@ -14,10 +14,10 @@
                     <div class="card-body d-flex align-items-center justify-content-between p-3"
                          title="Click để xem Tất cả (Bỏ lọc Kho)">
                         <div>
-                            <h6 class="text-uppercase fw-bold mb-1 opacity-75 small">Tổng Đơn Đang Mở</h6>
+                            <h6 class="text-uppercase fw-bold mb-1 opacity-75 small">Đơn hàng</h6>
                             <h3 class="mb-0 fw-bold"><t t-esc="state.dashboardStats.total || 0"/></h3>
                         </div>
-                        <i class="fa fa-shopping-cart fa-3x opacity-50" title="Tổng đơn"></i>
+                        <i class="fa fa-shopping-cart fa-3x opacity-50" title="Đơn hàng"></i>
                     </div>
                 </div>
             </div>

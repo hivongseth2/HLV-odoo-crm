@@ -229,6 +229,12 @@ export class DeliveryPlannerDashboard extends Component {
         const base = this.state.saleOrders.filter(so => {
             let val = so[field];
             if (dim === 'delivery_status' && val === 'unshipped') val = 'pending';
+            if (dim === 'packing_status') {
+                // Màn hình kiểm soát đóng gói chỉ quan tâm đơn chưa giao.
+                if (so.real_delivery_status === 'full') return false;
+                // Gom nhóm để tập trung hành động: còn hàng chưa đóng = cần xử lý ngay.
+                if (val === 'partial_packed') val = 'unpacked';
+            }
             return val === colValue;
         });
 

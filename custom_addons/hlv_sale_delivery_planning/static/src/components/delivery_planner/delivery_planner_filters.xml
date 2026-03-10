@@ -88,7 +88,7 @@
 
             <!-- Ngày Hẹn Giao SO -->
             <div class="col-md-3">
-                <label class="form-label small fw-bold text-muted mb-1">Ngày Hẹn Giao (SO)</label>
+                <label class="form-label small fw-bold text-muted mb-1">Ngày Hẹn Giao (Bán hàng)</label>
                 <div class="input-group">
                     <span class="input-group-text bg-light px-2" title="Từ Ngày">
                         <i class="fa fa-calendar text-primary"></i>
@@ -155,7 +155,7 @@
 
             <!-- Ngày Hẹn Nhận PO -->
             <div class="col-md-3">
-                <label class="form-label small fw-bold text-muted mb-1">Ngày Hẹn Nhận (PO)</label>
+                <label class="form-label small fw-bold text-muted mb-1">Ngày Hẹn Nhận (Mua hàng)</label>
                 <div class="input-group">
                     <span class="input-group-text bg-light px-2" title="Từ Ngày">
                         <i class="fa fa-calendar-o text-info"></i>
@@ -170,7 +170,7 @@
 
             <!-- Trạng Thái PO -->
             <div class="col-md-3 mt-md-0 mt-3">
-                <label class="form-label small fw-bold text-muted mb-1">Trạng Thái (PO)</label>
+                <label class="form-label small fw-bold text-muted mb-1">Trạng Thái (Mua hàng)</label>
                 <div class="input-group">
                     <span class="input-group-text bg-light px-2">
                         <i class="fa fa-file-text-o text-info" title="Hồ sơ"></i>

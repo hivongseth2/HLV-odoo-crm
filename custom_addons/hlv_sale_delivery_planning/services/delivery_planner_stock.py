@@ -104,7 +104,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             has_pending = False
             is_fully_ready = True
             total_pending, total_avail = 0, 0
-            total_storable_qty = 0
+            total_pending_packable_qty = 0
 
             for line in so.order_line:
                 if line.display_type or not line.product_id:
@@ -114,11 +114,11 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 if p_type == 'service' or is_kit:
                     continue
 
-                total_storable_qty += line.product_uom_qty
                 pending_qty = line.product_uom_qty - line.qty_delivered
                 if pending_qty > 0:
                     has_pending = True
                     total_pending += pending_qty
+                    total_pending_packable_qty += pending_qty
                     base_free = product_availabilities.get(
                         (line.product_id.id, so.warehouse_id.id), 0.0
                     )
@@ -137,9 +137,11 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 stock_status = 'delivered'
 
             packed_qty = packed_qty_by_so.get(so.id, 0.0)
+            # "Đã đóng gói đủ" chỉ áp dụng cho đơn còn phải giao.
+            # Đơn đã giao xong sẽ không rơi vào bucket đóng gói để tránh nhiễu từ phiếu trả hàng.
             if not has_pending:
-                packing_status = 'fully_packed'
-            elif packed_qty >= total_storable_qty and total_storable_qty > 0:
+                packing_status = 'delivered'
+            elif packed_qty >= total_pending_packable_qty and total_pending_packable_qty > 0:
                 packing_status = 'fully_packed'
             elif packed_qty > 0:
                 packing_status = 'partial_packed'

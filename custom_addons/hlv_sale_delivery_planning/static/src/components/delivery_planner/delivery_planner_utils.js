@@ -63,6 +63,7 @@ export function translatePackingStatus(status) {
         unpacked:      'Có Hàng Chưa Đóng Gói',
         partial_packed:'Đã Đóng 1 Phần',        // backward compatibility
         fully_packed:  'Đã Đóng Gói Đủ',
+        delivered:     'Đã Giao Xong',
     };
     return trans[status] || (status ? status.toUpperCase() : '');
 }
@@ -130,6 +131,7 @@ export function getPackingStatusBadgeClass(status) {
     if (status === 'partial_packed')return 'text-bg-info';        // backward compat
     if (status === 'unpacked')      return 'text-bg-warning';     // có hàng → đóng ngay!
     if (status === 'waiting_stock') return 'text-bg-secondary';   // chờ hàng về
+    if (status === 'delivered')     return 'text-bg-secondary';
     return 'text-bg-light border text-dark';
 }
 
