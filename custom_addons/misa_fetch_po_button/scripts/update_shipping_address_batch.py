@@ -13,6 +13,7 @@ import json
 import base64
 import logging
 import sys
+import copy
 from datetime import datetime
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -64,14 +65,33 @@ class ShippingAddressUpdater:
 
     def fetch_from_misa(self, sale_order_name):
         """
-        Gọi MISA Grid API với AISearchKeyword = sale_order_name
+        Gọi MISA Grid API với Filters để tìm kiếm chính xác theo SaleOrderNo
         Return: ShippingAddress nếu tìm thấy, None nếu không hoặc error
         """
         try:
-            payload = PAYLOAD_TEMPLATE.copy()
-            payload['AISearchKeyword'] = sale_order_name
+            # Deep copy để tránh vấn đề với nested objects
+            payload = copy.deepcopy(PAYLOAD_TEMPLATE)
+            
+            # Sử dụng Filters để tìm kiếm chính xác (AISearchKeyword bị ignored)
+            # SaleOrderNo là field chứa tên đơn hàng (ví dụ: DH115524948215998)
+            payload['Filters'] = [
+                {
+                    "ColumnName": "SaleOrderNo",
+                    "FilterType": 1,  # 1 = Equal/Exact match
+                    "FilterValue": sale_order_name,
+                    "LogicOperator": 0
+                }
+            ]
+            payload['PageSize'] = 1  # Chỉ lấy 1 kết quả nếu có match
+            payload['AISearchKeyword'] = ""
 
             logger.info(f"[MISA API] Tìm kiếm: {sale_order_name}")
+            # In payload để debug
+            logger.info(f"[MISA API] Payload gửi đi (Filters + Keys):")
+            logger.info(f"  - Filters: {json.dumps(payload.get('Filters'), ensure_ascii=False)}")
+            logger.info(f"  - PageSize: {payload.get('PageSize')}")
+            logger.info(f"  - AISearchKeyword: '{payload.get('AISearchKeyword')}'")
+            
             response = requests.post(
                 MISA_GRID_URL,
                 headers=self.headers,
@@ -90,26 +110,16 @@ class ShippingAddressUpdater:
                 logger.warning(f"[MISA API] Không tìm thấy do liệu cho {sale_order_name}")
                 return None
 
-            # Log tất cả items return về để debug
-            logger.info(f"[MISA API DEBUG] Items returned: {len(items)}")
-            for idx, item in enumerate(items[:3]):
-                item_name = item.get('SaleOrderName', item.get('SaleOrderNo', 'N/A'))
-                item_addr = item.get('ShippingAddress', '(empty)')
-                logger.info(f"  [{idx}] Name={item_name}, Address={item_addr[:50]}")
-
-            # Lấy item đầu tiên
+            # Lấy item duy nhất (vì PageSize=1)
             first_item = items[0]
-            found_name = first_item.get('SaleOrderName', first_item.get('SaleOrderNo', 'N/A'))
+            found_no = first_item.get('SaleOrderNo', 'N/A')
+            found_name = first_item.get('SaleOrderName', found_no)
             shipping_address = first_item.get('ShippingAddress', '').strip()
 
-            logger.info(f"[MISA API] Return item: Name={found_name} (searched: {sale_order_name})")
+            logger.info(f"[MISA API] ✅ Match found! No={found_no}, Name={found_name[:60]}")
             
-            # Kiểm tra xem có match không
-            if found_name and found_name != sale_order_name:
-                logger.warning(f"[MISA API] ⚠️ Name mismatch! Tìm: {sale_order_name}, nhận: {found_name}")
-
             if shipping_address:
-                logger.info(f"[MISA API] ✅ Address: {shipping_address[:80]}")
+                logger.info(f"[MISA API] Address: {shipping_address[:80]}")
                 return shipping_address
             else:
                 logger.warning(f"[MISA API] Địa chỉ trống cho {sale_order_name}")
