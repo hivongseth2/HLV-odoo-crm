@@ -24,12 +24,6 @@
                     Đóng gói
                 </button>
                 <button class="btn"
-                        t-att-class="state.kanbanGroupBy === 'internal_progress' ? 'btn-dark' : 'btn-outline-dark'"
-                        t-on-click="() => this.setKanbanGroupBy('internal_progress')">
-                    <i class="fa fa-tasks me-1" title="Tiến độ nội bộ"/>
-                    Tiến độ nội bộ
-                </button>
-                <button class="btn"
                         t-att-class="state.kanbanGroupBy === 'delivery_status' ? 'btn-primary' : 'btn-outline-primary'"
                         t-on-click="() => this.setKanbanGroupBy('delivery_status')">
                     <i class="fa fa-truck me-1" title="Tiến độ giao"/>

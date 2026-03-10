@@ -68,16 +68,6 @@ export function translatePackingStatus(status) {
     return trans[status] || (status ? status.toUpperCase() : '');
 }
 
-export function translateInternalProgressStatus(status) {
-    const trans = {
-        picking:   'Lấy Hàng',
-        packing:   'Đóng Gói',
-        mixed:     'Nhiều Trạng Thái',
-        delivered: 'Đã Giao Đủ',
-    };
-    return trans[status] || (status ? status.toUpperCase() : '');
-}
-
 export function translateSOStatus(status) {
     const trans = {
         draft:  'Báo giá',

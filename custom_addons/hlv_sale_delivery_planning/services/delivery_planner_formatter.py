@@ -90,7 +90,6 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         # --- Stock + packing status từ dict đã tính sẵn ---
         packing_status = so_status_dict.get('packing_status', 'unknown')
         stock_status = so_status_dict.get('stock_status', 'out_of_stock')
-        internal_progress_status = so_status_dict.get('internal_progress_status', 'picking')
 
         # --- Real delivery status ---
         # Uu tien gia tri da tinh o service stock de dong bo voi filter backend.
@@ -142,7 +141,6 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             'stock_status': stock_status,
             'is_fully_ready': is_fully_ready,
             'packing_status': packing_status,
-            'internal_progress_status': internal_progress_status,
             'picking_warehouse_ids': picking_warehouse_ids,
             'pos': po_data,
             'flows': flows,

@@ -119,6 +119,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             'packing_unpacked': 0, 'packing_waiting': 0,
         }
         so_status_dict = {}
+        so_meta_dict = {}
 
         for so in sales:
             has_pending = False
@@ -184,39 +185,18 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 # Còn phần có thể đóng nhưng chưa đóng hết.
                 packing_status = 'unpacked'
 
-            # Tien do noi bo: xu ly truong hop 1 don co nhieu nhom line o cac trang thai khac nhau.
-            if real_delivery_status == 'full':
-                internal_progress_status = 'delivered'
-            elif total_avail <= 0:
-                internal_progress_status = 'picking'
-            elif has_delivered or total_avail < total_pending:
-                internal_progress_status = 'mixed'
-            else:
-                # Da co hang de thao tac noi bo -> dong goi (gom ca cho giao va dong goi dang xu ly).
-                internal_progress_status = 'packing'
-
             so_status_dict[so.id] = {
                 'stock_status': stock_status,
                 'packing_status': packing_status,
                 'real_delivery_status': real_delivery_status,
-                'internal_progress_status': internal_progress_status,
             }
 
-            dashboard_stats['total'] += 1
-            if stock_status == 'ready':
-                dashboard_stats['ready'] += 1
-            elif stock_status == 'partial_ready':
-                dashboard_stats['partial'] += 1
-            elif stock_status == 'out_of_stock':
-                dashboard_stats['out_of_stock'] += 1
-
-            if has_pending:
-                if packing_status == 'fully_packed':
-                    dashboard_stats['packing_fully'] += 1
-                elif packing_status == 'unpacked':
-                    dashboard_stats['packing_unpacked'] += 1
-                elif packing_status == 'waiting_stock':
-                    dashboard_stats['packing_waiting'] += 1
+            # Giữ metadata để tổng hợp KPI theo tập đã lọc cuối cùng.
+            so_meta_dict[so.id] = {
+                'stock_status': stock_status,
+                'packing_status': packing_status,
+                'has_pending': has_pending,
+            }
 
             if filter_delivery_status == 'pending_partial':
                 delivery_ok = real_delivery_status in ('unshipped', 'partial')
@@ -233,5 +213,39 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 and (filter_packing_status == 'all' or packing_status == filter_packing_status)
             ):
                 matched_sale_ids.append(so.id)
+
+        # KPI phải phản ánh đúng tập dữ liệu sau khi áp toàn bộ filter hiện tại.
+        dashboard_stats.update({
+            'total': 0,
+            'ready': 0,
+            'partial': 0,
+            'out_of_stock': 0,
+            'packing_fully': 0,
+            'packing_partial': 0,
+            'packing_unpacked': 0,
+            'packing_waiting': 0,
+        })
+
+        for so_id in matched_sale_ids:
+            meta = so_meta_dict.get(so_id, {})
+            stock_status = meta.get('stock_status')
+            packing_status = meta.get('packing_status')
+            has_pending = meta.get('has_pending', False)
+
+            dashboard_stats['total'] += 1
+            if stock_status == 'ready':
+                dashboard_stats['ready'] += 1
+            elif stock_status == 'partial_ready':
+                dashboard_stats['partial'] += 1
+            elif stock_status == 'out_of_stock':
+                dashboard_stats['out_of_stock'] += 1
+
+            if has_pending:
+                if packing_status == 'fully_packed':
+                    dashboard_stats['packing_fully'] += 1
+                elif packing_status == 'unpacked':
+                    dashboard_stats['packing_unpacked'] += 1
+                elif packing_status == 'waiting_stock':
+                    dashboard_stats['packing_waiting'] += 1
 
         return sales, matched_sale_ids, dashboard_stats, product_availabilities, so_status_dict
