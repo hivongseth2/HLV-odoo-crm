@@ -5,7 +5,7 @@ Khi picking xuất kho (OUT) được validate và có checkbox x_studio_crm_eli
 tự động tạo tuyến vận chuyển trên MISA CRM và cập nhật vào Sale Order MISA.
 """
 import logging
-from odoo import models, fields, _
+from odoo import models, fields, api, _
 
 _logger = logging.getLogger(__name__)
 
@@ -15,11 +15,31 @@ class StockPickingCrmDelivery(models.Model):
 
     x_misa_shipping_address = fields.Char(
         string='MISA Shipping Address',
-        related='sale_id.misa_shipping_address',
+        compute='_compute_misa_shipping_address',
         readonly=True,
         store=True,
         index=True,
     )
+
+    @api.depends('sale_id.misa_shipping_address')
+    def _compute_misa_shipping_address(self):
+        """Compute misa_shipping_address from related sale order"""
+        for picking in self:
+            # Try to get from sale_id if it exists
+            if hasattr(picking, 'sale_id') and picking.sale_id:
+                picking.x_misa_shipping_address = picking.sale_id.misa_shipping_address
+            else:
+                # Try to find sale order via origin (SO name)
+                if picking.origin:
+                    sale_orders = self.env['sale.order'].search([
+                        ('name', '=', picking.origin)
+                    ], limit=1)
+                    if sale_orders:
+                        picking.x_misa_shipping_address = sale_orders.misa_shipping_address
+                    else:
+                        picking.x_misa_shipping_address = False
+                else:
+                    picking.x_misa_shipping_address = False
 
     def button_validate(self):
         """
