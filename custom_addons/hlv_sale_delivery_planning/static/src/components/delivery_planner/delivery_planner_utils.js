@@ -59,10 +59,10 @@ export function translateStockStatus(status) {
 
 export function translatePackingStatus(status) {
     const trans = {
-        waiting_stock: 'Chờ Hàng Đóng',
-        unpacked:      'Chưa Đóng Gói (Có Hàng)',
-        partial_packed:'Đã Đóng 1 Phần',
-        fully_packed:  'Đã Đóng Đủ Kiện',
+        waiting_stock: 'Không Có Hàng Đóng',
+        unpacked:      'Có Hàng Chưa Đóng Gói',
+        partial_packed:'Đã Đóng 1 Phần',        // backward compatibility
+        fully_packed:  'Đã Đóng Gói Đủ',
     };
     return trans[status] || (status ? status.toUpperCase() : '');
 }
@@ -127,9 +127,9 @@ export function getStockStatusBadgeClass(status) {
 
 export function getPackingStatusBadgeClass(status) {
     if (status === 'fully_packed')  return 'text-bg-success';
-    if (status === 'partial_packed')return 'text-bg-info';
-    if (status === 'unpacked')      return 'text-bg-warning';
-    if (status === 'waiting_stock') return 'text-bg-danger mb-opacity-75';
+    if (status === 'partial_packed')return 'text-bg-info';        // backward compat
+    if (status === 'unpacked')      return 'text-bg-warning';     // có hàng → đóng ngay!
+    if (status === 'waiting_stock') return 'text-bg-secondary';   // chờ hàng về
     return 'text-bg-light border text-dark';
 }
 

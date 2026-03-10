@@ -208,10 +208,9 @@ export class DeliveryPlannerDashboard extends Component {
                 { value: 'ready',          label: 'Đủ Hàng Xuất',    badgeClass: 'bg-success',           textClass: 'text-success',  iconClass: 'fa fa-check',          progressClass: 'bg-success' },
             ];
             case 'packing_status': return [
-                { value: 'waiting_stock',  label: 'Chờ Hàng Đóng',  badgeClass: 'bg-secondary',          textClass: 'text-secondary', iconClass: 'fa fa-hourglass-start', progressClass: 'bg-secondary' },
-                { value: 'unpacked',       label: 'Chưa Đóng Gói',  badgeClass: 'bg-warning text-dark',  textClass: 'text-warning',   iconClass: 'fa fa-cube',           progressClass: 'bg-warning' },
-                { value: 'partial_packed', label: 'Đóng 1 Phần',    badgeClass: 'bg-info',               textClass: 'text-info',      iconClass: 'fa fa-cubes',          progressClass: 'bg-info' },
-                { value: 'fully_packed',   label: 'Đã Đóng Đủ',     badgeClass: 'bg-success',            textClass: 'text-success',   iconClass: 'fa fa-check-square-o', progressClass: 'bg-success' },
+                { value: 'waiting_stock',  label: 'Không Có Hàng Đóng',      badgeClass: 'bg-secondary',          textClass: 'text-secondary', iconClass: 'fa fa-hourglass-start', progressClass: 'bg-secondary' },
+                { value: 'unpacked',       label: 'Có Hàng Chưa Đóng Gói',   badgeClass: 'bg-warning text-dark',  textClass: 'text-warning',   iconClass: 'fa fa-exclamation-triangle', progressClass: 'bg-warning' },
+                { value: 'fully_packed',   label: 'Đã Đóng Gói Đủ',          badgeClass: 'bg-success',            textClass: 'text-success',   iconClass: 'fa fa-check-square-o', progressClass: 'bg-success' },
             ];
             default: return [];
         }

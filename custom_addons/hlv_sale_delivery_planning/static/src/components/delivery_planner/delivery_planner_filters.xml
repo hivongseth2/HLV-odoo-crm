@@ -146,10 +146,9 @@
                     <select class="form-select px-1 fw-bold" t-model="state.filterPackingStatus"
                             t-on-change="onFilterChange">
                         <option value="all">Tất cả</option>
-                        <option value="waiting_stock">Chờ Hàng Đóng</option>
-                        <option value="unpacked">Chưa Đóng Gói</option>
-                        <option value="partial_packed">Đóng 1 Phần</option>
-                        <option value="fully_packed">Đã Đóng Đủ Kiện</option>
+                        <option value="waiting_stock">Không Có Hàng Đóng</option>
+                        <option value="unpacked">Có Hàng Chưa Đóng Gói</option>
+                        <option value="fully_packed">Đã Đóng Gói Đủ</option>
                     </select>
                 </div>
             </div>
