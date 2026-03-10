@@ -83,10 +83,10 @@ class DeliveryPlannerService(models.AbstractModel):
             moves = self.env['stock.move'].sudo().search_read([
                 ('sale_line_id', 'in', all_order_lines.ids),
                 ('state', 'not in', ('cancel', 'done'))
-            ], ['sale_line_id', 'reserved_availability'])
+            ], ['sale_line_id', 'quantity'])
             for m in moves:
                 s_id = m['sale_line_id'][0]
-                line_reserved_qty[s_id] = line_reserved_qty.get(s_id, 0.0) + m['reserved_availability']
+                line_reserved_qty[s_id] = line_reserved_qty.get(s_id, 0.0) + m['quantity']
 
         all_picking_ids = sales.mapped('picking_ids').ids
         packed_qty_by_so = {}
@@ -417,7 +417,7 @@ class DeliveryPlannerService(models.AbstractModel):
                 
                 # Tồn khả dụng cho đơn này = Tồn tự do hệ thống + Số lượng đơn này đang giữ
                 base_free = product_availabilities.get((line.product_id.id, so.warehouse_id.id), 0.0) if line.product_id and so.warehouse_id else 0.0
-                reserved_here = sum(line.move_ids.filtered(lambda m: m.state not in ('cancel', 'done')).mapped('reserved_availability'))
+                reserved_here = sum(line.move_ids.filtered(lambda m: m.state not in ('cancel', 'done')).mapped('quantity'))
                 qty_avail = base_free + reserved_here
                 
                 qty_packed = qty_packed_map.get(p_name, 0.0)
