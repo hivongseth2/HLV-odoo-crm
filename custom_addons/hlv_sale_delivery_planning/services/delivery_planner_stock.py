@@ -59,32 +59,49 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 s_id = m['sale_line_id'][0]
                 line_reserved_qty[s_id] = line_reserved_qty.get(s_id, 0.0) + m['quantity']
 
-        # --- 4. Tính số lượng đã đóng kiện theo SO ---
+        # --- 4. Tính số lượng đã đóng gói theo PHẦN CÒN PENDING của từng dòng SO ---
+        # Mục tiêu: không để hàng đã giao xong ở các dòng khác làm phình packed_qty của đơn.
+        pending_qty_by_line = {}
+        for line in sales.mapped('order_line'):
+            if line.display_type or not line.product_id:
+                continue
+            if line.product_id.type == 'service':
+                continue
+            pending_qty = line.product_uom_qty - line.qty_delivered
+            if pending_qty > 0:
+                pending_qty_by_line[line.id] = pending_qty
+
         all_picking_ids = sales.mapped('picking_ids').ids
         packed_qty_by_so = {}
-        if all_picking_ids:
-            # CHỈ ĐẾM PACKAGE TRONG PHIẾU XUẤT KHO (delivery), KHÔNG ĐẾM TRẢ HÀNG
+        if all_picking_ids and pending_qty_by_line:
             mls = self.env['stock.move.line'].sudo().search([
                 ('picking_id', 'in', all_picking_ids),
-                ('picking_id.picking_type_code', '=', 'outgoing'),  # Chỉ phiếu xuất
+                ('picking_id.picking_type_code', '=', 'outgoing'),
+                ('picking_id.state', 'not in', ['done', 'cancel']),
                 ('result_package_id', '!=', False),
                 ('state', 'not in', ['cancel', 'draft']),
+                ('move_id.sale_line_id', 'in', list(pending_qty_by_line.keys())),
             ])
-            so_pack_data = {}  # {so_id: {product_id: total_packed_qty}}
+
+            # Gộp theo line để có thể cap theo pending từng dòng.
+            packed_by_line = {}
+            so_by_line = {}
             for ml in mls:
+                line_id = ml.move_id.sale_line_id.id
+                if not line_id:
+                    continue
                 so_id = ml.picking_id.sale_id.id if ml.picking_id.sale_id else False
                 if not so_id:
                     continue
-                # Đếm theo sản phẩm, không theo package (tránh trùng lặp)
-                prod_id = ml.product_id.id
-                if so_id not in so_pack_data:
-                    so_pack_data[so_id] = {}
-                if prod_id not in so_pack_data[so_id]:
-                    so_pack_data[so_id][prod_id] = 0.0
-                so_pack_data[so_id][prod_id] += float(ml.quantity)
+                packed_by_line[line_id] = packed_by_line.get(line_id, 0.0) + float(ml.quantity)
+                so_by_line[line_id] = so_id
 
-            for so_id, products in so_pack_data.items():
-                packed_qty_by_so[so_id] = sum(products.values())
+            for line_id, packed_qty in packed_by_line.items():
+                so_id = so_by_line.get(line_id)
+                if not so_id:
+                    continue
+                capped_qty = min(packed_qty, pending_qty_by_line.get(line_id, 0.0))
+                packed_qty_by_so[so_id] = packed_qty_by_so.get(so_id, 0.0) + capped_qty
 
         # --- 5. Nhận diện sản phẩm Kit (phantom BOM) ---
         all_product_tmpl_ids = sales.mapped('order_line.product_id.product_tmpl_id').ids
@@ -150,13 +167,6 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             else:
                 # Còn phần có thể đóng nhưng chưa đóng hết.
                 packing_status = 'unpacked'
-            
-            # DEBUG LOG
-            if 'D-25644' in so.name:
-                import logging
-                _logger = logging.getLogger(__name__)
-                _logger.warning(f"DEBUG {so.name}: total_avail={total_avail}, packed_qty={packed_qty}, packing_status={packing_status}")
-
             so_status_dict[so.id] = {
                 'stock_status': stock_status,
                 'packing_status': packing_status,
