@@ -136,6 +136,24 @@
                 </div>
             </div>
 
+            <!-- Đóng Gói -->
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted mb-1">Đóng Gói</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light px-2">
+                        <i class="fa fa-cube text-info" title="Đóng gói"></i>
+                    </span>
+                    <select class="form-select px-1 fw-bold" t-model="state.filterPackingStatus"
+                            t-on-change="onFilterChange">
+                        <option value="all">Tất cả</option>
+                        <option value="waiting_stock">Chờ Hàng Đóng</option>
+                        <option value="unpacked">Chưa Đóng Gói</option>
+                        <option value="partial_packed">Đóng 1 Phần</option>
+                        <option value="fully_packed">Đã Đóng Đủ Kiện</option>
+                    </select>
+                </div>
+            </div>
+
             <!-- Ngày Hẹn Nhận PO -->
             <div class="col-md-3">
                 <label class="form-label small fw-bold text-muted mb-1">Ngày Hẹn Nhận (PO)</label>

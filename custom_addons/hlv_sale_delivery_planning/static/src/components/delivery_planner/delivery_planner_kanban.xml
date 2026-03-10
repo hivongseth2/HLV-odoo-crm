@@ -52,7 +52,7 @@
         <div class="hlv-kanban-board d-flex gap-3 overflow-auto pb-4 pt-1 pe-2">
             <t t-foreach="this.kanbanColumnDefs" t-as="col" t-key="col.value">
 
-                <div class="hlv-kanban-column flex-shrink-0 d-flex flex-column"
+                <div class="hlv-kanban-column d-flex flex-column"
                      t-att-data-col="col.value"
                      t-on-dragover="(ev) => this.onDragOver(ev, col.value)"
                      t-on-dragleave="(ev) => this.onDragLeave(ev)"
@@ -64,7 +64,7 @@
                         <div class="d-flex align-items-center gap-2">
                             <span class="badge rounded-pill fs-6 fw-bold"
                                   t-att-class="col.badgeClass">
-                                <t t-esc="this.ordersForColumn(col.value).length"/>
+                                <t t-esc="this.totalInColumn(col.value)"/>
                             </span>
                             <span class="fw-bold small text-uppercase"
                                   t-att-class="col.textClass">
@@ -77,7 +77,7 @@
                             <div class="progress-bar"
                                  t-att-class="col.progressClass"
                                  role="progressbar"
-                                 t-att-style="'width:' + (this.ordersForColumn(col.value).length / state.totalCount * 100) + '%'">
+                                 t-att-style="'width:' + (this.totalInColumn(col.value) / state.totalCount * 100) + '%'">
                             </div>
                         </div>
                     </div>
@@ -86,7 +86,7 @@
                     <div class="hlv-kanban-col-body flex-grow-1 rounded-bottom px-2 py-2">
 
                         <!-- Empty state -->
-                        <div t-if="!this.ordersForColumn(col.value).length"
+                        <div t-if="!this.totalInColumn(col.value)"
                              class="hlv-kanban-empty text-center text-muted py-5">
                             <i class="fa fa-inbox fa-2x d-block mb-2 opacity-25" title="Không có đơn hàng"></i>
                             <small>Không có đơn hàng</small>
@@ -103,6 +103,17 @@
                                 <t t-call="hlv_sale_delivery_planning.KanbanSOCard"/>
                             </div>
                         </t>
+
+                        <!-- Tải thêm -->
+                        <div t-if="this.hasMoreInColumn(col.value)" class="text-center pt-1 pb-2">
+                            <button class="btn btn-sm btn-outline-secondary w-100"
+                                    style="border-style: dashed; font-size: 0.75rem;"
+                                    t-on-click="() => this.loadMoreColumn(col.value)">
+                                <i class="fa fa-chevron-down me-1" title="Tải thêm"></i>
+                                Tải thêm
+                                (<t t-esc="this.totalInColumn(col.value) - (state.kanbanColPageSize[col.value] || 15)"/> còn lại)
+                            </button>
+                        </div>
 
                     </div>
                 </div>

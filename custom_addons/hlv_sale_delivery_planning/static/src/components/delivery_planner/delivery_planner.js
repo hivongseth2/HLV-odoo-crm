@@ -59,6 +59,7 @@ export class DeliveryPlannerDashboard extends Component {
             draggedSoId: null,
             dragOverColumn: null,
             kanbanColumnOrder: {},           // { colValue: [soId, ...] } — thứ tự DnD client-side
+            kanbanColPageSize: {},           // { colValue: N } — số card hiển thị mỗi cột
         });
 
         onWillStart(async () => {
@@ -85,8 +86,8 @@ export class DeliveryPlannerDashboard extends Component {
                     filter_po_date_to: this.state.filterPODateTo,
                     filter_po_status: this.state.filterPOStatus,
                     filter_packing_status: this.state.filterPackingStatus,
-                    // Kanban tải toàn bộ (không phân trang)
-                    limit: isKanban ? 500 : this.state.itemsPerPage,
+                    // Kanban tải theo batch, không phân trang backend
+                    limit: isKanban ? 200 : this.state.itemsPerPage,
                     offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
                 }
             );
@@ -167,6 +168,7 @@ export class DeliveryPlannerDashboard extends Component {
     async onFilterChange() {
         this.state.currentPage = 1;
         this.state.kanbanColumnOrder = {};
+        this.state.kanbanColPageSize = {};
         await this.fetchData();
     }
 
@@ -174,20 +176,22 @@ export class DeliveryPlannerDashboard extends Component {
     async setViewMode(mode) {
         this.state.viewMode = mode;
         if (mode === 'kanban') {
-            // Xóa filter theo status để tất cả cột kanban đều có dữ liệu
-            this.state.filterDeliveryStatus = 'all';
+            // Mặc định: chỉ hiện đơn chưa giao + giao 1 phần (tiết kiệm tải)
+            if (this.state.filterDeliveryStatus === 'all') {
+                this.state.filterDeliveryStatus = 'pending_partial';
+            }
             this.state.filterStockStatus = 'all';
-            this.state.filterPackingStatus = 'all';
             this.state.kanbanColumnOrder = {};
+            this.state.kanbanColPageSize = {};
         }
         this.state.currentPage = 1;
         await this.fetchData();
     }
 
     setKanbanGroupBy(dim) {
-        // Chỉ đổi chiều phân nhóm — không cần fetch lại (data đã có)
         this.state.kanbanGroupBy = dim;
         this.state.kanbanColumnOrder = {};
+        this.state.kanbanColPageSize = {};
     }
 
     // --- Kanban Column Definitions ---
@@ -213,8 +217,8 @@ export class DeliveryPlannerDashboard extends Component {
         }
     }
 
-    // Trả danh sách SO cho một cột kanban, theo thứ tự DnD
-    ordersForColumn(colValue) {
+    // Internal: toàn bộ SO của cột (theo DnD order)
+    _allOrdersForColumn(colValue) {
         const dim = this.state.kanbanGroupBy;
         const fieldMap = {
             delivery_status: 'real_delivery_status',
@@ -225,7 +229,6 @@ export class DeliveryPlannerDashboard extends Component {
 
         const base = this.state.saleOrders.filter(so => {
             let val = so[field];
-            // unshipped = pending (cùng hiển thị "Chưa giao")
             if (dim === 'delivery_status' && val === 'unshipped') val = 'pending';
             return val === colValue;
         });
@@ -235,6 +238,26 @@ export class DeliveryPlannerDashboard extends Component {
         const orderMap = {};
         order.forEach((id, idx) => { orderMap[id] = idx; });
         return [...base].sort((a, b) => (orderMap[a.id] ?? 9999) - (orderMap[b.id] ?? 9999));
+    }
+
+    // Public: chỉ trả N card đầu (phân trang client-side)
+    ordersForColumn(colValue) {
+        const pageSize = this.state.kanbanColPageSize[colValue] || 15;
+        return this._allOrdersForColumn(colValue).slice(0, pageSize);
+    }
+
+    totalInColumn(colValue) {
+        return this._allOrdersForColumn(colValue).length;
+    }
+
+    hasMoreInColumn(colValue) {
+        const pageSize = this.state.kanbanColPageSize[colValue] || 15;
+        return this._allOrdersForColumn(colValue).length > pageSize;
+    }
+
+    loadMoreColumn(colValue) {
+        const current = this.state.kanbanColPageSize[colValue] || 15;
+        this.state.kanbanColPageSize[colValue] = current + 15;
     }
 
     // --- Drag & Drop Handlers ---

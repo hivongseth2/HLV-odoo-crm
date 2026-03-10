@@ -145,18 +145,17 @@
     // KANBAN BOARD
 // =============================================================================
 
-    // Board container: cuon ngang, can bang theo top
+    // Board container: full width, cột cân bằng
     .hlv-kanban-board {
         min-height: 60vh;
         align-items: flex-start;
-        padding-bottom: 16px;
+        width: 100%;
     }
 
-    // Moi cot kanban
+    // Mỗi cột kanban: flex đều, không cố định width
     .hlv-kanban-column {
-        width: 300px;
-        min-width: 280px;
-        max-width: 320px;
+        flex: 1 1 0;
+        min-width: 220px;
         background: rgba(255, 255, 255, 0.55);
         border-radius: 14px;
         border: 2px solid transparent;

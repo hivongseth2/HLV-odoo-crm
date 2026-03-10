@@ -14,7 +14,8 @@
         <div class="o_action o_view_controller hlv_delivery_planner_dashboard"
              style="height: 100%; display: flex; flex-direction: column;">
             <div class="o_content bg-view bg-light" style="flex: 1; overflow-y: auto;">
-                <div class="container-fluid pt-4 pb-5">
+                <!-- kanban mode: không padding ngang, fullscreen -->
+                <div t-att-class="state.viewMode === 'kanban' ? 'px-3 pt-4 pb-5' : 'container-fluid pt-4 pb-5'">
 
                     <!-- Header -->
                     <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
