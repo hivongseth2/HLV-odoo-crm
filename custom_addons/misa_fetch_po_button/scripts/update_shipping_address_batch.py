@@ -112,6 +112,7 @@ class ShippingAddressUpdater:
         """
         Đếm số lượng SO đủ điều kiện:
         - state in [sale, draft]
+        - delivery_status != full (chưa giao xong)
         - name không chứa "S0"
         
         :param exclude_with_address: Nếu True, loại bỏ những đã có address
@@ -121,6 +122,7 @@ class ShippingAddressUpdater:
         
         domain = [
             ('state', 'in', ['sale', 'draft']),
+            ('delivery_status', '!=', 'full'),
         ]
         
         all_orders = SaleOrder.search(domain)
@@ -143,6 +145,7 @@ class ShippingAddressUpdater:
         """
         Cập nhật misa_shipping_address cho các SO (pagination):
         - state in [sale, draft]
+        - delivery_status != full (chưa giao xong)
         - Name không chứa "S0"
         - Support pagination để tránh fetch lại những đã làm
         
@@ -155,6 +158,7 @@ class ShippingAddressUpdater:
         
         domain = [
             ('state', 'in', ['sale', 'draft']),
+            ('delivery_status', '!=', 'full'),
         ]
         
         # Tìm tất cả SO
