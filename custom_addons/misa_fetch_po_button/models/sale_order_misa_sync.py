@@ -1210,7 +1210,23 @@ class SaleOrder(models.Model):
             shipping_addr = env['misa.api.utils'].extract_shipping_address_from_data(data) or ''
             partner_name  = data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
             shipping_contact_name = owner_date.get('shipping_contact') or data.get("ShippingContactIDText")
-            partner = odoo_utils._get_or_create_partner(partner_name)
+
+            # Đồng nhất với hard resync: ưu tiên sync partner theo AccountID từ MISA.
+            account_id = data.get("AccountID") or data.get("AccountId")
+            partner = None
+            if account_id:
+                partner = env['misa.api.utils']._sync_customer_from_misa_account_api(account_id, headers)
+
+            if not partner:
+                partner = odoo_utils._get_or_create_partner(partner_name)
+
+            # Chỉ chuẩn hóa country cho partner chính, không ghi đè thông tin shipping.
+            try:
+                vn_country = env['sale.api.import.wizard']._vn_country()
+                if vn_country and partner.country_id != vn_country:
+                    partner.write({'country_id': vn_country.id})
+            except Exception:
+                pass
 
             delivery_contact = env['sale.api.import.wizard']._get_or_create_delivery_contact(
                 parent_partner=partner,
