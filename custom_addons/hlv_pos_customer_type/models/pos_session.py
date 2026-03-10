@@ -6,8 +6,8 @@ class PosSession(models.Model):
     _inherit = 'pos.session'
 
     @api.model
-    def _pos_ui_models_to_load(self):
-        result = super()._pos_ui_models_to_load()
+    def _load_pos_data_models(self, config_id):
+        result = super()._load_pos_data_models(config_id)
         if 'pos.customer.type' not in result:
             result.append('pos.customer.type')
         return result

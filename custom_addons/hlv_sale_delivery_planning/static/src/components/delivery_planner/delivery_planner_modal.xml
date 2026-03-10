@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ================================================================
+         Modal Chi Tiết Kiện Hàng (Package Details Modal)
+         Sử dụng state.isPackageModalOpen và state.selectedPackage
+         ================================================================ -->
+    <t t-name="hlv_sale_delivery_planning.PackageModal">
+        <div t-if="state.isPackageModalOpen"
+             class="modal show d-block" tabindex="-1"
+             style="background: rgba(0,0,0,0.5); z-index: 1060;">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content shadow-lg border-0">
+
+                    <div class="modal-header bg-light text-white p-3">
+                        <h5 class="modal-title m-0">
+                            <i class="fa fa-archive me-2" title="Kiện hàng"></i>
+                            Chi Tiết Kiện: <t t-esc="state.selectedPackage.name"/>
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white"
+                                t-on-click="closePackageDetails"></button>
+                    </div>
+
+                    <div class="modal-body p-4 bg-light">
+                        <!-- Thứ tự và vị trí kiện -->
+                        <div class="row g-3 mb-4">
+                            <div class="col-6">
+                                <div class="bg-white rounded p-3 border shadow-sm h-100">
+                                    <div class="small text-muted text-uppercase fw-bold mb-1">Thứ tự đóng gói</div>
+                                    <div class="fw-bold text-primary">
+                                        <i class="fa fa-sort-amount-asc me-2" title="Thứ tự"></i>
+                                        Kiện thứ <t t-esc="state.selectedPackage.sequence"/>
+                                        / <t t-esc="state.selectedPackage.total"/>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="bg-white rounded p-3 border shadow-sm h-100">
+                                    <div class="small text-muted text-uppercase fw-bold mb-1">Vị trí hiện tại</div>
+                                    <div class="fw-bold text-success">
+                                        <i class="fa fa-map-marker me-2" title="Vị trí"></i>
+                                        <t t-esc="this.formatPackageLocation(state.selectedPackage.location_name)"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Header bảng + nút in -->
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="text-muted text-uppercase small m-0 fw-bold">
+                                <i class="fa fa-list me-1" title="Danh sách"></i> Danh sách hàng trong kiện
+                            </h6>
+                            <button class="btn btn-primary btn-sm rounded-pill shadow-sm px-3"
+                                    t-on-click="() => this.printPackageLabel(state.selectedPackage)">
+                                <i class="fa fa-print me-2" title="In tem"></i> In Tem Kiện
+                            </button>
+                        </div>
+
+                        <!-- Bảng sản phẩm trong kiện -->
+                        <div class="table-responsive rounded border bg-white">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3">Sản phẩm</th>
+                                        <th class="text-end pe-3" width="80">SL đóng</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="Object.entries(state.selectedPackage.product_map)"
+                                       t-as="entry" t-key="entry[0]">
+                                        <tr>
+                                            <td class="ps-3"><t t-esc="entry[0]"/></td>
+                                            <td class="text-end pe-3 fw-bold text-primary">
+                                                <t t-esc="this.formatQty(entry[1])"/>
+                                            </td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer bg-light border-top p-2">
+                        <button type="button" class="btn btn-secondary"
+                                t-on-click="closePackageDetails">Đóng</button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </t>
+
+</templates>

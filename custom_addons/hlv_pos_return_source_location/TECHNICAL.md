@@ -1,24 +1,20 @@
-# Technical Documentation: HLV POS Return to Original Source Location
+# Technical Documentation: HLV POS Return to Source Location
 
-## Purpose
-Override Odoo's default POS return behavior where all returns go to a fixed return location (usually `WH/Stock`). This module ensures returns go back to the specific location that shipped the product initially.
+## Overview
+This module ensures that when a product is returned (refunded) in Odoo POS, the stock move generated for the return is directed back to the original source location where the product was initially shipped from, instead of the default return location defined in the POS configuration.
 
-## Architecture
+## Key Components
 
-### Models
-- `pos.order.line`: Inherited to override `_prepare_stock_move_vals`.
+### Backend Logic
+- `models/pos_order.py`: Inherits `pos.order.line` and overrides `_prepare_stock_move_vals`.
 
 ### Logic Flow
-1. User creates a refund in POS.
-2. POS Order is sync'd to backend.
-3. `_create_order_picking` is called.
-4. For each line, `_prepare_stock_move_vals` is executed.
-5. If line quantity is negative and `refunded_orderline_id` is present:
-    a. Locate the original `pos.order.line`.
-    b. Find all completed `stock.move` records for the original order's pickings.
-    c. Identify the move for the same product.
-    d. Take that move's `location_id` (the original source).
-    e. Set the current move's `location_dest_id` to that original source.
+1. When a POS order is validated, Odoo creates stock pickings.
+2. For refund lines (quantity < 0), the system:
+    a. Identifies the original order line using `refunded_orderline_id`.
+    b. Finds the original `stock.move` records associated with that original line.
+    c. Retrieves the `location_id` (Source Location) from the original move.
+    d. Sets the `location_dest_id` (Destination Location) of the return move to this original source location.
 
 ## File Structure
 ```
