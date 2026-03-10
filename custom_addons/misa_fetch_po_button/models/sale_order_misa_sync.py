@@ -1177,9 +1177,8 @@ class SaleOrder(models.Model):
             vals_header_upd['x_studio_httt'] = owner_date['httt']
         if owner_date.get('htgh'):
             vals_header_upd['x_studio_htgh'] = owner_date['htgh']
-        shipping_address_raw = (data.get('ShippingAddress') or owner_date.get('ShippingAddress') or '').strip()
+        shipping_address_raw = (data.get('ShippingAddress') or '').strip()
         if shipping_address_raw:
-            vals_header_upd['x_studio_a_ch_giao_hng'] = shipping_address_raw
             vals_header_upd['misa_shipping_address'] = shipping_address_raw
         # Auto-set CRM Delivery flag nếu DeliveryPartnerID = 3000 (Tự vận chuyển)
         if owner_date.get('is_crm_delivery'):
@@ -1187,6 +1186,12 @@ class SaleOrder(models.Model):
         if vals_header_upd:
             self.write(vals_header_upd)
             _logger.info("✅ Đã cập nhật misa_saler_code/order_date/httt/htgh/misa_delivery cho SO %s", self.name)
+
+        # x_studio_a_ch_giao_hng nằm trên stock.picking, không phải sale.order.
+        if shipping_address_raw and 'x_studio_a_ch_giao_hng' in self.env['stock.picking']._fields:
+            self.picking_ids.filtered(lambda p: p.state != 'cancel').sudo().write({
+                'x_studio_a_ch_giao_hng': shipping_address_raw
+            })
 
         # --------- Cập nhật Địa chỉ Giao hàng (như action_resync_from_misa_hard) ---------
         try:
