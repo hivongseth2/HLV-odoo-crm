@@ -11,6 +11,11 @@
     'category': 'Point of Sale',
     'depends': ['point_of_sale', 'stock'],
     'data': [],
+    'assets': {
+        'point_of_sale._assets_pos': [
+            'hlv_pos_return_source_location/static/src/js/idb_fix.js',
+        ],
+    },
     'installable': True,
     'auto_install': False,
     'license': 'LGPL-3',

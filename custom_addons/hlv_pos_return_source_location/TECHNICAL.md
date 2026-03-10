@@ -20,6 +20,9 @@ Override Odoo's default POS return behavior where all returns go to a fixed retu
     d. Take that move's `location_id` (the original source).
     e. Set the current move's `location_dest_id` to that original source.
 
+### POS IndexedDB Safeguard
+- `static/src/js/idb_fix.js`: Automatically detects "NotFoundError" on object stores and deletes the `pos-db` in IndexedDB to force Odoo to rebuild the schema. This prevention system unblocks POS when models are removed or changed.
+
 ## File Structure
 ```
 hlv_pos_return_source_location/
@@ -28,5 +31,9 @@ hlv_pos_return_source_location/
 ├── models/
 │   ├── __init__.py
 │   └── pos_order.py
+├── static/
+│   └── src/
+│       └── js/
+│           └── idb_fix.js
 └── TECHNICAL.md
 ```
