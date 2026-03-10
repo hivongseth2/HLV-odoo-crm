@@ -36,13 +36,22 @@
 
         <!-- Action Window to open wizard -->
         <record id="action_misa_shipping_address_batch_update" model="ir.actions.act_window">
-            <field name="name">Update MISA Shipping Address</field>
+            <field name="name">Cập nhật địa chỉ giao hàng MISA</field>
             <field name="type">ir.actions.act_window</field>
             <field name="res_model">misa.shipping.address.batch.update</field>
             <field name="view_mode">form</field>
             <field name="target">new</field>
             <field name="help">Fetch and update MISA shipping addresses from CRM in batch</field>
         </record>
+
+        <!-- Menu Item -->
+        <menuitem
+            id="menu_misa_shipping_address_batch_update"
+            name="Cập nhật địa chỉ giao hàng"
+            action="action_misa_shipping_address_batch_update"
+            parent="menu_misa_import_root"
+            sequence="110"
+        />
 
     </data>
 </odoo>
