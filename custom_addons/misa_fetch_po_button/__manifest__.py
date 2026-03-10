@@ -17,10 +17,8 @@
         'wizard/misa_pos_sync_wizard_views.xml',
         'wizard/misa_tag_update_wizard_views.xml',
         'wizard/misa_tax_update_wizard_views.xml',
+        'wizard/misa_shipping_address_batch_update_views.xml',
         'views/misa_invoice_search_view.xml',
-    ],
-    'python': [
-        'models/sale_api_import_wizard.py',  # Thêm file này
     ],
     'installable': True,
     'auto_install': False,
