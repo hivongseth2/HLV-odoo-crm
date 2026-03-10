@@ -150,6 +150,12 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             else:
                 # Còn phần có thể đóng nhưng chưa đóng hết.
                 packing_status = 'unpacked'
+            
+            # DEBUG LOG
+            if 'D-25644' in so.name:
+                import logging
+                _logger = logging.getLogger(__name__)
+                _logger.warning(f"DEBUG {so.name}: total_avail={total_avail}, packed_qty={packed_qty}, packing_status={packing_status}")
 
             so_status_dict[so.id] = {
                 'stock_status': stock_status,
