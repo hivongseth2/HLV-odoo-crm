@@ -17,10 +17,10 @@
         'views/crm_tag_views.xml',
         'views/purchase_request_misa_view.xml',
         'wizard/misa_pos_sync_wizard_views.xml',
-
         'wizard/misa_tax_update_wizard_views.xml',
         'wizard/misa_tag_update_wizard_views.xml',
         'wizard/misa_purchase_request_sync_views.xml',
+        'wizard/misa_shipping_address_batch_update_views.xml',
         'views/misa_invoice_search_view.xml',
     ],
 
