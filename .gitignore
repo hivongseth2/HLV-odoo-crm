@@ -7,3 +7,4 @@ __pycache__/
 .claude/
 *.txt
 .agent/
+custom_addons/google_ads_automation/doc
