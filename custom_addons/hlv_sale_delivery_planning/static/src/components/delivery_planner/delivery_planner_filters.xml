@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ================================================================
+         Thanh bộ lọc đang kích hoạt (Active Filters Bar)
+         ================================================================ -->
+    <t t-name="hlv_sale_delivery_planning.ActiveFiltersBar">
+        <div t-if="this.hasActiveFilters"
+             class="mb-4 d-flex flex-wrap align-items-center gap-2 px-3 py-2 bg-light rounded border border-info border-opacity-25 w-100 shadow-sm mx-auto"
+             style="max-width: 98%;">
+            <span class="text-secondary small fw-bold me-2">
+                <i class="fa fa-filter me-1" title="Bộ lọc"></i> Bộ lọc đang chọn:
+            </span>
+
+            <span t-if="state.searchQuery"
+                  class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
+                Tìm: "<t t-esc="state.searchQuery"/>"
+                <i class="fa fa-times cursor-pointer ms-1" title="Xóa"
+                   t-on-click="() => { state.searchQuery = ''; this.fetchData(); }"></i>
+            </span>
+
+            <span t-if="state.filterWarehouseId !== 'all'"
+                  class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
+                Kho: <t t-esc="state.warehouses.find(w => w.id == state.filterWarehouseId)?.name"/>
+                <i class="fa fa-times cursor-pointer ms-1" title="Xóa"
+                   t-on-click="() => { state.filterWarehouseId = 'all'; this.fetchData(); }"></i>
+            </span>
+
+            <span t-if="state.filterPackingStatus !== 'all'"
+                  class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
+                Đóng gói: <t t-esc="this.translatePackingStatus(state.filterPackingStatus)"/>
+                <i class="fa fa-times cursor-pointer ms-1" title="Xóa"
+                   t-on-click="() => { state.filterPackingStatus = 'all'; this.fetchData(); }"></i>
+            </span>
+
+            <span t-if="state.filterDeliveryStatus !== 'all'"
+                  class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
+                Giao hàng: <t t-esc="this.translateDeliveryStatus(state.filterDeliveryStatus)"/>
+                <i class="fa fa-times cursor-pointer ms-1" title="Xóa"
+                   t-on-click="() => { state.filterDeliveryStatus = 'all'; this.fetchData(); }"></i>
+            </span>
+
+            <span t-if="state.filterStockStatus !== 'all'"
+                  class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
+                Tồn kho: <t t-esc="this.translateStockStatus(state.filterStockStatus)"/>
+                <i class="fa fa-times cursor-pointer ms-1" title="Xóa"
+                   t-on-click="() => { state.filterStockStatus = 'all'; this.fetchData(); }"></i>
+            </span>
+
+            <button class="btn btn-sm btn-outline-danger border-0 fw-bold ms-auto" t-on-click="resetFilters">
+                <i class="fa fa-trash-o me-1" title="Xóa tất cả"></i> Xóa tất cả bộ lọc
+            </button>
+        </div>
+    </t>
+
+    <!-- ================================================================
+         Thanh công cụ lọc (Filter Toolbar)
+         ================================================================ -->
+    <t t-name="hlv_sale_delivery_planning.FilterToolbar">
+        <div class="row g-3 mb-4 bg-white p-3 rounded shadow-sm border align-items-end">
+            <!-- Tìm kiếm -->
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted mb-1">Tìm Kiếm</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light px-2 cursor-pointer" t-on-click="onFilterChange">
+                        <i class="fa fa-search text-primary" title="Tìm kiếm"></i>
+                    </span>
+                    <input type="text" class="form-control px-2 border-1 fw-bold"
+                           placeholder="Tìm tên/mã Khách, SO..."
+                           t-model="state.searchQuery"
+                           t-on-keyup="onSearchKeyup"/>
+                </div>
+            </div>
+
+            <!-- Kho Cung Cấp -->
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted mb-1">Kho Cung Cấp</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light"><i class="fa fa-building text-muted" title="Kho"></i></span>
+                    <select class="form-select" t-model="state.filterWarehouseId" t-on-change="onFilterChange">
+                        <option value="all">Tất cả</option>
+                        <t t-foreach="state.warehouses" t-as="wh" t-key="wh.id">
+                            <option t-att-value="wh.id"><t t-esc="wh.name"/></option>
+                        </t>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Ngày Hẹn Giao SO -->
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted mb-1">Ngày Hẹn Giao (SO)</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light px-2" title="Từ Ngày">
+                        <i class="fa fa-calendar text-primary"></i>
+                    </span>
+                    <input type="date" class="form-control px-1" title="Từ Ngày"
+                           t-model="state.filterDateFrom" t-on-change="onFilterChange"/>
+                    <span class="input-group-text bg-light px-2 border-start-0 border-end-0">~</span>
+                    <input type="date" class="form-control px-1" title="Đến Ngày"
+                           t-model="state.filterDateTo" t-on-change="onFilterChange"/>
+                </div>
+            </div>
+
+            <!-- Tiến Độ Giao -->
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted mb-1">Tiến Độ Giao</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light px-2">
+                        <i class="fa fa-truck text-primary" title="Tiến độ giao"></i>
+                    </span>
+                    <select class="form-select px-1 fw-bold" t-model="state.filterDeliveryStatus"
+                            t-on-change="onFilterChange">
+                        <option value="all">Tất cả</option>
+                        <option value="pending_partial">Chưa giao &amp; Giao 1 phần</option>
+                        <option value="unshipped">Chưa giao</option>
+                        <option value="partial">Giao 1 phần</option>
+                        <option value="full">Hoàn thành</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Tình Trạng Kho -->
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted mb-1">Tình Trạng Kho</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light px-2">
+                        <i class="fa fa-cubes text-warning" title="Tình trạng kho"></i>
+                    </span>
+                    <select class="form-select px-1 fw-bold" t-model="state.filterStockStatus"
+                            t-on-change="onFilterChange">
+                        <option value="all">Tất cả</option>
+                        <option value="out_of_stock">Không có hàng</option>
+                        <option value="partial_ready">Có hàng 1 phần</option>
+                        <option value="ready">Đủ hàng xuất</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Ngày Hẹn Nhận PO -->
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted mb-1">Ngày Hẹn Nhận (PO)</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light px-2" title="Từ Ngày">
+                        <i class="fa fa-calendar-o text-info"></i>
+                    </span>
+                    <input type="date" class="form-control px-1" title="Từ Ngày"
+                           t-model="state.filterPODateFrom" t-on-change="onFilterChange"/>
+                    <span class="input-group-text bg-light px-2 border-start-0 border-end-0">~</span>
+                    <input type="date" class="form-control px-1" title="Đến Ngày"
+                           t-model="state.filterPODateTo" t-on-change="onFilterChange"/>
+                </div>
+            </div>
+
+            <!-- Trạng Thái PO -->
+            <div class="col-md-3 mt-md-0 mt-3">
+                <label class="form-label small fw-bold text-muted mb-1">Trạng Thái (PO)</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light px-2">
+                        <i class="fa fa-file-text-o text-info" title="Hồ sơ"></i>
+                    </span>
+                    <select class="form-select px-1 fw-bold" t-model="state.filterPOStatus"
+                            t-on-change="onFilterChange">
+                        <option value="all">Tất cả</option>
+                        <option value="pending">Chưa nhận hàng</option>
+                        <option value="partial">Nhận 1 phần</option>
+                        <option value="full">Đã nhận đủ</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </t>
+
+</templates>

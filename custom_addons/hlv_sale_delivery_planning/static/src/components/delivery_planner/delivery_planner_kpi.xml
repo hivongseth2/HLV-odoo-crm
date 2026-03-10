@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ================================================================
+         KPI Stock: Tổng Đơn / Sẵn Sàng / Hàng 1 Phần / Thiếu Hàng
+         Sử dụng trong: hlv_sale_delivery_planning.Dashboard (t-call)
+         ================================================================ -->
+    <t t-name="hlv_sale_delivery_planning.KPIStockCards">
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white shadow-sm border-1 h-100"
+                     style="cursor: pointer;"
+                     t-on-click="() => this.setStockFilter('all')">
+                    <div class="card-body d-flex align-items-center justify-content-between p-3"
+                         title="Click để xem Tất cả (Bỏ lọc Kho)">
+                        <div>
+                            <h6 class="text-uppercase fw-bold mb-1 opacity-75 small">Tổng Đơn Đang Mở</h6>
+                            <h3 class="mb-0 fw-bold"><t t-esc="state.dashboardStats.total || 0"/></h3>
+                        </div>
+                        <i class="fa fa-shopping-cart fa-3x opacity-50" title="Tổng đơn"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white shadow-sm border-1 h-100"
+                     style="cursor: pointer;"
+                     t-on-click="() => this.setStockFilter('ready')">
+                    <div class="card-body d-flex align-items-center justify-content-between p-3"
+                         title="Click để xem Đủ hàng xuất">
+                        <div>
+                            <h6 class="text-uppercase fw-bold mb-1 opacity-75 small">Sẵn Sàng Xuất Đủ</h6>
+                            <h3 class="mb-0 fw-bold"><t t-esc="state.dashboardStats.ready || 0"/></h3>
+                        </div>
+                        <i class="fa fa-check-circle fa-3x opacity-50" title="Sẵn sàng"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-dark shadow-sm border-1 h-100"
+                     style="cursor: pointer;"
+                     t-on-click="() => this.setStockFilter('partial_ready')">
+                    <div class="card-body d-flex align-items-center justify-content-between p-3"
+                         title="Click để xem Có hàng 1 phần">
+                        <div>
+                            <h6 class="text-uppercase fw-bold mb-1 opacity-75 small">Có Hàng 1 Phần</h6>
+                            <h3 class="mb-0 fw-bold"><t t-esc="state.dashboardStats.partial || 0"/></h3>
+                        </div>
+                        <i class="fa fa-exclamation-circle fa-3x opacity-50" title="Có hàng 1 phần"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-danger text-white shadow-sm border-1 h-100"
+                     style="cursor: pointer;"
+                     t-on-click="() => this.setStockFilter('out_of_stock')">
+                    <div class="card-body d-flex align-items-center justify-content-between p-3"
+                         title="Click để xem Thiếu hàng">
+                        <div>
+                            <h6 class="text-uppercase fw-bold mb-1 opacity-75 small">Chưa Có Hàng / Thiếu</h6>
+                            <h3 class="mb-0 fw-bold"><t t-esc="state.dashboardStats.out_of_stock || 0"/></h3>
+                        </div>
+                        <i class="fa fa-times-circle fa-3x opacity-50" title="Thiếu hàng"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </t>
+
+    <!-- ================================================================
+         KPI Đóng Gói: Chờ Cấp Hàng / Chờ Đóng / Đóng 1 Phần / Đủ Kiện
+         ================================================================ -->
+    <t t-name="hlv_sale_delivery_planning.KPIPackingCards">
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card bg-white text-dark shadow-sm border-0 h-100 kpi-card"
+                     style="cursor: pointer;"
+                     t-on-click="() => this.setPackingFilter('waiting_stock')"
+                     t-att-class="state.filterPackingStatus === 'waiting_stock' ? 'ring-2 ring-danger' : ''">
+                    <div class="card-body d-flex align-items-center p-3" title="Chưa đủ hàng để đóng kiện">
+                        <div class="rounded-circle bg-danger bg-opacity-10 p-3 me-3 text-danger">
+                            <i class="fa fa-clock-o fa-fw fa-2x" title="Chờ cấp hàng"></i>
+                        </div>
+                        <div>
+                            <h6 class="text-uppercase fw-bold text-muted mb-1 small opacity-75">Chờ Cấp Hàng</h6>
+                            <h3 class="mb-0 fw-bold"><t t-esc="state.dashboardStats.packing_waiting || 0"/></h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-white text-dark shadow-sm border-0 h-100 kpi-card"
+                     style="cursor: pointer;"
+                     t-on-click="() => this.setPackingFilter('unpacked')"
+                     t-att-class="state.filterPackingStatus === 'unpacked' ? 'ring-2 ring-warning' : ''">
+                    <div class="card-body d-flex align-items-center p-3" title="Có Hàng Nằm Chờ Đóng Gói">
+                        <div class="rounded-circle bg-warning bg-opacity-10 p-3 me-3 text-warning">
+                            <i class="fa fa-cubes fa-fw fa-2x" title="Hàng chờ đóng"></i>
+                        </div>
+                        <div>
+                            <h6 class="text-uppercase fw-bold text-muted mb-1 small opacity-75">Hàng Chờ Đóng</h6>
+                            <h3 class="mb-0 fw-bold"><t t-esc="state.dashboardStats.packing_unpacked || 0"/></h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-white text-dark shadow-sm border-0 h-100 kpi-card"
+                     style="cursor: pointer;"
+                     t-on-click="() => this.setPackingFilter('partial_packed')"
+                     t-att-class="state.filterPackingStatus === 'partial_packed' ? 'ring-2 ring-info' : ''">
+                    <div class="card-body d-flex align-items-center p-3" title="Đã Đóng 1 Phần Đơn">
+                        <div class="rounded-circle bg-info bg-opacity-10 p-3 me-3 text-info">
+                            <i class="fa fa-cube fa-fw fa-2x" title="Đóng 1 phần"></i>
+                        </div>
+                        <div>
+                            <h6 class="text-uppercase fw-bold text-muted mb-1 small opacity-75">Đóng 1 Phần</h6>
+                            <h3 class="mb-0 fw-bold"><t t-esc="state.dashboardStats.packing_partial || 0"/></h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-white text-dark shadow-sm border-0 h-100 kpi-card"
+                     style="cursor: pointer;"
+                     t-on-click="() => this.setPackingFilter('fully_packed')"
+                     t-att-class="state.filterPackingStatus === 'fully_packed' ? 'ring-2 ring-success' : ''">
+                    <div class="card-body d-flex align-items-center p-3" title="Đã Đóng Đủ Kiện Sẵn Sàng Giao">
+                        <div class="rounded-circle bg-success bg-opacity-10 p-3 me-3 text-success">
+                            <i class="fa fa-check-square-o fa-fw fa-2x" title="Đã đóng đủ"></i>
+                        </div>
+                        <div>
+                            <h6 class="text-uppercase fw-bold text-muted mb-1 small opacity-75">Đã Đủ Kiện</h6>
+                            <h3 class="mb-0 fw-bold"><t t-esc="state.dashboardStats.packing_fully || 0"/></h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </t>
+
+</templates>

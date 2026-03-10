@@ -3,6 +3,13 @@
 import { registry } from "@web/core/registry";
 import { Component, useState, onWillStart } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
+import {
+    translateDeliveryStatus, translatePickingState, translatePickingStatus,
+    translateStockStatus, translatePackingStatus, translateSOStatus, translatePOStatus,
+    getPickingStateBadgeClass, getPickingStatusBadgeClass, getDeliveryStatusBadgeClass,
+    getStockStatusBadgeClass, getPackingStatusBadgeClass, getPOStatusBadgeClass,
+    getSOCardColorClass, formatCurrency, formatQty, getDatesComparisonClass,
+} from "./delivery_planner_utils";
 
 export class DeliveryPlannerDashboard extends Component {
     static template = "hlv_sale_delivery_planning.Dashboard";
@@ -218,51 +225,21 @@ export class DeliveryPlannerDashboard extends Component {
     // --- PO Status Formatting (Receipt Based) ---
     getPOStatusClass(receiptStatus) {
         switch (receiptStatus) {
-            case "pending":
-                return "bg-secondary"; // Chưa nhận
-            case "partial":
-                return "bg-warning text-dark"; // Nhận 1 phần
-            case "full":
-                return "bg-success"; // Nhận đủ
-            default:
-                return "bg-light text-muted border";
+            case "pending": return "bg-secondary";
+            case "partial": return "bg-warning text-dark";
+            case "full":    return "bg-success";
+            default:        return "bg-light text-muted border";
         }
     }
 
-    translatePOStatus(receiptStatus) {
-        const trans = {
-            partial: "Nhận 1 phần",
-            pending: "Chưa nhận",
-            full: "Đã nhận đủ",
-            unknown: "Không rõ"
-        };
-        return trans[receiptStatus] || "Mới Tạo / Hủy";
-    }
-
-    // --- Translations ---
-    translateDeliveryStatus(status) {
-        const trans = {
-            'unknown': 'Chưa cập nhật',
-            'pending': 'CHƯA GIAO',
-            'unshipped': 'CHƯA GIAO',
-            'partial': 'Giao 1 phần',
-            'pending_partial': 'Chưa & Giao 1 phần',
-            'full': 'Đã giao đủ'
-        };
-        return trans[status] || (status ? status.toUpperCase() : '');
-    }
-
-    translatePickingState(state) {
-        const trans = {
-            'draft': 'Nháp',
-            'waiting': 'Chờ phiếu khác',
-            'confirmed': 'Chờ hàng',
-            'assigned': 'Sẵn sàng',
-            'done': 'Hoàn thành',
-            'cancel': 'Đã hủy'
-        };
-        return trans[state] || state;
-    }
+    // --- Translations (delegate to utils) ---
+    translatePOStatus(s)         { return translatePOStatus(s); }
+    translateDeliveryStatus(s)   { return translateDeliveryStatus(s); }
+    translatePickingState(s)     { return translatePickingState(s); }
+    translatePickingStatus(s)    { return translatePickingStatus(s); }
+    translateStockStatus(s)      { return translateStockStatus(s); }
+    translatePackingStatus(s)    { return translatePackingStatus(s); }
+    translateSOStatus(s)         { return translateSOStatus(s); }
 
     formatPackageGroupStatus(so, group) {
         if (group.picking_state !== 'done') {
@@ -314,119 +291,19 @@ export class DeliveryPlannerDashboard extends Component {
         return this.state.collapsedSections.has(sectionKey);
     }
 
-    getPickingStateBadgeClass(state) {
-        const mapping = {
-            'draft': 'bg-light text-dark',
-            'waiting': 'bg-warning text-dark',
-            'confirmed': 'bg-info text-white',
-            'assigned': 'bg-primary text-white',
-            'done': 'bg-success text-white',
-            'cancel': 'bg-danger text-white'
-        };
-        return mapping[state] || 'bg-secondary text-white';
-    }
+    // --- Badge Classes (delegate to utils) ---
+    getPickingStateBadgeClass(s)            { return getPickingStateBadgeClass(s); }
+    getPickingStatusBadgeClass(s)           { return getPickingStatusBadgeClass(s); }
+    getDeliveryStatusBadgeClass(s)          { return getDeliveryStatusBadgeClass(s); }
+    getStockStatusBadgeClass(s)             { return getStockStatusBadgeClass(s); }
+    getPackingStatusBadgeClass(s)           { return getPackingStatusBadgeClass(s); }
+    getPOStatusBadgeClass(state, receipt)   { return getPOStatusBadgeClass(state, receipt); }
+    getSOCardColorClass(so)                 { return getSOCardColorClass(so); }
 
-    translateStockStatus(status) {
-        const trans = {
-            'out_of_stock': 'Không có hàng',
-            'partial_ready': 'Có hàng 1 phần',
-            'ready': 'Đủ hàng xuất'
-        };
-        return trans[status] || (status ? status.toUpperCase() : '');
-    }
-
-    translatePackingStatus(status) {
-        const trans = {
-            'waiting_stock': 'Chờ Hàng Đóng',
-            'unpacked': 'Chưa Đóng Gói (Có Hàng)',
-            'partial_packed': 'Đã Đóng 1 Phần',
-            'fully_packed': 'Đã Đóng Đủ Kiện'
-        };
-        return trans[status] || (status ? status.toUpperCase() : '');
-    }
-
-    translateSOStatus(status) {
-        const trans = {
-            'draft': 'Báo giá',
-            'sent': 'Đã gửi',
-            'sale': 'Đơn hàng',
-            'done': 'Khóa',
-            'cancel': 'Đã hủy',
-        };
-        return trans[status] || (status ? status.toUpperCase() : '');
-    }
-
-    translatePickingStatus(state) {
-        const trans = {
-            'draft': 'Nháp',
-            'waiting': 'Chờ QĐ',
-            'confirmed': 'Chờ hàng',
-            'assigned': 'Sẵn sàng',
-            'done': 'Hoàn thành',
-            'cancel': 'Hủy'
-        };
-        return trans[state] || (state ? state.toUpperCase() : '');
-    }
-
-    getPOStatusBadgeClass(state, receiptStatus) {
-        if (state === 'cancel') return 'text-bg-secondary';
-        if (receiptStatus === 'full') return 'text-bg-success';
-        if (receiptStatus === 'partial') return 'text-bg-info';
-        if (state === 'purchase' || state === 'done') return 'text-bg-primary';
-        return 'text-bg-light border text-dark';
-    }
-
-    getDeliveryStatusBadgeClass(status) {
-        if (status === 'full') return 'text-bg-success';
-        if (status === 'partial') return 'text-bg-warning';
-        if (status === 'pending') return 'text-bg-secondary';
-        return 'text-bg-light border text-dark';
-    }
-
-    getStockStatusBadgeClass(status) {
-        if (status === 'ready') return 'text-bg-primary';
-        if (status === 'partial_ready') return 'text-bg-warning';
-        if (status === 'out_of_stock') return 'text-bg-danger';
-        return 'text-bg-light border text-dark';
-    }
-
-    getPackingStatusBadgeClass(status) {
-        if (status === 'fully_packed') return 'text-bg-success';
-        if (status === 'partial_packed') return 'text-bg-info';
-        if (status === 'unpacked') return 'text-bg-warning';
-        if (status === 'waiting_stock') return 'text-bg-danger mb-opacity-75';
-        return 'text-bg-light border text-dark';
-    }
-
-    getPickingStatusBadgeClass(state) {
-        if (state === 'done') return 'text-bg-success';
-        if (state === 'assigned') return 'text-bg-primary';
-        if (state === 'cancel') return 'text-bg-secondary opacity-50';
-        return 'text-bg-warning';
-    }
-
-    getDatesComparisonClass(soDate, poDate) {
-        if (!soDate || !poDate) return '';
-        const so = new Date(soDate);
-        const po = new Date(poDate);
-        if (po > so) return 'text-danger fw-bold';
-        return 'text-success';
-    }
-
-    formatCurrency(value) {
-        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
-    }
-
-    formatQty(value) {
-        return parseFloat(Number(value).toFixed(2));
-    }
-
-    getSOCardColorClass(so) {
-        if (so.real_delivery_status === 'full') return 'border-success border-2 shadow-sm';
-        if (so.stock_status === 'ready') return 'border-primary border-2 shadow-sm';
-        if (so.stock_status === 'partial_ready') return 'border-warning border-2 shadow-sm';
-        return 'border-danger border-2 shadow-sm';
-    }
+    // --- Formatting (delegate to utils) ---
+    formatCurrency(v)                       { return formatCurrency(v); }
+    formatQty(v)                            { return formatQty(v); }
+    getDatesComparisonClass(soDate, poDate) { return getDatesComparisonClass(soDate, poDate); }
 
     // --- Hover Interactions cho Liên kết Return/Backorder ---
     onPickingHover(pickingName) {
