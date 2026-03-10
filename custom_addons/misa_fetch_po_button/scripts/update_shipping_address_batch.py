@@ -5,6 +5,7 @@ Script để cập nhật misa_shipping_address từ MISA CRM
 - Call MISA API Grid để search theo tên đơn hàng
 - Extract ShippingAddress từ response
 - Update vào field misa_shipping_address
+- Hỗ trợ pagination để tránh fetch lại các orders đã xử lý
 """
 
 import requests
@@ -70,7 +71,7 @@ class ShippingAddressUpdater:
             payload = PAYLOAD_TEMPLATE.copy()
             payload['AISearchKeyword'] = sale_order_name
 
-            logger.info(f"[MISA API] Searching for: {sale_order_name}")
+            logger.info(f"[MISA API] Tìm kiếm: {sale_order_name}")
             response = requests.post(
                 MISA_GRID_URL,
                 headers=self.headers,
@@ -81,12 +82,12 @@ class ShippingAddressUpdater:
 
             data = response.json()
             if not data.get('Success'):
-                logger.warning(f"[MISA API] Failed for {sale_order_name}: {data.get('Message', 'Unknown error')}")
+                logger.warning(f"[MISA API] Lỗi với {sale_order_name}: {data.get('Message', 'Lỗi không xác định')}")
                 return None
 
             items = data.get('Data', [])
             if not items:
-                logger.warning(f"[MISA API] No results for {sale_order_name}")
+                logger.warning(f"[MISA API] Không tìm thấy do liệu cho {sale_order_name}")
                 return None
 
             # Lấy item đầu tiên (theo logic search, thường là match chính xác)
@@ -94,10 +95,10 @@ class ShippingAddressUpdater:
             shipping_address = first_item.get('ShippingAddress', '').strip()
 
             if shipping_address:
-                logger.info(f"[MISA API] Found address: {shipping_address[:60]}...")
+                logger.info(f"[MISA API] Tìm thấy địa chỉ: {shipping_address[:60]}...")
                 return shipping_address
             else:
-                logger.warning(f"[MISA API] Empty ShippingAddress for {sale_order_name}")
+                logger.warning(f"[MISA API] Địa chỉ trống cho {sale_order_name}")
                 return None
 
         except requests.exceptions.RequestException as e:
@@ -107,48 +108,93 @@ class ShippingAddressUpdater:
             logger.error(f"[MISA API] Unexpected error for {sale_order_name}: {str(e)}")
             return None
 
-    def update_sale_orders(self, limit=None, dry_run=False, force_update=False):
+def count_eligible_orders(self, exclude_with_address=True):
         """
-        Cập nhật misa_shipping_address cho các SO:
-        - DeliveryStatus != "Đã giao hàng"
-        - Name không chứa "S0"
+        Đếm số lượng SO đủ điều kiện:
+        - state in [sale, draft]
+        - name không chứa "S0"
         
-        :param limit: Số lượng SO tối đa để xử lý (None = all)
-        :param dry_run: Nếu True, không lưu vào DB, chỉ log
-        :param force_update: Nếu True, cập nhật cả những SO đã có address
+        :param exclude_with_address: Nếu True, loại bỏ những đã có address
+        :return: Số lượng eligible orders
         """
-        # Query SO chưa giao xong, name không chứa "S0"
         SaleOrder = self.env['sale.order']
         
         domain = [
-            ('state', 'in', ['sale', 'draft']),  # Trạng thái đơn hàng
+            ('state', 'in', ['sale', 'draft']),
         ]
         
-        orders = SaleOrder.search(domain, limit=limit)
-        logger.info(f"[INFO] Found {len(orders)} undelivered orders to process")
-
-        for idx, order in enumerate(orders, 1):
-            logger.info(f"\n[{idx}/{len(orders)}] Processing: {order.name} (ID: {order.id})")
-
-            # Kiểm tra name có chứa "S0" không
+        all_orders = SaleOrder.search(domain)
+        
+        eligible_count = 0
+        for order in all_orders:
+            # Loại bỏ orders có chứa "S0"
             if "S0" in order.name:
-                logger.info(f"  Skipping - name contains 'S0'")
                 continue
+            
+            # Loại bỏ orders đã có address (nếu exclude_with_address=True)
+            if exclude_with_address and order.misa_shipping_address:
+                continue
+            
+            eligible_count += 1
+        
+        return eligible_count
 
-            # Kiểm tra đã có misa_shipping_address không
-            if order.misa_shipping_address and not force_update:
-                logger.info(f"  Already has address: {order.misa_shipping_address[:60]}...")
+    def update_sale_orders(self, page=1, page_size=20, dry_run=False, force_update=False):
+        """
+        Cập nhật misa_shipping_address cho các SO (pagination):
+        - state in [sale, draft]
+        - Name không chứa "S0"
+        - Support pagination để tránh fetch lại những đã làm
+        
+        :param page: Trang hiện tại (mặc định 1)
+        :param page_size: Số SO per trang (mặc định 20)
+        :param dry_run: Nếu True, không lưu vào DB, chỉ log
+        :param force_update: Nếu True, cập nhật cả những SO đã có address
+        """
+        SaleOrder = self.env['sale.order']
+        
+        domain = [
+            ('state', 'in', ['sale', 'draft']),
+        ]
+        
+        # Tìm tất cả SO
+        all_orders = SaleOrder.search(domain, order='id ASC')
+        
+        # Filter: loại bỏ "S0", và loại bỏ đã có address (trừ khi force_update)
+        eligible_orders = []
+        for order in all_orders:
+            if "S0" in order.name:
                 continue
+            if order.misa_shipping_address and not force_update:
+                continue
+            eligible_orders.append(order)
+        
+        total_eligible = len(eligible_orders)
+        logger.info(f"\n[THỐNG KÊ] Tổng cộng {total_eligible} đơn hàng chưa giao, tên khác 'S0'")
+        
+        # Pagination
+        offset = (page - 1) * page_size
+        paginated_orders = eligible_orders[offset:offset + page_size]
+        
+        logger.info(f"[TRANG {page}] Xử lý {len(paginated_orders)} đơn hàng (từ {offset + 1} đến {offset + len(paginated_orders)})")
+        logger.info(f"[TRANG {page}] Trang tiếp theo: page={page + 1}, page_size={page_size} (nếu còn dữ liệu)")
+        
+        if not paginated_orders:
+            logger.warning(f"[TRANG {page}] Không có đơn hàng nào để xử lý!")
+            return
+        
+        for idx, order in enumerate(paginated_orders, 1):
+            logger.info(f"\n[{idx}/{len(paginated_orders)}] Xử lý: {order.name} (ID: {order.id})")
 
             # Fetch từ MISA
             address = self.fetch_from_misa(order.name)
             if not address:
-                logger.warning(f"  Failed to fetch address from MISA")
+                logger.warning(f"  ✗ Không thể fetch địa chỉ từ MISA")
                 self.failed_count += 1
                 self.errors.append({
                     'order_id': order.id,
                     'order_name': order.name,
-                    'error': 'MISA API returned no address'
+                    'error': 'MISA API không trả về dữ liệu'
                 })
                 continue
 
@@ -157,13 +203,13 @@ class ShippingAddressUpdater:
                 if not dry_run:
                     order.write({'misa_shipping_address': address})
                     self.env.cr.commit()
-                    logger.info(f"  ✓ Updated successfully")
+                    logger.info(f"  ✓ Cập nhật thành công")
                 else:
-                    logger.info(f"  [DRY RUN] Would update with: {address[:60]}...")
+                    logger.info(f"  [CHẢ CHẠY] Sẽ cập nhật: {address[:60]}...")
                 
                 self.updated_count += 1
             except Exception as e:
-                logger.error(f"  ✗ Failed to update: {str(e)}")
+                logger.error(f"  ✗ Lỗi khi cập nhật: {str(e)}")
                 self.failed_count += 1
                 self.errors.append({
                     'order_id': order.id,
@@ -175,32 +221,46 @@ class ShippingAddressUpdater:
     def print_summary(self):
         """In tóm tắt kết quả"""
         logger.info("\n" + "="*60)
-        logger.info("SUMMARY")
+        logger.info("THỐNG KÊ KẾT QUẢ")
         logger.info("="*60)
-        logger.info(f"Updated: {self.updated_count}")
-        logger.info(f"Failed: {self.failed_count}")
+        logger.info(f"Cập nhật thành công: {self.updated_count}")
+        logger.info(f"Lỗi: {self.failed_count}")
         
         if self.errors:
-            logger.info("\nErrors:")
+            logger.info("\nChi tiết lỗi:")
             for err in self.errors:
                 logger.info(f"  - {err['order_name']} (ID: {err['order_id']}): {err['error']}")
+        
+        logger.info("="*60)
 
 
-def run_from_odoo_shell(env, misa_headers, limit=None, dry_run=False, force_update=False):
+def run_from_odoo_shell(env, misa_headers, page=1, page_size=20, dry_run=False, force_update=False):
     """
     Dùng trong Odoo shell:
     $ odoo shell -c /path/to/config.conf
     >>> exec(open('/full/path/to/update_shipping_address_batch.py').read())
-    >>> run_from_odoo_shell(env, misa_headers, limit=100)
+    
+    # Lần 1: Xử lý 20 cái đầu
+    >>> updater = run_from_odoo_shell(env, misa_headers, page=1, page_size=20)
+    
+    # Lần 2: Xử lý 20 cái tiếp theo
+    >>> updater = run_from_odoo_shell(env, misa_headers, page=2, page_size=20)
     
     :param env: Odoo environment (self.env trong Odoo context)
     :param misa_headers: Headers dict cho MISA API
-    :param limit: Số lượng SO tối đa để xử lý
+    :param page: Số trang (mặc định 1)
+    :param page_size: Số SO per trang (mặc định 20)
     :param dry_run: Nếu True, chỉ preview mà không save
     :param force_update: Cập nhật cả những SO đã có address
     """
     updater = ShippingAddressUpdater(env, misa_headers)
-    updater.update_sale_orders(limit=limit, dry_run=dry_run, force_update=force_update)
+    
+    # Hiển thị thống kê trước
+    total_eligible = updater.count_eligible_orders(exclude_with_address=not force_update)
+    logger.info(f"\n[THỐNG KÊ TỔNG] Có {total_eligible} đơn hàng cần cập nhật đến địa chỉ")
+    logger.info(f"[PAGINATION] page_size={page_size}, cần {(total_eligible + page_size - 1) // page_size} trang")
+    
+    updater.update_sale_orders(page=page, page_size=page_size, dry_run=dry_run, force_update=force_update)
     updater.print_summary()
     return updater
 
@@ -208,7 +268,7 @@ def run_from_odoo_shell(env, misa_headers, limit=None, dry_run=False, force_upda
 if __name__ == '__main__':
     # Standalone script usage (chạy trực tiếp từ command line)
     # Cần thêm phần authenticate với MISA và connect Odoo khi chạy standalone
-    print("This script is designed to run within Odoo shell.")
-    print("Usage: odoo shell -c /path/to/odoo.conf")
-    print("Then in the shell: exec(open('update_shipping_address_batch.py').read())")
+    print("Script này được thiết kế để chạy trong Odoo shell.")
+    print("Cách sử dụng: odoo shell -c /path/to/odoo.conf")
+    print("Sau đó trong shell: exec(open('update_shipping_address_batch.py').read())")
     sys.exit(1)
