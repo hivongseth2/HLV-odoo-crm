@@ -7,16 +7,18 @@
         <field name="arch" type="xml">
             <list string="Lượt Chuyển Đổi">
                 <field name="order_date"/>
-                <field name="order_ref"/>
-                <field name="campaign_id"/>
+                <field name="order_ref" class="fw-bold text-primary"/>
+                <field name="campaign_id" optional="show"/>
                 <field name="customer_name"/>
-                <field name="product_names"/>
-                <field name="revenue" widget="monetary"
+                <field name="product_names" optional="show"/>
+                <field name="revenue" widget="monetary" sum="Tổng Doanh Thu"
                        options="{'currency_field': 'currency_id'}"/>
                 <field name="order_status" widget="badge"
                        decoration-success="order_status == 'completed'"
                        decoration-warning="order_status == 'processing'"
-                       decoration-danger="order_status == 'cancelled'"/>
+                       decoration-danger="order_status == 'cancelled'"
+                       decoration-info="order_status == 'pending'"/>
+                <field name="roas" widget="badge" decoration-success="roas &gt;= 3" decoration-warning="roas &gt; 1 and roas &lt; 3" optional="show"/>
                 <field name="source" widget="badge"/>
                 <field name="gclid" optional="hide"/>
             </list>
@@ -28,26 +30,60 @@
         <field name="name">google.ads.conversion.form</field>
         <field name="model">google.ads.conversion</field>
         <field name="arch" type="xml">
-            <form string="Lượt Chuyển Đổi">
+            <form string="Lượt Chuyển Đổi" class="o_google_ads_premium_form">
                 <sheet>
-                    <div class="oe_button_box" name="button_box"/>
-                    <group>
-                        <group string="Thông Tin Đơn Hàng">
-                            <field name="order_ref"/>
-                            <field name="order_date"/>
-                            <field name="customer_name"/>
-                            <field name="product_names"/>
-                            <field name="revenue"/>
-                            <field name="order_status"/>
-                        </group>
-                        <group string="Liên Kết Google Ads">
-                            <field name="account_id"/>
-                            <field name="campaign_id"/>
-                            <field name="gclid"/>
-                            <field name="source"/>
-                            <field name="roas" readonly="1"/>
-                        </group>
-                    </group>
+                    <field name="hero_header_html" widget="html" readonly="1"/>
+
+                    <div class="o_kpi_dashboard mt-n4">
+                        <div class="o_kpi_tile shadow-sm border-0">
+                            <span class="o_kpi_label">DOANH THU</span>
+                            <span class="o_kpi_value text-primary"><field name="revenue" widget="monetary"/></span>
+                        </div>
+                        <div class="o_kpi_tile shadow-sm border-0">
+                            <span class="o_kpi_label">TRẠNG THÁI</span>
+                            <span class="o_kpi_value text-dark"><field name="status_label"/></span>
+                        </div>
+                        <div class="o_kpi_tile shadow-sm border-0">
+                            <span class="o_kpi_label">ROAS (ƯỚC TÍNH)</span>
+                            <span class="o_kpi_value text-success"><field name="roas" widget="badge" decoration-success="roas &gt;= 3"/></span>
+                        </div>
+                        <div class="o_kpi_tile shadow-sm border-0">
+                            <span class="o_kpi_label">NGUỒN DỮ LIỆU</span>
+                            <span class="o_kpi_value text-info"><field name="source" widget="badge"/></span>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-7">
+                            <div class="o_premium_card h-100">
+                                <h4 class="mb-4 text-primary fw-bold"><i class="fa fa-file-text-o me-2"></i>Chi Tiết Giao Dịch</h4>
+                                <group>
+                                    <field name="order_ref"/>
+                                    <field name="order_date"/>
+                                    <field name="customer_name"/>
+                                    <field name="product_names" placeholder="Sản phẩm trong đơn..."/>
+                                    <field name="order_status" widget="badge"
+                                           decoration-success="order_status == 'completed'"
+                                           decoration-warning="order_status == 'processing'"
+                                           decoration-danger="order_status == 'cancelled'"/>
+                                </group>
+                            </div>
+                        </div>
+                        <div class="col-lg-5">
+                            <div class="o_premium_card h-100 bg-light border-0">
+                                <h4 class="mb-4 text-success fw-bold"><i class="fa fa-google me-2"></i>Google Ads Attribution</h4>
+                                <div class="alert alert-info border-0 shadow-sm rounded-3 mb-4">
+                                    <i class="fa fa-link me-1"></i> Dữ liệu này giúp bộ máy Google Ads tối ưu hóa theo giá trị đơn hàng thực tế.
+                                </div>
+                                <group>
+                                    <field name="campaign_id" options="{'no_create': True}"/>
+                                    <field name="account_id" invisible="1"/>
+                                    <field name="gclid" readonly="1"/>
+                                    <field name="campaign_cost" widget="monetary"/>
+                                </group>
+                            </div>
+                        </div>
+                    </div>
                 </sheet>
             </form>
         </field>

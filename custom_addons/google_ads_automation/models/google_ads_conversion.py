@@ -1,4 +1,5 @@
 from odoo import api, fields, models, _
+from markupsafe import Markup
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -61,3 +62,52 @@ class GoogleAdsConversion(models.Model):
         for rec in self:
             cost = rec.campaign_id.cost if rec.campaign_id else 0
             rec.roas = rec.revenue / cost if cost > 0 else 0
+
+    # ── UI/UX Rendering ──────────────────────────
+    status_label = fields.Char(compute='_compute_status_info')
+    hero_header_html = fields.Html(compute='_compute_status_info')
+
+    @api.depends('order_status', 'source', 'order_ref')
+    def _compute_status_info(self):
+        selection = dict(self._fields['order_status'].selection)
+        for rec in self:
+            rec.status_label = selection.get(rec.order_status, rec.order_status)
+            
+            # Render Hero Header
+            status_color = 'bg-success' if rec.order_status == 'completed' else \
+                          'bg-warning' if rec.order_status == 'processing' else \
+                          'bg-danger' if rec.order_status == 'cancelled' else 'bg-info'
+            
+            html = f"""
+                <div class="o_hero_header mb-4">
+                    <div class="status_badge">
+                        <span class="o_status_ping {status_color}"></span>
+                        <span class="badge text-bg-light fw-bold shadow-sm border">{rec.status_label}</span>
+                    </div>
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <div class="bg-light p-3 rounded-4 border text-primary">
+                                <i class="fa fa-shopping-cart fa-4x"></i>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <span class="o_logic_tag mb-2 d-inline-block bg-primary">GOOGLE ADS CONVERSION</span>
+                            <div class="d-flex align-items-center mb-1">
+                                <h1 class="me-3 mb-0">{rec.order_ref}</h1>
+                            </div>
+                            <div class="d-flex align-items-center text-muted mt-2 fw-medium">
+                                <div>
+                                    <i class="fa fa-calendar me-1"></i> Ngày đặt: <span class="text-dark fw-bold">{rec.order_date or '—'}</span>
+                                </div>
+                                <div class="ms-4">
+                                    <i class="fa fa-user me-1"></i> Khách hàng: <span class="text-dark">{rec.customer_name or 'Khách vãng lai'}</span>
+                                </div>
+                                <div class="ms-4">
+                                    <i class="fa fa-globe me-1"></i> Nguồn: <span class="text-dark">{rec.source.upper()}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            """
+            rec.hero_header_html = Markup(html)
