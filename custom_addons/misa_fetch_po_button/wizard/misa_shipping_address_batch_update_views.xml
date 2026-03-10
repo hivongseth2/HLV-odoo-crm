@@ -3,32 +3,52 @@
     <data>
         <!-- Wizard Form View -->
         <record id="view_misa_shipping_address_batch_update_form" model="ir.ui.view">
-            <field name="name">MISA Shipping Address Batch Update - Form</field>
+            <field name="name">Cập nhật địa chỉ giao hàng MISA - Form</field>
             <field name="model">misa.shipping.address.batch.update</field>
             <field name="arch" type="xml">
-                <form string="Update MISA Shipping Address">
-                    <group>
+                <form string="Cập nhật địa chỉ giao hàng MISA">
+                    <div class="alert alert-info" role="alert" invisible="total_eligible &gt; 0">
+                        <p><strong>ℹ️ Thông báo:</strong> Không tìm thấy đơn hàng nào để cập nhật!</p>
+                    </div>
+
+                    <group invisible="total_eligible == 0">
                         <div class="alert alert-info" role="alert">
-                            <p>This wizard will update <strong>misa_shipping_address</strong> field for sale orders by fetching data from MISA CRM.</p>
-                            <p><strong>Criteria:</strong>
+                            <p><strong>📋 Công cụ cập nhật địa chỉ giao hàng từ MISA CRM</strong></p>
+                            <p><strong>✓ Tiêu chí lọc:</strong>
                                 <ul>
-                                    <li>Order name does NOT contain "S0"</li>
-                                    <li>Orders in draft or sale state</li>
-                                    <li>By default, only orders without address will be updated (unless Force Update is checked)</li>
+                                    <li>Tên đơn hàng KHÔNG chứa "S0"</li>
+                                    <li>Trạng thái: Draft hoặc Sale (chưa hủy)</li>
+                                    <li>Mặc định: bỏ qua những đơn đã có địa chỉ (trừ khi bật "Cập nhật lại")</li>
                                 </ul>
                             </p>
                         </div>
-                        
+
                         <group>
-                            <field name="limit" />
+                            <field name="total_eligible" />
+                            <field name="total_pages" />
+                            <field name="page" />
+                            <field name="page_size" />
                             <field name="dry_run" />
                             <field name="force_update" />
                         </group>
+
+                        <div class="alert alert-warning" role="alert" invisible="total_pages &lt;= 1">
+                            <p>
+                                <strong>💡 Hướng dẫn phân trang:</strong>
+                                <br/>Khi hoàn thành trang hiện tại, hãy tăng "Số trang" lên 1 để xử lý trang tiếp theo.
+                                <br/>Ví dụ: Hoàn thành trang 1 → Thay trang thành 2 → Chạy tiếp
+                            </p>
+                        </div>
                     </group>
-                    
+
+                    <group invisible="total_eligible == 0">
+                        <field name="status" widget="text" nolabel="1" 
+                               style="font-family: monospace; white-space: pre-wrap; min-height: 250px;"/>
+                    </group>
+
                     <footer>
-                        <button name="action_update_shipping_address" type="object" string="Run Update" class="btn-primary"/>
-                        <button string="Cancel" class="btn-secondary" special="cancel"/>
+                        <button name="action_update_shipping_address" type="object" string="▶ Chạy cập nhật" class="btn-primary" invisible="total_eligible == 0"/>
+                        <button string="Đóng" class="btn-secondary" special="cancel"/>
                     </footer>
                 </form>
             </field>
@@ -41,7 +61,7 @@
             <field name="res_model">misa.shipping.address.batch.update</field>
             <field name="view_mode">form</field>
             <field name="target">new</field>
-            <field name="help">Fetch and update MISA shipping addresses from CRM in batch</field>
+            <field name="help">Fetch và cập nhật địa chỉ giao hàng từ MISA CRM (hỗ trợ phân trang)</field>
         </record>
 
         <!-- Menu Item -->
