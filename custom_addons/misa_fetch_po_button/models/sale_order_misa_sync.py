@@ -208,6 +208,20 @@ class SaleOrder(models.Model):
         tax = self.env['odoo.utils']._get_or_create_vn_vat(rate, use='sale')
         return [tax.id] if tax else []
 
+    def _sync_shipping_address_to_pickings(self, shipping_address, update_done=False):
+        """Ghi snapshot ShippingAddress từ MISA vào picking để không bị đổi theo partner."""
+        self.ensure_one()
+        addr = (shipping_address or '').strip()
+        if not addr:
+            return
+
+        pickings = self.picking_ids.filtered(lambda p: p.state != 'cancel')
+        if not update_done:
+            pickings = pickings.filtered(lambda p: p.state != 'done')
+
+        if pickings:
+            pickings.sudo().write({'x_misa_shipping_address': addr})
+
 
     def action_resync_from_misa_hard(self):
         self.ensure_one()
@@ -509,6 +523,7 @@ class SaleOrder(models.Model):
         # delivery_no   = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
         book_date     = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         deadline_date_raw = data.get("DeadlineDate")
+        shipping_address_raw = (data.get("ShippingAddress") or "").strip()
         # Sử dụng helper để extract full address từ các trường thành phần
         shipping_addr = env['misa.api.utils'].extract_shipping_address_from_data(data) or ''
         origin        = data.get("SaleOrderName") or ''
@@ -870,6 +885,9 @@ class SaleOrder(models.Model):
                 ('id', '!=', picking.id)
             ], limit=1)
             picking.name = f"{desired}-{picking.id}" if exists else desired
+
+        # Snapshot địa chỉ giao hàng để phiếu kho không bị đổi theo partner/contact về sau.
+        new_so._sync_shipping_address_to_pickings(shipping_address_raw)
 
         # Toast + log
         # new_so.message_post(body=_("Đồng bộ (xoá & tạo lại) thành công: %s") % (delivery_no or order_no))
@@ -1243,6 +1261,9 @@ class SaleOrder(models.Model):
                     'partner_invoice_id': delivery_contact.id
                 })
                 _logger.info("✅ Partial Resync: Updated shipping/invoice address to %s", delivery_contact.display_name)
+
+            # Cập nhật snapshot ShippingAddress trực tiếp lên picking mở.
+            self._sync_shipping_address_to_pickings(data.get('ShippingAddress'))
         except Exception as e_addr:
             _logger.warning("❌ Partial Resync: Failed to update address: %s", e_addr)
 
