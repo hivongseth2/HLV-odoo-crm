@@ -13,6 +13,7 @@ class SaleOrder(models.Model):
     misa_id = fields.Char(string="MISA ID")                  # ví dụ: "27264"
     misa_form_layout_id = fields.Integer(default=37)         # theo payload mẫu của bạn
     misa_form_type = fields.Integer(default=4)               # theo URL mẫu: .../SaleOrder/37/4
+    misa_shipping_address = fields.Char(string="MISA Shipping Address", copy=False, index=True)
     
     
 
@@ -584,7 +585,8 @@ class SaleOrder(models.Model):
         # delivery_no   = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
         book_date     = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         deadline_date_raw = data.get("DeadlineDate")
-        shipping_addr = data.get("ShippingAddress") or data.get("BillingAddress") or ''
+        shipping_address_raw = (data.get("ShippingAddress") or "").strip()
+        shipping_addr = shipping_address_raw or data.get("BillingAddress") or ''
         origin        = data.get("SaleOrderName") or ''
 
         # Địa chỉ giao hàng và lập hóa đơn sử dụng ShippingContactIDText
@@ -626,6 +628,7 @@ class SaleOrder(models.Model):
             'origin': origin,
             'warehouse_id': old_wh.id if old_wh else False,
             'misa_id': str(misa_order_id) if misa_order_id else False,
+            'misa_shipping_address': shipping_address_raw or False,
             'partner_shipping_id': shipping_id,
             'partner_invoice_id': shipping_id,
             'x_studio_zns': zns
@@ -1239,6 +1242,8 @@ class SaleOrder(models.Model):
             vals_header_upd['x_studio_httt'] = owner_date['httt']
         if owner_date.get('htgh'):
             vals_header_upd['x_studio_htgh'] = owner_date['htgh']
+        shipping_address_raw = (data.get('ShippingAddress') or '').strip()
+        vals_header_upd['misa_shipping_address'] = shipping_address_raw or False
         if vals_header_upd:
             self.write(vals_header_upd)
             _logger.info("✅ Đã cập nhật misa_saler_code/order_date/httt/htgh/misa_delivery cho SO %s", self.name)
