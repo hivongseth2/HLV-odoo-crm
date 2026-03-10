@@ -52,6 +52,13 @@ export class DeliveryPlannerDashboard extends Component {
 
             // UI State
             collapsedSections: new Set(['packages', 'flows', 'pending_products']), // Default collapsed
+
+            // View Mode
+            viewMode: 'list',               // 'list' | 'kanban'
+            kanbanGroupBy: 'delivery_status', // 'delivery_status' | 'stock_status' | 'packing_status'
+            draggedSoId: null,
+            dragOverColumn: null,
+            kanbanColumnOrder: {},           // { colValue: [soId, ...] } — thứ tự DnD client-side
         });
 
         onWillStart(async () => {
@@ -61,6 +68,7 @@ export class DeliveryPlannerDashboard extends Component {
 
     async fetchData() {
         this.state.isLoading = true;
+        const isKanban = this.state.viewMode === 'kanban';
         try {
             const result = await this.orm.call(
                 "sale.order",
@@ -77,8 +85,9 @@ export class DeliveryPlannerDashboard extends Component {
                     filter_po_date_to: this.state.filterPODateTo,
                     filter_po_status: this.state.filterPOStatus,
                     filter_packing_status: this.state.filterPackingStatus,
-                    limit: this.state.itemsPerPage,
-                    offset: (this.state.currentPage - 1) * this.state.itemsPerPage,
+                    // Kanban tải toàn bộ (không phân trang)
+                    limit: isKanban ? 500 : this.state.itemsPerPage,
+                    offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
                 }
             );
 
@@ -157,7 +166,129 @@ export class DeliveryPlannerDashboard extends Component {
 
     async onFilterChange() {
         this.state.currentPage = 1;
+        this.state.kanbanColumnOrder = {};
         await this.fetchData();
+    }
+
+    // --- View Mode Toggle ---
+    async setViewMode(mode) {
+        this.state.viewMode = mode;
+        if (mode === 'kanban') {
+            // Xóa filter theo status để tất cả cột kanban đều có dữ liệu
+            this.state.filterDeliveryStatus = 'all';
+            this.state.filterStockStatus = 'all';
+            this.state.filterPackingStatus = 'all';
+            this.state.kanbanColumnOrder = {};
+        }
+        this.state.currentPage = 1;
+        await this.fetchData();
+    }
+
+    setKanbanGroupBy(dim) {
+        // Chỉ đổi chiều phân nhóm — không cần fetch lại (data đã có)
+        this.state.kanbanGroupBy = dim;
+        this.state.kanbanColumnOrder = {};
+    }
+
+    // --- Kanban Column Definitions ---
+    get kanbanColumnDefs() {
+        switch (this.state.kanbanGroupBy) {
+            case 'delivery_status': return [
+                { value: 'pending',  label: 'Chưa Giao',    badgeClass: 'bg-danger',             textClass: 'text-danger',   iconClass: 'fa fa-clock-o',        progressClass: 'bg-danger' },
+                { value: 'partial',  label: 'Giao 1 Phần',  badgeClass: 'bg-warning text-dark',  textClass: 'text-warning',  iconClass: 'fa fa-truck',          progressClass: 'bg-warning' },
+                { value: 'full',     label: 'Đã Giao Đủ',   badgeClass: 'bg-success',            textClass: 'text-success',  iconClass: 'fa fa-check-circle',   progressClass: 'bg-success' },
+            ];
+            case 'stock_status': return [
+                { value: 'out_of_stock',   label: 'Không Có Hàng',   badgeClass: 'bg-danger',            textClass: 'text-danger',   iconClass: 'fa fa-times-circle',   progressClass: 'bg-danger' },
+                { value: 'partial_ready',  label: 'Có Hàng 1 Phần',  badgeClass: 'bg-warning text-dark', textClass: 'text-warning',  iconClass: 'fa fa-exclamation-circle', progressClass: 'bg-warning' },
+                { value: 'ready',          label: 'Đủ Hàng Xuất',    badgeClass: 'bg-success',           textClass: 'text-success',  iconClass: 'fa fa-check',          progressClass: 'bg-success' },
+            ];
+            case 'packing_status': return [
+                { value: 'waiting_stock',  label: 'Chờ Hàng Đóng',  badgeClass: 'bg-secondary',          textClass: 'text-secondary', iconClass: 'fa fa-hourglass-start', progressClass: 'bg-secondary' },
+                { value: 'unpacked',       label: 'Chưa Đóng Gói',  badgeClass: 'bg-warning text-dark',  textClass: 'text-warning',   iconClass: 'fa fa-cube',           progressClass: 'bg-warning' },
+                { value: 'partial_packed', label: 'Đóng 1 Phần',    badgeClass: 'bg-info',               textClass: 'text-info',      iconClass: 'fa fa-cubes',          progressClass: 'bg-info' },
+                { value: 'fully_packed',   label: 'Đã Đóng Đủ',     badgeClass: 'bg-success',            textClass: 'text-success',   iconClass: 'fa fa-check-square-o', progressClass: 'bg-success' },
+            ];
+            default: return [];
+        }
+    }
+
+    // Trả danh sách SO cho một cột kanban, theo thứ tự DnD
+    ordersForColumn(colValue) {
+        const dim = this.state.kanbanGroupBy;
+        const fieldMap = {
+            delivery_status: 'real_delivery_status',
+            stock_status:    'stock_status',
+            packing_status:  'packing_status',
+        };
+        const field = fieldMap[dim];
+
+        const base = this.state.saleOrders.filter(so => {
+            let val = so[field];
+            // unshipped = pending (cùng hiển thị "Chưa giao")
+            if (dim === 'delivery_status' && val === 'unshipped') val = 'pending';
+            return val === colValue;
+        });
+
+        const order = this.state.kanbanColumnOrder[colValue];
+        if (!order || !order.length) return base;
+        const orderMap = {};
+        order.forEach((id, idx) => { orderMap[id] = idx; });
+        return [...base].sort((a, b) => (orderMap[a.id] ?? 9999) - (orderMap[b.id] ?? 9999));
+    }
+
+    // --- Drag & Drop Handlers ---
+    onDragStart(ev, soId) {
+        this.state.draggedSoId = soId;
+        ev.dataTransfer.effectAllowed = 'move';
+        ev.dataTransfer.setData('text/plain', String(soId));
+    }
+
+    onDragOver(ev, colValue) {
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = 'move';
+        if (this.state.dragOverColumn !== colValue) {
+            this.state.dragOverColumn = colValue;
+        }
+    }
+
+    onDragLeave(ev) {
+        // Chỉ xóa highlight khi thực sự rời khỏi column (không phải trượt qua child)
+        if (!ev.currentTarget.contains(ev.relatedTarget)) {
+            this.state.dragOverColumn = null;
+        }
+    }
+
+    onDrop(ev, colValue) {
+        ev.preventDefault();
+        const soId = parseInt(ev.dataTransfer.getData('text/plain'), 10);
+        if (!soId) return;
+
+        const dim = this.state.kanbanGroupBy;
+        const fieldMap = {
+            delivery_status: 'real_delivery_status',
+            stock_status:    'stock_status',
+            packing_status:  'packing_status',
+        };
+        const field = fieldMap[dim];
+
+        // Cập nhật state cục bộ (optimistic update)
+        const so = this.state.saleOrders.find(s => s.id === soId);
+        if (so) {
+            so[field] = colValue;
+        }
+
+        // Đưa card lên đầu cột đích
+        const existingOrder = (this.state.kanbanColumnOrder[colValue] || []).filter(id => id !== soId);
+        this.state.kanbanColumnOrder[colValue] = [soId, ...existingOrder];
+
+        this.state.draggedSoId = null;
+        this.state.dragOverColumn = null;
+    }
+
+    onDragEnd() {
+        this.state.draggedSoId = null;
+        this.state.dragOverColumn = null;
     }
 
     async setStockFilter(status) {
