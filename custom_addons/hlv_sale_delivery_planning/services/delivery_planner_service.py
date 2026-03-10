@@ -27,7 +27,7 @@ class DeliveryPlannerService(models.AbstractModel):
         sales, matched_ids, dashboard_stats, product_availabilities, so_status_dict = \
             self._calculate_po_and_stock_status(
                 sales, filter_po_date_from, filter_po_date_to,
-                filter_po_status, filter_stock_status, filter_packing_status,
+                filter_po_status, filter_delivery_status, filter_stock_status, filter_packing_status,
             )
 
         total_count = len(matched_ids)

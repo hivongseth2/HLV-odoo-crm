@@ -11,12 +11,8 @@ class DeliveryPlannerServiceDomain(models.AbstractModel):
         """Xây dựng domain tìm kiếm Sale Order dựa trên các bộ lọc."""
         domain = [('state', 'in', ['sale', 'done'])]
 
-        if filter_delivery_status == 'pending_partial':
-            domain += [('delivery_status', 'in', ['pending', 'partial'])]
-        elif filter_delivery_status == 'unshipped':
-            domain += [('delivery_status', '=', 'pending')]
-        elif filter_delivery_status != 'all':
-            domain += [('delivery_status', '=', filter_delivery_status)]
+        # Luu y: filter delivery duoc xu ly o service layer bang real_delivery_status
+        # de dong bo voi kanban/card (tranh lech voi field delivery_status goc cua SO).
 
         if filter_warehouse_id != 'all':
             domain += [('warehouse_id', '=', int(filter_warehouse_id))]

@@ -6,7 +6,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
 
     def _calculate_po_and_stock_status(
         self, sales, po_date_from, po_date_to, po_status,
-        filter_stock_status, filter_packing_status,
+        filter_delivery_status, filter_stock_status, filter_packing_status,
     ):
         """
         Lọc SO theo PO (nếu có filter PO), tính stock_status và packing_status
@@ -122,6 +122,8 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
 
         for so in sales:
             has_pending = False
+            has_delivered = False
+            has_storable_line = False
             is_fully_ready = True
             total_pending, total_avail = 0, 0
 
@@ -132,6 +134,10 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 is_kit = line.product_id.product_tmpl_id.id in kit_tmpl_ids
                 if p_type == 'service' or is_kit:
                     continue
+
+                has_storable_line = True
+                if line.qty_delivered > 0:
+                    has_delivered = True
 
                 pending_qty = line.product_uom_qty - line.qty_delivered
                 if pending_qty > 0:
@@ -154,6 +160,16 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             else:
                 stock_status = 'delivered'
 
+            # Dong bo voi logic hien thi tren card/kanban.
+            if not has_storable_line:
+                real_delivery_status = 'full'
+            elif has_pending and not has_delivered:
+                real_delivery_status = 'unshipped'
+            elif has_pending and has_delivered:
+                real_delivery_status = 'partial'
+            else:
+                real_delivery_status = 'full'
+
             packed_qty = packed_qty_by_so.get(so.id, 0.0)
             # "Đã đóng gói đủ" = đã đóng hết phần có thể đóng ngay tại thời điểm hiện tại.
             # Cụ thể: so sánh số đã đóng với tổng qty có thể xuất (total_avail = min(available, pending) từng line).
@@ -170,6 +186,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             so_status_dict[so.id] = {
                 'stock_status': stock_status,
                 'packing_status': packing_status,
+                'real_delivery_status': real_delivery_status,
             }
 
             dashboard_stats['total'] += 1
@@ -188,8 +205,18 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 elif packing_status == 'waiting_stock':
                     dashboard_stats['packing_waiting'] += 1
 
+            if filter_delivery_status == 'pending_partial':
+                delivery_ok = real_delivery_status in ('unshipped', 'partial')
+            elif filter_delivery_status in ('unshipped', 'pending'):
+                delivery_ok = real_delivery_status == 'unshipped'
+            elif filter_delivery_status in ('partial', 'full'):
+                delivery_ok = real_delivery_status == filter_delivery_status
+            else:
+                delivery_ok = True
+
             if (
-                (filter_stock_status == 'all' or stock_status == filter_stock_status)
+                delivery_ok
+                and (filter_stock_status == 'all' or stock_status == filter_stock_status)
                 and (filter_packing_status == 'all' or packing_status == filter_packing_status)
             ):
                 matched_sale_ids.append(so.id)

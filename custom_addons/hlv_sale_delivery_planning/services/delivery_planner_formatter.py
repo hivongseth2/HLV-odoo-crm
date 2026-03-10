@@ -92,15 +92,17 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         stock_status = so_status_dict.get('stock_status', 'out_of_stock')
 
         # --- Real delivery status ---
+        # Uu tien gia tri da tinh o service stock de dong bo voi filter backend.
         storable_lines = [l for l in so_lines_data if l.get('product_type') != 'service']
         if not storable_lines:
-            real_delivery_status = 'full'
+            fallback_real_delivery_status = 'full'
         elif has_pending and not has_delivered:
-            real_delivery_status = 'unshipped'
+            fallback_real_delivery_status = 'unshipped'
         elif has_pending and has_delivered:
-            real_delivery_status = 'partial'
+            fallback_real_delivery_status = 'partial'
         else:
-            real_delivery_status = 'full'
+            fallback_real_delivery_status = 'full'
+        real_delivery_status = so_status_dict.get('real_delivery_status', fallback_real_delivery_status)
 
         # --- Phiếu kho (flat list, sắp xếp theo thời gian) ---
         flat_pickings = []
