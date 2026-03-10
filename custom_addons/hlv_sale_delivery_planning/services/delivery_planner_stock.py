@@ -63,25 +63,28 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         all_picking_ids = sales.mapped('picking_ids').ids
         packed_qty_by_so = {}
         if all_picking_ids:
+            # CHỈ ĐẾM PACKAGE TRONG PHIẾU XUẤT KHO (delivery), KHÔNG ĐẾM TRẢ HÀNG
             mls = self.env['stock.move.line'].sudo().search([
                 ('picking_id', 'in', all_picking_ids),
+                ('picking_id.picking_type_code', '=', 'outgoing'),  # Chỉ phiếu xuất
                 ('result_package_id', '!=', False),
-                ('state', '!=', 'cancel'),
+                ('state', 'not in', ['cancel', 'draft']),
             ])
-            so_pack_data = {}  # {so_id: {package_id: qty}}
+            so_pack_data = {}  # {so_id: {product_id: total_packed_qty}}
             for ml in mls:
                 so_id = ml.picking_id.sale_id.id if ml.picking_id.sale_id else False
                 if not so_id:
                     continue
-                p_id = ml.result_package_id.id
+                # Đếm theo sản phẩm, không theo package (tránh trùng lặp)
+                prod_id = ml.product_id.id
                 if so_id not in so_pack_data:
                     so_pack_data[so_id] = {}
-                # Chỉ lấy qty ở phiếu đầu tiên kiện xuất hiện (thường là PACK)
-                if p_id not in so_pack_data[so_id]:
-                    so_pack_data[so_id][p_id] = float(ml.quantity)
+                if prod_id not in so_pack_data[so_id]:
+                    so_pack_data[so_id][prod_id] = 0.0
+                so_pack_data[so_id][prod_id] += float(ml.quantity)
 
-            for so_id, packs in so_pack_data.items():
-                packed_qty_by_so[so_id] = sum(packs.values())
+            for so_id, products in so_pack_data.items():
+                packed_qty_by_so[so_id] = sum(products.values())
 
         # --- 5. Nhận diện sản phẩm Kit (phantom BOM) ---
         all_product_tmpl_ids = sales.mapped('order_line.product_id.product_tmpl_id').ids
