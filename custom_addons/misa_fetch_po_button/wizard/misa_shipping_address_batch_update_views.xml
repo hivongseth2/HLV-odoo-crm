@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Wizard Form View -->
+        <record id="view_misa_shipping_address_batch_update_form" model="ir.ui.view">
+            <field name="name">MISA Shipping Address Batch Update - Form</field>
+            <field name="model">misa.shipping.address.batch.update</field>
+            <field name="arch" type="xml">
+                <form string="Update MISA Shipping Address">
+                    <group>
+                        <div class="alert alert-info" role="alert">
+                            <p>This wizard will update <strong>misa_shipping_address</strong> field for sale orders by fetching data from MISA CRM.</p>
+                            <p><strong>Criteria:</strong>
+                                <ul>
+                                    <li>Order name does NOT contain "S0"</li>
+                                    <li>Orders in draft or sale state</li>
+                                    <li>By default, only orders without address will be updated (unless Force Update is checked)</li>
+                                </ul>
+                            </p>
+                        </div>
+                        
+                        <group>
+                            <field name="limit" />
+                            <field name="dry_run" />
+                            <field name="force_update" />
+                        </group>
+                    </group>
+                    
+                    <footer>
+                        <button name="action_update_shipping_address" type="object" string="Run Update" class="btn-primary"/>
+                        <button string="Cancel" class="btn-secondary" special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <!-- Action Window to open wizard -->
+        <record id="action_misa_shipping_address_batch_update" model="ir.actions.act_window">
+            <field name="name">Cập nhật địa chỉ giao hàng MISA</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">misa.shipping.address.batch.update</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+            <field name="help">Fetch and update MISA shipping addresses from CRM in batch</field>
+        </record>
+
+        <!-- Menu Item -->
+        <menuitem
+            id="menu_misa_shipping_address_batch_update"
+            name="Cập nhật địa chỉ giao hàng"
+            action="action_misa_shipping_address_batch_update"
+            parent="menu_misa_import_root"
+            sequence="110"
+        />
+
+    </data>
+</odoo>
