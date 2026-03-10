@@ -67,11 +67,11 @@
     </t>
 
     <!-- ================================================================
-         KPI Đóng Gói: Chờ Cấp Hàng / Chờ Đóng / Đóng 1 Phần / Đủ Kiện
+         KPI Đóng Gói: Không Có Hàng Đóng / Có Hàng Chưa Đóng / Đã Đóng Gói Đủ
          ================================================================ -->
     <t t-name="hlv_sale_delivery_planning.KPIPackingCards">
         <div class="row g-3 mb-4">
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <div class="card bg-white text-dark shadow-sm border-0 h-100 kpi-card"
                      style="cursor: pointer;"
                      t-on-click="() => this.setPackingFilter('waiting_stock')"
@@ -81,13 +81,13 @@
                             <i class="fa fa-clock-o fa-fw fa-2x" title="Chờ cấp hàng"></i>
                         </div>
                         <div>
-                            <h6 class="text-uppercase fw-bold text-muted mb-1 small opacity-75">Chờ Cấp Hàng</h6>
+                            <h6 class="text-uppercase fw-bold text-muted mb-1 small opacity-75">Không Có Hàng Đóng</h6>
                             <h3 class="mb-0 fw-bold"><t t-esc="state.dashboardStats.packing_waiting || 0"/></h3>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <div class="card bg-white text-dark shadow-sm border-0 h-100 kpi-card"
                      style="cursor: pointer;"
                      t-on-click="() => this.setPackingFilter('unpacked')"
@@ -97,39 +97,23 @@
                             <i class="fa fa-cubes fa-fw fa-2x" title="Hàng chờ đóng"></i>
                         </div>
                         <div>
-                            <h6 class="text-uppercase fw-bold text-muted mb-1 small opacity-75">Hàng Chờ Đóng</h6>
+                            <h6 class="text-uppercase fw-bold text-muted mb-1 small opacity-75">Có Hàng Chưa Đóng Gói</h6>
                             <h3 class="mb-0 fw-bold"><t t-esc="state.dashboardStats.packing_unpacked || 0"/></h3>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card bg-white text-dark shadow-sm border-0 h-100 kpi-card"
-                     style="cursor: pointer;"
-                     t-on-click="() => this.setPackingFilter('partial_packed')"
-                     t-att-class="state.filterPackingStatus === 'partial_packed' ? 'ring-2 ring-info' : ''">
-                    <div class="card-body d-flex align-items-center p-3" title="Đã Đóng 1 Phần Đơn">
-                        <div class="rounded-circle bg-info bg-opacity-10 p-3 me-3 text-info">
-                            <i class="fa fa-cube fa-fw fa-2x" title="Đóng 1 phần"></i>
-                        </div>
-                        <div>
-                            <h6 class="text-uppercase fw-bold text-muted mb-1 small opacity-75">Đóng 1 Phần</h6>
-                            <h3 class="mb-0 fw-bold"><t t-esc="state.dashboardStats.packing_partial || 0"/></h3>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <div class="card bg-white text-dark shadow-sm border-0 h-100 kpi-card"
                      style="cursor: pointer;"
                      t-on-click="() => this.setPackingFilter('fully_packed')"
                      t-att-class="state.filterPackingStatus === 'fully_packed' ? 'ring-2 ring-success' : ''">
-                    <div class="card-body d-flex align-items-center p-3" title="Đã Đóng Đủ Kiện Sẵn Sàng Giao">
+                    <div class="card-body d-flex align-items-center p-3" title="Đã đóng gói đủ toàn bộ phần có thể đóng ngay">
                         <div class="rounded-circle bg-success bg-opacity-10 p-3 me-3 text-success">
                             <i class="fa fa-check-square-o fa-fw fa-2x" title="Đã đóng đủ"></i>
                         </div>
                         <div>
-                            <h6 class="text-uppercase fw-bold text-muted mb-1 small opacity-75">Đã Đủ Kiện</h6>
+                            <h6 class="text-uppercase fw-bold text-muted mb-1 small opacity-75">Đã Đóng Gói Đủ</h6>
                             <h3 class="mb-0 fw-bold"><t t-esc="state.dashboardStats.packing_fully || 0"/></h3>
                         </div>
                     </div>

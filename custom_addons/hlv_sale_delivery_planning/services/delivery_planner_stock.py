@@ -104,7 +104,6 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             has_pending = False
             is_fully_ready = True
             total_pending, total_avail = 0, 0
-            total_pending_packable_qty = 0
 
             for line in so.order_line:
                 if line.display_type or not line.product_id:
@@ -118,7 +117,6 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 if pending_qty > 0:
                     has_pending = True
                     total_pending += pending_qty
-                    total_pending_packable_qty += pending_qty
                     base_free = product_availabilities.get(
                         (line.product_id.id, so.warehouse_id.id), 0.0
                     )
@@ -137,18 +135,18 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 stock_status = 'delivered'
 
             packed_qty = packed_qty_by_so.get(so.id, 0.0)
-            # "Đã đóng gói đủ" chỉ áp dụng cho đơn còn phải giao.
-            # Đơn đã giao xong sẽ không rơi vào bucket đóng gói để tránh nhiễu từ phiếu trả hàng.
+            # "Đã đóng gói đủ" = đã đóng hết phần có thể đóng ngay tại thời điểm hiện tại.
+            # Cụ thể: so sánh số đã đóng với tổng qty có thể xuất (total_avail = min(available, pending) từng line).
+            # Đơn đã giao xong không xét vào kiểm soát đóng gói.
             if not has_pending:
                 packing_status = 'delivered'
-            elif packed_qty >= total_pending_packable_qty and total_pending_packable_qty > 0:
-                packing_status = 'fully_packed'
-            elif packed_qty > 0:
-                packing_status = 'partial_packed'
-            elif stock_status in ['ready', 'partial_ready']:
-                packing_status = 'unpacked'
-            else:
+            elif total_avail <= 0:
                 packing_status = 'waiting_stock'
+            elif packed_qty >= total_avail:
+                packing_status = 'fully_packed'
+            else:
+                # Còn phần có thể đóng nhưng chưa đóng hết.
+                packing_status = 'unpacked'
 
             so_status_dict[so.id] = {
                 'stock_status': stock_status,
@@ -166,8 +164,6 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             if has_pending:
                 if packing_status == 'fully_packed':
                     dashboard_stats['packing_fully'] += 1
-                elif packing_status == 'partial_packed':
-                    dashboard_stats['packing_partial'] += 1
                 elif packing_status == 'unpacked':
                     dashboard_stats['packing_unpacked'] += 1
                 elif packing_status == 'waiting_stock':

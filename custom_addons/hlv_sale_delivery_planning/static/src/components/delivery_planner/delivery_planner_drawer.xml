@@ -10,10 +10,10 @@
              class="offcanvas offcanvas-end show shadow-lg" tabindex="-1"
              style="visibility: visible; width: 680px; z-index: 1050; position: fixed; top: 0; bottom: 0; right: 0; background: white;">
 
-            <div class="offcanvas-header bg-primary text-white p-3">
-                <h5 class="offcanvas-title m-0">
+            <div class="offcanvas-header bg-primary text-bg-primary p-3">
+                <h5 class="offcanvas-title m-0 text-bg-primary">
                     <i class="fa fa-list-alt me-2" title="Danh sách"></i>
-                    Tổng Quan Đơn: <t t-esc="state.selectedOrder.name"/>
+                    <t t-esc="state.selectedOrder.name"/>
                 </h5>
                 <button type="button" class="btn-close btn-close-white ms-auto"
                         aria-label="Close" t-on-click="closeOverviewDrawer"></button>
@@ -32,7 +32,7 @@
                         </div>
                     </div>
                     <div class="col-md-6 mb-2">
-                        <h6 class="text-muted text-uppercase small mb-2">Kho Cung Cấp</h6>
+                        <h6 class="text-muted text-uppercase small mb-2">Kho Hàng</h6>
                         <div class="fs-6 fw-bold">
                             <i class="fa fa-building me-2 text-info" title="Kho"></i>
                             <t t-esc="state.selectedOrder.warehouse_id ? state.selectedOrder.warehouse_id[1] : 'Chưa định thông tin'"/>
@@ -50,9 +50,9 @@
                             <th class="text-start">Sản phẩm</th>
                             <th width="70">Chốt Bán</th>
                             <th width="70">Đóng Gói</th>
-                            <th width="70">Kho Hiện Có</th>
+                            <th width="70">Tồn Kho</th>
                             <th width="70">Đã Giao</th>
-                            <th width="70">Còn Bị Thiếu</th>
+                            <th width="70">Thiếu</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -95,7 +95,7 @@
                 <!-- Đơn Mua (PO) trong drawer -->
                 <div t-if="state.selectedOrder.pos and state.selectedOrder.pos.length > 0">
                     <h6 class="text-muted text-uppercase small mb-3">
-                        <i class="fa fa-shopping-cart me-1" title="Lệnh mua"></i> Theo Dõi Đơn Mua (PMH)
+                        <i class="fa fa-shopping-cart me-1" title="Lệnh mua"></i> ĐƠN MUA HÀNG
                     </h6>
                     <div class="list-group shadow-sm border mb-4">
                         <t t-foreach="state.selectedOrder.pos" t-as="po" t-key="po.id">
