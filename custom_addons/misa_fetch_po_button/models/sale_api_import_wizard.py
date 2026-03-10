@@ -587,10 +587,10 @@ class SaleApiImportWizard(models.TransientModel):
           - KHÔNG tìm theo tên để tránh cập nhật liên hệ cũ
           - Dùng type='delivery' để hiển thị icon xe tải
           
-        Logic cho khách hàng thường:
-          - Nếu có contact_name: Tìm theo (parent_id, name=contact_name)
-            -> Nếu thấy: UPDATE theo dữ liệu mới nhất.
-            -> Nếu không thấy: TẠO MỚI với name=contact_name
+                Logic cho khách hàng thường:
+                    - Nếu có contact_name: ưu tiên tìm theo (parent_id, name, street)
+                        -> Nếu thấy: dùng lại contact đó.
+                        -> Nếu không thấy: TẠO MỚI để giữ lịch sử địa chỉ theo từng đơn (không ghi đè địa chỉ cũ).
           - Nếu không có contact_name: Tìm theo (parent_id, street=addr_str)
             -> Nếu thấy: UPDATE các field thiếu.
             -> Nếu không thấy: TẠO MỚI với name=parent_partner.name
@@ -619,16 +619,22 @@ class SaleApiImportWizard(models.TransientModel):
 
             # ===== LOGIC CHO KHÁCH HÀNG THƯỜNG =====
             if contact_name:
-             # Ưu tiên tìm theo tên contact
-             # BỎ CHECK ADDR_STR để cho phép cập nhật địa chỉ khi tên trùng
-             domain = [
-                ('parent_id', '=', parent_partner.id),
-                ('type', 'in', ['delivery', 'contact']),
-                ('name', '=', contact_name)
-             ]
-             
-             _logger.info("🔎 Search delivery by NAME: '%s' (parent=%s)", contact_name, parent_partner.id)
-             existing = Partner.search(domain, limit=1)
+             # Không tìm theo mỗi tên để tránh ghi đè địa chỉ giao hàng của các đơn cũ.
+             if addr_str:
+                 _logger.info("🔎 Search delivery by NAME+ADDR: '%s' / '%s' (parent=%s)", contact_name, addr_str, parent_partner.id)
+                 existing = Partner.search([
+                     ('parent_id', '=', parent_partner.id),
+                     ('type', 'in', ['delivery', 'contact']),
+                     ('name', '=', contact_name),
+                     ('street', '=', addr_str),
+                 ], limit=1)
+             else:
+                 _logger.info("🔎 Search delivery by NAME: '%s' (parent=%s)", contact_name, parent_partner.id)
+                 existing = Partner.search([
+                     ('parent_id', '=', parent_partner.id),
+                     ('type', 'in', ['delivery', 'contact']),
+                     ('name', '=', contact_name),
+                 ], limit=1)
 
             elif addr_str:
                  # Chỉ tìm theo địa chỉ nếu KHÔNG có contact_name
@@ -650,15 +656,15 @@ class SaleApiImportWizard(models.TransientModel):
             if contact_name and existing.name != contact_name:
                 vals_upd['name'] = contact_name
 
-            # CẬP NHẬT ĐỊA CHỈ MỚI (nếu có)
-            if addr_str and existing.street != addr_str:
+            # Không ghi đè địa chỉ đã có để tránh làm đổi địa chỉ trên các picking cũ.
+            if addr_str and not existing.street:
                 vals_upd['street'] = addr_str
-            
+
             if country and existing.country_id != country:
                 vals_upd['country_id'] = country.id
-            if state and existing.state_id != state:
+            if state and not existing.state_id:
                 vals_upd['state_id'] = state.id
-            if province_text and existing.city != province_text:
+            if province_text and not existing.city:
                 vals_upd['city'] = province_text
             if phone and existing.phone != phone:
                 vals_upd['phone'] = phone
