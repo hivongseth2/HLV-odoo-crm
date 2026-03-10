@@ -38,12 +38,19 @@
             </div>
 
             <div class="ms-auto d-flex align-items-center gap-3">
+                <button t-if="this.hasMoreKanbanData"
+                        class="btn btn-sm btn-outline-primary"
+                        t-on-click="loadMoreKanbanBatch"
+                        t-att-disabled="state.isLoading">
+                    <i class="fa fa-plus me-1" title="Tải thêm"></i>
+                    Tải thêm 200
+                </button>
                 <span class="text-muted small">
                     <i class="fa fa-arrows text-secondary me-1" title="Kéo thả"/>
                     Kéo thả để sắp xếp ưu tiên hoặc chuyển trạng thái
                 </span>
                 <span class="badge bg-secondary rounded-pill">
-                    <t t-esc="state.totalCount"/> đơn hàng
+                    <t t-esc="state.saleOrders.length"/> / <t t-esc="state.totalCount"/> đơn hàng
                 </span>
             </div>
         </div>

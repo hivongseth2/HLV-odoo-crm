@@ -60,6 +60,7 @@ export class DeliveryPlannerDashboard extends Component {
             dragOverColumn: null,
             kanbanColumnOrder: {},           // { colValue: [soId, ...] } — thứ tự DnD client-side
             kanbanColPageSize: {},           // { colValue: N } — số card hiển thị mỗi cột
+            kanbanBatchSize: 200,            // số đơn tải backend cho toàn kanban
         });
 
         onWillStart(async () => {
@@ -87,7 +88,7 @@ export class DeliveryPlannerDashboard extends Component {
                     filter_po_status: this.state.filterPOStatus,
                     filter_packing_status: this.state.filterPackingStatus,
                     // Kanban tải theo batch, không phân trang backend
-                    limit: isKanban ? 200 : this.state.itemsPerPage,
+                    limit: isKanban ? this.state.kanbanBatchSize : this.state.itemsPerPage,
                     offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
                 }
             );
@@ -169,6 +170,7 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.currentPage = 1;
         this.state.kanbanColumnOrder = {};
         this.state.kanbanColPageSize = {};
+        this.state.kanbanBatchSize = 200;
         await this.fetchData();
     }
 
@@ -183,6 +185,7 @@ export class DeliveryPlannerDashboard extends Component {
             this.state.filterStockStatus = 'all';
             this.state.kanbanColumnOrder = {};
             this.state.kanbanColPageSize = {};
+            this.state.kanbanBatchSize = 200;
         }
         this.state.currentPage = 1;
         await this.fetchData();
@@ -263,6 +266,16 @@ export class DeliveryPlannerDashboard extends Component {
     loadMoreColumn(colValue) {
         const current = this.state.kanbanColPageSize[colValue] || 15;
         this.state.kanbanColPageSize[colValue] = current + 15;
+    }
+
+    get hasMoreKanbanData() {
+        return this.state.viewMode === 'kanban' && this.state.saleOrders.length < this.state.totalCount;
+    }
+
+    async loadMoreKanbanBatch() {
+        if (this.state.isLoading || !this.hasMoreKanbanData) return;
+        this.state.kanbanBatchSize += 200;
+        await this.fetchData();
     }
 
     // --- Drag & Drop Handlers ---
