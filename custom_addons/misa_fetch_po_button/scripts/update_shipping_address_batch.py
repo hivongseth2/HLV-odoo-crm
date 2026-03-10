@@ -108,7 +108,7 @@ class ShippingAddressUpdater:
             logger.error(f"[MISA API] Unexpected error for {sale_order_name}: {str(e)}")
             return None
 
-def count_eligible_orders(self, exclude_with_address=True):
+    def count_eligible_orders(self, exclude_with_address=True):
         """
         Đếm số lượng SO đủ điều kiện:
         - state in [sale, draft]
@@ -139,7 +139,7 @@ def count_eligible_orders(self, exclude_with_address=True):
         
         return eligible_count
 
-def update_sale_orders(self, page=1, page_size=20, dry_run=False, force_update=False):
+    def update_sale_orders(self, page=1, page_size=20, dry_run=False, force_update=False):
         """
         Cập nhật misa_shipping_address cho các SO (pagination):
         - state in [sale, draft]
@@ -218,7 +218,7 @@ def update_sale_orders(self, page=1, page_size=20, dry_run=False, force_update=F
                 })
                 self.env.cr.rollback()
 
-def print_summary(self):
+    def print_summary(self):
         """In tóm tắt kết quả"""
         logger.info("\n" + "="*60)
         logger.info("THỐNG KÊ KẾT QUẢ")
