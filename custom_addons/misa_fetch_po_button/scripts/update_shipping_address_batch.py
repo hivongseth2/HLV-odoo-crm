@@ -131,7 +131,7 @@ class ShippingAddressUpdater:
             if "S0" in order.name:
                 continue
             
-            # Loại bỏ orders đã có address (nếu exclude_with_address=True)
+            # Loại bỏ orders đã có address (nếu exc
             if exclude_with_address and order.misa_shipping_address:
                 continue
             
