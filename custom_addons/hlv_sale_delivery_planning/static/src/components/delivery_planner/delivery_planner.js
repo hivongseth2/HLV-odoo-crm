@@ -61,6 +61,9 @@ export class DeliveryPlannerDashboard extends Component {
             kanbanColumnOrder: {},           // { colValue: [soId, ...] } — thứ tự DnD client-side
             kanbanColPageSize: {},           // { colValue: N } — số card hiển thị mỗi cột
             kanbanBatchSize: 200,            // số đơn tải backend cho toàn kanban
+
+            // Selection for printing
+            selectedSOIds: new Set(),        // Set of selected sale order IDs for printing
         });
 
         onWillStart(async () => {
@@ -276,6 +279,97 @@ export class DeliveryPlannerDashboard extends Component {
         if (this.state.isLoading || !this.hasMoreKanbanData) return;
         this.state.kanbanBatchSize += 200;
         await this.fetchData();
+    }
+
+    // --- Selection for Printing ---
+    toggleSOSelection(soId) {
+        if (this.state.selectedSOIds.has(soId)) {
+            this.state.selectedSOIds.delete(soId);
+        } else {
+            this.state.selectedSOIds.add(soId);
+        }
+        // Force reactivity
+        this.state.selectedSOIds = new Set(this.state.selectedSOIds);
+    }
+
+    isSOSelected(soId) {
+        return this.state.selectedSOIds.has(soId);
+    }
+
+    selectAllInColumn(columnValue) {
+        const ordersInColumn = this.ordersForColumn(columnValue);
+        ordersInColumn.forEach(so => this.state.selectedSOIds.add(so.id));
+        this.state.selectedSOIds = new Set(this.state.selectedSOIds);
+    }
+
+    deselectAllInColumn(columnValue) {
+        const ordersInColumn = this.ordersForColumn(columnValue);
+        ordersInColumn.forEach(so => this.state.selectedSOIds.delete(so.id));
+        this.state.selectedSOIds = new Set(this.state.selectedSOIds);
+    }
+
+    clearAllSelections() {
+        this.state.selectedSOIds.clear();
+        this.state.selectedSOIds = new Set(this.state.selectedSOIds);
+    }
+
+    get allSelectedInColumn() {
+        // Return object: { columnValue: boolean }
+        const result = {};
+        this.kanbanColumnDefs.forEach(col => {
+            const ordersInCol = this.ordersForColumn(col.value);
+            result[col.value] = ordersInCol.length > 0 &&
+                ordersInCol.every(so => this.state.selectedSOIds.has(so.id));
+        });
+        return result;
+    }
+
+    get selectedCount() {
+        return this.state.selectedSOIds.size;
+    }
+
+    async printSelectedPickingSlips() {
+        if (this.selectedCount === 0) return;
+
+        const selectedIds = Array.from(this.state.selectedSOIds);
+        
+        try {
+            this.state.isLoading = true;
+            const url = `/hlv_sale_delivery_planning/print_picking_slips`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    method: 'call',
+                    params: {
+                        sale_order_ids: selectedIds,
+                    },
+                }),
+            });
+
+            const result = await response.json();
+            if (result.error) {
+                console.error('Error printing picking slips:', result.error);
+                alert('Lỗi khi in phiếu lấy hàng: ' + (result.error.data?.message || result.error.message));
+                return;
+            }
+
+            // Open PDF in new tab
+            if (result.result && result.result.url) {
+                window.open(result.result.url, '_blank');
+                // Clear selections after successful print
+                this.clearAllSelections();
+            }
+        } catch (error) {
+            console.error('Error printing picking slips:', error);
+            alert('Lỗi khi in phiếu lấy hàng');
+        } finally {
+            this.state.isLoading = false;
+        }
     }
 
     // --- Drag & Drop Handlers ---

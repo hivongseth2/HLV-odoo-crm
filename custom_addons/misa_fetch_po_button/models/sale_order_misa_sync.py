@@ -487,25 +487,9 @@ class SaleOrder(models.Model):
         if not partner:
              partner = odoo_utils._get_or_create_partner(partner_name)
 
-        # Cập nhật thông tin partner chính từ MISA (địa chỉ, phone, province...)
+        # Không ghi đè địa chỉ/phone giao hàng vào partner chính.
+        # Với 1 khách có nhiều địa chỉ giao, dữ liệu shipping sẽ được tạo/ghép ở delivery contact phía dưới.
         partner_vals = {}
-        billing_addr = data.get("ShippingAddress")
-        partner_phone = data.get("Phone")
-        partner_province = data.get("ShippingProvinceIDText") or ""
-
-        if billing_addr and partner.street != billing_addr:
-            partner_vals['street'] = billing_addr
-        if partner_phone and partner.phone != partner_phone:
-            partner_vals['phone'] = partner_phone
-        if partner_province and partner.city != partner_province:
-            partner_vals['city'] = partner_province
-            # Cập nhật state_id nếu cần
-            try:
-                state = env['sale.api.import.wizard']._vn_state_by_name(partner_province)
-                if state and partner.state_id != state:
-                    partner_vals['state_id'] = state.id
-            except Exception:
-                pass
 
         # Đảm bảo country là Việt Nam
         try:
@@ -517,7 +501,7 @@ class SaleOrder(models.Model):
 
         if partner_vals:
             partner.write(partner_vals)
-            _logger.info("Cập nhật thông tin partner %s: %s", partner.name, partner_vals.keys())
+            _logger.info("Chuẩn hóa thông tin partner chính %s: %s", partner.name, partner_vals.keys())
 
         order_no      = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or order_no_fallback
         # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
