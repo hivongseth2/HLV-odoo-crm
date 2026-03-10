@@ -65,32 +65,24 @@ class ShippingAddressUpdater:
 
     def fetch_from_misa(self, sale_order_name):
         """
-        Gọi MISA Grid API với Filters để tìm kiếm chính xác theo SaleOrderNo
+        Gọi MISA Grid API với AISearchKeyword = sale_order_name (giống fetch request trên console)
         Return: ShippingAddress nếu tìm thấy, None nếu không hoặc error
         """
         try:
             # Deep copy để tránh vấn đề với nested objects
             payload = copy.deepcopy(PAYLOAD_TEMPLATE)
             
-            # Sử dụng Filters để tìm kiếm chính xác (AISearchKeyword bị ignored)
-            # SaleOrderNo là field chứa tên đơn hàng (ví dụ: DH115524948215998)
-            payload['Filters'] = [
-                {
-                    "ColumnName": "SaleOrderNo",
-                    "FilterType": 1,  # 1 = Equal/Exact match
-                    "FilterValue": sale_order_name,
-                    "LogicOperator": 0
-                }
-            ]
-            payload['PageSize'] = 1  # Chỉ lấy 1 kết quả nếu có match
-            payload['AISearchKeyword'] = ""
+            # Giữ Filters rỗng (giống fetch request) - AISearchKeyword sẽ xử lý search
+            payload['Filters'] = []
+            payload['AISearchKeyword'] = sale_order_name
+            payload['PageSize'] = 1  # Chỉ lấy 1 kết quả
 
             logger.info(f"[MISA API] Tìm kiếm: {sale_order_name}")
-            # In payload để debug
-            logger.info(f"[MISA API] Payload gửi đi (Filters + Keys):")
+            logger.info(f"[MISA API] Payload gửi đi:")
             logger.info(f"  - Filters: {json.dumps(payload.get('Filters'), ensure_ascii=False)}")
-            logger.info(f"  - PageSize: {payload.get('PageSize')}")
             logger.info(f"  - AISearchKeyword: '{payload.get('AISearchKeyword')}'")
+            logger.info(f"  - PageSize: {payload.get('PageSize')}")
+            logger.info(f"  - SessionID: {payload.get('SessionID')}")
             
             response = requests.post(
                 MISA_GRID_URL,
@@ -101,11 +93,15 @@ class ShippingAddressUpdater:
             response.raise_for_status()
 
             data = response.json()
+            logger.info(f"[MISA API] Response status: {data.get('Success')}, Message: {data.get('Message', 'N/A')}")
+            
             if not data.get('Success'):
                 logger.warning(f"[MISA API] Lỗi với {sale_order_name}: {data.get('Message', 'Lỗi không xác định')}")
                 return None
 
             items = data.get('Data', [])
+            logger.info(f"[MISA API] Số items return: {len(items)}")
+            
             if not items:
                 logger.warning(f"[MISA API] Không tìm thấy do liệu cho {sale_order_name}")
                 return None
