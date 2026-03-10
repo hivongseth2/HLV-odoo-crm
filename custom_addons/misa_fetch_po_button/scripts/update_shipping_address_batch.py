@@ -80,16 +80,22 @@ class ShippingAddressUpdater:
             payload['AISearchKeyword'] = sale_order_name
             payload['PageSize'] = 1  # ⚠️  MỘT LẦN NỮA: PageSize=1 là CÓ CHUYÊN Cần!
 
+            # Ensure headers have all required fields (hard code để khỏi dependency)
+            headers = self.headers.copy() if self.headers else {}
+            if 'layoutcode' not in headers:
+                headers['layoutcode'] = 'saleorder'
+            if 'x-misa-language' not in headers:
+                headers['x-misa-language'] = 'vi-VN'
+
             logger.info(f"[MISA API] Tìm kiếm: {sale_order_name}")
             logger.info(f"[MISA API] Payload gửi đi:")
             logger.info(f"  - Filters: {json.dumps(payload.get('Filters'), ensure_ascii=False)}")
             logger.info(f"  - AISearchKeyword: '{payload.get('AISearchKeyword')}'")
             logger.info(f"  - PageSize: {payload.get('PageSize')}")
-            logger.info(f"  - SessionID: {payload.get('SessionID')}")
             
             response = requests.post(
                 MISA_GRID_URL,
-                headers=self.headers,
+                headers=headers,
                 json=payload,
                 timeout=30
             )
