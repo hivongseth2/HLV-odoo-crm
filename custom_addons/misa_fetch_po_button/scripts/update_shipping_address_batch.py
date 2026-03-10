@@ -90,12 +90,26 @@ class ShippingAddressUpdater:
                 logger.warning(f"[MISA API] Không tìm thấy do liệu cho {sale_order_name}")
                 return None
 
-            # Lấy item đầu tiên (theo logic search, thường là match chính xác)
+            # Log tất cả items return về để debug
+            logger.info(f"[MISA API DEBUG] Items returned: {len(items)}")
+            for idx, item in enumerate(items[:3]):
+                item_name = item.get('SaleOrderName', item.get('SaleOrderNo', 'N/A'))
+                item_addr = item.get('ShippingAddress', '(empty)')
+                logger.info(f"  [{idx}] Name={item_name}, Address={item_addr[:50]}")
+
+            # Lấy item đầu tiên
             first_item = items[0]
+            found_name = first_item.get('SaleOrderName', first_item.get('SaleOrderNo', 'N/A'))
             shipping_address = first_item.get('ShippingAddress', '').strip()
 
+            logger.info(f"[MISA API] Return item: Name={found_name} (searched: {sale_order_name})")
+            
+            # Kiểm tra xem có match không
+            if found_name and found_name != sale_order_name:
+                logger.warning(f"[MISA API] ⚠️ Name mismatch! Tìm: {sale_order_name}, nhận: {found_name}")
+
             if shipping_address:
-                logger.info(f"[MISA API] Tìm thấy địa chỉ: {shipping_address[:60]}...")
+                logger.info(f"[MISA API] ✅ Address: {shipping_address[:80]}")
                 return shipping_address
             else:
                 logger.warning(f"[MISA API] Địa chỉ trống cho {sale_order_name}")
