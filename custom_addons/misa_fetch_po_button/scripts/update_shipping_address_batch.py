@@ -65,17 +65,20 @@ class ShippingAddressUpdater:
 
     def fetch_from_misa(self, sale_order_name):
         """
-        Gọi MISA Grid API với AISearchKeyword = sale_order_name (giống fetch request trên console)
+        Gọi MISA Grid API với AISearchKeyword = sale_order_name
+        ⚠️  CRITICAL: PageSize PHẢI = 1 để AISearchKeyword hoạt động đúng!
+            - PageSize=20: API ignore AISearchKeyword, return 20 items đầu tiên
+            - PageSize=1: API filter theo AISearchKeyword, return item match
         Return: ShippingAddress nếu tìm thấy, None nếu không hoặc error
         """
         try:
             # Deep copy để tránh vấn đề với nested objects
             payload = copy.deepcopy(PAYLOAD_TEMPLATE)
             
-            # Giữ Filters rỗng (giống fetch request) - AISearchKeyword sẽ xử lý search
+            # Giữ Filters rỗng - AISearchKeyword sẽ xử lý search
             payload['Filters'] = []
             payload['AISearchKeyword'] = sale_order_name
-            payload['PageSize'] = 1  # Chỉ lấy 1 kết quả
+            payload['PageSize'] = 1  # ⚠️  MỘT LẦN NỮA: PageSize=1 là CÓ CHUYÊN Cần!
 
             logger.info(f"[MISA API] Tìm kiếm: {sale_order_name}")
             logger.info(f"[MISA API] Payload gửi đi:")
@@ -101,6 +104,17 @@ class ShippingAddressUpdater:
 
             items = data.get('Data', [])
             logger.info(f"[MISA API] Số items return: {len(items)}")
+            
+            # 🔍 LOG CHI TIẾT TẤT CẢ ITEMS (để debug)
+            if items:
+                logger.info(f"[MISA API] ========== FIRST 5 ITEMS ==========")
+                for idx, item in enumerate(items[:5]):
+                    logger.info(f"  [{idx}] SaleOrderNo: {item.get('SaleOrderNo', 'N/A')}")
+                    logger.info(f"  [{idx}] SaleOrderName: {item.get('SaleOrderName', 'N/A')[:80]}")
+                    logger.info(f"  [{idx}] ShippingAddress: {item.get('ShippingAddress', 'N/A')[:100]}")
+                if len(items) > 5:
+                    logger.info(f"  ... + {len(items) - 5} more items")
+                logger.info(f"[MISA API] ========== END ITEMS ==========")
             
             if not items:
                 logger.warning(f"[MISA API] Không tìm thấy do liệu cho {sale_order_name}")
