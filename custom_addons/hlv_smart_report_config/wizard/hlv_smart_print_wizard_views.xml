@@ -25,7 +25,7 @@
                         <page string="Biên bản cần in" name="reports">
                             <field name="report_line_ids">
                                 <list editable="bottom">
-                                    <field name="report_id"/>
+                                    <field name="report_id" context="{'list_view_ref': 'hlv_smart_report_config.view_ir_actions_report_select_list'}"/>
                                     <field name="copies"/>
                                 </list>
                             </field>

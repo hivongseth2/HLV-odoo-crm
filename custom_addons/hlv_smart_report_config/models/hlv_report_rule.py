@@ -40,7 +40,7 @@ class HlvReportRule(models.Model):
                     return rule
             
             elif rule.match_type == 'regex' and rule.partner_regex:
-                if re.search(rule.partner_regex, partner.name or '', re.IGNORECASE):
+                if re.search(rule.partner_regex, partner.display_name or '', re.IGNORECASE):
                     return rule
         
         return False

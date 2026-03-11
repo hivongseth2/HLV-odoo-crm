@@ -1,5 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <!-- Simplified Report List View for Selection -->
+    <record id="view_ir_actions_report_select_list" model="ir.ui.view">
+        <field name="name">ir.actions.report.select.list</field>
+        <field name="model">ir.actions.report</field>
+        <field name="priority">100</field>
+        <field name="arch" type="xml">
+            <list string="Chọn biên bản">
+                <field name="name"/>
+                <field name="report_type"/>
+                <field name="model" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
     <record id="view_hlv_report_rule_list" model="ir.ui.view">
         <field name="name">hlv.report.rule.list</field>
         <field name="model">hlv.report.rule</field>
@@ -53,7 +67,7 @@
                             <field name="report_line_ids">
                                 <list editable="bottom">
                                     <field name="sequence" widget="handle"/>
-                                    <field name="report_id"/>
+                                    <field name="report_id" context="{'list_view_ref': 'hlv_smart_report_config.view_ir_actions_report_select_list'}"/>
                                     <field name="copies"/>
                                 </list>
                             </field>
