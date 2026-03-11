@@ -225,11 +225,11 @@
                         <h3>✓ Kiểm Kê Hoàn Tất</h3>
                         
                         <t t-if="state.check_data">
-                            <p>Vị Trí: <strong t-esc="state.location_name"/></p>
-                            <p>Sản Phẩm: <strong t-esc="state.check_data.product_count"/></strong></p>
-                            <p>Tồn Lý Thuyết: <strong t-esc="state.check_data.total_theoretical_qty.toFixed(2)"/></strong></p>
-                            <p>Tồn Thực Tế: <strong t-esc="state.check_data.total_scanned_qty.toFixed(2)"/></strong></p>
-                            <p>Chênh Lệch: <strong t-esc="(state.check_data.total_difference > 0 ? '+' : '') + state.check_data.total_difference.toFixed(2)"/></strong></p>
+                            <p>Vị Trí: <t t-esc="state.location_name"/></p>
+                            <p>Sản Phẩm: <t t-esc="state.check_data.product_count"/></p>
+                            <p>Tồn Lý Thuyết: <t t-esc="state.check_data.total_theoretical_qty.toFixed(2)"/></p>
+                            <p>Tồn Thực Tế: <t t-esc="state.check_data.total_scanned_qty.toFixed(2)"/></p>
+                            <p>Chênh Lệch: <t t-esc="(state.check_data.total_difference > 0 ? '+' : '') + state.check_data.total_difference.toFixed(2)"/></p>
                         </t>
                         
                         <button class="btn btn-primary w-100 mt-3" t-on-click="_resetSession">
