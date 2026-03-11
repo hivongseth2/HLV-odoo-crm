@@ -126,16 +126,13 @@
                         <t t-if="state.lines.length > 0">
                             <t t-foreach="state.lines" t-as="line" t-key="line.id">
                                 <div t-att-class="'hlv-product-row ' + (line.difference > 0 ? 'hlv-product-row--surplus' : line.difference &lt; 0 ? 'hlv-product-row--deficit' : line.scanned_qty > 0 ? 'hlv-product-row--matched' : 'hlv-product-row--pending')">
-                                    <!-- Status indicator dot -->
                                     <div class="hlv-product-row__status-dot"/>
 
-                                    <!-- Product Info -->
                                     <div class="hlv-product-row__info">
                                         <div class="hlv-product-row__name" t-esc="line.product_name"/>
                                         <div class="hlv-product-row__sku" t-if="line.product_code" t-esc="line.product_code"/>
                                     </div>
 
-                                    <!-- Quantities -->
                                     <div class="hlv-qty-group">
                                         <div class="hlv-qty-group__item">
                                             <span class="hlv-qty-group__label">Lý thuyết</span>
@@ -164,7 +161,6 @@
                                         </div>
                                     </div>
 
-                                    <!-- Actions -->
                                     <div class="hlv-product-row__actions">
                                         <t t-if="line.difference !== 0 &amp;&amp; !line.discrepancy_id">
                                             <button
@@ -202,20 +198,32 @@
                         <div class="hlv-summary">
                             <div class="hlv-summary__item">
                                 <span class="hlv-summary__label">Lý Thuyết</span>
-                                <span class="hlv-summary__value" t-if="state.check_data" t-esc="state.check_data.total_theoretical_qty"/>
-                                <span class="hlv-summary__value" t-if="!state.check_data">0</span>
+                                <t t-if="state.check_data">
+                                    <span class="hlv-summary__value" t-esc="state.check_data.total_theoretical_qty"/>
+                                </t>
+                                <t t-if="!state.check_data">
+                                    <span class="hlv-summary__value">0</span>
+                                </t>
                             </div>
                             <div class="hlv-summary__sep"/>
                             <div class="hlv-summary__item">
                                 <span class="hlv-summary__label">Thực Tế</span>
-                                <span class="hlv-summary__value" t-if="state.check_data" t-esc="state.check_data.total_scanned_qty"/>
-                                <span class="hlv-summary__value" t-if="!state.check_data">0</span>
+                                <t t-if="state.check_data">
+                                    <span class="hlv-summary__value" t-esc="state.check_data.total_scanned_qty"/>
+                                </t>
+                                <t t-if="!state.check_data">
+                                    <span class="hlv-summary__value">0</span>
+                                </t>
                             </div>
                             <div class="hlv-summary__sep"/>
-                            <div t-att-class="'hlv-summary__item ' + (state.check_data &amp;&amp; state.check_data.total_difference !== 0 ? 'hlv-summary__item--diff' : '')">
+                            <div class="hlv-summary__item">
                                 <span class="hlv-summary__label">Chênh Lệch</span>
-                                <span class="hlv-summary__value" t-if="state.check_data" t-esc="state.check_data.total_difference"/>
-                                <span class="hlv-summary__value" t-if="!state.check_data">0</span>
+                                <t t-if="state.check_data">
+                                    <span class="hlv-summary__value" t-esc="state.check_data.total_difference"/>
+                                </t>
+                                <t t-if="!state.check_data">
+                                    <span class="hlv-summary__value">0</span>
+                                </t>
                             </div>
                         </div>
                         <button
@@ -253,7 +261,7 @@
                                 <strong t-esc="state.check_data.total_scanned_qty"/>
                                 <span>Thực Tế</span>
                             </div>
-                            <div t-att-class="'hlv-done-stat ' + (state.check_data.total_difference !== 0 ? 'hlv-done-stat--diff' : 'hlv-done-stat--ok')">
+                            <div class="hlv-done-stat">
                                 <strong t-esc="state.check_data.total_difference"/>
                                 <span>Chênh Lệch</span>
                             </div>
@@ -266,251 +274,6 @@
                 </div>
             </t>
 
-        </div>
-    </t>
-
-</templates>
-
-        <div class="hlv_inventory_check_container">
-            <!-- Loading Overlay -->
-            <t t-if="state.is_loading">
-                <div class="loading-overlay">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                </div>
-            </t>
-
-            <!-- Location Selection View -->
-            <t t-if="state.view === 'location_select'">
-                <div class="location-select-view card">
-                    <div class="card-body">
-                        <h1 class="card-title">Chọn Vị Trí Kiểm Kê</h1>
-                        <p class="text-muted">Quét mã vị trí hoặc nhập tên vị trí kho</p>
-                        
-                        <div class="form-group">
-                            <label>Mã Vị Trí</label>
-                            <input 
-                                type="text" 
-                                class="form-control location-barcode"
-                                placeholder="Quét mã vị trị..."
-                                t-model="state.location_barcode"
-                                t-on-keydown="onLocationBarcodeInput"
-                                autofocus="autofocus"
-                            />
-                        </div>
-                        
-                        <button 
-                            class="btn btn-primary btn-lg w-100"
-                            t-on-click="selectLocationByBarcode"
-                            disabled="state.is_loading"
-                        >
-                            <i class="fa fa-check"></i> Xác Nhận
-                        </button>
-                        
-                        <!-- Recent Locations -->
-                        <hr/>
-                        <p class="text-muted small">Hoặc tiếp tục từ phiên trước...</p>
-                    </div>
-                </div>
-            </t>
-
-            <!-- Scanning View -->
-            <t t-if="state.view === 'scanning'">
-                <div class="scanning-view">
-                    <!-- Header -->
-                    <div class="scanning-header">
-                        <div class="location-info">
-                            <h2>
-                                <i class="fa fa-map-marker"></i>
-                                <t t-esc="state.location_name"/>
-                            </h2>
-                            <p class="text-muted" t-if="state.check_data">
-                                <strong t-esc="state.check_data.product_count"/> sản phẩm | 
-                                <strong t-esc="state.check_data.scan_count"/> lần quét
-                            </p>
-                        </div>
-                        <div class="action-buttons">
-                            <button 
-                                class="btn btn-sm btn-warning"
-                                t-on-click="viewCheckForm"
-                                title="Xem chi tiết"
-                            >
-                                <i class="fa fa-list"></i>
-                            </button>
-                            <button 
-                                class="btn btn-sm btn-danger"
-                                t-on-click="cancelCheck"
-                                title="Hủy kiểm kê"
-                            >
-                                <i class="fa fa-times"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Warning Section -->
-                    <t t-if="state.warning_message">
-                        <div class="alert alert-warning alert-dismissible" role="alert">
-                            <i class="fa fa-exclamation-triangle"></i>
-                            <strong t-esc="state.warning_message"/>
-                            <button type="button" class="btn-close" t-on-click="clearWarning"></button>
-                        </div>
-                    </t>
-
-                    <!-- Error Section -->
-                    <t t-if="state.error_message">
-                        <div class="alert alert-danger alert-dismissible" role="alert">
-                            <i class="fa fa-exclamation-circle"></i>
-                            <strong t-esc="state.error_message"/>
-                            <button type="button" class="btn-close" t-on-click="clearError"></button>
-                        </div>
-                    </t>
-
-                    <!-- Barcode Input -->
-                    <div class="barcode-input-section card">
-                        <div class="card-body">
-                            <label class="form-label">Quét Sản Phẩm</label>
-                            <input 
-                                type="text" 
-                                class="form-control form-control-lg product-barcode"
-                                placeholder="Quét barcode sản phẩm..."
-                                t-model="state.product_barcode"
-                                t-on-keydown="onProductBarcodeInput"
-                                autofocus="autofocus"
-                            />
-                        </div>
-                    </div>
-
-                    <!-- Scanned Items -->
-                    <div class="scanned-items-section">
-                        <h5>Danh Sách Quét</h5>
-                        
-                        <t t-if="state.lines.length === 0">
-                            <div class="empty-state">
-                                <p class="text-muted">Chưa có sản phẩm nào được quét</p>
-                            </div>
-                        </t>
-
-                        <t t-if="state.lines.length > 0">
-                            <table class="table table-sm table-striped scanned-items-table">
-                                <thead>
-                                    <tr>
-                                        <th>Sản Phẩm</th>
-                                        <th>Lý Thuyết</th>
-                                        <th>Thực Tế</th>
-                                        <th>Chênh Lệch</th>
-                                        <th>Hành Động</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr t-foreach="state.lines" t-as="line" t-key="line.id">
-                                        <td>
-                                            <strong t-esc="line.product_name"/>
-                                            <br/>
-                                            <small class="text-muted" t-esc="line.product_code"/>
-                                        </td>
-                                        <td>
-                                            <span t-esc="line.theoretical_qty"/>
-                                        </td>
-                                        <td>
-                                            <input 
-                                                type="number" 
-                                                class="form-control form-control-sm"
-                                                t-model="line.scanned_qty"
-                                                step="0.01"
-                                            />
-                                        </td>
-                                        <td t-att-class="line.difference > 0 ? 'text-success' : line.difference &lt; 0 ? 'text-danger' : ''">
-                                            <t t-if="line.difference === 0">
-                                                <span class="badge bg-success">✓ 0</span>
-                                            </t>
-                                            <t t-if="line.difference !== 0">
-                                                <strong t-esc="line.difference"/>
-                                            </t>
-                                        </td>
-                                        <td>
-                                            <button 
-                                                class="btn btn-xs btn-danger"
-                                                t-on-click="removeLineHandler"
-                                                t-att-data-line-id="line.id"
-                                                title="Xóa"
-                                            >
-                                                <i class="fa fa-trash"></i>
-                                            </button>
-                                            <t t-if="line.difference !== 0 &amp;&amp; !line.discrepancy_id">
-                                                <button 
-                                                    class="btn btn-xs btn-warning"
-                                                    t-on-click="addDiscrepancyHandler"
-                                                    t-att-data-line-id="line.id"
-                                                    t-att-data-product-name="line.product_name"
-                                                    t-att-data-difference="line.difference"
-                                                    title="Ghi nhận chênh lệch"
-                                                >
-                                                    <i class="fa fa-flag"></i>
-                                                </button>
-                                            </t>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </t>
-                    </div>
-
-                    <!-- Summary Panel -->
-                    <t t-if="state.check_data">
-                        <div class="summary-panel card">
-                            <div class="card-body">
-                                <div class="summary-grid">
-                                    <div class="summary-item">
-                                        <label>Tồn Kho Lý Thuyết</label>
-                                        <strong t-esc="state.check_data.total_theoretical_qty"/>
-                                    </div>
-                                    <div class="summary-item">
-                                        <label>Tồn Kho Thực Tế</label>
-                                        <strong t-esc="state.check_data.total_scanned_qty"/>
-                                    </div>
-                                    <div class="summary-item" t-att-class="state.check_data.total_difference > 0 ? 'text-success' : state.check_data.total_difference &lt; 0 ? 'text-danger' : ''">
-                                        <label>Chênh Lệch Tổng</label>
-                                        <strong t-esc="state.check_data.total_difference"/>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </t>
-
-                    <!-- Action Buttons -->
-                    <div class="action-buttons-section mt-3">
-                        <button 
-                            class="btn btn-success btn-lg w-100"
-                            t-on-click="confirmCheck"
-                            disabled="state.is_loading"
-                        >
-                            <i class="fa fa-save"></i> Xác Nhận Kiểm Kê
-                        </button>
-                    </div>
-                </div>
-            </t>
-
-            <!-- Summary View -->
-            <t t-if="state.view === 'summary'">
-                <div class="summary-view card">
-                    <div class="card-body">
-                        <h3>✓ Kiểm Kê Hoàn Tất</h3>
-                        
-                        <t t-if="state.check_data">
-                            <p>Vị Trí: <t t-esc="state.location_name"/></p>
-                            <p>Sản Phẩm: <t t-esc="state.check_data.product_count"/></p>
-                            <p>Tồn Lý Thuyết: <t t-esc="state.check_data.total_theoretical_qty"/></p>
-                            <p>Tồn Thực Tế: <t t-esc="state.check_data.total_scanned_qty"/></p>
-                            <p>Chênh Lệch: <t t-esc="state.check_data.total_difference"/></p>
-                        </t>
-                        
-                        <button class="btn btn-primary w-100 mt-3" t-on-click="_resetSession">
-                            <i class="fa fa-plus"></i> Kiểm Kê Mới
-                        </button>
-                    </div>
-                </div>
-            </t>
         </div>
     </t>
 
