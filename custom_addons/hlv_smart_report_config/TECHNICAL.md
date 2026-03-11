@@ -34,12 +34,19 @@ hlv_smart_report_config/
 1. Tìm rule phù hợp.
 2. Nếu tìm thấy rule VÀ có cấu hình báo cáo:
    - Mở wizard `hlv.smart.print.wizard`, tự động điền danh sách báo cáo từ rule.
-3. Nếu không tìm thấy:
-   - Mở wizard trống để người dùng chọn báo cáo thủ công.
+3. Khi người dùng nhấn **In biên bản** trên wizard:
+   - Hệ thống gọi một custom Action URL: `/hlv_smart/print_merged/<wizard_id>`.
+   - Controller tại server sẽ:
+     - Duyệt qua từng dòng biên bản trong wizard.
+     - Render nội dung PDF cho từng loại.
+     - Nhân bản nội dung dựa trên trường **Số bản in** (Copies).
+     - Gộp tất cả (Merge) thành 1 file PDF duy nhất bằng `odoo.tools.pdf.merge_pdf`.
+     - Trả về file PDF gộp cho trình duyệt tải về.
+   - Ưu điểm: Giải quyết được giới hạn của trình duyệt (chặn tải nhiều file) và giới hạn của Odoo (deduplicate recordset IDs).
 
 ## Quy tắc thiết kế (DRY)
 - Logic tìm kiếm rule được đặt tập trung tại model `hlv.report.rule`.
-- Wizard dùng chung cho cả trường hợp "đã tìm thấy rule" (để xác nhận/thay đổi) và "không tìm thấy rule".
+- Sử dụng controller để xử lý gộp PDF nhằm giữ cho mã nguồn sạch sẽ và chuyên nghiệp.
 
 ## Hướng dẫn mở rộng
 - Để thêm tiêu chí lọc mới (ví dụ lọc theo Kho):

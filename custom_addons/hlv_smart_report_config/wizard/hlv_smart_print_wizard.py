@@ -16,17 +16,13 @@ class HlvSmartPrintWizard(models.TransientModel):
         if not self.report_line_ids:
             return {'type': 'ir.actions.act_window_close'}
             
-        # Odoo's report_action takes a record list. 
-        # To print N copies, we pass the same ID N times in the list.
-        # Example: report.report_action([id, id, id]) -> Prints 3 copies in one PDF.
-        
-        # However, if there are multiple DIFFERENT reports, we can typically only return one Action.
-        # As a robust solution, we will print the FIRST report in the list with its copies.
-        # If there are more, we will warn the user or assume they will print them manually.
-        
-        line = self.report_line_ids[0]
-        picking_ids = self.picking_id.ids * line.copies
-        return line.report_id.report_action(picking_ids)
+        # Instead of returning a standard report action which deduplicates IDs,
+        # we call our custom controller that merges the PDFs for all copies and reports.
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/hlv_smart/print_merged/%s' % self.id,
+            'target': 'new',
+        }
 
 class HlvSmartPrintWizardLine(models.TransientModel):
     _name = 'hlv.smart.print.wizard.line'
