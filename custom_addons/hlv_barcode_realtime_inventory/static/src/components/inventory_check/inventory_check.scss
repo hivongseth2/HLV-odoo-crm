@@ -21,6 +21,26 @@ $border-color: #dee2e6;
     margin: 0;
     position: relative;
 
+    // Loading Overlay
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 9999;
+
+        .spinner-border {
+            width: 50px;
+            height: 50px;
+            border-width: 4px;
+        }
+    }
+
     // Location Select View
     .location-select-view {
         display: flex;

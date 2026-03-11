@@ -5,7 +5,11 @@
         <div class="hlv_inventory_check_container">
             <!-- Loading Overlay -->
             <t t-if="state.is_loading">
-                <BlockUI/>
+                <div class="loading-overlay">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
             </t>
 
             <!-- Location Selection View -->

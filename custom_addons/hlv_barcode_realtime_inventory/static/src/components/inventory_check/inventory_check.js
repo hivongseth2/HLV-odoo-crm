@@ -2,11 +2,10 @@
 
 import { Component, useState, onWillStart, onMounted } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
-import { BlockUI } from "@web/core/ui/block_ui";
 
 export class InventoryCheckScanner extends Component {
     static template = "hlv_barcode_realtime_inventory.inventory_check";
-    static components = { BlockUI };
+    static components = {};
 
     setup() {
         this.orm = useService("orm");
