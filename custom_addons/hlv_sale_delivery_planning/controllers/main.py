@@ -61,17 +61,27 @@ class DeliveryPlannerController(http.Controller):
             if not all_pickings:
                 return {'success': False, 'message': 'Không có phiếu lấy hàng nào cần in (tất cả đã hoàn thành hoặc đã hủy)'}
 
-            has_internal = any(p.picking_type_code == 'internal' for p in all_pickings)
-            report = request.env.ref(
-                'stock.action_report_picking' if has_internal else 'stock.action_report_delivery',
-                raise_if_not_found=False,
-            )
-            if not report:
-                report = request.env.ref('stock.action_report_delivery', raise_if_not_found=False)
+            # Fetch report by searching for picking report (not action ref)
+            report = request.env['ir.actions.report'].sudo().search([
+                ('model', '=', 'stock.picking'),
+                ('report_type', '=', 'qweb-pdf'),
+            ], limit=1)
+            
             if not report:
                 return {'success': False, 'message': 'Không tìm thấy report template cho phiếu lấy hàng'}
 
-            pdf_content, _ = report._render_qweb_pdf(all_pickings.ids)
+            try:
+                # Render PDF with proper ID list
+                picking_ids = list(all_pickings.ids)
+                try:
+                    # Cách 1: Thử với positional args
+                    pdf_content, _ = report._render_qweb_pdf(picking_ids)
+                except (TypeError, AttributeError):
+                    # Cách 2: Thử với keyword args
+                    pdf_content, _ = report._render_qweb_pdf(res_ids=picking_ids)
+            except Exception as render_error:
+                _logger.error("Error rendering PDF: %s", str(render_error), exc_info=True)
+                return {'success': False, 'message': f'Lỗi khi tạo PDF: {str(render_error)}'}
             if not pdf_content:
                 return {'success': False, 'message': 'Không thể tạo PDF'}
 
