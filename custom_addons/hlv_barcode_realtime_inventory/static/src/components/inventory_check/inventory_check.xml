@@ -118,7 +118,7 @@
                             </div>
                         </t>
 
-                        <t t-else>
+                        <t t-if="state.lines.length > 0">
                             <table class="table table-sm table-striped scanned-items-table">
                                 <thead>
                                     <tr>
@@ -151,7 +151,7 @@
                                             <t t-if="line.difference === 0">
                                                 <span class="badge bg-success">✓ 0</span>
                                             </t>
-                                            <t t-else>
+                                            <t t-if="line.difference !== 0">
                                                 <strong t-esc="(line.difference > 0 ? '+' : '') + line.difference.toFixed(2)"/>
                                             </t>
                                         </td>
