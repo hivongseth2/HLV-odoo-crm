@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_hlv_report_rule_user,access.hlv.report.rule.user,model_hlv_report_rule,base.group_user,1,0,0,0
+access_hlv_report_rule_manager,access.hlv.report.rule.manager,model_hlv_report_rule,stock.group_stock_manager,1,1,1,1
+access_hlv_report_rule_line_user,access.hlv.report.rule.line.user,model_hlv_report_rule_line,base.group_user,1,0,0,0
+access_hlv_report_rule_line_manager,access.hlv.report.rule.line.manager,model_hlv_report_rule_line,stock.group_stock_manager,1,1,1,1
+access_hlv_smart_print_wizard_user,access.hlv.smart.print.wizard.user,model_hlv_smart_print_wizard,base.group_user,1,1,1,1
+access_hlv_smart_print_wizard_line_user,access.hlv.smart.print.wizard.line.user,model_hlv_smart_print_wizard_line,base.group_user,1,1,1,1

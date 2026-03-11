@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_hlv_report_rule_list" model="ir.ui.view">
+        <field name="name">hlv.report.rule.list</field>
+        <field name="model">hlv.report.rule</field>
+        <field name="arch" type="xml">
+            <list string="Quy tắc in biên bản thông minh">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="match_type"/>
+                <field name="partner_ids" widget="many2many_tags" optional="show"/>
+                <field name="partner_regex" optional="hide"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_hlv_report_rule_form" model="ir.ui.view">
+        <field name="name">hlv.report.rule.form</field>
+        <field name="model">hlv.report.rule</field>
+        <field name="arch" type="xml">
+            <form string="Quy tắc in biên bản">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Tên quy tắc (ví dụ: Khách hàng VIP)"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="match_type"/>
+                            <field name="sequence"/>
+                        </group>
+                        <group>
+                            <field name="active" widget="boolean_toggle"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Tiêu chí khớp" name="criteria">
+                            <group>
+                                <field name="partner_ids" widget="many2many_tags" 
+                                       invisible="match_type != 'partner'"
+                                       required="match_type == 'partner'"/>
+                                <field name="partner_regex" 
+                                       invisible="match_type != 'regex'"
+                                       required="match_type == 'regex'"/>
+                            </group>
+                            <div invisible="match_type != 'all'" class="alert alert-info" role="alert">
+                                Quy tắc này sẽ áp dụng cho tất cả khách hàng không khớp với các quy tắc có thứ tự ưu tiên thấp hơn (số Sequence nhỏ hơn).
+                            </div>
+                        </page>
+                        <page string="Biên bản cần in" name="reports">
+                            <field name="report_line_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="report_id"/>
+                                    <field name="copies"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_hlv_report_rule_search" model="ir.ui.view">
+        <field name="name">hlv.report.rule.search</field>
+        <field name="model">hlv.report.rule</field>
+        <field name="arch" type="xml">
+            <search string="Tìm kiếm quy tắc">
+                <field name="name" string="Quy tắc/Regex" filter_domain="['|', ('name', 'ilike', self), ('partner_regex', 'ilike', self)]"/>
+                <field name="partner_ids" operator="child_of"/>
+                <separator/>
+                <filter string="Khách hàng cụ thể" name="match_partner" domain="[('match_type', '=', 'partner')]"/>
+                <filter string="Regex" name="match_regex" domain="[('match_type', '=', 'regex')]"/>
+                <filter string="Mặc định tất cả" name="match_all" domain="[('match_type', '=', 'all')]"/>
+                <separator/>
+                <filter string="Đã lưu trữ" name="inactive" domain="[('active', '=', False)]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter string="Kiểu khớp" name="group_match_type" context="{'group_by': 'match_type'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_hlv_report_rule" model="ir.actions.act_window">
+        <field name="name">Quy tắc in biên bản</field>
+        <field name="res_model">hlv.report.rule</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_hlv_report_rule_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Tạo quy tắc in mới!
+            </p>
+            <p>
+                Gom nhóm khách hàng hoặc dùng Regex để tự động chọn biên bản cần in cho mỗi phiếu kho.
+            </p>
+        </field>
+    </record>
+
+    <menuitem id="menu_hlv_report_rule"
+              name="Quy tắc in biên bản"
+              parent="stock.menu_stock_config_settings"
+              action="action_hlv_report_rule"
+              sequence="150"/>
+</odoo>
