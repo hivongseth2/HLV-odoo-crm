@@ -130,10 +130,20 @@ class ShopeeWebhookController(http.Controller):
             results_log = []
             for order in orders:
                 if status:
-                    old_status = order.shopee_order_status
-                    order.write({'shopee_order_status': status})
+                    old_status = order.shopee_delivery_status
+                    order.write({'shopee_delivery_status': status})
                     _logger.info("Shopee Webhook: Updated Order %s status from '%s' to '%s'", order.name, old_status, status)
                     results_log.append(f"Updated {order.name}: {old_status} -> {status}")
+
+                    # --- Zalo Cancel Notification ---
+                    if status == 'CANCELLED':
+                        try:
+                            order._shopee_send_zalo_cancel_notification()
+                            _logger.info("Shopee Webhook: Sent cancel notification for Order %s", order.name)
+                            results_log.append(f"Sent cancel notification for {order.name}")
+                        except Exception as e:
+                            _logger.error("Shopee Webhook: Cancel notification failed for %s: %s", order.name, str(e))
+                            results_log.append(f"Cancel notification failed {order.name}: {str(e)}")
                 else:
                     _logger.info("Shopee Webhook: No status update found in payload for Order %s", order.name)
 
