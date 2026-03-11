@@ -126,9 +126,9 @@
                 <separator/>
                 <filter string="Chưa Xác Nhận" name="draft" domain="[('state', '=', 'draft')]"/>
                 <filter string="Đã Xác Nhận" name="confirmed" domain="[('state', '=', 'confirmed')]"/>
-                <filter string="Chênh Lệch Lớn (>5)" name="big_difference" domain="[('difference', '>', 5)]"/>
+                <filter string="Chênh Lệch Lớn (>5)" name="big_difference" domain="[('difference', '&gt;', 5)]"/>
                 <separator/>
-                <filter string="Hôm Nay" name="today" domain="[('create_date', '>=', context_today().strftime('%Y-%m-%d')), ('create_date', '<', (context_today() + relativedelta(days=1)).strftime('%Y-%m-%d'))]"/>
+                <filter string="Hôm Nay" name="today" domain="[('create_date', '&gt;=', context_today().strftime('%Y-%m-%d')), ('create_date', '&lt;', (context_today() + relativedelta(days=1)).strftime('%Y-%m-%d'))]"/>
                 <separator/>
                 <group expand="0" string="Group By">
                     <filter string="Lý Do" name="group_reason" context="{'group_by': 'reason'}"/>
