@@ -119,7 +119,7 @@
                                 <list>
                                     <field name="name"/>
                                     <field name="product_id"/>
-                                    <field name="quantity_done"/>
+                                    <field name="quantity"/>
                                     <field name="state"/>
                                 </list>
                             </field>
