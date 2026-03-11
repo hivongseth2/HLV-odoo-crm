@@ -44,7 +44,7 @@ class HlvSmartPrintController(http.Controller):
             
             return request.make_response(merged_pdf, headers=[
                 ('Content-Type', 'application/pdf'),
-                ('Content-Disposition', content_disposition(filename))
+                ('Content-Disposition', 'inline; filename="%s"' % filename)
             ])
         except Exception as e:
             # Trả về lỗi chi tiết hơn nếu có thể (chỉ cho dev/test) hoặc log lại
