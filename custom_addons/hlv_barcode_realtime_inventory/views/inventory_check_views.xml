@@ -10,12 +10,12 @@
         sequence="30"
         />
     
-    <!-- Tree View -->
-    <record id="view_inventory_check_tree" model="ir.ui.view">
-        <field name="name">inventory.check.tree</field>
+    <!-- List View -->
+    <record id="view_inventory_check_list" model="ir.ui.view">
+        <field name="name">inventory.check.list</field>
         <field name="model">inventory.check</field>
         <field name="arch" type="xml">
-            <tree string="Phiên Kiểm Kê" decoration-success="state == 'confirmed'" decoration-warning="has_pending_outbound" decoration-danger="state == 'locked'" decoration-muted="state == 'cancelled'">
+            <list string="Phiên Kiểm Kê" decoration-success="state == 'confirmed'" decoration-warning="has_pending_outbound" decoration-danger="state == 'locked'" decoration-muted="state == 'cancelled'">
                 <field name="name"/>
                 <field name="user_id"/>
                 <field name="location_id"/>
@@ -24,7 +24,7 @@
                 <field name="start_time"/>
                 <field name="has_pending_outbound" invisible="1"/>
                 <field name="state" widget="badge"/>
-            </tree>
+            </list>
         </field>
     </record>
 
@@ -89,7 +89,7 @@
                         <!-- Check Details -->
                         <page string="Chi Tiết Kiểm Kê">
                             <field name="line_ids" readonly="state not in ['draft', 'in_progress']">
-                                <tree editable="bottom">
+                                <list editable="bottom">
                                     <field name="product_id"/>
                                     <field name="theoretical_qty"/>
                                     <field name="scanned_qty"/>
@@ -97,31 +97,31 @@
                                     <field name="location_id"/>
                                     <field name="lot_id"/>
                                     <field name="discrepancy_id"/>
-                                </tree>
+                                </list>
                             </field>
                         </page>
                         
                         <!-- Discrepancies -->
                         <page string="Ghi Nhận Chênh Lệch" invisible="discrepancy_count == 0">
                             <field name="discrepancy_ids">
-                                <tree>
+                                <list>
                                     <field name="product_id"/>
                                     <field name="difference"/>
                                     <field name="reason"/>
                                     <field name="state" widget="badge"/>
-                                </tree>
+                                </list>
                             </field>
                         </page>
                         
                         <!-- Locked Moves -->
                         <page string="Stock Moves Bị Khóa" invisible="locked_move_ids == []">
                             <field name="locked_move_ids" readonly="1">
-                                <tree>
+                                <list>
                                     <field name="name"/>
                                     <field name="product_id"/>
-                                    <field name="quantity_done"/>
+                                    <field name="quantity"/>
                                     <field name="state"/>
-                                </tree>
+                                </list>
                             </field>
                         </page>
                         
@@ -148,7 +148,7 @@
                 <filter string="Đang Kiểm Kê" name="in_progress" domain="[('state', '=', 'in_progress')]"/>
                 <filter string="Đã Xác Nhận" name="confirmed" domain="[('state', '=', 'confirmed')]"/>
                 <filter string="Có Chênh Lệch" name="has_discrepancy" domain="[('discrepancy_count', '>', 0)]"/>
-                <filter string="Có Outbound Chờ" name="has_outbound" domain="[('has_pending_outbound', '=', True)]"/>
+
                 <separator/>
                 <filter string="Hôm Nay" name="today" domain="[('create_date', '&gt;=', context_today().strftime('%Y-%m-%d')), ('create_date', '&lt;', (context_today() + relativedelta(days=1)).strftime('%Y-%m-%d'))]"/>
                 <separator/>
@@ -166,7 +166,7 @@
     <record id="action_inventory_check" model="ir.actions.act_window">
         <field name="name">Phiên Kiểm Kê</field>
         <field name="res_model">inventory.check</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_inventory_check_search"/>
     </record>
 

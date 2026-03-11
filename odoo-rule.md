@@ -418,3 +418,195 @@ module_name/
 - Mỗi hàm chỉ được tồn tại ở **một file duy nhất**; phải ghi rõ trong `TECHNICAL.md`
 - Khi AI phát hiện code trùng lặp trong module, **trước tiên đọc `TECHNICAL.md`** để biết file đúng để đặt logic đó
 - Sau mỗi lần thêm hàm/service mới, **cập nhật `TECHNICAL.md`** để phản ánh thực trạng hiện tại
+
+---
+
+14. XML View Validation & Field References (Odoo 18)
+14.1. Unescaped Comparison Operators in Domain Attributes
+- **Lỗi**: `lxml.etree.XMLSyntaxError: Unescaped '<' not allowed in attributes values, line X, column Y`
+- **Nguyên nhân**: Khi viết domain filter trong attribute `domain="..."`, nếu có ký tự `<`, `>`, `>=`, `<=`, chúng phải được escape thành XML entities.
+- **Giải pháp**: Luôn escape comparison operators trong XML attributes:
+  ```xml
+  <!-- ❌ SAI - Unescaped operators -->
+  <filter string="Hôm Nay" name="today" 
+    domain="[('create_date', '>=', context_today()), ('create_date', '<', tomorrow())]"/>
+  
+  <!-- ✅ ĐÚNG - Escaped operators -->
+  <filter string="Hôm Nay" name="today" 
+    domain="[('create_date', '&gt;=', context_today()), ('create_date', '&lt;', tomorrow())]"/>
+  
+  <!-- ✅ Tương tự cho > và <= -->
+  <filter string="Sản phẩm Chênh Lệch Lớn" name="big_diff"
+    domain="[('difference', '&gt;', 5)]"/>
+  <filter string="Sản phẩm Chênh Lệch Nhỏ" name="small_diff"
+    domain="[('difference', '&lt;=', 2)]"/>
+  ```
+
+  **Bảng mapping escape**:
+  | Ký tự | Entity | Khi nào dùng |
+  |-------|--------|------------|
+  | `<` | `&lt;` | Domain với `'<'` hoặc `'<='` |
+  | `>` | `&gt;` | Domain với `'>'` hoặc `'>='` |
+  | `>=` | `&gt;=` | Domain với `'>='` |
+  | `<=` | `&lt;=` | Domain với `'<='` |
+
+14.2. Computed Fields (store=False) Cannot Be Searchable
+- **Lỗi**: `Unsearchable field "has_pending_outbound" in path "has_pending_outbound" in domain of <filter>`
+- **Nguyên nhân**: Computed fields với `store=False` KHÔNG được lưu vào database, chỉ tính toán runtime. Odoo không thể dùng nó trong SQL WHERE clause.
+- **Giải pháp**:
+  ```python
+  # ❌ SAI - store=False không searchable
+  has_pending = fields.Boolean(compute='_compute_pending', store=False)
+  
+  # ✅ ĐÚNG - Nếu cần searchable, phải store=True
+  has_pending = fields.Boolean(compute='_compute_pending', store=True)
+  ```
+  
+  **Luật sử dụng trong Views**:
+  - **Computed, store=False**: Chỉ dùng trong form/list view, hoặc để hiển thị trong alert/warning. KHÔNG sử dụng trong search filters.
+  - **Computed, store=True**: Có thể dùng trong search filters nhưng phải cẩn thận về Performance (sẽ recompute khi search).
+  - **Regular field**: Có thể dùng bất cứ đâu.
+
+  **Nếu cần so sánh trong search filter mà field là computed store=False**:
+  - Cách 1: Thêm filter thường (domain dựa vào parent fields)
+  - Cách 2: Viết domain đóng gói logic thay vì dùng trực tiếp field
+  ```python
+  # ❌ SAI
+  <filter string="Còn Hàng Chờ" name="has_pending" 
+    domain="[('has_pending_outbound', '=', True)]"/>
+  
+  # ✅ ĐÚNG - Dùng domain logic thay vì field compute
+  <filter string="Còn Hàng Chờ" name="has_pending"
+    domain="[('location_id', '!=', False)]"/>  # Giả sử nếu có location thì có pending
+  ```
+
+14.3. Field Reference Validation in Views
+- **Lỗi**: `Field "quantity_done" does not exist in model "stock.move"`
+- **Nguyên nhân**: Khi viết field name trong view, phải kiểm tra xem field đó có tồn tại trên model hay không. Một số field chỉ tồn tại trên một sub-model khác.
+  
+  **Ví dụ phổ biến**:
+  - `quantity_done` chỉ tồn tại trên `stock.move.line`, không phải `stock.move`
+  - `stock.move` có field `quantity` (số lượng lô tính)
+  
+- **Giải pháp**: Kiểm tra đúng field name trước khi thêm vào view. Có thể dùng Odoo Developer Mode để tìm field name chính xác.
+  ```xml
+  <!-- ❌ SAI -->
+  <field name="locked_moves">
+      <list>
+          <field name="quantity_done"/>  <!-- Không tồn tại trên stock.move -->
+      </list>
+  </field>
+  
+  <!-- ✅ ĐÚNG -->
+  <field name="locked_moves">
+      <list>
+          <field name="quantity"/>  <!-- Đây là field đúng trên stock.move -->
+      </list>
+  </field>
+  ```
+
+15. ORM Method Rules for Odoo 18
+15.1. Batch Create Requirement (@api.model_create_multi)
+- **Lỗi**: `DeprecationWarning: The model ... is not overriding the create method in batch`
+- **Nguyên nhân**: Odoo 18 khuyến khích sử dụng batch create `@api.model_create_multi` thay vì `@api.model`. Nếu override phương thức create với decorator cũ, Odoo sẽ báo warning và có thể fail sau này.
+- **Giải pháp**:
+  ```python
+  # ❌ SAI - Odoo 17 style
+  @api.model
+  def create(self, vals):
+      if vals.get('name', 'New') == 'New':
+          vals['name'] = self.env['ir.sequence'].next_by_code('my.sequence')
+      return super(MyModel, self).create(vals)
+  
+  # ✅ ĐÚNG - Odoo 18 batch mode
+  @api.model_create_multi
+  def create(self, vals_list):
+      """Create in batch - Lặp qua vals_list để xử lý từng bản ghi"""
+      for vals in vals_list:
+          if vals.get('name', 'New') == 'New':
+              vals['name'] = self.env['ir.sequence'].next_by_code('my.sequence')
+      return super().create(vals_list)
+  ```
+
+  **Lưu ý quan trọng**:
+  - Parameter là `vals_list` (danh sách), KHÔNG phải `vals` (đơn số)
+  - Phải lặp `for vals in vals_list` nếu cần xử lý từng bản ghi
+  - Gọi `super().create(vals_list)` với toàn bộ danh sách
+
+15.2. Button Method Parameter Restrictions
+- **Lỗi**: `confirm_session on inventory.scan.session has parameters and cannot be called from a button`
+- **Nguyên nhân**: Nút bấm (button) trong form view gọi method dưới dạng `<button name="method_name" type="object">`. Odoo KHÔNG thể truyền tham số động qua button click. Method phải không có tham số hoặc chỉ có `self`.
+- **Giải pháp**:
+  ```python
+  # ❌ SAI - Method có tham số, không gọi được từ button
+  @api.model
+  def confirm_session(self, session_id):
+      """Cannot be called from button"""
+      session = self.browse(session_id)
+      # ...
+  
+  # ✅ ĐÚNG - Dùng instance method với ensure_one()
+  def confirm_session(self):
+      """Instance method, có thể gọi từ button"""
+      self.ensure_one()  # Assert chỉ có 1 bản ghi
+      # ... logic xử lý dùng self
+  ```
+  
+  **Quy tắc**:
+  - Nút bấm wrapper `<button name="method_name" type="object">` → method phải là **instance method** (không decorator).
+  - Nếu method cần xử lý 1 bản ghi duy nhất → dùng `self.ensure_one()` ở đầu method.
+  - Nếu cần xử lý nhiều bản ghi → không dùng button, dùng Action hoặc JavaScript.
+
+15.3. Avoid Direct RecordSet Arithmetic with Python Sets
+- **Lỗi**: `AttributeError: 'set' object has no attribute '_name'`
+- **Nguyên nhân**: Khi dùng `set(A) - set(B)` từ Python, kết quả là `set` thường, không phải Odoo RecordSet. RecordSet của Odoo có methods riêng như `.mapped()`, `._name`, v.v.
+- **Giải pháp**: Luôn dùng operator RecordSet:
+  ```python
+  # ❌ SAI
+  picks_without_return = set(all_pickings) - set(return_pickings)
+  result = picks_without_return - another_set  # Lỗi: set không có ._name
+  
+  # ✅ ĐÚNG
+  picks_without_return = all_pickings - return_pickings
+  result = picks_without_return - another_recordset  # OK
+  
+  # ✅ Nếu phải chuyển về set (list of IDs)
+  pick_ids = {pick.id for pick in all_pickings} - {pick.id for pick in return_pickings}
+  result_recordset = self.env['stock.picking'].browse(list(pick_ids))
+  ```
+
+---
+
+15.4. Many2many / One2many Relation Updates (fields.Command)
+- **Lỗi**: `TypeError: unsupported operand type(s) for +: 'list' and 'Command'` hoặc field không update
+- **Nguyên nhân**: Trong Odoo 18, cách cũ dùng tuple magic `(4, id, 0)` đã bị loại bỏ. Phải dùng `fields.Command` API.
+- **Giải pháp**:
+  ```python
+  from odoo.fields import Command
+  
+  # ❌ SAI - Odoo 17 style
+  self.write({'locked_move_ids': [(4, move.id, 0)]})  # Link
+  self.write({'locked_move_ids': [(3, move.id, 0)]})  # Unlink
+  self.write({'locked_move_ids': [(5, 0, 0)]})        # Clear all
+  
+  # ✅ ĐÚNG - Odoo 18
+  self.write({'locked_move_ids': [Command.link(move.id)]})
+  self.write({'locked_move_ids': [Command.unlink(move.id)]})
+  self.write({'locked_move_ids': [Command.clear()]})
+  
+  # ✅ Combine với create (append operation)
+  self.write({'line_ids': [
+      Command.create({'product_id': 5, 'qty': 10}),
+      Command.link(existing_line.id)
+  ]})
+  ```
+
+  **Bảng mapping Command**:
+  | Thao tác | Cách cũ (Odoo <18) | Cách mới (Odoo 18+) | Ý nghĩa |
+  |---------|-------------------|-------------------|---------|
+  | Link | `(4, id, 0)` | `Command.link(id)` | Liên kết record tồn tại (Many2many) |
+  | Unlink | `(3, id, 0)` | `Command.unlink(id)` | Hủy liên kết record |
+  | Clear | `(5, 0, 0)` | `Command.clear()` | Xóa tất cả liên kết |
+  | Create | `(0, 0, {...})` | `Command.create({...})` | Tạo record mới + liên kết |
+  | Update | `(1, id, {...})` | `Command.update(id, {...})` | Cập nhật record liên kết |
+  | Delete | `(2, id, 0)` | `Command.delete(id)` | Xóa record liên kết |
