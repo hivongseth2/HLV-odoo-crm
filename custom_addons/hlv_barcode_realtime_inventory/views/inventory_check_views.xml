@@ -148,7 +148,7 @@
                 <filter string="Đang Kiểm Kê" name="in_progress" domain="[('state', '=', 'in_progress')]"/>
                 <filter string="Đã Xác Nhận" name="confirmed" domain="[('state', '=', 'confirmed')]"/>
                 <filter string="Có Chênh Lệch" name="has_discrepancy" domain="[('discrepancy_count', '>', 0)]"/>
-                <filter string="Có Outbound Chờ" name="has_outbound" domain="[('has_pending_outbound', '=', True)]"/>
+
                 <separator/>
                 <filter string="Hôm Nay" name="today" domain="[('create_date', '&gt;=', context_today().strftime('%Y-%m-%d')), ('create_date', '&lt;', (context_today() + relativedelta(days=1)).strftime('%Y-%m-%d'))]"/>
                 <separator/>
