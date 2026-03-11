@@ -60,7 +60,7 @@ export class DeliveryPlannerDashboard extends Component {
             dragOverColumn: null,
             kanbanColumnOrder: {},           // { colValue: [soId, ...] } — thứ tự DnD client-side
             kanbanColPageSize: {},           // { colValue: N } — số card hiển thị mỗi cột
-            kanbanBatchSize: 200,            // số đơn tải backend cho toàn kanban
+            kanbanBatchSize: 50,             // số đơn tải backend cho toàn kanban (giảm từ 200 để tăng tốc)
 
             // Selection for printing
             selectedSOIds: new Set(),        // Set of selected sale order IDs for printing
@@ -358,6 +358,11 @@ export class DeliveryPlannerDashboard extends Component {
                 return;
             }
 
+            if (result.result && result.result.success === false) {
+                alert(result.result.message || 'Không thể in phiếu lấy hàng');
+                return;
+            }
+
             // Open PDF in new tab
             if (result.result && result.result.url) {
                 window.open(result.result.url, '_blank');
@@ -460,7 +465,7 @@ export class DeliveryPlannerDashboard extends Component {
             res_model: "sale.order",
             res_id: soId,
             views: [[false, "form"]],
-            target: "current",
+            target: "new",
         });
     }
 

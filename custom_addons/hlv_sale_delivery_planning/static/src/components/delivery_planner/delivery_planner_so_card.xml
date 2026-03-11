@@ -250,9 +250,12 @@
                                                 <t t-esc="line.product_id ? line.product_id[1] : 'Unknown'"/>
                                             </td>
                                             <td class="text-end pe-3 fw-bold">
-                                                <div t-att-class="line.qty_available >= (line.product_uom_qty - line.qty_delivered) ? 'text-success' : 'text-danger'">
-                                                    <t t-esc="this.formatQty(line.product_uom_qty - line.qty_delivered)"/>
-                                                    <i t-if="line.qty_available >= (line.product_uom_qty - line.qty_delivered)"
+                                                <t t-set="pending_qty" t-value="line.product_uom_qty - line.qty_delivered"/>
+                                                <t t-set="available_qty" t-value="Math.max(0, Math.min(line.qty_available || 0, pending_qty))"/>
+                                                <div t-att-class="available_qty >= pending_qty ? 'text-success' : 'text-danger'"
+                                                     t-att-title="'Hiện có / Yêu cầu: ' + this.formatQty(available_qty) + ' / ' + this.formatQty(pending_qty)">
+                                                    <t t-esc="this.formatQty(available_qty)"/>/<t t-esc="this.formatQty(pending_qty)"/>
+                                                    <i t-if="available_qty >= pending_qty"
                                                        class="fa fa-check ms-1" title="Kho đã có đủ"></i>
                                                 </div>
                                                 <div t-if="line.qty_packed > 0" class="mt-1">
