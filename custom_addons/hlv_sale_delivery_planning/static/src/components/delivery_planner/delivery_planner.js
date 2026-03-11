@@ -460,7 +460,7 @@ export class DeliveryPlannerDashboard extends Component {
             res_model: "sale.order",
             res_id: soId,
             views: [[false, "form"]],
-            target: "current",
+            target: "new",
         });
     }
 
