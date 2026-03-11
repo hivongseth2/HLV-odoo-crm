@@ -8,20 +8,44 @@ Cung cấp một Dashboard trực quan bằng OWL (Odoo Web Library) giúp Đi�
 hlv_sale_delivery_planning/
 ├── models/
 │   ├── __init__.py
-│   └── sale_order.py             ← Extend `sale.order`. Chỉ chứa fields bổ trợ và actions (như proxy method gọi xuống service).
-├── services/                     ← [NEW] Lớp xử lý logic tập trung (Shared logic layer), không phụ thuộc UI trực tiếp.
+│   └── sale_order.py               ← Extend `sale.order`. Chỉ chứa fields bổ trợ và proxy action xuống service.
+├── services/                       ← Lớp xử lý logic tập trung (Shared logic layer).
 │   ├── __init__.py
-│   └── delivery_planner_service.py ← Chứa AbstractModel `hlv.delivery.planner.service` bóc tách query xử lý dữ liệu phức tạp.
+│   ├── delivery_planner_service.py ← Orchestrator: `get_dashboard_data()` (gọi các service bên dưới).
+│   ├── delivery_planner_domain.py  ← `_build_search_domain()` — xây domain lọc Sale Order.
+│   ├── delivery_planner_stock.py   ← `_calculate_po_and_stock_status()` — tính tồn kho & packing.
+│   ├── delivery_planner_fetch.py   ← `_fetch_pos_for_sales()`, `_fetch_attachments_for_pickings()`, `_fetch_packages_for_sales()`.
+│   ├── delivery_planner_formatter.py ← `_format_dashboard_order()` — serialize SO → dict cho OWL.
+│   └── delivery_planner_flow.py    ← `_build_flow_nodes()` — vẽ sơ đồ luồng outbound/return.
 ├── static/
 │   └── src/
 │       └── components/
-│           └── delivery_planner/ ← Giao diện OWL Components (JS, XML, SCSS).
+│           └── delivery_planner/
+│               ├── delivery_planner.scss         ← Styles toàn bộ component.
+│               ├── delivery_planner_utils.js     ← Pure helper functions (translate*, get*BadgeClass, format*).
+│               ├── delivery_planner.js           ← OWL Component class (delegate sang utils).
+│               ├── delivery_planner_kpi.xml      ← Templates: KPIStockCards, KPIPackingCards.
+│               ├── delivery_planner_filters.xml  ← Templates: ActiveFiltersBar, FilterToolbar.
+│               ├── delivery_planner_so_card.xml  ← Templates: SOCard, PickingNodeReturn, PickingNodeOutbound.
+│               ├── delivery_planner_drawer.xml   ← Template: Drawer (Offcanvas).
+│               ├── delivery_planner_modal.xml    ← Template: PackageModal.
+│               └── delivery_planner.xml          ← Main template: gọi các sub-template qua t-call.
 ├── views/
-│   └── delivery_planner_views.xml ← Khai báo Menu, Action UI Client của OWL.
+│   └── delivery_planner_views.xml  ← Khai báo Menu, Action UI Client của OWL.
 ├── __init__.py
 ├── __manifest__.py
-└── TECHNICAL.md                  ← Báo cáo cấu trúc Module.
+└── TECHNICAL.md                    ← Tài liệu kỹ thuật module.
 ```
+
+### Nguyên tắc tách file Python (services/)
+Tất cả file trong `services/` dùng chung abstract model `hlv.delivery.planner.service` qua `_inherit`. Odoo ORM tự merge tất cả methods vào cùng một class khi khởi động — mỗi file chỉ chứa một nhóm method liên quan.
+
+### Nguyên tắc tách file XML
+OWL `<t t-call="TemplateName"/>` chia sẻ rendering context của caller (bao gồm biến `t-foreach`). Sub-templates **không** cần truyền tham số riêng — chúng truy cập trực tiếp `so`, `picking`, v.v. từ context.
+Tất cả XML files phải được đăng ký trong `__manifest__.py` → `web.assets_backend`, sub-templates đăng ký **trước** main template.
+
+### Nguyên tắc tách file JS
+`delivery_planner_utils.js` export các pure functions. `delivery_planner.js` import và wrap chúng thành instance methods để OWL templates gọi qua `this.*`.
 
 ## 3. Quy tắc Kiến trúc
 - **Tách biệt Data và View**: Các Model chuẩn (như `sale.order`) tuyệt đối không gánh `method` xử lý logic lấy data cho UI quá 50 dòng. Mọi request khối lượng lớn (như vẽ cây Tree node, Filter nhiều chiều, Gom nhóm SO/PO) BẮT BUỘC phải chuyển sang `services/`.

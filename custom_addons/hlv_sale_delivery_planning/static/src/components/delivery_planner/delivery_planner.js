@@ -3,6 +3,13 @@
 import { registry } from "@web/core/registry";
 import { Component, useState, onWillStart } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
+import {
+    translateDeliveryStatus, translatePickingState, translatePickingStatus,
+    translateStockStatus, translatePackingStatus, translateSOStatus, translatePOStatus,
+    getPickingStateBadgeClass, getPickingStatusBadgeClass, getDeliveryStatusBadgeClass,
+    getStockStatusBadgeClass, getPackingStatusBadgeClass, getPOStatusBadgeClass,
+    getSOCardColorClass, formatCurrency, formatQty, getDatesComparisonClass,
+} from "./delivery_planner_utils";
 
 export class DeliveryPlannerDashboard extends Component {
     static template = "hlv_sale_delivery_planning.Dashboard";
@@ -18,7 +25,7 @@ export class DeliveryPlannerDashboard extends Component {
             // Search & Filters
             searchQuery: "",
             filterWarehouseId: "all",
-            filterDeliveryStatus: "all",
+            filterDeliveryStatus: "pending_partial",
             filterStockStatus: "all",
             filterDateFrom: "",
             filterDateTo: null,
@@ -38,6 +45,25 @@ export class DeliveryPlannerDashboard extends Component {
             // Drawer
             isDrawerOpen: false,
             selectedOrder: null,
+
+            // Package Modal
+            isPackageModalOpen: false,
+            selectedPackage: null,
+
+            // UI State
+            collapsedSections: new Set(['packages', 'flows', 'pending_products']), // Default collapsed
+
+            // View Mode
+            viewMode: 'kanban',               // 'list' | 'kanban'
+            kanbanGroupBy: 'packing_status', // 'packing_status' | 'delivery_status' | 'stock_status'
+            draggedSoId: null,
+            dragOverColumn: null,
+            kanbanColumnOrder: {},           // { colValue: [soId, ...] } — thứ tự DnD client-side
+            kanbanColPageSize: {},           // { colValue: N } — số card hiển thị mỗi cột
+            kanbanBatchSize: 200,            // số đơn tải backend cho toàn kanban
+
+            // Selection for printing
+            selectedSOIds: new Set(),        // Set of selected sale order IDs for printing
         });
 
         onWillStart(async () => {
@@ -47,6 +73,7 @@ export class DeliveryPlannerDashboard extends Component {
 
     async fetchData() {
         this.state.isLoading = true;
+        const isKanban = this.state.viewMode === 'kanban';
         try {
             const result = await this.orm.call(
                 "sale.order",
@@ -63,8 +90,9 @@ export class DeliveryPlannerDashboard extends Component {
                     filter_po_date_to: this.state.filterPODateTo,
                     filter_po_status: this.state.filterPOStatus,
                     filter_packing_status: this.state.filterPackingStatus,
-                    limit: this.state.itemsPerPage,
-                    offset: (this.state.currentPage - 1) * this.state.itemsPerPage,
+                    // Kanban tải theo batch, không phân trang backend
+                    limit: isKanban ? this.state.kanbanBatchSize : this.state.itemsPerPage,
+                    offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
                 }
             );
 
@@ -143,7 +171,259 @@ export class DeliveryPlannerDashboard extends Component {
 
     async onFilterChange() {
         this.state.currentPage = 1;
+        this.state.kanbanColumnOrder = {};
+        this.state.kanbanColPageSize = {};
+        this.state.kanbanBatchSize = 200;
         await this.fetchData();
+    }
+
+    // --- View Mode Toggle ---
+    async setViewMode(mode) {
+        this.state.viewMode = mode;
+        if (mode === 'kanban') {
+            // Mặc định: chỉ hiện đơn chưa giao + giao 1 phần (tiết kiệm tải)
+            if (this.state.filterDeliveryStatus === 'all') {
+                this.state.filterDeliveryStatus = 'pending_partial';
+            }
+            this.state.filterStockStatus = 'all';
+            this.state.kanbanColumnOrder = {};
+            this.state.kanbanColPageSize = {};
+            this.state.kanbanBatchSize = 200;
+        }
+        this.state.currentPage = 1;
+        await this.fetchData();
+    }
+
+    setKanbanGroupBy(dim) {
+        this.state.kanbanGroupBy = dim;
+        this.state.kanbanColumnOrder = {};
+        this.state.kanbanColPageSize = {};
+    }
+
+    // --- Kanban Column Definitions ---
+    get kanbanColumnDefs() {
+        switch (this.state.kanbanGroupBy) {
+            case 'delivery_status': return [
+                { value: 'pending',  label: 'Chưa Giao',    badgeClass: 'bg-danger',             textClass: 'text-danger',   iconClass: 'fa fa-clock-o',        progressClass: 'bg-danger' },
+                { value: 'partial',  label: 'Giao 1 Phần',  badgeClass: 'bg-warning text-dark',  textClass: 'text-warning',  iconClass: 'fa fa-truck',          progressClass: 'bg-warning' },
+                { value: 'full',     label: 'Đã Giao Đủ',   badgeClass: 'bg-success',            textClass: 'text-success',  iconClass: 'fa fa-check-circle',   progressClass: 'bg-success' },
+            ];
+            case 'stock_status': return [
+                { value: 'out_of_stock',   label: 'Không Có Hàng',   badgeClass: 'bg-danger',            textClass: 'text-danger',   iconClass: 'fa fa-times-circle',   progressClass: 'bg-danger' },
+                { value: 'partial_ready',  label: 'Có Hàng 1 Phần',  badgeClass: 'bg-warning text-dark', textClass: 'text-warning',  iconClass: 'fa fa-exclamation-circle', progressClass: 'bg-warning' },
+                { value: 'ready',          label: 'Đủ Hàng Xuất',    badgeClass: 'bg-success',           textClass: 'text-success',  iconClass: 'fa fa-check',          progressClass: 'bg-success' },
+            ];
+            case 'packing_status': return [
+                { value: 'waiting_stock',  label: 'Không Có Hàng Đóng',      badgeClass: 'bg-secondary',          textClass: 'text-secondary', iconClass: 'fa fa-hourglass-start', progressClass: 'bg-secondary' },
+                { value: 'unpacked',       label: 'Có Hàng Chưa Đóng Gói',   badgeClass: 'bg-warning text-dark',  textClass: 'text-warning',   iconClass: 'fa fa-exclamation-triangle', progressClass: 'bg-warning' },
+                { value: 'fully_packed',   label: 'Đã Đóng Gói Đủ',          badgeClass: 'bg-success',            textClass: 'text-success',   iconClass: 'fa fa-check-square-o', progressClass: 'bg-success' },
+            ];
+            default: return [];
+        }
+    }
+
+    // Internal: toàn bộ SO của cột (theo DnD order)
+    _allOrdersForColumn(colValue) {
+        const dim = this.state.kanbanGroupBy;
+        const fieldMap = {
+            delivery_status: 'real_delivery_status',
+            stock_status:    'stock_status',
+            packing_status:  'packing_status',
+        };
+        const field = fieldMap[dim];
+
+        const base = this.state.saleOrders.filter(so => {
+            let val = so[field];
+            if (dim === 'delivery_status' && val === 'unshipped') val = 'pending';
+            if (dim === 'packing_status') {
+                // Màn hình kiểm soát đóng gói chỉ quan tâm đơn chưa giao.
+                if (so.real_delivery_status === 'full') return false;
+                // Gom nhóm để tập trung hành động: còn hàng chưa đóng = cần xử lý ngay.
+                if (val === 'partial_packed') val = 'unpacked';
+            }
+            return val === colValue;
+        });
+
+        const order = this.state.kanbanColumnOrder[colValue];
+        if (!order || !order.length) return base;
+        const orderMap = {};
+        order.forEach((id, idx) => { orderMap[id] = idx; });
+        return [...base].sort((a, b) => (orderMap[a.id] ?? 9999) - (orderMap[b.id] ?? 9999));
+    }
+
+    // Public: chỉ trả N card đầu (phân trang client-side)
+    ordersForColumn(colValue) {
+        const pageSize = this.state.kanbanColPageSize[colValue] || 15;
+        return this._allOrdersForColumn(colValue).slice(0, pageSize);
+    }
+
+    totalInColumn(colValue) {
+        return this._allOrdersForColumn(colValue).length;
+    }
+
+    hasMoreInColumn(colValue) {
+        const pageSize = this.state.kanbanColPageSize[colValue] || 15;
+        return this._allOrdersForColumn(colValue).length > pageSize;
+    }
+
+    loadMoreColumn(colValue) {
+        const current = this.state.kanbanColPageSize[colValue] || 15;
+        this.state.kanbanColPageSize[colValue] = current + 15;
+    }
+
+    get hasMoreKanbanData() {
+        return this.state.viewMode === 'kanban' && this.state.saleOrders.length < this.state.totalCount;
+    }
+
+    async loadMoreKanbanBatch() {
+        if (this.state.isLoading || !this.hasMoreKanbanData) return;
+        this.state.kanbanBatchSize += 200;
+        await this.fetchData();
+    }
+
+    // --- Selection for Printing ---
+    toggleSOSelection(soId) {
+        if (this.state.selectedSOIds.has(soId)) {
+            this.state.selectedSOIds.delete(soId);
+        } else {
+            this.state.selectedSOIds.add(soId);
+        }
+        // Force reactivity
+        this.state.selectedSOIds = new Set(this.state.selectedSOIds);
+    }
+
+    isSOSelected(soId) {
+        return this.state.selectedSOIds.has(soId);
+    }
+
+    selectAllInColumn(columnValue) {
+        const ordersInColumn = this.ordersForColumn(columnValue);
+        ordersInColumn.forEach(so => this.state.selectedSOIds.add(so.id));
+        this.state.selectedSOIds = new Set(this.state.selectedSOIds);
+    }
+
+    deselectAllInColumn(columnValue) {
+        const ordersInColumn = this.ordersForColumn(columnValue);
+        ordersInColumn.forEach(so => this.state.selectedSOIds.delete(so.id));
+        this.state.selectedSOIds = new Set(this.state.selectedSOIds);
+    }
+
+    clearAllSelections() {
+        this.state.selectedSOIds.clear();
+        this.state.selectedSOIds = new Set(this.state.selectedSOIds);
+    }
+
+    get allSelectedInColumn() {
+        // Return object: { columnValue: boolean }
+        const result = {};
+        this.kanbanColumnDefs.forEach(col => {
+            const ordersInCol = this.ordersForColumn(col.value);
+            result[col.value] = ordersInCol.length > 0 &&
+                ordersInCol.every(so => this.state.selectedSOIds.has(so.id));
+        });
+        return result;
+    }
+
+    get selectedCount() {
+        return this.state.selectedSOIds.size;
+    }
+
+    async printSelectedPickingSlips() {
+        if (this.selectedCount === 0) return;
+
+        const selectedIds = Array.from(this.state.selectedSOIds);
+        
+        try {
+            this.state.isLoading = true;
+            const url = `/hlv_sale_delivery_planning/print_picking_slips`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    method: 'call',
+                    params: {
+                        sale_order_ids: selectedIds,
+                    },
+                }),
+            });
+
+            const result = await response.json();
+            if (result.error) {
+                console.error('Error printing picking slips:', result.error);
+                alert('Lỗi khi in phiếu lấy hàng: ' + (result.error.data?.message || result.error.message));
+                return;
+            }
+
+            // Open PDF in new tab
+            if (result.result && result.result.url) {
+                window.open(result.result.url, '_blank');
+                // Clear selections after successful print
+                this.clearAllSelections();
+            }
+        } catch (error) {
+            console.error('Error printing picking slips:', error);
+            alert('Lỗi khi in phiếu lấy hàng');
+        } finally {
+            this.state.isLoading = false;
+        }
+    }
+
+    // --- Drag & Drop Handlers ---
+    onDragStart(ev, soId) {
+        this.state.draggedSoId = soId;
+        ev.dataTransfer.effectAllowed = 'move';
+        ev.dataTransfer.setData('text/plain', String(soId));
+    }
+
+    onDragOver(ev, colValue) {
+        ev.preventDefault();
+        ev.dataTransfer.dropEffect = 'move';
+        if (this.state.dragOverColumn !== colValue) {
+            this.state.dragOverColumn = colValue;
+        }
+    }
+
+    onDragLeave(ev) {
+        // Chỉ xóa highlight khi thực sự rời khỏi column (không phải trượt qua child)
+        if (!ev.currentTarget.contains(ev.relatedTarget)) {
+            this.state.dragOverColumn = null;
+        }
+    }
+
+    onDrop(ev, colValue) {
+        ev.preventDefault();
+        const soId = parseInt(ev.dataTransfer.getData('text/plain'), 10);
+        if (!soId) return;
+
+        const dim = this.state.kanbanGroupBy;
+        const fieldMap = {
+            delivery_status: 'real_delivery_status',
+            stock_status:    'stock_status',
+            packing_status:  'packing_status',
+        };
+        const field = fieldMap[dim];
+
+        // Cập nhật state cục bộ (optimistic update)
+        const so = this.state.saleOrders.find(s => s.id === soId);
+        if (so) {
+            so[field] = colValue;
+        }
+
+        // Đưa card lên đầu cột đích
+        const existingOrder = (this.state.kanbanColumnOrder[colValue] || []).filter(id => id !== soId);
+        this.state.kanbanColumnOrder[colValue] = [soId, ...existingOrder];
+
+        this.state.draggedSoId = null;
+        this.state.dragOverColumn = null;
+    }
+
+    onDragEnd() {
+        this.state.draggedSoId = null;
+        this.state.dragOverColumn = null;
     }
 
     async setStockFilter(status) {
@@ -211,165 +491,85 @@ export class DeliveryPlannerDashboard extends Component {
     // --- PO Status Formatting (Receipt Based) ---
     getPOStatusClass(receiptStatus) {
         switch (receiptStatus) {
-            case "pending":
-                return "bg-secondary"; // Chưa nhận
-            case "partial":
-                return "bg-warning text-dark"; // Nhận 1 phần
-            case "full":
-                return "bg-success"; // Nhận đủ
-            default:
-                return "bg-light text-muted border";
+            case "pending": return "bg-secondary";
+            case "partial": return "bg-warning text-dark";
+            case "full":    return "bg-success";
+            default:        return "bg-light text-muted border";
         }
     }
 
-    translatePOStatus(receiptStatus) {
-        const trans = {
-            partial: "Nhận 1 phần",
-            pending: "Chưa nhận",
-            full: "Đã nhận đủ",
-            unknown: "Không rõ"
-        };
-        return trans[receiptStatus] || "Mới Tạo / Hủy";
+    // --- Translations (delegate to utils) ---
+    translatePOStatus(s)         { return translatePOStatus(s); }
+    translateDeliveryStatus(s)   { return translateDeliveryStatus(s); }
+    translatePickingState(s)     { return translatePickingState(s); }
+    translatePickingStatus(s)    { return translatePickingStatus(s); }
+    translateStockStatus(s)      { return translateStockStatus(s); }
+    translatePackingStatus(s)    { return translatePackingStatus(s); }
+    translateSOStatus(s)         { return translateSOStatus(s); }
+
+    formatPackageGroupStatus(so, group) {
+        if (group.picking_state !== 'done') {
+            return this.translatePickingState(group.picking_state);
+        }
+
+        // Logic: Nếu có bất kỳ kiện nào trong group đã đến 'Partners/Customers' -> "Đã giao khách"
+        const hasDeliveredPack = (group.packages || []).some(p =>
+            (p.location_name || "").includes("Partners/Customers")
+        );
+
+        if (hasDeliveredPack) {
+            return "Đã giao khách";
+        }
+
+        // Nếu là phiếu đóng gói xong or phiếu OUT xong mà chưa giao đến khách -> "Đã đóng gói" 
+        const lowerName = (group.picking_name || "").toLowerCase();
+        if (lowerName.includes("pack") || lowerName.includes("đóng gói") || lowerName.includes("đầu ra")) {
+            return "Đã đóng gói";
+        }
+
+        return "Hoàn thành";
     }
 
-    // --- Translations ---
-    translateDeliveryStatus(status) {
-        const trans = {
-            'unknown': 'Chưa cập nhật',
-            'pending': 'CHƯA GIAO',
-            'unshipped': 'CHƯA GIAO',
-            'partial': 'Giao 1 phần',
-            'pending_partial': 'Chưa & Giao 1 phần',
-            'full': 'Đã giao đủ'
-        };
-        return trans[status] || (status ? status.toUpperCase() : '');
+    getPackageGroupBadgeClass(so, group) {
+        if (group.picking_state !== 'done') {
+            return this.getPickingStateBadgeClass(group.picking_state);
+        }
+
+        const status = this.formatPackageGroupStatus(so, group);
+        if (status === "Đã giao khách") {
+            return "bg-success text-bg-success"; // Green
+        }
+        if (status === "Đã đóng gói") {
+            return "bg-info text-bg-info"; // Blue
+        }
+        return "bg-primary text-bg-primary"; // Hoàn thành default
     }
 
-    translatePickingState(state) {
-        const trans = {
-            'draft': 'Nháp',
-            'waiting': 'Chờ phiếu khác',
-            'confirmed': 'Chờ hàng',
-            'assigned': 'Sẵn sàng',
-            'done': 'Đã giao khách',
-            'cancel': 'Đã hủy'
-        };
-        return trans[state] || state;
+    toggleSection(sectionKey) {
+        if (this.state.collapsedSections.has(sectionKey)) {
+            this.state.collapsedSections.delete(sectionKey);
+        } else {
+            this.state.collapsedSections.add(sectionKey);
+        }
     }
 
-    getPickingStateBadgeClass(state) {
-        const mapping = {
-            'draft': 'bg-light text-dark',
-            'waiting': 'bg-warning text-dark',
-            'confirmed': 'bg-info text-white',
-            'assigned': 'bg-primary text-white',
-            'done': 'bg-success text-white',
-            'cancel': 'bg-danger text-white'
-        };
-        return mapping[state] || 'bg-secondary text-white';
+    isSectionCollapsed(sectionKey) {
+        return this.state.collapsedSections.has(sectionKey);
     }
 
-    translateStockStatus(status) {
-        const trans = {
-            'out_of_stock': 'Không có hàng',
-            'partial_ready': 'Có hàng 1 phần',
-            'ready': 'Đủ hàng xuất'
-        };
-        return trans[status] || (status ? status.toUpperCase() : '');
-    }
+    // --- Badge Classes (delegate to utils) ---
+    getPickingStateBadgeClass(s)            { return getPickingStateBadgeClass(s); }
+    getPickingStatusBadgeClass(s)           { return getPickingStatusBadgeClass(s); }
+    getDeliveryStatusBadgeClass(s)          { return getDeliveryStatusBadgeClass(s); }
+    getStockStatusBadgeClass(s)             { return getStockStatusBadgeClass(s); }
+    getPackingStatusBadgeClass(s)           { return getPackingStatusBadgeClass(s); }
+    getPOStatusBadgeClass(state, receipt)   { return getPOStatusBadgeClass(state, receipt); }
+    getSOCardColorClass(so)                 { return getSOCardColorClass(so); }
 
-    translatePackingStatus(status) {
-        const trans = {
-            'waiting_stock': 'Chờ Hàng Đóng',
-            'unpacked': 'Chưa Đóng Gói (Có Hàng)',
-            'partial_packed': 'Đã Đóng 1 Phần',
-            'fully_packed': 'Đã Đóng Đủ Kiện'
-        };
-        return trans[status] || (status ? status.toUpperCase() : '');
-    }
-
-    translateSOStatus(status) {
-        const trans = {
-            'draft': 'Báo giá',
-            'sent': 'Đã gửi',
-            'sale': 'Đơn hàng',
-            'done': 'Khóa',
-            'cancel': 'Đã hủy',
-        };
-        return trans[status] || (status ? status.toUpperCase() : '');
-    }
-
-    translatePickingStatus(state) {
-        const trans = {
-            'draft': 'Nháp',
-            'waiting': 'Chờ QĐ',
-            'confirmed': 'Chờ hàng',
-            'assigned': 'Sẵn sàng',
-            'done': 'Hoàn thành',
-            'cancel': 'Hủy'
-        };
-        return trans[state] || (state ? state.toUpperCase() : '');
-    }
-
-    getPOStatusBadgeClass(state, receiptStatus) {
-        if (state === 'cancel') return 'text-bg-secondary';
-        if (receiptStatus === 'full') return 'text-bg-success';
-        if (receiptStatus === 'partial') return 'text-bg-info';
-        if (state === 'purchase' || state === 'done') return 'text-bg-primary';
-        return 'text-bg-light border text-dark';
-    }
-
-    getDeliveryStatusBadgeClass(status) {
-        if (status === 'full') return 'text-bg-success';
-        if (status === 'partial') return 'text-bg-warning';
-        if (status === 'pending') return 'text-bg-secondary';
-        return 'text-bg-light border text-dark';
-    }
-
-    getStockStatusBadgeClass(status) {
-        if (status === 'ready') return 'text-bg-primary';
-        if (status === 'partial_ready') return 'text-bg-warning';
-        if (status === 'out_of_stock') return 'text-bg-danger';
-        return 'text-bg-light border text-dark';
-    }
-
-    getPackingStatusBadgeClass(status) {
-        if (status === 'fully_packed') return 'text-bg-success';
-        if (status === 'partial_packed') return 'text-bg-info';
-        if (status === 'unpacked') return 'text-bg-warning';
-        if (status === 'waiting_stock') return 'text-bg-danger mb-opacity-75';
-        return 'text-bg-light border text-dark';
-    }
-
-    getPickingStatusBadgeClass(state) {
-        if (state === 'done') return 'text-bg-success';
-        if (state === 'assigned') return 'text-bg-primary';
-        if (state === 'cancel') return 'text-bg-secondary opacity-50';
-        return 'text-bg-warning';
-    }
-
-    getDatesComparisonClass(soDate, poDate) {
-        if (!soDate || !poDate) return '';
-        const so = new Date(soDate);
-        const po = new Date(poDate);
-        if (po > so) return 'text-danger fw-bold';
-        return 'text-success';
-    }
-
-    formatCurrency(value) {
-        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
-    }
-
-    formatQty(value) {
-        return parseFloat(Number(value).toFixed(2));
-    }
-
-    getSOCardColorClass(so) {
-        if (so.real_delivery_status === 'full') return 'border-success border-2 shadow-sm';
-        if (so.stock_status === 'ready') return 'border-primary border-2 shadow-sm';
-        if (so.stock_status === 'partial_ready') return 'border-warning border-2 shadow-sm';
-        return 'border-danger border-2 shadow-sm';
-    }
+    // --- Formatting (delegate to utils) ---
+    formatCurrency(v)                       { return formatCurrency(v); }
+    formatQty(v)                            { return formatQty(v); }
+    getDatesComparisonClass(soDate, poDate) { return getDatesComparisonClass(soDate, poDate); }
 
     // --- Hover Interactions cho Liên kết Return/Backorder ---
     onPickingHover(pickingName) {
@@ -417,7 +617,7 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.isDrawerOpen = false;
     }
 
-    // --- Package Modal Actions ---
+    // --- Package Modal Actions
     openPackageDetails(pack) {
         this.state.selectedPackage = pack;
         this.state.isPackageModalOpen = true;
@@ -428,11 +628,28 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.selectedPackage = null;
     }
 
-    async printPackageLabel(packageId) {
-        if (!packageId) return;
-        await this.actionService.doAction("hlv_pack_sequence.action_report_single_package_label", {
-            additionalContext: { active_ids: [packageId] },
+    async printPackageLabel(pack) {
+        if (!pack || !pack.picking_id) return;
+
+        await this.actionService.doAction("hlv_pack_sequence.action_report_package_labels", {
+            additionalContext: {
+                active_ids: [pack.picking_id],
+                active_model: 'stock.picking'
+            },
         });
+    }
+
+    formatPackageLocation(locationName) {
+        if (!locationName) {
+            return "khu vực đóng gói";
+        }
+        if (locationName.includes("Partners/Customers")) {
+            return "đã giao khách";
+        }
+        if (locationName.includes("/OUT") || locationName.includes("Đầu ra")) {
+            return "chờ xuất kho";
+        }
+        return locationName;
     }
 
     // --- Filter Helpers ---

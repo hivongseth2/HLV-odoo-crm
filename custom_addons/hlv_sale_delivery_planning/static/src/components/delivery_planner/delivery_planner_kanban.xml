@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ================================================================
+         Kanban Board Template
+         - Hiển thị đơn hàng theo dạng cột phân nhóm (kanban)
+         - Có thể kéo thả (DnD) để sắp xếp ưu tiên hoặc chuyển trạng thái
+         - Chuyển phân nhóm: tiến độ giao / tình trạng kho / đóng gói
+         ================================================================ -->
+    <t t-name="hlv_sale_delivery_planning.KanbanBoard">
+
+        <!-- ── Thanh chọn phân nhóm ───────────────────────────────────── -->
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3 p-3 bg-white rounded shadow-sm border">
+            <div class="d-flex align-items-center gap-2">
+                <i class="fa fa-th-large text-primary" title="Kanban"></i>
+                <span class="text-muted small fw-bold text-uppercase">Phân nhóm theo:</span>
+            </div>
+
+            <div class="btn-group btn-group-sm ms-1" role="group" aria-label="Kanban group by">
+                <button class="btn"
+                        t-att-class="state.kanbanGroupBy === 'packing_status' ? 'btn-info' : 'btn-outline-info'"
+                        t-on-click="() => this.setKanbanGroupBy('packing_status')">
+                    <i class="fa fa-cube me-1" title="Đóng gói"/>
+                    Đóng gói
+                </button>
+                <button class="btn"
+                        t-att-class="state.kanbanGroupBy === 'delivery_status' ? 'btn-primary' : 'btn-outline-primary'"
+                        t-on-click="() => this.setKanbanGroupBy('delivery_status')">
+                    <i class="fa fa-truck me-1" title="Tiến độ giao"/>
+                    Tiến độ giao
+                </button>
+                <button class="btn"
+                        t-att-class="state.kanbanGroupBy === 'stock_status' ? 'btn-warning' : 'btn-outline-warning'"
+                        t-on-click="() => this.setKanbanGroupBy('stock_status')">
+                    <i class="fa fa-cubes me-1" title="Tình trạng kho"/>
+                    Tình trạng kho
+                </button>
+            </div>
+
+            <div class="ms-auto d-flex align-items-center gap-3">
+                <!-- Print Button -->
+                <button class="btn btn-sm"
+                        t-att-class="this.selectedCount > 0 ? 'btn-success' : 'btn-outline-secondary'"
+                        t-att-disabled="this.selectedCount === 0 || state.isLoading"
+                        t-on-click="printSelectedPickingSlips"
+                        title="In phiếu lấy hàng cho các đơn đã chọn">
+                    <i class="fa fa-print me-1" title="In phiếu"></i>
+                    In phiếu lấy hàng
+                    <span t-if="this.selectedCount > 0" class="badge bg-white text-success ms-1">
+                        <t t-esc="this.selectedCount"/>
+                    </span>
+                </button>
+                <button t-if="this.hasMoreKanbanData"
+                        class="btn btn-sm btn-outline-primary"
+                        t-on-click="loadMoreKanbanBatch"
+                        t-att-disabled="state.isLoading">
+                    <i class="fa fa-plus me-1" title="Tải thêm"></i>
+                    Tải thêm 200
+                </button>
+                <span class="text-muted small">
+                    <i class="fa fa-arrows text-secondary me-1" title="Kéo thả"/>
+                    Kéo thả để sắp xếp ưu tiên hoặc chuyển trạng thái
+                </span>
+                <span class="badge bg-secondary rounded-pill">
+                    <t t-esc="state.saleOrders.length"/> / <t t-esc="state.totalCount"/> đơn hàng
+                </span>
+            </div>
+        </div>
+
+        <!-- ── Bảng Kanban (cuộn ngang) ───────────────────────────────── -->
+        <div class="hlv-kanban-board d-flex gap-3 overflow-auto pb-4 pt-1 pe-2">
+            <t t-foreach="this.kanbanColumnDefs" t-as="col" t-key="col.value">
+
+                <div class="hlv-kanban-column d-flex flex-column flex-grow-1"
+                     t-att-data-col="col.value"
+                     t-on-dragover="(ev) => this.onDragOver(ev, col.value)"
+                     t-on-dragleave="(ev) => this.onDragLeave(ev)"
+                     t-on-drop="(ev) => this.onDrop(ev, col.value)"
+                     t-att-class="state.dragOverColumn === col.value ? 'drag-over' : ''">
+
+                    <!-- Column Header -->
+                    <div class="hlv-kanban-col-header rounded-top px-3 py-2 mb-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <!-- Select All Checkbox -->
+                            <input type="checkbox"
+                                   class="form-check-input"
+                                   style="cursor: pointer;"
+                                   t-att-checked="this.allSelectedInColumn[col.value]"
+                                   t-on-click.stop="() => this.allSelectedInColumn[col.value] ? this.deselectAllInColumn(col.value) : this.selectAllInColumn(col.value)"
+                                   title="Chọn/Bỏ chọn tất cả trong cột này"/>
+                            <span class="badge rounded-pill fs-6 fw-bold"
+                                  t-att-class="col.badgeClass">
+                                <t t-esc="this.totalInColumn(col.value)"/>
+                            </span>
+                            <span class="fw-bold small text-uppercase"
+                                  t-att-class="col.textClass">
+                                <t t-esc="col.label"/>
+                            </span>
+                            <i t-att-class="col.iconClass + ' ms-auto opacity-50'"
+                               t-att-title="col.label"></i>
+                        </div>
+                        <div class="progress mt-2" style="height: 3px;" t-if="state.totalCount > 0">
+                            <div class="progress-bar"
+                                 t-att-class="col.progressClass"
+                                 role="progressbar"
+                                 t-att-style="'width:' + (this.totalInColumn(col.value) / state.totalCount * 100) + '%'">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cards container -->
+                    <div class="hlv-kanban-col-body flex-grow-1 rounded-bottom px-2 py-2">
+
+                        <!-- Empty state -->
+                        <div t-if="!this.totalInColumn(col.value)"
+                             class="hlv-kanban-empty text-center text-muted py-5">
+                            <i class="fa fa-inbox fa-2x d-block mb-2 opacity-25" title="Không có đơn hàng"></i>
+                            <small>Không có đơn hàng</small>
+                        </div>
+
+                        <!-- SO Cards -->
+                        <t t-foreach="this.ordersForColumn(col.value)" t-as="so" t-key="so.id">
+                            <div class="hlv-kanban-card mb-2"
+                                 draggable="true"
+                                 t-att-data-so-id="so.id"
+                                 t-att-class="{'is-dragging': state.draggedSoId === so.id}"
+                                 t-on-dragstart="(ev) => this.onDragStart(ev, so.id)"
+                                 t-on-dragend="() => this.onDragEnd()">
+                                <t t-call="hlv_sale_delivery_planning.KanbanSOCard"/>
+                            </div>
+                        </t>
+
+                        <!-- Tải thêm -->
+                        <div t-if="this.hasMoreInColumn(col.value)" class="text-center pt-1 pb-2">
+                            <button class="btn btn-sm btn-outline-secondary w-100"
+                                    style="border-style: dashed; font-size: 0.75rem;"
+                                    t-on-click="() => this.loadMoreColumn(col.value)">
+                                <i class="fa fa-chevron-down me-1" title="Tải thêm"></i>
+                                Tải thêm
+                                (<t t-esc="this.totalInColumn(col.value) - (state.kanbanColPageSize[col.value] || 15)"/> còn lại)
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+
+            </t>
+        </div>
+
+    </t>
+
+    <!-- ================================================================
+         KanbanSOCard – thẻ SO nhỏ gọn dùng trong Kanban
+         Nhận biến `so` từ t-foreach cha (context được chia sẻ qua t-call)
+         ================================================================ -->
+    <t t-name="hlv_sale_delivery_planning.KanbanSOCard">
+        <div class="card border-1 shadow-sm hlv-kanban-card-inner"
+             t-att-class="this.getSOCardColorClass(so)">
+            <div class="card-body p-2">
+
+                <!-- Checkbox for selection -->
+                <div class="d-flex align-items-center mb-2">
+                    <input type="checkbox"
+                           class="form-check-input me-2"
+                           style="cursor: pointer;"
+                           t-att-checked="this.isSOSelected(so.id)"
+                           t-on-click.stop="() => this.toggleSOSelection(so.id)"
+                           title="Chọn để in phiếu lấy hàng"/>
+                    <span class="text-muted small" style="font-size: 0.7rem;">
+                        Chọn để in
+                    </span>
+                </div>
+
+                <!-- Row 1: SO Name + Quick View -->
+                <div class="d-flex justify-content-between align-items-start mb-1 gap-1">
+                    <h6 class="card-title mb-0 text-primary cursor-pointer o_form_uri fw-bold lh-sm"
+                        style="font-size: 0.82rem;"
+                        t-on-click.stop="() => this.openSaleOrder(so.id)">
+                        <i class="fa fa-shopping-cart me-1 text-muted" style="font-size:0.7rem;" title="Đơn hàng"></i>
+                        <t t-esc="so.name"/>
+                    </h6>
+                    <button class="btn btn-link btn-sm p-0 ms-1 text-secondary flex-shrink-0"
+                            style="font-size: 0.75rem; line-height:1;"
+                            title="Xem tổng quan"
+                            t-on-click.stop="() => this.openOverviewDrawer(so)">
+                        <i class="fa fa-eye" title="Tổng quan"></i>
+                    </button>
+                </div>
+
+                <!-- Row 2: Customer -->
+                <div class="text-muted mb-1" style="font-size: 0.74rem;">
+                    <i class="fa fa-user me-1 text-info" title="Khách hàng"></i>
+                    <t t-esc="so.partner_id ? so.partner_id[1] : ''"/>
+                </div>
+
+                <!-- Row 3: Status Badges -->
+                <div class="d-flex flex-wrap gap-1 mb-1">
+                    <span class="badge"
+                          style="font-size: 0.62rem; padding: 2px 5px;"
+                          t-att-class="this.getDeliveryStatusBadgeClass(so.real_delivery_status)">
+                        <t t-esc="this.translateDeliveryStatus(so.real_delivery_status)"/>
+                    </span>
+                    <span class="badge"
+                          style="font-size: 0.62rem; padding: 2px 5px;"
+                          t-att-class="this.getStockStatusBadgeClass(so.stock_status)"
+                          t-if="so.stock_status and so.real_delivery_status !== 'full'">
+                        <t t-esc="this.translateStockStatus(so.stock_status)"/>
+                    </span>
+                    <span class="badge"
+                          style="font-size: 0.62rem; padding: 2px 5px;"
+                          t-att-class="this.getPackingStatusBadgeClass(so.packing_status)"
+                          t-if="so.packing_status and so.packing_status !== 'unknown' and so.real_delivery_status !== 'full'">
+                        <i class="fa fa-cube" style="font-size:0.6rem;" title="Đóng gói"></i>
+                        <t t-esc="this.translatePackingStatus(so.packing_status)"/>
+                    </span>
+                </div>
+
+                <!-- Row 4: Date + Amount -->
+                <div class="d-flex justify-content-between align-items-center mt-1"
+                     style="font-size: 0.72rem;">
+                    <span t-if="so.commitment_date" class="text-danger">
+                        <i class="fa fa-calendar me-1" title="Ngày hẹn giao"></i>
+                        <t t-esc="so.commitment_date.substring(0, 10)"/>
+                    </span>
+                    <span t-else="" class="text-muted">
+                        <i class="fa fa-calendar-o me-1 opacity-50" title="Không có ngày hẹn"></i>
+                        <small>Chưa hẹn</small>
+                    </span>
+                    <span class="fw-bold text-success">
+                        <t t-esc="this.formatCurrency(so.amount_total)"/>
+                    </span>
+                </div>
+
+                <!-- Row 5: POs count + warehouse -->
+                <div class="d-flex justify-content-between align-items-center mt-1 pt-1 border-top"
+                     style="font-size: 0.68rem;" t-if="so.pos and so.pos.length">
+                    <span class="text-muted">
+                        <i class="fa fa-cart-arrow-down me-1" title="Đơn mua"></i>
+                        <t t-esc="so.pos.length"/> PO liên quan
+                    </span>
+                    <span class="badge bg-light text-dark border" style="font-size: 0.62rem;"
+                          t-if="so.warehouse_name">
+                        <i class="fa fa-building-o me-1" title="Kho"></i>
+                        <t t-esc="so.warehouse_name"/>
+                    </span>
+                </div>
+
+            </div>
+        </div>
+    </t>
+
+</templates>
