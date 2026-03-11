@@ -9,7 +9,7 @@ _logger = logging.getLogger(__name__)
 class DeliveryPlannerController(http.Controller):
 
     @http.route('/hlv_sale_delivery_planning/print_picking_slips', type='json', auth='user', methods=['POST'])
-    def print_picking_slips(self, sale_order_ids):
+    def print_picking_slips(self, sale_order_ids=None, **kwargs):
         """
         In phiếu lấy hàng cho các đơn hàng đã chọn.
         Loại bỏ các phiếu đã hoàn thành (state = 'done').
@@ -18,6 +18,19 @@ class DeliveryPlannerController(http.Controller):
         :return: Dict with URL to PDF report
         """
         try:
+            # Hỗ trợ nhiều kiểu payload (json route / json-rpc params)
+            if sale_order_ids is None:
+                sale_order_ids = kwargs.get('sale_order_ids')
+            if sale_order_ids is None and isinstance(request.jsonrequest, dict):
+                sale_order_ids = (request.jsonrequest.get('params') or {}).get('sale_order_ids')
+
+            # Chuẩn hóa dữ liệu ID về list int
+            if isinstance(sale_order_ids, (set, tuple)):
+                sale_order_ids = list(sale_order_ids)
+            if not isinstance(sale_order_ids, list):
+                sale_order_ids = [sale_order_ids] if sale_order_ids else []
+            sale_order_ids = [int(x) for x in sale_order_ids if x]
+
             if not sale_order_ids:
                 return {'error': {'message': 'Không có đơn hàng nào được chọn'}}
 
@@ -26,12 +39,12 @@ class DeliveryPlannerController(http.Controller):
             if not sale_orders.exists():
                 return {'error': {'message': 'Không tìm thấy đơn hàng'}}
 
-            # Get all pickings from selected sale orders
-            # Filter: only outgoing, not done, not cancelled
-            all_pickings = sale_orders.mapped('picking_ids').filtered(
-                lambda p: p.picking_type_code == 'outgoing' 
-                and p.state not in ['done', 'cancel']
-            )
+            # Lấy phiếu lấy hàng theo domain để tránh miss do mapped/filter ở recordset lớn.
+            all_pickings = request.env['stock.picking'].search([
+                ('sale_id', 'in', sale_orders.ids),
+                ('picking_type_code', '=', 'outgoing'),
+                ('state', 'not in', ['done', 'cancel']),
+            ], order='scheduled_date asc, id asc')
 
             if not all_pickings:
                 return {'error': {'message': 'Không có phiếu lấy hàng nào cần in (tất cả đã hoàn thành hoặc đã hủy)'}}
@@ -48,7 +61,7 @@ class DeliveryPlannerController(http.Controller):
                 return {'error': {'message': 'Không tìm thấy report template cho phiếu lấy hàng'}}
 
             # Generate PDF
-            pdf_content, _ = report._render_qweb_pdf(report.id, all_pickings.ids)
+            pdf_content, _ = report._render_qweb_pdf(all_pickings.ids)
 
             if not pdf_content:
                 return {'error': {'message': 'Không thể tạo PDF'}}
