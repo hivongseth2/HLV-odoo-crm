@@ -35,11 +35,14 @@ class InventoryScanSession(models.Model):
             session.product_count = len(session.line_ids)
             session.scan_count = sum(session.line_ids.mapped('scanned_qty'))
 
-    @api.model
-    def create(self, vals):
-        if vals.get('name', 'New') == 'New':
-            vals['name'] = self.env['ir.sequence'].next_by_code('inventory.scan.session') or 'SCAN'
-        return super(InventoryScanSession, self).create(vals)
+    @api.model_create_multi
+    def create(self, vals_list):
+        """Override batch create for Odoo 18 compatibility"""
+        # Generate sequence numbers for new records
+        for vals in vals_list:
+            if vals.get('name', 'New') == 'New':
+                vals['name'] = self.env['ir.sequence'].next_by_code('inventory.scan.session') or 'SCAN'
+        return super().create(vals_list)
 
     # -------------------------------------------------------------------------
     # API Methods for OWL Component
@@ -212,15 +215,15 @@ class InventoryScanSession(models.Model):
             return {'success': True}
         return {'success': False}
 
-    @api.model
-    def confirm_session(self, session_id):
-        session = self.browse(session_id)
-        if not session.exists() or session.state != 'active':
-            return {'success': False, 'error': 'Session không hợp lệ'}
+    def confirm_session(self):
+        """Confirm session and apply stock inventory adjustment"""
+        self.ensure_one()
+        if self.state != 'active':
+            return {'success': False, 'error': _('Session không hợp lệ')}
             
         # 1. Tạo Inventory Adjustment (Stock Quant update)
         # Loop qua các line và update quantity
-        for line in session.line_ids:
+        for line in self.line_ids:
             # Tìm hoặc tạo stock.quant
             quant = self.env['stock.quant'].search([
                 ('product_id', '=', line.product_id.id),
@@ -247,12 +250,12 @@ class InventoryScanSession(models.Model):
                 _logger.error(f"Error applying inventory for product {line.product_id.name}: {str(e)}")
                 # Có thể return lỗi hoặc continue tùy chiến lược
         
-        session.write({
+        self.write({
             'state': 'confirmed',
             'confirmed_time': fields.Datetime.now()
         })
         
-        return {'success': True, 'message': 'Đã cập nhật tồn kho thành công!'}
+        return {'success': True, 'message': _('Đã cập nhật tồn kho thành công!')}
 
     @api.model
     def search_location(self, barcode):
