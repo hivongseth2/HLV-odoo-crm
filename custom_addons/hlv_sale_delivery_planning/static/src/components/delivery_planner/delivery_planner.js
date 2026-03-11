@@ -358,6 +358,11 @@ export class DeliveryPlannerDashboard extends Component {
                 return;
             }
 
+            if (result.result && result.result.success === false) {
+                alert(result.result.message || 'Không thể in phiếu lấy hàng');
+                return;
+            }
+
             // Open PDF in new tab
             if (result.result && result.result.url) {
                 window.open(result.result.url, '_blank');
