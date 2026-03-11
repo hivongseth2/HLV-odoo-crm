@@ -30,6 +30,7 @@
         'views/inventory_check_views.xml',
         'views/inventory_check_line_views.xml',
         'views/inventory_discrepancy_views.xml',
+        'views/inventory_scanner_views.xml',
         'data/sequence.xml',
     ],
     'assets': {
