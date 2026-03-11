@@ -22,7 +22,10 @@ class DeliveryPlannerService(models.AbstractModel):
             search_query, filter_warehouse_id,
             filter_delivery_status, filter_date_from, filter_date_to,
         )
-        sales = self.env['sale.order'].search(domain, order='commitment_date asc, date_order desc')
+        sales = self.env['sale.order'].search(
+            domain,
+            order='x_studio_misa_order_date desc, commitment_date asc, date_order desc'
+        )
 
         sales, matched_ids, dashboard_stats, product_availabilities, so_status_dict = \
             self._calculate_po_and_stock_status(
