@@ -195,6 +195,57 @@
 
                     <!-- Bottom Summary Bar + Confirm -->
                     <div class="hlv-bottom-bar">
+
+                    <!-- Inline Discrepancy Dialog -->
+                    <t t-if="state.discrepancy_dialog">
+                        <div class="hlv-dialog-overlay">
+                            <div class="hlv-discrepancy-dialog">
+                                <div class="hlv-dialog__header">
+                                    <span><i class="fa fa-flag"/> Ghi Nhận Chênh Lệch</span>
+                                    <button class="hlv-dialog__close" t-on-click="closeDiscrepancyDialog">
+                                        <i class="fa fa-times"/>
+                                    </button>
+                                </div>
+                                <div class="hlv-dialog__body">
+                                    <p class="hlv-dialog__product" t-esc="state.discrepancy_dialog.product_name"/>
+                                    <p class="hlv-dialog__diff">
+                                        Chênh lệch: <strong t-esc="state.discrepancy_dialog.difference"/>
+                                    </p>
+                                    <div class="hlv-form-group">
+                                        <label>Lý Do <span class="hlv-required">*</span></label>
+                                        <select class="hlv-select" t-model="state.discrepancy_dialog.reason">
+                                            <option value="">-- Chọn lý do --</option>
+                                            <option value="damaged">Hỏng / Mất</option>
+                                            <option value="expired">Hết hạn / Cũ</option>
+                                            <option value="unknown_location">Không tìm thấy</option>
+                                            <option value="counting_error">Lỗi đếm</option>
+                                            <option value="recording_error">Lỗi ghi chép</option>
+                                            <option value="theft">Mất cắp</option>
+                                            <option value="other">Khác</option>
+                                        </select>
+                                    </div>
+                                    <div class="hlv-form-group">
+                                        <label>Ghi Chú</label>
+                                        <textarea
+                                            class="hlv-textarea"
+                                            t-model="state.discrepancy_dialog.notes"
+                                            rows="3"
+                                            placeholder="Mô tả chi tiết nguyên nhân..."
+                                        />
+                                    </div>
+                                </div>
+                                <div class="hlv-dialog__footer">
+                                    <button class="hlv-btn hlv-btn--ghost" t-on-click="closeDiscrepancyDialog">
+                                        Hủy
+                                    </button>
+                                    <button class="hlv-btn hlv-btn--primary" t-on-click="saveDiscrepancy">
+                                        <i class="fa fa-save"/> Lưu
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+
                         <div class="hlv-summary">
                             <div class="hlv-summary__item">
                                 <span class="hlv-summary__label">Lý Thuyết</span>

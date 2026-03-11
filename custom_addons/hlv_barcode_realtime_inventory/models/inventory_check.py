@@ -342,7 +342,7 @@ class InventoryCheck(models.Model):
         """Khôi phục phiên kiểm kê cũ hoặc tạo mới"""
         domain = [
             ('user_id', '=', self.env.user.id),
-            ('state', '=', 'in_progress'),
+            ('state', 'in', ['draft', 'in_progress']),
             ('device_id', '=', device_id)
         ]
         
@@ -553,7 +553,34 @@ class InventoryCheck(models.Model):
                     'theoretical_qty': quant.quantity,
                 })
 
+        # Auto-start check when location is confirmed
+        if check.state == 'draft':
+            check.state = 'in_progress'
+            check.start_time = fields.Datetime.now()
+
         return check._get_check_data()
+
+    @api.model
+    def save_discrepancy(self, line_id, reason, notes):
+        """Lưu lý do chênh lệch từ inline dialog"""
+        line = self.env['inventory.check.line'].browse(line_id)
+        if not line.exists() or line.check_id.user_id != self.env.user:
+            return {'success': False, 'error': _('Không tìm thấy dòng kiểm kê')}
+        if not reason:
+            return {'success': False, 'error': _('Vui lòng chọn lý do chênh lệch')}
+
+        if line.discrepancy_id:
+            line.discrepancy_id.write({'reason': reason, 'notes': notes or ''})
+        else:
+            disc = self.env['inventory.discrepancy'].create({
+                'check_id': line.check_id.id,
+                'line_id': line.id,
+                'difference': line.difference,
+                'reason': reason,
+                'notes': notes or '',
+            })
+            line.discrepancy_id = disc.id
+        return {'success': True}
 
     @api.model
     def search_location(self, barcode):

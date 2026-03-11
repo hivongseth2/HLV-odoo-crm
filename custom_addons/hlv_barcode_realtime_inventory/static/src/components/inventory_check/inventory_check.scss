@@ -669,6 +669,168 @@ $r-full: 9999px;
         }
     }
 
+    // ===== INLINE DISCREPANCY DIALOG =====
+    .hlv-dialog-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba($gray-800, .55);
+        backdrop-filter: blur(4px);
+        z-index: 10000;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        padding: 0 0 env(safe-area-inset-bottom, 0);
+
+        @media (min-width: 481px) {
+            align-items: center;
+        }
+    }
+
+    .hlv-discrepancy-dialog {
+        width: 100%;
+        max-width: 480px;
+        background: $white;
+        border-radius: $r-lg $r-lg 0 0;
+        box-shadow: $shadow-lg;
+        animation: hlv-slide-up .22s ease-out;
+
+        @media (min-width: 481px) {
+            border-radius: $r-lg;
+            margin: 16px;
+        }
+    }
+
+    @keyframes hlv-slide-up {
+        from { transform: translateY(100%); opacity: 0; }
+        to   { transform: translateY(0);    opacity: 1; }
+    }
+
+    .hlv-dialog {
+        &__header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid $gray-200;
+            font-size: 15px;
+            font-weight: 700;
+            color: $gray-800;
+
+            i { color: $amber; margin-right: 8px; }
+        }
+
+        &__close {
+            background: none;
+            border: none;
+            color: $gray-400;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 4px;
+            border-radius: $r-sm;
+            &:hover { background: $gray-100; color: $gray-800; }
+        }
+
+        &__body {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        &__product {
+            font-size: 15px;
+            font-weight: 700;
+            color: $gray-800;
+            margin: 0;
+        }
+
+        &__diff {
+            font-size: 13px;
+            color: $gray-600;
+            margin: -8px 0 0;
+
+            strong { color: $red; }
+        }
+
+        &__footer {
+            display: flex;
+            gap: 10px;
+            padding: 14px 20px;
+            border-top: 1px solid $gray-200;
+        }
+    }
+
+    // ===== FORM ELEMENTS (dialog) =====
+    .hlv-form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+
+        label {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            color: $gray-600;
+        }
+    }
+
+    .hlv-required { color: $red; }
+
+    .hlv-select {
+        width: 100%;
+        border: 2px solid $gray-200;
+        border-radius: $r-md;
+        padding: 10px 12px;
+        font-size: 14px;
+        color: $gray-800;
+        background: $white;
+        outline: none;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394a3b8' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        padding-right: 36px;
+        cursor: pointer;
+        transition: border-color .2s, box-shadow .2s;
+
+        &:focus {
+            border-color: $blue;
+            box-shadow: 0 0 0 3px rgba($blue, .12);
+        }
+    }
+
+    .hlv-textarea {
+        width: 100%;
+        border: 2px solid $gray-200;
+        border-radius: $r-md;
+        padding: 10px 12px;
+        font-size: 14px;
+        color: $gray-800;
+        resize: vertical;
+        min-height: 72px;
+        font-family: inherit;
+        outline: none;
+        transition: border-color .2s, box-shadow .2s;
+
+        &:focus {
+            border-color: $blue;
+            box-shadow: 0 0 0 3px rgba($blue, .12);
+        }
+
+        &::placeholder { color: $gray-400; }
+    }
+
+    .hlv-btn--ghost {
+        background: $gray-100;
+        color: $gray-600;
+        flex: 1;
+        &:hover { background: $gray-200; }
+    }
+
+    // Give .hlv-btn--primary full width in dialog footer
+    .hlv-dialog__footer .hlv-btn--primary { flex: 2; }
+
     // ===== RESPONSIVE =====
     @media (max-width: 480px) {
         .hlv-scanning__header { padding: 10px 12px; }
