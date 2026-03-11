@@ -22,19 +22,39 @@ SHOPEE_STATUS_SELECTION = [(k, v) for k, v in SHOPEE_STATUS_MAP.items()]
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
+    shopee_order_status = fields.Char(
+        string='Trạng thái đơn hàng Shopee',
+        help="Giá trị trạng thái đơn hàng gốc từ Shopee API",
+        readonly=True,
+        copy=False,
+    )
+    shopee_order_status_display = fields.Selection(
+        selection=SHOPEE_STATUS_SELECTION,
+        string='Trạng thái đơn hàng',
+        compute='_compute_shopee_order_status_display',
+        store=False,
+        readonly=True,
+    )
     shopee_delivery_status = fields.Char(
         string='Trạng thái vận chuyển Shopee',
-        help="Giá trị trạng thái gốc từ Shopee API",
+        help="Giá trị trạng thái vận chuyển gốc từ Shopee Webhook",
         readonly=True,
         copy=False,
     )
     shopee_delivery_status_display = fields.Selection(
         selection=SHOPEE_STATUS_SELECTION,
-        string='Trạng thái Shopee',
+        string='Trạng thái vận chuyển',
         compute='_compute_shopee_delivery_status_display',
         store=False,
         readonly=True,
     )
+
+    @api.depends('shopee_order_status')
+    def _compute_shopee_order_status_display(self):
+        valid_keys = {k for k, _ in SHOPEE_STATUS_SELECTION}
+        for order in self:
+            raw = order.shopee_order_status or ''
+            order.shopee_order_status_display = raw if raw in valid_keys else False
 
     @api.depends('shopee_delivery_status')
     def _compute_shopee_delivery_status_display(self):
