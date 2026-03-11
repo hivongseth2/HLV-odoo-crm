@@ -414,6 +414,34 @@ class InventoryCheck(models.Model):
         } for disc in self.discrepancy_ids]
 
     @api.model
+    def get_active_sessions(self):
+        """Lấy danh sách phiên kiểm kê đang hoạt động của user (tất cả thiết bị)"""
+        checks = self.search([
+            ('user_id', '=', self.env.user.id),
+            ('state', 'in', ['draft', 'in_progress']),
+        ], order='write_date desc', limit=10)
+        return [{
+            'check_id': c.id,
+            'name': c.name,
+            'location_id': c.location_id.id if c.location_id else False,
+            'location_name': c.location_id.display_name if c.location_id else 'Chưa chọn vị trí',
+            'state': c.state,
+            'product_count': c.product_count,
+            'scan_count': c.scan_count,
+            'write_date': c.write_date.strftime('%d/%m %H:%M') if c.write_date else '',
+        } for c in checks]
+
+    @api.model
+    def resume_check(self, check_id):
+        """Tiếp tục một phiên kiểm kê cụ thể theo ID"""
+        check = self.browse(check_id)
+        if not check.exists() or check.user_id != self.env.user:
+            return {'success': False, 'error': _('Không tìm thấy phiên kiểm kê')}
+        if check.state not in ['draft', 'in_progress']:
+            return {'success': False, 'error': _('Phiên kiểm kê đã hoàn thành hoặc bị hủy')}
+        return check._get_check_data()
+
+    @api.model
     def register_scan(self, check_id, product_id, location_id, qty=1, lot_id=False, package_id=False):
         """Xử lý mỗi lần quét barcode"""
         check = self.browse(check_id)

@@ -22,6 +22,34 @@
                         <p>Quét mã vị trí để bắt đầu kiểm kê</p>
                     </div>
 
+                    <!-- Active Sessions Recovery -->
+                    <t t-if="state.active_sessions.length > 0">
+                        <div class="hlv-active-sessions">
+                            <div class="hlv-active-sessions__header">
+                                <i class="fa fa-history"/> Phên kiểm kê đang dở
+                            </div>
+                            <t t-foreach="state.active_sessions" t-as="sess" t-key="sess.check_id">
+                                <button class="hlv-session-card" t-on-click="() => resumeCheck(sess.check_id)">
+                                    <div class="hlv-session-card__left">
+                                        <div class="hlv-session-card__name" t-esc="sess.name"/>
+                                        <div class="hlv-session-card__loc">
+                                            <i class="fa fa-map-marker-alt"/>
+                                            <span t-esc="sess.location_name"/>
+                                        </div>
+                                    </div>
+                                    <div class="hlv-session-card__right">
+                                        <span class="hlv-badge hlv-badge--warn">
+                                            <i class="fa fa-box-open"/>
+                                            <t t-esc="sess.product_count"/> SP
+                                        </span>
+                                        <span class="hlv-session-card__time" t-esc="sess.write_date"/>
+                                        <i class="fa fa-chevron-right hlv-session-card__arrow"/>
+                                    </div>
+                                </button>
+                            </t>
+                        </div>
+                    </t>
+
                     <div class="hlv-location-select__card">
                         <div class="hlv-input-group">
                             <span class="hlv-input-group__icon">
@@ -144,7 +172,9 @@
                                             <input
                                                 type="number"
                                                 class="hlv-qty-input"
-                                                t-model="line.scanned_qty"
+                                                t-model.number="line.scanned_qty"
+                                                t-att-data-line-id="line.id"
+                                                t-on-change="onQtyChange"
                                                 step="1"
                                                 min="0"
                                             />

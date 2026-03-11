@@ -36,6 +36,9 @@ export class InventoryCheckScanner extends Component {
             // Inline discrepancy dialog state
             discrepancy_dialog: null,
 
+            // Active sessions for explicit resume (cross-device)
+            active_sessions: [],
+
             // Device
             device_id: this._generateDeviceId(),
         });
@@ -63,12 +66,10 @@ export class InventoryCheckScanner extends Component {
     async _restoreSession() {
         this.state.is_loading = true;
         try {
-            const result = await this.orm.call(
-                'inventory.check',
-                'get_or_create_active_check',
-                [this.state.device_id],
-                {}
-            );
+            const [result, sessions] = await Promise.all([
+                this.orm.call('inventory.check', 'get_or_create_active_check', [this.state.device_id], {}),
+                this.orm.call('inventory.check', 'get_active_sessions', [], {}),
+            ]);
 
             if (result.success) {
                 this.state.check_id = result.check_id;
@@ -81,10 +82,40 @@ export class InventoryCheckScanner extends Component {
                 // Resume directly to scanning view if location already set
                 if (result.location_id) {
                     this.state.view = 'scanning';
+                    this.state.active_sessions = [];
+                } else {
+                    // Show other active sessions so user can pick one to resume
+                    this.state.active_sessions = sessions.filter(s => s.check_id !== result.check_id);
                 }
             }
         } catch (error) {
             this._showError('Lỗi khôi phục phiên: ' + error.message);
+        } finally {
+            this.state.is_loading = false;
+        }
+    }
+
+    async resumeCheck(check_id) {
+        this.state.is_loading = true;
+        try {
+            const result = await this.orm.call('inventory.check', 'resume_check', [check_id], {});
+            if (result.success) {
+                this.state.check_id = result.check_id;
+                this.state.location_id = result.location_id;
+                this.state.location_name = result.location_name;
+                this.state.check_data = result;
+                this.state.lines = result.lines || [];
+                this.state.discrepancies = result.discrepancies || [];
+                this.state.active_sessions = [];
+                if (result.location_id) {
+                    this.state.view = 'scanning';
+                    this._focusOnBarcodeInput();
+                }
+            } else {
+                this._showError(result.error);
+            }
+        } catch (error) {
+            this._showError('Lỗi tiếp tục phiên: ' + error.message);
         } finally {
             this.state.is_loading = false;
         }
@@ -223,8 +254,25 @@ export class InventoryCheckScanner extends Component {
             );
             if (result.success) {
                 this.state.check_data = result;
-                this.state.lines = result.lines || [];
                 this.state.discrepancies = result.discrepancies || [];
+
+                // Preserve qty for line currently being manually edited
+                const activeEl = document.activeElement;
+                const editingId = (activeEl && activeEl.classList.contains('hlv-qty-input'))
+                    ? parseInt(activeEl.dataset.lineId) : null;
+
+                const newLines = result.lines || [];
+                if (editingId) {
+                    const cur = this.state.lines.find(l => l.id === editingId);
+                    this.state.lines = newLines.map(nl => {
+                        if (nl.id === editingId && cur) {
+                            return Object.assign({}, nl, { scanned_qty: cur.scanned_qty });
+                        }
+                        return nl;
+                    });
+                } else {
+                    this.state.lines = newLines;
+                }
             }
         } catch (error) {
             console.error('Lỗi cập nhật dữ liệu:', error);
@@ -257,6 +305,39 @@ export class InventoryCheckScanner extends Component {
             this._showError('Lỗi xóa: ' + error.message);
         } finally {
             this.state.is_loading = false;
+        }
+    }
+
+    // ========== Manual Qty Input ==========
+    async onQtyChange(event) {
+        const lineId = parseInt(event.target.dataset.lineId);
+        const newQty = parseFloat(event.target.value);
+        if (isNaN(newQty) || newQty < 0) return;
+
+        // Update local state immediately for reactive difference display
+        const line = this.state.lines.find(l => l.id === lineId);
+        if (line) {
+            line.scanned_qty = newQty;
+            line.difference = newQty - line.theoretical_qty;
+        }
+
+        try {
+            const result = await this.orm.call(
+                'inventory.check',
+                'update_line_qty',
+                [this.state.check_id, lineId, newQty],
+                {}
+            );
+            if (result.success) {
+                // Sync authoritative difference from backend
+                if (line) line.difference = result.difference;
+                // Refresh summary totals without overwriting active input
+                await this._refreshCheckData();
+            } else {
+                this._showError(result.error || 'Lỗi cập nhật số lượng');
+            }
+        } catch (error) {
+            this._showError('Lỗi cập nhật số lượng: ' + error.message);
         }
     }
 
@@ -387,6 +468,7 @@ export class InventoryCheckScanner extends Component {
         this.state.lines = [];
         this.state.discrepancies = [];
         this.state.discrepancy_dialog = null;
+        this.state.active_sessions = [];
         // Create fresh check ready for next location
         await this._restoreSession();
     }
