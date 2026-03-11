@@ -23,27 +23,35 @@ class HlvReportRule(models.Model):
     report_line_ids = fields.One2many('hlv.report.rule.line', 'rule_id', string='Biên bản cần in', copy=True)
 
     @api.model
-    def _find_rule_for_picking(self, picking):
-        """Find the first matching rule for a picking."""
+    def _find_all_rules_for_picking(self, picking):
+        """Find ALL matching rules for a picking. Returns a recordset."""
         partner = picking.partner_id
         rules = self.search([('active', '=', True)], order='sequence, id')
         
+        matched = self.env['hlv.report.rule']
         for rule in rules:
             if rule.match_type == 'all':
-                return rule
+                matched |= rule
+                continue
             
             if not partner:
                 continue
                 
             if rule.match_type == 'partner':
                 if partner.id in rule.partner_ids.ids:
-                    return rule
+                    matched |= rule
             
             elif rule.match_type == 'regex' and rule.partner_regex:
                 if re.search(rule.partner_regex, partner.display_name or '', re.IGNORECASE):
-                    return rule
+                    matched |= rule
         
-        return False
+        return matched
+
+    @api.model
+    def _find_rule_for_picking(self, picking):
+        """Find the first matching rule. Kept for backward compatibility."""
+        result = self._find_all_rules_for_picking(picking)
+        return result[:1] if result else False
 
 class HlvReportRuleLine(models.Model):
     _name = 'hlv.report.rule.line'
