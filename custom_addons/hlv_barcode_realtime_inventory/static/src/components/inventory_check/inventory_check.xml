@@ -52,9 +52,9 @@
                                 <i class="fa fa-map-marker"></i>
                                 <t t-esc="state.location_name"/>
                             </h2>
-                            <p class="text-muted" t-if="checkSummary">
-                                <strong t-esc="checkSummary.product_count"/> sản phẩm | 
-                                <strong t-esc="checkSummary.scan_count"/> lần quét
+                            <p class="text-muted" t-if="state.check_data">
+                                <strong t-esc="state.check_data.product_count"/> sản phẩm | 
+                                <strong t-esc="state.check_data.scan_count"/> lần quét
                             </p>
                         </div>
                         <div class="action-buttons">
@@ -118,7 +118,7 @@
                             </div>
                         </t>
 
-                        <t t-else="">
+                        <t t-else>
                             <table class="table table-sm table-striped scanned-items-table">
                                 <thead>
                                     <tr>
@@ -130,7 +130,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr t-foreach="state.lines" t-as="line" t-key="line.id" t-att-class="{'table-danger': line.difference !== 0}">
+                                    <tr t-foreach="state.lines" t-as="line" t-key="line.id">
                                         <td>
                                             <strong t-esc="line.product_name"/>
                                             <br/>
@@ -151,7 +151,7 @@
                                             <t t-if="line.difference === 0">
                                                 <span class="badge bg-success">✓ 0</span>
                                             </t>
-                                            <t t-else="">
+                                            <t t-else>
                                                 <strong t-esc="(line.difference > 0 ? '+' : '') + line.difference.toFixed(2)"/>
                                             </t>
                                         </td>
@@ -184,21 +184,21 @@
                     </div>
 
                     <!-- Summary Panel -->
-                    <t t-if="checkSummary">
+                    <t t-if="state.check_data">
                         <div class="summary-panel card">
                             <div class="card-body">
                                 <div class="summary-grid">
                                     <div class="summary-item">
                                         <label>Tồn Kho Lý Thuyết</label>
-                                        <strong t-esc="checkSummary.total_theoretical_qty.toFixed(2)"/>
+                                        <strong t-esc="state.check_data.total_theoretical_qty.toFixed(2)"/>
                                     </div>
                                     <div class="summary-item">
                                         <label>Tồn Kho Thực Tế</label>
-                                        <strong t-esc="checkSummary.total_scanned_qty.toFixed(2)"/>
+                                        <strong t-esc="state.check_data.total_scanned_qty.toFixed(2)"/>
                                     </div>
-                                    <div class="summary-item" t-att-class="checkSummary.total_difference > 0 ? 'text-success' : checkSummary.total_difference &lt; 0 ? 'text-danger' : ''">
+                                    <div class="summary-item" t-att-class="state.check_data.total_difference > 0 ? 'text-success' : state.check_data.total_difference &lt; 0 ? 'text-danger' : ''">
                                         <label>Chênh Lệch Tổng</label>
-                                        <strong t-esc="(checkSummary.total_difference > 0 ? '+' : '') + checkSummary.total_difference.toFixed(2)"/>
+                                        <strong t-esc="(state.check_data.total_difference > 0 ? '+' : '') + state.check_data.total_difference.toFixed(2)"/>
                                     </div>
                                 </div>
                             </div>
@@ -206,16 +206,13 @@
                     </t>
 
                     <!-- Action Buttons -->
-                    <div class="action-buttons-section">
+                    <div class="action-buttons-section mt-3">
                         <button 
                             class="btn btn-success btn-lg w-100"
                             t-on-click="confirmCheck"
-                            disabled="state.is_loading or pendingDiscrepancies.length > 0"
+                            disabled="state.is_loading"
                         >
                             <i class="fa fa-save"></i> Xác Nhận Kiểm Kê
-                            <t t-if="pendingDiscrepancies.length > 0">
-                                (<t t-esc="pendingDiscrepancies.length"/> chênh lệch)
-                            </t>
                         </button>
                     </div>
                 </div>
@@ -225,47 +222,19 @@
             <t t-if="state.view === 'summary'">
                 <div class="summary-view card">
                     <div class="card-body">
-                        <h3 class="card-title">
-                            <i class="fa fa-check-circle text-success"></i> Kiểm Kê Hoàn Tất
-                        </h3>
+                        <h3>✓ Kiểm Kê Hoàn Tất</h3>
                         
-                        <div class="summary-details">
-                            <p>
-                                <strong>Vị Trí:</strong>
-                                <t t-esc="state.location_name"/>
-                            </p>
-                            <p>
-                                <strong>Số Sản Phẩm:</strong>
-                                <t t-esc="checkSummary.product_count"/>
-                            </p>
-                            <p>
-                                <strong>Tồn Kho Lý Thuyết:</strong>
-                                <t t-esc="checkSummary.total_theoretical_qty.toFixed(2)"/>
-                            </p>
-                            <p>
-                                <strong>Tồn Kho Thực Tế:</strong>
-                                <t t-esc="checkSummary.total_scanned_qty.toFixed(2)"/>
-                            </p>
-                            <p t-att-class="checkSummary.total_difference > 0 ? 'text-success' : checkSummary.total_difference &lt; 0 ? 'text-danger' : ''">
-                                <strong>Chênh Lệch:</strong>
-                                <t t-esc="(checkSummary.total_difference > 0 ? '+' : '') + checkSummary.total_difference.toFixed(2)"/>
-                            </p>
-                        </div>
+                        <t t-if="state.check_data">
+                            <p>Vị Trí: <strong t-esc="state.location_name"/></p>
+                            <p>Sản Phẩm: <strong t-esc="state.check_data.product_count"/></strong></p>
+                            <p>Tồn Lý Thuyết: <strong t-esc="state.check_data.total_theoretical_qty.toFixed(2)"/></strong></p>
+                            <p>Tồn Thực Tế: <strong t-esc="state.check_data.total_scanned_qty.toFixed(2)"/></strong></p>
+                            <p>Chênh Lệch: <strong t-esc="(state.check_data.total_difference > 0 ? '+' : '') + state.check_data.total_difference.toFixed(2)"/></strong></p>
+                        </t>
                         
-                        <div class="button-group">
-                            <button 
-                                class="btn btn-primary w-100"
-                                t-on-click="viewCheckForm"
-                            >
-                                <i class="fa fa-eye"></i> Xem Chi Tiết
-                            </button>
-                            <button 
-                                class="btn btn-secondary w-100 mt-2"
-                                t-on-click="_resetSession"
-                            >
-                                <i class="fa fa-plus"></i> Kiểm Kê Vị Trí Khác
-                            </button>
-                        </div>
+                        <button class="btn btn-primary w-100 mt-3" t-on-click="_resetSession">
+                            <i class="fa fa-plus"></i> Kiểm Kê Mới
+                        </button>
                     </div>
                 </div>
             </t>
