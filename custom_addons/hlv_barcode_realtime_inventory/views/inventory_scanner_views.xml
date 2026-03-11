@@ -3,7 +3,7 @@
     <!-- Client Action for Inventory Scanner (Standalone App) -->
     <record id="action_inventory_scanner" model="ir.actions.client">
         <field name="name">Quét Kiểm Kê</field>
-        <field name="tag">hlv_inventory_scanner</field>
+        <field name="tag">hlv_inventory_check_scanner</field>
         <field name="target">fullscreen</field>
     </record>
 
