@@ -137,7 +137,7 @@
                                             <small class="text-muted" t-esc="line.product_code"/>
                                         </td>
                                         <td>
-                                            <span t-esc="line.theoretical_qty.toFixed(2)"/>
+                                            <span t-esc="line.theoretical_qty"/>
                                         </td>
                                         <td>
                                             <input 
@@ -152,7 +152,7 @@
                                                 <span class="badge bg-success">✓ 0</span>
                                             </t>
                                             <t t-if="line.difference !== 0">
-                                                <strong t-esc="(line.difference > 0 ? '+' : '') + line.difference.toFixed(2)"/>
+                                                <strong t-esc="line.difference"/>
                                             </t>
                                         </td>
                                         <td>
@@ -164,7 +164,7 @@
                                             >
                                                 <i class="fa fa-trash"></i>
                                             </button>
-                                            <t t-if="line.difference !== 0 and not line.discrepancy_id">
+                                            <t t-if="line.difference !== 0 &amp;&amp; !line.discrepancy_id">
                                                 <button 
                                                     class="btn btn-xs btn-warning"
                                                     t-on-click="addDiscrepancyHandler"
@@ -190,15 +190,15 @@
                                 <div class="summary-grid">
                                     <div class="summary-item">
                                         <label>Tồn Kho Lý Thuyết</label>
-                                        <strong t-esc="state.check_data.total_theoretical_qty.toFixed(2)"/>
+                                        <strong t-esc="state.check_data.total_theoretical_qty"/>
                                     </div>
                                     <div class="summary-item">
                                         <label>Tồn Kho Thực Tế</label>
-                                        <strong t-esc="state.check_data.total_scanned_qty.toFixed(2)"/>
+                                        <strong t-esc="state.check_data.total_scanned_qty"/>
                                     </div>
                                     <div class="summary-item" t-att-class="state.check_data.total_difference > 0 ? 'text-success' : state.check_data.total_difference &lt; 0 ? 'text-danger' : ''">
                                         <label>Chênh Lệch Tổng</label>
-                                        <strong t-esc="(state.check_data.total_difference > 0 ? '+' : '') + state.check_data.total_difference.toFixed(2)"/>
+                                        <strong t-esc="state.check_data.total_difference"/>
                                     </div>
                                 </div>
                             </div>
@@ -227,9 +227,9 @@
                         <t t-if="state.check_data">
                             <p>Vị Trí: <t t-esc="state.location_name"/></p>
                             <p>Sản Phẩm: <t t-esc="state.check_data.product_count"/></p>
-                            <p>Tồn Lý Thuyết: <t t-esc="state.check_data.total_theoretical_qty.toFixed(2)"/></p>
-                            <p>Tồn Thực Tế: <t t-esc="state.check_data.total_scanned_qty.toFixed(2)"/></p>
-                            <p>Chênh Lệch: <t t-esc="(state.check_data.total_difference > 0 ? '+' : '') + state.check_data.total_difference.toFixed(2)"/></p>
+                            <p>Tồn Lý Thuyết: <t t-esc="state.check_data.total_theoretical_qty"/></p>
+                            <p>Tồn Thực Tế: <t t-esc="state.check_data.total_scanned_qty"/></p>
+                            <p>Chênh Lệch: <t t-esc="state.check_data.total_difference"/></p>
                         </t>
                         
                         <button class="btn btn-primary w-100 mt-3" t-on-click="_resetSession">
