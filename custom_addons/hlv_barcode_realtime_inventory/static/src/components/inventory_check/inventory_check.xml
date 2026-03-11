@@ -80,7 +80,7 @@
                         <div class="alert alert-warning alert-dismissible" role="alert">
                             <i class="fa fa-exclamation-triangle"></i>
                             <strong t-esc="state.warning_message"/>
-                            <button type="button" class="btn-close" t-on-click="() => state.warning_message = ''"></button>
+                            <button type="button" class="btn-close" t-on-click="clearWarning"></button>
                         </div>
                     </t>
 
@@ -89,7 +89,7 @@
                         <div class="alert alert-danger alert-dismissible" role="alert">
                             <i class="fa fa-exclamation-circle"></i>
                             <strong t-esc="state.error_message"/>
-                            <button type="button" class="btn-close" t-on-click="() => state.error_message = ''"></button>
+                            <button type="button" class="btn-close" t-on-click="clearError"></button>
                         </div>
                     </t>
 
@@ -144,7 +144,6 @@
                                                 type="number" 
                                                 class="form-control form-control-sm"
                                                 t-model="line.scanned_qty"
-                                                t-on-change="(e) => updateLineQty(line.id, e.target.value)"
                                                 step="0.01"
                                             />
                                         </td>
@@ -159,7 +158,8 @@
                                         <td>
                                             <button 
                                                 class="btn btn-xs btn-danger"
-                                                t-on-click="() => removeLine(line.id)"
+                                                t-on-click="removeLineHandler"
+                                                t-att-data-line-id="line.id"
                                                 title="Xóa"
                                             >
                                                 <i class="fa fa-trash"></i>
@@ -167,7 +167,10 @@
                                             <t t-if="line.difference !== 0 and not line.discrepancy_id">
                                                 <button 
                                                     class="btn btn-xs btn-warning"
-                                                    t-on-click="() => addDiscrepancy(line.id, line.product_name, line.difference)"
+                                                    t-on-click="addDiscrepancyHandler"
+                                                    t-att-data-line-id="line.id"
+                                                    t-att-data-product-name="line.product_name"
+                                                    t-att-data-difference="line.difference"
                                                     title="Ghi nhận chênh lệch"
                                                 >
                                                     <i class="fa fa-flag"></i>

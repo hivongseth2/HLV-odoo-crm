@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-from odoo import models, fields, api
+from odoo import models, fields, api, _
+from odoo.exceptions import ValidationError, UserError
 
 
 class InventoryCheckLine(models.Model):
@@ -143,8 +144,7 @@ class InventoryCheckLine(models.Model):
         self.ensure_one()
         
         if self.difference == 0:
-            from odoo.exceptions import UserError
-            raise UserError('Không có chênh lệch để ghi nhận')
+            raise UserError(_('Không có chênh lệch để ghi nhận'))
         
         # Nếu chưa có discrepancy, tạo mới
         if not self.discrepancy_id:

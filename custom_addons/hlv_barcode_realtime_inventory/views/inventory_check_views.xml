@@ -37,15 +37,13 @@
                 <header>
                     <button name="action_start_check" type="object" string="Bắt Đầu Kiểm Kê" class="btn-primary" invisible="state != 'draft'"/>
                     <button name="action_confirm_check" type="object" string="Xác Nhận Kiểm Kê" class="btn-success" invisible="state != 'in_progress'"/>
-                    <button name="action_lock_moves_manually" type="object" string="Khóa Stock Moves" invisible="state not in ['in_progress']"/>
-                    <button name="action_unlock_moves_manually" type="object" string="Mở Khóa Stock Moves" invisible="state not in ['in_progress', 'confirmed']"/>
                     <button name="action_cancel" type="object" string="Hủy Kiểm Kê" class="btn-danger" invisible="state == 'cancelled'"/>
                     <field name="state" widget="statusbar"/>
                 </header>
                 
                 <sheet>
                     <!-- Warning for pending outbound moves -->
-                    <div class="alert alert-warning" role="alert" invisible="not has_pending_outbound">
+                    <div class="alert alert-warning" role="alert" invisible="has_pending_outbound == False">
                         <strong>⚠️ Cảnh báo:</strong> Có Stock Move Outbound đang chờ xử lý!
                         Vui lòng hoàn thành kiểm kê và xác nhận để không ảnh hưởng đến vận chuyển.
                     </div>
@@ -116,7 +114,7 @@
                         </page>
                         
                         <!-- Locked Moves -->
-                        <page string="Stock Moves Bị Khóa" invisible="len(locked_move_ids) == 0">
+                        <page string="Stock Moves Bị Khóa" invisible="locked_move_ids == []">
                             <field name="locked_move_ids" readonly="1">
                                 <tree>
                                     <field name="name"/>

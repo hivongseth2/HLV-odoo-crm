@@ -1,6 +1,6 @@
 {
     'name': 'HLV Inventory Check - Kiểm Kê Tồn Kho',
-    'version': '18.0.2.0.0',
+    'version': '18.0.1.0.3',
     'summary': 'Specialist inventory check module with barcode scanning and discrepancy tracking',
     'description': """
         Module kiểm kê tồn kho chuyên dụng cho Odoo 18:

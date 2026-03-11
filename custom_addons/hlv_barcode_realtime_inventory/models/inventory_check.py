@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
+import logging
+
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
-import logging
+from odoo.fields import Command
 
 _logger = logging.getLogger(__name__)
 
@@ -289,7 +291,7 @@ class InventoryCheck(models.Model):
         for move in moves_to_lock:
             try:
                 move.write({'is_locked': True})
-                self.locked_move_ids = [(4, move.id)]
+                self.locked_move_ids = [Command.link(move.id)]
             except Exception as e:
                 _logger.warning(f'Không thể lock move {move.name}: {str(e)}')
 
@@ -303,7 +305,7 @@ class InventoryCheck(models.Model):
             except Exception as e:
                 _logger.warning(f'Không thể unlock move {move.name}: {str(e)}')
         
-        self.locked_move_ids = [(5,)]  # Clear the relation
+        self.locked_move_ids = [Command.clear()]
 
     def _create_inventory_adjustment(self):
         """Tạo Inventory Adjustment từ kiểm kê"""
@@ -416,7 +418,7 @@ class InventoryCheck(models.Model):
         check = self.browse(check_id)
         
         if not check.exists() or check.state not in ['draft', 'in_progress']:
-            return {'success': False, 'error': 'Phiên kiểm kê không hợp lệ'}
+            return {'success': False, 'error': _('Phiên kiểm kê không hợp lệ')}
         
         # Nếu chưa bắt đầu, tự động bắt đầu
         if check.state == 'draft':
@@ -426,7 +428,7 @@ class InventoryCheck(models.Model):
         if check.has_pending_outbound:
             return {
                 'success': False,
-                'error': 'Cảnh báo: Có outbound chờ xử lý. Vui lòng hoàn thành kiểm kê và thoát!',
+                'error': _('Cảnh báo: Có outbound chờ xử lý. Vui lòng hoàn thành kiểm kê và thoát!'),
                 'warning': True,
             }
         

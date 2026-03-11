@@ -233,6 +233,27 @@ export class InventoryCheckScanner extends Component {
     }
 
     // ========== Line Management ==========
+    removeLineHandler(event) {
+        const lineId = event.target.closest('button').dataset.lineId;
+        this.removeLine(parseInt(lineId));
+    }
+
+    addDiscrepancyHandler(event) {
+        const button = event.target.closest('button');
+        const lineId = parseInt(button.dataset.lineId);
+        const productName = button.dataset.productName;
+        const difference = parseFloat(button.dataset.difference);
+        this.addDiscrepancy(lineId, productName, difference);
+    }
+
+    clearWarning() {
+        this.state.warning_message = '';
+    }
+
+    clearError() {
+        this.state.error_message = '';
+    }
+
     async updateLineQty(line_id, new_qty) {
         this.state.is_loading = true;
         try {
@@ -251,6 +272,48 @@ export class InventoryCheckScanner extends Component {
             this._showError('Lỗi cập nhật: ' + error.message);
         } finally {
             this.state.is_loading = false;
+        }
+    }
+
+    async removeLine(line_id) {
+        if (!confirm('Bạn chắc chắn muốn xóa dòng này?')) {
+            return;
+        }
+
+        this.state.is_loading = true;
+        try {
+            const result = await this.orm.call(
+                'inventory.check',
+                'remove_line',
+                [this.state.check_id, line_id],
+                {}
+            );
+            
+            if (result.success) {
+                await this._refreshCheckData();
+                this._showNotification('Đã xóa dòng', 'success');
+            }
+        } catch (error) {
+            this._showError('Lỗi xóa: ' + error.message);
+        } finally {
+            this.state.is_loading = false;
+        }
+    }
+
+    // ========== Discrepancy Management ==========
+    async addDiscrepancy(line_id, product_name, difference) {
+        // Mở dialog để ghi nhận chênh lệch
+        const action = await this.orm.call(
+            'inventory.check.line',
+            'action_open_discrepancy',
+            [line_id],
+            {}
+        );
+        
+        if (action) {
+            await this.action.doAction(action);
+            // Reload sau khi đóng dialog
+            setTimeout(() => this._refreshCheckData(), 1000);
         }
     }
 
