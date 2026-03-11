@@ -5,14 +5,38 @@ class StockPicking(models.Model):
     _inherit = 'stock.picking'
 
     def action_smart_print(self):
-        """Find matching rule and print, or show wizard if no rule found."""
+        """
+        In thẳng nếu chỉ có 1 quy tắc khớp.
+        Mở wizard để chọn nếu có nhiều quy tắc khớp.
+        Mở wizard rỗng nếu không tìm thấy quy tắc nào.
+        """
         self.ensure_one()
-        rule = self.env['hlv.report.rule']._find_rule_for_picking(self)
+        matched_rules = self.env['hlv.report.rule']._find_all_rules_for_picking(self)
         
-        if rule and rule.report_line_ids:
-            return self._open_smart_print_wizard(rule)
+        if len(matched_rules) == 1:
+            rule = matched_rules[0]
+            if rule.report_line_ids:
+                # Chỉ 1 quy tắc → tạo wizard ngầm rồi in thẳng
+                wizard = self.env['hlv.smart.print.wizard'].create({
+                    'picking_id': self.id,
+                    'partner_id': self.partner_id.id if self.partner_id else False,
+                    'rule_id': rule.id,
+                    'report_line_ids': [(0, 0, {
+                        'report_id': line.report_id.id,
+                        'copies': line.copies,
+                    }) for line in rule.report_line_ids],
+                })
+                return {
+                    'type': 'ir.actions.act_url',
+                    'url': '/hlv_smart/print_merged/%s' % wizard.id,
+                    'target': 'new',
+                }
         
-        # No rule found or no reports in rule
+        if len(matched_rules) > 1:
+            # Nhiều quy tắc cùng khớp → mở wizard để chọn
+            return self._open_smart_print_wizard(matched_rules[0])
+        
+        # Không tìm thấy quy tắc nào → mở wizard thủ công
         return self._open_smart_print_wizard()
 
     def _open_smart_print_wizard(self, rule=False):
