@@ -24,7 +24,7 @@ class DeliveryPlannerService(models.AbstractModel):
         )
         sales = self.env['sale.order'].search(
             domain,
-            order='x_studio_misa_order_date desc, commitment_date asc, date_order desc'
+            order='x_studio_misa_order_date desc nulls last, create_date desc, commitment_date asc, date_order desc'
         )
 
         sales, matched_ids, dashboard_stats, product_availabilities, so_status_dict = \
