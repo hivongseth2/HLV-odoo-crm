@@ -1,0 +1,527 @@
+// ===========================
+// HLV Inventory Check Styles
+// ===========================
+
+$primary-blue: #007bff;
+$success-green: #28a745;
+$danger-red: #dc3545;
+$warning-yellow: #ffc107;
+$light-gray: #f8f9fa;
+$dark-gray: #333;
+$border-color: #dee2e6;
+
+// Main Container
+.hlv_inventory_check_container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    padding: 0;
+    margin: 0;
+    position: relative;
+
+    // Location Select View
+    .location-select-view {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        padding: 20px;
+        max-width: 600px;
+        margin: 0 auto;
+        width: 100%;
+
+        .card {
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            border: none;
+            border-radius: 15px;
+
+            .card-body {
+                padding: 40px;
+
+                .card-title {
+                    text-align: center;
+                    margin-top: 0;
+                    color: $dark-gray;
+                    font-weight: 600;
+                    font-size: 28px;
+                }
+
+                .text-muted {
+                    text-align: center;
+                    font-size: 16px;
+                }
+
+                .form-group {
+                    margin-bottom: 30px;
+
+                    label {
+                        font-weight: 600;
+                        margin-bottom: 10px;
+                        color: $dark-gray;
+                    }
+
+                    input.location-barcode {
+                        font-size: 18px;
+                        padding: 15px;
+                        border-radius: 10px;
+                        border: 2px solid $border-color;
+                        transition: all 0.3s ease;
+
+                        &:focus {
+                            border-color: $primary-blue;
+                            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+                            outline: none;
+                        }
+                    }
+                }
+
+                .btn-primary {
+                    font-size: 18px;
+                    padding: 15px;
+                    border-radius: 10px;
+                    font-weight: 600;
+                    transition: all 0.3s ease;
+
+                    &:hover:not(:disabled) {
+                        transform: translateY(-2px);
+                        box-shadow: 0 5px 15px rgba(0, 123, 255, 0.3);
+                    }
+
+                    &:disabled {
+                        opacity: 0.6;
+                        cursor: not-allowed;
+                    }
+                }
+            }
+        }
+    }
+
+    // Scanning View
+    .scanning-view {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        background: #fff;
+        overflow-y: auto;
+
+        .scanning-header {
+            background: linear-gradient(135deg, $primary-blue 0%, #6c63ff 100%);
+            color: white;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+
+            .location-info {
+                flex: 1;
+
+                h2 {
+                    margin: 0 0 10px 0;
+                    font-size: 24px;
+                    font-weight: 600;
+
+                    i {
+                        margin-right: 10px;
+                    }
+                }
+
+                .text-muted {
+                    margin: 0;
+                    opacity: 0.8;
+                    font-size: 14px;
+                }
+            }
+
+            .action-buttons {
+                display: flex;
+                gap: 10px;
+
+                .btn {
+                    padding: 10px 15px;
+                    border-radius: 8px;
+                    border: none;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+
+                    &:hover {
+                        filter: brightness(1.1);
+                    }
+                }
+            }
+        }
+
+        .alert {
+            margin: 15px;
+            border-radius: 10px;
+            border: none;
+            padding: 15px;
+
+            &.alert-warning {
+                background-color: #fff3cd;
+                color: #856404;
+
+                strong {
+                    font-weight: 600;
+                }
+            }
+
+            &.alert-danger {
+                background-color: #f8d7da;
+                color: #721c24;
+            }
+        }
+
+        .barcode-input-section {
+            margin: 15px;
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+            .card-body {
+                padding: 20px;
+
+                .form-label {
+                    margin-bottom: 10px;
+                    font-weight: 600;
+                    color: $dark-gray;
+                }
+
+                input.product-barcode {
+                    font-size: 18px;
+                    padding: 15px;
+                    border: 2px solid $border-color;
+                    border-radius: 10px;
+                    transition: all 0.3s ease;
+
+                    &:focus {
+                        border-color: $success-green;
+                        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+                        outline: none;
+                    }
+                }
+            }
+        }
+
+        .scanned-items-section {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+
+            h5 {
+                font-weight: 600;
+                color: $dark-gray;
+                margin-bottom: 15px;
+            }
+
+            .empty-state {
+                text-align: center;
+                padding: 40px 20px;
+
+                p {
+                    color: $border-color;
+                    font-size: 16px;
+                }
+            }
+
+            .scanned-items-table {
+                background: white;
+                border-radius: 10px;
+                overflow: hidden;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+                thead {
+                    background-color: $light-gray;
+                }
+
+                th {
+                    font-weight: 600;
+                    padding: 12px;
+                    border-bottom: 2px solid $border-color;
+                }
+
+                td {
+                    padding: 12px;
+                    vertical-align: middle;
+
+                    strong {
+                        font-weight: 600;
+                    }
+
+                    .text-muted {
+                        color: #999;
+                        font-size: 12px;
+                    }
+
+                    input[type="number"] {
+                        border: 1px solid $border-color;
+                        padding: 5px 8px;
+                        border-radius: 5px;
+                    }
+
+                    .btn {
+                        padding: 5px 10px;
+                        font-size: 12px;
+                        border: none;
+                        border-radius: 5px;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+
+                        &:hover {
+                            transform: scale(1.05);
+                        }
+                    }
+
+                    .badge {
+                        padding: 8px 12px;
+                        border-radius: 20px;
+                        font-weight: 600;
+                    }
+                }
+
+                tr.table-danger {
+                    background-color: #fff5f5;
+
+                    &:hover {
+                        background-color: #ffecec;
+                    }
+                }
+
+                .text-success {
+                    color: $success-green;
+                }
+
+                .text-danger {
+                    color: $danger-red;
+                }
+            }
+        }
+
+        .summary-panel {
+            margin: 15px;
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            background: $light-gray;
+
+            .card-body {
+                padding: 20px;
+
+                .summary-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                    gap: 15px;
+
+                    .summary-item {
+                        text-align: center;
+                        padding: 15px;
+                        background: white;
+                        border-radius: 8px;
+                        border-left: 4px solid $primary-blue;
+
+                        label {
+                            display: block;
+                            font-size: 12px;
+                            color: #999;
+                            margin-bottom: 8px;
+                            text-transform: uppercase;
+                            font-weight: 600;
+                        }
+
+                        strong {
+                            display: block;
+                            font-size: 20px;
+                            color: $dark-gray;
+                        }
+
+                        &.text-success {
+                            border-left-color: $success-green;
+
+                            strong {
+                                color: $success-green;
+                            }
+                        }
+
+                        &.text-danger {
+                            border-left-color: $danger-red;
+
+                            strong {
+                                color: $danger-red;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        .action-buttons-section {
+            padding: 15px;
+            border-top: 1px solid $border-color;
+            background: white;
+
+            .btn-success {
+                font-size: 16px;
+                padding: 15px;
+                border-radius: 10px;
+                font-weight: 600;
+                transition: all 0.3s ease;
+                border: none;
+
+                &:hover:not(:disabled) {
+                    background-color: #20c997;
+                    transform: translateY(-2px);
+                    box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+                }
+
+                &:disabled {
+                    opacity: 0.6;
+                    cursor: not-allowed;
+                }
+            }
+        }
+    }
+
+    // Summary View
+    .summary-view {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        padding: 20px;
+        max-width: 500px;
+        margin: 0 auto;
+        width: 100%;
+
+        .card {
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            border: none;
+            border-radius: 15px;
+            border-top: 5px solid $success-green;
+
+            .card-body {
+                padding: 40px;
+
+                .card-title {
+                    text-align: center;
+                    color: $dark-gray;
+                    font-weight: 600;
+                    font-size: 24px;
+                    margin-bottom: 30px;
+
+                    i {
+                        margin-right: 10px;
+                        font-size: 32px;
+                    }
+                }
+
+                .summary-details {
+                    background: $light-gray;
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin-bottom: 30px;
+
+                    p {
+                        margin: 10px 0;
+                        font-size: 16px;
+
+                        strong {
+                            color: $dark-gray;
+                        }
+
+                        &.text-success {
+                            color: $success-green;
+                        }
+
+                        &.text-danger {
+                            color: $danger-red;
+                        }
+                    }
+                }
+
+                .button-group {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+
+                    .btn {
+                        padding: 15px;
+                        font-size: 16px;
+                        border-radius: 10px;
+                        font-weight: 600;
+                        border: none;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+
+                        &:hover {
+                            transform: translateY(-2px);
+                            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+                        }
+
+                        &.btn-primary {
+                            background-color: $primary-blue;
+                            color: white;
+                        }
+
+                        &.btn-secondary {
+                            background-color: #6c757d;
+                            color: white;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Responsive Design
+@media (max-width: 768px) {
+    .hlv_inventory_check_container {
+        .scanning-view {
+            .scanning-header {
+                flex-direction: column;
+                gap: 15px;
+
+                .action-buttons {
+                    width: 100%;
+                    justify-content: flex-end;
+                }
+            }
+
+            .scanned-items-table {
+                font-size: 12px;
+
+                th, td {
+                    padding: 8px;
+                }
+
+                .btn {
+                    padding: 4px 8px;
+                    font-size: 10px;
+                }
+            }
+        }
+    }
+}
+
+@media (max-width: 480px) {
+    .hlv_inventory_check_container {
+        .location-select-view .card-body,
+        .summary-view .card-body {
+            padding: 20px;
+        }
+
+        .scanning-view {
+            .barcode-input-section .card-body {
+                padding: 15px;
+            }
+
+            .summary-panel .card-body .summary-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    }
+}

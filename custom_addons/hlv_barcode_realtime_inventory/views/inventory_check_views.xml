@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ========================== INVENTORY CHECK VIEWS ========================== -->
+    
+    <!-- Menu Item -->
+    <menuitem
+        id="menu_inventory_check_root"
+        name="Kiểm Kê Tồn Kho"
+        parent="stock.menu_stock_root"
+        sequence="30"
+        />
+    
+    <!-- Tree View -->
+    <record id="view_inventory_check_tree" model="ir.ui.view">
+        <field name="name">inventory.check.tree</field>
+        <field name="model">inventory.check</field>
+        <field name="arch" type="xml">
+            <tree string="Phiên Kiểm Kê" decoration-success="state == 'confirmed'" decoration-warning="has_pending_outbound" decoration-danger="state == 'locked'" decoration-muted="state == 'cancelled'">
+                <field name="name"/>
+                <field name="user_id"/>
+                <field name="location_id"/>
+                <field name="product_count"/>
+                <field name="total_difference"/>
+                <field name="start_time"/>
+                <field name="has_pending_outbound" invisible="1"/>
+                <field name="state" widget="badge"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_inventory_check_form" model="ir.ui.view">
+        <field name="name">inventory.check.form</field>
+        <field name="model">inventory.check</field>
+        <field name="arch" type="xml">
+            <form string="Phiên Kiểm Kê">
+                <header>
+                    <button name="action_start_check" type="object" string="Bắt Đầu Kiểm Kê" class="btn-primary" invisible="state != 'draft'"/>
+                    <button name="action_confirm_check" type="object" string="Xác Nhận Kiểm Kê" class="btn-success" invisible="state != 'in_progress'"/>
+                    <button name="action_lock_moves_manually" type="object" string="Khóa Stock Moves" invisible="state not in ['in_progress']"/>
+                    <button name="action_unlock_moves_manually" type="object" string="Mở Khóa Stock Moves" invisible="state not in ['in_progress', 'confirmed']"/>
+                    <button name="action_cancel" type="object" string="Hủy Kiểm Kê" class="btn-danger" invisible="state == 'cancelled'"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                
+                <sheet>
+                    <!-- Warning for pending outbound moves -->
+                    <div class="alert alert-warning" role="alert" invisible="not has_pending_outbound">
+                        <strong>⚠️ Cảnh báo:</strong> Có Stock Move Outbound đang chờ xử lý!
+                        Vui lòng hoàn thành kiểm kê và xác nhận để không ảnh hưởng đến vận chuyển.
+                    </div>
+                    
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+                    
+                    <group>
+                        <group>
+                            <field name="location_id" readonly="state != 'draft'"/>
+                            <field name="user_id" readonly="1"/>
+                            <field name="created_by" readonly="1"/>
+                            <field name="confirmed_by" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="state" readonly="1"/>
+                            <field name="start_time"/>
+                            <field name="confirmed_time"/>
+                            <field name="last_scan_time"/>
+                            <field name="device_id"/>
+                        </group>
+                    </group>
+                    
+                    <notebook>
+                        <!-- Statistics Panel -->
+                        <page string="Thống Kê">
+                            <group>
+                                <group>
+                                    <field name="product_count" readonly="1"/>
+                                    <field name="scan_count" readonly="1"/>
+                                </group>
+                                <group>
+                                    <field name="total_theoretical_qty" readonly="1"/>
+                                    <field name="total_scanned_qty" readonly="1"/>
+                                    <field name="total_difference" readonly="1"/>
+                                </group>
+                            </group>
+                        </page>
+                        
+                        <!-- Check Details -->
+                        <page string="Chi Tiết Kiểm Kê">
+                            <field name="line_ids" readonly="state not in ['draft', 'in_progress']">
+                                <tree editable="bottom">
+                                    <field name="product_id"/>
+                                    <field name="theoretical_qty"/>
+                                    <field name="scanned_qty"/>
+                                    <field name="difference" sum="Total"/>
+                                    <field name="location_id"/>
+                                    <field name="lot_id"/>
+                                    <field name="discrepancy_id"/>
+                                </tree>
+                            </field>
+                        </page>
+                        
+                        <!-- Discrepancies -->
+                        <page string="Ghi Nhận Chênh Lệch" invisible="discrepancy_count == 0">
+                            <field name="discrepancy_ids">
+                                <tree>
+                                    <field name="product_id"/>
+                                    <field name="difference"/>
+                                    <field name="reason"/>
+                                    <field name="state" widget="badge"/>
+                                </tree>
+                            </field>
+                        </page>
+                        
+                        <!-- Locked Moves -->
+                        <page string="Stock Moves Bị Khóa" invisible="len(locked_move_ids) == 0">
+                            <field name="locked_move_ids" readonly="1">
+                                <tree>
+                                    <field name="name"/>
+                                    <field name="product_id"/>
+                                    <field name="quantity_done"/>
+                                    <field name="state"/>
+                                </tree>
+                            </field>
+                        </page>
+                        
+                        <!-- Notes -->
+                        <page string="Ghi Chú">
+                            <field name="notes" nolabel="1" placeholder="Ghi chú thêm về phiên kiểm kê..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_inventory_check_search" model="ir.ui.view">
+        <field name="name">inventory.check.search</field>
+        <field name="model">inventory.check</field>
+        <field name="arch" type="xml">
+            <search string="Phiên Kiểm Kê">
+                <field name="name"/>
+                <field name="user_id"/>
+                <field name="location_id"/>
+                <separator/>
+                <filter string="Đang Kiểm Kê" name="in_progress" domain="[('state', '=', 'in_progress')]"/>
+                <filter string="Đã Xác Nhận" name="confirmed" domain="[('state', '=', 'confirmed')]"/>
+                <filter string="Có Chênh Lệch" name="has_discrepancy" domain="[('discrepancy_count', '>', 0)]"/>
+                <filter string="Có Outbound Chờ" name="has_outbound" domain="[('has_pending_outbound', '=', True)]"/>
+                <separator/>
+                <filter string="Hôm Nay" name="today" domain="[('create_date', '>=', context_today().strftime('%Y-%m-%d')), ('create_date', '<', (context_today() + relativedelta(days=1)).strftime('%Y-%m-%d'))]"/>
+                <separator/>
+                <group expand="0" string="Group By">
+                    <filter string="Vị Trí" name="group_location" context="{'group_by': 'location_id'}"/>
+                    <filter string="Người Kiểm Kê" name="group_user" context="{'group_by': 'user_id'}"/>
+                    <filter string="Trạng Thái" name="group_state" context="{'group_by': 'state'}"/>
+                    <filter string="Ngày Bắt Đầu" name="group_date" context="{'group_by': 'start_time'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_inventory_check" model="ir.actions.act_window">
+        <field name="name">Phiên Kiểm Kê</field>
+        <field name="res_model">inventory.check</field>
+        <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="view_inventory_check_search"/>
+    </record>
+
+    <!-- Menu Item Link -->
+    <menuitem
+        id="menu_inventory_check_list"
+        parent="menu_inventory_check_root"
+        name="Danh Sách Kiểm Kê"
+        action="action_inventory_check"
+        sequence="1"
+        />
+
+    <!-- Client Action for Barcode Scanner (Fullscreen App) -->
+    <record id="action_inventory_check_scanner" model="ir.actions.client">
+        <field name="name">Ứng Dụng Quét Kiểm Kê</field>
+        <field name="tag">hlv_inventory_check_scanner</field>
+        <field name="target">fullscreen</field>
+    </record>
+
+    <menuitem
+        id="menu_inventory_check_scanner"
+        parent="menu_inventory_check_root"
+        name="Quét Kiểm Kê"
+        action="action_inventory_check_scanner"
+        sequence="2"
+        />
+
+</odoo>

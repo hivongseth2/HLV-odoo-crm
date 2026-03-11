@@ -1,0 +1,575 @@
+# -*- coding: utf-8 -*-
+from odoo import models, fields, api, _
+from odoo.exceptions import UserError, ValidationError
+import logging
+
+_logger = logging.getLogger(__name__)
+
+
+class InventoryCheck(models.Model):
+    """
+    Model chính cho phiên kiểm kê tồn kho
+    """
+    _name = 'inventory.check'
+    _description = 'Phiên Kiểm Kê Tồn Kho'
+    _order = 'create_date desc'
+    
+    # ========== Basic Info ==========
+    name = fields.Char(
+        string='Mã Phiên Kiểm Kê',
+        required=True,
+        copy=False,
+        readonly=True,
+        default='New'
+    )
+    
+    user_id = fields.Many2one(
+        'res.users',
+        string='Người Kiểm Kê',
+        default=lambda self: self.env.user,
+        required=True,
+        readonly=True
+    )
+    
+    location_id = fields.Many2one(
+        'stock.location',
+        string='Vị Trí Kho',
+        domain=[('usage', '=', 'internal')],
+        help='Vị trí kho cần kiểm kê'
+    )
+    
+    device_id = fields.Char(
+        string='Device ID',
+        help='Browser fingerprint hoặc device identifier'
+    )
+    
+    # ========== Time Info ==========
+    start_time = fields.Datetime(
+        string='Bắt Đầu',
+        default=fields.Datetime.now,
+        readonly=True
+    )
+    
+    last_scan_time = fields.Datetime(
+        string='Quét Lần Cuối'
+    )
+    
+    confirmed_time = fields.Datetime(
+        string='Xác Nhận Lúc'
+    )
+    
+    # ========== Status ==========
+    state = fields.Selection(
+        [
+            ('draft', 'Nháp'),
+            ('in_progress', 'Đang Kiểm Kê'),
+            ('pending_approval', 'Chờ Duyệt'),
+            ('confirmed', 'Đã Xác Nhận'),
+            ('locked', 'Bị Khóa'),
+            ('cancelled', 'Đã Hủy'),
+        ],
+        string='Trạng Thái',
+        default='draft',
+        tracking=True
+    )
+    
+    # ========== Lines & Details ==========
+    line_ids = fields.One2many(
+        'inventory.check.line',
+        'check_id',
+        string='Chi Tiết Kiểm Kê',
+        copy=True
+    )
+    
+    discrepancy_ids = fields.One2many(
+        'inventory.discrepancy',
+        'check_id',
+        string='Chênh Lệch',
+        copy=False
+    )
+    
+    # ========== Statistics ==========
+    product_count = fields.Integer(
+        string='Số Sản Phẩm Quét',
+        compute='_compute_stats',
+        store=True
+    )
+    
+    scan_count = fields.Integer(
+        string='Tổng Lượt Quét',
+        compute='_compute_stats',
+        store=True
+    )
+    
+    total_theoretical_qty = fields.Float(
+        string='Tồn Kho Lý Thuyết',
+        compute='_compute_stats',
+        store=True
+    )
+    
+    total_scanned_qty = fields.Float(
+        string='Tồn Kho Thực Tế',
+        compute='_compute_stats',
+        store=True
+    )
+    
+    total_difference = fields.Float(
+        string='Tổng Chênh Lệch',
+        compute='_compute_stats',
+        store=True
+    )
+    
+    discrepancy_count = fields.Integer(
+        string='Số Chênh Lệch',
+        compute='_compute_stats',
+        store=True
+    )
+    
+    # ========== Locking ==========
+    locked_move_ids = fields.Many2many(
+        'stock.move',
+        'inventory_check_stock_move_rel',
+        'check_id',
+        'move_id',
+        string='Stock Move Bị Khóa',
+        copy=False
+    )
+    
+    has_pending_outbound = fields.Boolean(
+        string='Có Outbound Chờ',
+        compute='_compute_pending_moves',
+        store=False
+    )
+    
+    pending_move_ids = fields.One2many(
+        'stock.move',
+        compute='_get_pending_moves',
+        string='Stock Move Chờ Xử Lý'
+    )
+    
+    notes = fields.Text(
+        string='Ghi Chú'
+    )
+    
+    # ========== Audit Trail ==========
+    created_by = fields.Many2one(
+        'res.users',
+        string='Tạo Bởi',
+        default=lambda self: self.env.user,
+        readonly=True
+    )
+    
+    confirmed_by = fields.Many2one(
+        'res.users',
+        string='Xác Nhận Bởi',
+        readonly=True
+    )
+    
+    @api.depends('line_ids', 'line_ids.scanned_qty', 'line_ids.theoretical_qty', 'discrepancy_ids')
+    def _compute_stats(self):
+        """Tính toán các thống kê cơ bản"""
+        for check in self:
+            check.product_count = len(check.line_ids)
+            check.scan_count = int(sum(check.line_ids.mapped('scanned_qty')))
+            check.total_theoretical_qty = sum(check.line_ids.mapped('theoretical_qty'))
+            check.total_scanned_qty = sum(check.line_ids.mapped('scanned_qty'))
+            check.total_difference = sum(check.line_ids.mapped('difference'))
+            check.discrepancy_count = len(check.discrepancy_ids)
+
+    @api.depends('location_id')
+    def _compute_pending_moves(self):
+        """Kiểm tra có outbound pending cho location"""
+        for check in self:
+            if not check.location_id:
+                check.has_pending_outbound = False
+                continue
+            
+            pending_moves = self.env['stock.move'].search([
+                ('location_id', '=', check.location_id.id),
+                ('state', 'in', ['confirmed', 'waiting', 'partially_available']),
+                ('move_type', 'in', ['outbound', 'internal']),
+            ])
+            check.has_pending_outbound = len(pending_moves) > 0
+
+    def _get_pending_moves(self):
+        """Lấy danh sách stock move đang chờ"""
+        for check in self:
+            if check.location_id:
+                check.pending_move_ids = self.env['stock.move'].search([
+                    ('location_id', '=', check.location_id.id),
+                    ('state', 'in', ['confirmed', 'waiting', 'partially_available']),
+                ])
+            else:
+                check.pending_move_ids = self.env['stock.move'].browse()
+
+    # ========== Sequence ==========
+    @api.model_create_multi
+    def create(self, vals_list):
+        """Auto generate sequence"""
+        for vals in vals_list:
+            if vals.get('name', 'New') == 'New':
+                vals['name'] = self.env['ir.sequence'].next_by_code('inventory.check') or 'CHECK'
+        return super().create(vals_list)
+
+    # ========== Actions ==========
+    def action_start_check(self):
+        """Bắt đầu kiểm kê - lock stock moves"""
+        for check in self:
+            if check.state != 'draft':
+                raise ValidationError(_('Chỉ có thể bắt đầu kiểm kê từ trạng thái Nháp'))
+            
+            # Lock outbound moves của location này
+            check._lock_location_moves()
+            
+            check.state = 'in_progress'
+            check.start_time = fields.Datetime.now()
+
+    def action_confirm_check(self):
+        """Xác nhận kiểm kê - tạo Stock Adjustment"""
+        for check in self:
+            if check.state != 'in_progress':
+                raise ValidationError(_('Chỉ có thể xác nhận kiểm kê đang tiến hành'))
+            
+            # Kiểm tra xem có chênh lệch chưa được ghi nhận không
+            lines_without_reason = check.line_ids.filtered(
+                lambda l: l.difference != 0 and not l.discrepancy_id
+            )
+            if lines_without_reason:
+                raise UserError(_(
+                    'Cần ghi nhận lý do chênh lệch cho %d sản phẩm trước khi xác nhận'
+                    % len(lines_without_reason)
+                ))
+            
+            # Tạo inventory adjustment
+            check._create_inventory_adjustment()
+            
+            # Unlock moves
+            check._unlock_location_moves()
+            
+            check.state = 'confirmed'
+            check.confirmed_time = fields.Datetime.now()
+            check.confirmed_by = self.env.user
+
+    def action_cancel(self):
+        """Hủy kiểm kê"""
+        for check in self:
+            # Unlock moves nếu có
+            check._unlock_location_moves()
+            
+            check.state = 'cancelled'
+
+    def action_lock_moves_manually(self):
+        """Lock stock moves của location (có thể gọi bất kỳ lúc nào)"""
+        for check in self:
+            check._lock_location_moves()
+            self.env.user.notify_warning(
+                message=_('Đã khóa tất cả outbound moves của %s') % check.location_id.name
+            )
+
+    def action_unlock_moves_manually(self):
+        """Unlock stock moves của location"""
+        for check in self:
+            check._unlock_location_moves()
+            self.env.user.notify_warning(
+                message=_('Đã mở khóa tất cả outbound moves của %s') % check.location_id.name
+            )
+
+    # ========== Helper Methods ==========
+    def _lock_location_moves(self):
+        """Lock outbound moves của location"""
+        self.ensure_one()
+        
+        # Tìm tất cả outbound/internal moves của location này
+        moves_to_lock = self.env['stock.move'].search([
+            ('location_id', '=', self.location_id.id),
+            ('state', 'in', ['confirmed', 'waiting', 'partially_available']),
+            ('move_type', 'in', ['outbound', 'internal']),
+        ])
+        
+        for move in moves_to_lock:
+            try:
+                move.write({'is_locked': True})
+                self.locked_move_ids = [(4, move.id)]
+            except Exception as e:
+                _logger.warning(f'Không thể lock move {move.name}: {str(e)}')
+
+    def _unlock_location_moves(self):
+        """Unlock outbound moves của location"""
+        self.ensure_one()
+        
+        for move in self.locked_move_ids:
+            try:
+                move.write({'is_locked': False})
+            except Exception as e:
+                _logger.warning(f'Không thể unlock move {move.name}: {str(e)}')
+        
+        self.locked_move_ids = [(5,)]  # Clear the relation
+
+    def _create_inventory_adjustment(self):
+        """Tạo Inventory Adjustment từ kiểm kê"""
+        self.ensure_one()
+        
+        adjustment_lines = []
+        
+        for line in self.line_ids:
+            adjustment_lines.append((0, 0, {
+                'product_id': line.product_id.id,
+                'location_id': line.location_id.id,
+                'product_qty': line.scanned_qty,
+                'product_uom_id': line.product_id.uom_id.id,
+                'lot_id': line.lot_id.id,
+                'package_id': line.package_id.id,
+            }))
+        
+        # Tạo Inventory Adjustment
+        inventory = self.env['stock.inventory'].create({
+            'name': self.name,
+            'location_ids': [(6, 0, [self.location_id.id])],
+            'line_ids': adjustment_lines,
+            'prefilled': False,
+            'state': 'draft',
+            'user_id': self.user_id.id,
+        })
+        
+        return inventory
+
+    # ========== API Methods for OWL Component ==========
+    @api.model
+    def get_or_create_active_check(self, device_id, location_id=None):
+        """Khôi phục phiên kiểm kê cũ hoặc tạo mới"""
+        domain = [
+            ('user_id', '=', self.env.user.id),
+            ('state', '=', 'in_progress'),
+            ('device_id', '=', device_id)
+        ]
+        
+        if location_id:
+            domain.append(('location_id', '=', location_id))
+        
+        check = self.search(domain, limit=1, order='start_time desc')
+        
+        if not check:
+            vals = {
+                'user_id': self.env.user.id,
+                'device_id': device_id,
+                'state': 'draft',
+            }
+            if location_id:
+                vals['location_id'] = location_id
+            
+            check = self.create(vals)
+        
+        return check._get_check_data()
+
+    def _get_check_data(self):
+        """Trả về dữ liệu kiểm kê cho frontend"""
+        self.ensure_one()
+        return {
+            'success': True,
+            'check_id': self.id,
+            'name': self.name,
+            'location_id': self.location_id.id if self.location_id else False,
+            'location_name': self.location_id.display_name if self.location_id else '',
+            'state': self.state,
+            'product_count': self.product_count,
+            'scan_count': self.scan_count,
+            'total_theoretical_qty': self.total_theoretical_qty,
+            'total_scanned_qty': self.total_scanned_qty,
+            'total_difference': self.total_difference,
+            'has_pending_outbound': self.has_pending_outbound,
+            'lines': self._get_lines_data(),
+            'discrepancies': self._get_discrepancies_data(),
+        }
+
+    def _get_lines_data(self):
+        """Trả về dữ liệu lines"""
+        return [{
+            'id': line.id,
+            'product_id': line.product_id.id,
+            'product_name': line.product_id.name,
+            'product_code': line.product_id.default_code,
+            'barcode': line.product_id.barcode,
+            'uom_name': line.product_id.uom_id.name,
+            'scanned_qty': line.scanned_qty,
+            'theoretical_qty': line.theoretical_qty,
+            'difference': line.difference,
+            'location_id': line.location_id.id,
+            'lot_id': line.lot_id.id,
+            'package_id': line.package_id.id,
+            'discrepancy_id': line.discrepancy_id.id if line.discrepancy_id else False,
+        } for line in self.line_ids]
+
+    def _get_discrepancies_data(self):
+        """Trả về dữ liệu chênh lệch"""
+        return [{
+            'id': disc.id,
+            'line_id': disc.line_id.id,
+            'product_name': disc.line_id.product_id.name,
+            'difference': disc.line_id.difference,
+            'reason': disc.reason,
+            'notes': disc.notes,
+        } for disc in self.discrepancy_ids]
+
+    @api.model
+    def register_scan(self, check_id, product_id, location_id, qty=1, lot_id=False, package_id=False):
+        """Xử lý mỗi lần quét barcode"""
+        check = self.browse(check_id)
+        
+        if not check.exists() or check.state not in ['draft', 'in_progress']:
+            return {'success': False, 'error': 'Phiên kiểm kê không hợp lệ'}
+        
+        # Nếu chưa bắt đầu, tự động bắt đầu
+        if check.state == 'draft':
+            check.action_start_check()
+        
+        # Kiểm tra có outbound pending
+        if check.has_pending_outbound:
+            return {
+                'success': False,
+                'error': 'Cảnh báo: Có outbound chờ xử lý. Vui lòng hoàn thành kiểm kê và thoát!',
+                'warning': True,
+            }
+        
+        # Tìm hoặc tạo line
+        domain = [
+            ('check_id', '=', check_id),
+            ('product_id', '=', product_id),
+            ('location_id', '=', location_id),
+        ]
+        
+        if lot_id:
+            domain.append(('lot_id', '=', lot_id))
+        else:
+            domain.append(('lot_id', '=', False))
+        
+        if package_id:
+            domain.append(('package_id', '=', package_id))
+        else:
+            domain.append(('package_id', '=', False))
+        
+        line = self.env['inventory.check.line'].search(domain, limit=1)
+        
+        if line:
+            line.scanned_qty += qty
+        else:
+            # Lấy tồn kho lý thuyết
+            quant_domain = [
+                ('product_id', '=', product_id),
+                ('location_id', '=', location_id),
+            ]
+            if lot_id:
+                quant_domain.append(('lot_id', '=', lot_id))
+            if package_id:
+                quant_domain.append(('package_id', '=', package_id))
+            
+            quants = self.env['stock.quant'].search(quant_domain)
+            theoretical_qty = sum(quants.mapped('quantity'))
+            
+            line = self.env['inventory.check.line'].create({
+                'check_id': check_id,
+                'product_id': product_id,
+                'location_id': location_id,
+                'lot_id': lot_id,
+                'package_id': package_id,
+                'scanned_qty': qty,
+                'theoretical_qty': theoretical_qty,
+            })
+        
+        check.write({'last_scan_time': fields.Datetime.now()})
+        
+        return {
+            'success': True,
+            'line_id': line.id,
+            'product_id': line.product_id.id,
+            'product_name': line.product_id.name,
+            'scanned_qty': line.scanned_qty,
+            'theoretical_qty': line.theoretical_qty,
+            'difference': line.difference,
+            'product_count': check.product_count,
+            'total_scans': check.scan_count,
+        }
+
+    @api.model
+    def update_line_qty(self, check_id, line_id, new_qty):
+        """Cập nhật số lượng line"""
+        line = self.env['inventory.check.line'].browse(line_id)
+        if line.check_id.id != check_id:
+            return {'success': False, 'error': 'Lỗi bảo mật'}
+        
+        line.write({'scanned_qty': new_qty})
+        
+        return {
+            'success': True,
+            'scanned_qty': line.scanned_qty,
+            'difference': line.difference,
+        }
+
+    @api.model
+    def remove_line(self, check_id, line_id):
+        """Xóa một line khỏi kiểm kê"""
+        line = self.env['inventory.check.line'].browse(line_id)
+        if line.check_id.id != check_id:
+            return {'success': False, 'error': 'Lỗi bảo mật'}
+        
+        check = line.check_id
+        line.unlink()
+        
+        return {'success': True}
+
+    @api.model
+    def set_location(self, check_id, location_id):
+        """Đặt vị trí kiểm kê"""
+        check = self.browse(check_id)
+        if check.exists():
+            check.write({'location_id': location_id})
+            return {'success': True}
+        return {'success': False}
+
+    @api.model
+    def search_location(self, barcode):
+        """Tìm location theo barcode hoặc tên"""
+        # Ưu tiên barcode chính xác
+        location = self.env['stock.location'].search([
+            ('barcode', '=', barcode), 
+            ('usage', '=', 'internal')
+        ], limit=1)
+        
+        if not location:
+            # Tìm theo tên nếu ko có barcode
+            location = self.env['stock.location'].search([
+                ('name', 'ilike', barcode), 
+                ('usage', '=', 'internal')
+            ], limit=1)
+
+        if location:
+            return {
+                'success': True, 
+                'location_id': location.id, 
+                'location_name': location.display_name
+            }
+        return {'success': False, 'error': f'Không tìm thấy vị trí: {barcode}'}
+
+    @api.model
+    def search_product(self, barcode):
+        """Tìm product theo barcode, default_code, hoặc name"""
+        product = self.env['product.product'].search([('barcode', '=', barcode)], limit=1)
+        
+        if not product:
+            product = self.env['product.product'].search([
+                '|', 
+                ('default_code', 'ilike', barcode),
+                ('name', 'ilike', barcode)
+            ], limit=1)
+
+        if not product:
+            return {'success': False, 'error': f"Không tìm thấy sản phẩm: {barcode}"}
+            
+        return {
+            'success': True,
+            'product_id': product.id,
+            'product_code': product.default_code or '',
+            'product_name': product.name,
+            'barcode': product.barcode or '',
+            'uom_id': product.uom_id.id,
+            'uom_name': product.uom_id.name,
+        }

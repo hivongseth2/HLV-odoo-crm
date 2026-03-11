@@ -1,13 +1,24 @@
 {
-    'name': 'HLV Stock Scanner',
-    'version': '18.0.1.0.0',
-    'summary': 'Standalone inventory scanner with real-time sync',
+    'name': 'HLV Inventory Check - Kiểm Kê Tồn Kho',
+    'version': '18.0.2.0.0',
+    'summary': 'Specialist inventory check module with barcode scanning and discrepancy tracking',
     'description': """
-        Module kiểm kê tồn kho độc lập sử dụng barcode:
-        - Quét mã vị trí kho → Quét sản phẩm → Xác nhận
-        - Real-time sync: mỗi lần quét được lưu ngay vào database
-        - Khôi phục dữ liệu khi reload trang (không mất session)
-        - Hiển thị chênh lệch giữa số lượng thực tế và lý thuyết
+        Module kiểm kê tồn kho chuyên dụng cho Odoo 18:
+        
+        ✓ Quét vị trí → Quét sản phẩm → Đếm và xác nhận
+        ✓ Lock toàn bộ inbound/outbound của vị trí đang kiểm kê
+        ✓ Hiển thị số lượng lý thuyết và thực tế
+        ✓ Cảnh báo nếu có outbound trong khi quét
+        ✓ Cho phép người dùng nhập lý do chênh lệch
+        ✓ Lưu chi tiết kiểm kê và so sánh
+        ✓ Tạo Stock Adjustment tự động
+        
+        Features:
+        - Real-time sync: Mỗi lần quét được lưu ngay vào database
+        - Session recovery: Khôi phục dữ liệu khi reload trang
+        - Move locking: Lock/Unlock stock moves của location
+        - Discrepancy tracking: Theo dõi và ghi nhận lý do chênh lệch
+        - Audit trail: Lưu toàn bộ thông tin kiểm kê
     """,
     'category': 'Inventory/Inventory',
     'author': 'HLV',
@@ -16,17 +27,21 @@
     'depends': ['stock'],
     'data': [
         'security/ir.model.access.csv',
-        'views/inventory_scanner_views.xml',
+        'views/inventory_check_views.xml',
+        'views/inventory_check_line_views.xml',
+        'views/inventory_discrepancy_views.xml',
+        'data/sequence.xml',
     ],
     'assets': {
         'web.assets_backend': [
-            'hlv_barcode_realtime_inventory/static/src/components/inventory_scanner/inventory_scanner.js',
-            'hlv_barcode_realtime_inventory/static/src/components/inventory_scanner/inventory_scanner.xml',
-            'hlv_barcode_realtime_inventory/static/src/components/inventory_scanner/inventory_scanner.scss',
+            'hlv_barcode_realtime_inventory/static/src/components/action_registry.js',
+            'hlv_barcode_realtime_inventory/static/src/components/inventory_check/inventory_check.js',
+            'hlv_barcode_realtime_inventory/static/src/components/inventory_check/inventory_check.xml',
+            'hlv_barcode_realtime_inventory/static/src/components/inventory_check/inventory_check.scss',
         ],
     },
     'installable': True,
-    'application': True,  # Hiện trên trang chủ
+    'application': True,
     'auto_install': False,
-    'sequence': 10,  # Thứ tự hiển thị
+    'sequence': 10,
 }

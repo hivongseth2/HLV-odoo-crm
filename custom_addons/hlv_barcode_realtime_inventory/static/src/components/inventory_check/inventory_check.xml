@@ -1,0 +1,272 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="hlv_barcode_realtime_inventory.inventory_check">
+        <div class="hlv_inventory_check_container">
+            <!-- Loading Overlay -->
+            <t t-if="state.is_loading">
+                <BlockUI/>
+            </t>
+
+            <!-- Location Selection View -->
+            <t t-if="state.view === 'location_select'">
+                <div class="location-select-view card">
+                    <div class="card-body">
+                        <h1 class="card-title">Chọn Vị Trí Kiểm Kê</h1>
+                        <p class="text-muted">Quét mã vị trí hoặc nhập tên vị trí kho</p>
+                        
+                        <div class="form-group">
+                            <label>Mã Vị Trí</label>
+                            <input 
+                                type="text" 
+                                class="form-control location-barcode"
+                                placeholder="Quét mã vị trị..."
+                                t-model="state.location_barcode"
+                                t-on-keydown="onLocationBarcodeInput"
+                                autofocus="autofocus"
+                            />
+                        </div>
+                        
+                        <button 
+                            class="btn btn-primary btn-lg w-100"
+                            t-on-click="selectLocationByBarcode"
+                            disabled="state.is_loading"
+                        >
+                            <i class="fa fa-check"></i> Xác Nhận
+                        </button>
+                        
+                        <!-- Recent Locations -->
+                        <hr/>
+                        <p class="text-muted small">Hoặc tiếp tục từ phiên trước...</p>
+                    </div>
+                </div>
+            </t>
+
+            <!-- Scanning View -->
+            <t t-if="state.view === 'scanning'">
+                <div class="scanning-view">
+                    <!-- Header -->
+                    <div class="scanning-header">
+                        <div class="location-info">
+                            <h2>
+                                <i class="fa fa-map-marker"></i>
+                                <t t-esc="state.location_name"/>
+                            </h2>
+                            <p class="text-muted" t-if="checkSummary">
+                                <strong t-esc="checkSummary.product_count"/> sản phẩm | 
+                                <strong t-esc="checkSummary.scan_count"/> lần quét
+                            </p>
+                        </div>
+                        <div class="action-buttons">
+                            <button 
+                                class="btn btn-sm btn-warning"
+                                t-on-click="viewCheckForm"
+                                title="Xem chi tiết"
+                            >
+                                <i class="fa fa-list"></i>
+                            </button>
+                            <button 
+                                class="btn btn-sm btn-danger"
+                                t-on-click="cancelCheck"
+                                title="Hủy kiểm kê"
+                            >
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Warning Section -->
+                    <t t-if="state.warning_message">
+                        <div class="alert alert-warning alert-dismissible" role="alert">
+                            <i class="fa fa-exclamation-triangle"></i>
+                            <strong t-esc="state.warning_message"/>
+                            <button type="button" class="btn-close" t-on-click="() => state.warning_message = ''"></button>
+                        </div>
+                    </t>
+
+                    <!-- Error Section -->
+                    <t t-if="state.error_message">
+                        <div class="alert alert-danger alert-dismissible" role="alert">
+                            <i class="fa fa-exclamation-circle"></i>
+                            <strong t-esc="state.error_message"/>
+                            <button type="button" class="btn-close" t-on-click="() => state.error_message = ''"></button>
+                        </div>
+                    </t>
+
+                    <!-- Barcode Input -->
+                    <div class="barcode-input-section card">
+                        <div class="card-body">
+                            <label class="form-label">Quét Sản Phẩm</label>
+                            <input 
+                                type="text" 
+                                class="form-control form-control-lg product-barcode"
+                                placeholder="Quét barcode sản phẩm..."
+                                t-model="state.product_barcode"
+                                t-on-keydown="onProductBarcodeInput"
+                                autofocus="autofocus"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- Scanned Items -->
+                    <div class="scanned-items-section">
+                        <h5>Danh Sách Quét</h5>
+                        
+                        <t t-if="state.lines.length === 0">
+                            <div class="empty-state">
+                                <p class="text-muted">Chưa có sản phẩm nào được quét</p>
+                            </div>
+                        </t>
+
+                        <t t-else="">
+                            <table class="table table-sm table-striped scanned-items-table">
+                                <thead>
+                                    <tr>
+                                        <th>Sản Phẩm</th>
+                                        <th>Lý Thuyết</th>
+                                        <th>Thực Tế</th>
+                                        <th>Chênh Lệch</th>
+                                        <th>Hành Động</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr t-foreach="state.lines" t-as="line" t-key="line.id" t-att-class="{'table-danger': line.difference !== 0}">
+                                        <td>
+                                            <strong t-esc="line.product_name"/>
+                                            <br/>
+                                            <small class="text-muted" t-esc="line.product_code"/>
+                                        </td>
+                                        <td>
+                                            <span t-esc="line.theoretical_qty.toFixed(2)"/>
+                                        </td>
+                                        <td>
+                                            <input 
+                                                type="number" 
+                                                class="form-control form-control-sm"
+                                                t-model="line.scanned_qty"
+                                                t-on-change="(e) => updateLineQty(line.id, e.target.value)"
+                                                step="0.01"
+                                            />
+                                        </td>
+                                        <td t-att-class="line.difference > 0 ? 'text-success' : line.difference &lt; 0 ? 'text-danger' : ''">
+                                            <t t-if="line.difference === 0">
+                                                <span class="badge bg-success">✓ 0</span>
+                                            </t>
+                                            <t t-else="">
+                                                <strong t-esc="(line.difference > 0 ? '+' : '') + line.difference.toFixed(2)"/>
+                                            </t>
+                                        </td>
+                                        <td>
+                                            <button 
+                                                class="btn btn-xs btn-danger"
+                                                t-on-click="() => removeLine(line.id)"
+                                                title="Xóa"
+                                            >
+                                                <i class="fa fa-trash"></i>
+                                            </button>
+                                            <t t-if="line.difference !== 0 and not line.discrepancy_id">
+                                                <button 
+                                                    class="btn btn-xs btn-warning"
+                                                    t-on-click="() => addDiscrepancy(line.id, line.product_name, line.difference)"
+                                                    title="Ghi nhận chênh lệch"
+                                                >
+                                                    <i class="fa fa-flag"></i>
+                                                </button>
+                                            </t>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </t>
+                    </div>
+
+                    <!-- Summary Panel -->
+                    <t t-if="checkSummary">
+                        <div class="summary-panel card">
+                            <div class="card-body">
+                                <div class="summary-grid">
+                                    <div class="summary-item">
+                                        <label>Tồn Kho Lý Thuyết</label>
+                                        <strong t-esc="checkSummary.total_theoretical_qty.toFixed(2)"/>
+                                    </div>
+                                    <div class="summary-item">
+                                        <label>Tồn Kho Thực Tế</label>
+                                        <strong t-esc="checkSummary.total_scanned_qty.toFixed(2)"/>
+                                    </div>
+                                    <div class="summary-item" t-att-class="checkSummary.total_difference > 0 ? 'text-success' : checkSummary.total_difference &lt; 0 ? 'text-danger' : ''">
+                                        <label>Chênh Lệch Tổng</label>
+                                        <strong t-esc="(checkSummary.total_difference > 0 ? '+' : '') + checkSummary.total_difference.toFixed(2)"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+
+                    <!-- Action Buttons -->
+                    <div class="action-buttons-section">
+                        <button 
+                            class="btn btn-success btn-lg w-100"
+                            t-on-click="confirmCheck"
+                            disabled="state.is_loading or pendingDiscrepancies.length > 0"
+                        >
+                            <i class="fa fa-save"></i> Xác Nhận Kiểm Kê
+                            <t t-if="pendingDiscrepancies.length > 0">
+                                (<t t-esc="pendingDiscrepancies.length"/> chênh lệch)
+                            </t>
+                        </button>
+                    </div>
+                </div>
+            </t>
+
+            <!-- Summary View -->
+            <t t-if="state.view === 'summary'">
+                <div class="summary-view card">
+                    <div class="card-body">
+                        <h3 class="card-title">
+                            <i class="fa fa-check-circle text-success"></i> Kiểm Kê Hoàn Tất
+                        </h3>
+                        
+                        <div class="summary-details">
+                            <p>
+                                <strong>Vị Trí:</strong>
+                                <t t-esc="state.location_name"/>
+                            </p>
+                            <p>
+                                <strong>Số Sản Phẩm:</strong>
+                                <t t-esc="checkSummary.product_count"/>
+                            </p>
+                            <p>
+                                <strong>Tồn Kho Lý Thuyết:</strong>
+                                <t t-esc="checkSummary.total_theoretical_qty.toFixed(2)"/>
+                            </p>
+                            <p>
+                                <strong>Tồn Kho Thực Tế:</strong>
+                                <t t-esc="checkSummary.total_scanned_qty.toFixed(2)"/>
+                            </p>
+                            <p t-att-class="checkSummary.total_difference > 0 ? 'text-success' : checkSummary.total_difference &lt; 0 ? 'text-danger' : ''">
+                                <strong>Chênh Lệch:</strong>
+                                <t t-esc="(checkSummary.total_difference > 0 ? '+' : '') + checkSummary.total_difference.toFixed(2)"/>
+                            </p>
+                        </div>
+                        
+                        <div class="button-group">
+                            <button 
+                                class="btn btn-primary w-100"
+                                t-on-click="viewCheckForm"
+                            >
+                                <i class="fa fa-eye"></i> Xem Chi Tiết
+                            </button>
+                            <button 
+                                class="btn btn-secondary w-100 mt-2"
+                                t-on-click="_resetSession"
+                            >
+                                <i class="fa fa-plus"></i> Kiểm Kê Vị Trí Khác
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </div>
+    </t>
+
+</templates>
