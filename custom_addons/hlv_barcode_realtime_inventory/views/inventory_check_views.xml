@@ -89,7 +89,7 @@
                         <!-- Check Details -->
                         <page string="Chi Tiết Kiểm Kê">
                             <field name="line_ids" readonly="state not in ['draft', 'in_progress']">
-                                <tree editable="bottom">
+                                <list editable="bottom">
                                     <field name="product_id"/>
                                     <field name="theoretical_qty"/>
                                     <field name="scanned_qty"/>
@@ -97,31 +97,31 @@
                                     <field name="location_id"/>
                                     <field name="lot_id"/>
                                     <field name="discrepancy_id"/>
-                                </tree>
+                                </list>
                             </field>
                         </page>
                         
                         <!-- Discrepancies -->
                         <page string="Ghi Nhận Chênh Lệch" invisible="discrepancy_count == 0">
                             <field name="discrepancy_ids">
-                                <tree>
+                                <list>
                                     <field name="product_id"/>
                                     <field name="difference"/>
                                     <field name="reason"/>
                                     <field name="state" widget="badge"/>
-                                </tree>
+                                </list>
                             </field>
                         </page>
                         
                         <!-- Locked Moves -->
                         <page string="Stock Moves Bị Khóa" invisible="locked_move_ids == []">
                             <field name="locked_move_ids" readonly="1">
-                                <tree>
+                                <list>
                                     <field name="name"/>
                                     <field name="product_id"/>
                                     <field name="quantity_done"/>
                                     <field name="state"/>
-                                </tree>
+                                </list>
                             </field>
                         </page>
                         
