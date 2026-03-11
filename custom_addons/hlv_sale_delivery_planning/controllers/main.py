@@ -83,7 +83,7 @@ class DeliveryPlannerController(http.Controller):
             attachment = request.env['ir.attachment'].sudo().create({
                 'name': filename,
                 'type': 'binary',
-                'datas': base64.b64encode(pdf_content),
+                'datas': base64.b64encode(pdf_content).decode('utf-8'),
                 'res_model': 'stock.picking',
                 'res_id': False,
                 'mimetype': 'application/pdf',

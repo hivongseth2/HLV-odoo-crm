@@ -60,7 +60,7 @@ export class DeliveryPlannerDashboard extends Component {
             dragOverColumn: null,
             kanbanColumnOrder: {},           // { colValue: [soId, ...] } — thứ tự DnD client-side
             kanbanColPageSize: {},           // { colValue: N } — số card hiển thị mỗi cột
-            kanbanBatchSize: 200,            // số đơn tải backend cho toàn kanban
+            kanbanBatchSize: 50,             // số đơn tải backend cho toàn kanban (giảm từ 200 để tăng tốc)
 
             // Selection for printing
             selectedSOIds: new Set(),        // Set of selected sale order IDs for printing
