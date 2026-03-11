@@ -189,7 +189,7 @@ class InventoryCheck(models.Model):
             pending_moves = self.env['stock.move'].search([
                 ('location_id', '=', check.location_id.id),
                 ('state', 'in', ['confirmed', 'waiting', 'partially_available']),
-                ('move_type', 'in', ['outbound', 'internal']),
+                ('picking_type_id.code', 'in', ['outgoing', 'internal']),
             ])
             check.has_pending_outbound = len(pending_moves) > 0
 
@@ -200,6 +200,7 @@ class InventoryCheck(models.Model):
                 check.pending_move_ids = self.env['stock.move'].search([
                     ('location_id', '=', check.location_id.id),
                     ('state', 'in', ['confirmed', 'waiting', 'partially_available']),
+                    ('picking_type_id.code', 'in', ['outgoing', 'internal']),
                 ])
             else:
                 check.pending_move_ids = self.env['stock.move'].browse()
@@ -285,7 +286,7 @@ class InventoryCheck(models.Model):
         moves_to_lock = self.env['stock.move'].search([
             ('location_id', '=', self.location_id.id),
             ('state', 'in', ['confirmed', 'waiting', 'partially_available']),
-            ('move_type', 'in', ['outbound', 'internal']),
+            ('picking_type_id.code', 'in', ['outgoing', 'internal']),
         ])
         
         for move in moves_to_lock:
@@ -520,12 +521,39 @@ class InventoryCheck(models.Model):
 
     @api.model
     def set_location(self, check_id, location_id):
-        """Đặt vị trí kiểm kê"""
+        """Đặt vị trí kiểm kê và tải danh sách sản phẩm từ stock.quant"""
         check = self.browse(check_id)
-        if check.exists():
-            check.write({'location_id': location_id})
-            return {'success': True}
-        return {'success': False}
+        if not check.exists():
+            return {'success': False, 'error': 'Không tìm thấy phiên kiểm kê'}
+
+        check.write({'location_id': location_id})
+
+        # Pre-populate lines với tồn kho lý thuyết tại vị trí
+        quants = self.env['stock.quant'].search([
+            ('location_id', '=', location_id),
+            ('quantity', '>', 0),
+        ])
+
+        for quant in quants:
+            existing = self.env['inventory.check.line'].search([
+                ('check_id', '=', check_id),
+                ('product_id', '=', quant.product_id.id),
+                ('location_id', '=', location_id),
+                ('lot_id', '=', quant.lot_id.id if quant.lot_id else False),
+                ('package_id', '=', quant.package_id.id if quant.package_id else False),
+            ], limit=1)
+            if not existing:
+                self.env['inventory.check.line'].create({
+                    'check_id': check_id,
+                    'product_id': quant.product_id.id,
+                    'location_id': location_id,
+                    'lot_id': quant.lot_id.id if quant.lot_id else False,
+                    'package_id': quant.package_id.id if quant.package_id else False,
+                    'scanned_qty': 0,
+                    'theoretical_qty': quant.quantity,
+                })
+
+        return check._get_check_data()
 
     @api.model
     def search_location(self, barcode):

@@ -129,17 +129,29 @@ export class InventoryCheckScanner extends Component {
     async _setLocation(location_id, location_name) {
         this.state.location_id = location_id;
         this.state.location_name = location_name;
-        
-        await this.orm.call(
-            'inventory.check',
-            'set_location',
-            [this.state.check_id, location_id],
-            {}
-        );
-        
+        this.state.is_loading = true;
+
+        try {
+            const result = await this.orm.call(
+                'inventory.check',
+                'set_location',
+                [this.state.check_id, location_id],
+                {}
+            );
+
+            if (result && result.success) {
+                this.state.check_data = result;
+                this.state.lines = result.lines || [];
+                this.state.discrepancies = result.discrepancies || [];
+            }
+        } catch (error) {
+            this._showError('Lỗi tải dữ liệu vị trí: ' + error.message);
+        } finally {
+            this.state.is_loading = false;
+        }
+
         this.state.view = 'scanning';
         this._focusOnBarcodeInput();
-        
         this._showNotification(`Đã chọn vị trí: ${location_name}`, 'success');
     }
 
