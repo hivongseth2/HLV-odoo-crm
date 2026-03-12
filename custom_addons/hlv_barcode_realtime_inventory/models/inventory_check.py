@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
+import pytz
+from datetime import datetime, timedelta
 
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
@@ -656,17 +658,35 @@ class InventoryCheck(models.Model):
         return {'success': True}
 
     @api.model
-    def get_daily_stats(self):
+    def get_daily_stats(self, date_str=None):
         """Thống kê kiểm kê theo ngày — chi tiết"""
-        today_start = fields.Datetime.now().replace(hour=0, minute=0, second=0)
+        tz = pytz.timezone(self.env.user.tz or 'Asia/Ho_Chi_Minh')
+
+        def _fmt_time(dt):
+            if not dt:
+                return ''
+            return pytz.utc.localize(dt).astimezone(tz).strftime('%H:%M')
+
+        if date_str:
+            d = datetime.strptime(date_str, '%Y-%m-%d').date()
+            today_start_local = tz.localize(datetime(d.year, d.month, d.day, 0, 0, 0))
+        else:
+            now_local = pytz.utc.localize(datetime.utcnow()).astimezone(tz)
+            today_start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        today_start_utc = today_start_local.astimezone(pytz.utc).replace(tzinfo=None)
+        today_end_utc = (today_start_local + timedelta(days=1)).astimezone(pytz.utc).replace(tzinfo=None)
+
         is_manager = self.env.user.has_group('stock.group_stock_manager')
 
         my_checks_today = self.search([
             ('user_id', '=', self.env.user.id),
-            ('create_date', '>=', today_start),
+            ('create_date', '>=', today_start_utc),
+            ('create_date', '<', today_end_utc),
         ])
         all_checks_today = self.search([
-            ('create_date', '>=', today_start),
+            ('create_date', '>=', today_start_utc),
+            ('create_date', '<', today_end_utc),
         ])
 
         def _stats(checks):
@@ -694,8 +714,8 @@ class InventoryCheck(models.Model):
             'product_count': c.product_count,
             'scan_count': c.scan_count,
             'total_difference': c.total_difference,
-            'start_time': c.start_time.strftime('%H:%M') if c.start_time else '',
-            'confirmed_time': c.confirmed_time.strftime('%H:%M') if c.confirmed_time else '',
+            'start_time': _fmt_time(c.start_time),
+            'confirmed_time': _fmt_time(c.confirmed_time),
         } for c in my_checks_today.sorted('start_time', reverse=True)]
 
         # Per-user breakdown (manager only)
@@ -725,6 +745,56 @@ class InventoryCheck(models.Model):
         }
 
     @api.model
+    def get_check_detail(self, check_id):
+        """Lấy chi tiết dòng sản phẩm của 1 phiên kiểm kê"""
+        check = self.browse(check_id)
+        if not check.exists():
+            return {'success': False, 'error': 'Phiên không tồn tại'}
+        # Only allow owner or manager to view
+        is_manager = self.env.user.has_group('stock.group_stock_manager')
+        if check.user_id.id != self.env.user.id and not is_manager:
+            return {'success': False, 'error': 'Không có quyền xem phiên này'}
+
+        tz = pytz.timezone(self.env.user.tz or 'Asia/Ho_Chi_Minh')
+
+        def _fmt(dt):
+            if not dt:
+                return ''
+            return pytz.utc.localize(dt).astimezone(tz).strftime('%H:%M')
+
+        state_labels = {
+            'draft': 'Nháp', 'in_progress': 'Đang làm',
+            'pending_approval': 'Chờ duyệt', 'confirmed': 'Hoàn thành',
+            'locked': 'Bị khóa', 'cancelled': 'Đã hủy',
+        }
+
+        lines = [{
+            'id': l.id,
+            'product_name': l.product_id.display_name if l.product_id else '',
+            'product_barcode': l.product_id.barcode or '',
+            'lot_name': l.lot_id.name if l.lot_id else '',
+            'scanned_qty': l.scanned_qty,
+            'theoretical_qty': l.theoretical_qty,
+            'difference': l.difference,
+            'uom': l.product_id.uom_id.name if l.product_id and l.product_id.uom_id else '',
+        } for l in check.line_ids.sorted('create_date')]
+
+        return {
+            'success': True,
+            'id': check.id,
+            'name': check.name,
+            'location_name': check.location_id.display_name if check.location_id else '',
+            'user_name': check.user_id.name,
+            'state': check.state,
+            'state_label': state_labels.get(check.state, check.state),
+            'start_time': _fmt(check.start_time),
+            'confirmed_time': _fmt(check.confirmed_time),
+            'product_count': check.product_count,
+            'total_difference': check.total_difference,
+            'lines': lines,
+        }
+
+    @api.model
     def get_scanner_settings(self):
         """Trả về cấu hình scanner cho frontend"""
         ICP = self.env['ir.config_parameter'].sudo()
@@ -751,6 +821,13 @@ class InventoryCheck(models.Model):
         """Lấy danh sách phiên chờ duyệt (cho manager)"""
         if not self.env.user.has_group('stock.group_stock_manager'):
             return []
+        tz = pytz.timezone(self.env.user.tz or 'Asia/Ho_Chi_Minh')
+
+        def _fmt(dt):
+            if not dt:
+                return ''
+            return pytz.utc.localize(dt).astimezone(tz).strftime('%d/%m %H:%M')
+
         checks = self.search([
             ('state', '=', 'pending_approval'),
         ], order='confirmed_time desc', limit=50)
@@ -761,7 +838,7 @@ class InventoryCheck(models.Model):
             'location_name': c.location_id.display_name if c.location_id else '',
             'product_count': c.product_count,
             'total_difference': c.total_difference,
-            'confirmed_time': c.confirmed_time.strftime('%d/%m %H:%M') if c.confirmed_time else '',
+            'confirmed_time': _fmt(c.confirmed_time),
         } for c in checks]
 
     @api.model

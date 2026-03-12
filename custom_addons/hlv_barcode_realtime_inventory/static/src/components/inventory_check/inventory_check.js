@@ -18,7 +18,7 @@ export class InventoryCheckScanner extends Component {
             location_id: null,
             location_name: '',
 
-            // Views: home | scanning | daily_stats | settings | approvals | summary
+            // Views: home | scanning | daily_stats | settings | approvals | summary | check_detail
             view: 'home',
             is_loading: false,
             error_message: '',
@@ -41,6 +41,10 @@ export class InventoryCheckScanner extends Component {
 
             // Daily stats
             daily_stats: null,
+            stats_date: new Date().toISOString().slice(0, 10),  // YYYY-MM-DD local today
+
+            // Check detail
+            check_detail: null,
 
             // Settings
             settings: null,
@@ -112,6 +116,7 @@ export class InventoryCheckScanner extends Component {
     }
 
     goToDailyStats() {
+        this.state.stats_date = new Date().toISOString().slice(0, 10);
         this.state.view = 'daily_stats';
         this._loadDailyStats();
     }
@@ -488,13 +493,61 @@ export class InventoryCheckScanner extends Component {
     async _loadDailyStats() {
         this.state.is_loading = true;
         try {
-            const r = await this.orm.call('inventory.check', 'get_daily_stats', [], {});
+            const r = await this.orm.call('inventory.check', 'get_daily_stats', [], { date_str: this.state.stats_date });
             if (r.success) this.state.daily_stats = r;
         } catch (error) {
             this._showError('Lỗi tải thống kê: ' + error.message);
         } finally {
             this.state.is_loading = false;
         }
+    }
+
+    _statsDateLabel() {
+        const today = new Date().toISOString().slice(0, 10);
+        if (this.state.stats_date === today) return 'Hôm Nay';
+        const [y, m, d] = this.state.stats_date.split('-');
+        return `${d}/${m}/${y}`;
+    }
+
+    statsPrevDay() {
+        const d = new Date(this.state.stats_date);
+        d.setDate(d.getDate() - 1);
+        this.state.stats_date = d.toISOString().slice(0, 10);
+        this._loadDailyStats();
+    }
+
+    statsNextDay() {
+        const today = new Date().toISOString().slice(0, 10);
+        const d = new Date(this.state.stats_date);
+        d.setDate(d.getDate() + 1);
+        const next = d.toISOString().slice(0, 10);
+        if (next > today) return;
+        this.state.stats_date = next;
+        this._loadDailyStats();
+    }
+
+    async openCheckDetail(ev) {
+        const checkId = parseInt(ev.currentTarget.dataset.id, 10);
+        if (!checkId) return;
+        this.state.is_loading = true;
+        try {
+            const r = await this.orm.call('inventory.check', 'get_check_detail', [checkId], {});
+            if (r.success) {
+                this.state.check_detail = r;
+                this.state.view = 'check_detail';
+            } else {
+                this._showError(r.error || 'Lỗi tải chi tiết phiên');
+            }
+        } catch (error) {
+            this._showError('Lỗi: ' + error.message);
+        } finally {
+            this.state.is_loading = false;
+        }
+    }
+
+    goBackToStats() {
+        this.state.view = 'daily_stats';
+        this.state.check_detail = null;
     }
 
     // ========== Settings ==========

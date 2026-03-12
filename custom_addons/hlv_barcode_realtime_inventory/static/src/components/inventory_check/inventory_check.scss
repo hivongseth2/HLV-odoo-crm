@@ -1120,6 +1120,40 @@ $r-full: 9999px;
         &--gray  { border-left: 3px solid $gray-400; .hlv-stat-card__val { color: $gray-600; } }
     }
 
+    // ===== DATE NAVIGATION =====
+    .hlv-date-nav {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 10px 16px 4px;
+
+        &__btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 1px solid $gray-200;
+            background: $white;
+            color: $gray-600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background .15s;
+
+            &:hover { background: $gray-100; }
+            &--disabled { opacity: .35; pointer-events: none; }
+        }
+
+        &__label {
+            min-width: 90px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 700;
+            color: $gray-800;
+        }
+    }
+
     // ===== CHECK LIST (in stats view) =====
     .hlv-checks-list {
         display: flex;
@@ -1137,6 +1171,21 @@ $r-full: 9999px;
         padding: 10px 14px;
         box-shadow: $shadow-sm;
         border: 1px solid $gray-200;
+        width: 100%;
+        text-align: left;
+
+        &--clickable {
+            cursor: pointer;
+            transition: border-color .15s, box-shadow .15s;
+            &:hover { border-color: $blue; box-shadow: 0 2px 8px rgba($blue, .12); }
+            &:active { background: $gray-50; }
+        }
+
+        &__arrow {
+            font-size: 11px;
+            color: $gray-300;
+            margin-left: 2px;
+        }
 
         &__left {
             display: flex;
@@ -1346,6 +1395,113 @@ $r-full: 9999px;
         -webkit-overflow-scrolling: touch;
         padding-bottom: 40px;
     }
+
+    // ===== CHECK DETAIL VIEW =====
+    .hlv-check-detail-view {
+        min-height: 100vh;
+        background: $gray-50;
+        padding-bottom: 40px;
+    }
+
+    .hlv-check-detail__summary {
+        padding: 12px 16px;
+        background: $white;
+        border-bottom: 1px solid $gray-200;
+        margin-bottom: 8px;
+
+        .hlv-check-detail__meta {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            font-size: 13px;
+            color: $gray-500;
+        }
+    }
+
+    .hlv-stats-grid--compact {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .hlv-detail-table {
+        margin: 0 16px;
+        background: $white;
+        border-radius: $r-md;
+        border: 1px solid $gray-200;
+        box-shadow: $shadow-sm;
+        overflow: hidden;
+
+        &__header {
+            display: flex;
+            background: $gray-50;
+            border-bottom: 1px solid $gray-200;
+            padding: 8px 12px;
+        }
+
+        &__row {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            border-bottom: 1px solid $gray-100;
+            &:last-child { border-bottom: none; }
+
+            &--diff { background: rgba($red, .03); }
+        }
+
+        &__col {
+            font-size: 13px;
+            color: $gray-700;
+
+            &--product {
+                flex: 1;
+                min-width: 0;
+            }
+
+            &--num {
+                width: 48px;
+                text-align: right;
+                font-variant-numeric: tabular-nums;
+                flex-shrink: 0;
+            }
+        }
+
+        &__header &__col {
+            font-size: 11px;
+            font-weight: 700;
+            color: $gray-500;
+            text-transform: uppercase;
+        }
+
+        &__pname {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: $gray-800;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        &__lot {
+            display: inline-block;
+            font-size: 11px;
+            color: $gray-400;
+            background: $gray-100;
+            border-radius: 4px;
+            padding: 1px 6px;
+            margin-top: 2px;
+        }
+
+        &__empty {
+            text-align: center;
+            color: $gray-400;
+            font-size: 13px;
+            padding: 24px;
+        }
+    }
+
+    .hlv-text-green { color: $green !important; font-weight: 600; }
+    .hlv-text-red   { color: $red !important; font-weight: 600; }
 
     .hlv-approval-card {
         background: $white;
