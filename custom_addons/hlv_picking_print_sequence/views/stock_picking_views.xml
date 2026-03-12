@@ -15,14 +15,14 @@
             </field>
         </record>
 
-        <!-- Tree/List View - Thêm cột print_sequence vào danh sách -->
-        <record id="stock_picking_tree_inherit_print_sequence" model="ir.ui.view">
-            <field name="name">stock.picking.tree.inherit.print.sequence</field>
+        <!-- List View - Thêm cột print_sequence vào danh sách -->
+        <record id="stock_picking_list_inherit_print_sequence" model="ir.ui.view">
+            <field name="name">stock.picking.list.inherit.print.sequence</field>
             <field name="model">stock.picking</field>
-            <field name="inherit_id" ref="stock.view_picking_tree"/>
+            <field name="inherit_id" ref="stock.view_picking_list"/>
             <field name="arch" type="xml">
                 <!-- Thêm cột print_sequence vào danh sách -->
-                <xpath expr="//tree" position="inside">
+                <xpath expr="//list" position="inside">
                     <field name="print_sequence"/>
                 </xpath>
             </field>
