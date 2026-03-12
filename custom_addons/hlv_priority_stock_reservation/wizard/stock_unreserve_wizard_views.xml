@@ -13,7 +13,7 @@
                 </p>
                 <h6 class="mt-2 mb-1 fw-bold">📦 Tồn kho hiện có</h6>
                 <field name="summary_ids" readonly="1">
-                    <list create="false" delete="false" editable="false">
+                    <list create="false" delete="false">
                         <field name="product_id" string="Sản phẩm"/>
                         <field name="location_id" string="Vị trí lấy hàng"/>
                         <field name="demand_qty" string="Cần"/>
