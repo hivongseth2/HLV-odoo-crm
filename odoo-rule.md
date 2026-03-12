@@ -51,31 +51,54 @@ XML ID: module_name.model_name_action_name
 
 7. Odoo 18 Specific Context
 
-**UI Views - Tree View → List View Migration**
-- ❌ **KHÔNG sử dụng**: Tree view (`ir.ui.view` với `<tree>` tag)
-- ❌ **KHÔNG reference**: `stock.view_picking_tree`, `sale.view_order_tree`, etc. (không tồn tại)
-- ✅ **LUÔN dùng**: List view (thay thế tree) - `stock.view_picking_list`, `sale.view_order_list`, etc.
-- ✅ **Inherit List view** thay vì Tree view:
-  ```xml
-  <!-- ❌ SAI - Odoo 18 không còn tree view -->
-  <record inherit_id="stock.view_picking_tree">
-  
-  <!-- ✅ ĐÚNG - Dùng list view -->
-  <record inherit_id="stock.view_picking_list">
-      <field name="arch" type="xml">
-          <xpath expr="//list" position="inside">
-              <field name="your_field"/>
-          </xpath>
-      </field>
-  </record>
-  ```
+**UI Views - View References & Availability**
+- ❌ **KHÔNG reference**: Tree view (`stock.view_picking_tree`, `sale.view_order_tree`) - không tồn tại
+- ❌ **KHÔNG reference**: List view của stock.picking (`stock.view_picking_list`) - không được export id bằng ngoài
+- ✅ **CÓ THỂ reference**: Form view (`stock.view_picking_form`) - có external ID
+- ✅ **CÓ THỂ reference**: Search view (`stock.view_picking_search`) - có external ID
+- ✅ **LUÔN dùng trong action**: view_mode = "list,form" (Odoo 18 sử dụng list thay tree)
+
+**Khi Inherit View:**
+```xml
+<!-- ✅ ĐÚNG - Form view có external ID -->
+<record inherit_id="stock.view_picking_form">
+    <field name="arch" type="xml">
+        <xpath expr="//field[@name='...]" position="after">
+            <field name="new_field"/>
+        </xpath>
+    </field>
+</record>
+
+<!-- ✅ ĐÚNG - Search view có external ID -->
+<record inherit_id="stock.view_picking_search">
+    <field name="arch" type="xml">
+        <xpath expr="//search" position="inside">
+            <filter name="new_filter" .../>
+        </xpath>
+    </field>
+</record>
+
+<!-- ❌ SAI - Không vào bao giờ inherit list/tree view không có external ID -->
+<record inherit_id="stock.view_picking_list">  <!-- Không tồn tại! -->
+```
+
+**Action View Modes (ir.actions.act_window)**
+- ❌ **KHÔNG dùng**: tree (không còn supported)
+- ✅ **LUÔN dùng**: list (thay thế tree)
+```xml
+<!-- ❌ SAI -->
+<field name="view_mode">tree,form</field>
+
+<!-- ✅ ĐÚNG -->
+<field name="view_mode">list,form</field>
+```
 
 **Server Actions - Binding Models**
 - ❌ **KHÔNG sử dụng**: `binding_model_id` (deprecated)
 - ✅ **LUÔN dùng**: `binding_view_types` = "list,form" hoặc tương ứng
   ```xml
   <record id="action_my_server_action" model="ir.actions.server">
-      <field name="binding_view_types">list,tree</field>
+      <field name="binding_view_types">list,form</field>
   </record>
   ```
 
@@ -99,6 +122,17 @@ XML ID: module_name.model_name_action_name
       record.write({...})
   ]]></field>
   ```
+
+**XPath in Inherited Views**
+- ✅ **LUÔN dùng absolute XPath**: //search, //form, //list
+- ❌ **HẠNY dùng**: Relative XPath như //field[@name='name'] (có thể match sai)
+```xml
+<!-- ✅ ĐÚNG -->
+<xpath expr="//search" position="inside">
+
+<!-- ❌ HẠNY - Có thể match nhiều field cùng tên -->
+<xpath expr="//field[@name='name']" position="after">
+```
 
 Chú ý sự thay đổi trong cách gọi Controllers.
 Kiểm tra các method đã bị Deprecated trong v16/v17 vì v18 có thể đã xóa bỏ hoàn toàn.
