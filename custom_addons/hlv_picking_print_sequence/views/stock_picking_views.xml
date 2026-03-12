@@ -81,21 +81,21 @@
         <record id="action_stock_picking_auto_sequence" model="ir.actions.server">
             <field name="name">Đánh số thứ tự tự động</field>
             <field name="model_id" ref="stock.model_stock_picking"/>
-            <field name="binding_view_types">list,tree</field>
+            <field name="binding_view_types">list</field>
             <field name="state">code</field>
             <field name="code"><![CDATA[
 records_to_sequence = records.filtered(lambda p: p.print_sequence == 0)
 if records_to_sequence:
     sorted_rec = records_to_sequence.sorted(key=lambda p: p.create_date)
     for idx, picking in enumerate(sorted_rec, 1):
-        picking.print_sequence = idx
+        picking.write({'print_sequence': idx})
             ]]></field>
         </record>
 
         <record id="action_stock_picking_reset_sequence" model="ir.actions.server">
             <field name="name">Xóa thứ tự in</field>
             <field name="model_id" ref="stock.model_stock_picking"/>
-            <field name="binding_view_types">list,tree</field>
+            <field name="binding_view_types">list</field>
             <field name="state">code</field>
             <field name="code"><![CDATA[
 records.write({

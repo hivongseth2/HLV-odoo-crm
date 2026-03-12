@@ -89,13 +89,28 @@ XML ID: module_name.model_name_action_name
 <field name="view_mode">list,form</field>
 ```
 
-**Server Actions - Binding Models**
-- ❌ **KHÔNG sử dụng**: `binding_model_id` (deprecated)
-- ✅ **LUÔN dùng**: `binding_view_types` = "list,form" hoặc tương ứng
+**Server Actions - Code Execution Rules (safe_eval)**
+- ❌ **KHÔNG**: Direct assignment như `picking.print_sequence = idx` (STORE_ATTR forbidden)
+- ✅ **LUÔN dùng**: `.write()` method để cập nhật record
 ```xml
-<record id="action_my_server_action" model="ir.actions.server">
-    <field name="binding_view_types">list,form</field>
-</record>
+<!-- ❌ SAI - Forbidden opcode STORE_ATTR -->
+<field name="code"><![CDATA[
+for picking in records:
+    picking.print_sequence = idx  # ← ERROR!
+]]></field>
+
+<!-- ✅ ĐÚNG - Dùng .write() -->
+<field name="code"><![CDATA[
+for idx, picking in enumerate(records, 1):
+    picking.write({'print_sequence': idx})
+]]></field>
+```
+
+**Server Actions - Binding View Types**
+- ❌ **KHÔNG dùng**: "list,tree" (tree không còn)
+- ✅ **LUÔN dùng**: "list" hoặc "list,form"
+```xml
+<field name="binding_view_types">list</field>  <!-- Đúng -->
 ```
 
 **Button Attributes - Loại bỏ attrs**
