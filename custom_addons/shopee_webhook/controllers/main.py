@@ -139,22 +139,6 @@ class ShopeeWebhookController(http.Controller):
                     order.write({'shopee_order_status': status})
                     _logger.info("Shopee Webhook: Updated Order %s status from '%s' to '%s'", order.name, old_status, status)
                     _log_to_file(data, result=f"Updated {order.name}: {old_status} -> {status}")
-                    
-                    # Notify warehouse TSN if order is cancelled
-                    # Check both mapped and unmapped status to be safe
-                    is_cancelled = False
-                    if str(push_code) == '3':
-                         # If it was code 3, status was mapped. The unmapped status was in the block above.
-                         # Let's check against both 'CANCELLED' and 'Đã hủy'
-                         is_cancelled = status in ['CANCELLED', 'Đã hủy', 'Đã Hủy']
-                    else:
-                         is_cancelled = str(status).upper() == 'CANCELLED'
-
-                    if is_cancelled and old_status not in ['CANCELLED', 'Đã hủy', 'Đã Hủy']:
-                        try:
-                            self._notify_warehouse_tsn(order)
-                        except Exception as ne:
-                            _logger.error("Failed to notify TSN warehouse: %s", str(ne))
                 else:
                     _logger.info("Shopee Webhook: No status update found in payload for Order %s", order.name)
 
@@ -164,60 +148,6 @@ class ShopeeWebhookController(http.Controller):
             _logger.error("Error processing Shopee Webhook: %s", str(e), exc_info=True)
             _log_to_file(data if 'data' in dir() else {}, result=f"ERROR: {str(e)}")
             return {'code': 3, 'msg': str(e)}
-
-    def _notify_warehouse_tsn(self, order):
-        """
-        Gửi tin nhắn Zalo cho thủ kho TSN dựa trên cấu hình trong cancellation requests.
-        """
-        # 1. Lấy mapping từ config parameter
-        Config = request.env['ir.config_parameter'].sudo()
-        mapping_str = Config.get_param('hlv_order_cancel_request.warehouse_zalo_mapping', '')
-        
-        if not mapping_str:
-            _logger.warning("Shopee Webhook: No warehouse mapping found (hlv_order_cancel_request.warehouse_zalo_mapping)")
-            return
-
-        # 2. Parse mapping string (Format: TSN:123456|KBC:789012,111222|TSNSR:333444)
-        tsn_uids = []
-        try:
-            parts = mapping_str.split('|')
-            for part in parts:
-                if ':' in part:
-                    warehouse_code, uids = part.split(':', 1)
-                    if warehouse_code.strip().upper() == 'TSN':
-                        tsn_uids = [u.strip() for u in uids.split(',') if u.strip()]
-                        break
-        except Exception as pe:
-            _logger.error("Shopee Webhook: Error parsing warehouse mapping: %s", str(pe))
-            return
-
-        if not tsn_uids:
-            _logger.info("Shopee Webhook: No Zalo UIDs found for warehouse 'TSN' in mapping.")
-            return
-
-        # 3. Xây dựng tin nhắn
-        msg = f"⚠️ ĐƠN SHOPEE ĐÃ HỦY - TSN NGỪNG ĐÓNG GÓI\n"
-        msg += f"• Đơn Odoo: {order.name}\n"
-        msg += f"• Shopee Ref: {order.shopee_order_ref or '?'}\n"
-        msg += f"• Khách hàng: {order.partner_id.name}\n"
-        msg += f"• Trạng thái: {order.shopee_order_status}\n"
-        msg += f"• Vui lòng kiểm tra và xử lý."
-
-        # 4. Gửi qua hlv_zalo_zns
-        try:
-            zalo_config = request.env['hlv.zalo.stock.notification'].sudo()._get_active_config()
-            if not zalo_config:
-                _logger.warning("Shopee Webhook: No active Zalo config found to send notification.")
-                return
-            
-            for uid in tsn_uids:
-                try:
-                    zalo_config.send_notification_message(uid, msg)
-                    _logger.info("Shopee Webhook: Sent cancellation notification to TSN UID %s for order %s", uid, order.name)
-                except Exception as se:
-                    _logger.error("Shopee Webhook: Failed to send Zalo message to %s: %s", uid, str(se))
-        except Exception as ge:
-            _logger.error("Shopee Webhook: Error accessing Zalo service: %s", str(ge))
 
     @http.route('/shopee/webhook/logs', type='http', auth='user', methods=['GET'])
     def shopee_webhook_logs(self, lines=100, **kwargs):
