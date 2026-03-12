@@ -124,10 +124,12 @@ document.addEventListener("DOMContentLoaded", function () {
     // 3. Call Server to Update
     const barcode = el.dataset.barcode; // Prefer barcode if available
     const lineId = el.dataset.lineId;   // Or Line ID
+    // Extract moveId from parent product-item element (reuse itemEl from above)
+    const moveId = itemEl ? itemEl.dataset.moveId : null;
 
     try {
-      // Pass lineId as explicit target
-      await updateQty(barcode, delta, lineId);
+      // Pass lineId and moveId as explicit target
+      await updateQty(barcode, delta, lineId, moveId);
       // Success: updateQty calls savePackageChanges -> updates UI & dataset.currentQty
     } catch (e) {
       // Fail: Revert UI
@@ -215,8 +217,9 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // [FIX] Priority Logic: Active (Partial) > Empty > First
-    let activeMatchId = null;
-    let emptyMatchId = null;
+    // Returns { lineId, moveId } to identify both move_line and stock.move
+    let activeMatch = null;
+    let emptyMatch = null;
 
     for (const el of elements) {
       // Changed: Support done-input or fallback to .done
@@ -229,22 +232,24 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const required = parseFloat(requiredEl?.innerText || 0);
 
+      const info = { lineId: el.dataset.lineId, moveId: el.dataset.moveId };
+
       // Prioritize "Active" (Partially Full) lines
       if (done > 0 && done < required) {
-        return el.dataset.lineId; // Priority 1: Return immediately
+        return info; // Priority 1: Return immediately
       }
 
       // Store "Empty" line as fallback
-      if (done === 0 && done < required && !emptyMatchId) {
-        emptyMatchId = el.dataset.lineId;
+      if (done === 0 && done < required && !emptyMatch) {
+        emptyMatch = info;
       }
     }
 
     // Priority 2: Empty Line
-    if (emptyMatchId) return emptyMatchId;
+    if (emptyMatch) return emptyMatch;
 
     // Priority 3: Fallback to first line (even if full, usually implies overflow)
-    if (elements.length > 0) return elements[0].dataset.lineId;
+    if (elements.length > 0) return { lineId: elements[0].dataset.lineId, moveId: elements[0].dataset.moveId };
 
     return null;
   }
@@ -274,14 +279,23 @@ document.addEventListener("DOMContentLoaded", function () {
     }, 600);
   };
 
-  async function updateQty(barcode, delta = 1, lineId = null) {
+  async function updateQty(barcode, delta = 1, lineId = null, moveId = null) {
     if (!lineId) {
-      lineId = findLineToUpdate(barcode);
+      const found = findLineToUpdate(barcode);
+      lineId = found?.lineId || null;
+      moveId = found?.moveId || null;
+    }
+    // If we have lineId but no moveId, extract moveId from DOM
+    if (lineId && !moveId) {
+      const el = document.querySelector(`[data-line-id="${lineId}"]`);
+      if (el) moveId = el.dataset.moveId || null;
     }
 
     // [NEW] Client-side Over-Quantity Validation
     if (lineId) {
-      const checkEl = document.querySelector(`[data-line-id="${lineId}"]`);
+      const checkEl = moveId
+        ? document.querySelector(`[data-move-id="${moveId}"]`)
+        : document.querySelector(`[data-line-id="${lineId}"]`);
       if (checkEl) {
         const maxQty = parseFloat(checkEl.getAttribute('data-max-qty') || 0);
         const input = checkEl.querySelector(".done-input");
@@ -314,7 +328,8 @@ document.addEventListener("DOMContentLoaded", function () {
             picking_id: pickingId,
             barcode,
             delta,
-            line_id: lineId
+            line_id: lineId,
+            move_id: moveId
           }
         })
       });
@@ -337,8 +352,10 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       result.scanned.forEach(item => {
-        // cố gắng tìm theo line_id
-        let el = document.querySelector(`[data-line-id="${item.line_id}"]`);
+        // [FIX] Ưu tiên tìm theo move_id (1 li = 1 stock.move, luôn đúng dòng)
+        let el = item.move_id ? document.querySelector(`[data-move-id="${item.move_id}"]`) : null;
+        // Fallback: tìm theo line_id
+        if (!el) el = document.querySelector(`[data-line-id="${item.line_id}"]`);
 
         // [FIX] If server returns a line_id that is NOT in the DOM, we must create/update dynamically.
         if (!el && item.barcode) {
@@ -423,6 +440,14 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         if (!el) { console.warn('No DOM line for', item); return; }
+
+        // [FIX] Sync data-line-id to the actual line the backend wrote to
+        if (item.line_id && el.dataset.lineId !== String(item.line_id)) {
+          el.setAttribute('data-line-id', item.line_id);
+          el.dataset.lineId = String(item.line_id);
+          const doneInp = el.querySelector('.done-input');
+          if (doneInp) doneInp.dataset.lineId = String(item.line_id);
+        }
 
         const requiredEl = el.querySelectorAll('span')[1];
         const required = parseFloat((requiredEl?.innerText || '0').replace(',', '.')) || 0;
@@ -592,11 +617,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (barcode !== 'CMD-CREATE-PACK' && !barcode.startsWith("AUTO-PKG-") && !barcode.startsWith("PACK")) {
 
-      const lineId = findLineToUpdate(barcode);
+      const foundLine = findLineToUpdate(barcode);
 
       // Nếu tìm thấy dòng cần update (chưa done), kiểm tra required qty
-      if (lineId) {
-        const lineEl = document.querySelector(`[data-line-id="${lineId}"]`);
+      if (foundLine) {
+        const lineEl = foundLine.moveId
+          ? document.querySelector(`[data-move-id="${foundLine.moveId}"]`)
+          : document.querySelector(`[data-line-id="${foundLine.lineId}"]`);
         if (lineEl) {
           const required = parseFloat(lineEl.querySelectorAll("span")[1]?.innerText || 0);
           if (required < 10) {
@@ -783,6 +810,10 @@ document.addEventListener("DOMContentLoaded", function () {
   setFocus();
   diag();
   setTimeout(optimizePackageUI, 100); // Delay nhẹ 100ms để đảm bảo DOM đã render xong
+  // [FIX] Khởi tạo label "Chưa đóng gói" cho tất cả items khi load trang
+  setTimeout(() => {
+    document.querySelectorAll('#product_list .product-item').forEach(el => updateUnpackedLabel(el));
+  }, 150);
   setTimeout(startRecording, 400);
 });
 
