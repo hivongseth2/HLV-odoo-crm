@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_hlv_smart_print_wizard_form" model="ir.ui.view">
+        <field name="name">hlv.smart.print.wizard.form</field>
+        <field name="model">hlv.smart.print.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Lựa chọn in thông minh">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="partner_id"/>
+                            <field name="rule_id" invisible="not rule_id"/>
+                        </group>
+                        <group>
+                            <field name="picking_id" invisible="1"/>
+                        </group>
+                    </group>
+                    <div invisible="rule_id" class="alert alert-warning" role="alert">
+                        Không tìm thấy quy tắc in nào khớp với khách hàng này. Vui lòng chọn biên bản thủ công bên dưới.
+                    </div>
+                    <div invisible="not rule_id" class="alert alert-success" role="alert">
+                        Quy tắc khớp: <field name="rule_id" readonly="1" options="{'no_open': True}"/>.
+                    </div>
+                    <notebook>
+                        <page string="Biên bản cần in" name="reports">
+                            <field name="report_line_ids">
+                                <list editable="bottom">
+                                    <field name="report_id" context="{'list_view_ref': 'hlv_smart_report_config.view_ir_actions_report_select_list'}"/>
+                                    <field name="copies"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <footer>
+                    <button name="action_confirm_print" string="In biên bản" type="object" class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_hlv_smart_print_wizard" model="ir.actions.act_window">
+        <field name="name">Lựa chọn in thông minh</field>
+        <field name="res_model">hlv.smart.print.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target" >new</field>
+    </record>
+</odoo>
