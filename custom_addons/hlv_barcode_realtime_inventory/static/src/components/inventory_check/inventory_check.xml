@@ -110,7 +110,7 @@
 
             <!-- =================== SCANNING VIEW =================== -->
             <t t-if="state.view === 'scanning'">
-                <div class="hlv-scanning">
+                <div class="hlv-scanning" t-on-click="onScanAreaClick">
 
                     <!-- Header -->
                     <div class="hlv-scanning__header">

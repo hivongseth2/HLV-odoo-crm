@@ -188,7 +188,8 @@ class InventoryCheck(models.Model):
             check.scan_count = int(sum(check.line_ids.mapped('scanned_qty')))
             check.total_theoretical_qty = sum(check.line_ids.mapped('theoretical_qty'))
             check.total_scanned_qty = sum(check.line_ids.mapped('scanned_qty'))
-            check.total_difference = sum(check.line_ids.mapped('difference'))
+            # Dùng tổng giá trị tuyệt đối để +1 và -1 không triệt tiêu nhau
+            check.total_difference = sum(abs(d) for d in check.line_ids.mapped('difference'))
             check.discrepancy_count = len(check.discrepancy_ids)
 
     @api.depends('location_id')
@@ -713,7 +714,7 @@ class InventoryCheck(models.Model):
             'state': c.state,
             'product_count': c.product_count,
             'scan_count': c.scan_count,
-            'total_difference': c.total_difference,
+            'total_difference': sum(abs(d) for d in c.line_ids.mapped('difference')),
             'start_time': _fmt_time(c.start_time),
             'confirmed_time': _fmt_time(c.confirmed_time),
         } for c in my_checks_today.sorted('start_time', reverse=True)]

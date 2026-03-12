@@ -636,19 +636,32 @@ export class InventoryCheckScanner extends Component {
         setTimeout(() => {
             const active = document.activeElement;
             if (active) {
+                const tag = active.tagName;
                 if (active.classList.contains('hlv-qty-input')) return;
                 if (active.closest && active.closest('.hlv-discrepancy-dialog')) return;
                 if (active.closest && active.closest('.hlv-confirm-dialog')) return;
-                // Don't steal focus from any other input, textarea, or select
-                const tag = active.tagName;
-                if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+                // Don't steal from non-scan inputs (qty, search, settings, etc.)
+                if ((tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') &&
+                    !active.classList.contains('hlv-input--scan') &&
+                    !active.classList.contains('hlv-input--lg')) return;
             }
             const selector = !this.state.location_id
                 ? '.hlv-input--lg'
                 : '.hlv-input--scan';
             const input = document.querySelector(selector);
-            if (input) input.focus();
-        }, 150);
+            if (input && document.activeElement !== input) input.focus();
+        }, 80);
+    }
+
+    onScanAreaClick(ev) {
+        // Re-focus the barcode input whenever the user taps empty space or a product row
+        // so scanning always works without needing to manually click the input
+        const tag = ev.target.tagName;
+        // Let buttons/inputs/selects handle their own focus
+        if (tag === 'BUTTON' || tag === 'A' || tag === 'INPUT' ||
+            tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (ev.target.closest && ev.target.closest('button, a')) return;
+        this._focusOnBarcodeInput();
     }
 
     _showError(message) {
