@@ -48,6 +48,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         has_delivered = False
         is_fully_ready = True
         so_lines_data = []
+        remaining_free_by_product = {}
 
         for line in so.order_line:
             if line.display_type:
@@ -57,14 +58,21 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             p_type = line.product_id.type if line.product_id else 'service'
             is_kit = line.product_id.product_tmpl_id.id in kit_tmpl_ids
 
-            base_free = (
-                product_availabilities.get((line.product_id.id, so.warehouse_id.id), 0.0)
-                if line.product_id and so.warehouse_id else 0.0
-            )
+            product_wh_key = False
+            if line.product_id and so.warehouse_id:
+                product_wh_key = (line.product_id.id, so.warehouse_id.id)
+                if product_wh_key not in remaining_free_by_product:
+                    remaining_free_by_product[product_wh_key] = product_availabilities.get(product_wh_key, 0.0)
+
+            base_free_remaining = remaining_free_by_product.get(product_wh_key, 0.0) if product_wh_key else 0.0
             reserved_here = sum(
                 line.move_ids.filtered(lambda m: m.state not in ('cancel', 'done')).mapped('quantity')
             )
-            qty_avail = base_free + reserved_here
+            pending_qty_line = max(line.product_uom_qty - line.qty_delivered, 0.0)
+            allocated_free = min(base_free_remaining, pending_qty_line) if pending_qty_line > 0 else 0.0
+            qty_avail = allocated_free + reserved_here
+            if product_wh_key and allocated_free > 0:
+                remaining_free_by_product[product_wh_key] = max(base_free_remaining - allocated_free, 0.0)
             qty_packed = qty_packed_map.get(p_name, 0.0)
 
             so_lines_data.append({

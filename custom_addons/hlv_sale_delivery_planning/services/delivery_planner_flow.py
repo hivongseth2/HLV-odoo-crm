@@ -89,15 +89,24 @@ class DeliveryPlannerServiceFlow(models.AbstractModel):
             ]
 
         # --- Helper: duyệt đệ quy theo move_dest_ids để tìm tất cả path ---
-        def get_paths(picking, allowed_pickings):
+        def get_paths(picking, allowed_pickings, visited=None):
+            if visited is None:
+                visited = set()
+
+            # Chặn vòng lặp khi chain move tạo cycle bất thường.
+            if picking.id in visited:
+                return [[picking]]
+
+            next_visited = set(visited)
+            next_visited.add(picking.id)
             next_pickings = picking.move_ids.mapped('move_dest_ids.picking_id').filtered(
-                lambda x: x in allowed_pickings and x.id != picking.id
+                lambda x: x in allowed_pickings and x.id != picking.id and x.id not in next_visited
             )
             if not next_pickings:
                 return [[picking]]
             paths = []
             for np in next_pickings:
-                for sub_path in get_paths(np, allowed_pickings):
+                for sub_path in get_paths(np, allowed_pickings, next_visited):
                     if picking not in sub_path:
                         paths.append([picking] + sub_path)
             return paths if paths else [[picking]]

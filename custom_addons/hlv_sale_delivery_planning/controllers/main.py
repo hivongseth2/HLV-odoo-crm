@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
+import base64
+import logging
+
 from odoo import http
 from odoo.http import request
-import logging
 
 _logger = logging.getLogger(__name__)
 
@@ -9,75 +11,95 @@ _logger = logging.getLogger(__name__)
 class DeliveryPlannerController(http.Controller):
 
     @http.route('/hlv_sale_delivery_planning/print_picking_slips', type='json', auth='user', methods=['POST'])
-    def print_picking_slips(self, sale_order_ids):
+    def print_picking_slips(self, sale_order_ids=None, **kwargs):
         """
         In phiếu lấy hàng cho các đơn hàng đã chọn.
         Loại bỏ các phiếu đã hoàn thành (state = 'done').
-        
-        :param sale_order_ids: List of sale.order IDs
-        :return: Dict with URL to PDF report
         """
         try:
+            if sale_order_ids is None:
+                sale_order_ids = kwargs.get('sale_order_ids')
+            if sale_order_ids is None and isinstance(request.jsonrequest, dict):
+                sale_order_ids = (request.jsonrequest.get('params') or {}).get('sale_order_ids')
+
+            if isinstance(sale_order_ids, (set, tuple)):
+                sale_order_ids = list(sale_order_ids)
+            if not isinstance(sale_order_ids, list):
+                sale_order_ids = [sale_order_ids] if sale_order_ids else []
+            sale_order_ids = [int(x) for x in sale_order_ids if x]
+
             if not sale_order_ids:
-                return {'error': {'message': 'Không có đơn hàng nào được chọn'}}
+                return {'success': False, 'message': 'Không có đơn hàng nào được chọn'}
 
-            # Get sale orders
-            sale_orders = request.env['sale.order'].browse(sale_order_ids)
-            if not sale_orders.exists():
-                return {'error': {'message': 'Không tìm thấy đơn hàng'}}
+            sale_orders = request.env['sale.order'].browse(sale_order_ids).exists()
+            if not sale_orders:
+                return {'success': False, 'message': 'Không tìm thấy đơn hàng'}
 
-            # Get all pickings from selected sale orders
-            # Filter: only outgoing, not done, not cancelled
-            all_pickings = sale_orders.mapped('picking_ids').filtered(
-                lambda p: p.picking_type_code == 'outgoing' 
-                and p.state not in ['done', 'cancel']
-            )
+            picking_obj = request.env['stock.picking']
+
+            linked_pickings = sale_orders.mapped('picking_ids')
+            linked_pickings |= picking_obj.search([
+                ('sale_id', 'in', sale_orders.ids),
+                ('picking_type_code', 'in', ['outgoing', 'internal']),
+                ('state', 'not in', ['done', 'cancel']),
+            ])
+            linked_pickings |= picking_obj.search([
+                ('origin', 'in', sale_orders.mapped('name')),
+                ('picking_type_code', 'in', ['outgoing', 'internal']),
+                ('state', 'not in', ['done', 'cancel']),
+            ])
+            linked_pickings |= picking_obj.search([
+                ('move_ids.sale_line_id.order_id', 'in', sale_orders.ids),
+                ('picking_type_code', 'in', ['outgoing', 'internal']),
+                ('state', 'not in', ['done', 'cancel']),
+            ])
+
+            all_pickings = linked_pickings.filtered(
+                lambda p: p.picking_type_code in ['outgoing', 'internal'] and p.state not in ['done', 'cancel']
+            ).sorted(key=lambda p: (p.scheduled_date or p.create_date, p.id))
 
             if not all_pickings:
-                return {'error': {'message': 'Không có phiếu lấy hàng nào cần in (tất cả đã hoàn thành hoặc đã hủy)'}}
+                return {'success': False, 'message': 'Không có phiếu lấy hàng nào cần in (tất cả đã hoàn thành hoặc đã hủy)'}
 
-            # Use standard Odoo stock picking report
-            # The report XML ID is usually 'stock.action_report_delivery'
-            report = request.env.ref('stock.action_report_delivery', raise_if_not_found=False)
+            # Fetch report by name "Hoạt động lấy hàng"
+            report = request.env['ir.actions.report'].sudo().search([
+                ('name', 'ilike', 'Hoạt động lấy hàng'),
+            ], limit=1)
             
             if not report:
-                # Fallback to generic stock picking report
-                report = request.env.ref('stock.action_report_picking', raise_if_not_found=False)
-            
-            if not report:
-                return {'error': {'message': 'Không tìm thấy report template cho phiếu lấy hàng'}}
+                return {'success': False, 'message': 'Không tìm thấy report template cho phiếu lấy hàng'}
 
-            # Generate PDF
-            pdf_content, _ = report._render_qweb_pdf(report.id, all_pickings.ids)
-
+            try:
+                # Render PDF with proper signature for Odoo 18
+                picking_ids = list(all_pickings.ids)
+                # In Odoo 18, _render_qweb_pdf needs report_ref as first arg
+                pdf_content, _ = report._render_qweb_pdf(report.report_name, res_ids=picking_ids)
+            except Exception as render_error:
+                _logger.error("Error rendering PDF: %s", str(render_error), exc_info=True)
+                return {'success': False, 'message': f'Lỗi khi tạo PDF: {str(render_error)}'}
             if not pdf_content:
-                return {'error': {'message': 'Không thể tạo PDF'}}
+                return {'success': False, 'message': 'Không thể tạo PDF'}
 
-            # Create attachment
             picking_names = ', '.join(all_pickings.mapped('name')[:5])
             if len(all_pickings) > 5:
                 picking_names += f' (+{len(all_pickings) - 5} phiếu khác)'
-            
+
             filename = f'Phieu_Lay_Hang_{picking_names}.pdf'
             attachment = request.env['ir.attachment'].sudo().create({
                 'name': filename,
                 'type': 'binary',
-                'datas': pdf_content,
+                'datas': base64.b64encode(pdf_content).decode('utf-8'),
                 'res_model': 'stock.picking',
-                'res_id': False,  # Not linked to specific picking
+                'res_id': False,
                 'mimetype': 'application/pdf',
             })
 
-            # Return download URL
-            download_url = f'/web/content/{attachment.id}?download=true'
-            
             return {
                 'success': True,
-                'url': download_url,
+                'url': f'/web/content/{attachment.id}?download=true',
                 'picking_count': len(all_pickings),
-                'message': f'Đã tạo PDF cho {len(all_pickings)} phiếu lấy hàng'
+                'message': f'Đã tạo PDF cho {len(all_pickings)} phiếu lấy hàng',
             }
-
         except Exception as e:
             _logger.error("Error printing picking slips: %s", str(e), exc_info=True)
-            return {'error': {'message': f'Lỗi khi in phiếu lấy hàng: {str(e)}'}}
+            return {'success': False, 'message': f'Lỗi khi in phiếu lấy hàng: {str(e)}'}
