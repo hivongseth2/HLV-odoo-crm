@@ -50,6 +50,56 @@ Class Python: PascalCase
 XML ID: module_name.model_name_action_name
 
 7. Odoo 18 Specific Context
+
+**UI Views - Tree View → List View Migration**
+- ❌ **KHÔNG sử dụng**: Tree view (`ir.ui.view` với `<tree>` tag)
+- ❌ **KHÔNG reference**: `stock.view_picking_tree`, `sale.view_order_tree`, etc. (không tồn tại)
+- ✅ **LUÔN dùng**: List view (thay thế tree) - `stock.view_picking_list`, `sale.view_order_list`, etc.
+- ✅ **Inherit List view** thay vì Tree view:
+  ```xml
+  <!-- ❌ SAI - Odoo 18 không còn tree view -->
+  <record inherit_id="stock.view_picking_tree">
+  
+  <!-- ✅ ĐÚNG - Dùng list view -->
+  <record inherit_id="stock.view_picking_list">
+      <field name="arch" type="xml">
+          <xpath expr="//list" position="inside">
+              <field name="your_field"/>
+          </xpath>
+      </field>
+  </record>
+  ```
+
+**Server Actions - Binding Models**
+- ❌ **KHÔNG sử dụng**: `binding_model_id` (deprecated)
+- ✅ **LUÔN dùng**: `binding_view_types` = "list,form" hoặc tương ứng
+  ```xml
+  <record id="action_my_server_action" model="ir.actions.server">
+      <field name="binding_view_types">list,tree</field>
+  </record>
+  ```
+
+**Button Attributes - Loại bỏ attrs**
+- ❌ **HẠNY dùng**: `attrs="{'invisible': [('field', '=', value)]}"` - không consistent
+- ✅ **LUÔN dùng**: Các attribute trực tiếp hoặc bỏ attrs, để button luôn visible
+  ```xml
+  <!-- ❌ SAI -->
+  <button attrs="{'invisible': [('state', '=', 'done')]}"/>
+  
+  <!-- ✅ ĐÚNG -->
+  <button name="action_method" type="object" string="My Label"/>
+  ```
+
+**Code in XML - CDATA Wrapping**
+- Khi có Python code trong field `<field name="code">`, bao bọc với `<![CDATA[...]]>` để tránh XML parsing error:
+  ```xml
+  <field name="code"><![CDATA[
+  # Python code here
+  for record in records:
+      record.write({...})
+  ]]></field>
+  ```
+
 Chú ý sự thay đổi trong cách gọi Controllers.
 Kiểm tra các method đã bị Deprecated trong v16/v17 vì v18 có thể đã xóa bỏ hoàn toàn.
 Sử dụng frozen=True cho các constant global để tối ưu bộ nhớ.

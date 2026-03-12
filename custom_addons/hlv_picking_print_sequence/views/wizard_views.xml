@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Wizard Form View -->
+        <record id="picking_print_sequence_wizard_form" model="ir.ui.view">
+            <field name="name">picking.print.sequence.wizard.form</field>
+            <field name="model">picking.print.sequence.wizard</field>
+            <field name="arch" type="xml">
+                <form string="Sắp xếp thứ tự in biên bản">
+                    <group>
+                        <group>
+                            <field name="picking_type" />
+                            <field name="state_filter" />
+                            <field name="sequence_method" />
+                        </group>
+                        <group>
+                            <field name="start_sequence" />
+                            <field name="reset_before" />
+                            <field name="dry_run" />
+                        </group>
+                    </group>
+
+                    <separator string="Phiếu cần sắp xếp"/>
+                    <field name="picking_ids" nolabel="1" />
+
+                    <separator string="Xem trước"/>
+                    <field name="preview_ids" nolabel="1" readonly="1" />
+
+                    <footer>
+                        <button name="action_preview" type="object" 
+                                string="Xem trước" class="btn-info"/>
+                        <button name="action_apply" type="object" 
+                                string="Áp dụng sắp xếp" class="btn-primary"/>
+                        <button string="Hủy" class="btn-secondary" special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <!-- Wizard Action -->
+        <record id="action_picking_print_sequence_wizard" model="ir.actions.act_window">
+            <field name="name">Sắp xếp thứ tự in</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">picking.print.sequence.wizard</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+
+        <!-- Menu Item for Wizard -->
+        <menuitem
+            id="menu_wizard_print_sequence"
+            name="Wizard Sắp xếp"
+            parent="menu_picking_print_sequence"
+            action="action_picking_print_sequence_wizard"
+            sequence="0"/>
+
+        <!-- Button in Stock Picking Form -->
+        <record id="stock_picking_form_button_wizard" model="ir.ui.view">
+            <field name="name">stock.picking.form.button.wizard</field>
+            <field name="model">stock.picking</field>
+            <field name="inherit_id" ref="stock.view_picking_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//button[@name='button_validate']" position="before">
+                    <button name="action_open_print_sequence_wizard" type="object" 
+                            string="Sắp xếp in" class="btn-warning"/>
+                </xpath>
+            </field>
+        </record>
+
+    </data>
+</odoo>
