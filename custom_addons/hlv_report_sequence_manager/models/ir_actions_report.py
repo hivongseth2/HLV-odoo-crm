@@ -5,9 +5,16 @@ class IrActionsReport(models.Model):
     _inherit = 'ir.actions.report'
 
     sequence = fields.Integer(
-        string='Sequence',
+        string='Thứ tự',
         default=10,
-        help='Sequence order for print templates. Lower numbers appear first in dropdown menu.',
+        help='Số thứ tự hiển thị trong dropdown menu in. Số nhỏ hơn xuất hiện trên cao hơn.',
     )
 
     _order = 'model ASC, sequence ASC, name ASC'
+
+    def write(self, vals):
+        result = super().write(vals)
+        if 'sequence' in vals:
+            # Xóa cache để dropdown in phản ánh thứ tự mới ngay lập tức
+            self.env.registry.clear_cache()
+        return result
