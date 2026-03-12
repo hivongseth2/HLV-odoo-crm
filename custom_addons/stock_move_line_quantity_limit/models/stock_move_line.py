@@ -11,11 +11,10 @@ class StockMoveLine(models.Model):
     @api.onchange('quantity')
     def _onchange_quantity_check_stock(self):
         """
-        Kiểm tra số lượng dành riêng so với tồn kho thực tế khi thay đổi.
-        Kiểm tra tổng available từ TẤT CẢ locations (không chỉ 1 location).
+        Kiểm tra số lượng nhập tay không vượt quá tồn kho TẠI VỊ TRÍ ĐÓ.
         - Chỉ áp dụng cho kho nội bộ (internal locations)
         - Bỏ qua các moves đã hoàn thành
-        - Tự động giới hạn số lượng đến mức có sẵn
+        - Tự động giới hạn số lượng đến mức có sẵn tại vị trí
         """
         if not self.location_id or not self.product_id:
             return
@@ -28,88 +27,33 @@ class StockMoveLine(models.Model):
         if self.move_id and self.move_id.state in ['done', 'cancel']:
             return
 
-        # **THAY ĐỔI**: Lấy tồn kho từ TẤT CẢ locations (không chỉ location của move)
-        all_quants = self.env['stock.quant'].search([
+        # Lấy tồn kho thực tế TẠI VỊ TRÍ NÀY
+        quant = self.env['stock.quant'].search([
             ('product_id', '=', self.product_id.id),
-            ('location_id.usage', '=', 'internal'),
-        ])
-        
-        total_available = sum(q.available_quantity for q in all_quants)
+            ('location_id', '=', self.location_id.id),
+        ], limit=1)
 
-        # Lấy số lượng đã dành riêng khác (không tính dòng này)
-        reserved_qty = self._get_reserved_qty_in_move()
+        stock_at_location = quant.quantity if quant else 0.0
 
-        # Số lượng còn available = tồn kho - số đã dành riêng
-        available_qty = total_available - reserved_qty
-
-        # Nếu số lượng nhập vào vượt quá có sẵn, điều chỉnh lại
-        if self.quantity > available_qty:
+        # Nếu số lượng nhập vào vượt quá tồn kho tại vị trí, điều chỉnh lại
+        if self.quantity > stock_at_location:
             old_qty = self.quantity
-            self.quantity = available_qty
+            self.quantity = max(0.0, stock_at_location)
 
-            # Hiển thị cảnh báo
             return {
                 'warning': {
-                    'title': _('Vượt quá tồn kho!'),
+                    'title': _('Vượt quá tồn kho tại vị trí!'),
                     'message': _(
-                        'Bạn cố gắng dành riêng %s cái, nhưng chỉ còn %s cái khả dụng (tính từ tất cả kho).\n'
-                        'Hệ thống đã tự động điều chỉnh thành %s cái.\n\n'
-                        'Ghi chú: Nếu hàng phân tán ở nhiều vị trí, hãy dùng Debug Tool để kiểm tra.'
+                        'Vị trí "%s" chỉ còn %s cái.\n'
+                        'Hệ thống đã tự động điều chỉnh từ %s thành %s cái.'
                     ) % (
+                        self.location_id.display_name,
+                        stock_at_location,
                         old_qty,
-                        available_qty,
-                        available_qty
+                        stock_at_location
                     )
                 }
             }
-
-    @api.constrains('quantity', 'location_id', 'product_id')
-    def _check_quantity_not_exceed_stock(self):
-        """
-        Kiểm tra quantity không vượt quá tồn kho.
-        Kiểm tra tổng available từ TẤT CẢ locations (không chỉ 1 location).
-        Giải quyết vấn đề hàng phân tán ở nhiều vị trí.
-        """
-        for record in self:
-            # Bỏ qua các dòng không có đủ thông tin
-            if not record.product_id or not record.location_id:
-                continue
-
-            # Chỉ kiểm tra kho nội bộ
-            if record.location_id.usage != 'internal':
-                continue
-
-            # Bỏ qua moves đã hoàn thành hoặc hủy
-            if record.move_id and record.move_id.state in ['done', 'cancel']:
-                continue
-
-            # **THAY ĐỔI**: Kiểm tra tổng available từ tất cả internal locations
-            # (không chỉ location của move này)
-            all_quants = self.env['stock.quant'].search([
-                ('product_id', '=', record.product_id.id),
-                ('location_id.usage', '=', 'internal'),
-            ])
-            
-            total_available = sum(q.available_quantity for q in all_quants)
-            
-            # Lấy số lượng đã dành riêng khác trong move này
-            reserved_qty = record._get_reserved_qty_in_move()
-            
-            # Tính số lượng thực sự có sẵn để dành riêng
-            available_for_this_line = total_available - reserved_qty
-
-            # Kiểm tra ràng buộc
-            if record.quantity > available_for_this_line:
-                raise models.ValidationError(
-                    _('Không thể dành riêng %s cái của "%s".\n'
-                      'Chỉ còn %s cái khả dụng (tính từ tất cả kho).\n'
-                      'Ghi chú: Hàng có thể phân tán ở nhiều vị trí, vui lòng sử dụng Debug Tool để kiểm tra.') % (
-                        record.quantity,
-                        record.product_id.display_name,
-                        available_for_this_line
-                    )
-                )
-
 
     def _get_total_stock_at_location(self):
         """

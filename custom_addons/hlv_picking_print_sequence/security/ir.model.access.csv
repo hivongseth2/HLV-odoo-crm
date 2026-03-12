@@ -1,5 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_stock_picking_user,stock.picking user,stock.model_stock_picking,stock.group_stock_user,1,1,0,0
-access_stock_picking_manager,stock.picking manager,stock.model_stock_picking,stock.group_stock_manager,1,1,1,0
-access_picking_print_sequence_wizard_user,picking.print.sequence.wizard user,model_picking_print_sequence_wizard,stock.group_stock_user,1,1,1,0
-access_picking_print_sequence_wizard_manager,picking.print.sequence.wizard manager,model_picking_print_sequence_wizard,stock.group_stock_manager,1,1,1,1
