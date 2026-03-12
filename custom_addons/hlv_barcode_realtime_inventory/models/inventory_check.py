@@ -655,8 +655,10 @@ class InventoryCheck(models.Model):
 
     @api.model
     def get_daily_stats(self):
-        """Thống kê kiểm kê theo ngày cho user hiện tại"""
+        """Thống kê kiểm kê theo ngày — chi tiết"""
         today_start = fields.Datetime.now().replace(hour=0, minute=0, second=0)
+        is_manager = self.env.user.has_group('stock.group_stock_manager')
+
         my_checks_today = self.search([
             ('user_id', '=', self.env.user.id),
             ('create_date', '>=', today_start),
@@ -669,6 +671,7 @@ class InventoryCheck(models.Model):
             confirmed = checks.filtered(lambda c: c.state == 'confirmed')
             pending = checks.filtered(lambda c: c.state == 'pending_approval')
             in_progress = checks.filtered(lambda c: c.state in ['draft', 'in_progress'])
+            locations = set(checks.filtered(lambda c: c.location_id).mapped('location_id.id'))
             return {
                 'total': len(checks),
                 'confirmed': len(confirmed),
@@ -677,12 +680,46 @@ class InventoryCheck(models.Model):
                 'total_products': sum(checks.mapped('product_count')),
                 'total_scans': sum(checks.mapped('scan_count')),
                 'total_difference': sum(checks.mapped('total_difference')),
+                'locations_checked': len(locations),
             }
+
+        # My checks list
+        my_checks_list = [{
+            'id': c.id,
+            'name': c.name,
+            'location_name': c.location_id.display_name if c.location_id else 'Chưa chọn',
+            'state': c.state,
+            'product_count': c.product_count,
+            'scan_count': c.scan_count,
+            'total_difference': c.total_difference,
+            'start_time': c.start_time.strftime('%H:%M') if c.start_time else '',
+            'confirmed_time': c.confirmed_time.strftime('%H:%M') if c.confirmed_time else '',
+        } for c in my_checks_today.sorted('start_time', reverse=True)]
+
+        # Per-user breakdown (manager only)
+        team_by_user = []
+        if is_manager:
+            users = all_checks_today.mapped('user_id')
+            for user in users:
+                user_checks = all_checks_today.filtered(lambda c, u=user: c.user_id == u)
+                team_by_user.append({
+                    'user_name': user.name,
+                    'total': len(user_checks),
+                    'confirmed': len(user_checks.filtered(lambda c: c.state == 'confirmed')),
+                    'in_progress': len(user_checks.filtered(lambda c: c.state in ['draft', 'in_progress'])),
+                    'total_products': sum(user_checks.mapped('product_count')),
+                    'total_scans': sum(user_checks.mapped('scan_count')),
+                    'total_difference': sum(user_checks.mapped('total_difference')),
+                })
+            team_by_user.sort(key=lambda x: x['total'], reverse=True)
 
         return {
             'success': True,
             'my_stats': _stats(my_checks_today),
             'team_stats': _stats(all_checks_today),
+            'my_checks': my_checks_list,
+            'team_by_user': team_by_user,
+            'is_manager': is_manager,
         }
 
     @api.model

@@ -15,13 +15,15 @@
         <field name="name">inventory.check.list</field>
         <field name="model">inventory.check</field>
         <field name="arch" type="xml">
-            <list string="Phiên Kiểm Kê" decoration-success="state == 'confirmed'" decoration-warning="has_pending_outbound" decoration-danger="state == 'locked'" decoration-muted="state == 'cancelled'">
+            <list string="Phiên Kiểm Kê" decoration-success="state == 'confirmed'" decoration-warning="has_pending_outbound" decoration-info="state == 'pending_approval'" decoration-danger="state == 'locked'" decoration-muted="state == 'cancelled'">
                 <field name="name"/>
                 <field name="user_id"/>
                 <field name="location_id"/>
                 <field name="product_count"/>
+                <field name="scan_count"/>
                 <field name="total_difference"/>
                 <field name="start_time"/>
+                <field name="confirmed_time"/>
                 <field name="has_pending_outbound" invisible="1"/>
                 <field name="state" widget="badge"/>
             </list>
@@ -37,8 +39,10 @@
                 <header>
                     <button name="action_start_check" type="object" string="Bắt Đầu Kiểm Kê" class="btn-primary" invisible="state != 'draft'"/>
                     <button name="action_confirm_check" type="object" string="Xác Nhận Kiểm Kê" class="btn-success" invisible="state != 'in_progress'"/>
-                    <button name="action_cancel" type="object" string="Hủy Kiểm Kê" class="btn-danger" invisible="state == 'cancelled'"/>
-                    <field name="state" widget="statusbar"/>
+                    <button name="action_approve" type="object" string="Duyệt" class="btn-success" invisible="state != 'pending_approval'" groups="stock.group_stock_manager"/>
+                    <button name="action_reject" type="object" string="Từ Chối" class="btn-warning" invisible="state != 'pending_approval'" groups="stock.group_stock_manager"/>
+                    <button name="action_cancel" type="object" string="Hủy Kiểm Kê" class="btn-danger" invisible="state in ('cancelled', 'confirmed')"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,in_progress,pending_approval,confirmed"/>
                 </header>
                 
                 <sheet>
@@ -60,11 +64,13 @@
                             <field name="user_id" readonly="1"/>
                             <field name="created_by" readonly="1"/>
                             <field name="confirmed_by" readonly="1"/>
+                            <field name="approved_by" readonly="1" invisible="state not in ('confirmed', 'pending_approval')"/>
                         </group>
                         <group>
                             <field name="state" readonly="1"/>
                             <field name="start_time"/>
                             <field name="confirmed_time"/>
+                            <field name="approved_time" readonly="1" invisible="state not in ('confirmed', 'pending_approval')"/>
                             <field name="last_scan_time"/>
                             <field name="device_id"/>
                         </group>
@@ -146,6 +152,7 @@
                 <field name="location_id"/>
                 <separator/>
                 <filter string="Đang Kiểm Kê" name="in_progress" domain="[('state', '=', 'in_progress')]"/>
+                <filter string="Chờ Duyệt" name="pending_approval" domain="[('state', '=', 'pending_approval')]"/>
                 <filter string="Đã Xác Nhận" name="confirmed" domain="[('state', '=', 'confirmed')]"/>
                 <filter string="Có Chênh Lệch" name="has_discrepancy" domain="[('discrepancy_count', '>', 0)]"/>
 
@@ -193,5 +200,53 @@
         action="action_inventory_check_scanner"
         sequence="2"
         />
+
+    <!-- ======================== GRAPH VIEW ======================== -->
+    <record id="view_inventory_check_graph" model="ir.ui.view">
+        <field name="name">inventory.check.graph</field>
+        <field name="model">inventory.check</field>
+        <field name="arch" type="xml">
+            <graph string="Thống Kê Kiểm Kê" type="bar">
+                <field name="user_id"/>
+                <field name="product_count" type="measure"/>
+                <field name="scan_count" type="measure"/>
+                <field name="total_difference" type="measure"/>
+            </graph>
+        </field>
+    </record>
+
+    <!-- ======================== PIVOT VIEW ======================== -->
+    <record id="view_inventory_check_pivot" model="ir.ui.view">
+        <field name="name">inventory.check.pivot</field>
+        <field name="model">inventory.check</field>
+        <field name="arch" type="xml">
+            <pivot string="Thống Kê Kiểm Kê">
+                <field name="user_id" type="row"/>
+                <field name="location_id" type="row"/>
+                <field name="product_count" type="measure"/>
+                <field name="scan_count" type="measure"/>
+                <field name="total_theoretical_qty" type="measure"/>
+                <field name="total_scanned_qty" type="measure"/>
+                <field name="total_difference" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <!-- ========= DASHBOARD ACTION (Manager — Desktop) ========= -->
+    <record id="action_inventory_check_dashboard" model="ir.actions.act_window">
+        <field name="name">Thống Kê Kiểm Kê</field>
+        <field name="res_model">inventory.check</field>
+        <field name="view_mode">pivot,graph,list,form</field>
+        <field name="search_view_id" ref="view_inventory_check_search"/>
+        <field name="context">{'search_default_today': 1, 'search_default_group_user': 1}</field>
+    </record>
+
+    <menuitem
+        id="menu_inventory_check_dashboard"
+        parent="menu_inventory_check_root"
+        name="Thống Kê Kiểm Kê"
+        action="action_inventory_check_dashboard"
+        sequence="5"
+        groups="stock.group_stock_manager"/>
 
 </odoo>

@@ -121,6 +121,10 @@ export class InventoryCheckScanner extends Component {
     }
 
     goToApprovals() {
+        if (!this.state.settings || !this.state.settings.is_manager) {
+            this._showError('Chỉ quản lý kho mới có quyền truy cập');
+            return;
+        }
         this.state.view = 'approvals';
         this._loadApprovals();
     }
@@ -200,6 +204,20 @@ export class InventoryCheckScanner extends Component {
                 'inventory.check', 'search_location', [barcode], {}
             );
             if (result.success) {
+                // Create check first if we don't have one
+                if (!this.state.check_id) {
+                    const checkResult = await this.orm.call(
+                        'inventory.check', 'get_or_create_active_check',
+                        [this.state.device_id], {}
+                    );
+                    if (checkResult.success) {
+                        this.state.check_id = checkResult.check_id;
+                        this.state.check_data = checkResult;
+                    } else {
+                        this._showError('Lỗi tạo phiên kiểm kê');
+                        return;
+                    }
+                }
                 await this._setLocation(result.location_id, result.location_name);
                 this.state.location_barcode = '';
             } else {
@@ -213,8 +231,6 @@ export class InventoryCheckScanner extends Component {
     }
 
     async _setLocation(location_id, location_name) {
-        this.state.location_id = location_id;
-        this.state.location_name = location_name;
         this.state.is_loading = true;
         try {
             const result = await this.orm.call(
@@ -223,15 +239,17 @@ export class InventoryCheckScanner extends Component {
             );
             if (result && result.success) {
                 this._applyCheckData(result);
+                this.state.view = 'scanning';
+                this._showNotification(`Đã chọn: ${location_name}`, 'success');
+                this._focusOnBarcodeInput();
+            } else {
+                this._showError(result.error || 'Lỗi thiết lập vị trí');
             }
         } catch (error) {
             this._showError('Lỗi tải dữ liệu vị trí: ' + error.message);
         } finally {
             this.state.is_loading = false;
         }
-        this.state.view = 'scanning';
-        this._showNotification(`Đã chọn: ${location_name}`, 'success');
-        this._focusOnBarcodeInput();
     }
 
     // ========== Barcode Scanning ==========

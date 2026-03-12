@@ -1102,6 +1102,134 @@ $r-full: 9999px;
         &--gray  { border-left: 3px solid $gray-400; .hlv-stat-card__val { color: $gray-600; } }
     }
 
+    // ===== CHECK LIST (in stats view) =====
+    .hlv-checks-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .hlv-check-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        background: $white;
+        border-radius: $r-sm;
+        padding: 10px 14px;
+        box-shadow: $shadow-sm;
+        border: 1px solid $gray-200;
+
+        &__left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        &__dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            background: $gray-300;
+
+            &--green { background: $green; }
+            &--amber { background: $amber; }
+            &--blue  { background: $blue; }
+        }
+
+        &__info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        &__loc {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: $gray-800;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        &__time {
+            display: block;
+            font-size: 11px;
+            color: $gray-400;
+            margin-top: 2px;
+            i { margin-right: 2px; }
+        }
+
+        &__right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        &__count {
+            font-size: 12px;
+            color: $gray-500;
+            font-weight: 500;
+        }
+
+        &__diff {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+
+            &--ok { color: $green; background: rgba($green, .1); }
+            &--bad { color: $red; background: rgba($red, .1); }
+        }
+    }
+
+    // ===== USER TABLE (team breakdown) =====
+    .hlv-user-table {
+        background: $white;
+        border-radius: $r-md;
+        box-shadow: $shadow-sm;
+        border: 1px solid $gray-200;
+        overflow: hidden;
+
+        &__header {
+            display: flex;
+            background: $gray-50;
+            border-bottom: 1px solid $gray-200;
+            padding: 8px 0;
+        }
+
+        &__row {
+            display: flex;
+            border-bottom: 1px solid $gray-100;
+            padding: 10px 0;
+
+            &:last-child { border-bottom: none; }
+        }
+
+        &__col {
+            flex: 1;
+            text-align: center;
+            font-size: 12px;
+            color: $gray-600;
+            padding: 0 6px;
+
+            &--name {
+                flex: 2;
+                text-align: left;
+                padding-left: 14px;
+                font-weight: 500;
+                color: $gray-800;
+            }
+
+            &--green { color: $green; font-weight: 600; }
+            &--red   { color: $red; font-weight: 600; }
+        }
+    }
+
     // ===== SETTINGS VIEW =====
     .hlv-settings-view {
         min-height: 100vh;
@@ -1328,6 +1456,8 @@ $r-full: 9999px;
         .hlv-approval-card__stats { margin-top: 6px; }
         .hlv-confirm__stats { flex-wrap: wrap; }
         .hlv-confirm__stat { min-width: 80px; }
+        .hlv-check-item { flex-wrap: wrap; }
+        .hlv-user-table__col--name { flex: 1.5; }
     }
 }
 

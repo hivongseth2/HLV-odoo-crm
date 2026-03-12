@@ -437,11 +437,13 @@
                             <i class="fa fa-arrow-left"/>
                         </button>
                         <h2>Thống Kê Hôm Nay</h2>
-                        <div/>
+                        <button class="hlv-icon-btn hlv-icon-btn--ghost" t-on-click="_loadDailyStats" title="Làm mới">
+                            <i class="fa fa-sync-alt"/>
+                        </button>
                     </div>
 
                     <t t-if="state.daily_stats">
-                        <!-- My Stats -->
+                        <!-- My Stats Summary -->
                         <div class="hlv-stats-section">
                             <h3><i class="fa fa-user"/> Của Tôi</h3>
                             <div class="hlv-stats-grid">
@@ -451,7 +453,7 @@
                                 </div>
                                 <div class="hlv-stat-card hlv-stat-card--green">
                                     <span class="hlv-stat-card__val" t-esc="state.daily_stats.my_stats.confirmed"/>
-                                    <span class="hlv-stat-card__lbl">Đã xác nhận</span>
+                                    <span class="hlv-stat-card__lbl">Hoàn thành</span>
                                 </div>
                                 <div class="hlv-stat-card hlv-stat-card--amber">
                                     <span class="hlv-stat-card__val" t-esc="state.daily_stats.my_stats.pending_approval"/>
@@ -466,11 +468,41 @@
                                     <span class="hlv-stat-card__lbl">Sản phẩm</span>
                                 </div>
                                 <div class="hlv-stat-card">
-                                    <span class="hlv-stat-card__val" t-esc="state.daily_stats.my_stats.total_scans"/>
-                                    <span class="hlv-stat-card__lbl">Lượt quét</span>
+                                    <span class="hlv-stat-card__val" t-esc="state.daily_stats.my_stats.locations_checked"/>
+                                    <span class="hlv-stat-card__lbl">Vị trí</span>
                                 </div>
                             </div>
                         </div>
+
+                        <!-- My Checks Today -->
+                        <t t-if="state.daily_stats.my_checks and state.daily_stats.my_checks.length > 0">
+                            <div class="hlv-stats-section">
+                                <h3><i class="fa fa-list-alt"/> Phiên Của Tôi</h3>
+                                <div class="hlv-checks-list">
+                                    <t t-foreach="state.daily_stats.my_checks" t-as="chk" t-key="chk.id">
+                                        <div class="hlv-check-item">
+                                            <div class="hlv-check-item__left">
+                                                <div t-att-class="'hlv-check-item__dot ' + (chk.state === 'confirmed' ? 'hlv-check-item__dot--green' : chk.state === 'pending_approval' ? 'hlv-check-item__dot--amber' : 'hlv-check-item__dot--blue')"/>
+                                                <div class="hlv-check-item__info">
+                                                    <span class="hlv-check-item__loc" t-esc="chk.location_name"/>
+                                                    <span class="hlv-check-item__time">
+                                                        <i class="fa fa-clock"/> <t t-esc="chk.start_time"/>
+                                                        <t t-if="chk.confirmed_time"> → <t t-esc="chk.confirmed_time"/></t>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div class="hlv-check-item__right">
+                                                <span class="hlv-check-item__count"><t t-esc="chk.product_count"/> SP</span>
+                                                <span t-att-class="'hlv-check-item__diff ' + (chk.total_difference == 0 ? 'hlv-check-item__diff--ok' : 'hlv-check-item__diff--bad')">
+                                                    <t t-if="chk.total_difference == 0">✓</t>
+                                                    <t t-else="">CL: <t t-esc="chk.total_difference"/></t>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </t>
+                                </div>
+                            </div>
+                        </t>
 
                         <!-- Team Stats -->
                         <div class="hlv-stats-section">
@@ -482,7 +514,7 @@
                                 </div>
                                 <div class="hlv-stat-card hlv-stat-card--green">
                                     <span class="hlv-stat-card__val" t-esc="state.daily_stats.team_stats.confirmed"/>
-                                    <span class="hlv-stat-card__lbl">Đã xác nhận</span>
+                                    <span class="hlv-stat-card__lbl">Hoàn thành</span>
                                 </div>
                                 <div class="hlv-stat-card hlv-stat-card--amber">
                                     <span class="hlv-stat-card__val" t-esc="state.daily_stats.team_stats.pending_approval"/>
@@ -493,8 +525,8 @@
                                     <span class="hlv-stat-card__lbl">Sản phẩm</span>
                                 </div>
                                 <div class="hlv-stat-card">
-                                    <span class="hlv-stat-card__val" t-esc="state.daily_stats.team_stats.total_scans"/>
-                                    <span class="hlv-stat-card__lbl">Lượt quét</span>
+                                    <span class="hlv-stat-card__val" t-esc="state.daily_stats.team_stats.locations_checked"/>
+                                    <span class="hlv-stat-card__lbl">Vị trí</span>
                                 </div>
                                 <div class="hlv-stat-card hlv-stat-card--red">
                                     <span class="hlv-stat-card__val" t-esc="state.daily_stats.team_stats.total_difference"/>
@@ -502,6 +534,31 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Team By User (manager only) -->
+                        <t t-if="state.daily_stats.team_by_user and state.daily_stats.team_by_user.length > 0">
+                            <div class="hlv-stats-section">
+                                <h3><i class="fa fa-chart-bar"/> Theo Nhân Viên</h3>
+                                <div class="hlv-user-table">
+                                    <div class="hlv-user-table__header">
+                                        <span class="hlv-user-table__col hlv-user-table__col--name">Nhân viên</span>
+                                        <span class="hlv-user-table__col">Phiên</span>
+                                        <span class="hlv-user-table__col">Xong</span>
+                                        <span class="hlv-user-table__col">SP</span>
+                                        <span class="hlv-user-table__col">CL</span>
+                                    </div>
+                                    <t t-foreach="state.daily_stats.team_by_user" t-as="usr" t-key="usr.user_name">
+                                        <div class="hlv-user-table__row">
+                                            <span class="hlv-user-table__col hlv-user-table__col--name" t-esc="usr.user_name"/>
+                                            <span class="hlv-user-table__col" t-esc="usr.total"/>
+                                            <span class="hlv-user-table__col hlv-user-table__col--green" t-esc="usr.confirmed"/>
+                                            <span class="hlv-user-table__col" t-esc="usr.total_products"/>
+                                            <span t-att-class="'hlv-user-table__col ' + (usr.total_difference != 0 ? 'hlv-user-table__col--red' : '')" t-esc="usr.total_difference"/>
+                                        </div>
+                                    </t>
+                                </div>
+                            </div>
+                        </t>
                     </t>
                 </div>
             </t>
@@ -555,8 +612,8 @@
                 </div>
             </t>
 
-            <!-- =================== APPROVALS VIEW =================== -->
-            <t t-if="state.view === 'approvals'">
+            <!-- =================== APPROVALS VIEW (Manager Only) =================== -->
+            <t t-if="state.view === 'approvals' and state.settings and state.settings.is_manager">
                 <div class="hlv-approvals-view">
                     <div class="hlv-page-header">
                         <button class="hlv-icon-btn hlv-icon-btn--ghost" t-on-click="goHome">
