@@ -475,7 +475,7 @@ export class DeliveryPlannerDashboard extends Component {
             res_model: "purchase.order",
             res_id: poId,
             views: [[false, "form"]],
-            target: "current",
+            target: "new",
         });
     }
 
@@ -485,7 +485,7 @@ export class DeliveryPlannerDashboard extends Component {
             res_model: "stock.picking",
             res_id: pickingId,
             views: [[false, "form"]],
-            target: "current",
+            target: "new",
         });
     }
 
