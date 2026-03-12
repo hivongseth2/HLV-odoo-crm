@@ -160,28 +160,19 @@ export class InventoryCheckScanner extends Component {
     }
 
     // ========== New Check ==========
-    async startNewCheck() {
-        this.state.is_loading = true;
-        try {
-            const result = await this.orm.call(
-                'inventory.check', 'get_or_create_active_check',
-                [this.state.device_id], {}
-            );
-            if (result.success) {
-                this._applyCheckData(result);
-                if (result.location_id) {
-                    this.state.view = 'scanning';
-                } else {
-                    this.state.view = 'scanning';
-                    // will show location input in scanning header when no location
-                }
-                this._focusOnBarcodeInput();
-            }
-        } catch (error) {
-            this._showError('Lỗi tạo phiên: ' + error.message);
-        } finally {
-            this.state.is_loading = false;
-        }
+    startNewCheck() {
+        // Reset hoàn toàn — phiên mới sẽ được tạo khi user chọn vị trí
+        this.state.check_id = null;
+        this.state.location_id = null;
+        this.state.location_name = '';
+        this.state.check_data = null;
+        this.state.lines = [];
+        this.state.discrepancies = [];
+        this.state.location_barcode = '';
+        this.state.product_barcode = '';
+        this.state.confirm_dialog = false;
+        this.state.view = 'scanning';
+        this._focusOnBarcodeInput();
     }
 
     _applyCheckData(result) {
@@ -213,19 +204,18 @@ export class InventoryCheckScanner extends Component {
                 'inventory.check', 'search_location', [barcode], {}
             );
             if (result.success) {
-                // Create check first if we don't have one
-                if (!this.state.check_id) {
-                    const checkResult = await this.orm.call(
-                        'inventory.check', 'get_or_create_active_check',
-                        [this.state.device_id], {}
-                    );
-                    if (checkResult.success) {
-                        this.state.check_id = checkResult.check_id;
-                        this.state.check_data = checkResult;
-                    } else {
-                        this._showError('Lỗi tạo phiên kiểm kê');
-                        return;
-                    }
+                // Luôn tạo phiên mới cho mỗi lần chọn vị trí mới
+                // (không bao giờ resume — tránh gộm sản phẩm 2 vị trí vào 1 phiên)
+                const checkResult = await this.orm.call(
+                    'inventory.check', 'create_new_check',
+                    [this.state.device_id], {}
+                );
+                if (checkResult.success) {
+                    this.state.check_id = checkResult.check_id;
+                    this.state.check_data = checkResult;
+                } else {
+                    this._showError('Lỗi tạo phiên kiểm kê');
+                    return;
                 }
                 await this._setLocation(result.location_id, result.location_name);
                 this.state.location_barcode = '';
@@ -302,10 +292,11 @@ export class InventoryCheckScanner extends Component {
 
     // ========== Data Refresh ==========
     async _refreshCheckData() {
+        if (!this.state.check_id) return;
         try {
             const result = await this.orm.call(
-                'inventory.check', 'get_or_create_active_check',
-                [this.state.device_id, this.state.location_id], {}
+                'inventory.check', 'get_check_data',
+                [this.state.check_id], {}
             );
             if (result.success) {
                 this.state.check_data = result;

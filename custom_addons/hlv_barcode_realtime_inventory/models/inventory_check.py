@@ -659,6 +659,26 @@ class InventoryCheck(models.Model):
         return {'success': True}
 
     @api.model
+    def create_new_check(self, device_id):
+        """Tạo phên kiểm kê mới (không resume phên cũ)"""
+        check = self.create({
+            'user_id': self.env.user.id,
+            'device_id': device_id,
+            'state': 'draft',
+        })
+        return check._get_check_data()
+
+    @api.model
+    def get_check_data(self, check_id):
+        """Lấy dữ liệu phên theo id, không tạo mới"""
+        check = self.browse(check_id)
+        if not check.exists():
+            return {'success': False, 'error': 'Không tìm thấy phiên'}
+        if check.user_id.id != self.env.user.id:
+            return {'success': False, 'error': 'Không có quyền truy cập phiên này'}
+        return check._get_check_data()
+
+    @api.model
     def get_daily_stats(self, date_str=None):
         """Thống kê kiểm kê theo ngày — chi tiết"""
         tz = pytz.timezone(self.env.user.tz or 'Asia/Ho_Chi_Minh')
