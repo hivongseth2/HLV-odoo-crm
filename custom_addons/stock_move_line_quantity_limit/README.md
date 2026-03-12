@@ -1,19 +1,126 @@
 # Module Công cụ Giới hạn Số lượng Dòng Chuyển kho
 
 ## Tổng quan
-Module này ngăn chặn người dùng nhập số lượng giữ tồn (quantity) vượt quá số lượng tồn thực tế tại vị trí trong kho. 
+Module này cung cấp **2 công cụ chính** cho quản lý stock:
 
-**Vấn đề giải quyết:** Khi user nhập 3 cái nhưng hệ thống tự động nhảy thành 2 dòng (3 + 1 = 4), module này sẽ ngăn chặn bằng cách:
-1. Chỉ cho phép dành riêng số lượng có sẵn trong move hiện tại
-2. Không tính tồn kho từ các moves khác
-3. Tự động điều chỉnh về mức khả dụng
+### 1. Kiểm soát Số lượng
+Ngăn chặn user nhập số lượng giữ tồn vượt quá tồn kho thực tế. Giải quyết vấn đề:
+- Nhảy thành nhiều dòng khi nhập số lượng cao
+- User nhập quá tồn kho có sẵn
+- Tự động điều chỉnh về mức khả dụng
+
+### 2. Debug Tool
+Phân tích chi tiết tại sao picking không assign được. Chẩn đoán:
+- **Hàng phân tán**: Stock ở nhiều vị trí → Cần gộp lại
+- **Thiếu hàng**: Không đủ toàn phần → Cần nhập thêm
+- **Quant issues**: Lock, UoM mismatch, etc
 
 ## Tính Năng
-✅ **Kiểm tra Real-time**: Thông báo ngay khi user cố gắng nhập vượt quá tồn kho  
+✅ **Kiểm tra Real-time**: Thông báo khi user thay đổi quantity  
 ✅ **Tự động điều chỉnh**: Giới hạn số lượng đến mức khả dụng  
-✅ **Ràng buộc Database**: Ngăn lưu dữ liệu không hợp lệ qua API hoặc bulk operations  
+✅ **Ràng buộc Database**: Ngăn lưu dữ liệu không hợp lệ qua API  
 ✅ **Chỉ áp dụng Kho Nội bộ**: Bỏ qua warehouse, supplier, customer locations  
-✅ **Tính toán Chính xác**: Chỉ tính số lượng đã dành riêng trong move hiện tại
+✅ **Debug Picking**: 🆕 Công cụ phân tích picking assign chi tiết  
+✅ **Multi-location Detection**: 🆕 Chỉ ra hàng phân tán ở nhiều nơi
+
+## Cách Cài đặt
+
+1. **Module đã tạo tại:**  
+   `custom_addons/stock_move_line_quantity_limit/`
+
+2. **Cập nhật Apps List:**
+   - Settings > Apps > Update Apps List
+
+3. **Cài đặt Module:**
+   - Tìm "Công cụ Giới hạn Số lượng Dòng Chuyển kho"
+   - Nhấn **Install**
+
+4. **Restart Odoo** (nếu cần)
+
+## Sử Dụng
+
+### Kiểm soát Quantity (Tự động)
+Khi user sửa quantity trong stock.move.line:
+1. Nếu nhập > available → Popup cảnh báo
+2. Tự động điều chỉnh về mức có sẵn
+3. Nếu vẫn save là invalid → Database constraint block
+
+### Debug Picking (Manual)
+Khi picking không assign được:
+
+1. Vào **Inventory > Debug Picking**
+2. Chọn picking order gặp lỗi
+3. Nhấn **🔍 Phân tích Lỗi**
+4. Xem output:
+
+```
+✅ SẢN PHẨM CÓ Ở CÁC VỊ TRÍ:
+  • KBC/Tồn kho/A1-T1/Thung-1: Qty=2, Available=2
+  • KBC/Tồn kho/A1-T1/Thung-2: Qty=2, Available=2
+  
+📊 TỔNG AVAILABLE TẠI TẤT CẢ LOCATIONS: 4
+✅ ĐỦ HÀNG (nhưng có thể phân tán)
+
+⚠️ HÀNG PHÂN TÁN - Cần combine multiple locations!
+```
+
+**Hành động:**
+- Nếu "HÀNG PHÂN TÁN" → Tạo transfer gộp hàng vào 1 location
+- Nếu "THIẾU HÀNG" → Nhập thêm hoặc giảm qty picking
+
+## Lợi ích
+
+| Vấn đề | Giải pháp |
+|-------|----------|
+| Nhập quá qty | ✅ Real-time warning + auto-adjust |
+| Assign fail | ✅ Debug tool chỉ ra nguyên nhân |
+| Hàng phân tán | ✅ 💡 Đề xuất gộp multiple locations |
+| Thiếu hàng | ✅ 💡 Đề xuất nhập thêm |
+
+## Ví dụ Thực Tế
+
+**Tình huống:** Hàng có 4 cái ở 2 vị trí, đơn cần 3 cái
+
+**Trước module:**
+```
+❌ Không assign được!
+❌ User không biết lý do → Phải vào move line chọn tay
+```
+
+**Sau module:**
+```
+1️⃣ Debug tool báo: "Hàng phân tán ở 2 locations, total 4 cái OK"
+2️⃣ User tạo transfer gộp 2 location về 1
+3️⃣ Assign thành công!
+```
+
+## Troubleshooting
+
+### Module không xuất hiện
+- ✅ Update Apps List lại
+- ✅ Restart Odoo
+- ✅ Clear cache browser
+
+### Debug tool không chính xác
+- ✅ Check stock.quant records
+- ✅ Check location types (phải internal)
+
+### Vẫn assign không được
+- ✅ Có thể stock bị lock
+- ✅ Check hlv_priority_stock_reservation module
+- ✅ Hoặc UoM (Unit of Measure) mismatch
+
+## Phục Thuộc
+
+- `stock` (Odoo base module)
+- Kompatibel với tất cả inventory modules
+
+## Version History
+
+- **v18.0.1.0.0** (2026-03): Initial release + Debug tool
+  - Kiểm soát quantity
+  - Debug picking assign
+  - Multi-location detection
 
 ## Cách Hoạt động
 

@@ -15,40 +15,12 @@
             </field>
         </record>
 
-        <!-- List View - Thêm cột print_sequence vào danh sách -->
-        <record id="stock_picking_list_inherit_print_sequence" model="ir.ui.view">
-            <field name="name">stock.picking.list.inherit.print.sequence</field>
-            <field name="model">stock.picking</field>
-            <field name="inherit_id" ref="stock.view_picking_list"/>
-            <field name="arch" type="xml">
-                <!-- Thêm cột print_sequence vào danh sách -->
-                <xpath expr="//list" position="inside">
-                    <field name="print_sequence"/>
-                </xpath>
-            </field>
-        </record>
-
-        <!-- Search View - Thêm filter/search cho print_sequence -->
-        <record id="stock_picking_search_inherit_print_sequence" model="ir.ui.view">
-            <field name="name">stock.picking.search.inherit.print.sequence</field>
-            <field name="model">stock.picking</field>
-            <field name="inherit_id" ref="stock.view_picking_search"/>
-            <field name="arch" type="xml">
-                <!-- Thêm filter cho print_sequence -->
-                <xpath expr="//search" position="inside">
-                    <separator/>
-                    <filter name="has_print_sequence" string="Có thứ tự in" domain="[('print_sequence', '>', 0)]"/>
-                    <filter name="no_print_sequence" string="Chưa sắp xếp" domain="[('print_sequence', '=', 0)]"/>
-                </xpath>
-            </field>
-        </record>
-
         <!-- Action View - Sắp xếp thứ tự in cho Outgoing Picking -->
         <record id="action_stock_picking_sortable_outgoing" model="ir.actions.act_window">
             <field name="name">Sắp xếp thứ tự in - Xuất kho</field>
             <field name="type">ir.actions.act_window</field>
             <field name="res_model">stock.picking</field>
-            <field name="view_mode">tree,form</field>
+            <field name="view_mode">list,form</field>
             <field name="domain">[('picking_type_id.code', '=', 'outgoing')]</field>
             <field name="context">{'search_default_outgoing': 1}</field>
             <field name="help" type="html">
@@ -68,7 +40,7 @@
             <field name="name">Sắp xếp thứ tự in - Chuyển nội bộ</field>
             <field name="type">ir.actions.act_window</field>
             <field name="res_model">stock.picking</field>
-            <field name="view_mode">tree,form</field>
+            <field name="view_mode">list,form</field>
             <field name="domain">[('picking_type_id.code', '=', 'internal')]</field>
             <field name="help" type="html">
                 <p class="o_view_nocontent_smiling_face">
