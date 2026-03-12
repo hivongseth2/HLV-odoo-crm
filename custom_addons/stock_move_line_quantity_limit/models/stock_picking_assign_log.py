@@ -139,3 +139,118 @@ class StockPickingAssignLog(models.Model):
                         q.reserved_quantity - real_reserved,
                     )
                     q.sudo().write({'reserved_quantity': real_reserved})
+
+    def button_validate(self):
+        """
+        Lớp bảo vệ thứ 3: Trước khi validate picking, kiểm tra lần cuối
+        rằng tổng done qty không vượt quá tồn kho thực tế.
+        Tính cả pending done từ các picking khác.
+        Tự động điều chỉnh nếu vượt quá.
+        """
+        from markupsafe import Markup
+
+        adjusted_moves = []
+
+        for picking in self:
+            # Nhóm moves theo (product, parent_location)
+            product_location_map = {}
+            for move in picking.move_ids.filtered(
+                lambda m: m.state not in ['done', 'cancel'] and m.quantity > 0
+            ):
+                if not move.product_id or not move.location_id:
+                    continue
+                if move.location_id.usage != 'internal':
+                    continue
+                key = (move.product_id.id, move.location_id.id)
+                product_location_map.setdefault(key, []).append(move)
+
+            for (prod_id, loc_id), moves in product_location_map.items():
+                product = moves[0].product_id
+                location = moves[0].location_id
+
+                # Tổng done qty trong picking hiện tại cho product này
+                total_done_this_picking = sum(m.quantity for m in moves)
+
+                # Tồn kho thực tế
+                quants = self.env['stock.quant'].search([
+                    ('product_id', '=', prod_id),
+                    ('location_id', 'child_of', loc_id),
+                ])
+                total_on_hand = sum(q.quantity for q in quants)
+                total_reserved_quant = sum(q.reserved_quantity for q in quants)
+
+                # Pending done từ picking khác (phần ĐÃ nhập tay nhưng chưa reserve trong quant)
+                other_move_lines = self.env['stock.move.line'].search([
+                    ('product_id', '=', prod_id),
+                    ('location_id', 'child_of', loc_id),
+                    ('state', 'not in', ['done', 'cancel']),
+                    ('quantity', '>', 0),
+                ])
+                other_picking_qty = sum(
+                    ml.quantity for ml in other_move_lines
+                    if ml.picking_id.id != picking.id
+                )
+                # Pending = phần chưa reserve = other_qty - quant_reserved
+                pending_others = max(0.0, other_picking_qty - total_reserved_quant)
+
+                real_available = (
+                    total_on_hand
+                    - total_reserved_quant
+                    - pending_others
+                )
+
+                if total_done_this_picking > real_available and real_available >= 0:
+                    _logger.warning(
+                        '[VALIDATE_CHECK] OVER-ALLOCATION | picking=%s | product=%s | '
+                        'done=%s > real_available=%s | on_hand=%s | reserved_quant=%s | '
+                        'pending_others=%s | own_reserved=%s',
+                        picking.name, product.display_name,
+                        total_done_this_picking, real_available,
+                        total_on_hand, total_reserved_quant,
+                        pending_others, own_reserved,
+                    )
+
+                    # Phân bổ lại qty cho các moves
+                    remaining = max(0.0, real_available)
+                    for m in moves:
+                        if remaining <= 0:
+                            old_qty = m.quantity
+                            m.with_context(skip_qty_limit_write_check=True).write(
+                                {'quantity': 0.0}
+                            )
+                            adjusted_moves.append(
+                                (m, product, old_qty, 0.0)
+                            )
+                        elif m.quantity > remaining:
+                            old_qty = m.quantity
+                            m.with_context(skip_qty_limit_write_check=True).write(
+                                {'quantity': remaining}
+                            )
+                            adjusted_moves.append(
+                                (m, product, old_qty, remaining)
+                            )
+                            remaining = 0.0
+                        else:
+                            remaining -= m.quantity
+
+            # Post thông báo nếu có điều chỉnh
+            if adjusted_moves:
+                msg_lines = []
+                for move, product, old_qty, new_qty in adjusted_moves:
+                    msg_lines.append(
+                        '<li><b>%s</b>: %s → %s (kho không đủ)</li>'
+                        % (product.display_name, old_qty, new_qty)
+                    )
+                msg = Markup(
+                    '<div style="color: #856404; background-color: #fff3cd; '
+                    'border: 1px solid #ffc107; padding: 10px; border-radius: 4px;">'
+                    '<b>⚠️ Hệ thống đã tự động điều chỉnh số lượng thực tế:</b>'
+                    '<ul>%s</ul>'
+                    '<small>Lý do: Tổng SL nhập tay vượt quá tồn kho khả dụng '
+                    '(đã tính cả các đơn khác đang xử lý).</small>'
+                    '</div>'
+                ) % Markup(''.join(msg_lines))
+                picking.message_post(body=msg)
+
+        return super().button_validate()
+

@@ -14,6 +14,7 @@ class StockMoveLine(models.Model):
         Kiểm tra số lượng nhập tay không vượt quá tồn kho TẠI VỊ TRÍ ĐÓ.
         - Chỉ áp dụng cho kho nội bộ (internal locations)
         - Bỏ qua các moves đã hoàn thành
+        - Tính cả pending done qty từ picking khác chưa validate
         - Tự động giới hạn số lượng đến mức có sẵn tại vị trí
         """
         _logger.info(
@@ -52,18 +53,40 @@ class StockMoveLine(models.Model):
         # Số lượng line này đang giữ trước khi user chỉnh (0 nếu là line mới)
         original_qty = self._origin.quantity if self._origin else 0.0
 
-        # Giới hạn thực = available (của đơn khác chưa dùng) + phần line này đang giữ
-        max_allowed = available_at_location + original_qty
+        # Pending done qty từ các PICKING KHÁC tại cùng location này
+        # (chưa phản ánh trong quant.reserved_quantity)
+        current_picking_id = self.picking_id.id if self.picking_id else (
+            self.move_id.picking_id.id if self.move_id and self.move_id.picking_id else False
+        )
+        other_pending_lines = self.env['stock.move.line'].search([
+            ('product_id', '=', self.product_id.id),
+            ('location_id', '=', self.location_id.id),
+            ('state', 'not in', ['done', 'cancel']),
+            ('quantity', '>', 0),
+        ])
+        # Tổng qty từ picking khác
+        other_picking_qty = sum(
+            oml.quantity for oml in other_pending_lines
+            if oml.picking_id.id != current_picking_id
+        )
+        # Pending = phần chưa reserve = other_qty - quant_reserved
+        # (quant_reserved đã bị trừ qua available_at_location rồi)
+        pending_done_others = max(0.0, other_picking_qty - reserved_at_location)
+
+        # Giới hạn thực = available (của đơn khác chưa dùng) + phần line này đang giữ - pending_others
+        max_allowed = available_at_location + original_qty - pending_done_others
 
         _logger.info(
             '[QTY_LIMIT] Stock check | product=%s | location=%s | '
-            'on_hand=%s | reserved=%s | available=%s | original_qty=%s | max_allowed=%s | qty_to_reserve=%s',
+            'on_hand=%s | reserved=%s | available=%s | original_qty=%s | '
+            'pending_done_others=%s | max_allowed=%s | qty_to_reserve=%s',
             self.product_id.display_name,
             self.location_id.display_name,
             stock_at_location,
             reserved_at_location,
             available_at_location,
             original_qty,
+            pending_done_others,
             max_allowed,
             self.quantity,
         )
@@ -87,13 +110,15 @@ class StockMoveLine(models.Model):
                 'warning': {
                     'title': _('Vượt quá tồn kho tại vị trí!'),
                     'message': _(
-                        'Vị trí "%s" chỉ còn %s cái khả dụng (tồn kho: %s, đã giữ bởi đơn khác: %s).\n'
+                        'Vị trí "%s" chỉ còn %s cái khả dụng thực tế '
+                        '(tồn kho: %s, đã giữ: %s, đang chờ đơn khác: %s).\n'
                         'Hệ thống đã tự động điều chỉnh từ %s thành %s cái.'
                     ) % (
                         self.location_id.display_name,
-                        max_allowed,
+                        max(0.0, max_allowed),
                         stock_at_location,
                         reserved_at_location - original_qty,
+                        pending_done_others,
                         old_qty,
                         self.quantity,
                     )
