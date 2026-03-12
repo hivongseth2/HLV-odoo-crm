@@ -49,29 +49,37 @@ class StockMoveLine(models.Model):
         reserved_at_location = quant.reserved_quantity if quant else 0.0
         available_at_location = quant.available_quantity if quant else 0.0
 
+        # Số lượng line này đang giữ trước khi user chỉnh (0 nếu là line mới)
+        original_qty = self._origin.quantity if self._origin else 0.0
+
+        # Giới hạn thực = available (của đơn khác chưa dùng) + phần line này đang giữ
+        max_allowed = available_at_location + original_qty
+
         _logger.info(
             '[QTY_LIMIT] Stock check | product=%s | location=%s | '
-            'on_hand=%s | reserved=%s | available=%s | qty_to_reserve=%s',
+            'on_hand=%s | reserved=%s | available=%s | original_qty=%s | max_allowed=%s | qty_to_reserve=%s',
             self.product_id.display_name,
             self.location_id.display_name,
             stock_at_location,
             reserved_at_location,
             available_at_location,
+            original_qty,
+            max_allowed,
             self.quantity,
         )
 
-        # Nếu số lượng nhập vào vượt quá tồn kho tại vị trí, điều chỉnh lại
-        if self.quantity > stock_at_location:
+        # Nếu số lượng nhập vào vượt quá giới hạn, điều chỉnh lại
+        if self.quantity > max_allowed:
             old_qty = self.quantity
-            self.quantity = max(0.0, stock_at_location)
+            self.quantity = max(0.0, max_allowed)
 
             _logger.warning(
                 '[QTY_LIMIT] BLOCKED | product=%s | location=%s | '
-                'qty_entered=%s | stock_at_location=%s | adjusted_to=%s',
+                'qty_entered=%s | max_allowed=%s | adjusted_to=%s',
                 self.product_id.display_name,
                 self.location_id.display_name,
                 old_qty,
-                stock_at_location,
+                max_allowed,
                 self.quantity,
             )
 
@@ -79,19 +87,21 @@ class StockMoveLine(models.Model):
                 'warning': {
                     'title': _('Vượt quá tồn kho tại vị trí!'),
                     'message': _(
-                        'Vị trí "%s" chỉ còn %s cái.\n'
+                        'Vị trí "%s" chỉ còn %s cái khả dụng (tồn kho: %s, đã giữ bởi đơn khác: %s).\n'
                         'Hệ thống đã tự động điều chỉnh từ %s thành %s cái.'
                     ) % (
                         self.location_id.display_name,
+                        max_allowed,
                         stock_at_location,
+                        reserved_at_location - original_qty,
                         old_qty,
-                        stock_at_location
+                        self.quantity,
                     )
                 }
             }
 
-        _logger.info('[QTY_LIMIT] OK | qty=%s <= stock_at_location=%s | no adjustment needed',
-                     self.quantity, stock_at_location)
+        _logger.info('[QTY_LIMIT] OK | qty=%s <= max_allowed=%s | no adjustment needed',
+                     self.quantity, max_allowed)
 
     def _get_total_stock_at_location(self):
         """
