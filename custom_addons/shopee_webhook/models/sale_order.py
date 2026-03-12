@@ -7,3 +7,5 @@ class SaleOrder(models.Model):
 
     shopee_order_status = fields.Char(string='Shopee Order Status', help="Status received from Shopee Webhook (e.g. PROCESSED, COMPLETED)")
     
+    # Dummy field to fix crash from old Studio views
+    shopee_order_status_display = fields.Char(string='Shopee Order Status (Old)', help="Dummy field to fix crash")
