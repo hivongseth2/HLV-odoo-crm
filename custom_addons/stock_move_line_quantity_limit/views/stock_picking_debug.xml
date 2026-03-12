@@ -16,6 +16,7 @@
                     </group>
                     <footer>
                         <button string="🔍 Phân tích Lỗi" name="action_debug_picking" type="object" class="btn-primary"/>
+                        <button string="🔧 Sửa Ghost Reservation" name="action_fix_ghost_reservations" type="object" class="btn-warning"/>
                         <button string="Đóng" class="btn-secondary" special="cancel"/>
                     </footer>
                 </form>

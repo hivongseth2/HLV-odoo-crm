@@ -66,6 +66,7 @@ class StockPickingAssignLog(models.Model):
                             ('state', 'not in', ['done', 'cancel']),
                             ('quantity', '>', 0),
                         ])
+                        sum_from_lines = sum(rl.quantity for rl in reserving_lines)
                         for rl in reserving_lines:
                             _logger.info(
                                 '[ASSIGN_LOG]      * RESERVED BY: picking=%s (id=%s) | picking_state=%s | move_line_id=%s | qty=%s | này_có_phải_picking_hiện_tại=%s',
@@ -75,6 +76,16 @@ class StockPickingAssignLog(models.Model):
                                 rl.id,
                                 rl.quantity,
                                 rl.picking_id.id == self.id,
+                            )
+                        # Phát hiện ghost reservation
+                        if abs(sum_from_lines - q.reserved_quantity) > 0.001:
+                            _logger.warning(
+                                '[ASSIGN_LOG]      *** GHOST RESERVATION DETECTED! location=%s | '
+                                'quant.reserved_quantity=%s | sum(move_lines.qty)=%s | phantom=%s cái ***',
+                                q.location_id.display_name,
+                                q.reserved_quantity,
+                                sum_from_lines,
+                                q.reserved_quantity - sum_from_lines,
                             )
 
         result = super().action_assign()

@@ -127,3 +127,64 @@ class StockQuantityLimitDebugHelper(models.TransientModel):
             'view_mode': 'form',
             'target': 'new',
         }
+
+    def action_fix_ghost_reservations(self):
+        """
+        Phát hiện và sửa ghost reservation:
+        Đồng bộ stock.quant.reserved_quantity với tổng move lines thực tế.
+        """
+        self.ensure_one()
+        picking = self.picking_id
+        logs = []
+        logs.append("╔═══════════════════════════════════════════════════╗")
+        logs.append("🔧 FIX GHOST RESERVATIONS")
+        logs.append("╚═══════════════════════════════════════════════════╝\n")
+
+        fixed_count = 0
+
+        for move in picking.move_ids:
+            # Lấy tất cả quants liên quan (child_of để bao gồm sub-locations)
+            quants = self.env['stock.quant'].search([
+                ('product_id', '=', move.product_id.id),
+                ('location_id', 'child_of', move.location_id.id),
+            ])
+            for q in quants:
+                # Tính tổng move lines thực tế đang giữ tại location này
+                real_reserved = sum(
+                    self.env['stock.move.line'].search([
+                        ('product_id', '=', move.product_id.id),
+                        ('location_id', '=', q.location_id.id),
+                        ('state', 'not in', ['done', 'cancel']),
+                        ('quantity', '>', 0),
+                    ]).mapped('quantity')
+                )
+                quant_reserved = q.reserved_quantity
+
+                if abs(quant_reserved - real_reserved) > 0.001:
+                    logs.append(
+                        f"⚠️  GHOST tại {q.location_id.display_name}: "
+                        f"quant.reserved={quant_reserved} | move_lines={real_reserved} | "
+                        f"phantom={quant_reserved - real_reserved}"
+                    )
+                    # Fix: ghi đè reserved_quantity về giá trị thực
+                    q.sudo().write({'reserved_quantity': real_reserved})
+                    logs.append(f"   ✅ Đã sửa reserved_quantity → {real_reserved}")
+                    fixed_count += 1
+                else:
+                    logs.append(
+                        f"✅ OK tại {q.location_id.display_name}: "
+                        f"quant.reserved={quant_reserved} khớp move_lines={real_reserved}"
+                    )
+
+        logs.append(f"\n📊 Kết quả: Đã sửa {fixed_count} quant bị ghost reservation.")
+        if fixed_count > 0:
+            logs.append("→ Bấm 'Kiểm tra tình trạng còn hàng' lại để assign.")
+
+        self.debug_log = "\n".join(logs)
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': self._name,
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
