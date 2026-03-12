@@ -15,21 +15,6 @@
             </field>
         </record>
 
-        <!-- Search View - Thêm filter/search cho print_sequence -->
-        <record id="stock_picking_search_inherit_print_sequence" model="ir.ui.view">
-            <field name="name">stock.picking.search.inherit.print.sequence</field>
-            <field name="model">stock.picking</field>
-            <field name="inherit_id" ref="stock.view_picking_search"/>
-            <field name="arch" type="xml">
-                <!-- Thêm filter cho print_sequence -->
-                <xpath expr="//search" position="inside">
-                    <separator/>
-                    <filter name="has_print_sequence" string="Có thứ tự in" domain="[('print_sequence', '&gt;', 0)]"/>
-                    <filter name="no_print_sequence" string="Chưa sắp xếp" domain="[('print_sequence', '=', 0)]"/>
-                </xpath>
-            </field>
-        </record>
-
         <!-- Action View - Sắp xếp thứ tự in cho Outgoing Picking -->
         <record id="action_stock_picking_sortable_outgoing" model="ir.actions.act_window">
             <field name="name">Sắp xếp thứ tự in - Xuất kho</field>

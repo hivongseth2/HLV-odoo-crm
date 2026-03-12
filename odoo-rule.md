@@ -51,35 +51,31 @@ XML ID: module_name.model_name_action_name
 
 7. Odoo 18 Specific Context
 
-**UI Views - View References & Availability**
-- ❌ **KHÔNG reference**: Tree view (`stock.view_picking_tree`, `sale.view_order_tree`) - không tồn tại
-- ❌ **KHÔNG reference**: List view của stock.picking (`stock.view_picking_list`) - không được export id bằng ngoài
-- ✅ **CÓ THỂ reference**: Form view (`stock.view_picking_form`) - có external ID
-- ✅ **CÓ THỂ reference**: Search view (`stock.view_picking_search`) - có external ID
-- ✅ **LUÔN dùng trong action**: view_mode = "list,form" (Odoo 18 sử dụng list thay tree)
+**UI Views - Which Views Have External IDs?**
 
-**Khi Inherit View:**
+**ONLY stock.view_picking_form exists as external ID:**
+- ✅ **CÓ**: `stock.view_picking_form` (form view)
+- ❌ **KHÔNG CÓ**: `stock.view_picking_list` (list view - không export)
+- ❌ **KHÔNG CÓ**: `stock.view_picking_search` (search view - không export)
+- ❌ **KHÔNG CÓ**: `stock.view_picking_tree` (tree view - không tồn tại)
+
+**Hệ quả:**
+- ✅ **CHỈ có thể** inherit form view (`stock.view_picking_form`)
+- ❌ **BẬT CẤTM inherit** list/search view (không có external ID)
+
 ```xml
-<!-- ✅ ĐÚNG - Form view có external ID -->
+<!-- ✅ ĐÚNG - Chỉ này có external ID -->
 <record inherit_id="stock.view_picking_form">
     <field name="arch" type="xml">
-        <xpath expr="//field[@name='...]" position="after">
-            <field name="new_field"/>
+        <xpath expr="//field[@name='origin']" position="after">
+            <field name="my_new_field"/>
         </xpath>
     </field>
 </record>
 
-<!-- ✅ ĐÚNG - Search view có external ID -->
-<record inherit_id="stock.view_picking_search">
-    <field name="arch" type="xml">
-        <xpath expr="//search" position="inside">
-            <filter name="new_filter" .../>
-        </xpath>
-    </field>
-</record>
-
-<!-- ❌ SAI - Không vào bao giờ inherit list/tree view không có external ID -->
-<record inherit_id="stock.view_picking_list">  <!-- Không tồn tại! -->
+<!-- ❌ SAI - Không có external ID -->
+<record inherit_id="stock.view_picking_search">  <!-- Không tồn tại! -->
+<record inherit_id="stock.view_picking_list">    <!-- Không export! -->
 ```
 
 **Action View Modes (ir.actions.act_window)**
@@ -96,41 +92,41 @@ XML ID: module_name.model_name_action_name
 **Server Actions - Binding Models**
 - ❌ **KHÔNG sử dụng**: `binding_model_id` (deprecated)
 - ✅ **LUÔN dùng**: `binding_view_types` = "list,form" hoặc tương ứng
-  ```xml
-  <record id="action_my_server_action" model="ir.actions.server">
-      <field name="binding_view_types">list,form</field>
-  </record>
-  ```
+```xml
+<record id="action_my_server_action" model="ir.actions.server">
+    <field name="binding_view_types">list,form</field>
+</record>
+```
 
 **Button Attributes - Loại bỏ attrs**
 - ❌ **HẠNY dùng**: `attrs="{'invisible': [('field', '=', value)]}"` - không consistent
 - ✅ **LUÔN dùng**: Các attribute trực tiếp hoặc bỏ attrs, để button luôn visible
-  ```xml
-  <!-- ❌ SAI -->
-  <button attrs="{'invisible': [('state', '=', 'done')]}"/>
-  
-  <!-- ✅ ĐÚNG -->
-  <button name="action_method" type="object" string="My Label"/>
-  ```
+```xml
+<!-- ❌ SAI -->
+<button attrs="{'invisible': [('state', '=', 'done')]}"/>
+
+<!-- ✅ ĐÚNG -->
+<button name="action_method" type="object" string="My Label"/>
+```
 
 **Code in XML - CDATA Wrapping**
 - Khi có Python code trong field `<field name="code">`, bao bọc với `<![CDATA[...]]>` để tránh XML parsing error:
-  ```xml
-  <field name="code"><![CDATA[
-  # Python code here
-  for record in records:
-      record.write({...})
-  ]]></field>
-  ```
+```xml
+<field name="code"><![CDATA[
+# Python code here
+for record in records:
+    record.write({...})
+]]></field>
+```
 
 **XPath in Inherited Views**
-- ✅ **LUÔN dùng absolute XPath**: //search, //form, //list
-- ❌ **HẠNY dùng**: Relative XPath như //field[@name='name'] (có thể match sai)
+- ✅ **LUÔN dùng absolute XPath**: //form, //field, etc.
+- ❌ **HẠNY dùng**: Relative XPath (có thể match sai)
 ```xml
 <!-- ✅ ĐÚNG -->
-<xpath expr="//search" position="inside">
+<xpath expr="//field[@name='origin']" position="after">
 
-<!-- ❌ HẠNY - Có thể match nhiều field cùng tên -->
+<!-- ❌ HẠNY - Match nhiều field cùng tên -->
 <xpath expr="//field[@name='name']" position="after">
 ```
 
