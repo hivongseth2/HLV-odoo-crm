@@ -43,6 +43,8 @@ $r-full: 9999px;
     color: $gray-800;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 
     // ===== LOADING OVERLAY =====
     .hlv-loading {
@@ -953,8 +955,9 @@ $r-full: 9999px;
         margin: 0 0 16px;
         border-radius: $r-md;
         overflow: hidden;
-        border: 1px solid rgba($amber, .35);
-        background: $amber-lt;
+        background: $white;
+        box-shadow: $shadow-sm;
+        border: 1px solid $gray-200;
 
         &__header {
             padding: 10px 14px;
@@ -962,8 +965,9 @@ $r-full: 9999px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: .5px;
-            color: $amber;
-            border-bottom: 1px solid rgba($amber, .2);
+            color: $blue;
+            background: linear-gradient(135deg, rgba($blue,.08), rgba($blue,.03));
+            border-bottom: 1px solid $gray-200;
             display: flex;
             align-items: center;
             gap: 6px;
@@ -975,17 +979,17 @@ $r-full: 9999px;
         align-items: center;
         justify-content: space-between;
         width: 100%;
-        padding: 12px 14px;
+        padding: 14px 16px;
         background: $white;
         border: none;
         border-bottom: 1px solid $gray-100;
         cursor: pointer;
         text-align: left;
-        transition: background .15s;
+        transition: background .15s, transform .1s;
 
         &:last-child { border-bottom: none; }
         &:hover { background: $gray-50; }
-        &:active { background: $gray-100; }
+        &:active { background: $gray-100; transform: scale(.99); }
 
         &__left {
             flex: 1;
@@ -994,10 +998,10 @@ $r-full: 9999px;
         }
 
         &__name {
-            font-size: 13px;
-            font-weight: 600;
+            font-size: 14px;
+            font-weight: 700;
             color: $gray-800;
-            margin-bottom: 3px;
+            margin-bottom: 4px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -1005,34 +1009,37 @@ $r-full: 9999px;
 
         &__loc {
             font-size: 12px;
-            color: $gray-600;
+            color: $gray-500;
             display: flex;
             align-items: center;
             gap: 4px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            i { color: $blue; }
         }
 
         &__right {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
             flex-shrink: 0;
         }
 
         &__time {
             font-size: 11px;
             color: $gray-400;
+            font-weight: 500;
         }
 
         &__arrow {
-            color: $gray-400;
-            font-size: 11px;
+            color: $blue;
+            font-size: 12px;
+            opacity: .6;
         }
     }
 
-    // Amber-tinted badge for session cards
+    // Tinted badges for session cards
     .hlv-badge--warn {
         background: rgba($amber, .15);
         color: $amber;
@@ -1045,10 +1052,18 @@ $r-full: 9999px;
         border-radius: $r-full;
     }
 
+    .hlv-badge--info {
+        background: rgba($blue, .12);
+        color: $blue;
+    }
+
     // ===== DAILY STATS VIEW =====
     .hlv-stats-view {
         min-height: 100vh;
         background: $gray-50;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 40px;
     }
 
     .hlv-stats-section {
@@ -1234,6 +1249,8 @@ $r-full: 9999px;
     .hlv-settings-view {
         min-height: 100vh;
         background: $gray-50;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
     }
 
     .hlv-settings-list {
@@ -1309,6 +1326,9 @@ $r-full: 9999px;
     .hlv-approvals-view {
         min-height: 100vh;
         background: $gray-50;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 40px;
     }
 
     .hlv-approval-card {

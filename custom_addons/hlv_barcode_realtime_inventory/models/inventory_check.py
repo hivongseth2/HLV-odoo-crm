@@ -272,6 +272,8 @@ class InventoryCheck(models.Model):
         self.state = 'confirmed'
         self.confirmed_time = fields.Datetime.now()
         self.confirmed_by = self.env.user
+        # Update discrepancy states to confirmed
+        self.discrepancy_ids.filtered(lambda d: d.state == 'draft').write({'state': 'confirmed'})
 
     def action_approve(self):
         """Quản lý duyệt phiên kiểm kê pending_approval"""
@@ -679,7 +681,7 @@ class InventoryCheck(models.Model):
                 'in_progress': len(in_progress),
                 'total_products': sum(checks.mapped('product_count')),
                 'total_scans': sum(checks.mapped('scan_count')),
-                'total_difference': sum(checks.mapped('total_difference')),
+                'total_difference': sum(abs(c.total_difference) for c in checks),
                 'locations_checked': len(locations),
             }
 
@@ -709,14 +711,14 @@ class InventoryCheck(models.Model):
                     'in_progress': len(user_checks.filtered(lambda c: c.state in ['draft', 'in_progress'])),
                     'total_products': sum(user_checks.mapped('product_count')),
                     'total_scans': sum(user_checks.mapped('scan_count')),
-                    'total_difference': sum(user_checks.mapped('total_difference')),
+                    'total_difference': sum(abs(c.total_difference) for c in user_checks),
                 })
             team_by_user.sort(key=lambda x: x['total'], reverse=True)
 
         return {
             'success': True,
             'my_stats': _stats(my_checks_today),
-            'team_stats': _stats(all_checks_today),
+            'team_stats': _stats(all_checks_today) if is_manager else None,
             'my_checks': my_checks_list,
             'team_by_user': team_by_user,
             'is_manager': is_manager,

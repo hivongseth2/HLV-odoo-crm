@@ -117,6 +117,10 @@ export class InventoryCheckScanner extends Component {
     }
 
     goToSettings() {
+        if (!this.state.settings || !this.state.settings.is_manager) {
+            this._showError('Chỉ quản lý kho mới có quyền truy cập');
+            return;
+        }
         this.state.view = 'settings';
     }
 
@@ -263,7 +267,7 @@ export class InventoryCheckScanner extends Component {
     async scanProduct() {
         const barcode = this.state.product_barcode.trim();
         if (!barcode) return;
-        this.state.is_loading = true;
+        // Don't block UI with loading overlay for scans
         try {
             const pr = await this.orm.call(
                 'inventory.check', 'search_product', [barcode], {}
@@ -279,7 +283,7 @@ export class InventoryCheckScanner extends Component {
             );
             if (sr.success) {
                 if (sr.warning) this.state.warning_message = sr.error;
-                await this._refreshCheckData();
+                this._refreshCheckData();
                 this._showNotification(`✓ ${pr.product_name} (SL: ${sr.scanned_qty})`, 'success');
                 this.state.product_barcode = '';
                 this._focusOnBarcodeInput();
@@ -288,8 +292,6 @@ export class InventoryCheckScanner extends Component {
             }
         } catch (error) {
             this._showError('Lỗi quét: ' + error.message);
-        } finally {
-            this.state.is_loading = false;
         }
     }
 

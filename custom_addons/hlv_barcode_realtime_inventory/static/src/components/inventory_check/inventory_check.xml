@@ -55,7 +55,7 @@
                                         </div>
                                     </div>
                                     <div class="hlv-session-card__right">
-                                        <span class="hlv-badge hlv-badge--warn">
+                                        <span class="hlv-badge hlv-badge--info">
                                             <i class="fa fa-box-open"/>
                                             <t t-esc="sess.product_count"/> SP
                                         </span>
@@ -92,8 +92,8 @@
                             <button class="hlv-nav-btn" t-on-click="goToApprovals">
                                 <i class="fa fa-clipboard-check"/>
                                 <span>Duyệt</span>
-                                <t t-if="state.daily_stats and state.daily_stats.my_stats.pending_approval > 0">
-                                    <span class="hlv-nav-btn__badge" t-esc="state.daily_stats.my_stats.pending_approval"/>
+                                <t t-if="state.daily_stats and state.daily_stats.team_stats and state.daily_stats.team_stats.pending_approval > 0">
+                                    <span class="hlv-nav-btn__badge" t-esc="state.daily_stats.team_stats.pending_approval"/>
                                 </t>
                             </button>
                         </t>
@@ -504,9 +504,10 @@
                             </div>
                         </t>
 
-                        <!-- Team Stats -->
-                        <div class="hlv-stats-section">
-                            <h3><i class="fa fa-users"/> Toàn Team</h3>
+                        <!-- Team Stats (manager only) -->
+                        <t t-if="state.daily_stats.team_stats">
+                            <div class="hlv-stats-section">
+                                <h3><i class="fa fa-users"/> Toàn Team</h3>
                             <div class="hlv-stats-grid">
                                 <div class="hlv-stat-card hlv-stat-card--blue">
                                     <span class="hlv-stat-card__val" t-esc="state.daily_stats.team_stats.total"/>
@@ -534,6 +535,7 @@
                                 </div>
                             </div>
                         </div>
+                        </t>
 
                         <!-- Team By User (manager only) -->
                         <t t-if="state.daily_stats.team_by_user and state.daily_stats.team_by_user.length > 0">
