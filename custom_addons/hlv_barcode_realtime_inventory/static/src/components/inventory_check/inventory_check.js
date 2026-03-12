@@ -586,6 +586,9 @@ export class InventoryCheckScanner extends Component {
                 if (active.classList.contains('hlv-qty-input')) return;
                 if (active.closest && active.closest('.hlv-discrepancy-dialog')) return;
                 if (active.closest && active.closest('.hlv-confirm-dialog')) return;
+                // Don't steal focus from any other input, textarea, or select
+                const tag = active.tagName;
+                if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
             }
             const selector = !this.state.location_id
                 ? '.hlv-input--lg'

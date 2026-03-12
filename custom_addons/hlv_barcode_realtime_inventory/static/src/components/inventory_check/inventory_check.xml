@@ -50,13 +50,13 @@
                                     <div class="hlv-session-card__left">
                                         <div class="hlv-session-card__name" t-esc="sess.name"/>
                                         <div class="hlv-session-card__loc">
-                                            <i class="fa fa-map-marker-alt"/>
+                                            <i class="fa fa-map-marker"/>
                                             <span t-esc="sess.location_name"/>
                                         </div>
                                     </div>
                                     <div class="hlv-session-card__right">
                                         <span class="hlv-badge hlv-badge--info">
-                                            <i class="fa fa-box-open"/>
+                                            <i class="fa fa-cube"/>
                                             <t t-esc="sess.product_count"/> SP
                                         </span>
                                         <span class="hlv-session-card__time" t-esc="sess.write_date"/>
@@ -70,7 +70,7 @@
                     <!-- New Check -->
                     <div class="hlv-home__card">
                         <div class="hlv-input-group">
-                            <span class="hlv-input-group__icon"><i class="fa fa-map-marker-alt"/></span>
+                            <span class="hlv-input-group__icon"><i class="fa fa-map-marker"/></span>
                             <input type="text" class="hlv-input hlv-input--lg"
                                 placeholder="Quét hoặc nhập mã vị trí..."
                                 t-model="state.location_barcode"
@@ -85,12 +85,12 @@
                     <!-- Bottom Nav -->
                     <div class="hlv-home__nav">
                         <button class="hlv-nav-btn" t-on-click="goToDailyStats">
-                            <i class="fa fa-chart-bar"/>
+                            <i class="fa fa-bar-chart"/>
                             <span>Thống Kê</span>
                         </button>
                         <t t-if="state.settings and state.settings.is_manager">
                             <button class="hlv-nav-btn" t-on-click="goToApprovals">
-                                <i class="fa fa-clipboard-check"/>
+                                <i class="fa fa-check-square-o"/>
                                 <span>Duyệt</span>
                                 <t t-if="state.daily_stats and state.daily_stats.team_stats and state.daily_stats.team_stats.pending_approval > 0">
                                     <span class="hlv-nav-btn__badge" t-esc="state.daily_stats.team_stats.pending_approval"/>
@@ -124,7 +124,7 @@
                                     <div class="hlv-scanning__location-name" t-esc="state.location_name"/>
                                     <div class="hlv-scanning__stats" t-if="state.check_data">
                                         <span class="hlv-badge hlv-badge--light">
-                                            <i class="fa fa-box-open"/>
+                                            <i class="fa fa-cube"/>
                                             <t t-esc="state.check_data.product_count"/> SP
                                         </span>
                                         <span class="hlv-badge hlv-badge--light">
@@ -143,7 +143,7 @@
 
                         <div class="hlv-scanning__header-actions">
                             <button class="hlv-icon-btn hlv-icon-btn--outline" t-on-click="viewCheckForm" title="Xem form">
-                                <i class="fa fa-external-link-alt"/>
+                                <i class="fa fa-external-link"/>
                             </button>
                             <button class="hlv-icon-btn hlv-icon-btn--cancel" t-on-click="cancelCheck" title="Hủy">
                                 <i class="fa fa-times"/>
@@ -155,7 +155,7 @@
                     <t t-if="!state.location_id">
                         <div class="hlv-location-input-inline">
                             <div class="hlv-input-group">
-                                <span class="hlv-input-group__icon"><i class="fa fa-map-marker-alt"/></span>
+                                <span class="hlv-input-group__icon"><i class="fa fa-map-marker"/></span>
                                 <input type="text" class="hlv-input hlv-input--lg"
                                     placeholder="Quét mã vị trí..."
                                     t-model="state.location_barcode"
@@ -355,7 +355,7 @@
                                 </div>
                                 <div class="hlv-dialog__body">
                                     <p class="hlv-confirm__loc">
-                                        <i class="fa fa-map-marker-alt"/> <t t-esc="state.location_name"/>
+                                        <i class="fa fa-map-marker"/> <t t-esc="state.location_name"/>
                                     </p>
                                     <div class="hlv-confirm__stats">
                                         <div class="hlv-confirm__stat">
@@ -540,7 +540,7 @@
                         <!-- Team By User (manager only) -->
                         <t t-if="state.daily_stats.team_by_user and state.daily_stats.team_by_user.length > 0">
                             <div class="hlv-stats-section">
-                                <h3><i class="fa fa-chart-bar"/> Theo Nhân Viên</h3>
+                                <h3><i class="fa fa-bar-chart"/> Theo Nhân Viên</h3>
                                 <div class="hlv-user-table">
                                     <div class="hlv-user-table__header">
                                         <span class="hlv-user-table__col hlv-user-table__col--name">Nhân viên</span>
@@ -576,12 +576,16 @@
                         <div/>
                     </div>
 
+                    <div class="hlv-settings-manager-note">
+                        <i class="fa fa-info-circle"/> Thiết lập quyền Thủ Kho: <b>Cài Đặt → Người Dùng → chọn user → Kho vận → Quản Lý Kho</b>
+                    </div>
+
                     <t t-if="state.settings">
                         <div class="hlv-settings-list">
                             <div class="hlv-setting-row" t-on-click="toggleApprovalRequired">
                                 <div class="hlv-setting-row__info">
                                     <div class="hlv-setting-row__title">
-                                        <i class="fa fa-clipboard-check"/> Chế Độ Duyệt
+                                        <i class="fa fa-tasks"/> Chế Độ Duyệt
                                     </div>
                                     <div class="hlv-setting-row__desc">
                                         Phiên kiểm kê cần quản lý duyệt trước khi áp dụng điều chỉnh tồn kho
@@ -627,7 +631,7 @@
 
                     <t t-if="state.pending_approvals.length === 0">
                         <div class="hlv-empty-state" style="padding-top: 60px;">
-                            <i class="fa fa-clipboard-check hlv-empty-state__icon"/>
+                            <i class="fa fa-tasks hlv-empty-state__icon"/>
                             <p>Không có phiên nào chờ duyệt</p>
                         </div>
                     </t>
@@ -640,7 +644,7 @@
                                         <div class="hlv-approval-card__name" t-esc="ap.name"/>
                                         <div class="hlv-approval-card__meta">
                                             <span><i class="fa fa-user"/> <t t-esc="ap.user_name"/></span>
-                                            <span><i class="fa fa-map-marker-alt"/> <t t-esc="ap.location_name"/></span>
+                                            <span><i class="fa fa-map-marker"/> <t t-esc="ap.location_name"/></span>
                                             <span><i class="fa fa-clock"/> <t t-esc="ap.confirmed_time"/></span>
                                         </div>
                                     </div>
