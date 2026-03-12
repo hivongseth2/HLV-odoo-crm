@@ -58,6 +58,24 @@ class StockPickingAssignLog(models.Model):
                         q.location_id.display_name, q.location_id.id,
                         q.quantity, q.reserved_quantity, q.available_quantity,
                     )
+                    # Nếu location này có reserved > 0, log xem PICKING NÀO đang giữ
+                    if q.reserved_quantity > 0:
+                        reserving_lines = self.env['stock.move.line'].search([
+                            ('product_id', '=', move.product_id.id),
+                            ('location_id', '=', q.location_id.id),
+                            ('state', 'not in', ['done', 'cancel']),
+                            ('quantity', '>', 0),
+                        ])
+                        for rl in reserving_lines:
+                            _logger.info(
+                                '[ASSIGN_LOG]      * RESERVED BY: picking=%s (id=%s) | picking_state=%s | move_line_id=%s | qty=%s | này_có_phải_picking_hiện_tại=%s',
+                                rl.picking_id.name if rl.picking_id else 'N/A',
+                                rl.picking_id.id if rl.picking_id else 'N/A',
+                                rl.picking_id.state if rl.picking_id else 'N/A',
+                                rl.id,
+                                rl.quantity,
+                                rl.picking_id.id == self.id,
+                            )
 
         result = super().action_assign()
 
