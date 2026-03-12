@@ -82,7 +82,7 @@
             id="menu_report_sequence_manager"
             name="Print Templates Order"
             action="action_report_sequence_view"
-            parent="stock.menu_stock_config"
+            parent="stock.menu_stock_config_settings"
             sequence="30"/>
 
     </data>
