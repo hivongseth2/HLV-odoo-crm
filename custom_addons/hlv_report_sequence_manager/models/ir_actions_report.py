@@ -10,4 +10,4 @@ class IrActionsReport(models.Model):
         help='Sequence order for print templates. Lower numbers appear first in dropdown menu.',
     )
 
-    _order = 'sequence ASC, name ASC'
+    _order = 'model ASC, sequence ASC, name ASC'
