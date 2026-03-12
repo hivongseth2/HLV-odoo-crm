@@ -6,7 +6,7 @@
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='partner_id']" position="after">
-                <field name="shopee_order_status" readonly="1" widget="badge"
+                <field name="shopee_order_status" widget="badge"
                        decoration-danger="shopee_order_status == 'Đã hủy'"
                        decoration-success="shopee_order_status == 'Hoàn thành'"
                        decoration-info="shopee_order_status in ('Chờ lấy hàng', 'Đã xử lý', 'Đang giao')"
