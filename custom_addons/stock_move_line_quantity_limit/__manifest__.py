@@ -1,17 +1,17 @@
 {
-    'name': 'Stock Move Line Quantity Limit',
+    'name': 'Công cụ Giới hạn Số lượng Dòng Chuyển kho',
     'version': '18.0.1.0.0',
     'category': 'Inventory/Inventory',
-    'summary': 'Prevent exceeding actual stock quantity when setting reserved quantities',
+    'summary': 'Ngăn chặn nhập số lượng vượt quá tồn kho thực tế',
     'description': '''
-        This module prevents users from entering reserved quantity (quantity) exceeding 
-        the actual on-hand quantity at a location.
+        Module này ngăn chặn người dùng nhập số lượng giữ tồn (quantity) vượt quá 
+        tồn kho thực tế (on-hand) tại một vị trí.
         
-        Features:
-        - Real-time validation on quantity field change
-        - Database constraint to prevent invalid data
-        - Warning popup when attempting to exceed stock
-        - Automatic adjustment to available quantity
+        Tính năng:
+        - Kiểm tra real-time khi thay đổi số lượng
+        - Ràng buộc database để ngăn dữ liệu không hợp lệ
+        - Cảnh báo popup khi cố nhập vượt quá tồn kho
+        - Tự động điều chỉnh lại số lượng hợp lệ
     ''',
     'author': 'HLV Team',
     'depends': ['stock'],

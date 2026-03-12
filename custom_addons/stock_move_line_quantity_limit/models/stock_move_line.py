@@ -11,43 +11,48 @@ class StockMoveLine(models.Model):
     @api.onchange('quantity')
     def _onchange_quantity_check_stock(self):
         """
-        Validate quantity against actual on-hand quantity when reserved quantity changes.
-        - For internal locations only
-        - For moves not yet done
-        - Automatically caps quantity to available stock
+        Kiểm tra số lượng dành riêng so với tồn kho thực tế khi thay đổi.
+        - Chỉ áp dụng cho kho nội bộ (internal locations)
+        - Bỏ qua các moves đã hoàn thành
+        - Tự động giới hạn số lượng đến mức có sẵn
         """
         if not self.location_id or not self.product_id:
             return
 
-        # Only validate for internal locations and non-completed moves
+        # Chỉ kiểm tra kho nội bộ
         if self.location_id.usage != 'internal':
             return
 
-        # Skip validation for already completed moves
+        # Bỏ qua moves đã hoàn thành hoặc hủy
         if self.move_id and self.move_id.state in ['done', 'cancel']:
             return
 
-        # Get actual on-hand quantity at this location
-        real_on_hand = self._get_available_quantity()
+        # Lấy tồn kho thực tế tại vị trí
+        total_stock = self._get_total_stock_at_location()
 
-        # If quantity exceeds available stock, handle it
-        if self.quantity > real_on_hand:
-            # Cap the quantity to available stock
-            old_quantity = self.quantity
-            self.quantity = real_on_hand
+        # Lấy số lượng đã dành riêng khác (không tính dòng này)
+        reserved_qty = self._get_reserved_qty_in_move()
 
-            # Return warning notification
+        # Số lượng còn available = tồn kho - số đã dành riêng + số của dòng hiện tại
+        available_qty = total_stock - reserved_qty
+
+        # Nếu số lượng nhập vào vượt quá có sẵn, điều chỉnh lại
+        if self.quantity > available_qty:
+            old_qty = self.quantity
+            self.quantity = available_qty
+
+            # Hiển thị cảnh báo
             return {
                 'warning': {
-                    'title': _('Stock Quantity Exceeded!'),
+                    'title': _('Vượt quá tồn kho!'),
                     'message': _(
-                        'Attempted to reserve %s units, but only %s units are available at location "%s".\n'
-                        'Quantity has been automatically adjusted to %s units.'
+                        'Bạn cố gắng dành riêng %s cái, nhưng chỉ còn %s cái khả dụng tại vị trí "%s".\n'
+                        'Hệ thống đã tự động điều chỉnh thành %s cái.'
                     ) % (
-                        old_quantity,
-                        real_on_hand,
+                        old_qty,
+                        available_qty,
                         self.location_id.display_name,
-                        real_on_hand
+                        available_qty
                     )
                 }
             }
@@ -55,31 +60,37 @@ class StockMoveLine(models.Model):
     @api.constrains('quantity', 'location_id', 'product_id')
     def _check_quantity_not_exceed_stock(self):
         """
-        Database-level constraint to prevent saving quantities exceeding available stock.
-        This ensures validation even when bypassing UI (API calls, bulk operations, etc).
+        Ràng buộc cấp database để ngăn lưu số lượng vượt quá tồn kho.
+        Đảm bảo kiểm tra khi dùng API hoặc bulk operations.
         """
         for record in self:
-            # Skip for empty records
+            # Bỏ qua các dòng không có đủ thông tin
             if not record.product_id or not record.location_id:
                 continue
 
-            # Only validate internal locations
+            # Chỉ kiểm tra kho nội bộ
             if record.location_id.usage != 'internal':
                 continue
 
-            # Skip for completed moves
+            # Bỏ qua moves đã hoàn thành hoặc hủy
             if record.move_id and record.move_id.state in ['done', 'cancel']:
                 continue
 
-            # Get available quantity
-            available_qty = record._get_available_quantity()
+            # Lấy tồn kho thực tế
+            total_stock = record._get_total_stock_at_location()
+            
+            # Lấy số lượng đã dành riêng khác trong move này
+            reserved_qty = record._get_reserved_qty_in_move()
+            
+            # Tính số lượng có sẵn
+            available_qty = total_stock - reserved_qty
 
-            # Check constraint
+            # Kiểm tra ràng buộc
             if record.quantity > available_qty:
                 raise models.ValidationError(
-                    _('Cannot reserve %s units of "%s" at location "%s".\n'
-                      'Only %s units are available.\n'
-                      'Current Location: %s') % (
+                    _('Không thể dành riêng %s cái của "%s" tại vị trí "%s".\n'
+                      'Chỉ còn %s cái khả dụng.\n'
+                      'Vị trí: %s') % (
                         record.quantity,
                         record.product_id.display_name,
                         record.location_id.display_name,
@@ -88,58 +99,57 @@ class StockMoveLine(models.Model):
                     )
                 )
 
-    def _get_available_quantity(self):
+
+    def _get_total_stock_at_location(self):
         """
-        Calculate available on-hand quantity at the specified location.
-        This includes:
-        - Physical stock quantity
-        - Excludes damaged/lost stock
+        Lấy tồn kho thực tế (on-hand) tại vị trí.
+        Bao gồm:
+        - Sản phẩm có sẵn trong kho
         
         Returns:
-            float: Available quantity
+            float: Số lượng có sẵn
         """
         self.ensure_one()
 
         if not self.product_id or not self.location_id:
             return 0.0
 
-        # Search for stock quant at this location
+        # Tìm stock quant tại vị trí
         quant = self.env['stock.quant'].search([
             ('product_id', '=', self.product_id.id),
             ('location_id', '=', self.location_id.id),
         ], limit=1)
 
         if quant:
-            # Use the 'quantity' field (on-hand quantity)
+            # Trả về quantity (số lượng thực tế)
             return max(0.0, quant.quantity)
         
         return 0.0
 
-    def _get_quantity_with_reserved(self):
+    def _get_reserved_qty_in_move(self):
         """
-        Get available quantity minus already reserved amounts.
-        Useful for checking truly available (unreserved) quantity.
+        Lấy tổng số lượng đã dành riêng trong move hiện tại (không tính dòng này).
+        Chỉ tính số lượng từ dòng khác trong cùng move.
         
         Returns:
-            float: Available unreserved quantity
+            float: Tổng số lượng đã dành riêng
         """
         self.ensure_one()
 
-        available = self._get_available_quantity()
+        if not self.move_id or not self.product_id or not self.location_id:
+            return 0.0
 
-        # Find all other move lines for this product at this location
-        # that are not yet done
-        reserved_qty = self.env['stock.move.line'].search_read(
-            [
-                ('product_id', '=', self.product_id.id),
-                ('location_id', '=', self.location_id.id),
-                ('id', '!=', self.id),  # Exclude current line
-                ('state', 'not in', ['done', 'cancel']),
-            ],
-            fields=['quantity']
-        )
+        # Tìm tất cả dòng khác trong move này
+        # Cùng sản phẩm + cùng vị trí + khác dòng hiện tại + chưa hoàn thành
+        other_lines = self.env['stock.move.line'].search([
+            ('move_id', '=', self.move_id.id),
+            ('product_id', '=', self.product_id.id),
+            ('location_id', '=', self.location_id.id),
+            ('id', '!=', self.id),  # Không tính dòng hiện tại
+            ('state', 'not in', ['done', 'cancel']),
+        ])
 
-        # Sum reserved quantities
-        total_reserved = sum(line['quantity'] for line in reserved_qty)
-
-        return max(0.0, available - total_reserved)
+        # Tính tổng quantity của các dòng khác
+        reserved = sum(line.quantity for line in other_lines)
+        
+        return max(0.0, reserved)
