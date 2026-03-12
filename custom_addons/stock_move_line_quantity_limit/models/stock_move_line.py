@@ -16,15 +16,27 @@ class StockMoveLine(models.Model):
         - Bỏ qua các moves đã hoàn thành
         - Tự động giới hạn số lượng đến mức có sẵn tại vị trí
         """
+        _logger.info(
+            '[QTY_LIMIT] onchange trigger | product=%s (id=%s) | location=%s (id=%s) | qty_entered=%s',
+            self.product_id.display_name if self.product_id else 'N/A',
+            self.product_id.id if self.product_id else 'N/A',
+            self.location_id.display_name if self.location_id else 'N/A',
+            self.location_id.id if self.location_id else 'N/A',
+            self.quantity,
+        )
+
         if not self.location_id or not self.product_id:
+            _logger.info('[QTY_LIMIT] SKIP: missing location or product')
             return
 
         # Chỉ kiểm tra kho nội bộ
         if self.location_id.usage != 'internal':
+            _logger.info('[QTY_LIMIT] SKIP: location usage=%s (not internal)', self.location_id.usage)
             return
 
         # Bỏ qua moves đã hoàn thành hoặc hủy
         if self.move_id and self.move_id.state in ['done', 'cancel']:
+            _logger.info('[QTY_LIMIT] SKIP: move state=%s', self.move_id.state)
             return
 
         # Lấy tồn kho thực tế TẠI VỊ TRÍ NÀY
@@ -34,11 +46,34 @@ class StockMoveLine(models.Model):
         ], limit=1)
 
         stock_at_location = quant.quantity if quant else 0.0
+        reserved_at_location = quant.reserved_quantity if quant else 0.0
+        available_at_location = quant.available_quantity if quant else 0.0
+
+        _logger.info(
+            '[QTY_LIMIT] Stock check | product=%s | location=%s | '
+            'on_hand=%s | reserved=%s | available=%s | qty_to_reserve=%s',
+            self.product_id.display_name,
+            self.location_id.display_name,
+            stock_at_location,
+            reserved_at_location,
+            available_at_location,
+            self.quantity,
+        )
 
         # Nếu số lượng nhập vào vượt quá tồn kho tại vị trí, điều chỉnh lại
         if self.quantity > stock_at_location:
             old_qty = self.quantity
             self.quantity = max(0.0, stock_at_location)
+
+            _logger.warning(
+                '[QTY_LIMIT] BLOCKED | product=%s | location=%s | '
+                'qty_entered=%s | stock_at_location=%s | adjusted_to=%s',
+                self.product_id.display_name,
+                self.location_id.display_name,
+                old_qty,
+                stock_at_location,
+                self.quantity,
+            )
 
             return {
                 'warning': {
@@ -54,6 +89,9 @@ class StockMoveLine(models.Model):
                     )
                 }
             }
+
+        _logger.info('[QTY_LIMIT] OK | qty=%s <= stock_at_location=%s | no adjustment needed',
+                     self.quantity, stock_at_location)
 
     def _get_total_stock_at_location(self):
         """
