@@ -62,8 +62,7 @@
             <field name="arch" type="xml">
                 <xpath expr="//button[@name='button_validate']" position="before">
                     <button name="action_open_print_sequence_wizard" type="object" 
-                            string="Sắp xếp in" class="btn-warning"
-                            attrs="{'invisible': [('state', 'not in', ['confirmed', 'assigned', 'done'])]}"/>
+                            string="Sắp xếp in" class="btn-warning"/>
                 </xpath>
             </field>
         </record>

@@ -22,8 +22,8 @@
             <field name="inherit_id" ref="stock.view_picking_tree"/>
             <field name="arch" type="xml">
                 <!-- Thêm cột print_sequence vào danh sách -->
-                <xpath expr="//field[@name='name']" position="after">
-                    <field name="print_sequence" optional="hide"/>
+                <xpath expr="//tree" position="inside">
+                    <field name="print_sequence"/>
                 </xpath>
             </field>
         </record>
@@ -34,8 +34,8 @@
             <field name="model">stock.picking</field>
             <field name="inherit_id" ref="stock.view_picking_search"/>
             <field name="arch" type="xml">
-                <!-- Thêm filter theo picking_type_code -->
-                <xpath expr="//filter[@name='waiting']" position="before">
+                <!-- Thêm filter cho print_sequence -->
+                <xpath expr="//search" position="inside">
                     <separator/>
                     <filter name="has_print_sequence" string="Có thứ tự in" domain="[('print_sequence', '>', 0)]"/>
                     <filter name="no_print_sequence" string="Chưa sắp xếp" domain="[('print_sequence', '=', 0)]"/>
@@ -100,8 +100,7 @@
             <field name="arch" type="xml">
                 <xpath expr="//button[@name='button_validate']" position="before">
                     <button name="action_print_by_sequence" type="object" 
-                            string="In theo thứ tự" class="btn-secondary"
-                            attrs="{'invisible': [('print_sequence', '=', 0)]}"/>
+                            string="In theo thứ tự" class="btn-secondary"/>
                 </xpath>
             </field>
         </record>
@@ -110,30 +109,28 @@
         <record id="action_stock_picking_auto_sequence" model="ir.actions.server">
             <field name="name">Đánh số thứ tự tự động</field>
             <field name="model_id" ref="stock.model_stock_picking"/>
-            <field name="binding_model_id" ref="stock.model_stock_picking"/>
+            <field name="binding_view_types">list,tree</field>
             <field name="state">code</field>
-            <field name="code">
-# Tự động đánh số thứ tự cho các phiếu chưa có sequence
+            <field name="code"><![CDATA[
 records_to_sequence = records.filtered(lambda p: p.print_sequence == 0)
 if records_to_sequence:
     sorted_rec = records_to_sequence.sorted(key=lambda p: p.create_date)
     for idx, picking in enumerate(sorted_rec, 1):
         picking.print_sequence = idx
-            </field>
+            ]]></field>
         </record>
 
         <record id="action_stock_picking_reset_sequence" model="ir.actions.server">
             <field name="name">Xóa thứ tự in</field>
             <field name="model_id" ref="stock.model_stock_picking"/>
-            <field name="binding_model_id" ref="stock.model_stock_picking"/>
+            <field name="binding_view_types">list,tree</field>
             <field name="state">code</field>
-            <field name="code">
-# Xóa thứ tự in cho các phiếu được chọn
+            <field name="code"><![CDATA[
 records.write({
     'print_sequence': 0,
     'print_sequence_note': ''
 })
-            </field>
+            ]]></field>
         </record>
 
     </data>
