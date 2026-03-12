@@ -1,8 +1,17 @@
 # Stock Move Force Assign Module
 
-## Vấn đề Sửa chữa
+## ⚠️ UPDATE: Module Đã Được Sửa
 
-**Tình trạng:** Picking không assign được dù hàng có trong kho
+Module được điều chỉnh để **tránh conflict** với `hlv_priority_stock_reservation`:
+- ❌ Bỏ override `action_assign()` (gây conflict)
+- ❌ Bỏ override `_action_assign()` (fail Odoo 18)
+- ✅ Giữ DEBUG TOOL để kiểm tra lỗi
+
+## Tình trạng Vấn đề
+
+**Lỗi:** Picking không assign được dù hàng có trong kho
+- Bấm "Kiểm tra tình trạng còn hàng" không hoạt động
+- Phải vào move line chọn tay
 - Bấm "Kiểm tra tình trạng còn hàng" không hoạt động
 - Phải vào move line chọn tay
 - Lỗi này thỉnh thoảng xảy ra

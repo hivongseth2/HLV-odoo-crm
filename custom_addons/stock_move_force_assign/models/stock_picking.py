@@ -7,39 +7,9 @@ _logger = logging.getLogger(__name__)
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
 
-    def action_assign(self):
-        """
-        Override action_assign để thêm fallback logic.
-        Nếu assign thất bại, ghi log chi tiết.
-        """
-        _logger.info(f"=== Picking {self.name} - action_assign START ===")
-        
-        for move in self.move_ids:
-            _logger.info(
-                f"Move {move.name}: qty={move.product_uom_qty}, "
-                f"state={move.state}, available={self._get_move_qty_available(move)}"
-            )
-
-        # Cố gắng assign normal
-        try:
-            result = super().action_assign()
-            _logger.info(f"✅ {self.name} - Assign thành công")
-            return result
-        except Exception as e:
-            _logger.error(f"❌ {self.name} - Assign fail: {str(e)}")
-            
-            # Fallback: Thử assign từng move
-            _logger.info(f"Fallback: Assign từng move...")
-            for move in self.move_ids.filtered(lambda m: m.state not in ['assigned', 'partially_available', 'done']):
-                try:
-                    move._action_assign()
-                    _logger.info(f"  ✅ {move.name} assigned")
-                except Exception as move_error:
-                    _logger.warning(f"  ⚠️  {move.name} failed: {str(move_error)[:100]}")
-
-        _logger.info(f"=== Picking {self.name} - action_assign END ===")
-        return True
-
+    # NOTE: Không override action_assign vì conflict với hlv_priority_stock_reservation
+    # Sử dụng debug tool thay vào đó để kiểm tra lỗi assign
+    
     def _get_move_qty_available(self, move):
         """
         Tính qty available cho 1 move.
