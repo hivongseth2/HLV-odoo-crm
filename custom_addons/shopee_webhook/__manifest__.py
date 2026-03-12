@@ -11,7 +11,7 @@
     'website': "https://www.hlv.vn",
     'category': 'Sales',
     'version': '0.1',
-    'depends': ['sale'],
+    'depends': ['sale', 'hlv_zalo_zns'],
     'data': [
         'views/sale_order_views.xml',
     ],

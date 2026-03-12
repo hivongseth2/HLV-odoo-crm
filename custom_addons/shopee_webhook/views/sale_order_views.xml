@@ -1,43 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Form view: thêm trạng thái Shopee -->
     <record id="view_order_form_inherit_shopee" model="ir.ui.view">
         <field name="name">sale.order.form.inherit.shopee</field>
         <field name="model">sale.order</field>
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='partner_id']" position="after">
-                <field name="shopee_order_status_display" widget="badge"
-                       decoration-info="shopee_order_status_display == 'UNPAID'"
-                       decoration-warning="shopee_order_status_display in ('READY_TO_SHIP', 'RETRY_SHIP', 'INVOICE_PENDING', 'PENDING')"
-                       decoration-primary="shopee_order_status_display == 'PROCESSED'"
-                       decoration-success="shopee_order_status_display in ('SHIPPED', 'COMPLETED')"
-                       decoration-danger="shopee_order_status_display in ('IN_CANCEL', 'CANCELLED')"/>
-                <field name="shopee_delivery_status_display" widget="badge"
-                       decoration-warning="shopee_delivery_status_display in ('READY_TO_SHIP', 'RETRY_SHIP')"
-                       decoration-success="shopee_delivery_status_display in ('SHIPPED', 'COMPLETED')"
-                       decoration-danger="shopee_delivery_status_display in ('IN_CANCEL', 'CANCELLED')"/>
-            </xpath>
-        </field>
-    </record>
-
-    <!-- List view: thêm cột trạng thái Shopee với badge màu -->
-    <record id="view_order_list_inherit_shopee" model="ir.ui.view">
-        <field name="name">sale.order.list.inherit.shopee</field>
-        <field name="model">sale.order</field>
-        <field name="inherit_id" ref="sale.view_quotation_tree_with_onboarding"/>
-        <field name="arch" type="xml">
-            <xpath expr="//field[@name='state']" position="before">
-                <field name="shopee_order_status_display" widget="badge" optional="show"
-                       decoration-info="shopee_order_status_display == 'UNPAID'"
-                       decoration-warning="shopee_order_status_display in ('READY_TO_SHIP', 'RETRY_SHIP', 'INVOICE_PENDING', 'PENDING')"
-                       decoration-primary="shopee_order_status_display == 'PROCESSED'"
-                       decoration-success="shopee_order_status_display in ('SHIPPED', 'COMPLETED')"
-                       decoration-danger="shopee_order_status_display in ('IN_CANCEL', 'CANCELLED')"/>
-                <field name="shopee_delivery_status_display" widget="badge" optional="show"
-                       decoration-warning="shopee_delivery_status_display in ('READY_TO_SHIP', 'RETRY_SHIP')"
-                       decoration-success="shopee_delivery_status_display in ('SHIPPED', 'COMPLETED')"
-                       decoration-danger="shopee_delivery_status_display in ('IN_CANCEL', 'CANCELLED')"/>
+                <field name="shopee_order_status" widget="badge" readonly="0"
+                       decoration-danger="shopee_order_status == 'Đã hủy'"
+                       decoration-success="shopee_order_status == 'Hoàn thành'"
+                       decoration-info="shopee_order_status in ('Chờ lấy hàng', 'Đã xử lý', 'Đang giao')"
+                       decoration-warning="shopee_order_status in ('Chưa thanh toán', 'Chờ xác nhận hủy', 'Chờ xuất HĐ', 'Giao lại')"
+                       decoration-muted="shopee_order_status == 'Tạm chờ'" />
             </xpath>
         </field>
     </record>

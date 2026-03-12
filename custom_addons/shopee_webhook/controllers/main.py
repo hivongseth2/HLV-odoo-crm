@@ -2,20 +2,22 @@
 import json
 import os
 import logging
-import time
-import hashlib
-import hmac
 from datetime import datetime
-
-import requests as req_lib
 from odoo import http
 from odoo.http import request
 
 _logger = logging.getLogger(__name__)
 
-_LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
-_LOG_FILE = os.path.join(_LOG_DIR, 'shopee_webhook.log')
+# Use a writable directory outside the module path, typically in the user's home or tmp
+try:
+    _LOG_DIR = os.path.join(os.path.expanduser('~'), 'shopee_logs')
+    os.makedirs(_LOG_DIR, exist_ok=True)
+except Exception:
+    # Fallback to /tmp if home dir is not writable
+    _LOG_DIR = '/tmp/shopee_logs'
+    os.makedirs(_LOG_DIR, exist_ok=True)
 
+_LOG_FILE = os.path.join(_LOG_DIR, 'shopee_webhook.log')
 
 def _log_to_file(data, result=None):
     """Ghi data vào file log persistent, dễ đọc."""
@@ -62,11 +64,6 @@ class ShopeeWebhookController(http.Controller):
             if not data:
                  return {'code': 1, 'msg': 'Empty payload'}
 
-            # Get Push Code
-            push_code = data.get('code')
-            if push_code not in (23, 30):
-                return {'code': 0, 'msg': f'ignored (code={push_code})'}
-
             # The payload structure usually has a 'data' key or matches generic format.
             # Adjust these keys based on actual Shopee documentation if needed.
             # Assuming 'ordersn' is the key for Order SN (Shopee Order Ref).
@@ -92,6 +89,23 @@ class ShopeeWebhookController(http.Controller):
             # Possible keys for status: 'status', 'tracking_status', 'logistics_status'
             status = find_value(data, 'status') or find_value(data, 'tracking_status') or find_value(data, 'logistics_status')
 
+            # Thêm logic mapping tiếng Việt đối với push mechanism code 3 theo yêu cầu
+            push_code = data.get('code')
+            if str(push_code) == '3' and status:
+                status_mapping = {
+                    'UNPAID': 'Chưa thanh toán',
+                    'READY_TO_SHIP': 'Chờ lấy hàng',
+                    'PROCESSED': 'Đã xử lý',
+                    'SHIPPED': 'Đang giao',
+                    'COMPLETED': 'Hoàn thành',
+                    'IN_CANCEL': 'Chờ xác nhận hủy',
+                    'CANCELLED': 'Đã hủy',
+                    'RETRY_SHIP': 'Giao lại',
+                    'TO_CONFIRM_RECEIVE': 'Đã nhận hàng',
+                    'TO_RETURN': 'Đang trả hàng'
+                }
+                status = status_mapping.get(str(status).upper(), status)
+
             # Possible keys for tracking number: 'tracking_no', 'tracking_number'
             tracking_no = find_value(data, 'tracking_no') or find_value(data, 'tracking_number')
 
@@ -104,14 +118,6 @@ class ShopeeWebhookController(http.Controller):
             if ordersn:
                 # 1. Try finding by Shopee Order Ref (Mã đơn hàng)
                 orders = request.env['sale.order'].sudo().search([('shopee_order_ref', '=', ordersn)])
-                
-                # 1b. Fallback to Odoo Order Name (especially useful for manual testing)
-                if not orders:
-                    orders = request.env['sale.order'].sudo().search([('name', '=', ordersn)])
-                    
-                # 1c. Fallback to Client Order Ref
-                if not orders:
-                    orders = request.env['sale.order'].sudo().search([('client_order_ref', '=', ordersn)])
             
             if not orders and tracking_no:
                 # 2. If not found by Order Ref, try finding by Tracking Number (Mã vận đơn) in Stock Picking
@@ -127,79 +133,30 @@ class ShopeeWebhookController(http.Controller):
                 # Otherwise they might retry indefinitely.
                 return {'code': 0, 'msg': 'Order not found, but processed'}
 
-            results_log = []
             for order in orders:
                 if status:
                     old_status = order.shopee_order_status
-                    order.write({
-                        'shopee_order_status': status,
-                        'shopee_delivery_status': status,
-                    })
+                    order.write({'shopee_order_status': status})
                     _logger.info("Shopee Webhook: Updated Order %s status from '%s' to '%s'", order.name, old_status, status)
-                    results_log.append(f"Updated {order.name}: {old_status} -> {status}")
+                    _log_to_file(data, result=f"Updated {order.name}: {old_status} -> {status}")
+                    
+                    # Notify warehouse TSN if order is cancelled
+                    # Check both mapped and unmapped status to be safe
+                    is_cancelled = False
+                    if str(push_code) == '3':
+                         # If it was code 3, status was mapped. The unmapped status was in the block above.
+                         # Let's check against both 'CANCELLED' and 'Đã hủy'
+                         is_cancelled = status in ['CANCELLED', 'Đã hủy', 'Đã Hủy']
+                    else:
+                         is_cancelled = str(status).upper() == 'CANCELLED'
 
-                    # --- Zalo Cancel Notification ---
-                    if status == 'CANCELLED':
+                    if is_cancelled and old_status not in ['CANCELLED', 'Đã hủy', 'Đã Hủy']:
                         try:
-                            order._shopee_send_zalo_cancel_notification()
-                            _logger.info("Shopee Webhook: Sent cancel notification for Order %s", order.name)
-                            results_log.append(f"Sent cancel notification for {order.name}")
-                        except Exception as e:
-                            _logger.error("Shopee Webhook: Cancel notification failed for %s: %s", order.name, str(e))
-                            results_log.append(f"Cancel notification failed {order.name}: {str(e)}")
+                            self._notify_warehouse_tsn(order)
+                        except Exception as ne:
+                            _logger.error("Failed to notify TSN warehouse: %s", str(ne))
                 else:
                     _logger.info("Shopee Webhook: No status update found in payload for Order %s", order.name)
-
-                # --- Auto Validate Delivery Order ---
-                if push_code == 30 and status == 'LOGISTICS_DELIVERY_DONE':
-                    # Find outging picking for this order
-                    pickings_to_validate = request.env['stock.picking'].sudo().search([
-                        ('sale_id', '=', order.id),
-                        ('picking_type_id.code', '=', 'outgoing'),
-                        ('state', 'in', ['confirmed', 'assigned'])
-                    ])
-                    for pick in pickings_to_validate:
-                        try:
-                            # 1. Assign (Reserve) if not assigned
-                            if pick.state == 'confirmed':
-                                pick.action_assign()
-                            
-                            # 2. Set Done Quantities to Reserved or Demanded Quantities
-                            for move in pick.move_ids.filtered(lambda m: m.state not in ['done', 'cancel']):
-                                # In Odoo 16/17/18, we can write directly on move line or move
-                                if hasattr(move, 'move_line_ids') and move.move_line_ids:
-                                    for line in move.move_line_ids:
-                                        if hasattr(line, 'qty_done') and hasattr(line, 'reserved_uom_qty'):
-                                            line.qty_done = line.reserved_uom_qty
-                                        elif hasattr(line, 'quantity') and hasattr(line, 'quantity_product_uom'): # v17+
-                                            line.quantity = line.quantity_product_uom
-                                else:
-                                    # Fallback to move level
-                                    if hasattr(move, 'quantity_done'):
-                                        move.quantity_done = move.product_uom_qty
-
-                            # 3. Validate
-                            # _action_done could trigger immediate transfer limits depending on Odoo version
-                            # We use button_validate to go through standard UI flow checks if possible,
-                            # or _action_done directly if we just want to force it.
-                            res_validate = pick.button_validate()
-                            if isinstance(res_validate, dict) and res_validate.get('res_model') == 'stock.immediate.transfer':
-                                # Process immediate transfer wizard if it pops up
-                                immediate_transfer = request.env['stock.immediate.transfer'].sudo().with_context(res_validate.get('context', {})).create({'pick_ids': [(4, pick.id)]})
-                                immediate_transfer.process()
-                            elif isinstance(res_validate, dict) and res_validate.get('res_model') == 'stock.backorder.confirmation':
-                                # This shouldn't happen if we set qty_done = product_uom_qty, but just in case
-                                backorder_conf = request.env['stock.backorder.confirmation'].sudo().with_context(res_validate.get('context', {})).create({'pick_ids': [(4, pick.id)]})
-                                backorder_conf.process_cancel_backorder() # Do not create backorder
-
-                            results_log.append(f"Auto-validated picking: {pick.name}")
-                            _logger.info("Shopee Webhook: Auto-validated picking %s for order %s", pick.name, order.name)
-                        except Exception as e:
-                            _logger.error("Shopee Webhook: Auto-validate failed for %s: %s", pick.name, str(e))
-                            results_log.append(f"Auto-validate failed {pick.name}: {str(e)}")
-
-            if results_log:
-                _log_to_file(data, result=" | ".join(results_log))
 
             return {'code': 0, 'msg': 'success'}
 
@@ -207,6 +164,60 @@ class ShopeeWebhookController(http.Controller):
             _logger.error("Error processing Shopee Webhook: %s", str(e), exc_info=True)
             _log_to_file(data if 'data' in dir() else {}, result=f"ERROR: {str(e)}")
             return {'code': 3, 'msg': str(e)}
+
+    def _notify_warehouse_tsn(self, order):
+        """
+        Gửi tin nhắn Zalo cho thủ kho TSN dựa trên cấu hình trong cancellation requests.
+        """
+        # 1. Lấy mapping từ config parameter
+        Config = request.env['ir.config_parameter'].sudo()
+        mapping_str = Config.get_param('hlv_order_cancel_request.warehouse_zalo_mapping', '')
+        
+        if not mapping_str:
+            _logger.warning("Shopee Webhook: No warehouse mapping found (hlv_order_cancel_request.warehouse_zalo_mapping)")
+            return
+
+        # 2. Parse mapping string (Format: TSN:123456|KBC:789012,111222|TSNSR:333444)
+        tsn_uids = []
+        try:
+            parts = mapping_str.split('|')
+            for part in parts:
+                if ':' in part:
+                    warehouse_code, uids = part.split(':', 1)
+                    if warehouse_code.strip().upper() == 'TSN':
+                        tsn_uids = [u.strip() for u in uids.split(',') if u.strip()]
+                        break
+        except Exception as pe:
+            _logger.error("Shopee Webhook: Error parsing warehouse mapping: %s", str(pe))
+            return
+
+        if not tsn_uids:
+            _logger.info("Shopee Webhook: No Zalo UIDs found for warehouse 'TSN' in mapping.")
+            return
+
+        # 3. Xây dựng tin nhắn
+        msg = f"⚠️ ĐƠN SHOPEE ĐÃ HỦY - TSN NGỪNG ĐÓNG GÓI\n"
+        msg += f"• Đơn Odoo: {order.name}\n"
+        msg += f"• Shopee Ref: {order.shopee_order_ref or '?'}\n"
+        msg += f"• Khách hàng: {order.partner_id.name}\n"
+        msg += f"• Trạng thái: {order.shopee_order_status}\n"
+        msg += f"• Vui lòng kiểm tra và xử lý."
+
+        # 4. Gửi qua hlv_zalo_zns
+        try:
+            zalo_config = request.env['hlv.zalo.stock.notification'].sudo()._get_active_config()
+            if not zalo_config:
+                _logger.warning("Shopee Webhook: No active Zalo config found to send notification.")
+                return
+            
+            for uid in tsn_uids:
+                try:
+                    zalo_config.send_notification_message(uid, msg)
+                    _logger.info("Shopee Webhook: Sent cancellation notification to TSN UID %s for order %s", uid, order.name)
+                except Exception as se:
+                    _logger.error("Shopee Webhook: Failed to send Zalo message to %s: %s", uid, str(se))
+        except Exception as ge:
+            _logger.error("Shopee Webhook: Error accessing Zalo service: %s", str(ge))
 
     @http.route('/shopee/webhook/logs', type='http', auth='user', methods=['GET'])
     def shopee_webhook_logs(self, lines=100, **kwargs):
@@ -256,103 +267,3 @@ class ShopeeWebhookController(http.Controller):
             return request.make_response(page, headers=[('Content-Type', 'text/html; charset=utf-8')])
         except Exception as e:
             return request.make_response(str(e), headers=[('Content-Type', 'text/plain')])
-
-    # ──────────────────────────────────────────────────────────────
-    #  Shopee API Proxy – get_order_detail (read-only, no DB write)
-    # ──────────────────────────────────────────────────────────────
-    @http.route('/shopee/api/get_order_detail', type='http', auth='public', methods=['GET'], csrf=False)
-    def shopee_get_order_detail(self, **kwargs):
-        """
-        Proxy endpoint gọi Shopee Open API v2/order/get_order_detail.
-        Trả về raw JSON response từ Shopee. Không ghi gì vào DB.
-
-        Query params:
-            partner_id        (int, required)
-            partner_key       (string, required) – để tạo sign
-            access_token      (string, required)
-            shop_id           (int, required)
-            order_sn_list     (string, required) – danh sách order SN cách bởi dấu phẩy
-            request_order_status_pending (string, optional) – "true"/"false"
-            response_optional_fields     (string, optional)
-        """
-        try:
-            # --- 1. Đọc params ---
-            partner_id = kwargs.get('partner_id')
-            partner_key = kwargs.get('partner_key')
-            access_token = kwargs.get('access_token')
-            shop_id = kwargs.get('shop_id')
-            order_sn_list = kwargs.get('order_sn_list')
-
-            if not all([partner_id, partner_key, access_token, shop_id, order_sn_list]):
-                return request.make_response(
-                    json.dumps({
-                        'error': 'Missing required params',
-                        'required': ['partner_id', 'partner_key', 'access_token', 'shop_id', 'order_sn_list'],
-                    }),
-                    headers=[('Content-Type', 'application/json')],
-                )
-
-            partner_id = int(partner_id)
-            shop_id = int(shop_id)
-
-            # --- 2. Tạo timestamp & sign (HMAC-SHA256) ---
-            ts = int(time.time())
-            api_path = '/api/v2/order/get_order_detail'
-            # base_string = partner_id + api_path + timestamp + access_token + shop_id
-            base_string = f"{partner_id}{api_path}{ts}{access_token}{shop_id}"
-            sign = hmac.new(
-                partner_key.encode('utf-8'),
-                base_string.encode('utf-8'),
-                hashlib.sha256,
-            ).hexdigest()
-
-            # --- 3. Gọi Shopee API ---
-            shopee_url = 'https://partner.shopeemobile.com/api/v2/order/get_order_detail'
-            params = {
-                'partner_id': partner_id,
-                'timestamp': ts,
-                'access_token': access_token,
-                'shop_id': shop_id,
-                'sign': sign,
-                'order_sn_list': order_sn_list,
-            }
-
-            # Optional params
-            pending = kwargs.get('request_order_status_pending')
-            if pending is not None:
-                params['request_order_status_pending'] = pending
-
-            opt_fields = kwargs.get('response_optional_fields')
-            if opt_fields:
-                params['response_optional_fields'] = opt_fields
-
-            _logger.info("Shopee API call – get_order_detail params: %s", params)
-
-            resp = req_lib.get(shopee_url, params=params, timeout=30)
-
-            # --- 4. Trả raw response ---
-            try:
-                body = resp.json()
-            except Exception:
-                body = resp.text
-
-            result = {
-                'shopee_http_status': resp.status_code,
-                'shopee_response': body,
-                'request_params_sent': params,
-            }
-
-            _logger.info("Shopee API response – status=%s body=%s", resp.status_code, body)
-
-            return request.make_response(
-                json.dumps(result, indent=2, ensure_ascii=False),
-                headers=[('Content-Type', 'application/json; charset=utf-8')],
-            )
-
-        except Exception as e:
-            _logger.error("Shopee get_order_detail error: %s", str(e), exc_info=True)
-            return request.make_response(
-                json.dumps({'error': str(e)}),
-                headers=[('Content-Type', 'application/json')],
-            )
-
