@@ -166,6 +166,17 @@ class InventoryCheck(models.Model):
         string='Xác Nhận Bởi',
         readonly=True
     )
+
+    approved_by = fields.Many2one(
+        'res.users',
+        string='Duyệt Bởi',
+        readonly=True
+    )
+
+    approved_time = fields.Datetime(
+        string='Duyệt Lúc',
+        readonly=True
+    )
     
     @api.depends('line_ids', 'line_ids.scanned_qty', 'line_ids.theoretical_qty', 'discrepancy_ids')
     def _compute_stats(self):
@@ -228,12 +239,11 @@ class InventoryCheck(models.Model):
             check.start_time = fields.Datetime.now()
 
     def action_confirm_check(self):
-        """Xác nhận kiểm kê - tạo Stock Adjustment"""
+        """Xác nhận kiểm kê — nếu approval_required thì chuyển pending_approval"""
         for check in self:
             if check.state != 'in_progress':
                 raise ValidationError(_('Chỉ có thể xác nhận kiểm kê đang tiến hành'))
-            
-            # Kiểm tra xem có chênh lệch chưa được ghi nhận không
+
             lines_without_reason = check.line_ids.filtered(
                 lambda l: l.difference != 0 and not l.discrepancy_id
             )
@@ -242,16 +252,42 @@ class InventoryCheck(models.Model):
                     'Cần ghi nhận lý do chênh lệch cho %d sản phẩm trước khi xác nhận'
                     % len(lines_without_reason)
                 ))
-            
-            # Tạo inventory adjustment
-            check._create_inventory_adjustment()
-            
-            # Unlock moves
-            check._unlock_location_moves()
-            
-            check.state = 'confirmed'
-            check.confirmed_time = fields.Datetime.now()
-            check.confirmed_by = self.env.user
+
+            approval_required = self.env['ir.config_parameter'].sudo().get_param(
+                'hlv_inventory.approval_required', 'False'
+            ) == 'True'
+
+            if approval_required:
+                check.state = 'pending_approval'
+                check.confirmed_time = fields.Datetime.now()
+                check.confirmed_by = self.env.user
+            else:
+                check._apply_and_confirm()
+
+    def _apply_and_confirm(self):
+        """Áp dụng adjustment + unlock + confirmed"""
+        self.ensure_one()
+        self._create_inventory_adjustment()
+        self._unlock_location_moves()
+        self.state = 'confirmed'
+        self.confirmed_time = fields.Datetime.now()
+        self.confirmed_by = self.env.user
+
+    def action_approve(self):
+        """Quản lý duyệt phiên kiểm kê pending_approval"""
+        for check in self:
+            if check.state != 'pending_approval':
+                raise ValidationError(_('Chỉ có thể duyệt phiên đang chờ duyệt'))
+            check._apply_and_confirm()
+            check.approved_by = self.env.user
+            check.approved_time = fields.Datetime.now()
+
+    def action_reject(self):
+        """Từ chối phiên kiểm kê — trở về in_progress"""
+        for check in self:
+            if check.state != 'pending_approval':
+                raise ValidationError(_('Chỉ có thể từ chối phiên đang chờ duyệt'))
+            check.state = 'in_progress'
 
     def action_cancel(self):
         """Hủy kiểm kê"""
@@ -615,6 +651,137 @@ class InventoryCheck(models.Model):
                 'notes': notes or '',
             })
             line.discrepancy_id = disc.id
+        return {'success': True}
+
+    @api.model
+    def get_daily_stats(self):
+        """Thống kê kiểm kê theo ngày — chi tiết"""
+        today_start = fields.Datetime.now().replace(hour=0, minute=0, second=0)
+        is_manager = self.env.user.has_group('stock.group_stock_manager')
+
+        my_checks_today = self.search([
+            ('user_id', '=', self.env.user.id),
+            ('create_date', '>=', today_start),
+        ])
+        all_checks_today = self.search([
+            ('create_date', '>=', today_start),
+        ])
+
+        def _stats(checks):
+            confirmed = checks.filtered(lambda c: c.state == 'confirmed')
+            pending = checks.filtered(lambda c: c.state == 'pending_approval')
+            in_progress = checks.filtered(lambda c: c.state in ['draft', 'in_progress'])
+            locations = set(checks.filtered(lambda c: c.location_id).mapped('location_id.id'))
+            return {
+                'total': len(checks),
+                'confirmed': len(confirmed),
+                'pending_approval': len(pending),
+                'in_progress': len(in_progress),
+                'total_products': sum(checks.mapped('product_count')),
+                'total_scans': sum(checks.mapped('scan_count')),
+                'total_difference': sum(checks.mapped('total_difference')),
+                'locations_checked': len(locations),
+            }
+
+        # My checks list
+        my_checks_list = [{
+            'id': c.id,
+            'name': c.name,
+            'location_name': c.location_id.display_name if c.location_id else 'Chưa chọn',
+            'state': c.state,
+            'product_count': c.product_count,
+            'scan_count': c.scan_count,
+            'total_difference': c.total_difference,
+            'start_time': c.start_time.strftime('%H:%M') if c.start_time else '',
+            'confirmed_time': c.confirmed_time.strftime('%H:%M') if c.confirmed_time else '',
+        } for c in my_checks_today.sorted('start_time', reverse=True)]
+
+        # Per-user breakdown (manager only)
+        team_by_user = []
+        if is_manager:
+            users = all_checks_today.mapped('user_id')
+            for user in users:
+                user_checks = all_checks_today.filtered(lambda c, u=user: c.user_id == u)
+                team_by_user.append({
+                    'user_name': user.name,
+                    'total': len(user_checks),
+                    'confirmed': len(user_checks.filtered(lambda c: c.state == 'confirmed')),
+                    'in_progress': len(user_checks.filtered(lambda c: c.state in ['draft', 'in_progress'])),
+                    'total_products': sum(user_checks.mapped('product_count')),
+                    'total_scans': sum(user_checks.mapped('scan_count')),
+                    'total_difference': sum(user_checks.mapped('total_difference')),
+                })
+            team_by_user.sort(key=lambda x: x['total'], reverse=True)
+
+        return {
+            'success': True,
+            'my_stats': _stats(my_checks_today),
+            'team_stats': _stats(all_checks_today),
+            'my_checks': my_checks_list,
+            'team_by_user': team_by_user,
+            'is_manager': is_manager,
+        }
+
+    @api.model
+    def get_scanner_settings(self):
+        """Trả về cấu hình scanner cho frontend"""
+        ICP = self.env['ir.config_parameter'].sudo()
+        is_manager = self.env.user.has_group('stock.group_stock_manager')
+        return {
+            'success': True,
+            'approval_required': ICP.get_param('hlv_inventory.approval_required', 'False') == 'True',
+            'auto_confirm': ICP.get_param('hlv_inventory.auto_confirm', 'False') == 'True',
+            'is_manager': is_manager,
+        }
+
+    @api.model
+    def save_scanner_settings(self, approval_required, auto_confirm):
+        """Lưu cấu hình scanner (chỉ manager)"""
+        if not self.env.user.has_group('stock.group_stock_manager'):
+            return {'success': False, 'error': _('Chỉ quản lý kho mới được thay đổi cài đặt')}
+        ICP = self.env['ir.config_parameter'].sudo()
+        ICP.set_param('hlv_inventory.approval_required', 'True' if approval_required else 'False')
+        ICP.set_param('hlv_inventory.auto_confirm', 'True' if auto_confirm else 'False')
+        return {'success': True}
+
+    @api.model
+    def get_pending_approvals(self):
+        """Lấy danh sách phiên chờ duyệt (cho manager)"""
+        if not self.env.user.has_group('stock.group_stock_manager'):
+            return []
+        checks = self.search([
+            ('state', '=', 'pending_approval'),
+        ], order='confirmed_time desc', limit=50)
+        return [{
+            'check_id': c.id,
+            'name': c.name,
+            'user_name': c.user_id.name,
+            'location_name': c.location_id.display_name if c.location_id else '',
+            'product_count': c.product_count,
+            'total_difference': c.total_difference,
+            'confirmed_time': c.confirmed_time.strftime('%d/%m %H:%M') if c.confirmed_time else '',
+        } for c in checks]
+
+    @api.model
+    def approve_check(self, check_id):
+        """Duyệt phiên kiểm kê từ frontend (manager only)"""
+        if not self.env.user.has_group('stock.group_stock_manager'):
+            return {'success': False, 'error': _('Chỉ quản lý kho mới được duyệt')}
+        check = self.browse(check_id)
+        if not check.exists() or check.state != 'pending_approval':
+            return {'success': False, 'error': _('Phiên không hợp lệ hoặc không ở trạng thái chờ duyệt')}
+        check.action_approve()
+        return {'success': True}
+
+    @api.model
+    def reject_check(self, check_id):
+        """Từ chối phiên kiểm kê từ frontend (manager only)"""
+        if not self.env.user.has_group('stock.group_stock_manager'):
+            return {'success': False, 'error': _('Chỉ quản lý kho mới được từ chối')}
+        check = self.browse(check_id)
+        if not check.exists() or check.state != 'pending_approval':
+            return {'success': False, 'error': _('Phiên không hợp lệ')}
+        check.action_reject()
         return {'success': True}
 
     @api.model

@@ -67,46 +67,39 @@ $r-full: 9999px;
 
     @keyframes hlv-spin { to { transform: rotate(360deg); } }
 
-    // ===== LOCATION SELECT =====
-    .hlv-location-select {
+    // ===== HOME VIEW =====
+    .hlv-home {
         min-height: 100vh;
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
         background: $blue-grad;
-        padding: 24px 20px;
+        padding: 24px 20px 100px;
 
         &__header {
             text-align: center;
             color: $white;
-            margin-bottom: 28px;
+            margin-bottom: 20px;
 
             .hlv-logo {
-                width: 80px;
-                height: 80px;
-                margin: 0 auto 20px;
+                width: 72px;
+                height: 72px;
+                margin: 0 auto 16px;
                 background: rgba($white, .15);
                 border: 1px solid rgba($white, .25);
                 border-radius: $r-full;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-size: 32px;
+                font-size: 28px;
                 backdrop-filter: blur(8px);
             }
 
             h1 {
-                font-size: 30px;
+                font-size: 26px;
                 font-weight: 700;
-                margin: 0 0 10px;
-                letter-spacing: -.3px;
-            }
-
-            p {
-                font-size: 15px;
                 margin: 0;
-                opacity: .75;
+                letter-spacing: -.3px;
             }
         }
 
@@ -115,13 +108,137 @@ $r-full: 9999px;
             max-width: 440px;
             background: $white;
             border-radius: $r-lg;
-            padding: 28px 24px;
+            padding: 24px 20px;
             box-shadow: $shadow-lg;
             display: flex;
             flex-direction: column;
-            gap: 14px;
+            gap: 12px;
+        }
+
+        &__nav {
+            display: flex;
+            gap: 12px;
+            width: 100%;
+            max-width: 440px;
+            margin-top: 16px;
         }
     }
+
+    // ===== MINI STATS (home) =====
+    .hlv-mini-stats {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        width: 100%;
+        max-width: 440px;
+        background: rgba($white, .12);
+        border: 1px solid rgba($white, .2);
+        backdrop-filter: blur(8px);
+        border-radius: $r-md;
+        padding: 12px;
+        margin-bottom: 16px;
+        cursor: pointer;
+        transition: background .2s;
+
+        &:hover { background: rgba($white, .18); }
+
+        &__item {
+            flex: 1;
+            text-align: center;
+        }
+
+        &__val {
+            display: block;
+            font-size: 22px;
+            font-weight: 700;
+            color: $white;
+        }
+
+        &__lbl {
+            display: block;
+            font-size: 11px;
+            color: rgba($white, .7);
+            margin-top: 2px;
+        }
+
+        &__sep {
+            width: 1px;
+            height: 30px;
+            background: rgba($white, .2);
+        }
+    }
+
+    // ===== NAV BUTTONS =====
+    .hlv-nav-btn {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        padding: 14px 8px;
+        background: rgba($white, .12);
+        border: 1px solid rgba($white, .2);
+        backdrop-filter: blur(8px);
+        border-radius: $r-md;
+        color: $white;
+        cursor: pointer;
+        transition: background .2s;
+        position: relative;
+
+        &:hover { background: rgba($white, .2); }
+
+        i { font-size: 18px; }
+        span { font-size: 11px; font-weight: 600; }
+
+        &__badge {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: $red;
+            color: $white;
+            font-size: 10px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    }
+
+    // ===== PAGE HEADER (subpages) =====
+    .hlv-page-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        background: $white;
+        border-bottom: 1px solid $gray-200;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+
+        h2 {
+            flex: 1;
+            font-size: 18px;
+            font-weight: 700;
+            margin: 0;
+            color: $gray-800;
+        }
+    }
+
+    // ===== LOCATION INPUT INLINE (scanning without location) =====
+    .hlv-location-input-inline {
+        padding: 12px 16px;
+        background: $gray-50;
+        border-bottom: 1px solid $gray-200;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .hlv-text-muted { color: $gray-400; }
 
     // ===== INPUTS =====
     .hlv-input-group {
@@ -928,7 +1045,401 @@ $r-full: 9999px;
         border-radius: $r-full;
     }
 
+    // ===== DAILY STATS VIEW =====
+    .hlv-stats-view {
+        min-height: 100vh;
+        background: $gray-50;
+    }
+
+    .hlv-stats-section {
+        padding: 16px;
+
+        h3 {
+            font-size: 14px;
+            font-weight: 700;
+            color: $gray-600;
+            margin: 0 0 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+        }
+    }
+
+    .hlv-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+    }
+
+    .hlv-stat-card {
+        background: $white;
+        border-radius: $r-md;
+        padding: 14px 12px;
+        text-align: center;
+        box-shadow: $shadow-sm;
+        border: 1px solid $gray-200;
+
+        &__val {
+            display: block;
+            font-size: 24px;
+            font-weight: 700;
+            color: $gray-800;
+        }
+
+        &__lbl {
+            display: block;
+            font-size: 11px;
+            color: $gray-400;
+            margin-top: 4px;
+        }
+
+        &--blue { border-left: 3px solid $blue; .hlv-stat-card__val { color: $blue; } }
+        &--green { border-left: 3px solid $green; .hlv-stat-card__val { color: $green; } }
+        &--amber { border-left: 3px solid $amber; .hlv-stat-card__val { color: $amber; } }
+        &--red   { border-left: 3px solid $red;   .hlv-stat-card__val { color: $red; } }
+        &--gray  { border-left: 3px solid $gray-400; .hlv-stat-card__val { color: $gray-600; } }
+    }
+
+    // ===== CHECK LIST (in stats view) =====
+    .hlv-checks-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .hlv-check-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        background: $white;
+        border-radius: $r-sm;
+        padding: 10px 14px;
+        box-shadow: $shadow-sm;
+        border: 1px solid $gray-200;
+
+        &__left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        &__dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            background: $gray-300;
+
+            &--green { background: $green; }
+            &--amber { background: $amber; }
+            &--blue  { background: $blue; }
+        }
+
+        &__info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        &__loc {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: $gray-800;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        &__time {
+            display: block;
+            font-size: 11px;
+            color: $gray-400;
+            margin-top: 2px;
+            i { margin-right: 2px; }
+        }
+
+        &__right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        &__count {
+            font-size: 12px;
+            color: $gray-500;
+            font-weight: 500;
+        }
+
+        &__diff {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+
+            &--ok { color: $green; background: rgba($green, .1); }
+            &--bad { color: $red; background: rgba($red, .1); }
+        }
+    }
+
+    // ===== USER TABLE (team breakdown) =====
+    .hlv-user-table {
+        background: $white;
+        border-radius: $r-md;
+        box-shadow: $shadow-sm;
+        border: 1px solid $gray-200;
+        overflow: hidden;
+
+        &__header {
+            display: flex;
+            background: $gray-50;
+            border-bottom: 1px solid $gray-200;
+            padding: 8px 0;
+        }
+
+        &__row {
+            display: flex;
+            border-bottom: 1px solid $gray-100;
+            padding: 10px 0;
+
+            &:last-child { border-bottom: none; }
+        }
+
+        &__col {
+            flex: 1;
+            text-align: center;
+            font-size: 12px;
+            color: $gray-600;
+            padding: 0 6px;
+
+            &--name {
+                flex: 2;
+                text-align: left;
+                padding-left: 14px;
+                font-weight: 500;
+                color: $gray-800;
+            }
+
+            &--green { color: $green; font-weight: 600; }
+            &--red   { color: $red; font-weight: 600; }
+        }
+    }
+
+    // ===== SETTINGS VIEW =====
+    .hlv-settings-view {
+        min-height: 100vh;
+        background: $gray-50;
+    }
+
+    .hlv-settings-list {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .hlv-setting-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        background: $white;
+        border-radius: $r-md;
+        padding: 16px;
+        box-shadow: $shadow-sm;
+        border: 1px solid $gray-200;
+        cursor: pointer;
+        transition: border-color .2s;
+
+        &:hover { border-color: $blue; }
+
+        &__info { flex: 1; }
+
+        &__title {
+            font-size: 14px;
+            font-weight: 600;
+            color: $gray-800;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+
+        &__desc {
+            font-size: 12px;
+            color: $gray-400;
+            line-height: 1.4;
+        }
+    }
+
+    // ===== TOGGLE SWITCH =====
+    .hlv-toggle {
+        flex-shrink: 0;
+
+        &__track {
+            width: 46px;
+            height: 26px;
+            border-radius: 13px;
+            background: $gray-300;
+            position: relative;
+            transition: background .25s;
+        }
+
+        &__thumb {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: $white;
+            box-shadow: 0 1px 3px rgba(0,0,0,.2);
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: transform .25s;
+        }
+
+        &--on .hlv-toggle__track { background: $blue; }
+        &--on .hlv-toggle__thumb { transform: translateX(20px); }
+    }
+
+    // ===== APPROVALS VIEW =====
+    .hlv-approvals-view {
+        min-height: 100vh;
+        background: $gray-50;
+    }
+
+    .hlv-approval-card {
+        background: $white;
+        border-radius: $r-md;
+        margin: 8px 16px;
+        box-shadow: $shadow-sm;
+        border: 1px solid $gray-200;
+        overflow: hidden;
+
+        &__top {
+            padding: 14px 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        &__info { flex: 1; min-width: 0; }
+
+        &__name {
+            font-size: 14px;
+            font-weight: 600;
+            color: $gray-800;
+            margin-bottom: 4px;
+        }
+
+        &__meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 12px;
+            color: $gray-400;
+
+            i { margin-right: 2px; }
+        }
+
+        &__stats {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        &__actions {
+            display: flex;
+            gap: 8px;
+            padding: 10px 16px;
+            background: $gray-50;
+            border-top: 1px solid $gray-100;
+            justify-content: flex-end;
+        }
+    }
+
+    .hlv-badge--danger {
+        background: rgba($red, .12);
+        color: $red;
+    }
+
+    .hlv-badge--success {
+        background: rgba($green, .12);
+        color: $green;
+    }
+
+    // ===== CONFIRM DIALOG =====
+    .hlv-confirm-dialog {
+        background: $white;
+        border-radius: $r-lg $r-lg 0 0;
+        overflow: hidden;
+        width: 100%;
+        max-width: 440px;
+        max-height: 80vh;
+        animation: hlv-slide-up .3s ease-out;
+    }
+
+    .hlv-confirm__loc {
+        font-size: 15px;
+        font-weight: 600;
+        color: $gray-800;
+        margin: 0 0 16px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .hlv-confirm__stats {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .hlv-confirm__stat {
+        flex: 1;
+        text-align: center;
+        padding: 10px;
+        background: $gray-50;
+        border-radius: $r-sm;
+
+        &-val {
+            display: block;
+            font-size: 22px;
+            font-weight: 700;
+            color: $gray-800;
+        }
+
+        &-lbl {
+            display: block;
+            font-size: 11px;
+            color: $gray-400;
+            margin-top: 2px;
+        }
+    }
+
+    .hlv-confirm__note {
+        font-size: 12px;
+        color: $amber;
+        background: $amber-lt;
+        padding: 8px 12px;
+        border-radius: $r-sm;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
     // ===== RESPONSIVE =====
+    // ===== SMALL BUTTON =====
+    .hlv-btn--sm {
+        padding: 6px 14px;
+        font-size: 12px;
+        border-radius: $r-sm;
+    }
+
     @media (max-width: 480px) {
         .hlv-scanning__header { padding: 10px 12px; }
         .hlv-scanning__location-name { font-size: 15px; }
@@ -937,7 +1448,16 @@ $r-full: 9999px;
         .hlv-qty-input { width: 46px; font-size: 13px; }
         .hlv-bottom-bar { padding: 8px 10px 12px; }
         .hlv-summary__value { font-size: 17px; }
-        .hlv-location-select__header h1 { font-size: 24px; }
+
+        .hlv-home__nav { flex-direction: column; gap: 8px; }
+        .hlv-mini-stats { flex-wrap: wrap; gap: 6px; }
+        .hlv-stats-grid { grid-template-columns: repeat(2, 1fr); }
+        .hlv-approval-card__top { flex-direction: column; }
+        .hlv-approval-card__stats { margin-top: 6px; }
+        .hlv-confirm__stats { flex-wrap: wrap; }
+        .hlv-confirm__stat { min-width: 80px; }
+        .hlv-check-item { flex-wrap: wrap; }
+        .hlv-user-table__col--name { flex: 1.5; }
     }
 }
 

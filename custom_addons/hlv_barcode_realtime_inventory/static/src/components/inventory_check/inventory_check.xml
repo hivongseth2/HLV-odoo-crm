@@ -4,32 +4,49 @@
     <t t-name="hlv_barcode_realtime_inventory.inventory_check">
         <div class="hlv-scanner">
 
-            <!-- Loading Overlay -->
+            <!-- Loading -->
             <t t-if="state.is_loading">
-                <div class="hlv-loading">
-                    <div class="hlv-loading__spinner"/>
-                </div>
+                <div class="hlv-loading"><div class="hlv-loading__spinner"/></div>
             </t>
 
-            <!-- =================== LOCATION SELECT VIEW =================== -->
-            <t t-if="state.view === 'location_select'">
-                <div class="hlv-location-select">
-                    <div class="hlv-location-select__header">
-                        <div class="hlv-logo">
-                            <i class="fa fa-cubes"/>
-                        </div>
+            <!-- =================== HOME VIEW =================== -->
+            <t t-if="state.view === 'home'">
+                <div class="hlv-home">
+
+                    <!-- Header -->
+                    <div class="hlv-home__header">
+                        <div class="hlv-logo"><i class="fa fa-cubes"/></div>
                         <h1>Kiểm Kê Kho</h1>
-                        <p>Quét mã vị trí để bắt đầu kiểm kê</p>
                     </div>
 
-                    <!-- Active Sessions Recovery -->
+                    <!-- Quick Stats (today) -->
+                    <t t-if="state.daily_stats">
+                        <div class="hlv-mini-stats" t-on-click="goToDailyStats">
+                            <div class="hlv-mini-stats__item">
+                                <span class="hlv-mini-stats__val" t-esc="state.daily_stats.my_stats.total"/>
+                                <span class="hlv-mini-stats__lbl">Phiên hôm nay</span>
+                            </div>
+                            <div class="hlv-mini-stats__sep"/>
+                            <div class="hlv-mini-stats__item">
+                                <span class="hlv-mini-stats__val" t-esc="state.daily_stats.my_stats.confirmed"/>
+                                <span class="hlv-mini-stats__lbl">Đã xác nhận</span>
+                            </div>
+                            <div class="hlv-mini-stats__sep"/>
+                            <div class="hlv-mini-stats__item">
+                                <span class="hlv-mini-stats__val" t-esc="state.daily_stats.my_stats.in_progress"/>
+                                <span class="hlv-mini-stats__lbl">Đang làm</span>
+                            </div>
+                        </div>
+                    </t>
+
+                    <!-- Active Sessions -->
                     <t t-if="state.active_sessions.length > 0">
                         <div class="hlv-active-sessions">
                             <div class="hlv-active-sessions__header">
-                                <i class="fa fa-history"/> Phên kiểm kê đang dở
+                                <i class="fa fa-history"/> Phiên đang dở
                             </div>
                             <t t-foreach="state.active_sessions" t-as="sess" t-key="sess.check_id">
-                                <button class="hlv-session-card" t-on-click="() => resumeCheck(sess.check_id)">
+                                <button class="hlv-session-card" t-on-click="() => this.resumeCheck(sess.check_id)">
                                     <div class="hlv-session-card__left">
                                         <div class="hlv-session-card__name" t-esc="sess.name"/>
                                         <div class="hlv-session-card__loc">
@@ -50,24 +67,44 @@
                         </div>
                     </t>
 
-                    <div class="hlv-location-select__card">
+                    <!-- New Check -->
+                    <div class="hlv-home__card">
                         <div class="hlv-input-group">
-                            <span class="hlv-input-group__icon">
-                                <i class="fa fa-map-marker-alt"/>
-                            </span>
-                            <input
-                                type="text"
-                                class="hlv-input hlv-input--lg"
+                            <span class="hlv-input-group__icon"><i class="fa fa-map-marker-alt"/></span>
+                            <input type="text" class="hlv-input hlv-input--lg"
                                 placeholder="Quét hoặc nhập mã vị trí..."
                                 t-model="state.location_barcode"
                                 t-on-keydown="onLocationBarcodeInput"
-                                autofocus="autofocus"
-                            />
+                                autofocus="autofocus"/>
                         </div>
                         <button class="hlv-btn hlv-btn--primary hlv-btn--lg hlv-btn--full" t-on-click="selectLocationByBarcode">
-                            <i class="fa fa-arrow-right"/> Xác Nhận Vị Trí
+                            <i class="fa fa-plus"/> Bắt Đầu Kiểm Kê
                         </button>
                     </div>
+
+                    <!-- Bottom Nav -->
+                    <div class="hlv-home__nav">
+                        <button class="hlv-nav-btn" t-on-click="goToDailyStats">
+                            <i class="fa fa-chart-bar"/>
+                            <span>Thống Kê</span>
+                        </button>
+                        <t t-if="state.settings and state.settings.is_manager">
+                            <button class="hlv-nav-btn" t-on-click="goToApprovals">
+                                <i class="fa fa-clipboard-check"/>
+                                <span>Duyệt</span>
+                                <t t-if="state.daily_stats and state.daily_stats.my_stats.pending_approval > 0">
+                                    <span class="hlv-nav-btn__badge" t-esc="state.daily_stats.my_stats.pending_approval"/>
+                                </t>
+                            </button>
+                        </t>
+                        <t t-if="state.settings and state.settings.is_manager">
+                            <button class="hlv-nav-btn" t-on-click="goToSettings">
+                                <i class="fa fa-cog"/>
+                                <span>Cài Đặt</span>
+                            </button>
+                        </t>
+                    </div>
+
                 </div>
             </t>
 
@@ -75,35 +112,61 @@
             <t t-if="state.view === 'scanning'">
                 <div class="hlv-scanning">
 
-                    <!-- Sticky Header -->
+                    <!-- Header -->
                     <div class="hlv-scanning__header">
-                        <div class="hlv-scanning__location">
-                            <div class="hlv-scanning__location-icon">
-                                <i class="fa fa-map-marker-alt"/>
-                            </div>
-                            <div class="hlv-scanning__location-meta">
-                                <div class="hlv-scanning__location-name" t-esc="state.location_name"/>
-                                <div class="hlv-scanning__stats" t-if="state.check_data">
-                                    <span class="hlv-badge hlv-badge--light">
-                                        <i class="fa fa-box-open"/>
-                                        <t t-esc="state.check_data.product_count"/> SP
-                                    </span>
-                                    <span class="hlv-badge hlv-badge--light">
-                                        <i class="fa fa-barcode"/>
-                                        <t t-esc="state.check_data.scan_count"/> lượt
-                                    </span>
+                        <button class="hlv-icon-btn hlv-icon-btn--ghost" t-on-click="goHome" title="Quay lại">
+                            <i class="fa fa-arrow-left"/>
+                        </button>
+
+                        <t t-if="state.location_id">
+                            <div class="hlv-scanning__location">
+                                <div class="hlv-scanning__location-meta">
+                                    <div class="hlv-scanning__location-name" t-esc="state.location_name"/>
+                                    <div class="hlv-scanning__stats" t-if="state.check_data">
+                                        <span class="hlv-badge hlv-badge--light">
+                                            <i class="fa fa-box-open"/>
+                                            <t t-esc="state.check_data.product_count"/> SP
+                                        </span>
+                                        <span class="hlv-badge hlv-badge--light">
+                                            <i class="fa fa-barcode"/>
+                                            <t t-esc="state.check_data.scan_count"/> lượt
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        </t>
+                        <t t-if="!state.location_id">
+                            <div class="hlv-scanning__location">
+                                <span class="hlv-scanning__location-name hlv-text-muted">Chưa chọn vị trí</span>
+                            </div>
+                        </t>
+
                         <div class="hlv-scanning__header-actions">
-                            <button class="hlv-icon-btn hlv-icon-btn--outline" t-on-click="viewCheckForm" title="Xem chi tiết">
+                            <button class="hlv-icon-btn hlv-icon-btn--outline" t-on-click="viewCheckForm" title="Xem form">
                                 <i class="fa fa-external-link-alt"/>
                             </button>
-                            <button class="hlv-icon-btn hlv-icon-btn--cancel" t-on-click="cancelCheck" title="Hủy kiểm kê">
+                            <button class="hlv-icon-btn hlv-icon-btn--cancel" t-on-click="cancelCheck" title="Hủy">
                                 <i class="fa fa-times"/>
                             </button>
                         </div>
                     </div>
+
+                    <!-- Location Input (if no location yet) -->
+                    <t t-if="!state.location_id">
+                        <div class="hlv-location-input-inline">
+                            <div class="hlv-input-group">
+                                <span class="hlv-input-group__icon"><i class="fa fa-map-marker-alt"/></span>
+                                <input type="text" class="hlv-input hlv-input--lg"
+                                    placeholder="Quét mã vị trí..."
+                                    t-model="state.location_barcode"
+                                    t-on-keydown="onLocationBarcodeInput"
+                                    autofocus="autofocus"/>
+                            </div>
+                            <button class="hlv-btn hlv-btn--primary hlv-btn--full" t-on-click="selectLocationByBarcode">
+                                <i class="fa fa-check"/> Xác Nhận Vị Trí
+                            </button>
+                        </div>
+                    </t>
 
                     <!-- Alerts -->
                     <t t-if="state.warning_message">
@@ -121,67 +184,59 @@
                         </div>
                     </t>
 
-                    <!-- Barcode Input -->
-                    <div class="hlv-barcode-input">
-                        <div class="hlv-input-group hlv-input-group--scan">
-                            <span class="hlv-input-group__icon hlv-input-group__icon--scan">
-                                <i class="fa fa-barcode"/>
-                            </span>
-                            <input
-                                type="text"
-                                class="hlv-input hlv-input--scan"
-                                placeholder="Quét barcode sản phẩm..."
-                                t-model="state.product_barcode"
-                                t-on-keydown="onProductBarcodeInput"
-                                autofocus="autofocus"
-                            />
-                            <button class="hlv-input-group__btn" t-on-click="scanProduct">
-                                <i class="fa fa-check"/>
-                            </button>
+                    <!-- Barcode Input (only when location set) -->
+                    <t t-if="state.location_id">
+                        <div class="hlv-barcode-input">
+                            <div class="hlv-input-group hlv-input-group--scan">
+                                <span class="hlv-input-group__icon hlv-input-group__icon--scan">
+                                    <i class="fa fa-barcode"/>
+                                </span>
+                                <input type="text" class="hlv-input hlv-input--scan"
+                                    placeholder="Quét barcode sản phẩm..."
+                                    t-model="state.product_barcode"
+                                    t-on-keydown="onProductBarcodeInput"
+                                    autofocus="autofocus"/>
+                                <button class="hlv-input-group__btn" t-on-click="scanProduct">
+                                    <i class="fa fa-check"/>
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                    </t>
 
                     <!-- Product List -->
                     <div class="hlv-product-list">
                         <t t-if="state.lines.length === 0">
                             <div class="hlv-empty-state">
                                 <i class="fa fa-inbox hlv-empty-state__icon"/>
-                                <p>Chưa có sản phẩm nào</p>
-                                <small>Quét barcode để thêm hoặc xác nhận sản phẩm</small>
+                                <p>Chưa có sản phẩm</p>
+                                <small>Quét barcode để bắt đầu</small>
                             </div>
                         </t>
-
                         <t t-if="state.lines.length > 0">
                             <t t-foreach="state.lines" t-as="line" t-key="line.id">
                                 <div t-att-class="'hlv-product-row ' + (line.difference > 0 ? 'hlv-product-row--surplus' : line.difference &lt; 0 ? 'hlv-product-row--deficit' : line.scanned_qty > 0 ? 'hlv-product-row--matched' : 'hlv-product-row--pending')">
                                     <div class="hlv-product-row__status-dot"/>
-
                                     <div class="hlv-product-row__info">
                                         <div class="hlv-product-row__name" t-esc="line.product_name"/>
                                         <div class="hlv-product-row__sku" t-if="line.product_code" t-esc="line.product_code"/>
                                     </div>
-
                                     <div class="hlv-qty-group">
                                         <div class="hlv-qty-group__item">
-                                            <span class="hlv-qty-group__label">Lý thuyết</span>
+                                            <span class="hlv-qty-group__label">LT</span>
                                             <span class="hlv-qty-group__value" t-esc="line.theoretical_qty"/>
                                         </div>
                                         <div class="hlv-qty-group__divider"/>
                                         <div class="hlv-qty-group__item">
-                                            <span class="hlv-qty-group__label">Thực tế</span>
-                                            <input
-                                                type="number"
-                                                class="hlv-qty-input"
+                                            <span class="hlv-qty-group__label">TT</span>
+                                            <input type="number" class="hlv-qty-input"
                                                 t-model.number="line.scanned_qty"
                                                 t-att-data-line-id="line.id"
                                                 t-on-change="onQtyChange"
-                                                step="1"
-                                                min="0"
-                                            />
+                                                step="1" min="0"/>
                                         </div>
                                         <div class="hlv-qty-group__divider"/>
                                         <div class="hlv-qty-group__item">
-                                            <span class="hlv-qty-group__label">Lệch</span>
+                                            <span class="hlv-qty-group__label">CL</span>
                                             <t t-if="line.difference === 0">
                                                 <span class="hlv-diff hlv-diff--ok">✓</span>
                                             </t>
@@ -190,31 +245,26 @@
                                             </t>
                                         </div>
                                     </div>
-
                                     <div class="hlv-product-row__actions">
                                         <t t-if="line.difference !== 0 &amp;&amp; !line.discrepancy_id">
-                                            <button
-                                                class="hlv-icon-btn hlv-icon-btn--warn hlv-icon-btn--sm"
+                                            <button class="hlv-icon-btn hlv-icon-btn--warn hlv-icon-btn--sm"
                                                 t-on-click="addDiscrepancyHandler"
                                                 t-att-data-line-id="line.id"
                                                 t-att-data-product-name="line.product_name"
                                                 t-att-data-difference="line.difference"
-                                                title="Ghi nhận lý do chênh lệch"
-                                            >
+                                                title="Ghi nhận lý do">
                                                 <i class="fa fa-flag"/>
                                             </button>
                                         </t>
                                         <t t-if="line.discrepancy_id">
-                                            <span class="hlv-icon-btn hlv-icon-btn--ok hlv-icon-btn--sm" title="Đã ghi nhận lý do">
+                                            <span class="hlv-icon-btn hlv-icon-btn--ok hlv-icon-btn--sm" title="Đã ghi">
                                                 <i class="fa fa-check"/>
                                             </span>
                                         </t>
-                                        <button
-                                            class="hlv-icon-btn hlv-icon-btn--ghost hlv-icon-btn--sm"
+                                        <button class="hlv-icon-btn hlv-icon-btn--ghost hlv-icon-btn--sm"
                                             t-on-click="removeLineHandler"
                                             t-att-data-line-id="line.id"
-                                            title="Xóa dòng"
-                                        >
+                                            title="Xóa">
                                             <i class="fa fa-trash"/>
                                         </button>
                                     </div>
@@ -223,10 +273,33 @@
                         </t>
                     </div>
 
-                    <!-- Bottom Summary Bar + Confirm -->
-                    <div class="hlv-bottom-bar">
+                    <!-- Bottom Bar: Summary + Confirm -->
+                    <t t-if="state.location_id">
+                        <div class="hlv-bottom-bar">
+                            <div class="hlv-summary">
+                                <div class="hlv-summary__item">
+                                    <span class="hlv-summary__label">LT</span>
+                                    <span class="hlv-summary__value" t-esc="state.check_data ? state.check_data.total_theoretical_qty : 0"/>
+                                </div>
+                                <div class="hlv-summary__sep"/>
+                                <div class="hlv-summary__item">
+                                    <span class="hlv-summary__label">TT</span>
+                                    <span class="hlv-summary__value" t-esc="state.check_data ? state.check_data.total_scanned_qty : 0"/>
+                                </div>
+                                <div class="hlv-summary__sep"/>
+                                <div class="hlv-summary__item">
+                                    <span class="hlv-summary__label">CL</span>
+                                    <span class="hlv-summary__value" t-esc="state.check_data ? state.check_data.total_difference : 0"/>
+                                </div>
+                            </div>
+                            <button class="hlv-btn hlv-btn--confirm hlv-btn--full"
+                                t-on-click="openConfirmDialog" t-att-disabled="state.is_loading">
+                                <i class="fa fa-check-circle"/> Xác Nhận Kiểm Kê
+                            </button>
+                        </div>
+                    </t>
 
-                    <!-- Inline Discrepancy Dialog -->
+                    <!-- Discrepancy Dialog -->
                     <t t-if="state.discrepancy_dialog">
                         <div class="hlv-dialog-overlay">
                             <div class="hlv-discrepancy-dialog">
@@ -256,18 +329,12 @@
                                     </div>
                                     <div class="hlv-form-group">
                                         <label>Ghi Chú</label>
-                                        <textarea
-                                            class="hlv-textarea"
-                                            t-model="state.discrepancy_dialog.notes"
-                                            rows="3"
-                                            placeholder="Mô tả chi tiết nguyên nhân..."
-                                        />
+                                        <textarea class="hlv-textarea" t-model="state.discrepancy_dialog.notes"
+                                            rows="3" placeholder="Mô tả chi tiết..."/>
                                     </div>
                                 </div>
                                 <div class="hlv-dialog__footer">
-                                    <button class="hlv-btn hlv-btn--ghost" t-on-click="closeDiscrepancyDialog">
-                                        Hủy
-                                    </button>
+                                    <button class="hlv-btn hlv-btn--ghost" t-on-click="closeDiscrepancyDialog">Hủy</button>
                                     <button class="hlv-btn hlv-btn--primary" t-on-click="saveDiscrepancy">
                                         <i class="fa fa-save"/> Lưu
                                     </button>
@@ -276,45 +343,51 @@
                         </div>
                     </t>
 
-                        <div class="hlv-summary">
-                            <div class="hlv-summary__item">
-                                <span class="hlv-summary__label">Lý Thuyết</span>
-                                <t t-if="state.check_data">
-                                    <span class="hlv-summary__value" t-esc="state.check_data.total_theoretical_qty"/>
-                                </t>
-                                <t t-if="!state.check_data">
-                                    <span class="hlv-summary__value">0</span>
-                                </t>
-                            </div>
-                            <div class="hlv-summary__sep"/>
-                            <div class="hlv-summary__item">
-                                <span class="hlv-summary__label">Thực Tế</span>
-                                <t t-if="state.check_data">
-                                    <span class="hlv-summary__value" t-esc="state.check_data.total_scanned_qty"/>
-                                </t>
-                                <t t-if="!state.check_data">
-                                    <span class="hlv-summary__value">0</span>
-                                </t>
-                            </div>
-                            <div class="hlv-summary__sep"/>
-                            <div class="hlv-summary__item">
-                                <span class="hlv-summary__label">Chênh Lệch</span>
-                                <t t-if="state.check_data">
-                                    <span class="hlv-summary__value" t-esc="state.check_data.total_difference"/>
-                                </t>
-                                <t t-if="!state.check_data">
-                                    <span class="hlv-summary__value">0</span>
-                                </t>
+                    <!-- Confirm Dialog -->
+                    <t t-if="state.confirm_dialog">
+                        <div class="hlv-dialog-overlay">
+                            <div class="hlv-confirm-dialog">
+                                <div class="hlv-dialog__header">
+                                    <span><i class="fa fa-check-circle"/> Xác Nhận Kiểm Kê</span>
+                                    <button class="hlv-dialog__close" t-on-click="closeConfirmDialog">
+                                        <i class="fa fa-times"/>
+                                    </button>
+                                </div>
+                                <div class="hlv-dialog__body">
+                                    <p class="hlv-confirm__loc">
+                                        <i class="fa fa-map-marker-alt"/> <t t-esc="state.location_name"/>
+                                    </p>
+                                    <div class="hlv-confirm__stats">
+                                        <div class="hlv-confirm__stat">
+                                            <span class="hlv-confirm__stat-val" t-esc="state.check_data ? state.check_data.product_count : 0"/>
+                                            <span class="hlv-confirm__stat-lbl">Sản phẩm</span>
+                                        </div>
+                                        <div class="hlv-confirm__stat">
+                                            <span class="hlv-confirm__stat-val" t-esc="state.check_data ? state.check_data.total_scanned_qty : 0"/>
+                                            <span class="hlv-confirm__stat-lbl">Thực tế</span>
+                                        </div>
+                                        <div class="hlv-confirm__stat">
+                                            <span class="hlv-confirm__stat-val" t-esc="state.check_data ? state.check_data.total_difference : 0"/>
+                                            <span class="hlv-confirm__stat-lbl">Chênh lệch</span>
+                                        </div>
+                                    </div>
+                                    <t t-if="state.settings and state.settings.approval_required">
+                                        <p class="hlv-confirm__note">
+                                            <i class="fa fa-info-circle"/> Phiên sẽ được gửi cho quản lý duyệt
+                                        </p>
+                                    </t>
+                                </div>
+                                <div class="hlv-dialog__footer">
+                                    <button class="hlv-btn hlv-btn--ghost" t-on-click="closeConfirmDialog">Hủy</button>
+                                    <button class="hlv-btn hlv-btn--confirm" t-on-click="confirmCheck">
+                                        <i class="fa fa-check-circle"/>
+                                        <t t-if="state.settings and state.settings.approval_required"> Gửi Duyệt</t>
+                                        <t t-else=""> Xác Nhận</t>
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                        <button
-                            class="hlv-btn hlv-btn--confirm hlv-btn--full"
-                            t-on-click="confirmCheck"
-                            disabled="state.is_loading"
-                        >
-                            <i class="fa fa-check-circle"/> Xác Nhận Kiểm Kê
-                        </button>
-                    </div>
+                    </t>
 
                 </div>
             </t>
@@ -322,10 +395,11 @@
             <!-- =================== SUMMARY VIEW =================== -->
             <t t-if="state.view === 'summary'">
                 <div class="hlv-done-view">
-                    <div class="hlv-done-view__icon">
-                        <i class="fa fa-check-circle"/>
-                    </div>
-                    <h2>Kiểm Kê Hoàn Tất!</h2>
+                    <div class="hlv-done-view__icon"><i class="fa fa-check-circle"/></div>
+                    <h2>
+                        <t t-if="state.settings and state.settings.approval_required">Đã Gửi Duyệt!</t>
+                        <t t-else="">Kiểm Kê Hoàn Tất!</t>
+                    </h2>
                     <p class="hlv-done-view__loc" t-esc="state.location_name"/>
 
                     <t t-if="state.check_data">
@@ -349,9 +423,245 @@
                         </div>
                     </t>
 
-                    <button class="hlv-btn hlv-btn--primary hlv-btn--lg hlv-btn--full" t-on-click="_resetSession">
-                        <i class="fa fa-plus"/> Kiểm Kê Vị Trí Mới
+                    <button class="hlv-btn hlv-btn--primary hlv-btn--lg hlv-btn--full" t-on-click="goHome">
+                        <i class="fa fa-home"/> Về Trang Chủ
                     </button>
+                </div>
+            </t>
+
+            <!-- =================== DAILY STATS VIEW =================== -->
+            <t t-if="state.view === 'daily_stats'">
+                <div class="hlv-stats-view">
+                    <div class="hlv-page-header">
+                        <button class="hlv-icon-btn hlv-icon-btn--ghost" t-on-click="goHome">
+                            <i class="fa fa-arrow-left"/>
+                        </button>
+                        <h2>Thống Kê Hôm Nay</h2>
+                        <button class="hlv-icon-btn hlv-icon-btn--ghost" t-on-click="_loadDailyStats" title="Làm mới">
+                            <i class="fa fa-sync-alt"/>
+                        </button>
+                    </div>
+
+                    <t t-if="state.daily_stats">
+                        <!-- My Stats Summary -->
+                        <div class="hlv-stats-section">
+                            <h3><i class="fa fa-user"/> Của Tôi</h3>
+                            <div class="hlv-stats-grid">
+                                <div class="hlv-stat-card hlv-stat-card--blue">
+                                    <span class="hlv-stat-card__val" t-esc="state.daily_stats.my_stats.total"/>
+                                    <span class="hlv-stat-card__lbl">Tổng phiên</span>
+                                </div>
+                                <div class="hlv-stat-card hlv-stat-card--green">
+                                    <span class="hlv-stat-card__val" t-esc="state.daily_stats.my_stats.confirmed"/>
+                                    <span class="hlv-stat-card__lbl">Hoàn thành</span>
+                                </div>
+                                <div class="hlv-stat-card hlv-stat-card--amber">
+                                    <span class="hlv-stat-card__val" t-esc="state.daily_stats.my_stats.pending_approval"/>
+                                    <span class="hlv-stat-card__lbl">Chờ duyệt</span>
+                                </div>
+                                <div class="hlv-stat-card hlv-stat-card--gray">
+                                    <span class="hlv-stat-card__val" t-esc="state.daily_stats.my_stats.in_progress"/>
+                                    <span class="hlv-stat-card__lbl">Đang làm</span>
+                                </div>
+                                <div class="hlv-stat-card">
+                                    <span class="hlv-stat-card__val" t-esc="state.daily_stats.my_stats.total_products"/>
+                                    <span class="hlv-stat-card__lbl">Sản phẩm</span>
+                                </div>
+                                <div class="hlv-stat-card">
+                                    <span class="hlv-stat-card__val" t-esc="state.daily_stats.my_stats.locations_checked"/>
+                                    <span class="hlv-stat-card__lbl">Vị trí</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- My Checks Today -->
+                        <t t-if="state.daily_stats.my_checks and state.daily_stats.my_checks.length > 0">
+                            <div class="hlv-stats-section">
+                                <h3><i class="fa fa-list-alt"/> Phiên Của Tôi</h3>
+                                <div class="hlv-checks-list">
+                                    <t t-foreach="state.daily_stats.my_checks" t-as="chk" t-key="chk.id">
+                                        <div class="hlv-check-item">
+                                            <div class="hlv-check-item__left">
+                                                <div t-att-class="'hlv-check-item__dot ' + (chk.state === 'confirmed' ? 'hlv-check-item__dot--green' : chk.state === 'pending_approval' ? 'hlv-check-item__dot--amber' : 'hlv-check-item__dot--blue')"/>
+                                                <div class="hlv-check-item__info">
+                                                    <span class="hlv-check-item__loc" t-esc="chk.location_name"/>
+                                                    <span class="hlv-check-item__time">
+                                                        <i class="fa fa-clock"/> <t t-esc="chk.start_time"/>
+                                                        <t t-if="chk.confirmed_time"> → <t t-esc="chk.confirmed_time"/></t>
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div class="hlv-check-item__right">
+                                                <span class="hlv-check-item__count"><t t-esc="chk.product_count"/> SP</span>
+                                                <span t-att-class="'hlv-check-item__diff ' + (chk.total_difference == 0 ? 'hlv-check-item__diff--ok' : 'hlv-check-item__diff--bad')">
+                                                    <t t-if="chk.total_difference == 0">✓</t>
+                                                    <t t-else="">CL: <t t-esc="chk.total_difference"/></t>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </t>
+                                </div>
+                            </div>
+                        </t>
+
+                        <!-- Team Stats -->
+                        <div class="hlv-stats-section">
+                            <h3><i class="fa fa-users"/> Toàn Team</h3>
+                            <div class="hlv-stats-grid">
+                                <div class="hlv-stat-card hlv-stat-card--blue">
+                                    <span class="hlv-stat-card__val" t-esc="state.daily_stats.team_stats.total"/>
+                                    <span class="hlv-stat-card__lbl">Tổng phiên</span>
+                                </div>
+                                <div class="hlv-stat-card hlv-stat-card--green">
+                                    <span class="hlv-stat-card__val" t-esc="state.daily_stats.team_stats.confirmed"/>
+                                    <span class="hlv-stat-card__lbl">Hoàn thành</span>
+                                </div>
+                                <div class="hlv-stat-card hlv-stat-card--amber">
+                                    <span class="hlv-stat-card__val" t-esc="state.daily_stats.team_stats.pending_approval"/>
+                                    <span class="hlv-stat-card__lbl">Chờ duyệt</span>
+                                </div>
+                                <div class="hlv-stat-card">
+                                    <span class="hlv-stat-card__val" t-esc="state.daily_stats.team_stats.total_products"/>
+                                    <span class="hlv-stat-card__lbl">Sản phẩm</span>
+                                </div>
+                                <div class="hlv-stat-card">
+                                    <span class="hlv-stat-card__val" t-esc="state.daily_stats.team_stats.locations_checked"/>
+                                    <span class="hlv-stat-card__lbl">Vị trí</span>
+                                </div>
+                                <div class="hlv-stat-card hlv-stat-card--red">
+                                    <span class="hlv-stat-card__val" t-esc="state.daily_stats.team_stats.total_difference"/>
+                                    <span class="hlv-stat-card__lbl">Tổng CL</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Team By User (manager only) -->
+                        <t t-if="state.daily_stats.team_by_user and state.daily_stats.team_by_user.length > 0">
+                            <div class="hlv-stats-section">
+                                <h3><i class="fa fa-chart-bar"/> Theo Nhân Viên</h3>
+                                <div class="hlv-user-table">
+                                    <div class="hlv-user-table__header">
+                                        <span class="hlv-user-table__col hlv-user-table__col--name">Nhân viên</span>
+                                        <span class="hlv-user-table__col">Phiên</span>
+                                        <span class="hlv-user-table__col">Xong</span>
+                                        <span class="hlv-user-table__col">SP</span>
+                                        <span class="hlv-user-table__col">CL</span>
+                                    </div>
+                                    <t t-foreach="state.daily_stats.team_by_user" t-as="usr" t-key="usr.user_name">
+                                        <div class="hlv-user-table__row">
+                                            <span class="hlv-user-table__col hlv-user-table__col--name" t-esc="usr.user_name"/>
+                                            <span class="hlv-user-table__col" t-esc="usr.total"/>
+                                            <span class="hlv-user-table__col hlv-user-table__col--green" t-esc="usr.confirmed"/>
+                                            <span class="hlv-user-table__col" t-esc="usr.total_products"/>
+                                            <span t-att-class="'hlv-user-table__col ' + (usr.total_difference != 0 ? 'hlv-user-table__col--red' : '')" t-esc="usr.total_difference"/>
+                                        </div>
+                                    </t>
+                                </div>
+                            </div>
+                        </t>
+                    </t>
+                </div>
+            </t>
+
+            <!-- =================== SETTINGS VIEW =================== -->
+            <t t-if="state.view === 'settings'">
+                <div class="hlv-settings-view">
+                    <div class="hlv-page-header">
+                        <button class="hlv-icon-btn hlv-icon-btn--ghost" t-on-click="goHome">
+                            <i class="fa fa-arrow-left"/>
+                        </button>
+                        <h2>Cài Đặt</h2>
+                        <div/>
+                    </div>
+
+                    <t t-if="state.settings">
+                        <div class="hlv-settings-list">
+                            <div class="hlv-setting-row" t-on-click="toggleApprovalRequired">
+                                <div class="hlv-setting-row__info">
+                                    <div class="hlv-setting-row__title">
+                                        <i class="fa fa-clipboard-check"/> Chế Độ Duyệt
+                                    </div>
+                                    <div class="hlv-setting-row__desc">
+                                        Phiên kiểm kê cần quản lý duyệt trước khi áp dụng điều chỉnh tồn kho
+                                    </div>
+                                </div>
+                                <div t-att-class="'hlv-toggle ' + (state.settings.approval_required ? 'hlv-toggle--on' : '')">
+                                    <div class="hlv-toggle__track">
+                                        <div class="hlv-toggle__thumb"/>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="hlv-setting-row" t-on-click="toggleAutoConfirm">
+                                <div class="hlv-setting-row__info">
+                                    <div class="hlv-setting-row__title">
+                                        <i class="fa fa-bolt"/> Tự Động Xác Nhận
+                                    </div>
+                                    <div class="hlv-setting-row__desc">
+                                        Tự động xác nhận khi tất cả sản phẩm đã được quét và ghi nhận lý do
+                                    </div>
+                                </div>
+                                <div t-att-class="'hlv-toggle ' + (state.settings.auto_confirm ? 'hlv-toggle--on' : '')">
+                                    <div class="hlv-toggle__track">
+                                        <div class="hlv-toggle__thumb"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </div>
+            </t>
+
+            <!-- =================== APPROVALS VIEW (Manager Only) =================== -->
+            <t t-if="state.view === 'approvals' and state.settings and state.settings.is_manager">
+                <div class="hlv-approvals-view">
+                    <div class="hlv-page-header">
+                        <button class="hlv-icon-btn hlv-icon-btn--ghost" t-on-click="goHome">
+                            <i class="fa fa-arrow-left"/>
+                        </button>
+                        <h2>Phiên Chờ Duyệt</h2>
+                        <div/>
+                    </div>
+
+                    <t t-if="state.pending_approvals.length === 0">
+                        <div class="hlv-empty-state" style="padding-top: 60px;">
+                            <i class="fa fa-clipboard-check hlv-empty-state__icon"/>
+                            <p>Không có phiên nào chờ duyệt</p>
+                        </div>
+                    </t>
+
+                    <t t-if="state.pending_approvals.length > 0">
+                        <t t-foreach="state.pending_approvals" t-as="ap" t-key="ap.check_id">
+                            <div class="hlv-approval-card">
+                                <div class="hlv-approval-card__top">
+                                    <div class="hlv-approval-card__info">
+                                        <div class="hlv-approval-card__name" t-esc="ap.name"/>
+                                        <div class="hlv-approval-card__meta">
+                                            <span><i class="fa fa-user"/> <t t-esc="ap.user_name"/></span>
+                                            <span><i class="fa fa-map-marker-alt"/> <t t-esc="ap.location_name"/></span>
+                                            <span><i class="fa fa-clock"/> <t t-esc="ap.confirmed_time"/></span>
+                                        </div>
+                                    </div>
+                                    <div class="hlv-approval-card__stats">
+                                        <span class="hlv-badge hlv-badge--light">
+                                            <t t-esc="ap.product_count"/> SP
+                                        </span>
+                                        <span t-att-class="'hlv-badge ' + (ap.total_difference !== 0 ? 'hlv-badge--danger' : 'hlv-badge--success')">
+                                            CL: <t t-esc="ap.total_difference"/>
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="hlv-approval-card__actions">
+                                    <button class="hlv-btn hlv-btn--ghost hlv-btn--sm" t-on-click="() => this.rejectCheck(ap.check_id)">
+                                        <i class="fa fa-times"/> Từ Chối
+                                    </button>
+                                    <button class="hlv-btn hlv-btn--confirm hlv-btn--sm" t-on-click="() => this.approveCheck(ap.check_id)">
+                                        <i class="fa fa-check"/> Duyệt
+                                    </button>
+                                </div>
+                            </div>
+                        </t>
+                    </t>
                 </div>
             </t>
 

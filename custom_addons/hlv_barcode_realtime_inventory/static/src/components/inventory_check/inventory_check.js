@@ -18,8 +18,8 @@ export class InventoryCheckScanner extends Component {
             location_id: null,
             location_name: '',
 
-            // UI State
-            view: 'location_select',
+            // Views: home | scanning | daily_stats | settings | approvals | summary
+            view: 'home',
             is_loading: false,
             error_message: '',
             warning_message: '',
@@ -33,18 +33,30 @@ export class InventoryCheckScanner extends Component {
             location_barcode: '',
             product_barcode: '',
 
-            // Inline discrepancy dialog state
+            // Inline discrepancy dialog
             discrepancy_dialog: null,
 
-            // Active sessions for explicit resume (cross-device)
+            // Active sessions
             active_sessions: [],
+
+            // Daily stats
+            daily_stats: null,
+
+            // Settings
+            settings: null,
+
+            // Approvals list (manager)
+            pending_approvals: [],
+
+            // Confirm dialog
+            confirm_dialog: false,
 
             // Device
             device_id: this._generateDeviceId(),
         });
 
         onWillStart(async () => {
-            await this._restoreSession();
+            await this._loadHome();
         });
 
         onMounted(() => {
@@ -52,61 +64,78 @@ export class InventoryCheckScanner extends Component {
         });
     }
 
-    // ========== Device Management ==========
+    // ========== Device ==========
     _generateDeviceId() {
-        let deviceId = localStorage.getItem('hlv_device_id');
-        if (!deviceId) {
-            deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            localStorage.setItem('hlv_device_id', deviceId);
+        let id = localStorage.getItem('hlv_device_id');
+        if (!id) {
+            id = 'dev_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem('hlv_device_id', id);
         }
-        return deviceId;
+        return id;
     }
 
-    // ========== Session Management ==========
-    async _restoreSession() {
+    // ========== Home / Init ==========
+    async _loadHome() {
         this.state.is_loading = true;
         try {
-            const [result, sessions] = await Promise.all([
-                this.orm.call('inventory.check', 'get_or_create_active_check', [this.state.device_id], {}),
+            const [sessions, settings, stats] = await Promise.all([
                 this.orm.call('inventory.check', 'get_active_sessions', [], {}),
+                this.orm.call('inventory.check', 'get_scanner_settings', [], {}),
+                this.orm.call('inventory.check', 'get_daily_stats', [], {}),
             ]);
-
-            if (result.success) {
-                this.state.check_id = result.check_id;
-                this.state.location_id = result.location_id;
-                this.state.location_name = result.location_name;
-                this.state.check_data = result;
-                this.state.lines = result.lines || [];
-                this.state.discrepancies = result.discrepancies || [];
-
-                // Resume directly to scanning view if location already set
-                if (result.location_id) {
-                    this.state.view = 'scanning';
-                    this.state.active_sessions = [];
-                } else {
-                    // Show other active sessions so user can pick one to resume
-                    this.state.active_sessions = sessions.filter(s => s.check_id !== result.check_id);
-                }
-            }
+            this.state.active_sessions = sessions || [];
+            this.state.settings = settings || {};
+            this.state.daily_stats = stats || null;
         } catch (error) {
-            this._showError('Lỗi khôi phục phiên: ' + error.message);
+            this._showError('Lỗi tải dữ liệu: ' + error.message);
         } finally {
             this.state.is_loading = false;
         }
     }
 
+    // ========== Navigation ==========
+    goHome() {
+        this.state.view = 'home';
+        this.state.check_id = null;
+        this.state.location_id = null;
+        this.state.location_name = '';
+        this.state.check_data = null;
+        this.state.lines = [];
+        this.state.discrepancies = [];
+        this.state.confirm_dialog = false;
+        this._loadHome();
+    }
+
+    goToScanning() {
+        this.state.view = 'scanning';
+        this._focusOnBarcodeInput();
+    }
+
+    goToDailyStats() {
+        this.state.view = 'daily_stats';
+        this._loadDailyStats();
+    }
+
+    goToSettings() {
+        this.state.view = 'settings';
+    }
+
+    goToApprovals() {
+        if (!this.state.settings || !this.state.settings.is_manager) {
+            this._showError('Chỉ quản lý kho mới có quyền truy cập');
+            return;
+        }
+        this.state.view = 'approvals';
+        this._loadApprovals();
+    }
+
+    // ========== Session Resume ==========
     async resumeCheck(check_id) {
         this.state.is_loading = true;
         try {
             const result = await this.orm.call('inventory.check', 'resume_check', [check_id], {});
             if (result.success) {
-                this.state.check_id = result.check_id;
-                this.state.location_id = result.location_id;
-                this.state.location_name = result.location_name;
-                this.state.check_data = result;
-                this.state.lines = result.lines || [];
-                this.state.discrepancies = result.discrepancies || [];
-                this.state.active_sessions = [];
+                this._applyCheckData(result);
                 if (result.location_id) {
                     this.state.view = 'scanning';
                     this._focusOnBarcodeInput();
@@ -119,6 +148,40 @@ export class InventoryCheckScanner extends Component {
         } finally {
             this.state.is_loading = false;
         }
+    }
+
+    // ========== New Check ==========
+    async startNewCheck() {
+        this.state.is_loading = true;
+        try {
+            const result = await this.orm.call(
+                'inventory.check', 'get_or_create_active_check',
+                [this.state.device_id], {}
+            );
+            if (result.success) {
+                this._applyCheckData(result);
+                if (result.location_id) {
+                    this.state.view = 'scanning';
+                } else {
+                    this.state.view = 'scanning';
+                    // will show location input in scanning header when no location
+                }
+                this._focusOnBarcodeInput();
+            }
+        } catch (error) {
+            this._showError('Lỗi tạo phiên: ' + error.message);
+        } finally {
+            this.state.is_loading = false;
+        }
+    }
+
+    _applyCheckData(result) {
+        this.state.check_id = result.check_id;
+        this.state.location_id = result.location_id;
+        this.state.location_name = result.location_name;
+        this.state.check_data = result;
+        this.state.lines = result.lines || [];
+        this.state.discrepancies = result.discrepancies || [];
     }
 
     // ========== Location Selection ==========
@@ -135,17 +198,26 @@ export class InventoryCheckScanner extends Component {
             this._showError('Vui lòng nhập mã vị trí');
             return;
         }
-
         this.state.is_loading = true;
         try {
             const result = await this.orm.call(
-                'inventory.check',
-                'search_location',
-                [barcode],
-                {}
+                'inventory.check', 'search_location', [barcode], {}
             );
-
             if (result.success) {
+                // Create check first if we don't have one
+                if (!this.state.check_id) {
+                    const checkResult = await this.orm.call(
+                        'inventory.check', 'get_or_create_active_check',
+                        [this.state.device_id], {}
+                    );
+                    if (checkResult.success) {
+                        this.state.check_id = checkResult.check_id;
+                        this.state.check_data = checkResult;
+                    } else {
+                        this._showError('Lỗi tạo phiên kiểm kê');
+                        return;
+                    }
+                }
                 await this._setLocation(result.location_id, result.location_name);
                 this.state.location_barcode = '';
             } else {
@@ -159,33 +231,25 @@ export class InventoryCheckScanner extends Component {
     }
 
     async _setLocation(location_id, location_name) {
-        this.state.location_id = location_id;
-        this.state.location_name = location_name;
         this.state.is_loading = true;
-
         try {
-            // set_location now: populates lines + auto-starts the check (state → in_progress)
             const result = await this.orm.call(
-                'inventory.check',
-                'set_location',
-                [this.state.check_id, location_id],
-                {}
+                'inventory.check', 'set_location',
+                [this.state.check_id, location_id], {}
             );
-
             if (result && result.success) {
-                this.state.check_data = result;
-                this.state.lines = result.lines || [];
-                this.state.discrepancies = result.discrepancies || [];
+                this._applyCheckData(result);
+                this.state.view = 'scanning';
+                this._showNotification(`Đã chọn: ${location_name}`, 'success');
+                this._focusOnBarcodeInput();
+            } else {
+                this._showError(result.error || 'Lỗi thiết lập vị trí');
             }
         } catch (error) {
             this._showError('Lỗi tải dữ liệu vị trí: ' + error.message);
         } finally {
             this.state.is_loading = false;
         }
-
-        this.state.view = 'scanning';
-        this._showNotification(`Đã chọn vị trí: ${location_name}`, 'success');
-        this._focusOnBarcodeInput();
     }
 
     // ========== Barcode Scanning ==========
@@ -199,42 +263,28 @@ export class InventoryCheckScanner extends Component {
     async scanProduct() {
         const barcode = this.state.product_barcode.trim();
         if (!barcode) return;
-
         this.state.is_loading = true;
         try {
-            const product_result = await this.orm.call(
-                'inventory.check',
-                'search_product',
-                [barcode],
-                {}
+            const pr = await this.orm.call(
+                'inventory.check', 'search_product', [barcode], {}
             );
-
-            if (!product_result.success) {
-                this._showError(product_result.error);
+            if (!pr.success) {
+                this._showError(pr.error);
                 this.state.product_barcode = '';
                 return;
             }
-
-            const scan_result = await this.orm.call(
-                'inventory.check',
-                'register_scan',
-                [this.state.check_id, product_result.product_id, this.state.location_id, 1],
-                {}
+            const sr = await this.orm.call(
+                'inventory.check', 'register_scan',
+                [this.state.check_id, pr.product_id, this.state.location_id, 1], {}
             );
-
-            if (scan_result.success) {
-                if (scan_result.warning) {
-                    this.state.warning_message = scan_result.error;
-                }
+            if (sr.success) {
+                if (sr.warning) this.state.warning_message = sr.error;
                 await this._refreshCheckData();
-                this._showNotification(
-                    `✓ ${product_result.product_name} (SL: ${scan_result.scanned_qty})`,
-                    'success'
-                );
+                this._showNotification(`✓ ${pr.product_name} (SL: ${sr.scanned_qty})`, 'success');
                 this.state.product_barcode = '';
                 this._focusOnBarcodeInput();
             } else {
-                this._showError(scan_result.error);
+                this._showError(sr.error);
             }
         } catch (error) {
             this._showError('Lỗi quét: ' + error.message);
@@ -247,35 +297,29 @@ export class InventoryCheckScanner extends Component {
     async _refreshCheckData() {
         try {
             const result = await this.orm.call(
-                'inventory.check',
-                'get_or_create_active_check',
-                [this.state.device_id, this.state.location_id],
-                {}
+                'inventory.check', 'get_or_create_active_check',
+                [this.state.device_id, this.state.location_id], {}
             );
             if (result.success) {
                 this.state.check_data = result;
                 this.state.discrepancies = result.discrepancies || [];
-
-                // Preserve qty for line currently being manually edited
                 const activeEl = document.activeElement;
                 const editingId = (activeEl && activeEl.classList.contains('hlv-qty-input'))
                     ? parseInt(activeEl.dataset.lineId) : null;
-
                 const newLines = result.lines || [];
                 if (editingId) {
                     const cur = this.state.lines.find(l => l.id === editingId);
-                    this.state.lines = newLines.map(nl => {
-                        if (nl.id === editingId && cur) {
-                            return Object.assign({}, nl, { scanned_qty: cur.scanned_qty });
-                        }
-                        return nl;
-                    });
+                    this.state.lines = newLines.map(nl =>
+                        (nl.id === editingId && cur)
+                            ? Object.assign({}, nl, { scanned_qty: cur.scanned_qty })
+                            : nl
+                    );
                 } else {
                     this.state.lines = newLines;
                 }
             }
         } catch (error) {
-            console.error('Lỗi cập nhật dữ liệu:', error);
+            console.error('Lỗi cập nhật:', error);
         }
     }
 
@@ -286,19 +330,15 @@ export class InventoryCheckScanner extends Component {
     }
 
     async removeLine(line_id) {
-        if (!confirm('Bạn chắc chắn muốn xóa dòng này?')) return;
-
+        if (!confirm('Xóa dòng này?')) return;
         this.state.is_loading = true;
         try {
-            const result = await this.orm.call(
-                'inventory.check',
-                'remove_line',
-                [this.state.check_id, line_id],
-                {}
+            const r = await this.orm.call(
+                'inventory.check', 'remove_line', [this.state.check_id, line_id], {}
             );
-            if (result.success) {
+            if (r.success) {
                 await this._refreshCheckData();
-                this._showNotification('Đã xóa dòng', 'success');
+                this._showNotification('Đã xóa', 'success');
                 this._focusOnBarcodeInput();
             }
         } catch (error) {
@@ -308,57 +348,44 @@ export class InventoryCheckScanner extends Component {
         }
     }
 
-    // ========== Manual Qty Input ==========
+    // ========== Manual Qty ==========
     async onQtyChange(event) {
         const lineId = parseInt(event.target.dataset.lineId);
         const newQty = parseFloat(event.target.value);
         if (isNaN(newQty) || newQty < 0) return;
-
-        // Update local state immediately for reactive difference display
         const line = this.state.lines.find(l => l.id === lineId);
         if (line) {
             line.scanned_qty = newQty;
             line.difference = newQty - line.theoretical_qty;
         }
-
         try {
-            const result = await this.orm.call(
-                'inventory.check',
-                'update_line_qty',
-                [this.state.check_id, lineId, newQty],
-                {}
+            const r = await this.orm.call(
+                'inventory.check', 'update_line_qty',
+                [this.state.check_id, lineId, newQty], {}
             );
-            if (result.success) {
-                // Sync authoritative difference from backend
-                if (line) line.difference = result.difference;
-                // Refresh summary totals without overwriting active input
+            if (r.success) {
+                if (line) line.difference = r.difference;
                 await this._refreshCheckData();
             } else {
-                this._showError(result.error || 'Lỗi cập nhật số lượng');
+                this._showError(r.error || 'Lỗi cập nhật số lượng');
             }
         } catch (error) {
-            this._showError('Lỗi cập nhật số lượng: ' + error.message);
+            this._showError('Lỗi: ' + error.message);
         }
     }
 
-    // ========== Inline Discrepancy Dialog ==========
+    // ========== Discrepancy Dialog ==========
     addDiscrepancyHandler(event) {
-        const button = event.target.closest('button');
+        const btn = event.target.closest('button');
         this.openDiscrepancyDialog(
-            parseInt(button.dataset.lineId),
-            button.dataset.productName,
-            parseFloat(button.dataset.difference)
+            parseInt(btn.dataset.lineId),
+            btn.dataset.productName,
+            parseFloat(btn.dataset.difference)
         );
     }
 
     openDiscrepancyDialog(line_id, product_name, difference) {
-        this.state.discrepancy_dialog = {
-            line_id,
-            product_name,
-            difference,
-            reason: '',
-            notes: '',
-        };
+        this.state.discrepancy_dialog = { line_id, product_name, difference, reason: '', notes: '' };
     }
 
     closeDiscrepancyDialog() {
@@ -367,26 +394,20 @@ export class InventoryCheckScanner extends Component {
     }
 
     async saveDiscrepancy() {
-        const dialog = this.state.discrepancy_dialog;
-        if (!dialog.reason) {
-            this._showError('Vui lòng chọn lý do chênh lệch');
-            return;
-        }
+        const d = this.state.discrepancy_dialog;
+        if (!d.reason) { this._showError('Vui lòng chọn lý do'); return; }
         this.state.is_loading = true;
         try {
-            const result = await this.orm.call(
-                'inventory.check',
-                'save_discrepancy',
-                [dialog.line_id, dialog.reason, dialog.notes],
-                {}
+            const r = await this.orm.call(
+                'inventory.check', 'save_discrepancy', [d.line_id, d.reason, d.notes], {}
             );
-            if (result.success) {
-                this._showNotification('Đã ghi nhận lý do chênh lệch', 'success');
+            if (r.success) {
+                this._showNotification('Đã ghi nhận lý do', 'success');
                 this.state.discrepancy_dialog = null;
                 await this._refreshCheckData();
                 this._focusOnBarcodeInput();
             } else {
-                this._showError(result.error || 'Lỗi lưu chênh lệch');
+                this._showError(r.error || 'Lỗi');
             }
         } catch (error) {
             this._showError('Lỗi: ' + error.message);
@@ -395,26 +416,33 @@ export class InventoryCheckScanner extends Component {
         }
     }
 
-    // ========== Check Actions ==========
-    async confirmCheck() {
-        const pending = this.state.lines.filter(
-            l => l.difference !== 0 && !l.discrepancy_id
-        );
+    // ========== Confirm Check (inline) ==========
+    openConfirmDialog() {
+        const pending = this.state.lines.filter(l => l.difference !== 0 && !l.discrepancy_id);
         if (pending.length > 0) {
             this._showError(`Cần ghi nhận lý do chênh lệch cho ${pending.length} sản phẩm`);
             return;
         }
-        if (!confirm('Bạn chắc chắn muốn xác nhận kiểm kê?')) return;
+        this.state.confirm_dialog = true;
+    }
 
+    closeConfirmDialog() {
+        this.state.confirm_dialog = false;
+    }
+
+    async confirmCheck() {
         this.state.is_loading = true;
+        this.state.confirm_dialog = false;
         try {
             await this.orm.call(
-                'inventory.check',
-                'action_confirm_check',
-                [this.state.check_id],
-                {}
+                'inventory.check', 'action_confirm_check', [this.state.check_id], {}
             );
-            this._showNotification('Đã xác nhận kiểm kê', 'success');
+            const approvalRequired = this.state.settings && this.state.settings.approval_required;
+            if (approvalRequired) {
+                this._showNotification('Đã gửi phiên kiểm kê chờ duyệt', 'success');
+            } else {
+                this._showNotification('Đã xác nhận kiểm kê', 'success');
+            }
             this.state.view = 'summary';
         } catch (error) {
             this._showError('Lỗi xác nhận: ' + error.message);
@@ -425,17 +453,13 @@ export class InventoryCheckScanner extends Component {
 
     async cancelCheck() {
         if (!confirm('Bạn chắc chắn muốn hủy kiểm kê?')) return;
-
         this.state.is_loading = true;
         try {
             await this.orm.call(
-                'inventory.check',
-                'action_cancel',
-                [this.state.check_id],
-                {}
+                'inventory.check', 'action_cancel', [this.state.check_id], {}
             );
-            this._showNotification('Đã hủy kiểm kê', 'success');
-            await this._resetSession();
+            this._showNotification('Đã hủy', 'success');
+            this.goHome();
         } catch (error) {
             this._showError('Lỗi: ' + error.message);
         } finally {
@@ -454,43 +478,114 @@ export class InventoryCheckScanner extends Component {
                 target: 'current',
             });
         } catch (error) {
-            this._showError('Không thể mở form: ' + error.message);
+            this._showError('Lỗi mở form: ' + error.message);
         }
     }
 
-    // ========== Session Reset ==========
-    async _resetSession() {
-        this.state.check_id = null;
-        this.state.location_id = null;
-        this.state.location_name = '';
-        this.state.check_data = null;
-        this.state.view = 'location_select';
-        this.state.lines = [];
-        this.state.discrepancies = [];
-        this.state.discrepancy_dialog = null;
-        this.state.active_sessions = [];
-        // Create fresh check ready for next location
-        await this._restoreSession();
+    // ========== Daily Stats ==========
+    async _loadDailyStats() {
+        this.state.is_loading = true;
+        try {
+            const r = await this.orm.call('inventory.check', 'get_daily_stats', [], {});
+            if (r.success) this.state.daily_stats = r;
+        } catch (error) {
+            this._showError('Lỗi tải thống kê: ' + error.message);
+        } finally {
+            this.state.is_loading = false;
+        }
     }
 
-    // ========== Alert Helpers ==========
+    // ========== Settings ==========
+    async toggleApprovalRequired() {
+        const s = this.state.settings;
+        s.approval_required = !s.approval_required;
+        await this._saveSettings();
+    }
+
+    async toggleAutoConfirm() {
+        const s = this.state.settings;
+        s.auto_confirm = !s.auto_confirm;
+        await this._saveSettings();
+    }
+
+    async _saveSettings() {
+        const s = this.state.settings;
+        try {
+            const r = await this.orm.call(
+                'inventory.check', 'save_scanner_settings',
+                [s.approval_required, s.auto_confirm], {}
+            );
+            if (r.success) {
+                this._showNotification('Đã lưu cài đặt', 'success');
+            } else {
+                this._showError(r.error);
+            }
+        } catch (error) {
+            this._showError('Lỗi: ' + error.message);
+        }
+    }
+
+    // ========== Approvals ==========
+    async _loadApprovals() {
+        this.state.is_loading = true;
+        try {
+            const r = await this.orm.call('inventory.check', 'get_pending_approvals', [], {});
+            this.state.pending_approvals = r || [];
+        } catch (error) {
+            this._showError('Lỗi tải: ' + error.message);
+        } finally {
+            this.state.is_loading = false;
+        }
+    }
+
+    async approveCheck(check_id) {
+        this.state.is_loading = true;
+        try {
+            const r = await this.orm.call('inventory.check', 'approve_check', [check_id], {});
+            if (r.success) {
+                this._showNotification('Đã duyệt', 'success');
+                await this._loadApprovals();
+            } else {
+                this._showError(r.error);
+            }
+        } catch (error) {
+            this._showError('Lỗi: ' + error.message);
+        } finally {
+            this.state.is_loading = false;
+        }
+    }
+
+    async rejectCheck(check_id) {
+        if (!confirm('Từ chối phiên này?')) return;
+        this.state.is_loading = true;
+        try {
+            const r = await this.orm.call('inventory.check', 'reject_check', [check_id], {});
+            if (r.success) {
+                this._showNotification('Đã từ chối', 'info');
+                await this._loadApprovals();
+            } else {
+                this._showError(r.error);
+            }
+        } catch (error) {
+            this._showError('Lỗi: ' + error.message);
+        } finally {
+            this.state.is_loading = false;
+        }
+    }
+
+    // ========== Helpers ==========
     clearWarning() { this.state.warning_message = ''; }
     clearError() { this.state.error_message = ''; }
 
-    // ========== Smart Focus ==========
-    /**
-     * Refocuses the barcode input but respects:
-     * - User actively typing in a qty input (.hlv-qty-input)
-     * - User in the discrepancy dialog (.hlv-discrepancy-dialog)
-     */
     _focusOnBarcodeInput() {
         setTimeout(() => {
             const active = document.activeElement;
             if (active) {
                 if (active.classList.contains('hlv-qty-input')) return;
                 if (active.closest && active.closest('.hlv-discrepancy-dialog')) return;
+                if (active.closest && active.closest('.hlv-confirm-dialog')) return;
             }
-            const selector = this.state.view === 'location_select'
+            const selector = !this.state.location_id
                 ? '.hlv-input--lg'
                 : '.hlv-input--scan';
             const input = document.querySelector(selector);
@@ -498,7 +593,6 @@ export class InventoryCheckScanner extends Component {
         }, 150);
     }
 
-    // ========== Notification Helpers ==========
     _showError(message) {
         this.state.error_message = message;
         this.notification.add(message, { type: 'danger' });
