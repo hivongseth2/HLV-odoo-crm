@@ -8,11 +8,15 @@ class StockPickingAssignLog(models.Model):
     _inherit = 'stock.picking'
 
     def action_assign(self):
-        """Log khi user bấm nút 'Kiểm tra tình trạng còn hàng'"""
+        """Log khi user bấm nút 'Kiểm tra tình trạng còn hàng'
+        và tự động sửa ghost reservation trước khi assign."""
         _logger.info(
             '[ASSIGN_LOG] ===== action_assign CALLED | picking=%s (id=%s) | state=%s =====',
             self.name, self.id, self.state,
         )
+
+        # Tự động sửa ghost reservation trước khi assign
+        self._fix_ghost_reservations_before_assign()
 
         # Log tất cả moves đang cần dự trữ
         for move in self.move_ids.filtered(lambda m: m.state not in ['done', 'cancel']):
@@ -105,3 +109,33 @@ class StockPickingAssignLog(models.Model):
                 )
 
         return result
+
+    def _fix_ghost_reservations_before_assign(self):
+        """
+        Tự động phát hiện và sửa ghost reservation trước khi assign.
+        Ghost reservation = quant.reserved_quantity > tổng move lines thực tế.
+        """
+        for move in self.move_ids.filtered(lambda m: m.state not in ['done', 'cancel']):
+            quants = self.env['stock.quant'].search([
+                ('product_id', '=', move.product_id.id),
+                ('location_id', 'child_of', move.location_id.id),
+            ])
+            for q in quants:
+                real_reserved = sum(
+                    self.env['stock.move.line'].search([
+                        ('product_id', '=', move.product_id.id),
+                        ('location_id', '=', q.location_id.id),
+                        ('state', 'not in', ['done', 'cancel']),
+                        ('quantity', '>', 0),
+                    ]).mapped('quantity')
+                )
+                if abs(q.reserved_quantity - real_reserved) > 0.001:
+                    _logger.warning(
+                        '[ASSIGN_LOG] AUTO-FIX ghost reservation | location=%s | '
+                        'quant.reserved=%s → fix to=%s (phantom=%s)',
+                        q.location_id.display_name,
+                        q.reserved_quantity,
+                        real_reserved,
+                        q.reserved_quantity - real_reserved,
+                    )
+                    q.sudo().write({'reserved_quantity': real_reserved})
