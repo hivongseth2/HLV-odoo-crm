@@ -61,10 +61,9 @@ class DeliveryPlannerController(http.Controller):
             if not all_pickings:
                 return {'success': False, 'message': 'Không có phiếu lấy hàng nào cần in (tất cả đã hoàn thành hoặc đã hủy)'}
 
-            # Fetch report by searching for picking report (not action ref)
+            # Fetch report by name "Hoạt động lấy hàng"
             report = request.env['ir.actions.report'].sudo().search([
-                ('model', '=', 'stock.picking'),
-                ('report_type', '=', 'qweb-pdf'),
+                ('name', 'ilike', 'Hoạt động lấy hàng'),
             ], limit=1)
             
             if not report:

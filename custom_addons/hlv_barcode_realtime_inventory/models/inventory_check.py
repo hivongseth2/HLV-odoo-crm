@@ -309,32 +309,39 @@ class InventoryCheck(models.Model):
         self.locked_move_ids = [Command.clear()]
 
     def _create_inventory_adjustment(self):
-        """Tạo Inventory Adjustment từ kiểm kê"""
+        """Áp dụng Inventory Adjustment qua stock.quant (Odoo 17/18)"""
         self.ensure_one()
-        
-        adjustment_lines = []
-        
+
+        quants_to_apply = self.env['stock.quant']
+
         for line in self.line_ids:
-            adjustment_lines.append((0, 0, {
-                'product_id': line.product_id.id,
-                'location_id': line.location_id.id,
-                'product_qty': line.scanned_qty,
-                'product_uom_id': line.product_id.uom_id.id,
-                'lot_id': line.lot_id.id,
-                'package_id': line.package_id.id,
-            }))
-        
-        # Tạo Inventory Adjustment
-        inventory = self.env['stock.inventory'].create({
-            'name': self.name,
-            'location_ids': [(6, 0, [self.location_id.id])],
-            'line_ids': adjustment_lines,
-            'prefilled': False,
-            'state': 'draft',
-            'user_id': self.user_id.id,
-        })
-        
-        return inventory
+            domain = [
+                ('product_id', '=', line.product_id.id),
+                ('location_id', '=', line.location_id.id),
+                ('lot_id', '=', line.lot_id.id if line.lot_id else False),
+                ('package_id', '=', line.package_id.id if line.package_id else False),
+            ]
+            quant = self.env['stock.quant'].search(domain, limit=1)
+
+            if quant:
+                quant.inventory_quantity = line.scanned_qty
+                quant.inventory_quantity_set = True
+            else:
+                # Sản phẩm không tồn tại ở kho, tạo quant mới với inventory_quantity
+                quant = self.env['stock.quant'].create({
+                    'product_id': line.product_id.id,
+                    'location_id': line.location_id.id,
+                    'lot_id': line.lot_id.id if line.lot_id else False,
+                    'package_id': line.package_id.id if line.package_id else False,
+                    'inventory_quantity': line.scanned_qty,
+                    'inventory_quantity_set': True,
+                })
+
+            quants_to_apply |= quant
+
+        # Áp dụng toàn bộ điều chỉnh, tạo stock.move điều chỉnh tồn kho
+        if quants_to_apply:
+            quants_to_apply.action_apply_inventory()
 
     # ========== API Methods for OWL Component ==========
     @api.model
@@ -412,6 +419,34 @@ class InventoryCheck(models.Model):
             'reason': disc.reason,
             'notes': disc.notes,
         } for disc in self.discrepancy_ids]
+
+    @api.model
+    def get_active_sessions(self):
+        """Lấy danh sách phiên kiểm kê đang hoạt động của user (tất cả thiết bị)"""
+        checks = self.search([
+            ('user_id', '=', self.env.user.id),
+            ('state', 'in', ['draft', 'in_progress']),
+        ], order='write_date desc', limit=10)
+        return [{
+            'check_id': c.id,
+            'name': c.name,
+            'location_id': c.location_id.id if c.location_id else False,
+            'location_name': c.location_id.display_name if c.location_id else 'Chưa chọn vị trí',
+            'state': c.state,
+            'product_count': c.product_count,
+            'scan_count': c.scan_count,
+            'write_date': c.write_date.strftime('%d/%m %H:%M') if c.write_date else '',
+        } for c in checks]
+
+    @api.model
+    def resume_check(self, check_id):
+        """Tiếp tục một phiên kiểm kê cụ thể theo ID"""
+        check = self.browse(check_id)
+        if not check.exists() or check.user_id != self.env.user:
+            return {'success': False, 'error': _('Không tìm thấy phiên kiểm kê')}
+        if check.state not in ['draft', 'in_progress']:
+            return {'success': False, 'error': _('Phiên kiểm kê đã hoàn thành hoặc bị hủy')}
+        return check._get_check_data()
 
     @api.model
     def register_scan(self, check_id, product_id, location_id, qty=1, lot_id=False, package_id=False):
