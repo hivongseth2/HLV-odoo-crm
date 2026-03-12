@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Inherit form view to add sequence field -->
+        <record id="report_view_form_sequence" model="ir.ui.view">
+            <field name="name">ir.actions.report.form.sequence</field>
+            <field name="model">ir.actions.report</field>
+            <field name="inherit_id" ref="base.act_report_xml_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='name']" position="after">
+                    <field name="sequence" col="2"/>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Create a dedicated form view with just sequence field for quick editing -->
+        <record id="report_view_form_quick_edit" model="ir.ui.view">
+            <field name="name">ir.actions.report.form.quick.sequence</field>
+            <field name="model">ir.actions.report</field>
+            <field name="arch" type="xml">
+                <form string="Print Template Sequence">
+                    <group>
+                        <field name="name" readonly="1"/>
+                        <field name="model_id" readonly="1"/>
+                        <field name="sequence"/>
+                    </group>
+                </form>
+            </field>
+        </record>
+
+        <!-- Create list view to manage report sequences -->
+        <record id="report_view_list_sequence" model="ir.ui.view">
+            <field name="name">ir.actions.report.tree.sequence</field>
+            <field name="model">ir.actions.report</field>
+            <field name="arch" type="xml">
+                <list string="Print Templates" editable="top">
+                    <field name="sequence" widget="handle"/>
+                    <field name="name"/>
+                    <field name="model_id"/>
+                    <field name="report_type"/>
+                </list>
+            </field>
+        </record>
+
+        <!-- Search view for print templates -->
+        <record id="report_view_search_sequence" model="ir.ui.view">
+            <field name="name">ir.actions.report.search.sequence</field>
+            <field name="model">ir.actions.report</field>
+            <field name="arch" type="xml">
+                <search string="Print Templates">
+                    <field name="name" string="Template Name"/>
+                    <field name="model_id" string="Model"/>
+                    <separator/>
+                    <filter name="filter_qweb" string="QWeb Templates" 
+                            domain="[('report_type', '=', 'qweb-pdf')]"/>
+                    <filter name="filter_python" string="Python Templates" 
+                            domain="[('report_type', '=', 'py3o')]"/>
+                    <group string="Group By">
+                        <filter name="group_model" string="Model" 
+                                context="{'group_by': 'model_id'}"/>
+                        <filter name="group_type" string="Report Type" 
+                                context="{'group_by': 'report_type'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <!-- Menu action to manage print templates -->
+        <record id="action_report_sequence_view" model="ir.actions.act_window">
+            <field name="name">Manage Print Templates</field>
+            <field name="res_model">ir.actions.report</field>
+            <field name="view_mode">list,form</field>
+            <field name="view_id" ref="report_view_list_sequence"/>
+            <field name="search_view_id" ref="report_view_search_sequence"/>
+            <field name="context">{'default_sequence': 10}</field>
+            <field name="help">Drag and drop to reorder print templates. The sequence determines the order 
+                they appear in the print dropdown menu. Lower numbers appear first.</field>
+        </record>
+
+        <!-- Add menu item -->
+        <menuitem 
+            id="menu_report_sequence_manager"
+            name="Print Templates Order"
+            action="action_report_sequence_view"
+            parent="stock.menu_stock_config"
+            sequence="30"/>
+
+    </data>
+</odoo>
