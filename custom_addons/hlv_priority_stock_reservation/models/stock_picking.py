@@ -31,9 +31,23 @@ class StockPicking(models.Model):
                 # Tìm các đơn hàng khác đang giữ sản phẩm này
                 victim_data = self._get_potential_unreserve_candidates(picking, moves_missing_stock)
                 if victim_data:
+                    # Tính summary tồn kho cho từng sản phẩm còn thiếu
+                    summary_data = []
+                    for move in moves_missing_stock:
+                        already_reserved = sum(move.move_line_ids.mapped('quantity'))
+                        still_needed = move.product_uom_qty - already_reserved
+                        summary_data.append({
+                            'product_id': move.product_id.id,
+                            'location_id': move.location_id.id,
+                            'demand_qty': move.product_uom_qty,
+                            'already_reserved': already_reserved,
+                            'still_needed': still_needed,
+                            'uom_id': move.product_uom.id,
+                        })
                     # Tạo và mở bảng chọn cho người dùng
                     wizard = self.env['stock.unreserve.wizard'].create({
                         'picking_id': picking.id,
+                        'summary_ids': [(0, 0, s) for s in summary_data],
                         'line_ids': [(0, 0, v) for v in victim_data]
                     })
                     return {

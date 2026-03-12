@@ -1,3 +1,4 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_stock_unreserve_wizard,stock.unreserve.wizard,model_stock_unreserve_wizard,base.group_user,1,1,1,1
 access_stock_unreserve_wizard_line,stock.unreserve.wizard.line,model_stock_unreserve_wizard_line,base.group_user,1,1,1,1
+access_stock_unreserve_wizard_summary,stock.unreserve.wizard.summary,model_stock_unreserve_wizard_summary,base.group_user,1,1,1,1

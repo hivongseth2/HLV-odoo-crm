@@ -11,6 +11,18 @@
                 <p class="text-muted">
                     Vui lòng nhập <b>số lượng muốn lấy</b> từ các đơn hàng dưới đây để ưu tiên cho đơn này.
                 </p>
+                <h6 class="mt-2 mb-1 fw-bold">📦 Tồn kho hiện có</h6>
+                <field name="summary_ids" readonly="1">
+                    <list create="false" delete="false" editable="false">
+                        <field name="product_id" string="Sản phẩm"/>
+                        <field name="location_id" string="Vị trí lấy hàng"/>
+                        <field name="demand_qty" string="Cần"/>
+                        <field name="already_reserved" string="Đã giữ từ kho trống" decoration-success="already_reserved > 0"/>
+                        <field name="still_needed" string="Còn thiếu (cần rút)" decoration-danger="still_needed > 0" decoration-success="still_needed == 0"/>
+                        <field name="uom_id" string="ĐVT"/>
+                    </list>
+                </field>
+                <h6 class="mt-3 mb-1 fw-bold">🔄 Rút hàng từ đơn khác</h6>
                 <field name="line_ids">
                     <list editable="bottom" create="false" delete="false">
                         <field name="picking_id"/>

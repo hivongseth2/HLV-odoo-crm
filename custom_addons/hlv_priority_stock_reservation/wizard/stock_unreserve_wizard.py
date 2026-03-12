@@ -9,6 +9,7 @@ class StockUnreserveWizard(models.TransientModel):
     _description = 'Hủy dự trữ đơn hàng để nhường hàng'
 
     picking_id = fields.Many2one('stock.picking', string='Đơn hàng cần hàng', readonly=True)
+    summary_ids = fields.One2many('stock.unreserve.wizard.summary', 'wizard_id', string='Tình trạng tồn kho')
     line_ids = fields.One2many('stock.unreserve.wizard.line', 'wizard_id', string='Danh sách các đơn đang giữ hàng')
 
     def action_confirm(self):
@@ -79,6 +80,19 @@ class StockUnreserveWizard(models.TransientModel):
                 remaining_qty = 0
         
         move._recompute_state()
+
+class StockUnreserveWizardSummary(models.TransientModel):
+    _name = 'stock.unreserve.wizard.summary'
+    _description = 'Tóm tắt tình trạng tồn kho từng sản phẩm'
+
+    wizard_id = fields.Many2one('stock.unreserve.wizard', string='Wizard')
+    product_id = fields.Many2one('product.product', string='Sản phẩm', readonly=True)
+    location_id = fields.Many2one('stock.location', string='Vị trí', readonly=True)
+    demand_qty = fields.Float(string='Cần', readonly=True)
+    already_reserved = fields.Float(string='Đã giữ từ kho trống', readonly=True)
+    still_needed = fields.Float(string='Còn thiếu (cần rút)', readonly=True)
+    uom_id = fields.Many2one('uom.uom', string='ĐVT', readonly=True)
+
 
 class StockUnreserveWizardLine(models.TransientModel):
     _name = 'stock.unreserve.wizard.line'
