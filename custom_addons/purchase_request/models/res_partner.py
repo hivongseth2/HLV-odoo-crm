@@ -25,7 +25,7 @@ class ResPartner(models.Model):
                 product_ids = []
 
             if product_ids:
-                # Find partners who are suppliers for these products
+                # Find partners who are suppliers for these product
                 suppliers = self.env["product.supplierinfo"].search([
                     ("product_tmpl_id", "in", self.env["product.product"].browse(product_ids).mapped("product_tmpl_id").ids)
                 ])
