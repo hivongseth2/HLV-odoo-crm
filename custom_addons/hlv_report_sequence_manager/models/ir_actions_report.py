@@ -1,4 +1,4 @@
-from odoo import fields, models
+from odoo import api, fields, models
 
 
 class IrActionsReport(models.Model):
@@ -15,6 +15,22 @@ class IrActionsReport(models.Model):
     def write(self, vals):
         result = super().write(vals)
         if 'sequence' in vals:
-            # Xóa cache để dropdown in phản ánh thứ tự mới ngay lập tức
             self.env.registry.clear_cache()
         return result
+
+
+class IrActionsActions(models.Model):
+    _inherit = 'ir.actions.actions'
+
+    @api.model
+    def _get_bindings(self, model_name):
+        result = super()._get_bindings(model_name)
+        # Odoo builds toolbar via raw SQL ORDER BY id, ignoring _order.
+        # Re-sort print actions by sequence so the dropdown reflects user-defined order.
+        if result.get('print'):
+            result['print'] = sorted(
+                result['print'],
+                key=lambda a: (a.get('sequence', 10), a.get('name', '')),
+            )
+        return result
+
