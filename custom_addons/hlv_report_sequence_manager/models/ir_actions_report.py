@@ -25,12 +25,28 @@ class IrActionsActions(models.Model):
     @api.model
     def _get_bindings(self, model_name):
         result = super()._get_bindings(model_name)
-        # Odoo builds toolbar via raw SQL ORDER BY id, ignoring _order.
-        # Re-sort print actions by sequence so the dropdown reflects user-defined order.
         if result.get('print'):
             result['print'] = sorted(
                 result['print'],
                 key=lambda a: (a.get('sequence', 10), a.get('name', '')),
             )
+        return result
+
+
+class Base(models.AbstractModel):
+    _inherit = 'base'
+
+    @api.model
+    def get_views(self, views, options=None):
+        result = super().get_views(views, options)
+        # Sort print toolbar by sequence at the final assembly point,
+        # because _get_bindings result may be reordered by id in SQL.
+        for view_info in result.get('views', {}).values():
+            toolbar = view_info.get('toolbar', {})
+            if toolbar.get('print'):
+                toolbar['print'] = sorted(
+                    toolbar['print'],
+                    key=lambda a: (a.get('sequence', 10), a.get('name', '')),
+                )
         return result
 
