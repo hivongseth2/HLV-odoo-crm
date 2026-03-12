@@ -33,7 +33,7 @@ class StockMoveLine(models.Model):
         # Lấy số lượng đã dành riêng khác (không tính dòng này)
         reserved_qty = self._get_reserved_qty_in_move()
 
-        # Số lượng còn available = tồn kho - số đã dành riêng + số của dòng hiện tại 1
+        # Số lượng còn available = tồn kho - số đã dành riêng + số của dòng hiện tại 
         available_qty = total_stock - reserved_qty
 
         # Nếu số lượng nhập vào vượt quá có sẵn, điều chỉnh lại
