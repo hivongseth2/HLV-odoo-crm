@@ -429,7 +429,7 @@
                 </div>
             </t>
 
-            <!-- =================== SUMMARY VIEW =================== -->
+            <!-- =================== SUMMARY VIEW ================== -->
             <t t-if="state.view === 'summary'">
                 <div class="hlv-done-view">
                     <div class="hlv-done-view__icon"><i class="fa fa-check-circle"/></div>
