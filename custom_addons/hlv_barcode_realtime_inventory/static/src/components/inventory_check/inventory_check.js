@@ -16,6 +16,7 @@ export class InventoryCheckScanner extends Component {
         this._cameraStream = null;
         this._cameraAnimFrame = null;
         this._barcodeDetector = null;
+        this._zxingReader = null;
         this._lastScannedCode = '';
         this._lastScanTime = 0;
 
@@ -699,13 +700,7 @@ export class InventoryCheckScanner extends Component {
         this._lastScannedCode = '';
         this._lastScanTime = 0;
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            this._showError('Trình duyệt không hỗ trợ camera. Vui lòng dùng Chrome trên Android.');
-            return;
-        }
-
-        // BarcodeDetector: native Chrome API
-        if (!window.BarcodeDetector) {
-            this._showError('Trình duyệt chưa hỗ trợ nhận dạng barcode tự động. Vui lòng dùng Chrome mới nhất trên Android.');
+            this._showError('Trình duyệt không hỗ trợ camera. Vui lòng dùng Chrome (Android) hoặc Safari 14.3+ (iPhone).');
             return;
         }
 
@@ -716,7 +711,7 @@ export class InventoryCheckScanner extends Component {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
-                    facingMode: { ideal: 'environment' },  // rear camera
+                    facingMode: { ideal: 'environment' },
                     width: { ideal: 1280 },
                     height: { ideal: 720 },
                 }
@@ -728,20 +723,64 @@ export class InventoryCheckScanner extends Component {
             const video = this.cameraVideo.el;
             if (!video) { this._stopCameraStream(); return; }
 
+            // iOS requires muted + playsinline for autoplay
+            video.muted = true;
             video.srcObject = stream;
-            await video.play();
+            try { await video.play(); } catch(e) { /* autoplay attribute handles it */ }
 
             this.state.camera_status = '';
 
-            // Init BarcodeDetector (support common 1D + 2D formats)
-            const supported = await window.BarcodeDetector.getSupportedFormats();
-            this._barcodeDetector = new window.BarcodeDetector({ formats: supported });
-
-            this._scanLoop();
+            if (window.BarcodeDetector) {
+                // Native API: Chrome/Android
+                const supported = await window.BarcodeDetector.getSupportedFormats();
+                this._barcodeDetector = new window.BarcodeDetector({ formats: supported });
+                this._scanLoop();
+            } else {
+                // Fallback: ZXing (iOS Safari, Firefox)
+                this.state.camera_status = 'Đang tải thư viện quét...';
+                const loaded = await this._ensureZXing();
+                if (!loaded) {
+                    this.state.camera_status = 'Không thể tải thư viện quét. Kiểm tra kết nối mạng.';
+                    this.state.camera_status_type = 'error';
+                    return;
+                }
+                this.state.camera_status = '';
+                this._startZXingScan(stream, video);
+            }
         } catch (err) {
-            this.state.camera_status = 'Không thể truy cập camera: ' + (err.message || err);
+            this.state.camera_status = 'Không thể mở camera: ' + (err.message || err);
             this.state.camera_status_type = 'error';
         }
+    }
+
+    async _ensureZXing() {
+        if (window.ZXing) return true;
+        return new Promise((resolve) => {
+            const s = document.createElement('script');
+            s.src = '/hlv_barcode_realtime_inventory/static/lib/zxing/zxing.min.js';
+            s.onload = () => resolve(true);
+            s.onerror = () => resolve(false);
+            document.head.appendChild(s);
+        });
+    }
+
+    _startZXingScan(stream, video) {
+        if (!this.state.camera_active || !window.ZXing) return;
+        const reader = new window.ZXing.BrowserMultiFormatReader();
+        this._zxingReader = reader;
+        // decodeFromStream does continuous scanning from a live MediaStream
+        reader.decodeFromStream(stream, video, (result, err) => {
+            if (!this.state.camera_active) return;
+            if (result) {
+                const code = result.getText();
+                const now = Date.now();
+                if (code !== this._lastScannedCode || now - this._lastScanTime > 1500) {
+                    this._lastScannedCode = code;
+                    this._lastScanTime = now;
+                    this._processCameraBarcode(code);
+                }
+            }
+        });
     }
 
     _scanLoop() {
@@ -804,6 +843,10 @@ export class InventoryCheckScanner extends Component {
         if (this._cameraAnimFrame) {
             cancelAnimationFrame(this._cameraAnimFrame);
             this._cameraAnimFrame = null;
+        }
+        if (this._zxingReader) {
+            try { this._zxingReader.reset(); } catch(e) {}
+            this._zxingReader = null;
         }
         if (this._cameraStream) {
             this._cameraStream.getTracks().forEach(t => t.stop());

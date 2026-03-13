@@ -794,7 +794,7 @@
                             </button>
                         </div>
                         <div class="hlv-camera-body">
-                            <video class="hlv-camera-video" autoplay="true" playsinline="true"
+                            <video class="hlv-camera-video" autoplay="true" playsinline="true" muted="true"
                                    t-ref="cameraVideo"/>
                             <div class="hlv-camera-frame">
                                 <div class="hlv-camera-frame__corner hlv-camera-frame__corner--tl"/>
