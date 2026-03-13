@@ -18,7 +18,7 @@ export class InventoryCheckScanner extends Component {
             location_id: null,
             location_name: '',
 
-            // Views: home | scanning | daily_stats | settings | approvals | summary
+            // Views: home | scanning | daily_stats | settings | approvals | summary | check_detail
             view: 'home',
             is_loading: false,
             error_message: '',
@@ -41,6 +41,10 @@ export class InventoryCheckScanner extends Component {
 
             // Daily stats
             daily_stats: null,
+            stats_date: new Date().toISOString().slice(0, 10),  // YYYY-MM-DD local today
+
+            // Check detail
+            check_detail: null,
 
             // Settings
             settings: null,
@@ -112,11 +116,16 @@ export class InventoryCheckScanner extends Component {
     }
 
     goToDailyStats() {
+        this.state.stats_date = new Date().toISOString().slice(0, 10);
         this.state.view = 'daily_stats';
         this._loadDailyStats();
     }
 
     goToSettings() {
+        if (!this.state.settings || !this.state.settings.is_manager) {
+            this._showError('Chỉ quản lý kho mới có quyền truy cập');
+            return;
+        }
         this.state.view = 'settings';
     }
 
@@ -151,28 +160,19 @@ export class InventoryCheckScanner extends Component {
     }
 
     // ========== New Check ==========
-    async startNewCheck() {
-        this.state.is_loading = true;
-        try {
-            const result = await this.orm.call(
-                'inventory.check', 'get_or_create_active_check',
-                [this.state.device_id], {}
-            );
-            if (result.success) {
-                this._applyCheckData(result);
-                if (result.location_id) {
-                    this.state.view = 'scanning';
-                } else {
-                    this.state.view = 'scanning';
-                    // will show location input in scanning header when no location
-                }
-                this._focusOnBarcodeInput();
-            }
-        } catch (error) {
-            this._showError('Lỗi tạo phiên: ' + error.message);
-        } finally {
-            this.state.is_loading = false;
-        }
+    startNewCheck() {
+        // Reset hoàn toàn — phiên mới sẽ được tạo khi user chọn vị trí
+        this.state.check_id = null;
+        this.state.location_id = null;
+        this.state.location_name = '';
+        this.state.check_data = null;
+        this.state.lines = [];
+        this.state.discrepancies = [];
+        this.state.location_barcode = '';
+        this.state.product_barcode = '';
+        this.state.confirm_dialog = false;
+        this.state.view = 'scanning';
+        this._focusOnBarcodeInput();
     }
 
     _applyCheckData(result) {
@@ -204,19 +204,18 @@ export class InventoryCheckScanner extends Component {
                 'inventory.check', 'search_location', [barcode], {}
             );
             if (result.success) {
-                // Create check first if we don't have one
-                if (!this.state.check_id) {
-                    const checkResult = await this.orm.call(
-                        'inventory.check', 'get_or_create_active_check',
-                        [this.state.device_id], {}
-                    );
-                    if (checkResult.success) {
-                        this.state.check_id = checkResult.check_id;
-                        this.state.check_data = checkResult;
-                    } else {
-                        this._showError('Lỗi tạo phiên kiểm kê');
-                        return;
-                    }
+                // Luôn tạo phiên mới cho mỗi lần chọn vị trí mới
+                // (không bao giờ resume — tránh gộm sản phẩm 2 vị trí vào 1 phiên)
+                const checkResult = await this.orm.call(
+                    'inventory.check', 'create_new_check',
+                    [this.state.device_id], {}
+                );
+                if (checkResult.success) {
+                    this.state.check_id = checkResult.check_id;
+                    this.state.check_data = checkResult;
+                } else {
+                    this._showError('Lỗi tạo phiên kiểm kê');
+                    return;
                 }
                 await this._setLocation(result.location_id, result.location_name);
                 this.state.location_barcode = '';
@@ -263,7 +262,7 @@ export class InventoryCheckScanner extends Component {
     async scanProduct() {
         const barcode = this.state.product_barcode.trim();
         if (!barcode) return;
-        this.state.is_loading = true;
+        // Don't block UI with loading overlay for scans
         try {
             const pr = await this.orm.call(
                 'inventory.check', 'search_product', [barcode], {}
@@ -279,7 +278,7 @@ export class InventoryCheckScanner extends Component {
             );
             if (sr.success) {
                 if (sr.warning) this.state.warning_message = sr.error;
-                await this._refreshCheckData();
+                this._refreshCheckData();
                 this._showNotification(`✓ ${pr.product_name} (SL: ${sr.scanned_qty})`, 'success');
                 this.state.product_barcode = '';
                 this._focusOnBarcodeInput();
@@ -288,17 +287,16 @@ export class InventoryCheckScanner extends Component {
             }
         } catch (error) {
             this._showError('Lỗi quét: ' + error.message);
-        } finally {
-            this.state.is_loading = false;
         }
     }
 
     // ========== Data Refresh ==========
     async _refreshCheckData() {
+        if (!this.state.check_id) return;
         try {
             const result = await this.orm.call(
-                'inventory.check', 'get_or_create_active_check',
-                [this.state.device_id, this.state.location_id], {}
+                'inventory.check', 'get_check_data',
+                [this.state.check_id], {}
             );
             if (result.success) {
                 this.state.check_data = result;
@@ -486,13 +484,61 @@ export class InventoryCheckScanner extends Component {
     async _loadDailyStats() {
         this.state.is_loading = true;
         try {
-            const r = await this.orm.call('inventory.check', 'get_daily_stats', [], {});
+            const r = await this.orm.call('inventory.check', 'get_daily_stats', [], { date_str: this.state.stats_date });
             if (r.success) this.state.daily_stats = r;
         } catch (error) {
             this._showError('Lỗi tải thống kê: ' + error.message);
         } finally {
             this.state.is_loading = false;
         }
+    }
+
+    _statsDateLabel() {
+        const today = new Date().toISOString().slice(0, 10);
+        if (this.state.stats_date === today) return 'Hôm Nay';
+        const [y, m, d] = this.state.stats_date.split('-');
+        return `${d}/${m}/${y}`;
+    }
+
+    statsPrevDay() {
+        const d = new Date(this.state.stats_date);
+        d.setDate(d.getDate() - 1);
+        this.state.stats_date = d.toISOString().slice(0, 10);
+        this._loadDailyStats();
+    }
+
+    statsNextDay() {
+        const today = new Date().toISOString().slice(0, 10);
+        const d = new Date(this.state.stats_date);
+        d.setDate(d.getDate() + 1);
+        const next = d.toISOString().slice(0, 10);
+        if (next > today) return;
+        this.state.stats_date = next;
+        this._loadDailyStats();
+    }
+
+    async openCheckDetail(ev) {
+        const checkId = parseInt(ev.currentTarget.dataset.id, 10);
+        if (!checkId) return;
+        this.state.is_loading = true;
+        try {
+            const r = await this.orm.call('inventory.check', 'get_check_detail', [checkId], {});
+            if (r.success) {
+                this.state.check_detail = r;
+                this.state.view = 'check_detail';
+            } else {
+                this._showError(r.error || 'Lỗi tải chi tiết phiên');
+            }
+        } catch (error) {
+            this._showError('Lỗi: ' + error.message);
+        } finally {
+            this.state.is_loading = false;
+        }
+    }
+
+    goBackToStats() {
+        this.state.view = 'daily_stats';
+        this.state.check_detail = null;
     }
 
     // ========== Settings ==========
@@ -581,16 +627,32 @@ export class InventoryCheckScanner extends Component {
         setTimeout(() => {
             const active = document.activeElement;
             if (active) {
+                const tag = active.tagName;
                 if (active.classList.contains('hlv-qty-input')) return;
                 if (active.closest && active.closest('.hlv-discrepancy-dialog')) return;
                 if (active.closest && active.closest('.hlv-confirm-dialog')) return;
+                // Don't steal from non-scan inputs (qty, search, settings, etc.)
+                if ((tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') &&
+                    !active.classList.contains('hlv-input--scan') &&
+                    !active.classList.contains('hlv-input--lg')) return;
             }
             const selector = !this.state.location_id
                 ? '.hlv-input--lg'
                 : '.hlv-input--scan';
             const input = document.querySelector(selector);
-            if (input) input.focus();
-        }, 150);
+            if (input && document.activeElement !== input) input.focus();
+        }, 80);
+    }
+
+    onScanAreaClick(ev) {
+        // Re-focus the barcode input whenever the user taps empty space or a product row
+        // so scanning always works without needing to manually click the input
+        const tag = ev.target.tagName;
+        // Let buttons/inputs/selects handle their own focus
+        if (tag === 'BUTTON' || tag === 'A' || tag === 'INPUT' ||
+            tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (ev.target.closest && ev.target.closest('button, a')) return;
+        this._focusOnBarcodeInput();
     }
 
     _showError(message) {
