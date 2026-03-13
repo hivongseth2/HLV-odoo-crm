@@ -69,12 +69,16 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                     None
                 )
                 if bom and so.warehouse_id:
+                    # Lấy pickings active của đơn này để cộng lại reserved cho chính đơn
+                    so_active_pickings = so.picking_ids.filtered(
+                        lambda p: p.state not in ('done', 'cancel')
+                    )
+
                     kit_qty = float('inf')
                     for comp_line in bom.bom_line_ids:
                         comp_key = (comp_line.product_id.id, so.warehouse_id.id)
                         if comp_key not in kit_comp_true_free:
-                            # Tính từ quants: quantity - reserved_quantity
-                            # (free_qty bỏ qua moves đã assigned → tính sai)
+                            # Tính từ quants: quantity - reserved_quantity (tất cả reservations)
                             quants = self.env['stock.quant'].sudo().search([
                                 ('product_id', '=', comp_line.product_id.id),
                                 ('location_id', 'child_of', so.warehouse_id.lot_stock_id.id),
@@ -83,7 +87,16 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                                 max(float(q.quantity) - float(q.reserved_quantity), 0.0)
                                 for q in quants
                             )
-                        comp_free = kit_comp_true_free[comp_key]
+                        # Tìm phần đã reserve cho chính đơn này
+                        # (cộng lại vì đã bị trừ trong quants nhưng thực ra là của đơn này)
+                        comp_reserved_for_so = sum(
+                            float(mv.quantity)
+                            for pk in so_active_pickings
+                            for mv in pk.move_ids
+                            if mv.product_id.id == comp_line.product_id.id
+                            and mv.state not in ('cancel', 'done')
+                        )
+                        comp_free = kit_comp_true_free[comp_key] + comp_reserved_for_so
                         qty_per_kit = comp_line.product_qty / (bom.product_qty or 1.0)
                         if qty_per_kit > 0:
                             kit_qty = min(kit_qty, comp_free / qty_per_kit)
