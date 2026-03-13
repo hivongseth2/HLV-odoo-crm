@@ -1,6 +1,6 @@
 /** @odoo-module */
 
-import { Component, useState, onWillStart, onMounted } from "@odoo/owl";
+import { Component, useState, onWillStart, onMounted, onWillUnmount, useRef } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 
 export class InventoryCheckScanner extends Component {
@@ -11,6 +11,11 @@ export class InventoryCheckScanner extends Component {
         this.orm = useService("orm");
         this.notification = useService("notification");
         this.action = useService("action");
+
+        this.cameraVideo = useRef("cameraVideo");
+        this._cameraStream = null;
+        this._cameraAnimFrame = null;
+        this._barcodeDetector = null;
 
         this.state = useState({
             // Session
@@ -55,6 +60,11 @@ export class InventoryCheckScanner extends Component {
             // Confirm dialog
             confirm_dialog: false,
 
+            // Camera
+            camera_active: false,
+            camera_status: '',
+            camera_status_type: 'info',
+
             // Device
             device_id: this._generateDeviceId(),
         });
@@ -65,6 +75,10 @@ export class InventoryCheckScanner extends Component {
 
         onMounted(() => {
             this._focusOnBarcodeInput();
+        });
+
+        onWillUnmount(() => {
+            this._stopCameraStream();
         });
     }
 
@@ -653,6 +667,98 @@ export class InventoryCheckScanner extends Component {
             tag === 'TEXTAREA' || tag === 'SELECT') return;
         if (ev.target.closest && ev.target.closest('button, a')) return;
         this._focusOnBarcodeInput();
+    }
+
+    // ========== Camera Scanning ==========
+    async openCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            this._showError('Trình duyệt không hỗ trợ camera. Vui lòng dùng Chrome trên Android.');
+            return;
+        }
+
+        // BarcodeDetector: native Chrome API
+        if (!window.BarcodeDetector) {
+            this._showError('Trình duyệt chưa hỗ trợ nhận dạng barcode tự động. Vui lòng dùng Chrome mới nhất trên Android.');
+            return;
+        }
+
+        this.state.camera_active = true;
+        this.state.camera_status = 'Đang khởi động camera...';
+        this.state.camera_status_type = 'info';
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: { ideal: 'environment' },  // rear camera
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                }
+            });
+            this._cameraStream = stream;
+
+            // Wait for OWL to render the <video> element
+            await new Promise(r => setTimeout(r, 150));
+            const video = this.cameraVideo.el;
+            if (!video) { this._stopCameraStream(); return; }
+
+            video.srcObject = stream;
+            await video.play();
+
+            this.state.camera_status = '';
+
+            // Init BarcodeDetector (support common 1D + 2D formats)
+            const supported = await window.BarcodeDetector.getSupportedFormats();
+            this._barcodeDetector = new window.BarcodeDetector({ formats: supported });
+
+            this._scanLoop();
+        } catch (err) {
+            this.state.camera_status = 'Không thể truy cập camera: ' + (err.message || err);
+            this.state.camera_status_type = 'error';
+        }
+    }
+
+    _scanLoop() {
+        if (!this.state.camera_active) return;
+        const video = this.cameraVideo.el;
+        if (!video || video.readyState < 2) {
+            this._cameraAnimFrame = requestAnimationFrame(() => this._scanLoop());
+            return;
+        }
+
+        this._barcodeDetector.detect(video).then(barcodes => {
+            if (!this.state.camera_active) return;
+            if (barcodes.length > 0) {
+                const code = barcodes[0].rawValue;
+                this.closeCamera();
+                this.state.product_barcode = code;
+                this.scanProduct();
+            } else {
+                this._cameraAnimFrame = requestAnimationFrame(() => this._scanLoop());
+            }
+        }).catch(() => {
+            if (this.state.camera_active) {
+                this._cameraAnimFrame = requestAnimationFrame(() => this._scanLoop());
+            }
+        });
+    }
+
+    closeCamera() {
+        this.state.camera_active = false;
+        this.state.camera_status = '';
+        this._stopCameraStream();
+        this._focusOnBarcodeInput();
+    }
+
+    _stopCameraStream() {
+        if (this._cameraAnimFrame) {
+            cancelAnimationFrame(this._cameraAnimFrame);
+            this._cameraAnimFrame = null;
+        }
+        if (this._cameraStream) {
+            this._cameraStream.getTracks().forEach(t => t.stop());
+            this._cameraStream = null;
+        }
+        this._barcodeDetector = null;
     }
 
     _showError(message) {

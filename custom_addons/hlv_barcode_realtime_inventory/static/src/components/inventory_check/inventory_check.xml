@@ -196,9 +196,47 @@
                                     t-model="state.product_barcode"
                                     t-on-keydown="onProductBarcodeInput"
                                     autofocus="autofocus"/>
+                                <button class="hlv-input-group__btn hlv-input-group__btn--camera"
+                                        t-on-click="openCamera"
+                                        title="Quét bằng camera">
+                                    <i class="fa fa-camera"/>
+                                </button>
                                 <button class="hlv-input-group__btn" t-on-click="scanProduct">
                                     <i class="fa fa-check"/>
                                 </button>
+                            </div>
+                        </div>
+                    </t>
+
+                    <!-- Camera Overlay -->
+                    <t t-if="state.camera_active">
+                        <div class="hlv-camera-overlay">
+                            <div class="hlv-camera-modal">
+                                <div class="hlv-camera-header">
+                                    <span><i class="fa fa-camera"/> Quét barcode bằng camera</span>
+                                    <button class="hlv-camera-close" t-on-click="closeCamera">
+                                        <i class="fa fa-times"/>
+                                    </button>
+                                </div>
+                                <div class="hlv-camera-body">
+                                    <video class="hlv-camera-video" autoplay="true" playsinline="true"
+                                           t-ref="cameraVideo"/>
+                                    <div class="hlv-camera-frame">
+                                        <div class="hlv-camera-frame__corner hlv-camera-frame__corner--tl"/>
+                                        <div class="hlv-camera-frame__corner hlv-camera-frame__corner--tr"/>
+                                        <div class="hlv-camera-frame__corner hlv-camera-frame__corner--bl"/>
+                                        <div class="hlv-camera-frame__corner hlv-camera-frame__corner--br"/>
+                                        <div class="hlv-camera-scanner-line"/>
+                                    </div>
+                                    <t t-if="state.camera_status">
+                                        <div t-att-class="'hlv-camera-status ' + (state.camera_status_type === 'error' ? 'hlv-camera-status--error' : 'hlv-camera-status--info')">
+                                            <t t-esc="state.camera_status"/>
+                                        </div>
+                                    </t>
+                                </div>
+                                <div class="hlv-camera-footer">
+                                    <small>Hưẻng camera vào barcode — tự động nhận diện</small>
+                                </div>
                             </div>
                         </div>
                     </t>
