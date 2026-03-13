@@ -1,0 +1,433 @@
+/* Inventory Scanner - Scoped Styles */
+
+.hlv-inventory-scanner {
+    /* Define CSS variables locally */
+    --hlv-primary: #714B67;
+    --hlv-secondary: #F8F9FA;
+    --hlv-text: #212529;
+    --hlv-border: #DEE2E6;
+    --hlv-danger: #DC3545;
+    --hlv-success: #28A745;
+    --hlv-warning: #FFC107;
+    --hlv-bg-dark: #212529;
+
+    /* Layout */
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background: #FFFFFF;
+    color: var(--hlv-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+
+    /* Reset box-sizing ONLY within this app */
+    * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Header */
+    .hlv-header {
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        height: 48px;
+        background: #FFFFFF;
+        border-bottom: 1px solid var(--hlv-border);
+        flex-shrink: 0;
+    }
+
+    .hlv-btn-back {
+        background: #E9ECEF;
+        border: none;
+        width: 32px;
+        height: 32px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #495057;
+        cursor: pointer;
+        margin-right: 12px;
+    }
+
+    .hlv-title {
+        flex: 1;
+        font-size: 16px;
+        font-weight: 500;
+        margin: 0;
+        color: var(--hlv-text);
+    }
+
+    .hlv-header-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .hlv-btn-icon {
+        width: 32px;
+        height: 32px;
+        border: none;
+        background: transparent;
+        color: #495057;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+    }
+
+    .hlv-btn-icon.active {
+        background: var(--hlv-success);
+        color: white;
+        border-radius: 4px;
+    }
+
+    /* Camera Zone */
+    .hlv-scanner-zone {
+        background: var(--hlv-bg-dark);
+        flex-shrink: 0;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .hlv-camera-container {
+        width: 100%;
+        height: 250px;
+        background: black;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    #hlv-camera-preview {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .hlv-camera-overlay {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+    }
+
+    .hlv-scan-frame {
+        width: 70%;
+        height: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.5);
+        border-radius: 4px;
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+    }
+
+    .hlv-scanner-mode-switch {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px;
+        background: #2D3035;
+        color: white;
+        font-size: 14px;
+        cursor: pointer;
+    }
+
+    /* Keyboard Input */
+    .hlv-keyboard-input-area {
+        padding: 12px;
+        background: #FFFFFF;
+        border-bottom: 1px solid var(--hlv-border);
+    }
+
+    /* Location Bar */
+    .hlv-location-bar {
+        display: flex;
+        align-items: center;
+        padding: 8px 16px;
+        background: #E9ECEF;
+        border-bottom: 1px solid var(--hlv-border);
+        font-size: 14px;
+        color: #495057;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    .hlv-location-icon {
+        margin-right: 8px;
+        color: #6C757D;
+    }
+
+    .hlv-location-name {
+        font-weight: 500;
+    }
+
+    /* Product List */
+    .hlv-product-list {
+        flex: 1;
+        overflow-y: auto;
+        background: #F8F9FA;
+        padding: 0;
+    }
+
+    .hlv-empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #6C757D;
+    }
+
+    /* Product Card */
+    .hlv-product-card {
+        background: #FFFFFF;
+        border-bottom: 1px solid var(--hlv-border);
+        padding: 12px 16px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .hlv-product-card.hlv-bg-highlight {
+        background: #FFF0F0;
+    }
+
+    .hlv-card-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 8px;
+    }
+
+    .hlv-product-info {
+        flex: 1;
+    }
+
+    .hlv-product-code {
+        font-weight: 700;
+        font-size: 16px;
+        color: var(--hlv-text);
+        display: block;
+        margin-bottom: 4px;
+    }
+
+    .hlv-product-name-sub {
+        font-size: 13px;
+        color: #6C757D;
+        display: block;
+    }
+
+    .hlv-product-actions-right {
+        display: flex;
+        gap: 4px;
+    }
+
+    .hlv-btn-mini {
+        width: 36px;
+        height: 36px;
+        border: 1px solid var(--hlv-border);
+        background: white;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #495057;
+        cursor: pointer;
+    }
+
+    .hlv-btn-delete {
+        background: var(--hlv-danger);
+        color: white;
+        border: none;
+    }
+
+    .hlv-card-bottom {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .hlv-qty-wrapper {
+        display: flex;
+        align-items: baseline;
+        font-size: 20px;
+    }
+
+    .hlv-qty-val {
+        font-weight: 700;
+    }
+
+    .hlv-qty-val.text-danger {
+        color: var(--hlv-danger);
+    }
+
+    .hlv-qty-val.text-success {
+        color: var(--hlv-success);
+    }
+
+    .hlv-qty-separator {
+        margin: 0 4px;
+        color: #6C757D;
+    }
+
+    .hlv-qty-uom {
+        font-size: 14px;
+        color: #6C757D;
+        margin-left: 4px;
+    }
+
+    .hlv-quick-btns {
+        display: flex;
+        gap: 8px;
+    }
+
+    .hlv-btn-pill {
+        padding: 4px 12px;
+        background: #E9ECEF;
+        border: none;
+        border-radius: 16px;
+        font-size: 13px;
+        font-weight: 500;
+        color: #495057;
+        cursor: pointer;
+    }
+
+    /* Footer */
+    .hlv-footer {
+        display: flex;
+        padding: 8px 16px;
+        background: #FFFFFF;
+        border-top: 1px solid var(--hlv-border);
+        gap: 16px;
+        padding-bottom: 8px;
+    }
+
+    @supports (padding-bottom: env(safe-area-inset-bottom)) {
+        .hlv-footer {
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+    }
+
+    .hlv-btn-main {
+        flex: 1;
+        padding: 12px;
+        border: none;
+        border-radius: 4px;
+        font-size: 15px;
+        font-weight: 500;
+        cursor: pointer;
+        text-transform: uppercase;
+    }
+
+    .hlv-btn-footer-secondary {
+        background: #E9ECEF;
+        color: #212529;
+    }
+
+    .hlv-btn-footer-primary {
+        background: var(--hlv-primary);
+        color: white;
+    }
+
+    .hlv-btn-footer-primary:disabled {
+        opacity: 0.6;
+    }
+
+    /* Modal - Scoped within scanner */
+    .hlv-modal-overlay {
+        position: absolute;
+        /* Changed from fixed to absolute relative to container */
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 2000;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .hlv-modal-full {
+        background: #FFFFFF;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .hlv-modal-body-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px;
+    }
+
+    .hlv-form-group {
+        margin-bottom: 24px;
+    }
+
+    .hlv-form-label {
+        display: block;
+        margin-bottom: 8px;
+        color: #6C757D;
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    .hlv-input-control {
+        width: 100%;
+        padding: 8px 0;
+        border: none;
+        border-bottom: 1px solid var(--hlv-border);
+        font-size: 16px;
+        background: transparent;
+        border-radius: 0;
+    }
+
+    .hlv-input-control:focus {
+        outline: none;
+        border-bottom-color: var(--hlv-primary);
+    }
+
+    .hlv-qty-input-section {
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 24px;
+    }
+
+    .hlv-qty-display-large {
+        font-size: 48px;
+        text-align: right;
+        font-weight: 300;
+        margin-bottom: 16px;
+        color: var(--hlv-text);
+    }
+
+    .hlv-qty-btn-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 8px;
+        background: #E9ECEF;
+        padding: 4px;
+        border-radius: 4px;
+    }
+
+    .hlv-btn-numpad {
+        background: transparent;
+        border: none;
+        padding: 12px;
+        font-size: 16px;
+        font-weight: 500;
+        color: #495057;
+        cursor: pointer;
+    }
+
+    .hlv-btn-numpad:hover {
+        background: rgba(255, 255, 255, 0.5);
+    }
+}

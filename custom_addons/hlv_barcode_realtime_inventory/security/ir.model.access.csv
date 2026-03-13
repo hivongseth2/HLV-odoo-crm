@@ -1,0 +1,11 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_inventory_check_user,inventory.check.user,model_inventory_check,stock.group_stock_user,1,1,1,0
+access_inventory_check_manager,inventory.check.manager,model_inventory_check,stock.group_stock_manager,1,1,1,1
+access_inventory_check_line_user,inventory.check.line.user,model_inventory_check_line,stock.group_stock_user,1,1,1,0
+access_inventory_check_line_manager,inventory.check.line.manager,model_inventory_check_line,stock.group_stock_manager,1,1,1,1
+access_inventory_discrepancy_user,inventory.discrepancy.user,model_inventory_discrepancy,stock.group_stock_user,1,1,1,0
+access_inventory_discrepancy_manager,inventory.discrepancy.manager,model_inventory_discrepancy,stock.group_stock_manager,1,1,1,1
+access_inventory_scan_session_user,inventory.scan.session.user,model_inventory_scan_session,stock.group_stock_user,1,1,1,0
+access_inventory_scan_session_manager,inventory.scan.session.manager,model_inventory_scan_session,stock.group_stock_manager,1,1,1,1
+access_inventory_scan_line_user,inventory.scan.line.user,model_inventory_scan_line,stock.group_stock_user,1,1,1,0
+access_inventory_scan_line_manager,inventory.scan.line.manager,model_inventory_scan_line,stock.group_stock_manager,1,1,1,1

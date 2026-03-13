@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ========================== INVENTORY DISCREPANCY VIEWS ========================== -->
+    
+    <!-- Menu Item -->
+    <menuitem
+        id="menu_inventory_discrepancy_root"
+        parent="menu_inventory_check_root"
+        name="Ghi Nhận Chênh Lệch"
+        sequence="3"
+        />
+
+    <!-- List View -->
+    <record id="view_inventory_discrepancy_list" model="ir.ui.view">
+        <field name="name">inventory.discrepancy.list</field>
+        <field name="model">inventory.discrepancy</field>
+        <field name="arch" type="xml">
+            <list string="Chênh Lệch Kiểm Kê" decoration-success="state == 'confirmed'" decoration-warning="state == 'draft'" decoration-danger="difference > 5">
+                <field name="check_id"/>
+                <field name="product_id"/>
+                <field name="difference"/>
+                <field name="reason"/>
+                <field name="responsible_user"/>
+                <field name="state" widget="badge"/>
+                <field name="created_by"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_inventory_discrepancy_form" model="ir.ui.view">
+        <field name="name">inventory.discrepancy.form</field>
+        <field name="model">inventory.discrepancy</field>
+        <field name="arch" type="xml">
+            <form string="Ghi Nhận Chênh Lệch">
+                <header>
+                    <button name="action_acknowledge" type="object" string="Xác Nhận Ghi Nhận" class="btn-primary" invisible="state != 'draft'"/>
+                    <button name="action_reset" type="object" string="Đặt Lại" invisible="state != 'confirmed'"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="product_id" readonly="1" class="oe_inline"/>
+                        </h1>
+                    </div>
+                    
+                    <group>
+                        <group>
+                            <field name="check_id" readonly="1"/>
+                            <field name="line_id" readonly="1"/>
+                            <field name="product_id" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="state" readonly="1"/>
+                            <field name="created_by" readonly="1"/>
+                            <field name="acknowledged_by" readonly="1"/>
+                            <field name="acknowledged_at" readonly="1"/>
+                        </group>
+                    </group>
+                    
+                    <group string="Thông Tin Chênh Lệch">
+                        <group>
+                            <field name="theoretical_qty" readonly="1"/>
+                            <field name="scanned_qty" readonly="1"/>
+                            <field name="difference" readonly="1" widget="float"/>
+                        </group>
+                        <group>
+                            <field name="location_id" readonly="1"/>
+                        </group>
+                    </group>
+                    
+                    <group string="Ghi Nhận Lý Do">
+                        <field name="reason" required="1"/>
+                        <field name="responsible_user" placeholder="Chọn người chịu trách nhiệm..."/>
+                    </group>
+                    
+                    <group string="Chi Tiết">
+                        <field name="notes" nolabel="1" placeholder="Mô tả chi tiết về nguyên nhân chênh lệch..."/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Dialog Form View (Modal) -->
+    <record id="view_inventory_discrepancy_form_modal" model="ir.ui.view">
+        <field name="name">inventory.discrepancy.form.modal</field>
+        <field name="model">inventory.discrepancy</field>
+        <field name="arch" type="xml">
+            <form string="Ghi Nhận Chênh Lệch">
+                <sheet>
+                    <group string="Thông Tin Sản Phẩm">
+                        <field name="product_id" readonly="1"/>
+                        <field name="theoretical_qty" readonly="1"/>
+                        <field name="scanned_qty" readonly="1"/>
+                        <field name="difference" readonly="1"/>
+                    </group>
+                    
+                    <group string="Lý Do Chênh Lệch">
+                        <field name="reason" required="1" nolabel="1"/>
+                    </group>
+                    
+                    <group string="Ghi Chú">
+                        <field name="notes" nolabel="1" placeholder="Mô tả chi tiết..."/>
+                    </group>
+                    
+                    <group>
+                        <field name="responsible_user"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_inventory_discrepancy_search" model="ir.ui.view">
+        <field name="name">inventory.discrepancy.search</field>
+        <field name="model">inventory.discrepancy</field>
+        <field name="arch" type="xml">
+            <search string="Chênh Lệch Kiểm Kê">
+                <field name="product_id"/>
+                <field name="check_id"/>
+                <field name="responsible_user"/>
+                <separator/>
+                <filter string="Chưa Xác Nhận" name="draft" domain="[('state', '=', 'draft')]"/>
+                <filter string="Đã Xác Nhận" name="confirmed" domain="[('state', '=', 'confirmed')]"/>
+                <filter string="Chênh Lệch Lớn (>5)" name="big_difference" domain="[('difference', '&gt;', 5)]"/>
+                <separator/>
+                <filter string="Hôm Nay" name="today" domain="[('create_date', '&gt;=', context_today().strftime('%Y-%m-%d')), ('create_date', '&lt;', (context_today() + relativedelta(days=1)).strftime('%Y-%m-%d'))]"/>
+                <separator/>
+                <group expand="0" string="Group By">
+                    <filter string="Lý Do" name="group_reason" context="{'group_by': 'reason'}"/>
+                    <filter string="Trạng Thái" name="group_state" context="{'group_by': 'state'}"/>
+                    <filter string="Vị Trí" name="group_location" context="{'group_by': 'location_id'}"/>
+                    <filter string="Phiên Kiểm Kê" name="group_check" context="{'group_by': 'check_id'}"/>
+                    <filter string="Ngày Ghi Nhận" name="group_date" context="{'group_by': 'create_date'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_inventory_discrepancy" model="ir.actions.act_window">
+        <field name="name">Ghi Nhận Chênh Lệch</field>
+        <field name="res_model">inventory.discrepancy</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_inventory_discrepancy_search"/>
+    </record>
+
+    <menuitem
+        id="menu_inventory_discrepancy_list"
+        parent="menu_inventory_discrepancy_root"
+        action="action_inventory_discrepancy"
+        />
+
+</odoo>

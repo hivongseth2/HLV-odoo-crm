@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ========================== INVENTORY CHECK LINE VIEWS ========================== -->
+    
+    <!-- List View -->
+    <record id="view_inventory_check_line_list" model="ir.ui.view">
+        <field name="name">inventory.check.line.list</field>
+        <field name="model">inventory.check.line</field>
+        <field name="arch" type="xml">
+            <list string="Chi Tiết Kiểm Kê" decoration-danger="difference != 0" decoration-success="difference == 0">
+                <field name="product_id"/>
+                <field name="location_id"/>
+                <field name="theoretical_qty"/>
+                <field name="scanned_qty"/>
+                <field name="difference" sum="Total"/>
+                <field name="lot_id"/>
+                <field name="discrepancy_id"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_inventory_check_line_form" model="ir.ui.view">
+        <field name="name">inventory.check.line.form</field>
+        <field name="model">inventory.check.line</field>
+        <field name="arch" type="xml">
+            <form string="Chi Tiết Kiểm Kê">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="check_id"/>
+                            <field name="product_id" readonly="1"/>
+                            <field name="location_id" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="lot_id"/>
+                            <field name="package_id"/>
+                        </group>
+                    </group>
+                    
+                    <group>
+                        <group>
+                            <field name="theoretical_qty" readonly="1"/>
+                            <field name="scanned_qty"/>
+                        </group>
+                        <group>
+                            <field name="difference" readonly="1"/>
+                            <field name="discrepancy_id"/>
+                        </group>
+                    </group>
+                    
+                    <group>
+                        <field name="scanned_by" readonly="1"/>
+                        <field name="scanned_at" readonly="1"/>
+                        <field name="updated_at" readonly="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_inventory_check_line_search" model="ir.ui.view">
+        <field name="name">inventory.check.line.search</field>
+        <field name="model">inventory.check.line</field>
+        <field name="arch" type="xml">
+            <search string="Chi Tiết Kiểm Kê">
+                <field name="product_id"/>
+                <field name="location_id"/>
+                <field name="check_id"/>
+                <separator/>
+                <filter string="Có Chênh Lệch" name="has_difference" domain="[('difference', '!=', 0)]"/>
+                <filter string="Chưa Ghi Nhận" name="not_recorded" domain="[('difference', '!=', 0), ('discrepancy_id', '=', False)]"/>
+                <separator/>
+                <group expand="0" string="Group By">
+                    <filter string="Vị Trí" name="group_location" context="{'group_by': 'location_id'}"/>
+                    <filter string="Phiên Kiểm Kê" name="group_check" context="{'group_by': 'check_id'}"/>
+                    <filter string="Sản Phẩm" name="group_product" context="{'group_by': 'product_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_inventory_check_line" model="ir.actions.act_window">
+        <field name="name">Chi Tiết Kiểm Kê</field>
+        <field name="res_model">inventory.check.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_inventory_check_line_search"/>
+    </record>
+
+</odoo>

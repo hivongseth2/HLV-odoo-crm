@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Client Action for Inventory Scanner (Standalone App) -->
+    <record id="action_inventory_scanner" model="ir.actions.client">
+        <field name="name">Quét Kiểm Kê</field>
+        <field name="tag">hlv_inventory_check_scanner</field>
+        <field name="target">fullscreen</field>
+    </record>
+
+    <!-- Direct URL Access - không cần login vào menu -->
+    <record id="inventory_scanner_url" model="ir.actions.act_url">
+        <field name="name">Inventory Scanner App</field>
+        <field name="url">/web#action=hlv_barcode_realtime_inventory.action_inventory_scanner</field>
+        <field name="target">self</field>
+    </record>
+
+    <!-- Session Views for admin -->
+    <record id="view_inventory_scan_session_tree" model="ir.ui.view">
+        <field name="name">inventory.scan.session.tree</field>
+        <field name="model">inventory.scan.session</field>
+        <field name="arch" type="xml">
+            <list string="Phiên Kiểm Kê" decoration-success="state == 'confirmed'" decoration-muted="state == 'cancelled'">
+                <field name="name"/>
+                <field name="user_id"/>
+                <field name="location_id"/>
+                <field name="product_count"/>
+                <field name="scan_count"/>
+                <field name="start_time"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_inventory_scan_session_form" model="ir.ui.view">
+        <field name="name">inventory.scan.session.form</field>
+        <field name="model">inventory.scan.session</field>
+        <field name="arch" type="xml">
+            <form string="Phiên Kiểm Kê">
+                <header>
+                    <button name="confirm_session" type="object" string="Xác Nhận" class="btn-primary" invisible="state != 'active'"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="user_id"/>
+                        <field name="location_id"/>
+                        <field name="product_count"/>
+                        <field name="scan_count"/>
+                    </group>
+                    <field name="line_ids">
+                        <list>
+                            <field name="product_id"/>
+                            <field name="scanned_qty"/>
+                            <field name="theoretical_qty"/>
+                            <field name="difference"/>
+                        </list>
+                    </field>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_inventory_scan_sessions" model="ir.actions.act_window">
+        <field name="name">Lịch Sử Kiểm Kê</field>
+        <field name="res_model">inventory.scan.session</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- Root Menu - Hiện trên trang chủ -->
+    <menuitem
+        id="menu_inventory_scanner_root"
+        name="HLV Stock Scanner"
+        sequence="10"
+        web_icon="hlv_barcode_realtime_inventory,static/description/icon.png"
+        action="action_inventory_scanner"/>
+
+    <!-- Admin Menu - Lịch sử sessions -->
+    <menuitem
+        id="menu_inventory_scan_sessions"
+        name="Lịch Sử Kiểm Kê"
+        parent="stock.menu_stock_root"
+        action="action_inventory_scan_sessions"
+        sequence="100"
+        groups="stock.group_stock_manager"/>
+
+</odoo>
