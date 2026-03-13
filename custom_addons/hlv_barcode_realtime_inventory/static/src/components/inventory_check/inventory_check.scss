@@ -945,6 +945,7 @@ $r-full: 9999px;
         background: $gray-100;
         color: $gray-600;
         flex: 1;
+        border:1px solid #cccc;
         &:hover { background: $gray-200; }
     }
 
@@ -1627,7 +1628,7 @@ $r-full: 9999px;
     // ===== RESPONSIVE =====
     // ===== SMALL BUTTON =====
     .hlv-btn--sm {
-        padding: 6px 14px;
+        padding: 8px 48px;
         font-size: 12px;
         border-radius: $r-sm;
     }

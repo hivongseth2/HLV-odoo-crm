@@ -664,7 +664,7 @@
                                         </div>
                                     </div>
                                     <div class="hlv-approval-card__stats">
-                                        <span class="hlv-badge hlv-badge--light">
+                                        <span class="hlv-badge hlv-badge--info">
                                             <t t-esc="ap.product_count"/> SP
                                         </span>
                                         <span t-att-class="'hlv-badge ' + (ap.total_difference !== 0 ? 'hlv-badge--danger' : 'hlv-badge--success')">
