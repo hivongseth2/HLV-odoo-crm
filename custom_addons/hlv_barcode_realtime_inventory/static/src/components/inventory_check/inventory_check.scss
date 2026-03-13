@@ -558,8 +558,8 @@ $r-full: 9999px;
     .hlv-product-list {
         flex: 1;
         overflow-y: auto;
-        padding: 8px 0 4px;
-        background: $gray-100;
+        padding: 0;
+        background: $white;
 
         // Smooth scroll
         scroll-behavior: smooth;
@@ -590,33 +590,31 @@ $r-full: 9999px;
     // ===== PRODUCT ROW =====
     .hlv-product-row {
         display: flex;
-        align-items: center;
+        flex-direction: column;
         gap: 10px;
-        padding: 10px 12px 10px 14px;
+        padding: 14px 12px 14px 16px;
         background: $white;
-        margin: 3px 8px;
-        border-radius: $r-md;
-        box-shadow: $shadow-sm;
-        border-left: 4px solid $gray-200;
-        transition: box-shadow .15s;
+        border-left: 3px solid $gray-200;
+        border-bottom: 1px solid $gray-100;
+        transition: background .1s;
 
-        &:hover { box-shadow: $shadow-md; }
+        &:last-child { border-bottom: none; }
+        &:active { background: $gray-50; }
 
         &--pending  { border-left-color: $gray-300; }
         &--matched  { border-left-color: $green; }
         &--surplus  { border-left-color: $amber; }
         &--deficit  { border-left-color: $red; }
 
-        &__status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            flex-shrink: 0;
-            background: $gray-300;
+        &__main {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
 
-            .hlv-product-row--matched  & { background: $green; }
-            .hlv-product-row--surplus  & { background: $amber; }
-            .hlv-product-row--deficit  & { background: $red; }
+        &__bottom {
+            display: flex;
+            align-items: center;
         }
 
         &__info {
@@ -625,24 +623,26 @@ $r-full: 9999px;
         }
 
         &__name {
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 600;
             color: $gray-800;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            line-height: 1.3;
         }
 
         &__sku {
-            font-size: 11px;
+            font-size: 12px;
             color: $gray-400;
-            margin-top: 2px;
+            margin-top: 3px;
         }
 
         &__actions {
             display: flex;
             gap: 4px;
             flex-shrink: 0;
+            margin-top: -2px;
         }
     }
 
@@ -650,43 +650,42 @@ $r-full: 9999px;
     .hlv-qty-group {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 0;
         flex-shrink: 0;
 
         &__item {
             display: flex;
-            flex-direction: column;
             align-items: center;
+            gap: 6px;
+            padding: 0 14px 0 0;
         }
 
         &__label {
-            font-size: 9px;
-            text-transform: uppercase;
-            letter-spacing: .06em;
+            font-size: 12px;
             color: $gray-400;
-            font-weight: 600;
-            margin-bottom: 3px;
+            font-weight: 500;
         }
 
         &__value {
-            font-size: 14px;
+            font-size: 15px;
             font-weight: 700;
             color: $gray-800;
         }
 
         &__divider {
             width: 1px;
-            height: 28px;
+            height: 20px;
             background: $gray-200;
+            margin-right: 14px;
         }
     }
 
     .hlv-qty-input {
-        width: 52px;
+        width: 58px;
         border: 1.5px solid $gray-200;
         border-radius: $r-sm;
-        padding: 3px 4px;
-        font-size: 14px;
+        padding: 4px 6px;
+        font-size: 15px;
         font-weight: 700;
         text-align: center;
         outline: none;

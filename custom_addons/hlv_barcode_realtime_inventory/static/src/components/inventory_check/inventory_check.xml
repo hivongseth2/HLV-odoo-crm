@@ -246,58 +246,63 @@
                         <t t-if="state.lines.length > 0">
                             <t t-foreach="state.lines" t-as="line" t-key="line.id">
                                 <div t-att-class="'hlv-product-row ' + (line.difference > 0 ? 'hlv-product-row--surplus' : line.difference &lt; 0 ? 'hlv-product-row--deficit' : line.scanned_qty > 0 ? 'hlv-product-row--matched' : 'hlv-product-row--pending')">
-                                    <div class="hlv-product-row__status-dot"/>
-                                    <div class="hlv-product-row__info">
-                                        <div class="hlv-product-row__name" t-esc="line.product_name"/>
-                                        <div class="hlv-product-row__sku" t-if="line.product_code" t-esc="line.product_code"/>
-                                    </div>
-                                    <div class="hlv-qty-group">
-                                        <div class="hlv-qty-group__item">
-                                            <span class="hlv-qty-group__label">LT</span>
-                                            <span class="hlv-qty-group__value" t-esc="line.theoretical_qty"/>
+                                    <!-- Row 1: name + actions -->
+                                    <div class="hlv-product-row__main">
+                                        <div class="hlv-product-row__info">
+                                            <div class="hlv-product-row__name" t-esc="line.product_name"/>
+                                            <div class="hlv-product-row__sku" t-if="line.product_code" t-esc="line.product_code"/>
                                         </div>
-                                        <div class="hlv-qty-group__divider"/>
-                                        <div class="hlv-qty-group__item">
-                                            <span class="hlv-qty-group__label">TT</span>
-                                            <input type="number" class="hlv-qty-input"
-                                                t-model.number="line.scanned_qty"
-                                                t-att-data-line-id="line.id"
-                                                t-on-change="onQtyChange"
-                                                step="1" min="0"/>
-                                        </div>
-                                        <div class="hlv-qty-group__divider"/>
-                                        <div class="hlv-qty-group__item">
-                                            <span class="hlv-qty-group__label">CL</span>
-                                            <t t-if="line.difference === 0">
-                                                <span class="hlv-diff hlv-diff--ok">✓</span>
+                                        <div class="hlv-product-row__actions">
+                                            <t t-if="line.difference !== 0 &amp;&amp; !line.discrepancy_id">
+                                                <button class="hlv-icon-btn hlv-icon-btn--warn hlv-icon-btn--sm"
+                                                    t-on-click="addDiscrepancyHandler"
+                                                    t-att-data-line-id="line.id"
+                                                    t-att-data-product-name="line.product_name"
+                                                    t-att-data-difference="line.difference"
+                                                    title="Ghi nhận lý do">
+                                                    <i class="fa fa-flag"/>
+                                                </button>
                                             </t>
-                                            <t t-if="line.difference !== 0">
-                                                <span class="hlv-diff hlv-diff--bad" t-esc="line.difference"/>
+                                            <t t-if="line.discrepancy_id">
+                                                <span class="hlv-icon-btn hlv-icon-btn--ok hlv-icon-btn--sm" title="Đã ghi">
+                                                    <i class="fa fa-check"/>
+                                                </span>
                                             </t>
-                                        </div>
-                                    </div>
-                                    <div class="hlv-product-row__actions">
-                                        <t t-if="line.difference !== 0 &amp;&amp; !line.discrepancy_id">
-                                            <button class="hlv-icon-btn hlv-icon-btn--warn hlv-icon-btn--sm"
-                                                t-on-click="addDiscrepancyHandler"
+                                            <button class="hlv-icon-btn hlv-icon-btn--ghost hlv-icon-btn--sm"
+                                                t-on-click="removeLineHandler"
                                                 t-att-data-line-id="line.id"
-                                                t-att-data-product-name="line.product_name"
-                                                t-att-data-difference="line.difference"
-                                                title="Ghi nhận lý do">
-                                                <i class="fa fa-flag"/>
+                                                title="Xóa">
+                                                <i class="fa fa-trash"/>
                                             </button>
-                                        </t>
-                                        <t t-if="line.discrepancy_id">
-                                            <span class="hlv-icon-btn hlv-icon-btn--ok hlv-icon-btn--sm" title="Đã ghi">
-                                                <i class="fa fa-check"/>
-                                            </span>
-                                        </t>
-                                        <button class="hlv-icon-btn hlv-icon-btn--ghost hlv-icon-btn--sm"
-                                            t-on-click="removeLineHandler"
-                                            t-att-data-line-id="line.id"
-                                            title="Xóa">
-                                            <i class="fa fa-trash"/>
-                                        </button>
+                                        </div>
+                                    </div>
+                                    <!-- Row 2: qty numbers -->
+                                    <div class="hlv-product-row__bottom">
+                                        <div class="hlv-qty-group">
+                                            <div class="hlv-qty-group__item">
+                                                <span class="hlv-qty-group__label">Lý Thuyết</span>
+                                                <span class="hlv-qty-group__value" t-esc="line.theoretical_qty"/>
+                                            </div>
+                                            <div class="hlv-qty-group__divider"/>
+                                            <div class="hlv-qty-group__item">
+                                                <span class="hlv-qty-group__label">Thực Tế</span>
+                                                <input type="number" class="hlv-qty-input"
+                                                    t-model.number="line.scanned_qty"
+                                                    t-att-data-line-id="line.id"
+                                                    t-on-change="onQtyChange"
+                                                    step="1" min="0"/>
+                                            </div>
+                                            <div class="hlv-qty-group__divider"/>
+                                            <div class="hlv-qty-group__item">
+                                                <span class="hlv-qty-group__label">Chênh Lệch</span>
+                                                <t t-if="line.difference === 0">
+                                                    <span class="hlv-diff hlv-diff--ok">✓</span>
+                                                </t>
+                                                <t t-if="line.difference !== 0">
+                                                    <span class="hlv-diff hlv-diff--bad" t-esc="line.difference"/>
+                                                </t>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </t>
