@@ -493,8 +493,9 @@ class CustomBarcodeScanController(http.Controller):
         barcode = kwargs.get("barcode")
         delta = float(kwargs.get("delta", 1))
         line_id = kwargs.get("line_id")
+        move_id = kwargs.get("move_id")
         _logger = logging.getLogger(__name__)
-        _logger.info(f"SCAN_ITEM START: barcode={barcode}, delta={delta}, line_id={line_id}")
+        _logger.info(f"SCAN_ITEM START: barcode={barcode}, delta={delta}, line_id={line_id}, move_id={move_id}")
         picking = request.env['stock.picking'].sudo().browse(picking_id)
         # Tìm move dựa trên barcode
         # [FIX] Use move_ids instead of move_ids_without_package to ensure we see ALL moves
@@ -533,6 +534,16 @@ class CustomBarcodeScanController(http.Controller):
             except:
                 target_ml = None
 
+        # [FIX] Tìm target_move từ move_id (nếu FE gửi lên) để scope lại tìm kiếm
+        target_move_from_fe = None
+        if move_id:
+            try:
+                target_move_from_fe = request.env['stock.move'].sudo().browse(int(move_id))
+                if not target_move_from_fe.exists() or target_move_from_fe.picking_id.id != picking.id:
+                    target_move_from_fe = None
+            except:
+                target_move_from_fe = None
+
         if target_ml:
             # [SMART-REDIRECT-2024-V3.4] Logic lấp đầy toàn diện (Universal Balanced)
             # Cho phép Redirect ngay cả khi target_ml đã gắn package 
@@ -543,10 +554,15 @@ class CustomBarcodeScanController(http.Controller):
             # 1. Target là hàng lẻ
             # 2. HOẶC Target là package nhưng không có giới hạn (Reserved=0) và đã có hàng (Done > 0)
             if not is_target_packed or (target_res == 0 and target_ml.qty_done > 0):
-                # Tìm TẤT CẢ move lines của sản phẩm này (bao gồm cả LOOSE LINES và PACKAGE LINES)
-                all_product_mls = picking.move_line_ids.filtered(
-                    lambda l: l.product_id.id == target_ml.product_id.id
-                )
+                # [FIX] Khi có move_id, chỉ tìm trong cùng 1 stock.move để không nhảy sang dòng khác
+                if target_move_from_fe:
+                    all_product_mls = target_move_from_fe.move_line_ids.filtered(
+                        lambda l: l.product_id.id == target_ml.product_id.id
+                    )
+                else:
+                    all_product_mls = picking.move_line_ids.filtered(
+                        lambda l: l.product_id.id == target_ml.product_id.id
+                    )
                 
                 # Thứ tự ưu tiên V3.4:
                 # 1. Dòng PACKAGE còn chỗ (qty_done < reserved)
@@ -622,16 +638,15 @@ class CustomBarcodeScanController(http.Controller):
 
         # Nếu chưa xác định được target_ml (do line_id null hoặc sai hoặc đã bị packed), tự động tìm dòng phù hợp
         if not target_ml:
-            # [NEW LOGIC] Chiến lược tìm kiếm theo từng move_line (để hỗ trợ nhiều nguồn/pack khác nhau)
-            # 1. Lấy TẤT CẢ move_lines của sản phẩm này trong picking (từ tất cả moves)
-            # 2. Sắp xếp theo ID (thứ tự tạo = thứ tự hiển thị trong UI)
-            # 3. Tìm move_line đầu tiên còn chỗ (reserved_qty - qty_done > 0 hoặc chưa đóng gói)
-            # 4. Chỉ cập nhật move_line đó, tôn trọng reserved_qty của nó
+            # [FIX] Khi có move_id từ FE, chỉ tìm trong move đó trước
+            scoped_moves = moves
+            if target_move_from_fe and target_move_from_fe in moves:
+                scoped_moves = target_move_from_fe
             
             if delta > 0:
-                # Thu thập tất cả move_lines từ các moves
+                # Thu thập move_lines (scope theo move_id nếu có)
                 all_move_lines = request.env['stock.move.line'].sudo()
-                for m in moves:
+                for m in scoped_moves:
                     all_move_lines |= m.move_line_ids
                 
                 # [FIX-2024] Sắp xếp: Ưu tiên các dòng đã được liên kết với package (nguồn hoặc đích)
@@ -664,7 +679,7 @@ class CustomBarcodeScanController(http.Controller):
                 
                 # Nếu không tìm thấy move_line nào còn chỗ, kiểm tra xem move có dư demand không
                 if not found_target:
-                    for m in moves:
+                    for m in scoped_moves:
                         move_done = sum(ml.qty_done for ml in m.move_line_ids)
                         move_remaining = m.product_uom_qty - move_done
                         if move_remaining > 0:
@@ -691,21 +706,22 @@ class CustomBarcodeScanController(http.Controller):
                         _logger.error(f"Failed to create move line: {e}")
                         return {"error": "❌ Lỗi hệ thống: Không thể tạo dòng sản phẩm mới."}
 
-                # Fallback: tìm loose line bất kỳ
+                # Fallback: tìm loose line (scope theo move_id nếu có)
                 if not found_target:
                     _logger.info("All move_lines are full or packed. Fallback to find any loose line.")
                     loose_candidates = request.env['stock.move.line'].sudo().search([
                         ('picking_id', '=', picking.id),
-                        ('product_id', 'in', moves.mapped('product_id').ids),
+                        ('product_id', 'in', scoped_moves.mapped('product_id').ids),
+                        ('move_id', 'in', scoped_moves.ids),
                         ('result_package_id', '=', False)
                     ], limit=1)
                     
                     if loose_candidates:
                         target_ml = loose_candidates[0]
                         _logger.info(f"Fallback: Found generic loose line: {target_ml.id}")
-                    elif moves:
+                    elif scoped_moves:
                         # Tạo line mới cho move đầu tiên (over-scan)
-                        m = moves[0]
+                        m = scoped_moves[0] if hasattr(scoped_moves, '__getitem__') else scoped_moves
                         try:
                             target_ml = request.env['stock.move.line'].sudo().create({
                                 'picking_id': picking.id,
@@ -722,7 +738,7 @@ class CustomBarcodeScanController(http.Controller):
 
             # Nếu đang trừ: tìm dòng có qty_done > 0
             elif delta < 0:
-                for move in moves:
+                for move in scoped_moves:
                     for ml in move.move_line_ids:
                         if ml.qty_done > 0:
                             # [VALIDATION] Check if line is already packed
@@ -820,6 +836,7 @@ class CustomBarcodeScanController(http.Controller):
 
                     updated_lines.append({
                         "line_id": ml.id,
+                        "move_id": move.id,
                         "product": move.product_id.display_name,
                         "done_qty": local_done_qty,   # Return LOCAL total for this move
                         "packed_qty": local_packed_qty, # Return LOCAL packed for this move
@@ -837,6 +854,7 @@ class CustomBarcodeScanController(http.Controller):
                     
                     updated_lines.append({
                         "line_id": ml.id,
+                        "move_id": move.id,
                         "product": move.product_id.display_name,
                         "done_qty": new_total_done_all,
                         "required_qty": move.product_uom_qty,

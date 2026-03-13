@@ -42,8 +42,10 @@
                 <li t-att-data-barcode="line.product_id.barcode" 
                   class="product-item" 
                   t-att-data-line-id="ml.id"
+                  t-att-data-move-id="line.id"
                   t-att-data-default-code="line.product_id.default_code or ''"
-                  t-att-data-packed-qty="sum(line.move_line_ids.filtered(lambda x: x.result_package_id).mapped('qty_done'))"> 
+                  t-att-data-packed-qty="sum(line.move_line_ids.filtered(lambda x: x.result_package_id).mapped('qty_done'))"
+                  t-att-data-max-qty="line.product_uom_qty"> 
                   <div style="flex: 1; max-width: 70%;">
                     <strong><t t-esc="line.product_id.display_name"/></strong>
                     <div style="font-size: 0.85rem; color: #666; margin-top: 2px;">
