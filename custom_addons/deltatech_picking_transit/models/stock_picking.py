@@ -17,7 +17,7 @@ class StockPicking(models.Model):
 
    
     create_second_transfer_automatically = fields.Boolean(
-        string="Tự động tạo phiếu nhận (bước 2)",
+        string="Tự động tạo phiếu bước 2",
         related="picking_type_id.auto_second_transfer",
         store=True,
     )
@@ -150,14 +150,25 @@ class StockPicking(models.Model):
 
     # ---------------- Helper ----------------
     def _is_inter_warehouse_transit(self, location):
-        """Chỉ nhận 'Physical Locations/Inter-warehouse transit'.
+        """Chỉ nhận 'Physical Locations/Inter-warehouse transit' (Tiếng Anh) 
+        hoặc 'Vị trí vật lý/Trung chuyển liên kho' (Tiếng Việt).
         Ưu tiên check theo complete_name; fallback usage='transit'.
         """
         if not location:
             return False
-        name_ok = (location.complete_name or "").strip().lower().endswith("physical locations/inter-warehouse transit".lower()) \
-                  or (location.complete_name or "").strip().lower() == "physical locations/inter-warehouse transit".lower()
-        return name_ok or (location.usage == "transit" and "inter-warehouse transit" in (location.complete_name or "").lower())
+        
+        complete_name = (location.complete_name or "").strip().lower()
+        
+        # Danh sách các tên được chấp nhận (mapping Việt - Anh)
+        accepted_names = [
+            "physical locations/inter-warehouse transit",
+            "vị trí vật lý/trung chuyển liên kho",
+            "kho trung gian"
+        ]
+        
+        name_ok = any(complete_name.endswith(name) or complete_name == name for name in accepted_names)
+        
+        return name_ok or (location.usage == "transit" and ("inter-warehouse transit" in complete_name or "trung chuyển liên kho" in complete_name or "kho trung gian" in complete_name))
 
     # -------------- Wizard mở tay --------------
     def open_transfer_wizard(self):
@@ -251,7 +262,7 @@ class StockPicking(models.Model):
                 new_picking_msg = Markup("""
                     <div style="background: linear-gradient(135deg, #e8f5e9, #c8e6c9); border-left: 4px solid #4caf50; padding: 12px; border-radius: 8px; margin: 8px 0;">
                         <div style="font-weight: bold; color: #2e7d32; font-size: 14px; margin-bottom: 8px;">
-                            📦 Phiếu nhận hàng từ Transit
+                            📦 Phiếu nhận hàng từ Kho trung gian
                         </div>
                         <div style="color: #333; font-size: 13px;">
                             <div>🔗 <b>Phiếu nguồn:</b> %s</div>
@@ -278,7 +289,7 @@ class StockPicking(models.Model):
                         <div style="color: #333; font-size: 13px;">
                             <div>📦 <b>Phiếu nhận đã tạo:</b> %s</div>
                             <div>🏢 <b>Kho nhận:</b> %s</div>
-                            <div>📍 <b>Transit:</b> %s</div>
+                            <div>📍 <b>Kho trung gian:</b> %s</div>
                         </div>
                     </div>
                 """) % (new_link, dest_warehouse, transit_location.display_name)

@@ -11,7 +11,7 @@
         <field name="create_second_transfer_automatically" invisible="1"/>
         <button name="reassign_location"
                 type="object"
-                string="Reassign Location"
+                string="Phân bổ lại vị trí"
                 class="btn-primary"
                 invisible="sub_location_existent==False"/>
         <button name="open_transfer_wizard"
