@@ -82,10 +82,41 @@ export class InventoryCheckScanner extends Component {
 
         onMounted(() => {
             this._focusOnBarcodeInput();
+            // Whenever focus leaves any element, restore it to the right input
+            // This keeps the hidden location input always ready for hardware scanners
+            this._globalFocusOut = () => {
+                // Small delay so the newly-focused element has time to receive focus
+                setTimeout(() => {
+                    if (this.state.camera_active) return;              // camera modal handles its own focus
+                    if (this.state.is_loading) return;
+                    const active = document.activeElement;
+                    if (!active || active.tagName === 'BODY' || active.tagName === 'HTML') {
+                        this._focusOnBarcodeInput();
+                        return;
+                    }
+                    // If focus went to a known interactive element, leave it alone
+                    // but still refocus hidden input after button actions on home/no-location screens
+                    const needsHidden = !this.state.location_id &&
+                        (this.state.view === 'home' || this.state.view === 'scanning');
+                    if (needsHidden && !active.classList.contains('hlv-location-hidden-input')) {
+                        const isInteractive = active.tagName === 'INPUT' ||
+                            active.tagName === 'TEXTAREA' ||
+                            active.tagName === 'SELECT';
+                        // Only refocus if focus went to a button and has already settled
+                        if (!isInteractive) {
+                            this._focusOnBarcodeInput();
+                        }
+                    }
+                }, 200);
+            };
+            document.addEventListener('focusout', this._globalFocusOut);
         });
 
         onWillUnmount(() => {
             this._stopCameraStream();
+            if (this._globalFocusOut) {
+                document.removeEventListener('focusout', this._globalFocusOut);
+            }
         });
     }
 
