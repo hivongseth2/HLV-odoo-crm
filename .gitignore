@@ -8,3 +8,4 @@ __pycache__/
 *.txt
 .agent/
 custom_addons/google_ads_automation/doc
+.clinerules/
