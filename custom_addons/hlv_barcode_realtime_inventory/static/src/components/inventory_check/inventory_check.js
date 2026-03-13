@@ -230,17 +230,16 @@ export class InventoryCheckScanner extends Component {
     async selectLocationByBarcode() {
         const barcode = this.state.location_barcode.trim();
         if (!barcode) {
-            this._showError('Vui lòng nhập mã vị trí');
+            this._showError('Vui lòng quét mã vị trí');
             return;
         }
+        this.state.location_barcode = '';  // always clear immediately
         this.state.is_loading = true;
         try {
             const result = await this.orm.call(
                 'inventory.check', 'search_location', [barcode], {}
             );
             if (result.success) {
-                // Luôn tạo phiên mới cho mỗi lần chọn vị trí mới
-                // (không bao giờ resume — tránh gộm sản phẩm 2 vị trí vào 1 phiên)
                 const checkResult = await this.orm.call(
                     'inventory.check', 'create_new_check',
                     [this.state.device_id], {}
@@ -253,11 +252,13 @@ export class InventoryCheckScanner extends Component {
                     return;
                 }
                 await this._setLocation(result.location_id, result.location_name);
-                this.state.location_barcode = '';
+                this._beepSuccess();
             } else {
+                this._beepError();
                 this._showError(result.error || 'Không tìm thấy vị trí');
             }
         } catch (error) {
+            this._beepError();
             this._showError('Lỗi: ' + error.message);
         } finally {
             this.state.is_loading = false;
@@ -314,6 +315,7 @@ export class InventoryCheckScanner extends Component {
             if (sr.success) {
                 if (sr.warning) this.state.warning_message = sr.error;
                 this._refreshCheckData();
+                this._beepSuccess();
                 this._showNotification(`✓ ${pr.product_name} (SL: ${sr.scanned_qty})`, 'success');
                 this.state.product_barcode = '';
                 this._focusOnBarcodeInput();
@@ -669,14 +671,20 @@ export class InventoryCheckScanner extends Component {
                 // Don't steal from non-scan inputs (qty, search, settings, etc.)
                 if ((tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') &&
                     !active.classList.contains('hlv-input--scan') &&
-                    !active.classList.contains('hlv-input--lg')) return;
+                    !active.classList.contains('hlv-input--lg') &&
+                    !active.classList.contains('hlv-location-hidden-input')) return;
             }
             const selector = !this.state.location_id
-                ? '.hlv-input--lg'
+                ? '.hlv-location-hidden-input'
                 : '.hlv-input--scan';
             const input = document.querySelector(selector);
             if (input && document.activeElement !== input) input.focus();
         }, 80);
+    }
+
+    focusLocationInput() {
+        const input = document.querySelector('.hlv-location-hidden-input');
+        if (input) input.focus();
     }
 
     onScanAreaClick(ev) {
@@ -859,6 +867,41 @@ export class InventoryCheckScanner extends Component {
         this.state.error_message = message;
         this.notification.add(message, { type: 'danger' });
         setTimeout(() => { this.state.error_message = ''; }, 5000);
+    }
+
+    // ========== Audio Feedback ==========
+    _beepSuccess() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1047, ctx.currentTime);   // C6
+            gain.gain.setValueAtTime(0.35, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.18);
+            osc.onended = () => ctx.close();
+        } catch(e) {}
+    }
+
+    _beepError() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(220, ctx.currentTime);    // A3
+            gain.gain.setValueAtTime(0.2, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.25);
+            osc.onended = () => ctx.close();
+        } catch(e) {}
     }
 
     _showNotification(message, type = 'info') {

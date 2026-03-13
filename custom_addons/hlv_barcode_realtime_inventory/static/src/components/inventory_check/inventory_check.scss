@@ -241,6 +241,44 @@ $r-full: 9999px;
         gap: 8px;
     }
 
+    // Hidden input that captures hardware barcode scanner without showing on screen
+    .hlv-location-hidden-input {
+        position: absolute;
+        opacity: 0;
+        width: 1px;
+        height: 1px;
+        pointer-events: none;
+        border: none;
+        outline: none;
+    }
+
+    // Location scan UI (camera-first, no visible input)
+    .hlv-location-scan {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+        padding: 8px 0;
+        position: relative;
+
+        &--inline {
+            padding: 16px;
+        }
+
+        &__icon {
+            font-size: 40px;
+            color: $blue;
+            opacity: .7;
+        }
+
+        &__hint {
+            margin: 0;
+            font-size: 14px;
+            color: $gray-500;
+            text-align: center;
+        }
+    }
+
     .hlv-text-muted { color: $gray-400; }
 
     // ===== INPUTS =====
