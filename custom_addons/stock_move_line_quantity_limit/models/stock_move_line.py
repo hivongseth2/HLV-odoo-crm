@@ -14,8 +14,11 @@ class StockMoveLine(models.Model):
         Kiểm tra số lượng nhập tay không vượt quá tồn kho TẠI VỊ TRÍ ĐÓ.
         - Chỉ áp dụng cho kho nội bộ (internal locations)
         - Bỏ qua các moves đã hoàn thành
-        - Tính cả pending done qty từ picking khác chưa validate
+        - Tính cả done qty từ picking khác chưa validate
         - Tự động giới hạn số lượng đến mức có sẵn tại vị trí
+
+        Công thức: max_allowed = on_hand_at_loc - other_pickings_done_at_loc
+        KHÔNG dùng quant.reserved_quantity (dễ bị ghost reservation).
         """
         _logger.info(
             '[QTY_LIMIT] onchange trigger | product=%s (id=%s) | location=%s (id=%s) | qty_entered=%s',
@@ -40,53 +43,52 @@ class StockMoveLine(models.Model):
             _logger.info('[QTY_LIMIT] SKIP: move state=%s', self.move_id.state)
             return
 
-        # Lấy tồn kho thực tế TẠI VỊ TRÍ NÀY
+        # Lấy tồn kho vật lý TẠI VỊ TRÍ NÀY (on-hand)
         quant = self.env['stock.quant'].search([
             ('product_id', '=', self.product_id.id),
             ('location_id', '=', self.location_id.id),
         ], limit=1)
-
         stock_at_location = quant.quantity if quant else 0.0
-        reserved_at_location = quant.reserved_quantity if quant else 0.0
-        available_at_location = quant.available_quantity if quant else 0.0
 
-        # Số lượng line này đang giữ trước khi user chỉnh (0 nếu là line mới)
-        original_qty = self._origin.quantity if self._origin else 0.0
-
-        # Pending done qty từ các PICKING KHÁC tại cùng location này
-        # (chưa phản ánh trong quant.reserved_quantity)
+        # Tìm picking ID hiện tại
         current_picking_id = self.picking_id.id if self.picking_id else (
             self.move_id.picking_id.id if self.move_id and self.move_id.picking_id else False
         )
-        other_pending_lines = self.env['stock.move.line'].search([
+
+        # Tổng done qty từ CÁC PICKING KHÁC tại cùng location
+        other_lines = self.env['stock.move.line'].search([
             ('product_id', '=', self.product_id.id),
             ('location_id', '=', self.location_id.id),
             ('state', 'not in', ['done', 'cancel']),
             ('quantity', '>', 0),
+            ('picking_id', '!=', current_picking_id),
         ])
-        # Tổng qty từ picking khác
-        other_picking_qty = sum(
-            oml.quantity for oml in other_pending_lines
-            if oml.picking_id.id != current_picking_id
-        )
-        # Pending = phần chưa reserve = other_qty - quant_reserved
-        # (quant_reserved đã bị trừ qua available_at_location rồi)
-        pending_done_others = max(0.0, other_picking_qty - reserved_at_location)
+        other_done = sum(oml.quantity for oml in other_lines)
 
-        # Giới hạn thực = available (của đơn khác chưa dùng) + phần line này đang giữ - pending_others
-        max_allowed = available_at_location + original_qty - pending_done_others
+        # Tổng done qty từ CÁC LINE KHÁC CÙNG PICKING tại cùng location
+        # (trừ line hiện tại để không double count)
+        same_picking_other_lines = self.env['stock.move.line'].search([
+            ('product_id', '=', self.product_id.id),
+            ('location_id', '=', self.location_id.id),
+            ('state', 'not in', ['done', 'cancel']),
+            ('quantity', '>', 0),
+            ('picking_id', '=', current_picking_id),
+            ('id', '!=', self._origin.id if self._origin else 0),
+        ])
+        same_picking_other_done = sum(oml.quantity for oml in same_picking_other_lines)
+
+        # max_allowed = tồn kho vật lý - đơn khác - cùng picking (line khác)
+        max_allowed = stock_at_location - other_done - same_picking_other_done
 
         _logger.info(
             '[QTY_LIMIT] Stock check | product=%s | location=%s | '
-            'on_hand=%s | reserved=%s | available=%s | original_qty=%s | '
-            'pending_done_others=%s | max_allowed=%s | qty_to_reserve=%s',
+            'on_hand=%s | other_pickings_done=%s | same_picking_other=%s | '
+            'max_allowed=%s | qty_entered=%s',
             self.product_id.display_name,
             self.location_id.display_name,
             stock_at_location,
-            reserved_at_location,
-            available_at_location,
-            original_qty,
-            pending_done_others,
+            other_done,
+            same_picking_other_done,
             max_allowed,
             self.quantity,
         )
@@ -110,15 +112,14 @@ class StockMoveLine(models.Model):
                 'warning': {
                     'title': _('Vượt quá tồn kho tại vị trí!'),
                     'message': _(
-                        'Vị trí "%s" chỉ còn %s cái khả dụng thực tế '
-                        '(tồn kho: %s, đã giữ: %s, đang chờ đơn khác: %s).\n'
+                        'Vị trí "%s" chỉ còn %s cái khả dụng '
+                        '(tồn kho: %s, đang giữ bởi đơn khác: %s).\n'
                         'Hệ thống đã tự động điều chỉnh từ %s thành %s cái.'
                     ) % (
                         self.location_id.display_name,
                         max(0.0, max_allowed),
                         stock_at_location,
-                        reserved_at_location - original_qty,
-                        pending_done_others,
+                        other_done,
                         old_qty,
                         self.quantity,
                     )
@@ -127,57 +128,3 @@ class StockMoveLine(models.Model):
 
         _logger.info('[QTY_LIMIT] OK | qty=%s <= max_allowed=%s | no adjustment needed',
                      self.quantity, max_allowed)
-
-    def _get_total_stock_at_location(self):
-        """
-        Lấy tồn kho thực tế (on-hand) tại vị trí.
-        Bao gồm:
-        - Sản phẩm có sẵn trong kho
-        
-        Returns:
-            float: Số lượng có sẵn
-        """
-        self.ensure_one()
-
-        if not self.product_id or not self.location_id:
-            return 0.0
-
-        # Tìm stock quant tại vị trí
-        quant = self.env['stock.quant'].search([
-            ('product_id', '=', self.product_id.id),
-            ('location_id', '=', self.location_id.id),
-        ], limit=1)
-
-        if quant:
-            # Trả về quantity (số lượng thực tế)
-            return max(0.0, quant.quantity)
-        
-        return 0.0
-
-    def _get_reserved_qty_in_move(self):
-        """
-        Lấy tổng số lượng đã dành riêng trong move hiện tại (không tính dòng này).
-        Chỉ tính số lượng từ dòng khác trong cùng move.
-        
-        Returns:
-            float: Tổng số lượng đã dành riêng
-        """
-        self.ensure_one()
-
-        if not self.move_id or not self.product_id or not self.location_id:
-            return 0.0
-
-        # Tìm tất cả dòng khác trong move này
-        # Cùng sản phẩm + cùng vị trí + khác dòng hiện tại + chưa hoàn thành
-        other_lines = self.env['stock.move.line'].search([
-            ('move_id', '=', self.move_id.id),
-            ('product_id', '=', self.product_id.id),
-            ('location_id', '=', self.location_id.id),
-            ('id', '!=', self.id),  # Không tính dòng hiện tại
-            ('state', 'not in', ['done', 'cancel']),
-        ])
-
-        # Tính tổng quantity của các dòng khác
-        reserved = sum(line.quantity for line in other_lines)
-        
-        return max(0.0, reserved)

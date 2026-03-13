@@ -142,16 +142,16 @@ class StockPickingAssignLog(models.Model):
 
     def button_validate(self):
         """
-        Lớp bảo vệ thứ 3: Trước khi validate picking, kiểm tra lần cuối
-        rằng tổng done qty không vượt quá tồn kho thực tế.
-        Tính cả pending done từ các picking khác.
-        Tự động điều chỉnh nếu vượt quá.
+        Lớp bảo vệ thứ 2: Trước khi validate picking, kiểm tra lần cuối
+        rằng tổng done qty không vượt quá tồn kho vật lý.
+        Công thức: available = on_hand - other_pickings_done
+        KHÔNG dùng quant.reserved_quantity (dễ bị ghost reservation).
         """
         from markupsafe import Markup
 
-        adjusted_moves = []
-
         for picking in self:
+            adjusted_moves = []
+
             # Nhóm moves theo (product, parent_location)
             product_location_map = {}
             for move in picking.move_ids.filtered(
@@ -171,43 +171,33 @@ class StockPickingAssignLog(models.Model):
                 # Tổng done qty trong picking hiện tại cho product này
                 total_done_this_picking = sum(m.quantity for m in moves)
 
-                # Tồn kho thực tế
+                # Tồn kho vật lý (on-hand)
                 quants = self.env['stock.quant'].search([
                     ('product_id', '=', prod_id),
                     ('location_id', 'child_of', loc_id),
                 ])
                 total_on_hand = sum(q.quantity for q in quants)
-                total_reserved_quant = sum(q.reserved_quantity for q in quants)
 
-                # Pending done từ picking khác (phần ĐÃ nhập tay nhưng chưa reserve trong quant)
+                # Tổng done từ PICKING KHÁC
                 other_move_lines = self.env['stock.move.line'].search([
                     ('product_id', '=', prod_id),
                     ('location_id', 'child_of', loc_id),
                     ('state', 'not in', ['done', 'cancel']),
                     ('quantity', '>', 0),
+                    ('picking_id', '!=', picking.id),
                 ])
-                other_picking_qty = sum(
-                    ml.quantity for ml in other_move_lines
-                    if ml.picking_id.id != picking.id
-                )
-                # Pending = phần chưa reserve = other_qty - quant_reserved
-                pending_others = max(0.0, other_picking_qty - total_reserved_quant)
+                other_done = sum(ml.quantity for ml in other_move_lines)
 
-                real_available = (
-                    total_on_hand
-                    - total_reserved_quant
-                    - pending_others
-                )
+                # Available = on_hand - other_pickings_done
+                real_available = total_on_hand - other_done
 
                 if total_done_this_picking > real_available and real_available >= 0:
                     _logger.warning(
                         '[VALIDATE_CHECK] OVER-ALLOCATION | picking=%s | product=%s | '
-                        'done=%s > real_available=%s | on_hand=%s | reserved_quant=%s | '
-                        'pending_others=%s | own_reserved=%s',
+                        'done=%s > real_available=%s | on_hand=%s | other_done=%s',
                         picking.name, product.display_name,
                         total_done_this_picking, real_available,
-                        total_on_hand, total_reserved_quant,
-                        pending_others, own_reserved,
+                        total_on_hand, other_done,
                     )
 
                     # Phân bổ lại qty cho các moves
@@ -215,17 +205,13 @@ class StockPickingAssignLog(models.Model):
                     for m in moves:
                         if remaining <= 0:
                             old_qty = m.quantity
-                            m.with_context(skip_qty_limit_write_check=True).write(
-                                {'quantity': 0.0}
-                            )
+                            m.quantity = 0.0
                             adjusted_moves.append(
                                 (m, product, old_qty, 0.0)
                             )
                         elif m.quantity > remaining:
                             old_qty = m.quantity
-                            m.with_context(skip_qty_limit_write_check=True).write(
-                                {'quantity': remaining}
-                            )
+                            m.quantity = remaining
                             adjusted_moves.append(
                                 (m, product, old_qty, remaining)
                             )
