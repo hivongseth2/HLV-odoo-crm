@@ -76,6 +76,11 @@
                                 t-model="state.location_barcode"
                                 t-on-keydown="onLocationBarcodeInput"
                                 autofocus="autofocus"/>
+                            <button class="hlv-input-group__btn hlv-input-group__btn--camera"
+                                    t-on-click="openCameraForLocation"
+                                    title="Quét vị trí bằng camera">
+                                <i class="fa fa-camera"/>
+                            </button>
                         </div>
                         <button class="hlv-btn hlv-btn--primary hlv-btn--lg hlv-btn--full" t-on-click="selectLocationByBarcode">
                             <i class="fa fa-plus"/> Bắt Đầu Kiểm Kê
@@ -161,6 +166,11 @@
                                     t-model="state.location_barcode"
                                     t-on-keydown="onLocationBarcodeInput"
                                     autofocus="autofocus"/>
+                                <button class="hlv-input-group__btn hlv-input-group__btn--camera"
+                                        t-on-click="openCameraForLocation"
+                                        title="Quét vị trí bằng camera">
+                                    <i class="fa fa-camera"/>
+                                </button>
                             </div>
                             <button class="hlv-btn hlv-btn--primary hlv-btn--full" t-on-click="selectLocationByBarcode">
                                 <i class="fa fa-check"/> Xác Nhận Vị Trí

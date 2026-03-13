@@ -16,6 +16,8 @@ export class InventoryCheckScanner extends Component {
         this._cameraStream = null;
         this._cameraAnimFrame = null;
         this._barcodeDetector = null;
+        this._lastScannedCode = '';
+        this._lastScanTime = 0;
 
         this.state = useState({
             // Session
@@ -64,6 +66,7 @@ export class InventoryCheckScanner extends Component {
             camera_active: false,
             camera_status: '',
             camera_status_type: 'info',
+            camera_mode: 'product',  // 'product' | 'location'
 
             // Device
             device_id: this._generateDeviceId(),
@@ -670,7 +673,14 @@ export class InventoryCheckScanner extends Component {
     }
 
     // ========== Camera Scanning ==========
-    async openCamera() {
+    openCameraForLocation() {
+        this.openCamera('location');
+    }
+
+    async openCamera(mode = 'product') {
+        this.state.camera_mode = mode;
+        this._lastScannedCode = '';
+        this._lastScanTime = 0;
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             this._showError('Trình duyệt không hỗ trợ camera. Vui lòng dùng Chrome trên Android.');
             return;
@@ -729,17 +739,41 @@ export class InventoryCheckScanner extends Component {
             if (!this.state.camera_active) return;
             if (barcodes.length > 0) {
                 const code = barcodes[0].rawValue;
-                this.closeCamera();
-                this.state.product_barcode = code;
-                this.scanProduct();
-            } else {
-                this._cameraAnimFrame = requestAnimationFrame(() => this._scanLoop());
+                const now = Date.now();
+                // Debounce: skip same code within 1.5 s to avoid double-fire
+                if (code !== this._lastScannedCode || now - this._lastScanTime > 1500) {
+                    this._lastScannedCode = code;
+                    this._lastScanTime = now;
+                    this._processCameraBarcode(code);
+                }
             }
+            // Always continue scanning (continuous mode)
+            this._cameraAnimFrame = requestAnimationFrame(() => this._scanLoop());
         }).catch(() => {
             if (this.state.camera_active) {
                 this._cameraAnimFrame = requestAnimationFrame(() => this._scanLoop());
             }
         });
+    }
+
+    _processCameraBarcode(code) {
+        if (this.state.camera_mode === 'location') {
+            // Close camera first, then navigate to location
+            this.state.camera_active = false;
+            this.state.camera_status = '';
+            this._stopCameraStream();
+            this.state.location_barcode = code;
+            this.selectLocationByBarcode();
+        } else {
+            // Product mode: keep camera open, show brief flash
+            this.state.camera_status = '\u2713 ' + code;
+            this.state.camera_status_type = 'info';
+            setTimeout(() => {
+                if (this.state.camera_active) this.state.camera_status = '';
+            }, 900);
+            this.state.product_barcode = code;
+            this.scanProduct();
+        }
     }
 
     closeCamera() {
