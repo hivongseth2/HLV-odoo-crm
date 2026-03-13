@@ -34,6 +34,13 @@ $r-md:   12px;
 $r-lg:   18px;
 $r-full: 9999px;
 
+// --- Flash animation for scanned product row ---
+@keyframes hlvRowFlash {
+    0%   { background: rgba($green, .22); }
+    70%  { background: rgba($green, .07); }
+    100% { background: $white; }
+}
+
 // --- Root ---
 .hlv-scanner {
     position: fixed;
@@ -595,7 +602,7 @@ $r-full: 9999px;
         padding: 14px 12px 14px 16px;
         background: $white;
         border-left: 3px solid $gray-200;
-        border-bottom: 1px solid $gray-100;
+        border-bottom: 1px solid $gray-200;
         transition: background .1s;
 
         &:last-child { border-bottom: none; }
@@ -605,6 +612,7 @@ $r-full: 9999px;
         &--matched  { border-left-color: $green; }
         &--surplus  { border-left-color: $amber; }
         &--deficit  { border-left-color: $red; }
+        &--flash    { animation: hlvRowFlash 1.2s ease-out forwards; }
 
         &__main {
             display: flex;

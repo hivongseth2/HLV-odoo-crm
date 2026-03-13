@@ -66,6 +66,9 @@ export class InventoryCheckScanner extends Component {
             // Pause dialog (back button from scanning)
             pause_dialog: false,
 
+            // Last scanned line (flash highlight)
+            last_scanned_line_id: null,
+
             // Camera
             camera_active: false,
             camera_status: '',
@@ -348,6 +351,12 @@ export class InventoryCheckScanner extends Component {
                 this._refreshCheckData();
                 this._beepSuccess();
                 this._showNotification(`✓ ${pr.product_name} (SL: ${sr.scanned_qty})`, 'success');
+                this.state.last_scanned_line_id = sr.line_id;
+                setTimeout(() => { this.state.last_scanned_line_id = null; }, 1200);
+                setTimeout(() => {
+                    const el = document.querySelector(`.hlv-product-row[data-line-id="${sr.line_id}"]`);
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 50);
                 this.state.product_barcode = '';
                 this._focusOnBarcodeInput();
             } else {

@@ -245,7 +245,8 @@
                         </t>
                         <t t-if="state.lines.length > 0">
                             <t t-foreach="state.lines" t-as="line" t-key="line.id">
-                                <div t-att-class="'hlv-product-row ' + (line.difference > 0 ? 'hlv-product-row--surplus' : line.difference &lt; 0 ? 'hlv-product-row--deficit' : line.scanned_qty > 0 ? 'hlv-product-row--matched' : 'hlv-product-row--pending')">
+                                <div t-att-class="'hlv-product-row ' + (line.id === state.last_scanned_line_id ? 'hlv-product-row--flash ' : '') + (line.difference > 0 ? 'hlv-product-row--surplus' : line.difference &lt; 0 ? 'hlv-product-row--deficit' : line.scanned_qty > 0 ? 'hlv-product-row--matched' : 'hlv-product-row--pending')"
+                                     t-att-data-line-id="line.id">
                                     <!-- Row 1: name + actions -->
                                     <div class="hlv-product-row__main">
                                         <div class="hlv-product-row__info">
@@ -314,17 +315,17 @@
                         <div class="hlv-bottom-bar">
                             <div class="hlv-summary">
                                 <div class="hlv-summary__item">
-                                    <span class="hlv-summary__label">LT</span>
+                                    <span class="hlv-summary__label">Lý thuyết</span>
                                     <span class="hlv-summary__value" t-esc="state.check_data ? state.check_data.total_theoretical_qty : 0"/>
                                 </div>
                                 <div class="hlv-summary__sep"/>
                                 <div class="hlv-summary__item">
-                                    <span class="hlv-summary__label">TT</span>
+                                    <span class="hlv-summary__label">Thực tế</span>
                                     <span class="hlv-summary__value" t-esc="state.check_data ? state.check_data.total_scanned_qty : 0"/>
                                 </div>
                                 <div class="hlv-summary__sep"/>
                                 <div class="hlv-summary__item">
-                                    <span class="hlv-summary__label">CL</span>
+                                    <span class="hlv-summary__label">Chênh lệch</span>
                                     <span class="hlv-summary__value" t-esc="state.check_data ? state.check_data.total_difference : 0"/>
                                 </div>
                             </div>
