@@ -360,6 +360,7 @@ $r-full: 9999px;
         border: none;
         border-radius: $r-md;
         font-size: 15px;
+        display: flex;
         font-weight: 600;
         cursor: pointer;
         transition: all .2s;
