@@ -317,15 +317,36 @@ class StockPicking(models.Model):
                 return new_picking
 
     def copy_move_lines(self, source_picking, target_picking):
-        for move in source_picking.move_ids_without_package:
-            move.copy(
+        """Sao chép move và move lines (bao gồm kiện hàng) sang phiếu mới."""
+        for move in source_picking.move_ids:
+            # Tạo move mới ở trạng thái draft cho phiếu bước 2
+            new_move = move.copy(
                 {
                     "picking_id": target_picking.id,
-                    "location_id": source_picking.location_dest_id.id,
+                    "location_id": target_picking.location_id.id,
                     "location_dest_id": target_picking.location_dest_id.id,
                     "state": "draft",
+                    # Không copy move lines mặc định từ move.copy để ta tự tạo chính xác theo kiện
+                    "move_line_ids": [],
                 }
             )
+            
+            # Duyệt qua các chi tiết dịch chuyển của phiếu nguồn (phiếu đã validate)
+            # Lấy các dòng có số lượng đã xử lý (quantity > 0)
+            for line in move.move_line_ids.filtered(lambda l: l.quantity > 0):
+                # result_package_id của bước 1 sẽ trở thành package_id (kiện nguồn) của bước 2
+                # và đồng thời là result_package_id để giữ nguyên kiện hàng cho đến đích cuối
+                self.env["stock.move.line"].create({
+                    "picking_id": target_picking.id,
+                    "move_id": new_move.id,
+                    "product_id": line.product_id.id,
+                    "product_uom_id": line.product_uom_id.id,
+                    "quantity": line.quantity,
+                    "location_id": target_picking.location_id.id,
+                    "location_dest_id": target_picking.location_dest_id.id,
+                    "package_id": line.result_package_id.id if line.result_package_id else False,
+                    "result_package_id": line.result_package_id.id if line.result_package_id else False,
+                })
 
     def _compute_sub_location_existent(self):
         for record in self:
