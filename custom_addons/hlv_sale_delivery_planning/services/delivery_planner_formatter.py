@@ -43,6 +43,10 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         ])
         kit_tmpl_ids = set(kits.mapped('product_tmpl_id').ids)
 
+        # Cache tồn kho thực (on_hand - reserved_in_quant) cho linh kiện kit
+        # Dùng riêng vì product_availabilities dùng free_qty (bỏ qua assigned reservations)
+        kit_comp_true_free = {}
+
         # --- Dòng sản phẩm ---
         has_pending = False
         has_delivered = False
@@ -68,12 +72,18 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                     kit_qty = float('inf')
                     for comp_line in bom.bom_line_ids:
                         comp_key = (comp_line.product_id.id, so.warehouse_id.id)
-                        if comp_key not in product_availabilities:
-                            # Component không phải là line trực tiếp → fetch riêng và cache
-                            product_availabilities[comp_key] = comp_line.product_id.with_context(
-                                warehouse=so.warehouse_id.id
-                            ).free_qty
-                        comp_free = product_availabilities[comp_key]
+                        if comp_key not in kit_comp_true_free:
+                            # Tính từ quants: quantity - reserved_quantity
+                            # (free_qty bỏ qua moves đã assigned → tính sai)
+                            quants = self.env['stock.quant'].sudo().search([
+                                ('product_id', '=', comp_line.product_id.id),
+                                ('location_id', 'child_of', so.warehouse_id.lot_stock_id.id),
+                            ])
+                            kit_comp_true_free[comp_key] = sum(
+                                max(float(q.quantity) - float(q.reserved_quantity), 0.0)
+                                for q in quants
+                            )
+                        comp_free = kit_comp_true_free[comp_key]
                         qty_per_kit = comp_line.product_qty / (bom.product_qty or 1.0)
                         if qty_per_kit > 0:
                             kit_qty = min(kit_qty, comp_free / qty_per_kit)
