@@ -70,7 +70,7 @@
     <!-- Root Menu - Hiện trên trang chủ -->
     <menuitem
         id="menu_inventory_scanner_root"
-        name="HLV Stock Scanner"
+        name="HLV Kiểm kê tồn kho"
         sequence="10"
         web_icon="hlv_barcode_realtime_inventory,static/description/icon.png"
         action="action_inventory_scanner"/>
