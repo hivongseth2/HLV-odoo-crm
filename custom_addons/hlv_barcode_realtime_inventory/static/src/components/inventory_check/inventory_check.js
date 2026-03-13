@@ -62,6 +62,9 @@ export class InventoryCheckScanner extends Component {
             // Confirm dialog
             confirm_dialog: false,
 
+            // Pause dialog (back button from scanning)
+            pause_dialog: false,
+
             // Camera
             camera_active: false,
             camera_status: '',
@@ -115,7 +118,21 @@ export class InventoryCheckScanner extends Component {
     }
 
     // ========== Navigation ==========
+    requestGoHome() {
+        // If there's an active check in progress, show pause confirmation
+        if (this.state.check_id) {
+            this.state.pause_dialog = true;
+        } else {
+            this.goHome();
+        }
+    }
+
+    closePauseDialog() {
+        this.state.pause_dialog = false;
+    }
+
     goHome() {
+        this.state.pause_dialog = false;
         this.state.view = 'home';
         this.state.check_id = null;
         this.state.location_id = null;
