@@ -1,6 +1,6 @@
 /** @odoo-module */
 
-import { Component, useState, onWillStart, onMounted } from "@odoo/owl";
+import { Component, useState, onWillStart, onMounted, onWillUnmount, useRef } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 
 export class InventoryCheckScanner extends Component {
@@ -11,6 +11,14 @@ export class InventoryCheckScanner extends Component {
         this.orm = useService("orm");
         this.notification = useService("notification");
         this.action = useService("action");
+
+        this.cameraVideo = useRef("cameraVideo");
+        this._cameraStream = null;
+        this._cameraAnimFrame = null;
+        this._barcodeDetector = null;
+        this._zxingReader = null;
+        this._lastScannedCode = '';
+        this._lastScanTime = 0;
 
         this.state = useState({
             // Session
@@ -55,6 +63,18 @@ export class InventoryCheckScanner extends Component {
             // Confirm dialog
             confirm_dialog: false,
 
+            // Pause dialog (back button from scanning)
+            pause_dialog: false,
+
+            // Last scanned line (flash highlight)
+            last_scanned_line_id: null,
+
+            // Camera
+            camera_active: false,
+            camera_status: '',
+            camera_status_type: 'info',
+            camera_mode: 'product',  // 'product' | 'location'
+
             // Device
             device_id: this._generateDeviceId(),
         });
@@ -65,6 +85,41 @@ export class InventoryCheckScanner extends Component {
 
         onMounted(() => {
             this._focusOnBarcodeInput();
+            // Whenever focus leaves any element, restore it to the right input
+            // This keeps the hidden location input always ready for hardware scanners
+            this._globalFocusOut = () => {
+                // Small delay so the newly-focused element has time to receive focus
+                setTimeout(() => {
+                    if (this.state.camera_active) return;              // camera modal handles its own focus
+                    if (this.state.is_loading) return;
+                    const active = document.activeElement;
+                    if (!active || active.tagName === 'BODY' || active.tagName === 'HTML') {
+                        this._focusOnBarcodeInput();
+                        return;
+                    }
+                    // If focus went to a known interactive element, leave it alone
+                    // but still refocus hidden input after button actions on home/no-location screens
+                    const needsHidden = !this.state.location_id &&
+                        (this.state.view === 'home' || this.state.view === 'scanning');
+                    if (needsHidden && !active.classList.contains('hlv-location-hidden-input')) {
+                        const isInteractive = active.tagName === 'INPUT' ||
+                            active.tagName === 'TEXTAREA' ||
+                            active.tagName === 'SELECT';
+                        // Only refocus if focus went to a button and has already settled
+                        if (!isInteractive) {
+                            this._focusOnBarcodeInput();
+                        }
+                    }
+                }, 200);
+            };
+            document.addEventListener('focusout', this._globalFocusOut);
+        });
+
+        onWillUnmount(() => {
+            this._stopCameraStream();
+            if (this._globalFocusOut) {
+                document.removeEventListener('focusout', this._globalFocusOut);
+            }
         });
     }
 
@@ -98,7 +153,21 @@ export class InventoryCheckScanner extends Component {
     }
 
     // ========== Navigation ==========
+    requestGoHome() {
+        // If there's an active check in progress, show pause confirmation
+        if (this.state.check_id) {
+            this.state.pause_dialog = true;
+        } else {
+            this.goHome();
+        }
+    }
+
+    closePauseDialog() {
+        this.state.pause_dialog = false;
+    }
+
     goHome() {
+        this.state.pause_dialog = false;
         this.state.view = 'home';
         this.state.check_id = null;
         this.state.location_id = null;
@@ -195,17 +264,16 @@ export class InventoryCheckScanner extends Component {
     async selectLocationByBarcode() {
         const barcode = this.state.location_barcode.trim();
         if (!barcode) {
-            this._showError('Vui lòng nhập mã vị trí');
+            this._showError('Vui lòng quét mã vị trí');
             return;
         }
+        this.state.location_barcode = '';  // always clear immediately
         this.state.is_loading = true;
         try {
             const result = await this.orm.call(
                 'inventory.check', 'search_location', [barcode], {}
             );
             if (result.success) {
-                // Luôn tạo phiên mới cho mỗi lần chọn vị trí mới
-                // (không bao giờ resume — tránh gộm sản phẩm 2 vị trí vào 1 phiên)
                 const checkResult = await this.orm.call(
                     'inventory.check', 'create_new_check',
                     [this.state.device_id], {}
@@ -218,11 +286,13 @@ export class InventoryCheckScanner extends Component {
                     return;
                 }
                 await this._setLocation(result.location_id, result.location_name);
-                this.state.location_barcode = '';
+                this._beepSuccess();
             } else {
+                this._beepError();
                 this._showError(result.error || 'Không tìm thấy vị trí');
             }
         } catch (error) {
+            this._beepError();
             this._showError('Lỗi: ' + error.message);
         } finally {
             this.state.is_loading = false;
@@ -279,7 +349,14 @@ export class InventoryCheckScanner extends Component {
             if (sr.success) {
                 if (sr.warning) this.state.warning_message = sr.error;
                 this._refreshCheckData();
+                this._beepSuccess();
                 this._showNotification(`✓ ${pr.product_name} (SL: ${sr.scanned_qty})`, 'success');
+                this.state.last_scanned_line_id = sr.line_id;
+                setTimeout(() => { this.state.last_scanned_line_id = null; }, 1200);
+                setTimeout(() => {
+                    const el = document.querySelector(`.hlv-product-row[data-line-id="${sr.line_id}"]`);
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 50);
                 this.state.product_barcode = '';
                 this._focusOnBarcodeInput();
             } else {
@@ -634,14 +711,20 @@ export class InventoryCheckScanner extends Component {
                 // Don't steal from non-scan inputs (qty, search, settings, etc.)
                 if ((tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') &&
                     !active.classList.contains('hlv-input--scan') &&
-                    !active.classList.contains('hlv-input--lg')) return;
+                    !active.classList.contains('hlv-input--lg') &&
+                    !active.classList.contains('hlv-location-hidden-input')) return;
             }
             const selector = !this.state.location_id
-                ? '.hlv-input--lg'
+                ? '.hlv-location-hidden-input'
                 : '.hlv-input--scan';
             const input = document.querySelector(selector);
             if (input && document.activeElement !== input) input.focus();
         }, 80);
+    }
+
+    focusLocationInput() {
+        const input = document.querySelector('.hlv-location-hidden-input');
+        if (input) input.focus();
     }
 
     onScanAreaClick(ev) {
@@ -655,10 +738,210 @@ export class InventoryCheckScanner extends Component {
         this._focusOnBarcodeInput();
     }
 
+    // ========== Camera Scanning ==========
+    openCameraForLocation() {
+        this.openCamera('location');
+    }
+
+    async openCamera(mode = 'product') {
+        this.state.camera_mode = mode;
+        this._lastScannedCode = '';
+        this._lastScanTime = 0;
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            this._showError('Trình duyệt không hỗ trợ camera. Vui lòng dùng Chrome (Android) hoặc Safari 14.3+ (iPhone).');
+            return;
+        }
+
+        this.state.camera_active = true;
+        this.state.camera_status = 'Đang khởi động camera...';
+        this.state.camera_status_type = 'info';
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: { ideal: 'environment' },
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                }
+            });
+            this._cameraStream = stream;
+
+            // Wait for OWL to render the <video> element
+            await new Promise(r => setTimeout(r, 150));
+            const video = this.cameraVideo.el;
+            if (!video) { this._stopCameraStream(); return; }
+
+            // iOS requires muted + playsinline for autoplay
+            video.muted = true;
+            video.srcObject = stream;
+            try { await video.play(); } catch(e) { /* autoplay attribute handles it */ }
+
+            this.state.camera_status = '';
+
+            if (window.BarcodeDetector) {
+                // Native API: Chrome/Android
+                const supported = await window.BarcodeDetector.getSupportedFormats();
+                this._barcodeDetector = new window.BarcodeDetector({ formats: supported });
+                this._scanLoop();
+            } else {
+                // Fallback: ZXing (iOS Safari, Firefox)
+                this.state.camera_status = 'Đang tải thư viện quét...';
+                const loaded = await this._ensureZXing();
+                if (!loaded) {
+                    this.state.camera_status = 'Không thể tải thư viện quét. Kiểm tra kết nối mạng.';
+                    this.state.camera_status_type = 'error';
+                    return;
+                }
+                this.state.camera_status = '';
+                this._startZXingScan(stream, video);
+            }
+        } catch (err) {
+            this.state.camera_status = 'Không thể mở camera: ' + (err.message || err);
+            this.state.camera_status_type = 'error';
+        }
+    }
+
+    async _ensureZXing() {
+        if (window.ZXing) return true;
+        return new Promise((resolve) => {
+            const s = document.createElement('script');
+            s.src = '/hlv_barcode_realtime_inventory/static/lib/zxing/zxing.min.js';
+            s.onload = () => resolve(true);
+            s.onerror = () => resolve(false);
+            document.head.appendChild(s);
+        });
+    }
+
+    _startZXingScan(stream, video) {
+        if (!this.state.camera_active || !window.ZXing) return;
+        const reader = new window.ZXing.BrowserMultiFormatReader();
+        this._zxingReader = reader;
+        // decodeFromStream does continuous scanning from a live MediaStream
+        reader.decodeFromStream(stream, video, (result, err) => {
+            if (!this.state.camera_active) return;
+            if (result) {
+                const code = result.getText();
+                const now = Date.now();
+                if (code !== this._lastScannedCode || now - this._lastScanTime > 1500) {
+                    this._lastScannedCode = code;
+                    this._lastScanTime = now;
+                    this._processCameraBarcode(code);
+                }
+            }
+        });
+    }
+
+    _scanLoop() {
+        if (!this.state.camera_active) return;
+        const video = this.cameraVideo.el;
+        if (!video || video.readyState < 2) {
+            this._cameraAnimFrame = requestAnimationFrame(() => this._scanLoop());
+            return;
+        }
+
+        this._barcodeDetector.detect(video).then(barcodes => {
+            if (!this.state.camera_active) return;
+            if (barcodes.length > 0) {
+                const code = barcodes[0].rawValue;
+                const now = Date.now();
+                // Debounce: skip same code within 1.5 s to avoid double-fire
+                if (code !== this._lastScannedCode || now - this._lastScanTime > 1500) {
+                    this._lastScannedCode = code;
+                    this._lastScanTime = now;
+                    this._processCameraBarcode(code);
+                }
+            }
+            // Always continue scanning (continuous mode)
+            this._cameraAnimFrame = requestAnimationFrame(() => this._scanLoop());
+        }).catch(() => {
+            if (this.state.camera_active) {
+                this._cameraAnimFrame = requestAnimationFrame(() => this._scanLoop());
+            }
+        });
+    }
+
+    _processCameraBarcode(code) {
+        if (this.state.camera_mode === 'location') {
+            // Close camera first, then navigate to location
+            this.state.camera_active = false;
+            this.state.camera_status = '';
+            this._stopCameraStream();
+            this.state.location_barcode = code;
+            this.selectLocationByBarcode();
+        } else {
+            // Product mode: keep camera open, show brief flash
+            this.state.camera_status = '\u2713 ' + code;
+            this.state.camera_status_type = 'info';
+            setTimeout(() => {
+                if (this.state.camera_active) this.state.camera_status = '';
+            }, 900);
+            this.state.product_barcode = code;
+            this.scanProduct();
+        }
+    }
+
+    closeCamera() {
+        this.state.camera_active = false;
+        this.state.camera_status = '';
+        this._stopCameraStream();
+        this._focusOnBarcodeInput();
+    }
+
+    _stopCameraStream() {
+        if (this._cameraAnimFrame) {
+            cancelAnimationFrame(this._cameraAnimFrame);
+            this._cameraAnimFrame = null;
+        }
+        if (this._zxingReader) {
+            try { this._zxingReader.reset(); } catch(e) {}
+            this._zxingReader = null;
+        }
+        if (this._cameraStream) {
+            this._cameraStream.getTracks().forEach(t => t.stop());
+            this._cameraStream = null;
+        }
+        this._barcodeDetector = null;
+    }
+
     _showError(message) {
         this.state.error_message = message;
         this.notification.add(message, { type: 'danger' });
         setTimeout(() => { this.state.error_message = ''; }, 5000);
+    }
+
+    // ========== Audio Feedback ==========
+    _beepSuccess() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1047, ctx.currentTime);   // C6
+            gain.gain.setValueAtTime(0.35, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.18);
+            osc.onended = () => ctx.close();
+        } catch(e) {}
+    }
+
+    _beepError() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(220, ctx.currentTime);    // A3
+            gain.gain.setValueAtTime(0.2, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.25);
+            osc.onended = () => ctx.close();
+        } catch(e) {}
     }
 
     _showNotification(message, type = 'info') {

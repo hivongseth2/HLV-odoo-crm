@@ -34,6 +34,13 @@ $r-md:   12px;
 $r-lg:   18px;
 $r-full: 9999px;
 
+// --- Flash animation for scanned product row ---
+@keyframes hlvRowFlash {
+    0%   { background: rgba($green, .22); }
+    70%  { background: rgba($green, .07); }
+    100% { background: $white; }
+}
+
 // --- Root ---
 .hlv-scanner {
     position: fixed;
@@ -241,6 +248,44 @@ $r-full: 9999px;
         gap: 8px;
     }
 
+    // Hidden input that captures hardware barcode scanner without showing on screen
+    .hlv-location-hidden-input {
+        position: absolute;
+        opacity: 0;
+        width: 1px;
+        height: 1px;
+        pointer-events: none;
+        border: none;
+        outline: none;
+    }
+
+    // Location scan UI (camera-first, no visible input)
+    .hlv-location-scan {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+        padding: 8px 0;
+        position: relative;
+
+        &--inline {
+            padding: 16px;
+        }
+
+        &__icon {
+            font-size: 40px;
+            color: $blue;
+            opacity: .7;
+        }
+
+        &__hint {
+            margin: 0;
+            font-size: 14px;
+            color: $gray-500;
+            text-align: center;
+        }
+    }
+
     .hlv-text-muted { color: $gray-400; }
 
     // ===== INPUTS =====
@@ -287,6 +332,12 @@ $r-full: 9999px;
             transition: background .2s;
 
             &:hover { background: darken($green, 6%); }
+
+            &--camera {
+                background: $blue;
+                padding: 0 16px;
+                &:hover { background: darken($blue, 6%); }
+            }
         }
     }
 
@@ -316,6 +367,7 @@ $r-full: 9999px;
         border: none;
         border-radius: $r-md;
         font-size: 15px;
+        display: flex;
         font-weight: 600;
         cursor: pointer;
         transition: all .2s;
@@ -513,8 +565,8 @@ $r-full: 9999px;
     .hlv-product-list {
         flex: 1;
         overflow-y: auto;
-        padding: 8px 0 4px;
-        background: $gray-100;
+        padding: 0;
+        background: $white;
 
         // Smooth scroll
         scroll-behavior: smooth;
@@ -545,33 +597,32 @@ $r-full: 9999px;
     // ===== PRODUCT ROW =====
     .hlv-product-row {
         display: flex;
-        align-items: center;
+        flex-direction: column;
         gap: 10px;
-        padding: 10px 12px 10px 14px;
+        padding: 14px 12px 14px 16px;
         background: $white;
-        margin: 3px 8px;
-        border-radius: $r-md;
-        box-shadow: $shadow-sm;
-        border-left: 4px solid $gray-200;
-        transition: box-shadow .15s;
+        border-left: 3px solid $gray-200;
+        border-bottom: 1px solid $gray-200;
+        transition: background .1s;
 
-        &:hover { box-shadow: $shadow-md; }
+        &:last-child { border-bottom: none; }
+        &:active { background: $gray-50; }
 
         &--pending  { border-left-color: $gray-300; }
         &--matched  { border-left-color: $green; }
         &--surplus  { border-left-color: $amber; }
         &--deficit  { border-left-color: $red; }
+        &--flash    { animation: hlvRowFlash 1.2s ease-out forwards; }
 
-        &__status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            flex-shrink: 0;
-            background: $gray-300;
+        &__main {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
 
-            .hlv-product-row--matched  & { background: $green; }
-            .hlv-product-row--surplus  & { background: $amber; }
-            .hlv-product-row--deficit  & { background: $red; }
+        &__bottom {
+            display: flex;
+            align-items: center;
         }
 
         &__info {
@@ -580,24 +631,26 @@ $r-full: 9999px;
         }
 
         &__name {
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 600;
             color: $gray-800;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            line-height: 1.3;
         }
 
         &__sku {
-            font-size: 11px;
+            font-size: 12px;
             color: $gray-400;
-            margin-top: 2px;
+            margin-top: 3px;
         }
 
         &__actions {
             display: flex;
             gap: 4px;
             flex-shrink: 0;
+            margin-top: -2px;
         }
     }
 
@@ -605,43 +658,42 @@ $r-full: 9999px;
     .hlv-qty-group {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 0;
         flex-shrink: 0;
 
         &__item {
             display: flex;
-            flex-direction: column;
             align-items: center;
+            gap: 6px;
+            padding: 0 14px 0 0;
         }
 
         &__label {
-            font-size: 9px;
-            text-transform: uppercase;
-            letter-spacing: .06em;
+            font-size: 12px;
             color: $gray-400;
-            font-weight: 600;
-            margin-bottom: 3px;
+            font-weight: 500;
         }
 
         &__value {
-            font-size: 14px;
+            font-size: 15px;
             font-weight: 700;
             color: $gray-800;
         }
 
         &__divider {
             width: 1px;
-            height: 28px;
+            height: 20px;
             background: $gray-200;
+            margin-right: 14px;
         }
     }
 
     .hlv-qty-input {
-        width: 52px;
+        width: 58px;
         border: 1.5px solid $gray-200;
         border-radius: $r-sm;
-        padding: 3px 4px;
-        font-size: 14px;
+        padding: 4px 6px;
+        font-size: 15px;
         font-weight: 700;
         text-align: center;
         outline: none;
@@ -945,6 +997,7 @@ $r-full: 9999px;
         background: $gray-100;
         color: $gray-600;
         flex: 1;
+        border:1px solid #cccc;
         &:hover { background: $gray-200; }
     }
 
@@ -1503,6 +1556,125 @@ $r-full: 9999px;
     .hlv-text-green { color: $green !important; font-weight: 600; }
     .hlv-text-red   { color: $red !important; font-weight: 600; }
 
+    // ===== CAMERA OVERLAY =====
+    .hlv-camera-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, .85);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+    }
+
+    .hlv-camera-modal {
+        width: 100%;
+        max-width: 420px;
+        background: #111;
+        border-radius: $r-md;
+        overflow: hidden;
+    }
+
+    .hlv-camera-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        background: rgba($white, .08);
+        color: $white;
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    .hlv-camera-close {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: none;
+        background: rgba($white, .15);
+        color: $white;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        &:hover { background: rgba($white, .25); }
+    }
+
+    .hlv-camera-body {
+        position: relative;
+        aspect-ratio: 4/3;
+        background: #000;
+        overflow: hidden;
+    }
+
+    .hlv-camera-video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .hlv-camera-frame {
+        position: absolute;
+        inset: 15%;
+        pointer-events: none;
+
+        &__corner {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border-color: $green;
+            border-style: solid;
+            border-width: 0;
+
+            &--tl { top: 0; left: 0; border-top-width: 3px; border-left-width: 3px; border-radius: 3px 0 0 0; }
+            &--tr { top: 0; right: 0; border-top-width: 3px; border-right-width: 3px; border-radius: 0 3px 0 0; }
+            &--bl { bottom: 0; left: 0; border-bottom-width: 3px; border-left-width: 3px; border-radius: 0 0 0 3px; }
+            &--br { bottom: 0; right: 0; border-bottom-width: 3px; border-right-width: 3px; border-radius: 0 0 3px 0; }
+        }
+    }
+
+    .hlv-camera-scanner-line {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, transparent 0%, $green 50%, transparent 100%);
+        animation: hlv-scan-move 2s linear infinite;
+        top: 0;
+    }
+
+    @keyframes hlv-scan-move {
+        0%   { top: 0%; }
+        100% { top: 100%; }
+    }
+
+    .hlv-camera-status {
+        position: absolute;
+        bottom: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, .7);
+        color: $white;
+        font-size: 12px;
+        padding: 6px 14px;
+        border-radius: 20px;
+        white-space: nowrap;
+
+        &--error { background: rgba($red, .85); }
+        &--info  { background: rgba(0, 0, 0, .7); }
+    }
+
+    .hlv-camera-footer {
+        padding: 10px 16px;
+        text-align: center;
+        color: rgba($white, .5);
+        font-size: 11px;
+        background: rgba($white, .04);
+    }
+
     .hlv-approval-card {
         background: $white;
         border-radius: $r-md;
@@ -1627,7 +1799,7 @@ $r-full: 9999px;
     // ===== RESPONSIVE =====
     // ===== SMALL BUTTON =====
     .hlv-btn--sm {
-        padding: 6px 14px;
+        padding: 8px 48px;
         font-size: 12px;
         border-radius: $r-sm;
     }

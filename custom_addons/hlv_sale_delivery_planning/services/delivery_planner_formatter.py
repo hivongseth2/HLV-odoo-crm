@@ -58,21 +58,44 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             p_type = line.product_id.type if line.product_id else 'service'
             is_kit = line.product_id.product_tmpl_id.id in kit_tmpl_ids
 
-            product_wh_key = False
-            if line.product_id and so.warehouse_id:
-                product_wh_key = (line.product_id.id, so.warehouse_id.id)
-                if product_wh_key not in remaining_free_by_product:
-                    remaining_free_by_product[product_wh_key] = product_availabilities.get(product_wh_key, 0.0)
+            if is_kit:
+                # Phantom BOM kit: tính số kit hoàn chỉnh có thể lắp ráp từ linh kiện
+                bom = next(
+                    (b for b in kits if b.product_tmpl_id.id == line.product_id.product_tmpl_id.id),
+                    None
+                )
+                if bom and so.warehouse_id:
+                    kit_qty = float('inf')
+                    for comp_line in bom.bom_line_ids:
+                        comp_key = (comp_line.product_id.id, so.warehouse_id.id)
+                        if comp_key not in product_availabilities:
+                            # Component không phải là line trực tiếp → fetch riêng và cache
+                            product_availabilities[comp_key] = comp_line.product_id.with_context(
+                                warehouse=so.warehouse_id.id
+                            ).free_qty
+                        comp_free = product_availabilities[comp_key]
+                        qty_per_kit = comp_line.product_qty / (bom.product_qty or 1.0)
+                        if qty_per_kit > 0:
+                            kit_qty = min(kit_qty, comp_free / qty_per_kit)
+                    qty_avail = kit_qty if kit_qty != float('inf') else 0.0
+                else:
+                    qty_avail = 0.0
+            else:
+                product_wh_key = False
+                if line.product_id and so.warehouse_id:
+                    product_wh_key = (line.product_id.id, so.warehouse_id.id)
+                    if product_wh_key not in remaining_free_by_product:
+                        remaining_free_by_product[product_wh_key] = product_availabilities.get(product_wh_key, 0.0)
 
-            base_free_remaining = remaining_free_by_product.get(product_wh_key, 0.0) if product_wh_key else 0.0
-            reserved_here = sum(
-                line.move_ids.filtered(lambda m: m.state not in ('cancel', 'done')).mapped('quantity')
-            )
-            pending_qty_line = max(line.product_uom_qty - line.qty_delivered, 0.0)
-            allocated_free = min(base_free_remaining, pending_qty_line) if pending_qty_line > 0 else 0.0
-            qty_avail = allocated_free + reserved_here
-            if product_wh_key and allocated_free > 0:
-                remaining_free_by_product[product_wh_key] = max(base_free_remaining - allocated_free, 0.0)
+                base_free_remaining = remaining_free_by_product.get(product_wh_key, 0.0) if product_wh_key else 0.0
+                reserved_here = sum(
+                    line.move_ids.filtered(lambda m: m.state not in ('cancel', 'done')).mapped('quantity')
+                )
+                pending_qty_line = max(line.product_uom_qty - line.qty_delivered, 0.0)
+                allocated_free = min(base_free_remaining, pending_qty_line) if pending_qty_line > 0 else 0.0
+                qty_avail = allocated_free + reserved_here
+                if product_wh_key and allocated_free > 0:
+                    remaining_free_by_product[product_wh_key] = max(base_free_remaining - allocated_free, 0.0)
             qty_packed = qty_packed_map.get(p_name, 0.0)
 
             so_lines_data.append({
