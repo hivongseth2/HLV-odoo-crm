@@ -1,6 +1,6 @@
 /** @odoo-module **/
 import { registry } from "@web/core/registry";
-import { Component, useState, onWillStart, useRef } from "@odoo/owl";
+import { Component, useState, onWillStart, onWillUnmount, useRef } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 
 export class WarehouseMonitorDashboard extends Component {
@@ -43,12 +43,13 @@ export class WarehouseMonitorDashboard extends Component {
             // Auto-refresh every 30 seconds
             this._refreshInterval = setInterval(() => this.silentRefresh(), 30000);
         });
-    }
 
-    willUnmount() {
-        if (this._refreshInterval) {
-            clearInterval(this._refreshInterval);
-        }
+        onWillUnmount(() => {
+            if (this._refreshInterval) {
+                clearInterval(this._refreshInterval);
+                this._refreshInterval = null;
+            }
+        });
     }
 
     // ── Data Fetching ───────────────────────────────────────

@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Queue Screen — Hospital-style Order Display           -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <t t-name="hlv_warehouse_monitor.QueueScreen">
+        <div class="o_action hlv_queue_screen">
+
+            <!-- Loading -->
+            <t t-if="state.isLoading">
+                <div class="queue-loading">
+                    <div class="spinner"/>
+                    <div>Đang tải hàng đợi...</div>
+                </div>
+            </t>
+
+            <t t-else="">
+                <!-- Top bar -->
+                <div class="queue-topbar">
+                    <div class="queue-brand">
+                        <div class="brand-icon">🏭</div>
+                        <div class="brand-text">
+                            <h1>QUEUE MONITOR</h1>
+                            <div class="brand-sub">Màn hình hàng đợi kho</div>
+                        </div>
+                    </div>
+
+                    <div class="queue-topbar-center">
+                        <div class="queue-count-badge badge-pick">
+                            <span>🏗️ PICK</span>
+                            <span class="count-num" t-esc="state.pickQueue.length"/>
+                            <span>đơn đang chờ</span>
+                        </div>
+                        <div class="queue-count-badge badge-pack">
+                            <span>📦 PACK</span>
+                            <span class="count-num" t-esc="state.packQueue.length"/>
+                            <span>đơn đang chờ</span>
+                        </div>
+                    </div>
+
+                    <div class="queue-topbar-right">
+                        <select t-on-change="(ev) => this.onWarehouseChange(ev)">
+                            <option value="all">🏭 Tất cả kho</option>
+                            <t t-foreach="state.warehouses" t-as="wh" t-key="wh.id">
+                                <option t-att-value="wh.id"
+                                        t-att-selected="state.warehouseId == wh.id"
+                                        t-esc="wh.name"/>
+                            </t>
+                        </select>
+                        <div class="refresh-countdown">
+                            <span class="countdown-num" t-esc="state.countdownSec"/>
+                            <span>giây</span>
+                        </div>
+                        <div class="queue-clock" t-esc="state.clockTime"/>
+                        <button class="btn-fullscreen" t-on-click="() => this.toggleFullscreen()"
+                                title="Toàn màn hình">⛶</button>
+                    </div>
+                </div>
+
+                <!-- Main queue grid -->
+                <div class="queue-main">
+                    <!-- PICK Column -->
+                    <div class="queue-column">
+                        <div class="column-header header-pick">
+                            <div class="col-title pick-title">
+                                <div class="col-icon">🏗️</div>
+                                <h2>Lấy hàng (PICK)</h2>
+                            </div>
+                            <div class="col-count" t-esc="state.pickQueue.length"/>
+                        </div>
+                        <div class="column-body">
+                            <t t-if="state.pickQueue.length === 0">
+                                <div class="queue-empty">
+                                    <div class="empty-icon">✅</div>
+                                    <div class="empty-label">Hàng đợi trống</div>
+                                    <div class="empty-sub">Không có đơn lấy hàng đang chờ</div>
+                                </div>
+                            </t>
+                            <t t-foreach="state.pickQueue" t-as="item" t-key="item.id">
+                                <t t-call="hlv_warehouse_monitor.QueueCard">
+                                    <t t-set="rank" t-value="item_index + 1"/>
+                                    <t t-set="card" t-value="item"/>
+                                </t>
+                            </t>
+                        </div>
+                    </div>
+
+                    <!-- PACK Column -->
+                    <div class="queue-column">
+                        <div class="column-header header-pack">
+                            <div class="col-title pack-title">
+                                <div class="col-icon">📦</div>
+                                <h2>Đóng gói (PACK)</h2>
+                            </div>
+                            <div class="col-count" t-esc="state.packQueue.length"/>
+                        </div>
+                        <div class="column-body">
+                            <t t-if="state.packQueue.length === 0">
+                                <div class="queue-empty">
+                                    <div class="empty-icon">✅</div>
+                                    <div class="empty-label">Hàng đợi trống</div>
+                                    <div class="empty-sub">Không có đơn đóng gói đang chờ</div>
+                                </div>
+                            </t>
+                            <t t-foreach="state.packQueue" t-as="item" t-key="item.id">
+                                <t t-call="hlv_warehouse_monitor.QueueCard">
+                                    <t t-set="rank" t-value="item_index + 1"/>
+                                    <t t-set="card" t-value="item"/>
+                                </t>
+                            </t>
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </div>
+    </t>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Queue Card Sub-template                               -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <t t-name="hlv_warehouse_monitor.QueueCard">
+        <div t-att-class="'queue-card priority-' + (card.priority === '1' ? 'urgent' : 'normal')
+                          + ' state-' + card.state"
+             t-on-click="() => this.openPicking(card.id)">
+            <div class="card-top">
+                <div class="card-rank" t-esc="'#' + rank"/>
+                <div class="card-badges">
+                    <span t-att-class="'badge-priority ' + (card.priority === '1' ? 'bp-urgent' : 'bp-normal')">
+                        <t t-if="card.priority === '1'">⚡ KHẨN CẤP</t>
+                        <t t-else="">📋 BÌNH THƯỜNG</t>
+                    </span>
+                    <span t-att-class="'badge-state ' + (card.state === 'assigned' ? 'bs-assigned' : 'bs-confirmed')">
+                        <t t-if="card.state === 'assigned'">✔ SẴN SÀNG</t>
+                        <t t-else="">⏳ CHỜ HÀNG</t>
+                    </span>
+                </div>
+            </div>
+
+            <div class="card-name" t-esc="card.name"/>
+
+            <div class="card-origin" t-if="card.origin or card.sale_name">
+                <span class="origin-label">Đơn:</span>
+                <t t-esc="card.sale_name or card.origin"/>
+            </div>
+
+            <div class="card-partner" t-if="card.partner_name" t-esc="card.partner_name"/>
+
+            <div class="card-products" t-if="card.products.length">
+                <t t-foreach="card.products" t-as="prod" t-key="prod_index">
+                    <div class="product-line" t-esc="prod"/>
+                </t>
+            </div>
+
+            <div class="card-meta">
+                <span class="meta-warehouse" t-esc="card.warehouse_name"/>
+                <span class="meta-date" t-esc="this.formatQueueDate(card.scheduled_date)"/>
+            </div>
+        </div>
+    </t>
+
+</templates>

@@ -37,12 +37,17 @@
     ],
     "assets": {
         "web.assets_backend": [
+            # Monitor Dashboard
             "hlv_warehouse_monitor/static/src/components/monitor_dashboard/monitor_dashboard.scss",
             "hlv_warehouse_monitor/static/src/components/monitor_dashboard/monitor_dashboard_kpi.xml",
             "hlv_warehouse_monitor/static/src/components/monitor_dashboard/monitor_dashboard_timeline.xml",
             "hlv_warehouse_monitor/static/src/components/monitor_dashboard/monitor_dashboard_suggestions.xml",
             "hlv_warehouse_monitor/static/src/components/monitor_dashboard/monitor_dashboard.xml",
             "hlv_warehouse_monitor/static/src/components/monitor_dashboard/monitor_dashboard.js",
+            # Queue Screen (PICK/PACK hospital display)
+            "hlv_warehouse_monitor/static/src/components/queue_screen/queue_screen.scss",
+            "hlv_warehouse_monitor/static/src/components/queue_screen/queue_screen.xml",
+            "hlv_warehouse_monitor/static/src/components/queue_screen/queue_screen.js",
         ],
     },
     "installable": True,

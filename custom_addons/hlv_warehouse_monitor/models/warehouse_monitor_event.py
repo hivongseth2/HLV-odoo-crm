@@ -196,6 +196,8 @@ class WarehouseMonitorEvent(models.Model):
     def get_monitor_dashboard_data(self, warehouse_id=None, date_from=None, date_to=None,
                                    event_type=None, limit=50, offset=0):
         """Return dashboard data for OWL frontend."""
+        # Use sudo for read-only dashboard access — any logged-in user can view
+        ME = self.sudo()
         domain = []
         if warehouse_id and warehouse_id != "all":
             domain.append(("warehouse_id", "=", int(warehouse_id)))
@@ -206,22 +208,22 @@ class WarehouseMonitorEvent(models.Model):
         if event_type and event_type != "all":
             domain.append(("event_type", "=", event_type))
 
-        events = self.search(domain, limit=limit, offset=offset, order="timestamp desc")
-        total_count = self.search_count(domain)
+        events = ME.search(domain, limit=limit, offset=offset, order="timestamp desc")
+        total_count = ME.search_count(domain)
 
         # KPI counts (today)
         today_start = fields.Datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         today_domain = domain + [("timestamp", ">=", today_start)]
 
         kpi = {
-            "total_events_today": self.search_count(today_domain),
-            "in_today": self.search_count(today_domain + [("event_type", "=", "in")]),
-            "out_today": self.search_count(today_domain + [("event_type", "=", "out")]),
-            "pick_today": self.search_count(today_domain + [("event_type", "=", "pick")]),
-            "pack_today": self.search_count(today_domain + [("event_type", "=", "pack")]),
-            "sale_today": self.search_count(today_domain + [("event_type", "=", "sale")]),
-            "purchase_today": self.search_count(today_domain + [("event_type", "=", "purchase")]),
-            "suggestions_pending": self.search_count(
+            "total_events_today": ME.search_count(today_domain),
+            "in_today": ME.search_count(today_domain + [("event_type", "=", "in")]),
+            "out_today": ME.search_count(today_domain + [("event_type", "=", "out")]),
+            "pick_today": ME.search_count(today_domain + [("event_type", "=", "pick")]),
+            "pack_today": ME.search_count(today_domain + [("event_type", "=", "pack")]),
+            "sale_today": ME.search_count(today_domain + [("event_type", "=", "sale")]),
+            "purchase_today": ME.search_count(today_domain + [("event_type", "=", "purchase")]),
+            "suggestions_pending": ME.search_count(
                 domain + [("is_suggestion", "=", True), ("is_read", "=", False)]
             ),
         }
@@ -256,7 +258,7 @@ class WarehouseMonitorEvent(models.Model):
             })
 
         # Pending suggestions
-        suggestions = self.search(
+        suggestions = ME.search(
             domain + [("is_suggestion", "=", True), ("is_read", "=", False)],
             limit=20,
             order="priority desc, timestamp desc",
@@ -276,7 +278,7 @@ class WarehouseMonitorEvent(models.Model):
             })
 
         # Warehouses list for filter
-        warehouses = self.env["stock.warehouse"].search([])
+        warehouses = self.env["stock.warehouse"].sudo().search([])
         warehouse_list = [{"id": w.id, "name": w.name} for w in warehouses]
 
         return {
@@ -290,14 +292,101 @@ class WarehouseMonitorEvent(models.Model):
     @api.model
     def mark_events_read(self, event_ids):
         """Mark multiple events as read."""
-        events = self.browse(event_ids)
-        events.write({"is_read": True})
+        self.browse(event_ids).sudo().write({"is_read": True})
         return True
 
     @api.model
     def dismiss_suggestion(self, event_id):
         """Dismiss a suggestion by marking it read."""
-        event = self.browse(event_id)
+        event = self.sudo().browse(event_id)
         if event.exists():
             event.write({"is_read": True})
         return True
+
+    # ── Queue Screen RPC ─────────────────────────────────────────
+    @api.model
+    def get_queue_screen_data(self, warehouse_id=None):
+        """Return PICK and PACK active queues for the hospital-style queue screen."""
+        PickingType = self.env["stock.picking.type"].sudo()
+        StockPicking = self.env["stock.picking"].sudo()
+
+        # Resolve warehouse filter
+        wh_filter = []
+        if warehouse_id and warehouse_id != "all":
+            wh_filter = [("warehouse_id", "=", int(warehouse_id))]
+
+        # Find PICK picking types
+        pick_types = PickingType.search(
+            [("sequence_code", "ilike", "PICK"), ("active", "=", True)] + wh_filter
+        )
+        # Find PACK picking types
+        pack_types = PickingType.search(
+            [("sequence_code", "ilike", "PACK"), ("active", "=", True)] + wh_filter
+        )
+
+        def _format_pickings(pickings):
+            result = []
+            for p in pickings:
+                so = None
+                if hasattr(p, "sale_id") and p.sale_id:
+                    so = p.sale_id
+                if not so and p.group_id and hasattr(p.group_id, "sale_id"):
+                    so = p.group_id.sale_id
+
+                product_names = []
+                for move in p.move_ids[:5]:
+                    product_names.append(
+                        "%s x%g" % (move.product_id.display_name, move.product_uom_qty)
+                    )
+                if len(p.move_ids) > 5:
+                    product_names.append("... +%d" % (len(p.move_ids) - 5))
+
+                result.append({
+                    "id": p.id,
+                    "name": p.name,
+                    "origin": p.origin or "",
+                    "partner_name": p.partner_id.name if p.partner_id else "",
+                    "state": p.state,
+                    "priority": p.priority or "0",
+                    "scheduled_date": fields.Datetime.to_string(p.scheduled_date) if p.scheduled_date else "",
+                    "move_count": len(p.move_ids),
+                    "warehouse_name": (
+                        p.picking_type_id.warehouse_id.name
+                        if p.picking_type_id and p.picking_type_id.warehouse_id
+                        else ""
+                    ),
+                    "sale_name": so.name if so else "",
+                    "picking_type_name": p.picking_type_id.name if p.picking_type_id else "",
+                    "products": product_names,
+                })
+            return result
+
+        # Active PICK queue: confirmed + assigned, ordered urgent first then oldest
+        pick_domain = [("state", "in", ["confirmed", "assigned"])]
+        if pick_types:
+            pick_domain.append(("picking_type_id", "in", pick_types.ids))
+        else:
+            # Fallback: outgoing internal with PICK in name
+            pick_domain.append(("picking_type_id.sequence_code", "ilike", "PICK"))
+        pick_pickings = StockPicking.search(
+            pick_domain, order="priority desc, scheduled_date asc", limit=30
+        )
+
+        # Active PACK queue
+        pack_domain = [("state", "in", ["confirmed", "assigned"])]
+        if pack_types:
+            pack_domain.append(("picking_type_id", "in", pack_types.ids))
+        else:
+            pack_domain.append(("picking_type_id.sequence_code", "ilike", "PACK"))
+        pack_pickings = StockPicking.search(
+            pack_domain, order="priority desc, scheduled_date asc", limit=30
+        )
+
+        warehouses = self.env["stock.warehouse"].sudo().search([])
+        return {
+            "pick_queue": _format_pickings(pick_pickings),
+            "pack_queue": _format_pickings(pack_pickings),
+            "warehouses": [{"id": w.id, "name": w.name} for w in warehouses],
+            "pick_count": len(pick_pickings),
+            "pack_count": len(pack_pickings),
+        }

@@ -21,6 +21,16 @@
               sequence="1"/>
 
     <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Queue Screen Menu                                     -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <menuitem id="menu_warehouse_monitor_queue_screen"
+              name="Màn hình hàng đợi PICK/PACK"
+              action="action_warehouse_monitor_queue_screen"
+              parent="menu_warehouse_monitor_root"
+              sequence="2"/>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
     <!--  Events Menu                                           -->
     <!-- ═══════════════════════════════════════════════════════ -->
 
