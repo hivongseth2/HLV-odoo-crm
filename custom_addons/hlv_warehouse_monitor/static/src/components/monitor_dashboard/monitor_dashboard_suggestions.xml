@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Suggestions Panel                                     -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <t t-name="hlv_warehouse_monitor.Suggestions">
+        <div class="suggestions-panel" t-ref="suggestionsPanel">
+            <div class="suggestions-header">
+                <h3>
+                    💡 Đề xuất hành động
+                    <span class="badge-count" t-if="state.suggestions.length > 0"
+                          t-esc="state.suggestions.length"/>
+                </h3>
+            </div>
+            <div class="suggestion-list">
+                <t t-if="state.suggestions.length === 0">
+                    <div class="no-suggestions">
+                        <div class="no-suggestions-icon">✅</div>
+                        <div>Không có đề xuất mới</div>
+                    </div>
+                </t>
+                <t t-foreach="state.suggestions" t-as="sug" t-key="sug.id">
+                    <div class="suggestion-item">
+                        <div t-att-class="'suggestion-priority priority-' + sug.priority"
+                             t-esc="this.getPriorityLabel(sug.priority)"/>
+                        <div class="suggestion-text" t-esc="sug.suggestion"/>
+                        <div class="suggestion-meta">
+                            <span>
+                                <t t-if="sug.sale_name">🛒 <t t-esc="sug.sale_name"/> </t>
+                                <t t-if="sug.purchase_name">🛍️ <t t-esc="sug.purchase_name"/> </t>
+                                <t t-if="sug.picking_name">📋 <t t-esc="sug.picking_name"/> </t>
+                                · <t t-esc="this.formatTime(sug.timestamp)"/>
+                            </span>
+                            <button class="suggestion-dismiss"
+                                    t-on-click.stop="() => this.dismissSuggestion(sug.id)">
+                                Bỏ qua
+                            </button>
+                        </div>
+                    </div>
+                </t>
+            </div>
+
+            <!-- Phase 2 AI placeholder -->
+            <div class="ai-panel-placeholder" style="margin: 16px; border-radius: 8px;">
+                <div class="ai-icon">🤖</div>
+                <h4>AI Assistant (Phase 2)</h4>
+                <p>Tích hợp AI phân tích sự kiện và đưa ra quyết định tự động.</p>
+            </div>
+        </div>
+    </t>
+
+</templates>

@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_warehouse_monitor_event_user,warehouse.monitor.event.user,model_warehouse_monitor_event,group_warehouse_monitor_user,1,1,1,0
+access_warehouse_monitor_event_manager,warehouse.monitor.event.manager,model_warehouse_monitor_event,group_warehouse_monitor_manager,1,1,1,1
+access_warehouse_monitor_config_manager,warehouse.monitor.config.manager,model_warehouse_monitor_config,group_warehouse_monitor_manager,1,1,1,1
+access_warehouse_monitor_config_user,warehouse.monitor.config.user,model_warehouse_monitor_config,group_warehouse_monitor_user,1,0,0,0

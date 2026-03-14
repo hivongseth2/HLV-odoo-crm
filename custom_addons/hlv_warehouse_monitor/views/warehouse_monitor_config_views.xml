@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Config - Tree View                                    -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <record id="view_warehouse_monitor_config_tree" model="ir.ui.view">
+        <field name="name">warehouse.monitor.config.tree</field>
+        <field name="model">warehouse.monitor.config</field>
+        <field name="arch" type="xml">
+            <list string="Cấu hình giám sát kho">
+                <field name="warehouse_id"/>
+                <field name="active" widget="boolean_toggle"/>
+                <field name="auto_suggest_pick" widget="boolean_toggle"/>
+                <field name="auto_suggest_pack" widget="boolean_toggle"/>
+                <field name="auto_suggest_out" widget="boolean_toggle"/>
+                <field name="track_sales" widget="boolean_toggle"/>
+                <field name="track_purchases" widget="boolean_toggle"/>
+                <field name="track_pickings" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Config - Form View                                    -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <record id="view_warehouse_monitor_config_form" model="ir.ui.view">
+        <field name="name">warehouse.monitor.config.form</field>
+        <field name="model">warehouse.monitor.config</field>
+        <field name="arch" type="xml">
+            <form string="Cấu hình giám sát kho">
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="warehouse_id"/></h1>
+                    </div>
+                    <group>
+                        <group string="Trạng thái">
+                            <field name="active" widget="boolean_toggle"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Đề xuất tự động">
+                            <field name="auto_suggest_pick"/>
+                            <field name="auto_suggest_pack"/>
+                            <field name="auto_suggest_out"/>
+                        </group>
+                        <group string="Theo dõi">
+                            <field name="track_sales"/>
+                            <field name="track_purchases"/>
+                            <field name="track_pickings"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Config - Action                                       -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <record id="action_warehouse_monitor_config" model="ir.actions.act_window">
+        <field name="name">Cấu hình giám sát</field>
+        <field name="res_model">warehouse.monitor.config</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+</odoo>

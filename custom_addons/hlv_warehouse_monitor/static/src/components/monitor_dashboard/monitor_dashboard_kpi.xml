@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  KPI Cards                                             -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <t t-name="hlv_warehouse_monitor.KPICards">
+        <div class="kpi-grid">
+            <div class="kpi-card kpi-total">
+                <div class="kpi-icon">📊</div>
+                <div class="kpi-value" t-esc="state.kpi.total_events_today || 0"/>
+                <div class="kpi-label">Tổng sự kiện hôm nay</div>
+            </div>
+            <div class="kpi-card kpi-in" t-on-click="() => this.filterByType('in')">
+                <div class="kpi-icon">📥</div>
+                <div class="kpi-value" t-esc="state.kpi.in_today || 0"/>
+                <div class="kpi-label">Nhập kho</div>
+            </div>
+            <div class="kpi-card kpi-pick" t-on-click="() => this.filterByType('pick')">
+                <div class="kpi-icon">🏗️</div>
+                <div class="kpi-value" t-esc="state.kpi.pick_today || 0"/>
+                <div class="kpi-label">Lấy hàng</div>
+            </div>
+            <div class="kpi-card kpi-pack" t-on-click="() => this.filterByType('pack')">
+                <div class="kpi-icon">📦</div>
+                <div class="kpi-value" t-esc="state.kpi.pack_today || 0"/>
+                <div class="kpi-label">Đóng gói</div>
+            </div>
+            <div class="kpi-card kpi-out" t-on-click="() => this.filterByType('out')">
+                <div class="kpi-icon">🚚</div>
+                <div class="kpi-value" t-esc="state.kpi.out_today || 0"/>
+                <div class="kpi-label">Xuất kho</div>
+            </div>
+            <div class="kpi-card kpi-sale" t-on-click="() => this.filterByType('sale')">
+                <div class="kpi-icon">🛒</div>
+                <div class="kpi-value" t-esc="state.kpi.sale_today || 0"/>
+                <div class="kpi-label">Đơn bán</div>
+            </div>
+            <div class="kpi-card kpi-purchase" t-on-click="() => this.filterByType('purchase')">
+                <div class="kpi-icon">🛍️</div>
+                <div class="kpi-value" t-esc="state.kpi.purchase_today || 0"/>
+                <div class="kpi-label">Đơn mua</div>
+            </div>
+            <div class="kpi-card kpi-suggestion" t-on-click="() => this.scrollToSuggestions()">
+                <div class="kpi-icon">💡</div>
+                <div class="kpi-value" t-esc="state.kpi.suggestions_pending || 0"/>
+                <div class="kpi-label">Đề xuất chờ xử lý</div>
+            </div>
+        </div>
+    </t>
+
+</templates>

@@ -1,0 +1,598 @@
+/* ═══════════════════════════════════════════════════════════
+   HLV Warehouse Monitor — Dashboard Styles
+   Custom UI — không phụ thuộc giao diện Odoo gốc
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Variables ─────────────────────────────────────────── */
+$monitor-bg: #0f1923;
+$monitor-card-bg: #1a2733;
+$monitor-card-hover: #223344;
+$monitor-border: #2a3a4a;
+$monitor-text: #e0e6ed;
+$monitor-text-muted: #8899aa;
+$monitor-accent: #00d4aa;
+$monitor-accent-2: #4ecdc4;
+$monitor-blue: #3b82f6;
+$monitor-amber: #f59e0b;
+$monitor-red: #ef4444;
+$monitor-green: #10b981;
+$monitor-purple: #8b5cf6;
+$monitor-orange: #f97316;
+$monitor-cyan: #06b6d4;
+$monitor-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+
+.hlv_warehouse_monitor_dashboard {
+    background: $monitor-bg;
+    min-height: 100vh;
+    color: $monitor-text;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 0;
+
+    /* ── Header ─────────────────────────────────────── */
+    .monitor-header {
+        background: linear-gradient(135deg, #1a2744 0%, #0f1923 100%);
+        border-bottom: 1px solid $monitor-border;
+        padding: 16px 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+
+        .monitor-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+
+            .monitor-icon {
+                width: 40px;
+                height: 40px;
+                background: linear-gradient(135deg, $monitor-accent 0%, $monitor-accent-2 100%);
+                border-radius: 10px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 20px;
+            }
+
+            h1 {
+                font-size: 20px;
+                font-weight: 700;
+                margin: 0;
+                color: #fff;
+                letter-spacing: -0.3px;
+            }
+
+            .monitor-subtitle {
+                font-size: 12px;
+                color: $monitor-text-muted;
+                margin-top: 2px;
+            }
+        }
+
+        .monitor-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+
+            select, input {
+                background: $monitor-card-bg;
+                border: 1px solid $monitor-border;
+                color: $monitor-text;
+                padding: 8px 12px;
+                border-radius: 8px;
+                font-size: 13px;
+                outline: none;
+                transition: border-color 0.2s;
+
+                &:focus {
+                    border-color: $monitor-accent;
+                }
+            }
+
+            .btn-refresh {
+                background: $monitor-accent;
+                color: $monitor-bg;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 8px;
+                font-weight: 600;
+                font-size: 13px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                transition: all 0.2s;
+
+                &:hover {
+                    background: $monitor-accent-2;
+                    transform: translateY(-1px);
+                }
+
+                &.is-loading {
+                    opacity: 0.7;
+                    pointer-events: none;
+                }
+            }
+        }
+    }
+
+    /* ── KPI Section ────────────────────────────────── */
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 16px;
+        padding: 20px 24px;
+    }
+
+    .kpi-card {
+        background: $monitor-card-bg;
+        border: 1px solid $monitor-border;
+        border-radius: 12px;
+        padding: 16px;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        cursor: default;
+
+        &::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+        }
+
+        &:hover {
+            background: $monitor-card-hover;
+            transform: translateY(-2px);
+            box-shadow: $monitor-shadow;
+        }
+
+        &.kpi-in::before { background: $monitor-green; }
+        &.kpi-out::before { background: $monitor-blue; }
+        &.kpi-pick::before { background: $monitor-cyan; }
+        &.kpi-pack::before { background: $monitor-purple; }
+        &.kpi-sale::before { background: $monitor-amber; }
+        &.kpi-purchase::before { background: $monitor-orange; }
+        &.kpi-total::before { background: $monitor-accent; }
+        &.kpi-suggestion::before { background: $monitor-red; }
+
+        .kpi-value {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -1px;
+            margin-bottom: 4px;
+        }
+
+        .kpi-label {
+            font-size: 12px;
+            color: $monitor-text-muted;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .kpi-icon {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            font-size: 24px;
+            opacity: 0.3;
+        }
+
+        &.kpi-in .kpi-value { color: $monitor-green; }
+        &.kpi-out .kpi-value { color: $monitor-blue; }
+        &.kpi-pick .kpi-value { color: $monitor-cyan; }
+        &.kpi-pack .kpi-value { color: $monitor-purple; }
+        &.kpi-sale .kpi-value { color: $monitor-amber; }
+        &.kpi-purchase .kpi-value { color: $monitor-orange; }
+        &.kpi-total .kpi-value { color: $monitor-accent; }
+        &.kpi-suggestion .kpi-value { color: $monitor-red; }
+    }
+
+    /* ── Main Content Grid ──────────────────────────── */
+    .monitor-content {
+        display: grid;
+        grid-template-columns: 1fr 360px;
+        gap: 20px;
+        padding: 0 24px 24px;
+        min-height: 500px;
+
+        @media (max-width: 1200px) {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* ── Suggestions Panel ──────────────────────────── */
+    .suggestions-panel {
+        background: $monitor-card-bg;
+        border: 1px solid $monitor-border;
+        border-radius: 12px;
+        overflow: hidden;
+
+        .suggestions-header {
+            padding: 16px;
+            border-bottom: 1px solid $monitor-border;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+
+            h3 {
+                font-size: 15px;
+                font-weight: 700;
+                margin: 0;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+
+                .badge-count {
+                    background: $monitor-red;
+                    color: #fff;
+                    font-size: 11px;
+                    padding: 2px 8px;
+                    border-radius: 20px;
+                    font-weight: 700;
+                }
+            }
+        }
+
+        .suggestion-list {
+            max-height: 500px;
+            overflow-y: auto;
+
+            &::-webkit-scrollbar {
+                width: 4px;
+            }
+            &::-webkit-scrollbar-thumb {
+                background: $monitor-border;
+                border-radius: 4px;
+            }
+        }
+
+        .suggestion-item {
+            padding: 14px 16px;
+            border-bottom: 1px solid rgba($monitor-border, 0.5);
+            transition: background 0.2s;
+            cursor: pointer;
+
+            &:hover {
+                background: $monitor-card-hover;
+            }
+
+            .suggestion-priority {
+                display: inline-block;
+                padding: 2px 8px;
+                border-radius: 4px;
+                font-size: 10px;
+                font-weight: 700;
+                text-transform: uppercase;
+                margin-bottom: 6px;
+
+                &.priority-urgent { background: rgba($monitor-red, 0.2); color: $monitor-red; }
+                &.priority-high { background: rgba($monitor-amber, 0.2); color: $monitor-amber; }
+                &.priority-medium { background: rgba($monitor-blue, 0.2); color: $monitor-blue; }
+            }
+
+            .suggestion-text {
+                font-size: 13px;
+                line-height: 1.5;
+                color: $monitor-text;
+            }
+
+            .suggestion-meta {
+                font-size: 11px;
+                color: $monitor-text-muted;
+                margin-top: 6px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            .suggestion-dismiss {
+                background: transparent;
+                border: 1px solid $monitor-border;
+                color: $monitor-text-muted;
+                padding: 4px 10px;
+                border-radius: 6px;
+                font-size: 11px;
+                cursor: pointer;
+                transition: all 0.2s;
+
+                &:hover {
+                    border-color: $monitor-red;
+                    color: $monitor-red;
+                }
+            }
+        }
+
+        .no-suggestions {
+            padding: 40px 20px;
+            text-align: center;
+            color: $monitor-text-muted;
+            font-size: 13px;
+
+            .no-suggestions-icon {
+                font-size: 40px;
+                margin-bottom: 12px;
+                opacity: 0.5;
+            }
+        }
+    }
+
+    /* ── Event Timeline ─────────────────────────────── */
+    .timeline-panel {
+        background: $monitor-card-bg;
+        border: 1px solid $monitor-border;
+        border-radius: 12px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+
+        .timeline-header {
+            padding: 16px;
+            border-bottom: 1px solid $monitor-border;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+
+            h3 {
+                font-size: 15px;
+                font-weight: 700;
+                margin: 0;
+            }
+
+            .timeline-filter-tabs {
+                display: flex;
+                gap: 4px;
+
+                button {
+                    background: transparent;
+                    border: 1px solid $monitor-border;
+                    color: $monitor-text-muted;
+                    padding: 4px 10px;
+                    border-radius: 6px;
+                    font-size: 11px;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    white-space: nowrap;
+
+                    &:hover {
+                        border-color: $monitor-accent;
+                        color: $monitor-accent;
+                    }
+
+                    &.active {
+                        background: $monitor-accent;
+                        border-color: $monitor-accent;
+                        color: $monitor-bg;
+                        font-weight: 600;
+                    }
+                }
+            }
+        }
+
+        .timeline-body {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 600px;
+            padding: 8px 0;
+
+            &::-webkit-scrollbar {
+                width: 4px;
+            }
+            &::-webkit-scrollbar-thumb {
+                background: $monitor-border;
+                border-radius: 4px;
+            }
+        }
+    }
+
+    /* ── Event Row ──────────────────────────────────── */
+    .event-row {
+        display: flex;
+        align-items: flex-start;
+        padding: 10px 16px;
+        gap: 12px;
+        border-bottom: 1px solid rgba($monitor-border, 0.3);
+        transition: background 0.15s;
+        cursor: pointer;
+
+        &:hover {
+            background: rgba($monitor-accent, 0.05);
+        }
+
+        &.unread {
+            border-left: 3px solid $monitor-accent;
+            padding-left: 13px;
+        }
+
+        .event-type-badge {
+            flex-shrink: 0;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 700;
+
+            &.type-in { background: rgba($monitor-green, 0.15); color: $monitor-green; }
+            &.type-out { background: rgba($monitor-blue, 0.15); color: $monitor-blue; }
+            &.type-pick { background: rgba($monitor-cyan, 0.15); color: $monitor-cyan; }
+            &.type-pack { background: rgba($monitor-purple, 0.15); color: $monitor-purple; }
+            &.type-sale { background: rgba($monitor-amber, 0.15); color: $monitor-amber; }
+            &.type-purchase { background: rgba($monitor-orange, 0.15); color: $monitor-orange; }
+            &.type-internal { background: rgba($monitor-text-muted, 0.15); color: $monitor-text-muted; }
+            &.type-return { background: rgba($monitor-red, 0.15); color: $monitor-red; }
+        }
+
+        .event-content {
+            flex: 1;
+            min-width: 0;
+
+            .event-title {
+                font-size: 13px;
+                font-weight: 600;
+                margin-bottom: 2px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .event-summary {
+                font-size: 12px;
+                color: $monitor-text-muted;
+                line-height: 1.4;
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                line-clamp: 2;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+            }
+
+            .event-tags {
+                display: flex;
+                gap: 6px;
+                margin-top: 4px;
+                flex-wrap: wrap;
+
+                .event-tag {
+                    font-size: 10px;
+                    padding: 1px 6px;
+                    border-radius: 4px;
+                    background: rgba($monitor-border, 0.5);
+                    color: $monitor-text-muted;
+                    white-space: nowrap;
+
+                    &.tag-origin { background: rgba($monitor-amber, 0.15); color: $monitor-amber; }
+                    &.tag-warehouse { background: rgba($monitor-cyan, 0.15); color: $monitor-cyan; }
+                }
+            }
+        }
+
+        .event-time {
+            flex-shrink: 0;
+            font-size: 11px;
+            color: $monitor-text-muted;
+            text-align: right;
+            white-space: nowrap;
+        }
+    }
+
+    /* ── Empty state ────────────────────────────────── */
+    .empty-state {
+        padding: 60px 20px;
+        text-align: center;
+        color: $monitor-text-muted;
+
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.4;
+        }
+
+        .empty-text {
+            font-size: 14px;
+        }
+    }
+
+    /* ── Pagination ─────────────────────────────────── */
+    .pagination-bar {
+        padding: 12px 16px;
+        border-top: 1px solid $monitor-border;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+
+        .page-info {
+            font-size: 12px;
+            color: $monitor-text-muted;
+        }
+
+        .page-buttons {
+            display: flex;
+            gap: 6px;
+
+            button {
+                background: transparent;
+                border: 1px solid $monitor-border;
+                color: $monitor-text-muted;
+                padding: 6px 12px;
+                border-radius: 6px;
+                font-size: 12px;
+                cursor: pointer;
+                transition: all 0.2s;
+
+                &:hover:not(:disabled) {
+                    border-color: $monitor-accent;
+                    color: $monitor-accent;
+                }
+
+                &:disabled {
+                    opacity: 0.3;
+                    cursor: not-allowed;
+                }
+            }
+        }
+    }
+
+    /* ── Loading ────────────────────────────────────── */
+    .monitor-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 100px 20px;
+        color: $monitor-text-muted;
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid $monitor-border;
+            border-top-color: $monitor-accent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 16px;
+        }
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* ── Phase 2 placeholder ────────────────────────── */
+    .ai-panel-placeholder {
+        background: $monitor-card-bg;
+        border: 1px solid $monitor-border;
+        border-radius: 12px;
+        padding: 24px;
+        margin: 0 24px 24px;
+        text-align: center;
+        border-style: dashed;
+
+        .ai-icon {
+            font-size: 36px;
+            margin-bottom: 12px;
+            opacity: 0.4;
+        }
+
+        h4 {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: $monitor-text-muted;
+        }
+
+        p {
+            font-size: 12px;
+            color: darken($monitor-text-muted, 10%);
+        }
+    }
+}
