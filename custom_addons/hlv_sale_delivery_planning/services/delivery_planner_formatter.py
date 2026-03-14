@@ -121,6 +121,14 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                     remaining_free_by_product[product_wh_key] = max(base_free_remaining - allocated_free, 0.0)
             qty_packed = qty_packed_map.get(p_name, 0.0)
 
+            # Raw warehouse free_qty (không capped theo line) để hiển thị "Tồn Kho"
+            if is_kit:
+                raw_free = qty_avail  # Kit giữ nguyên logic kit
+            elif product_wh_key:
+                raw_free = product_availabilities.get(product_wh_key, 0.0)
+            else:
+                raw_free = 0.0
+
             so_lines_data.append({
                 'id': line.id,
                 'product_id': [line.product_id.id, p_name] if line.product_id else False,
@@ -128,6 +136,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'qty_delivered': line.qty_delivered,
                 'qty_packed': qty_packed,
                 'qty_available': qty_avail,
+                'qty_warehouse_free': raw_free,
                 'product_type': p_type,
                 'is_kit': is_kit,
             })

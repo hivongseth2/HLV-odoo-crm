@@ -7,6 +7,7 @@ class DeliveryPlannerServiceDomain(models.AbstractModel):
     def _build_search_domain(
         self, search_query, filter_warehouse_id,
         filter_delivery_status, filter_date_from, filter_date_to,
+        filter_saler_code='',
     ):
         """Xây dựng domain tìm kiếm Sale Order dựa trên các bộ lọc."""
         domain = [('state', 'in', ['sale', 'done'])]
@@ -33,5 +34,8 @@ class DeliveryPlannerServiceDomain(models.AbstractModel):
                        ('commitment_date', '<=', filter_date_to),
                        '&', ('commitment_date', '=', False),
                        ('date_order', '<=', filter_date_to)]
+
+        if filter_saler_code:
+            domain += [('x_studio_misa_saler_code', 'ilike', filter_saler_code)]
 
         return domain

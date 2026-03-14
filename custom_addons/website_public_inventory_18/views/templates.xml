@@ -222,17 +222,30 @@
           <section>
             <div class="container-fluid mt-3 mb-6" style="max-width: 1550px;">
               <!-- Navigation Tabs -->
-              <ul class="nav nav-pills mb-4 justify-content-center" style="border-bottom: 2px solid #e9ecef; padding-bottom: 20px;">
-                   <li class="nav-item mx-1">
-                       <a class="nav-link active bg-primary text-white" href="/search_stock" style="font-weight: 600;">Tra cứu tồn kho</a>
-                   </li>
-                   <li class="nav-item mx-1">
-                       <a class="nav-link text-dark" href="/misa/purchase/lookup" style="font-weight: 500; background-color: #f8f9fa;">Tra cứu chứng từ mua hàng</a>
-                   </li>
-                   <li class="nav-item mx-1">
-                       <a class="nav-link text-dark" href="/search_invoice" style="font-weight: 500; background-color: #f8f9fa;">Tra cứu Hóa đơn MISA</a>
-                   </li>
-              </ul>
+              <div style="border-bottom: 2px solid #e9ecef; padding-bottom: 16px; margin-bottom: 1.5rem;">
+                <ul class="nav nav-pills justify-content-center flex-wrap gap-2">
+                  <li class="nav-item">
+                    <a class="nav-link active bg-primary text-white px-3 py-2" href="/search_stock" style="font-weight:600;font-size:.9rem;">
+                      <i class="fa fa-cubes me-1"></i><span>Tồn kho</span>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a class="nav-link text-dark px-3 py-2" href="/misa/purchase/lookup" style="font-weight:500;font-size:.9rem;background:#f8f9fa;">
+                      <i class="fa fa-shopping-cart me-1"></i><span>Chứng từ mua</span>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a class="nav-link text-dark px-3 py-2" href="/search_invoice" style="font-weight:500;font-size:.9rem;background:#f8f9fa;">
+                      <i class="fa fa-file-text me-1"></i><span>Hóa đơn MISA</span>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a class="nav-link text-dark px-3 py-2" href="/sale_plan" style="font-weight:500;font-size:.9rem;background:#f8f9fa;">
+                      <i class="fa fa-truck me-1"></i><span>Tình trạng đơn</span>
+                    </a>
+                  </li>
+                </ul>
+              </div>
               
               <form t-att-action="request.httprequest.path" method="get" class="row g-2 mb-4" id="search-form">
                 <div class="col-md-5 position-relative">
