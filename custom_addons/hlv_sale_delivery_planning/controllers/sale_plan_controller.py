@@ -38,7 +38,7 @@ _LOGIN = """<!DOCTYPE html>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"/>
 </head>
 <body class="bg-light d-flex align-items-center justify-content-center" style="min-height:100vh">
-<div class="card shadow p-4" style="max-width:400px;width:100%">
+<div class="card shadow p-4" style="max-width:400px;width:100%;border-radius:4px">
   <h4 class="fw-bold text-center text-primary mb-3">&#128666; Tình trạng Đơn hàng</h4>
   {err}
   <form method="post" action="/sale_plan">
@@ -56,11 +56,28 @@ _PAGE = r"""<!DOCTYPE html>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
 <style>
+*{box-sizing:border-box}
 body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
-.kpi-card{border-radius:12px;transition:.2s;cursor:default}
-.kpi-card:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.12)}
-.kpi-card.cursor-pointer{cursor:pointer}
-.kpi-card h2{font-size:2rem}
+.card,.form-control,.form-select,.btn,.badge,.list-group-item,.alert,.modal-content,
+.input-group-text,.dropdown-menu{border-radius:3px!important}
+/* KPI row 1 - colored background cards */
+.kpi-main{padding:18px 20px;color:#fff;position:relative;overflow:hidden;border:0;transition:.15s}
+.kpi-main:hover{opacity:.92}
+.kpi-main .kpi-icon{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:2.4rem;opacity:.25}
+.kpi-main .kpi-label{font-size:.78rem;text-transform:uppercase;font-weight:600;letter-spacing:.3px;opacity:.9}
+.kpi-main .kpi-val{font-size:2rem;font-weight:800;line-height:1.1}
+.kpi-bg-total{background:linear-gradient(135deg,#4a5568,#2d3748)}
+.kpi-bg-ready{background:linear-gradient(135deg,#38a169,#276749)}
+.kpi-bg-partial{background:linear-gradient(135deg,#d69e2e,#b7791f)}
+.kpi-bg-out{background:linear-gradient(135deg,#e53e3e,#c53030)}
+/* KPI row 2 - packing with circle icons */
+.kpi-pack{padding:14px 16px;border:1px solid #e2e8f0;cursor:pointer;transition:.15s;display:flex;align-items:center;gap:14px}
+.kpi-pack:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.kpi-pack.active{border-color:#3182ce;box-shadow:0 0 0 2px rgba(49,130,206,.25)}
+.kpi-pack-icon{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0}
+.kpi-pack .kpi-pack-label{font-size:.78rem;color:#718096;text-transform:uppercase;font-weight:600}
+.kpi-pack .kpi-pack-val{font-size:1.5rem;font-weight:700;line-height:1.1}
+/* Badges */
 .badge-del-pending{background:#6c757d;color:#fff}
 .badge-del-partial{background:#ffc107;color:#000}
 .badge-del-full{background:#198754;color:#fff}
@@ -74,25 +91,36 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 .badge-po-partial{background:#0dcaf0;color:#000}
 .badge-po-full{background:#198754;color:#fff}
 .cursor-pointer{cursor:pointer}
-.kanban-col{min-width:320px;max-width:400px;flex:1}
+/* Filter chips */
+.filter-chip{font-size:.82rem;padding:5px 8px 5px 10px;display:inline-flex;align-items:center;gap:6px;cursor:default}
+.filter-chip .chip-x{background:none;border:none;color:#fff;font-size:1rem;line-height:1;padding:0 2px;cursor:pointer;opacity:.8}
+.filter-chip .chip-x:hover{opacity:1}
+/* Kanban */
+.kanban-col{min-width:320px;max-width:420px;flex:1}
 .kanban-col .card-header{font-size:.85rem}
+/* Cards */
+.so-card{border-width:2px!important;transition:.1s}
+.so-card:hover{box-shadow:0 3px 10px rgba(0,0,0,.1)}
+/* Drawer */
 #drawer{position:fixed;top:0;right:-700px;width:680px;height:100vh;background:#fff;
   box-shadow:-4px 0 24px rgba(0,0,0,.15);z-index:1060;transition:right .3s;overflow-y:auto}
 #drawer.open{right:0}
 #drawer-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:1055}
 #drawer-overlay.open{display:block}
-.filter-chip .btn-close{font-size:.6rem;margin-left:4px}
 .table-lines td,.table-lines th{font-size:.85rem;vertical-align:middle}
 .row-pending{background:#fff9e6}
 .row-delivered{background:#e8f5e9}
+/* Loading */
 .loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.6);z-index:2000;
   display:flex;align-items:center;justify-content:center}
 .loading-overlay .spinner-border{width:3rem;height:3rem}
+/* Load more */
+#btn-load-more{font-weight:600;padding:8px 32px}
 @media(max-width:768px){#drawer{width:100%} .kanban-col{min-width:100%}}
 </style>
 </head><body>
 <div id="loading" class="loading-overlay d-none"><div class="spinner-border text-primary"></div></div>
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-3">
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-3" style="border-radius:0!important">
 <div class="container-fluid">
   <a class="navbar-brand fw-bold" href="/sale_plan">&#128666; Điều phối Giao hàng</a>
   <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#nav1"><span class="navbar-toggler-icon"></span></button>
@@ -106,21 +134,30 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
   </div>
 </div></nav>
 <div class="container-fluid px-3">
-<!-- KPI -->
-<div class="row g-2 mb-3">
-  <div class="col-6 col-md-3"><div class="card kpi-card text-center p-3 border-primary border-2"><small class="text-muted">Đơn hàng</small><h2 class="text-primary mb-0" id="kpi-total">0</h2></div></div>
-  <div class="col-6 col-md-3"><div class="card kpi-card text-center p-3 border-success border-2"><small class="text-muted">Sẵn sàng</small><h2 class="text-success mb-0" id="kpi-ready">0</h2></div></div>
-  <div class="col-6 col-md-3"><div class="card kpi-card text-center p-3 border-warning border-2"><small class="text-muted">Có hàng 1 phần</small><h2 class="text-warning mb-0" id="kpi-partial">0</h2></div></div>
-  <div class="col-6 col-md-3"><div class="card kpi-card text-center p-3 border-danger border-2"><small class="text-muted">Chưa có hàng/Thiếu</small><h2 class="text-danger mb-0" id="kpi-outstock">0</h2></div></div>
+<!-- KPI row 1 -->
+<div class="row g-2 mb-2">
+  <div class="col-6 col-md-3"><div class="card kpi-main kpi-bg-total"><div class="kpi-label">Đơn hàng</div><div class="kpi-val" id="kpi-total">0</div><i class="fa fa-boxes-stacked kpi-icon"></i></div></div>
+  <div class="col-6 col-md-3"><div class="card kpi-main kpi-bg-ready"><div class="kpi-label">Sẵn sàng xuất đủ</div><div class="kpi-val" id="kpi-ready">0</div><i class="fa fa-circle-check kpi-icon"></i></div></div>
+  <div class="col-6 col-md-3"><div class="card kpi-main kpi-bg-partial"><div class="kpi-label">Có hàng 1 phần</div><div class="kpi-val" id="kpi-partial">0</div><i class="fa fa-exclamation-circle kpi-icon"></i></div></div>
+  <div class="col-6 col-md-3"><div class="card kpi-main kpi-bg-out"><div class="kpi-label">Chưa có hàng / Thiếu</div><div class="kpi-val" id="kpi-outstock">0</div><i class="fa fa-xmark-circle kpi-icon"></i></div></div>
 </div>
-<!-- Packing KPIs -->
+<!-- KPI row 2 - packing -->
 <div class="row g-2 mb-3">
-  <div class="col-4"><div class="card kpi-card text-center p-3 cursor-pointer" id="kpi-pack-waiting" data-filter="waiting_stock"><small class="text-muted">Không có hàng đóng</small><h3 class="mb-0" id="kpi-pw">0</h3></div></div>
-  <div class="col-4"><div class="card kpi-card text-center p-3 cursor-pointer" id="kpi-pack-unpacked" data-filter="unpacked"><small class="text-muted">Có hàng chưa đóng gói</small><h3 class="mb-0" id="kpi-pu">0</h3></div></div>
-  <div class="col-4"><div class="card kpi-card text-center p-3 cursor-pointer" id="kpi-pack-done" data-filter="fully_packed"><small class="text-muted">Đã đóng gói đủ</small><h3 class="mb-0" id="kpi-pf">0</h3></div></div>
+  <div class="col-md-4"><div class="card kpi-pack" id="kpi-pack-waiting" data-filter="waiting_stock">
+    <div class="kpi-pack-icon" style="background:#fed7d7;color:#c53030"><i class="fa fa-circle-xmark"></i></div>
+    <div><div class="kpi-pack-label">Không có hàng đóng</div><div class="kpi-pack-val" id="kpi-pw">0</div></div>
+  </div></div>
+  <div class="col-md-4"><div class="card kpi-pack" id="kpi-pack-unpacked" data-filter="unpacked">
+    <div class="kpi-pack-icon" style="background:#fefcbf;color:#b7791f"><i class="fa fa-box-open"></i></div>
+    <div><div class="kpi-pack-label">Có hàng chưa đóng gói</div><div class="kpi-pack-val" id="kpi-pu">0</div></div>
+  </div></div>
+  <div class="col-md-4"><div class="card kpi-pack" id="kpi-pack-done" data-filter="fully_packed">
+    <div class="kpi-pack-icon" style="background:#c6f6d5;color:#276749"><i class="fa fa-circle-check"></i></div>
+    <div><div class="kpi-pack-label">Đã đóng gói đủ</div><div class="kpi-pack-val" id="kpi-pf">0</div></div>
+  </div></div>
 </div>
 <!-- Active Filters -->
-<div id="active-filters" class="mb-2 d-flex flex-wrap gap-1 align-items-center" style="display:none!important"></div>
+<div id="active-filters" class="mb-2 d-none d-flex flex-wrap gap-1 align-items-center"></div>
 <!-- Filters -->
 <div class="card mb-3"><div class="card-body py-2">
 <div class="row g-2 mb-2">
@@ -158,15 +195,19 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 </div></div>
 <!-- View toggle -->
 <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-  <div class="d-flex gap-1 flex-wrap">
-    <button id="btn-kanban" class="btn btn-sm btn-primary"><i class="fa fa-th"></i> Kanban</button>
-    <button id="btn-list" class="btn btn-sm btn-outline-secondary"><i class="fa fa-list"></i> Danh sách</button>
+  <div class="d-flex gap-1 flex-wrap align-items-center">
+    <span class="text-muted small fw-bold me-1"><i class="fa fa-th-large"></i> PHÂN NHÓM THEO:</span>
+    <button id="grp-packing" class="btn btn-sm btn-outline-primary active">&#128230; Đóng gói</button>
+    <button id="grp-delivery" class="btn btn-sm btn-outline-primary">&#128666; Tiến độ giao</button>
+    <button id="grp-stock" class="btn btn-sm btn-outline-primary">&#128230; Tình trạng kho</button>
     <span class="vr mx-1"></span>
-    <button id="grp-packing" class="btn btn-sm btn-outline-primary active">Đóng gói</button>
-    <button id="grp-delivery" class="btn btn-sm btn-outline-primary">Tiến độ giao</button>
-    <button id="grp-stock" class="btn btn-sm btn-outline-primary">Tình trạng kho</button>
+    <button id="btn-kanban" class="btn btn-sm btn-primary"><i class="fa fa-th"></i></button>
+    <button id="btn-list" class="btn btn-sm btn-outline-secondary"><i class="fa fa-list"></i></button>
   </div>
-  <small class="text-muted" id="count-info">0 / 0 đơn hàng</small>
+  <div class="d-flex align-items-center gap-2">
+    <button id="btn-load-more" class="btn btn-sm btn-outline-primary d-none"><i class="fa fa-plus"></i> Tải thêm 200</button>
+    <span class="badge bg-secondary" style="font-size:.85rem;padding:6px 12px" id="count-info">0 / 0 đơn hàng</span>
+  </div>
 </div>
 <!-- Kanban -->
 <div id="kanban-view" class="d-flex gap-3 overflow-auto pb-3"></div>
@@ -178,12 +219,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
   <th>Giao dự kiến</th><th>Tổng tiền</th><th>Giao hàng</th><th>Tồn kho</th><th>Đóng kiện</th>
 </tr></thead><tbody id="tbl-body"></tbody>
 </table></div></div>
-<!-- Pagination -->
-<div id="pg-row" class="d-flex justify-content-between align-items-center my-3">
-  <small id="pg-info" class="text-muted"></small>
-  <div><button id="pg-prev" class="btn btn-sm btn-outline-secondary me-1">&#8592; Trước</button>
-  <button id="pg-next" class="btn btn-sm btn-outline-secondary">Sau &#8594;</button></div>
-</div>
 </div>
 <!-- Drawer overlay -->
 <div id="drawer-overlay"></div>
@@ -199,7 +234,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 <script>
 (function(){
 "use strict";
-var S={page:1,limit:100,total:0,viewMode:'kanban',kanbanGroupBy:'packing_status',
+var S={limit:250,total:0,viewMode:'kanban',kanbanGroupBy:'packing_status',
   orders:[],warehouses:[],stats:{},whLoaded:false};
 
 /* Translation maps */
@@ -225,13 +260,16 @@ function whName(o){return o.warehouse_id?o.warehouse_id[1]:'';}
 function showLoading(){$('loading').classList.remove('d-none')}
 function hideLoading(){$('loading').classList.add('d-none')}
 
-function load(){
+/* ---- Data loading ---- */
+function load(append){
   showLoading();
+  var offset=append?S.orders.length:0;
+  var lim=append?200:S.limit;
   var body={search:gv('f-q'),warehouse_id:gv('f-wh'),delivery_status:gv('f-del'),
     stock_status:gv('f-stk'),packing_status:gv('f-pack'),
     date_from:gv('f-date-from'),date_to:gv('f-date-to'),
     po_date_from:gv('f-po-date-from'),po_date_to:gv('f-po-date-to'),
-    po_status:gv('f-po-status'),limit:S.limit,offset:(S.page-1)*S.limit};
+    po_status:gv('f-po-status'),limit:lim,offset:offset};
   fetch('/api/sale_plan/data',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({jsonrpc:'2.0',method:'call',params:body})})
   .then(function(r){return r.json()})
@@ -239,7 +277,11 @@ function load(){
     hideLoading();
     if(!j.result||j.result.status!=='success'){console.error('API error',j);return;}
     var d=j.result.data;
-    S.orders=d.orders||[];
+    if(append){
+      S.orders=S.orders.concat(d.orders||[]);
+    } else {
+      S.orders=d.orders||[];
+    }
     S.total=d.total_count||0;
     S.stats=d.dashboard_stats||{};
     if(d.warehouses&&!S.whLoaded){
@@ -250,7 +292,7 @@ function load(){
       S.whLoaded=true;
       S.warehouses=d.warehouses;
     }
-    updKPI();render();updPg();updFilters();
+    updKPI();render();updLoadMore();updFilters();
   }).catch(function(e){hideLoading();console.error(e);});
 }
 
@@ -265,12 +307,23 @@ function updKPI(){
   $('kpi-pf').textContent=s.packing_fully||0;
 }
 
+function updLoadMore(){
+  var btn=$('btn-load-more');
+  var remaining=S.total-S.orders.length;
+  if(remaining>0){
+    btn.classList.remove('d-none');
+    btn.innerHTML='<i class="fa fa-plus"></i> Tải thêm '+(remaining>=200?200:remaining);
+  } else {
+    btn.classList.add('d-none');
+  }
+  $('count-info').textContent=S.orders.length+' / '+S.total+' đơn hàng';
+}
+
+/* ---- Render ---- */
 function render(){
   if(S.viewMode==='kanban') renderKanban(); else renderList();
   $('kanban-view').classList.toggle('d-none',S.viewMode!=='kanban');
   $('list-view').classList.toggle('d-none',S.viewMode!=='list');
-  $('count-info').textContent=S.orders.length+' / '+S.total+' đơn hàng';
-  /* Show/hide groupBy buttons only in kanban mode */
   ['grp-packing','grp-delivery','grp-stock'].forEach(function(id){
     $(id).style.display=S.viewMode==='kanban'?'':'none';
   });
@@ -279,28 +332,27 @@ function render(){
 function renderKanban(){
   var cols,gb=S.kanbanGroupBy;
   if(gb==='packing_status') cols=[
-    {key:'waiting_stock',lbl:'Không có hàng đóng',cls:'text-secondary'},
-    {key:'unpacked',lbl:'Có hàng chưa đóng gói',cls:'text-warning'},
-    {key:'fully_packed',lbl:'Đã đóng gói đủ',cls:'text-success'}
+    {key:'waiting_stock',lbl:'KHÔNG CÓ HÀNG ĐÓNG',cls:'text-secondary'},
+    {key:'unpacked',lbl:'CÓ HÀNG CHƯA ĐÓNG GÓI',cls:'text-warning'},
+    {key:'fully_packed',lbl:'ĐÃ ĐÓNG GÓI ĐỦ',cls:'text-success'}
   ];
   else if(gb==='delivery_status') cols=[
-    {key:'unshipped',lbl:'Chưa giao',cls:'text-secondary'},
-    {key:'partial',lbl:'Giao 1 phần',cls:'text-warning'},
-    {key:'full',lbl:'Đã giao đủ',cls:'text-success'}
+    {key:'unshipped',lbl:'CHƯA GIAO',cls:'text-secondary'},
+    {key:'partial',lbl:'GIAO 1 PHẦN',cls:'text-warning'},
+    {key:'full',lbl:'ĐÃ GIAO ĐỦ',cls:'text-success'}
   ];
   else cols=[
-    {key:'out_of_stock',lbl:'Không có hàng',cls:'text-danger'},
-    {key:'partial_ready',lbl:'Có hàng 1 phần',cls:'text-warning'},
-    {key:'ready',lbl:'Đủ hàng',cls:'text-success'}
+    {key:'out_of_stock',lbl:'KHÔNG CÓ HÀNG',cls:'text-danger'},
+    {key:'partial_ready',lbl:'CÓ HÀNG 1 PHẦN',cls:'text-warning'},
+    {key:'ready',lbl:'ĐỦ HÀNG',cls:'text-success'}
   ];
 
   var wrap=$('kanban-view');wrap.innerHTML='';
   cols.forEach(function(c){
-    /* For delivery groupBy, match on real_delivery_status; otherwise match field directly */
     var field=(gb==='delivery_status')?'real_delivery_status':gb;
     var items=S.orders.filter(function(o){return o[field]===c.key;});
     var col=document.createElement('div');col.className='kanban-col';
-    col.innerHTML='<div class="card"><div class="card-header d-flex justify-content-between align-items-center '+c.cls+'">'
+    col.innerHTML='<div class="card"><div class="card-header d-flex justify-content-between align-items-center '+c.cls+' py-2">'
       +'<strong>'+c.lbl+'</strong><span class="badge bg-secondary rounded-pill">'+items.length+'</span></div>'
       +'<div class="card-body p-2 d-flex flex-column gap-2"></div></div>';
     wrap.appendChild(col);
@@ -324,7 +376,7 @@ function getCardBorderClass(o){
 function renderSOCard(o){
   var bc=getCardBorderClass(o);
   var rd=o.real_delivery_status||o.delivery_status;
-  var h='<div class="card border-2 shadow-sm cursor-pointer '+bc+'" data-so-id="'+o.id+'">'
+  var h='<div class="card so-card cursor-pointer '+bc+'" data-so-id="'+o.id+'">'
     +'<div class="card-header py-2">'
     +'<div class="d-flex flex-wrap gap-1 mb-1">'
     +b(DC[rd]||'badge-del-pending',DL[rd]||rd)
@@ -363,13 +415,7 @@ function renderList(){
   });
 }
 
-function updPg(){
-  var pages=Math.ceil(S.total/S.limit)||1;
-  $('pg-info').textContent='Trang '+S.page+' / '+pages+' ('+S.total+' đơn)';
-  $('pg-prev').disabled=S.page<=1;
-  $('pg-next').disabled=S.page>=pages;
-}
-
+/* ---- Drawer ---- */
 function openDrawer(id){
   var o=S.orders.find(function(x){return x.id===id;});
   if(!o)return;
@@ -385,7 +431,6 @@ function openDrawer(id){
     +' &mdash; <i class="fa fa-warehouse"></i> '+esc(whName(o))
     +'</div>';
 
-  /* Product lines table */
   h+='<table class="table table-sm table-bordered table-lines"><thead class="table-light"><tr>'
     +'<th>Sản phẩm</th><th class="text-end">Chốt Bán</th><th class="text-end">Đóng Gói</th>'
     +'<th class="text-end">Tồn Kho</th><th class="text-end">Đã Giao</th><th class="text-end">Thiếu</th></tr></thead><tbody>';
@@ -403,7 +448,6 @@ function openDrawer(id){
   });
   h+='</tbody></table>';
 
-  /* Purchase orders */
   if(o.pos&&o.pos.length){
     h+='<h6 class="mt-3"><i class="fa fa-truck"></i> Đơn mua hàng ('+o.pos.length+')</h6>'
       +'<ul class="list-group list-group-flush">';
@@ -431,65 +475,65 @@ function closeDrawer(){
   $('drawer-overlay').classList.remove('open');
 }
 
+/* ---- Filter chips ---- */
 function updFilters(){
   var box=$('active-filters'),chips=[];
-  var fv={search:gv('f-q'),warehouse_id:gv('f-wh'),delivery_status:gv('f-del'),
-    stock_status:gv('f-stk'),packing_status:gv('f-pack'),
-    date_from:gv('f-date-from'),date_to:gv('f-date-to'),
-    po_date_from:gv('f-po-date-from'),po_date_to:gv('f-po-date-to'),
-    po_status:gv('f-po-status')};
-  if(fv.search) chips.push({k:'f-q',v:'Tìm: '+fv.search});
-  if(fv.warehouse_id&&fv.warehouse_id!=='all'){var s=$('f-wh');chips.push({k:'f-wh',v:'Kho: '+s.options[s.selectedIndex].text});}
-  if(fv.delivery_status&&fv.delivery_status!=='all'&&fv.delivery_status!=='pending_partial'){
-    var s2=$('f-del');chips.push({k:'f-del',v:s2.options[s2.selectedIndex].text});}
-  if(fv.stock_status&&fv.stock_status!=='all'){var s3=$('f-stk');chips.push({k:'f-stk',v:s3.options[s3.selectedIndex].text});}
-  if(fv.packing_status&&fv.packing_status!=='all'){var s4=$('f-pack');chips.push({k:'f-pack',v:s4.options[s4.selectedIndex].text});}
-  if(fv.date_from) chips.push({k:'f-date-from',v:'Giao từ: '+fv.date_from});
-  if(fv.date_to) chips.push({k:'f-date-to',v:'Giao đến: '+fv.date_to});
-  if(fv.po_date_from) chips.push({k:'f-po-date-from',v:'Nhận từ: '+fv.po_date_from});
-  if(fv.po_date_to) chips.push({k:'f-po-date-to',v:'Nhận đến: '+fv.po_date_to});
-  if(fv.po_status&&fv.po_status!=='all'){var s5=$('f-po-status');chips.push({k:'f-po-status',v:'PO: '+s5.options[s5.selectedIndex].text});}
+  if(gv('f-q')) chips.push({k:'f-q',v:'Tìm: '+gv('f-q'),reset:''});
+  if(gv('f-wh')!=='all'){var s=$('f-wh');chips.push({k:'f-wh',v:'Kho: '+s.options[s.selectedIndex].text,reset:'all'});}
+  if(gv('f-del')!=='all'){var s2=$('f-del');chips.push({k:'f-del',v:'Giao hàng: '+s2.options[s2.selectedIndex].text,reset:'pending_partial'});}
+  if(gv('f-stk')!=='all'){var s3=$('f-stk');chips.push({k:'f-stk',v:'Kho: '+s3.options[s3.selectedIndex].text,reset:'all'});}
+  if(gv('f-pack')!=='all'){var s4=$('f-pack');chips.push({k:'f-pack',v:'Đóng gói: '+s4.options[s4.selectedIndex].text,reset:'all'});}
+  if(gv('f-date-from')) chips.push({k:'f-date-from',v:'Giao từ: '+gv('f-date-from'),reset:''});
+  if(gv('f-date-to')) chips.push({k:'f-date-to',v:'Giao đến: '+gv('f-date-to'),reset:''});
+  if(gv('f-po-date-from')) chips.push({k:'f-po-date-from',v:'Nhận từ: '+gv('f-po-date-from'),reset:''});
+  if(gv('f-po-date-to')) chips.push({k:'f-po-date-to',v:'Nhận đến: '+gv('f-po-date-to'),reset:''});
+  if(gv('f-po-status')!=='all'){var s5=$('f-po-status');chips.push({k:'f-po-status',v:'Mua hàng: '+s5.options[s5.selectedIndex].text,reset:'all'});}
 
-  if(!chips.length){box.style.display='none';return;}
-  box.removeAttribute('style');
-  var html='';
-  chips.forEach(function(c){
-    html+='<span class="badge bg-primary filter-chip pe-1">'+esc(c.v)
-      +' <button class="btn-close btn-close-white" data-fk="'+c.k+'"></button></span>';
-  });
-  html+=' <a href="#" id="clear-all-filters" class="small text-danger">Xóa tất cả bộ lọc</a>';
-  box.innerHTML=html;
-  box.querySelectorAll('.btn-close').forEach(function(bt){
-    bt.addEventListener('click',function(){
-      var el=$(bt.dataset.fk);if(!el)return;
-      if(el.tagName==='SELECT'){
-        el.value=(el.id==='f-del')?'pending_partial':'all';
-      } else {el.value='';}
-      S.page=1;load();
-    });
-  });
-  var ca=$('clear-all-filters');
-  if(ca) ca.addEventListener('click',function(e){e.preventDefault();clearAll();});
+  if(!chips.length){box.classList.add('d-none');return;}
+  box.classList.remove('d-none');
+  box.innerHTML='<i class="fa fa-filter text-muted small"></i> <small class="text-muted">Bộ lọc đang chọn:</small> '
+    +chips.map(function(c){
+      return '<span class="badge bg-success filter-chip" data-fk="'+c.k+'" data-fr="'+c.reset+'">'
+        +esc(c.v)+' <span class="chip-x" data-fk="'+c.k+'" data-fr="'+c.reset+'">&times;</span></span>';
+    }).join('')
+    +' <a href="#" id="clear-all-filters" class="small text-danger ms-1"><i class="fa fa-trash"></i> Xóa tất cả bộ lọc</a>';
 }
+
+/* ---- Event delegation for chips ---- */
+document.addEventListener('click',function(e){
+  /* Chip X remove */
+  var chipX=e.target.closest('.chip-x');
+  if(chipX){
+    e.preventDefault();e.stopPropagation();
+    var el=$(chipX.dataset.fk);
+    if(el){el.value=chipX.dataset.fr||'';}
+    load(false);
+    return;
+  }
+  /* Clear all filters link */
+  if(e.target.closest('#clear-all-filters')){
+    e.preventDefault();
+    clearAll();
+    return;
+  }
+  /* SO card click → open drawer */
+  var card=e.target.closest('[data-so-id]');
+  if(card&&!e.target.closest('.chip-x')){
+    openDrawer(parseInt(card.dataset.soId,10));
+  }
+});
 
 function clearAll(){
   ['f-q','f-date-from','f-date-to','f-po-date-from','f-po-date-to'].forEach(function(id){var e=$(id);if(e)e.value='';});
   ['f-wh','f-stk','f-pack','f-po-status'].forEach(function(id){var e=$(id);if(e)e.value='all';});
   $('f-del').value='pending_partial';
-  S.page=1;load();
+  load(false);
 }
 
-/* Delegate click for SO cards (kanban + list) */
-document.addEventListener('click',function(e){
-  var card=e.target.closest('[data-so-id]');
-  if(card){openDrawer(parseInt(card.dataset.soId,10));}
-});
-
-/* Events */
-$('btn-filter').addEventListener('click',function(){S.page=1;load();});
-$('f-q').addEventListener('keydown',function(e){if(e.key==='Enter'){S.page=1;load();}});
-$('pg-prev').addEventListener('click',function(){if(S.page>1){S.page--;load();}});
-$('pg-next').addEventListener('click',function(){if(S.page*S.limit<S.total){S.page++;load();}});
+/* ---- Button events ---- */
+$('btn-filter').addEventListener('click',function(){load(false);});
+$('f-q').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();load(false);}});
+$('btn-load-more').addEventListener('click',function(){load(true);});
 
 $('btn-kanban').addEventListener('click',function(){
   S.viewMode='kanban';
@@ -518,9 +562,11 @@ $('btn-list').addEventListener('click',function(){
   $(id).addEventListener('click',function(){
     var f=this.dataset.filter;
     var cur=gv('f-pack');
-    /* Toggle: if already set to this value, reset to all */
     $('f-pack').value=(cur===f)?'all':f;
-    S.page=1;load();
+    /* Visual active state */
+    document.querySelectorAll('.kpi-pack').forEach(function(el){el.classList.remove('active');});
+    if(cur!==f) this.classList.add('active');
+    load(false);
   });
 });
 
@@ -529,7 +575,7 @@ $('drawer-overlay').addEventListener('click',closeDrawer);
 document.addEventListener('keydown',function(e){if(e.key==='Escape')closeDrawer();});
 
 /* Init */
-load();
+load(false);
 })();
 </script>
 </body></html>"""
@@ -568,7 +614,7 @@ class SalePlanPublicController(http.Controller):
     def api_sale_plan_data(self, search='', warehouse_id='all', delivery_status='all',
                            stock_status='all', packing_status='all',
                            date_from='', date_to='', po_date_from='', po_date_to='',
-                           po_status='all', limit=100, offset=0, **kwargs):
+                           po_status='all', limit=250, offset=0, **kwargs):
         if not request.session.get(SESSION_KEY_OK):
             return {'status': 'error', 'message': 'Unauthorized'}
         try:
