@@ -211,21 +211,64 @@ class WarehouseMonitorEvent(models.Model):
         events = ME.search(domain, limit=limit, offset=offset, order="timestamp desc")
         total_count = ME.search_count(domain)
 
-        # KPI counts (today)
+        # ── Live KPI from actual models (not event log) ──────────
+        # This ensures data is available even before the event log is populated
         today_start = fields.Datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        today_domain = domain + [("timestamp", ">=", today_start)]
+        SP = self.env["stock.picking"].sudo()
+        SO = self.env["sale.order"].sudo()
+        PO = self.env["purchase.order"].sudo()
+
+        wh_picking_filter = []
+        if warehouse_id and warehouse_id != "all":
+            wh_picking_filter = [("picking_type_id.warehouse_id", "=", int(warehouse_id))]
+        wh_sale_filter = []
+        if warehouse_id and warehouse_id != "all":
+            wh_sale_filter = [("warehouse_id", "=", int(warehouse_id))]
+
+        # Count active pickings per type (in progress, not done/cancel)
+        active_states = ["confirmed", "assigned"]
+        pick_active = SP.search_count(
+            wh_picking_filter + [("picking_type_id.sequence_code", "ilike", "PICK"),
+                                  ("state", "in", active_states)]
+        )
+        pack_active = SP.search_count(
+            wh_picking_filter + [("picking_type_id.sequence_code", "ilike", "PACK"),
+                                  ("state", "in", active_states)]
+        )
+        # Count validated today
+        out_done_today = SP.search_count(
+            wh_picking_filter + [("picking_type_code", "=", "outgoing"),
+                                  ("state", "=", "done"),
+                                  ("date_done", ">=", today_start)]
+        )
+        in_done_today = SP.search_count(
+            wh_picking_filter + [("picking_type_code", "=", "incoming"),
+                                  ("state", "=", "done"),
+                                  ("date_done", ">=", today_start)]
+        )
+        # Sales confirmed today
+        sale_today = SO.search_count(
+            wh_sale_filter + [("state", "in", ["sale", "done"]),
+                              ("date_order", ">=", today_start)]
+        )
+        # POs confirmed today
+        po_today = PO.search_count(
+            [("state", "in", ["purchase", "done"]),
+             ("date_approve", ">=", today_start)]
+        )
+        suggestions_pending = ME.search_count(
+            domain + [("is_suggestion", "=", True), ("is_read", "=", False)]
+        )
 
         kpi = {
-            "total_events_today": ME.search_count(today_domain),
-            "in_today": ME.search_count(today_domain + [("event_type", "=", "in")]),
-            "out_today": ME.search_count(today_domain + [("event_type", "=", "out")]),
-            "pick_today": ME.search_count(today_domain + [("event_type", "=", "pick")]),
-            "pack_today": ME.search_count(today_domain + [("event_type", "=", "pack")]),
-            "sale_today": ME.search_count(today_domain + [("event_type", "=", "sale")]),
-            "purchase_today": ME.search_count(today_domain + [("event_type", "=", "purchase")]),
-            "suggestions_pending": ME.search_count(
-                domain + [("is_suggestion", "=", True), ("is_read", "=", False)]
-            ),
+            "total_events_today": pick_active + pack_active + out_done_today + in_done_today,
+            "in_today": in_done_today,
+            "out_today": out_done_today,
+            "pick_today": pick_active,
+            "pack_today": pack_active,
+            "sale_today": sale_today,
+            "purchase_today": po_today,
+            "suggestions_pending": suggestions_pending,
         }
 
         # Format events
@@ -324,6 +367,25 @@ class WarehouseMonitorEvent(models.Model):
             [("sequence_code", "ilike", "PACK"), ("active", "=", True)] + wh_filter
         )
 
+        def _compute_display_priority(p):
+            """Smart priority: overdue > user-urgent+ready > ready > waiting.
+            Odoo default sets all SO-picking priority to '1', so we only honor
+            priority='1' when the picking is also assigned (ready). A confirmed
+            (waiting stock) picking is never shown as urgent.
+            """
+            now = fields.Datetime.now()
+            is_overdue = p.scheduled_date and p.scheduled_date < now
+            is_assigned = p.state == "assigned"
+            user_marked_urgent = p.priority == "1"
+
+            if is_overdue:
+                return "overdue"        # Trễ hạn — màu đỏ pulse
+            if user_marked_urgent and is_assigned:
+                return "urgent"         # Được đánh dấu khẩn + sẵn sàng — cam
+            if is_assigned:
+                return "ready"          # Sẵn sàng lấy — xanh
+            return "waiting"            # Chờ hàng về — vàng
+
         def _format_pickings(pickings):
             result = []
             for p in pickings:
@@ -347,7 +409,7 @@ class WarehouseMonitorEvent(models.Model):
                     "origin": p.origin or "",
                     "partner_name": p.partner_id.name if p.partner_id else "",
                     "state": p.state,
-                    "priority": p.priority or "0",
+                    "computed_priority": _compute_display_priority(p),
                     "scheduled_date": fields.Datetime.to_string(p.scheduled_date) if p.scheduled_date else "",
                     "move_count": len(p.move_ids),
                     "warehouse_name": (
@@ -369,7 +431,7 @@ class WarehouseMonitorEvent(models.Model):
             # Fallback: outgoing internal with PICK in name
             pick_domain.append(("picking_type_id.sequence_code", "ilike", "PICK"))
         pick_pickings = StockPicking.search(
-            pick_domain, order="priority desc, scheduled_date asc", limit=30
+            pick_domain, order="scheduled_date asc", limit=50
         )
 
         # Active PACK queue
@@ -379,7 +441,7 @@ class WarehouseMonitorEvent(models.Model):
         else:
             pack_domain.append(("picking_type_id.sequence_code", "ilike", "PACK"))
         pack_pickings = StockPicking.search(
-            pack_domain, order="priority desc, scheduled_date asc", limit=30
+            pack_domain, order="scheduled_date asc", limit=50
         )
 
         warehouses = self.env["stock.warehouse"].sudo().search([])

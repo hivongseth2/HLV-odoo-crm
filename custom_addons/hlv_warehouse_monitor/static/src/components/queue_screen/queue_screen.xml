@@ -122,18 +122,15 @@
     <!-- ═══════════════════════════════════════════════════════ -->
 
     <t t-name="hlv_warehouse_monitor.QueueCard">
-        <div t-att-class="'queue-card priority-' + (card.priority === '1' ? 'urgent' : 'normal')
-                          + ' state-' + card.state"
+        <div t-att-class="'queue-card priority-' + card.computed_priority"
              t-on-click="() => this.openPicking(card.id)">
             <div class="card-top">
                 <div class="card-rank" t-esc="'#' + rank"/>
                 <div class="card-badges">
-                    <span t-att-class="'badge-priority ' + (card.priority === '1' ? 'bp-urgent' : 'bp-normal')">
-                        <t t-if="card.priority === '1'">⚡ KHẨN CẤP</t>
-                        <t t-else="">📋 BÌNH THƯỜNG</t>
-                    </span>
-                    <span t-att-class="'badge-state ' + (card.state === 'assigned' ? 'bs-assigned' : 'bs-confirmed')">
-                        <t t-if="card.state === 'assigned'">✔ SẴN SÀNG</t>
+                    <span t-att-class="'badge-priority bp-' + card.computed_priority">
+                        <t t-if="card.computed_priority === 'overdue'">🔴 TRỄ HẠN</t>
+                        <t t-elif="card.computed_priority === 'urgent'">⚡ KHẨN CẤP</t>
+                        <t t-elif="card.computed_priority === 'ready'">✔ SẴN SÀNG</t>
                         <t t-else="">⏳ CHỜ HÀNG</t>
                     </span>
                 </div>

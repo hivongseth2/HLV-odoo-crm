@@ -257,31 +257,48 @@ $q-pack-color: #9b59b6;
         }
 
         /* Priority variants */
-        &.priority-urgent {
-            background: $q-urgent-bg;
-            border-color: rgba($q-urgent, 0.4);
-            animation: urgentPulse 2s ease-in-out infinite, cardIn 0.4s ease-out;
+        &.priority-overdue {
+            background: rgba($q-urgent, 0.15);
+            border-color: rgba($q-urgent, 0.5);
+            border-left: 4px solid $q-urgent;
+            animation: overduePulse 1.5s ease-in-out infinite, cardIn 0.4s ease-out;
 
-            @keyframes urgentPulse {
-                0%, 100% { border-color: rgba($q-urgent, 0.4); }
-                50% { border-color: rgba($q-urgent, 0.9); box-shadow: 0 0 20px rgba($q-urgent, 0.3); }
+            @keyframes overduePulse {
+                0%, 100% { border-color: rgba($q-urgent, 0.5); }
+                50% { border-color: $q-urgent; box-shadow: 0 0 24px rgba($q-urgent, 0.45); }
             }
 
             .card-rank { color: $q-urgent; }
         }
 
-        &.priority-normal {
-            background: rgba($q-panel-bg, 0.8);
-            border-color: $q-border;
+        &.priority-urgent {
+            background: rgba($q-waiting, 0.12);
+            border-color: rgba($q-waiting, 0.4);
+            border-left: 4px solid $q-waiting;
+            animation: urgentPulse 2s ease-in-out infinite, cardIn 0.4s ease-out;
+
+            @keyframes urgentPulse {
+                0%, 100% { border-color: rgba($q-waiting, 0.4); }
+                50% { border-color: rgba($q-waiting, 0.9); box-shadow: 0 0 18px rgba($q-waiting, 0.3); }
+            }
+
+            .card-rank { color: $q-waiting; }
+        }
+
+        &.priority-ready {
+            background: rgba($q-normal, 0.08);
+            border-color: rgba($q-normal, 0.35);
+            border-left: 4px solid $q-normal;
+
             .card-rank { color: $q-normal; }
         }
 
-        /* State variants */
-        &.state-assigned {
+        &.priority-waiting {
+            background: rgba($q-panel-bg, 0.8);
+            border-color: $q-border;
             border-left: 4px solid $q-ready;
-        }
-        &.state-confirmed {
-            border-left: 4px solid $q-waiting;
+
+            .card-rank { color: $q-ready; }
         }
 
         .card-top {
@@ -313,32 +330,25 @@ $q-pack-color: #9b59b6;
             text-transform: uppercase;
             letter-spacing: 0.5px;
 
-            &.bp-urgent {
+            &.bp-overdue {
                 background: rgba($q-urgent, 0.25);
                 color: $q-urgent;
                 border: 1px solid rgba($q-urgent, 0.5);
             }
-            &.bp-normal {
-                background: rgba($q-normal, 0.12);
-                color: $q-normal;
-                border: 1px solid rgba($q-normal, 0.3);
-            }
-        }
-
-        .badge-state {
-            padding: 3px 10px;
-            border-radius: 20px;
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-
-            &.bs-assigned {
-                background: $q-ready-bg;
-                color: $q-ready;
-            }
-            &.bs-confirmed {
-                background: $q-waiting-bg;
+            &.bp-urgent {
+                background: rgba($q-waiting, 0.2);
                 color: $q-waiting;
+                border: 1px solid rgba($q-waiting, 0.4);
+            }
+            &.bp-ready {
+                background: rgba($q-normal, 0.15);
+                color: $q-normal;
+                border: 1px solid rgba($q-normal, 0.35);
+            }
+            &.bp-waiting {
+                background: rgba($q-ready, 0.12);
+                color: $q-ready;
+                border: 1px solid rgba($q-ready, 0.3);
             }
         }
 
