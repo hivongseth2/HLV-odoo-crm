@@ -76,7 +76,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 .kpi-pack.active{border-color:#3182ce;box-shadow:0 0 0 2px rgba(49,130,206,.25);background:#ebf8ff}
 .kpi-pack-icon{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
 .kpi-pack .kpi-pack-label{font-size:.75rem;color:#718096;text-transform:uppercase;font-weight:600;letter-spacing:.3px}
-.kpi-pack .kpi-pack-val{font-size:1.4rem;font-weight:700;line-height:1.2;color:#2d3748}
+.kpi-pack .kpi-pack-val{justify-content: center;align-items: center;text-align: center;width: 100%;font-size:1.6rem;font-weight:700;line-height:1.2;color:#2d3748;}
 /* Badges */
 .badge-del-pending{background:#6c757d;color:#fff}
 .badge-del-partial{background:#ffc107;color:#000}
