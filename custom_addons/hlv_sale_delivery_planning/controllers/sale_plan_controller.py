@@ -102,7 +102,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 .so-card{border-width:2px!important;transition:.1s}
 .so-card:hover{box-shadow:0 3px 10px rgba(0,0,0,.1)}
 /* Drawer */
-#drawer{position:fixed;top:0;right:-700px;width:800px;height:100vh;background:#fff;
+#drawer{position:fixed;top:0;right:-820px;width:800px;height:100vh;background:#fff;
   box-shadow:-4px 0 24px rgba(0,0,0,.15);z-index:1060;transition:right .3s;overflow-y:auto}
 #drawer.open{right:0}
 #drawer-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:1055}
@@ -110,7 +110,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 /* Drawer table */
 .table-lines td,.table-lines th{font-size:.85rem;vertical-align:middle}
 .table-lines thead th{background:#f7fafc;color:#4a5568;font-weight:600;text-transform:uppercase;font-size:.75rem;letter-spacing:.3px;padding:10px 8px;border-bottom:2px solid #e2e8f0}
-.table-lines td{padding:8px;border-color:#edf2f7}
+.table-lines td{padding:8px;border-color:#cccc}
 .table-lines tbody tr:hover{background:#f7fafc}
 .table-lines .cell-packed-full{color:#198754;font-weight:700}
 .table-lines .cell-packed-partial{color:#0dcaf0;font-weight:700}
@@ -129,7 +129,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
   display:flex;align-items:center;justify-content:center}
 .loading-overlay .spinner-border{width:3rem;height:3rem}
 /* Load more */
-#btn-load-more{font-weight:600;padding:8px 32px}
+#btn-load-more{font-weight:600;padding:4px 32px}
 @media(max-width:768px){#drawer{width:100%} .kanban-col{min-width:100%}}
 </style>
 </head><body>
@@ -338,6 +338,13 @@ function updKPI(){
   $('kpi-pw').textContent=s.packing_waiting||0;
   $('kpi-pu').textContent=s.packing_unpacked||0;
   $('kpi-pf').textContent=s.packing_fully||0;
+  // Sync active state trên KPI pack cards với filter hiện tại
+  var curPack=gv('f-pack');
+  document.querySelectorAll('.kpi-pack').forEach(function(el){el.classList.remove('active');});
+  if(curPack&&curPack!=='all'){
+    var activeCard=document.querySelector('.kpi-pack[data-filter="'+curPack+'"]');
+    if(activeCard)activeCard.classList.add('active');
+  }
 }
 
 function updLoadMore(){
