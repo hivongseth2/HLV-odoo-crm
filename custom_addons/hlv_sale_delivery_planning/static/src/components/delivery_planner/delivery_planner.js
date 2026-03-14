@@ -588,12 +588,11 @@ export class DeliveryPlannerDashboard extends Component {
             if (map[pid]) {
                 map[pid].product_uom_qty += (l.product_uom_qty || 0);
                 map[pid].qty_delivered += (l.qty_delivered || 0);
-                map[pid].qty_available += (l.qty_available || 0);
-                // qty_packed is the total from packages (same for all lines of same product), keep as-is
+                // qty_available, qty_warehouse_free: keep first (same product/warehouse = same stock)
             } else {
                 map[pid] = { ...l, product_uom_qty: l.product_uom_qty || 0,
                     qty_delivered: l.qty_delivered || 0, qty_packed: l.qty_packed || 0,
-                    qty_available: l.qty_available || 0 };
+                    qty_available: l.qty_available || 0, qty_warehouse_free: l.qty_warehouse_free || 0 };
                 order.push(pid);
             }
         }

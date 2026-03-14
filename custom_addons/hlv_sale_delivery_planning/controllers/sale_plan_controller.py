@@ -102,7 +102,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 .so-card{border-width:2px!important;transition:.1s}
 .so-card:hover{box-shadow:0 3px 10px rgba(0,0,0,.1)}
 /* Drawer */
-#drawer{position:fixed;top:0;right:-700px;width:680px;height:100vh;background:#fff;
+#drawer{position:fixed;top:0;right:-700px;width:800px;height:100vh;background:#fff;
   box-shadow:-4px 0 24px rgba(0,0,0,.15);z-index:1060;transition:right .3s;overflow-y:auto}
 #drawer.open{right:0}
 #drawer-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:1055}
@@ -222,7 +222,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
     <button id="btn-list" class="btn btn-sm btn-outline-secondary"><i class="fa fa-list"></i> Danh sách</button>
     <span class="vr"></span>
     <button id="btn-load-more" class="btn btn-sm btn-outline-primary d-none"><i class="fa fa-plus"></i> Tải thêm 200</button>
-    <span class="badge bg-secondary" style="font-size:.85rem;padding:6px 12px" id="count-info">0 / 0 đơn hàng</span>
+    <span class="badge bg-primary" style="font-size:.85rem;padding:9px 12px" id="count-info">0 / 0 đơn hàng</span>
   </div>
 </div>
 <!-- Kanban -->
@@ -275,12 +275,12 @@ function groupLines(lines){
     if(map[pid]){
       map[pid].product_uom_qty+=l.product_uom_qty||0;
       map[pid].qty_delivered+=l.qty_delivered||0;
-      map[pid].qty_available+=(l.qty_available||0);
-      // qty_packed already is total from packages, take max (same value for same product)
+      // qty_available, qty_warehouse_free: keep first (same product/warehouse = same stock)
     } else {
       map[pid]={product_id:l.product_id,product_uom_qty:l.product_uom_qty||0,
         qty_delivered:l.qty_delivered||0,qty_packed:l.qty_packed||0,
-        qty_available:l.qty_available||0,is_kit:l.is_kit||false};
+        qty_available:l.qty_available||0,qty_warehouse_free:l.qty_warehouse_free||0,
+        is_kit:l.is_kit||false};
       order.push(pid);
     }
   });
@@ -468,8 +468,11 @@ function openDrawer(id){
     +b(SC[o.stock_status]||'badge-stk-out',SL[o.stock_status]||o.stock_status)
     +b(PC[o.packing_status]||'badge-pack-waiting',PL[o.packing_status]||o.packing_status)
     +'</div>'
-    +'<strong><i class="fa fa-user"></i> '+esc(partnerName(o))+'</strong>'
-    +' &mdash; <i class="fa fa-warehouse"></i> '+esc(whName(o))
+    +'<div class="d-flex flex-column gap-2 mt-2 p-3 rounded" style="background:#f7fafc;border:1px solid #e2e8f0">'
+    +'<div><i class="fa fa-user text-primary me-2"></i><strong>'+esc(partnerName(o))+'</strong></div>'
+    +'<div><i class="fa fa-warehouse text-muted me-2"></i><span class="text-muted">'+esc(whName(o))+'</span></div>'
+    +(o.commitment_date?'<div><i class="fa fa-calendar text-muted me-2"></i><span class="text-muted">Hẹn giao: '+fd(o.commitment_date)+'</span></div>':'')
+    +'</div>'
     +'</div>';
   h+='<table class="table table-sm table-bordered table-lines"><thead class="table-light"><tr>'
     +'<th>Sản phẩm</th><th class="text-end">Chốt Bán</th><th class="text-end">Đóng Gói</th>'
@@ -477,16 +480,17 @@ function openDrawer(id){
   var grouped=groupLines(o.lines||[]);
   grouped.forEach(function(l){
     var pname=l.product_id?l.product_id[1]:'Unknown';
-    var shortage=Math.max((l.product_uom_qty||0)-(l.qty_delivered||0)-(l.qty_available||0),0);
+    var wfree=l.qty_warehouse_free||0;
+    var shortage=Math.max((l.product_uom_qty||0)-(l.qty_delivered||0)-wfree,0);
     var pending=(l.product_uom_qty||0)-(l.qty_delivered||0);
     var rc=pending>0?'table-warning':'table-success';
     var packCls=l.qty_packed>=l.product_uom_qty&&l.qty_packed>0?'cell-packed-full':(l.qty_packed>0?'cell-packed-partial':'cell-packed-zero');
-    var stkCls=(l.qty_available||0)>0?'cell-stock-ok':'cell-stock-zero';
+    var stkCls=wfree>0?'cell-stock-ok':'cell-stock-zero';
     var packHtml=l.qty_packed>0?'<i class="fa fa-cube me-1"></i>'+fq(l.qty_packed)+(l.qty_packed>=l.product_uom_qty?' <i class="fa fa-check-circle"></i>':''):fq(0);
     h+='<tr class="'+rc+'"><td>'+esc(pname)+(l.is_kit?' <span class="badge bg-warning bg-opacity-25 text-dark" style="font-size:10px"><i class="fa fa-gift"></i> Combo</span>':'')+'</td>'
       +'<td class="text-end fw-bold">'+fq(l.product_uom_qty)+'</td>'
       +'<td class="text-end '+packCls+'">'+packHtml+'</td>'
-      +'<td class="text-end '+stkCls+'">'+fq(l.qty_available||0)+'</td>'
+      +'<td class="text-end '+stkCls+'">'+fq(wfree)+'</td>'
       +'<td class="text-end cell-delivered">'+fq(l.qty_delivered)+'</td>'
       +'<td class="text-end '+(shortage>0?'cell-shortage':'text-muted opacity-50')+'">'+fq(shortage)+'</td></tr>';
   });
