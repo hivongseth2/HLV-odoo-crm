@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
+import logging
 from odoo import http
 from odoo.http import request
+
+_logger = logging.getLogger(__name__)
 
 SESSION_KEY_OK = "inv_pw_ok"
 PW_PARAM_KEY   = "website_public_inventory_18.search_password"
@@ -50,6 +53,25 @@ _ERR_VIEWER = u"""<!DOCTYPE html>
         t\u1ea1o key: <code>hlv_sale_delivery_planning.viewer_password</code><br/>
         value: password c\u1ee7a user tr\u00ean</li>
   </ol>
+  <a href="/sale_plan" class="btn btn-secondary mt-2">&#8592; Quay l\u1ea1i</a>
+</div>
+</body></html>"""
+
+_ERR_AUTH = u"""<!DOCTYPE html>
+<html lang="vi"><head><meta charset="utf-8"/>
+<title>L\u1ed7i \u0111\u0103ng nh\u1eadp Viewer</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"/>
+</head>
+<body class="bg-light d-flex align-items-center justify-content-center" style="min-height:100vh">
+<div class="card shadow p-4" style="max-width:560px;width:100%">
+  <h4 class="text-danger fw-bold mb-3">&#9888; \u0110\u0103ng nh\u1eadp viewer th\u1ea5t b\u1ea1i</h4>
+  <p class="text-muted mb-2">User <code>sale_plan_viewer</code> kh\u00f4ng \u0111\u0103ng nh\u1eadp \u0111\u01b0\u1ee3c. Ki\u1ec3m tra:</p>
+  <ul class="text-start mb-3">
+    <li>User ch\u01b0a b\u1ecb \u1eadn/kh\u00f3a (Settings \u2192 Users)</li>
+    <li>Password trong System Parameters kh\u1edbp v\u1edbi password c\u1ee7a user</li>
+    <li>Key parameter \u0111\u00fang: <code>hlv_sale_delivery_planning.viewer_password</code></li>
+  </ul>
+  <div class="alert alert-secondary small"><b>Chi ti\u1ebft l\u1ed7i:</b> {detail}</div>
   <a href="/sale_plan" class="btn btn-secondary mt-2">&#8592; Quay l\u1ea1i</a>
 </div>
 </body></html>"""
@@ -109,18 +131,26 @@ _VIEWER_FRAME = u"""<!DOCTYPE html>
 class SalePlanPublicController(http.Controller):
 
     def _auto_login_viewer(self):
-        """Authenticate the current session as the dedicated read-only viewer user."""
+        """Authenticate the current session as the dedicated read-only viewer user.
+        Returns (True, '') on success, or (False, error_message) on failure.
+        """
         viewer_pw = (
             request.env['ir.config_parameter'].sudo()
             .get_param(VIEWER_PW_KEY, default='') or ''
         )
         if not viewer_pw:
-            return False
+            _logger.warning(
+                'sale_plan_viewer: system parameter "%s" is empty or missing', VIEWER_PW_KEY
+            )
+            return False, 'not_configured'
         try:
             uid = request.session.authenticate(request.db, VIEWER_LOGIN, viewer_pw)
-            return bool(uid)
-        except Exception:
-            return False
+            if uid:
+                return True, ''
+            return False, 'bad_credentials'
+        except Exception as e:
+            _logger.exception('sale_plan_viewer: authenticate() failed: %s', e)
+            return False, str(e)
 
     @http.route('/sale_plan', type='http', auth='public', methods=['GET', 'POST'])
     def sale_plan_page(self, **kwargs):
@@ -137,9 +167,15 @@ class SalePlanPublicController(http.Controller):
         if request.httprequest.method == 'POST':
             inp = (request.params.get('inv_password') or '').strip()
             if inp == conf_pw:
-                ok = self._auto_login_viewer()
+                ok, err_detail = self._auto_login_viewer()
                 if not ok:
-                    return request.make_response(_ERR_VIEWER, headers=_H)
+                    if err_detail == 'not_configured':
+                        return request.make_response(_ERR_VIEWER, headers=_H)
+                    # Auth failed — show debug info so admin can fix
+                    return request.make_response(
+                        _ERR_AUTH.format(detail=err_detail or 'unknown'),
+                        headers=_H,
+                    )
                 # Viewer authenticated — redirect so GET serves the frame
                 return request.redirect('/sale_plan')
             return request.make_response(
