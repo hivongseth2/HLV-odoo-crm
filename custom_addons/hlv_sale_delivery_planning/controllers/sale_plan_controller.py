@@ -76,7 +76,7 @@ _ERR_AUTH = u"""<!DOCTYPE html>
 </div>
 </body></html>"""
 
-BACKEND_URL = '/web#action=hlv_sale_delivery_planning.action_delivery_planner_dashboard'
+BACKEND_URL = '/web?viewer=1#action=hlv_sale_delivery_planning.action_delivery_planner_dashboard'
 
 
 class SalePlanPublicController(http.Controller):

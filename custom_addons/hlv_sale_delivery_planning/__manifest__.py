@@ -24,6 +24,8 @@
             # JS utils (phải đăng ký trước main component)
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_utils.js',
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner.js',
+            # Viewer mode: ẩn navbar khi mở từ /sale_plan
+            'hlv_sale_delivery_planning/static/src/hide_navbar_viewer.js',
         ],
     },
     'installable': True,
