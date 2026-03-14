@@ -33,6 +33,7 @@ export class DeliveryPlannerDashboard extends Component {
             filterPODateTo: null,
             filterPOStatus: "all",
             filterPackingStatus: "all",
+            filterSalerCode: "",
 
             // Stats
             dashboardStats: { total: 0, ready: 0, partial: 0, out_of_stock: 0 },
@@ -90,6 +91,7 @@ export class DeliveryPlannerDashboard extends Component {
                     filter_po_date_to: this.state.filterPODateTo,
                     filter_po_status: this.state.filterPOStatus,
                     filter_packing_status: this.state.filterPackingStatus,
+                    filter_saler_code: this.state.filterSalerCode.trim(),
                     // Kanban tải theo batch, không phân trang backend
                     limit: isKanban ? this.state.kanbanBatchSize : this.state.itemsPerPage,
                     offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
@@ -576,6 +578,28 @@ export class DeliveryPlannerDashboard extends Component {
     formatQty(v)                            { return formatQty(v); }
     getDatesComparisonClass(soDate, poDate) { return getDatesComparisonClass(soDate, poDate); }
 
+    // --- Group duplicate product lines ---
+    groupedLines(lines) {
+        if (!lines || !lines.length) return [];
+        const map = {};
+        const order = [];
+        for (const l of lines) {
+            const pid = l.product_id ? l.product_id[0] : 0;
+            if (map[pid]) {
+                map[pid].product_uom_qty += (l.product_uom_qty || 0);
+                map[pid].qty_delivered += (l.qty_delivered || 0);
+                map[pid].qty_available += (l.qty_available || 0);
+                // qty_packed is the total from packages (same for all lines of same product), keep as-is
+            } else {
+                map[pid] = { ...l, product_uom_qty: l.product_uom_qty || 0,
+                    qty_delivered: l.qty_delivered || 0, qty_packed: l.qty_packed || 0,
+                    qty_available: l.qty_available || 0 };
+                order.push(pid);
+            }
+        }
+        return order.map(pid => map[pid]);
+    }
+
     // --- Hover Interactions cho Liên kết Return/Backorder ---
     onPickingHover(pickingName) {
         const safeName = pickingName.split('/').join('-');
@@ -668,7 +692,8 @@ export class DeliveryPlannerDashboard extends Component {
             this.state.filterPODateFrom ||
             this.state.filterPODateTo ||
             this.state.filterPOStatus !== "all" ||
-            this.state.filterPackingStatus !== "all";
+            this.state.filterPackingStatus !== "all" ||
+            this.state.filterSalerCode;
     }
 
     resetFilters() {
@@ -682,6 +707,7 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.filterPODateTo = null;
         this.state.filterPOStatus = "all";
         this.state.filterPackingStatus = "all";
+        this.state.filterSalerCode = "";
         this.state.currentPage = 1;
         this.fetchData();
     }

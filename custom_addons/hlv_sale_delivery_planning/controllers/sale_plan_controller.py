@@ -61,8 +61,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 .card,.form-control,.form-select,.btn,.badge,.list-group-item,.alert,.modal-content,
 .input-group-text,.dropdown-menu{border-radius:3px!important}
 /* KPI row 1 - colored background cards */
-.kpi-main{padding:18px 20px;color:#fff;position:relative;overflow:hidden;border:0;transition:.15s}
-.kpi-main:hover{opacity:.92}
+.kpi-main{padding:18px 20px;color:#fff;position:relative;overflow:hidden;border:0;transition:.2s;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.kpi-main:hover{opacity:.92;box-shadow:0 4px 16px rgba(0,0,0,.2);transform:translateY(-1px)}
 .kpi-main .kpi-icon{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:2.4rem;opacity:.25}
 .kpi-main .kpi-label{font-size:.78rem;text-transform:uppercase;font-weight:600;letter-spacing:.3px;opacity:.9}
 .kpi-main .kpi-val{font-size:2rem;font-weight:800;line-height:1.1}
@@ -71,8 +71,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 .kpi-bg-partial{background:linear-gradient(135deg,#d69e2e,#b7791f)}
 .kpi-bg-out{background:linear-gradient(135deg,#e53e3e,#c53030)}
 /* KPI row 2 - packing with circle icons */
-.kpi-pack{padding:14px 16px;border:1px solid #e2e8f0;cursor:pointer;transition:.15s;display:flex;align-items:center;gap:14px;background:#fff}
-.kpi-pack:hover{box-shadow:0 2px 8px rgba(0,0,0,.08);border-color:#cbd5e0}
+.kpi-pack{padding:14px 16px;border:1px solid #e2e8f0;cursor:pointer;transition:.2s;display:flex;align-items:center;gap:14px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.kpi-pack:hover{box-shadow:0 3px 12px rgba(0,0,0,.1);border-color:#cbd5e0;transform:translateY(-1px)}
 .kpi-pack.active{border-color:#3182ce;box-shadow:0 0 0 2px rgba(49,130,206,.25);background:#ebf8ff}
 .kpi-pack-icon{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
 .kpi-pack .kpi-pack-label{font-size:.75rem;color:#718096;text-transform:uppercase;font-weight:600;letter-spacing:.3px}
@@ -112,6 +112,13 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 .table-lines thead th{background:#f7fafc;color:#4a5568;font-weight:600;text-transform:uppercase;font-size:.75rem;letter-spacing:.3px;padding:10px 8px;border-bottom:2px solid #e2e8f0}
 .table-lines td{padding:8px;border-color:#edf2f7}
 .table-lines tbody tr:hover{background:#f7fafc}
+.table-lines .cell-packed-full{color:#198754;font-weight:700}
+.table-lines .cell-packed-partial{color:#0dcaf0;font-weight:700}
+.table-lines .cell-packed-zero{color:#adb5bd}
+.table-lines .cell-stock-ok{color:#198754;font-weight:700}
+.table-lines .cell-stock-zero{color:#dc3545}
+.table-lines .cell-shortage{color:#dc3545;font-weight:700}
+.table-lines .cell-delivered{color:#0d6efd}
 .row-pending{background:#fffbeb}
 .row-delivered{background:#f0fdf4}
 /* Kanban col load more */
@@ -261,6 +268,24 @@ function fm(v){return(v||0).toLocaleString('vi-VN')+'₫'}
 function fq(v){var n=parseFloat(v)||0;return n%1===0?n.toLocaleString('vi-VN'):n.toLocaleString('vi-VN',{minimumFractionDigits:0,maximumFractionDigits:2})}
 function b(cls,label){return'<span class="badge '+cls+' me-1">'+label+'</span>'}
 function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function groupLines(lines){
+  var map={},order=[];
+  lines.forEach(function(l){
+    var pid=l.product_id?l.product_id[0]:0;
+    if(map[pid]){
+      map[pid].product_uom_qty+=l.product_uom_qty||0;
+      map[pid].qty_delivered+=l.qty_delivered||0;
+      map[pid].qty_available+=(l.qty_available||0);
+      // qty_packed already is total from packages, take max (same value for same product)
+    } else {
+      map[pid]={product_id:l.product_id,product_uom_qty:l.product_uom_qty||0,
+        qty_delivered:l.qty_delivered||0,qty_packed:l.qty_packed||0,
+        qty_available:l.qty_available||0,is_kit:l.is_kit||false};
+      order.push(pid);
+    }
+  });
+  return order.map(function(pid){return map[pid];});
+}
 function gv(id){var e=$(id);return e?e.value:'';}
 function partnerName(o){return o.partner_id?o.partner_id[1]:'';}
 function whName(o){return o.warehouse_id?o.warehouse_id[1]:'';}
@@ -449,17 +474,21 @@ function openDrawer(id){
   h+='<table class="table table-sm table-bordered table-lines"><thead class="table-light"><tr>'
     +'<th>Sản phẩm</th><th class="text-end">Chốt Bán</th><th class="text-end">Đóng Gói</th>'
     +'<th class="text-end">Tồn Kho</th><th class="text-end">Đã Giao</th><th class="text-end">Thiếu</th></tr></thead><tbody>';
-  (o.lines||[]).forEach(function(l){
+  var grouped=groupLines(o.lines||[]);
+  grouped.forEach(function(l){
     var pname=l.product_id?l.product_id[1]:'Unknown';
     var shortage=Math.max((l.product_uom_qty||0)-(l.qty_delivered||0)-(l.qty_available||0),0);
-    var rc=(l.qty_delivered>=l.product_uom_qty&&l.product_uom_qty>0)?'row-delivered':
-           (l.qty_delivered>0?'row-pending':'');
-    h+='<tr class="'+rc+'"><td>'+esc(pname)+'</td>'
-      +'<td class="text-end">'+fq(l.product_uom_qty)+'</td>'
-      +'<td class="text-end">'+fq(l.qty_packed||0)+'</td>'
-      +'<td class="text-end">'+fq(l.qty_available||0)+'</td>'
-      +'<td class="text-end">'+fq(l.qty_delivered)+'</td>'
-      +'<td class="text-end '+(shortage>0?'text-danger fw-bold':'')+'">'+fq(shortage)+'</td></tr>';
+    var pending=(l.product_uom_qty||0)-(l.qty_delivered||0);
+    var rc=pending>0?'table-warning':'table-success';
+    var packCls=l.qty_packed>=l.product_uom_qty&&l.qty_packed>0?'cell-packed-full':(l.qty_packed>0?'cell-packed-partial':'cell-packed-zero');
+    var stkCls=(l.qty_available||0)>0?'cell-stock-ok':'cell-stock-zero';
+    var packHtml=l.qty_packed>0?'<i class="fa fa-cube me-1"></i>'+fq(l.qty_packed)+(l.qty_packed>=l.product_uom_qty?' <i class="fa fa-check-circle"></i>':''):fq(0);
+    h+='<tr class="'+rc+'"><td>'+esc(pname)+(l.is_kit?' <span class="badge bg-warning bg-opacity-25 text-dark" style="font-size:10px"><i class="fa fa-gift"></i> Combo</span>':'')+'</td>'
+      +'<td class="text-end fw-bold">'+fq(l.product_uom_qty)+'</td>'
+      +'<td class="text-end '+packCls+'">'+packHtml+'</td>'
+      +'<td class="text-end '+stkCls+'">'+fq(l.qty_available||0)+'</td>'
+      +'<td class="text-end cell-delivered">'+fq(l.qty_delivered)+'</td>'
+      +'<td class="text-end '+(shortage>0?'cell-shortage':'text-muted opacity-50')+'">'+fq(shortage)+'</td></tr>';
   });
   h+='</tbody></table>';
   if(o.pos&&o.pos.length){
