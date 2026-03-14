@@ -622,4 +622,327 @@ $monitor-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
             color: darken($monitor-text-muted, 10%);
         }
     }
+
+    /* ══════════════════════════════════════════════════
+       Phase 2 — Delivery Planner Panel
+       ══════════════════════════════════════════════════ */
+    .delivery-planner-panel {
+        border-top: 2px solid $monitor-border;
+        margin-top: 4px;
+        padding-top: 4px;
+
+        /* Header */
+        .dp-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+
+            .dp-title {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 14px;
+                font-weight: 700;
+                color: #fff;
+
+                .dp-icon { font-size: 18px; }
+
+                .dp-badge {
+                    background: rgba($monitor-cyan, 0.2);
+                    color: $monitor-cyan;
+                    border: 1px solid rgba($monitor-cyan, 0.3);
+                    border-radius: 20px;
+                    padding: 2px 8px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+            }
+
+            .dp-header-actions {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+
+                .dp-loading-indicator {
+                    font-size: 11px;
+                    color: $monitor-text-muted;
+                    animation: dpSpin 1s linear infinite;
+                    @keyframes dpSpin {
+                        from { opacity: 1; }
+                        50% { opacity: 0.3; }
+                        to { opacity: 1; }
+                    }
+                }
+
+                .dp-btn-load {
+                    background: rgba($monitor-cyan, 0.15);
+                    border: 1px solid rgba($monitor-cyan, 0.35);
+                    color: $monitor-cyan;
+                    padding: 5px 12px;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s;
+
+                    &:hover {
+                        background: rgba($monitor-cyan, 0.25);
+                    }
+
+                    &.is-loading {
+                        opacity: 0.6;
+                        pointer-events: none;
+                    }
+                }
+            }
+        }
+
+        /* PO in-transit notifications */
+        .dp-po-notifications {
+            margin: 0 12px 10px;
+            background: rgba($monitor-amber, 0.08);
+            border: 1px solid rgba($monitor-amber, 0.3);
+            border-radius: 8px;
+            padding: 10px;
+
+            .dp-po-title {
+                font-size: 12px;
+                font-weight: 700;
+                color: $monitor-amber;
+                margin-bottom: 6px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+
+            .dp-po-card {
+                display: flex;
+                align-items: flex-start;
+                gap: 8px;
+                padding: 4px 0;
+                font-size: 12px;
+                color: rgba($monitor-text, 0.85);
+                border-top: 1px solid rgba($monitor-amber, 0.15);
+
+                &:first-of-type { border-top: none; }
+
+                .dp-po-icon { flex-shrink: 0; }
+                .dp-po-msg { line-height: 1.4; }
+            }
+        }
+
+        /* Empty / loading state */
+        .dp-empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 24px 16px;
+            color: $monitor-text-muted;
+            text-align: center;
+
+            .dp-empty-icon { font-size: 32px; opacity: 0.4; }
+            .dp-empty-text { font-size: 12px; line-height: 1.5; max-width: 260px; }
+
+            .dp-loading-spinner {
+                width: 24px;
+                height: 24px;
+                border: 2px solid rgba($monitor-cyan, 0.2);
+                border-top-color: $monitor-cyan;
+                border-radius: 50%;
+                animation: dpSpinner 0.8s linear infinite;
+                @keyframes dpSpinner {
+                    to { transform: rotate(360deg); }
+                }
+            }
+        }
+
+        /* Trip cards */
+        .dp-trip-card {
+            margin: 0 12px 8px;
+            border-radius: 8px;
+            border: 1px solid $monitor-border;
+            overflow: hidden;
+            transition: border-color 0.2s;
+
+            &.dp-priority-overdue {
+                border-color: rgba($monitor-red, 0.5);
+                background: rgba($monitor-red, 0.05);
+            }
+            &.dp-priority-urgent {
+                border-color: rgba($monitor-amber, 0.4);
+                background: rgba($monitor-amber, 0.04);
+            }
+            &.dp-priority-normal {
+                border-color: $monitor-border;
+                background: rgba($monitor-card-bg, 0.6);
+            }
+
+            .dp-trip-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 10px 12px;
+                cursor: pointer;
+                user-select: none;
+
+                &:hover { background: rgba(#fff, 0.03); }
+
+                .dp-trip-left {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+
+                    .dp-trip-vehicle {
+                        font-size: 13px;
+                        font-weight: 700;
+                        color: $monitor-text;
+                    }
+
+                    .dp-trip-stats {
+                        display: flex;
+                        align-items: center;
+                        gap: 4px;
+                        font-size: 12px;
+                        color: $monitor-text-muted;
+
+                        .dp-stat-num {
+                            font-weight: 700;
+                            color: $monitor-text;
+                        }
+                        .dp-stat-sep { opacity: 0.4; padding: 0 2px; }
+                    }
+                }
+
+                .dp-trip-right {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+
+                    .dp-priority-badge {
+                        padding: 2px 8px;
+                        border-radius: 20px;
+                        font-size: 10px;
+                        font-weight: 800;
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
+
+                        &.dp-pb-overdue {
+                            background: rgba($monitor-red, 0.2);
+                            color: $monitor-red;
+                        }
+                        &.dp-pb-urgent {
+                            background: rgba($monitor-amber, 0.2);
+                            color: $monitor-amber;
+                        }
+                        &.dp-pb-normal {
+                            background: rgba($monitor-green, 0.15);
+                            color: $monitor-green;
+                        }
+                    }
+
+                    .dp-expand-icon {
+                        font-size: 10px;
+                        color: $monitor-text-muted;
+                        transition: transform 0.2s;
+
+                        &.expanded { transform: rotate(90deg); }
+                    }
+                }
+            }
+
+            .dp-trip-vehicle-suggestion {
+                padding: 4px 12px 8px;
+                font-size: 11px;
+                color: $monitor-text-muted;
+
+                strong { color: $monitor-cyan; }
+            }
+
+            /* Expanded order list */
+            .dp-order-list {
+                border-top: 1px solid rgba($monitor-border, 0.6);
+
+                .dp-order-row {
+                    padding: 8px 12px;
+                    border-bottom: 1px solid rgba($monitor-border, 0.3);
+                    display: flex;
+                    flex-direction: column;
+                    gap: 4px;
+                    font-size: 12px;
+                    transition: background 0.15s;
+
+                    &:hover { background: rgba(#fff, 0.02); }
+                    &:last-child { border-bottom: none; }
+
+                    &.dp-order-overdue {
+                        background: rgba($monitor-red, 0.06);
+                        border-left: 3px solid $monitor-red;
+                        padding-left: 9px;
+                    }
+
+                    .dp-order-main {
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                        gap: 8px;
+
+                        .dp-order-name {
+                            font-weight: 700;
+                            color: $monitor-accent;
+                            font-family: 'Courier New', monospace;
+                            font-size: 13px;
+                        }
+
+                        .dp-order-partner {
+                            color: $monitor-text;
+                            white-space: nowrap;
+                            overflow: hidden;
+                            text-overflow: ellipsis;
+                            max-width: 160px;
+                        }
+                    }
+
+                    .dp-order-meta {
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 6px;
+                        align-items: center;
+
+                        .dp-stock {
+                            font-size: 11px;
+                            font-weight: 600;
+                            &.dp-stock-ready { color: $monitor-green; }
+                            &.dp-stock-partial { color: $monitor-amber; }
+                            &.dp-stock-waiting { color: $monitor-text-muted; }
+                        }
+
+                        .dp-htgh {
+                            padding: 1px 6px;
+                            border-radius: 4px;
+                            background: rgba($monitor-border, 0.5);
+                            color: $monitor-text-muted;
+                            font-size: 10px;
+                            font-style: italic;
+                        }
+
+                        .dp-deadline {
+                            font-size: 11px;
+                            color: $monitor-text-muted;
+
+                            &.overdue { color: $monitor-red; font-weight: 700; }
+                            &.urgent  { color: $monitor-amber; font-weight: 700; }
+                        }
+
+                        .dp-dist {
+                            font-size: 11px;
+                            color: $monitor-cyan;
+
+                            &.dp-no-coords { color: $monitor-text-muted; opacity: 0.6; }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

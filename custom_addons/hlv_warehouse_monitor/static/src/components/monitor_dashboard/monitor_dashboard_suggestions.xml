@@ -42,12 +42,8 @@
                 </t>
             </div>
 
-            <!-- Phase 2 AI placeholder -->
-            <div class="ai-panel-placeholder" style="margin: 16px; border-radius: 8px;">
-                <div class="ai-icon">🤖</div>
-                <h4>AI Assistant (Phase 2)</h4>
-                <p>Tích hợp AI phân tích sự kiện và đưa ra quyết định tự động.</p>
-            </div>
+            <!-- Phase 2: AI Delivery Planner -->
+            <t t-call="hlv_warehouse_monitor.DeliveryPlanner"/>
         </div>
     </t>
 

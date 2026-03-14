@@ -24,6 +24,15 @@ export class WarehouseMonitorDashboard extends Component {
             offset: 0,
             pageSize: 50,
             countdown: 30,
+            deliveryPlan: {
+                isLoading: false,
+                loaded: false,
+                trips: [],
+                poNotifications: [],
+                totalOrders: 0,
+                totalTrips: 0,
+                expandedTrip: null,
+            },
             kpi: {
                 total_events_today: 0,
                 in_today: 0,
@@ -119,6 +128,11 @@ export class WarehouseMonitorDashboard extends Component {
                     );
                 }
             }
+
+            // Auto-refresh delivery plan if it was previously loaded
+            if (this.state.deliveryPlan.loaded) {
+                this.loadDeliveryPlan();
+            }
         } catch {
             // Silent fail on auto-refresh
         }
@@ -204,6 +218,42 @@ export class WarehouseMonitorDashboard extends Component {
         this.state.suggestions = this.state.suggestions.filter((s) => s.id !== eventId);
         this.state.kpi.suggestions_pending = Math.max(0, this.state.kpi.suggestions_pending - 1);
         this.notification.add("Đã bỏ qua đề xuất", { type: "info" });
+    }
+
+    // ── Phase 2: Delivery Planner ───────────────────────────
+    async loadDeliveryPlan() {
+        if (this.state.deliveryPlan.isLoading) return;
+        this.state.deliveryPlan.isLoading = true;
+        try {
+            const result = await this.orm.call(
+                "warehouse.monitor.event",
+                "get_delivery_plan_suggestions",
+                [],
+                { warehouse_id: this.state.warehouseId }
+            );
+            this.state.deliveryPlan.trips = result.trips || [];
+            this.state.deliveryPlan.poNotifications = result.po_notify || [];
+            this.state.deliveryPlan.totalOrders = result.total_orders || 0;
+            this.state.deliveryPlan.totalTrips = result.total_trips || 0;
+            this.state.deliveryPlan.loaded = true;
+
+            if ((result.po_notify || []).length > 0) {
+                this.notification.add(
+                    `${result.po_notify.length} PO đang về kho – chuẩn bị đóng gói!`,
+                    { type: "warning", sticky: false }
+                );
+            }
+        } catch (e) {
+            console.error("[WM Planner] Delivery plan fetch error:", e);
+            this.notification.add("Lỗi tải kế hoạch giao hàng", { type: "danger" });
+        } finally {
+            this.state.deliveryPlan.isLoading = false;
+        }
+    }
+
+    toggleTripExpand(tripId) {
+        this.state.deliveryPlan.expandedTrip =
+            this.state.deliveryPlan.expandedTrip === tripId ? null : tripId;
     }
 
     // ── Helpers ─────────────────────────────────────────────

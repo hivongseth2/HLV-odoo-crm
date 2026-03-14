@@ -26,6 +26,7 @@
         "sale_management",
         "purchase",
         "web",
+        "fleet",
     ],
     "data": [
         "security/warehouse_monitor_security.xml",
@@ -48,6 +49,8 @@
             "hlv_warehouse_monitor/static/src/components/queue_screen/queue_screen.scss",
             "hlv_warehouse_monitor/static/src/components/queue_screen/queue_screen.xml",
             "hlv_warehouse_monitor/static/src/components/queue_screen/queue_screen.js",
+            # Delivery Planner (Phase 2)
+            "hlv_warehouse_monitor/static/src/components/monitor_dashboard/monitor_dashboard_delivery.xml",
         ],
     },
     "installable": True,
