@@ -217,9 +217,46 @@
         <t t-if="pw_ok">
           <section>
             <div class="container-fluid px-4 mt-3 mb-6">
-              <div class="d-flex justify-content-between align-items-center mb-4">
+              <div class="d-flex justify-content-between align-items-center mb-4 gap-2 flex-wrap">
                   <h2 class="text-primary fw-bold mb-0">Tra cứu tồn kho</h2>
-                  <a href="/search_invoice" class="btn btn-info fw-bold text-white"><i class="fa fa-file-invoice me-1"></i> Tra cứu Hóa đơn MISA</a>
+
+                  <!-- Desktop: nút hiển thị thẳng hàng -->
+                  <div class="d-none d-md-flex gap-2 flex-wrap justify-content-end">
+                      <a href="/search_stock" class="btn btn-primary fw-bold">
+                          <i class="fa fa-cubes me-1"></i> Tra cứu tồn kho
+                      </a>
+                      <a href="/search_order" class="btn btn-secondary fw-bold">
+                          <i class="fa fa-file-text me-1"></i> Tra cứu chứng từ mua hàng
+                      </a>
+                      <a href="/sale_plan" class="btn btn-success fw-bold">
+                          <i class="fa fa-tasks me-1"></i> Tình trạng đơn hàng
+                      </a>
+                      <a href="/search_invoice" class="btn btn-info fw-bold text-white">
+                          <i class="fa fa-file-invoice me-1"></i> Tra cứu Hóa đơn MISA
+                      </a>
+                  </div>
+
+                  <!-- Mobile: dropdown gọn -->
+                  <div class="d-md-none dropdown">
+                      <button class="btn btn-outline-secondary dropdown-toggle" type="button"
+                              id="nav-pages-mobile" data-bs-toggle="dropdown" aria-expanded="false">
+                          <i class="fa fa-bars me-1"></i> Menu
+                      </button>
+                      <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="nav-pages-mobile">
+                          <li><a class="dropdown-item fw-bold text-primary" href="/search_stock">
+                              <i class="fa fa-cubes me-2"></i> Tra cứu tồn kho
+                          </a></li>
+                          <li><a class="dropdown-item fw-bold text-secondary" href="/search_order">
+                              <i class="fa fa-file-text me-2"></i> Tra cứu chứng từ mua hàng
+                          </a></li>
+                          <li><a class="dropdown-item fw-bold text-success" href="/sale_plan">
+                              <i class="fa fa-tasks me-2"></i> Tình trạng đơn hàng
+                          </a></li>
+                          <li><a class="dropdown-item fw-bold text-info" href="/search_invoice">
+                              <i class="fa fa-file-invoice me-2"></i> Tra cứu Hóa đơn MISA
+                          </a></li>
+                      </ul>
+                  </div>
               </div>
               <form t-att-action="request.httprequest.path" method="get" class="row g-2 mb-4" id="search-form">
                 <div class="col-md-5 position-relative">
