@@ -76,56 +76,7 @@ _ERR_AUTH = u"""<!DOCTYPE html>
 </div>
 </body></html>"""
 
-# ─── Wrapper: fullscreen iframe + hide Odoo navbar via CSS injection ──────────
-_VIEWER_FRAME = u"""<!DOCTYPE html>
-<html style="margin:0;padding:0;height:100%;overflow:hidden">
-<head>
-<meta charset="utf-8"/>
-<title>T\u00ecnh tr\u1ea1ng \u0110\u01a1n h\u00e0ng</title>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<style>
-  *,html,body{{margin:0;padding:0;box-sizing:border-box}}
-  #hlv-frame{{position:fixed;top:0;left:0;width:100%;height:100%;border:none}}
-</style>
-</head>
-<body>
-<iframe id="hlv-frame"
-  src="/web#action=hlv_sale_delivery_planning.action_delivery_planner_dashboard">
-</iframe>
-<script>
-(function(){{
-  // CSS injected into the iframe to hide Odoo top navbar
-  var CSS = [
-    'nav.o_main_navbar {{ display: none !important; }}',
-    '.o_web_client {{ padding-top: 0 !important; }}',
-    '.o_action_manager {{ top: 0 !important; height: 100vh !important; }}',
-  ].join('\\n');
-
-  var frame = document.getElementById('hlv-frame');
-  var timer;
-
-  function inject() {{
-    try {{
-      var doc = frame.contentDocument || frame.contentWindow.document;
-      if (!doc || !doc.head) return;
-      if (doc.getElementById('_hlv_no_nav')) return;
-      var s = doc.createElement('style');
-      s.id = '_hlv_no_nav';
-      s.textContent = CSS;
-      doc.head.appendChild(s);
-    }} catch(e) {{}}
-  }}
-
-  // Re-inject every 400ms to survive SPA route changes
-  frame.addEventListener('load', function() {{
-    clearInterval(timer);
-    inject();
-    timer = setInterval(inject, 400);
-  }});
-}})();
-</script>
-</body>
-</html>"""
+BACKEND_URL = '/web#action=hlv_sale_delivery_planning.action_delivery_planner_dashboard'
 
 
 class SalePlanPublicController(http.Controller):
@@ -157,9 +108,9 @@ class SalePlanPublicController(http.Controller):
 
     @http.route('/sale_plan', type='http', auth='public', methods=['GET', 'POST'])
     def sale_plan_page(self, **kwargs):
-        # ── Already have an Odoo session (viewer or normal user) → show dashboard
+        # ── Already have an Odoo session (viewer or normal user) → go to dashboard
         if request.session.uid:
-            return request.make_response(_VIEWER_FRAME, headers=_H)
+            return request.redirect(BACKEND_URL)
 
         # ── Check public password ────────────────────────────────────────────
         conf_pw = (
@@ -179,8 +130,8 @@ class SalePlanPublicController(http.Controller):
                         _ERR_AUTH.format(detail=err_detail or 'unknown'),
                         headers=_H,
                     )
-                # Viewer authenticated — redirect so GET serves the frame
-                return request.redirect('/sale_plan')
+                # Viewer authenticated — redirect straight to dashboard
+                return request.redirect(BACKEND_URL)
             return request.make_response(
                 _LOGIN.format(csrf=request.csrf_token(), err=_ERR_PW),
                 headers=_H,
