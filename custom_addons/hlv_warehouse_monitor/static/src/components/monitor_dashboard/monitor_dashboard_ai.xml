@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  AI Assistant Panel (embedded in Dashboard)            -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <t t-name="hlv_warehouse_monitor.AIAssistant">
+        <div class="wm-ai-panel">
+
+            <!-- Panel Header -->
+            <div class="wm-ai-header">
+                <div class="wm-ai-title-group">
+                    <span class="wm-ai-robot-icon">🤖</span>
+                    <span class="wm-ai-title">AI Trợ lý Kho</span>
+                    <t t-if="state.aiPanel.cards.length > 0">
+                        <span class="wm-ai-badge" t-esc="state.aiPanel.cards.length"/>
+                    </t>
+                    <t t-if="state.aiPanel.isThinking">
+                        <span class="wm-ai-thinking-badge">
+                            <span class="wm-ai-dot"/>
+                            <span class="wm-ai-dot"/>
+                            <span class="wm-ai-dot"/>
+                            đang suy nghĩ
+                        </span>
+                    </t>
+                </div>
+
+                <div class="wm-ai-ask-group">
+                    <input
+                        class="wm-ai-input"
+                        type="text"
+                        placeholder="Hỏi AI về tình trạng kho..."
+                        t-att-value="state.aiPanel.userQuestion"
+                        t-on-input="(ev) => this.onAiQuestionInput(ev)"
+                        t-on-keydown="(ev) => this.onAiQuestionKeydown(ev)"
+                        t-att-disabled="state.aiPanel.isThinking ? 'disabled' : false"
+                    />
+                    <button class="wm-ai-send-btn"
+                            t-on-click="() => this.askAI()"
+                            t-att-disabled="state.aiPanel.isThinking ? 'disabled' : false">
+                        ✉️ Gửi
+                    </button>
+                    <t t-if="state.aiPanel.cards.length > 0">
+                        <button class="wm-ai-clear-btn"
+                                t-on-click="() => this.clearAllInsights()">
+                            🗑 Xóa tất cả
+                        </button>
+                    </t>
+                </div>
+            </div>
+
+            <!-- Cards Area -->
+            <div class="wm-ai-cards-area">
+
+                <!-- Thinking Placeholder Card -->
+                <t t-if="state.aiPanel.isThinking">
+                    <div class="wm-ai-card wm-ai-card--thinking">
+                        <div class="wm-ai-card-header">
+                            <span class="wm-ai-type-badge wm-ai-type--thinking">🤖 AI</span>
+                        </div>
+                        <div class="wm-ai-thinking-content">
+                            <div class="wm-ai-thinking-dots">
+                                <span class="wm-ai-pulse-dot"/>
+                                <span class="wm-ai-pulse-dot"/>
+                                <span class="wm-ai-pulse-dot"/>
+                            </div>
+                            <span>Đang phân tích...</span>
+                        </div>
+                    </div>
+                </t>
+
+                <!-- Insight Cards -->
+                <t t-foreach="state.aiPanel.cards" t-as="card" t-key="card.id">
+                    <div t-att-class="'wm-ai-card wm-ai-card--' + card.priority">
+
+                        <!-- Card Header -->
+                        <div class="wm-ai-card-header">
+                            <div class="wm-ai-card-meta">
+                                <t t-if="card.is_question">
+                                    <span class="wm-ai-type-badge wm-ai-type--question">❓ Câu hỏi</span>
+                                </t>
+                                <t t-else="">
+                                    <span t-att-class="'wm-ai-type-badge wm-ai-type--' + (card.event_type || 'other')"
+                                          t-esc="(card.event_type || '').toUpperCase()"/>
+                                </t>
+                                <span t-att-class="'wm-ai-priority-badge wm-ai-priority--' + card.priority">
+                                    <t t-if="card.priority === 'urgent'">🔴 Khẩn cấp</t>
+                                    <t t-elif="card.priority === 'high'">🟠 Cao</t>
+                                    <t t-else="">🔵 Bình thường</t>
+                                </span>
+                            </div>
+                            <button class="wm-ai-dismiss-btn"
+                                    t-on-click="() => this.dismissInsight(card.id)"
+                                    title="Ẩn thẻ này">✕</button>
+                        </div>
+
+                        <!-- Headline & time -->
+                        <div class="wm-ai-card-headline" t-esc="card.headline"/>
+                        <div class="wm-ai-card-time" t-esc="this.formatTime(card.timestamp)"/>
+
+                        <!-- Question display (if user question) -->
+                        <t t-if="card.is_question and card.question">
+                            <div class="wm-ai-question-text">
+                                💬 "<span t-esc="card.question"/>"
+                            </div>
+                        </t>
+
+                        <div class="wm-ai-card-divider"/>
+
+                        <!-- AI Analysis -->
+                        <div class="wm-ai-analysis" t-esc="card.analysis"/>
+
+                        <!-- Suggested Actions -->
+                        <t t-if="card.actions and card.actions.length > 0">
+                            <div class="wm-ai-card-divider"/>
+                            <ul class="wm-ai-actions-list">
+                                <t t-foreach="card.actions" t-as="act" t-key="act_index">
+                                    <li class="wm-ai-action-item">
+                                        <span class="wm-ai-action-check">✅</span>
+                                        <span t-esc="act"/>
+                                    </li>
+                                </t>
+                            </ul>
+                        </t>
+
+                    </div>
+                </t>
+
+                <!-- Empty State -->
+                <t t-if="!state.aiPanel.isThinking and state.aiPanel.cards.length === 0">
+                    <div class="wm-ai-empty">
+                        <span class="wm-ai-empty-icon">🤖</span>
+                        <div class="wm-ai-empty-text">
+                            AI đang chờ sự kiện mới...
+                        </div>
+                        <div class="wm-ai-empty-hint">
+                            Khi có hoạt động kho (nhập, xuất, xác nhận đơn...) AI sẽ tự động phân tích và gợi ý.
+                        </div>
+                    </div>
+                </t>
+
+            </div>
+        </div>
+    </t>
+
+</templates>

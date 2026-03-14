@@ -945,4 +945,386 @@ $monitor-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
             }
         }
     }
-}
+
+    /* ══════════════════════════════════════════════════
+       Phase 3 — AI Assistant Panel
+       ══════════════════════════════════════════════════ */
+    .wm-ai-panel {
+        background: #141b2d;
+        border: 1px solid rgba(99, 215, 255, 0.18);
+        border-radius: 14px;
+        margin: 0 24px 20px;
+        overflow: hidden;
+        box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3);
+
+        /* ── Panel Header ── */
+        .wm-ai-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            padding: 14px 20px;
+            border-bottom: 1px solid rgba(99, 215, 255, 0.12);
+            background: rgba(99, 215, 255, 0.04);
+
+            .wm-ai-title-group {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+
+                .wm-ai-robot-icon { font-size: 22px; }
+
+                .wm-ai-title {
+                    font-size: 15px;
+                    font-weight: 700;
+                    color: #63d7ff;
+                    letter-spacing: -0.2px;
+                }
+
+                .wm-ai-badge {
+                    background: #63d7ff;
+                    color: #0a0f1e;
+                    font-size: 11px;
+                    font-weight: 700;
+                    padding: 2px 8px;
+                    border-radius: 20px;
+                }
+
+                .wm-ai-thinking-badge {
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                    background: rgba(99, 215, 255, 0.12);
+                    border: 1px solid rgba(99, 215, 255, 0.3);
+                    border-radius: 20px;
+                    padding: 3px 10px;
+                    font-size: 11px;
+                    color: #63d7ff;
+                    animation: pulse-border 1.5s ease-in-out infinite;
+
+                    .wm-ai-dot {
+                        width: 5px;
+                        height: 5px;
+                        background: #63d7ff;
+                        border-radius: 50%;
+                        animation: bounce-dot 1.4s ease-in-out infinite;
+
+                        &:nth-child(2) { animation-delay: 0.2s; }
+                        &:nth-child(3) { animation-delay: 0.4s; }
+                    }
+                }
+            }
+
+            .wm-ai-ask-group {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex: 1;
+                min-width: 0;
+                max-width: 520px;
+
+                .wm-ai-input {
+                    flex: 1;
+                    min-width: 0;
+                    background: rgba(255, 255, 255, 0.06);
+                    border: 1px solid rgba(99, 215, 255, 0.25);
+                    border-radius: 8px;
+                    padding: 8px 12px;
+                    font-size: 13px;
+                    color: #e0eeff;
+                    outline: none;
+                    transition: border-color 0.2s;
+
+                    &::placeholder { color: rgba(99, 215, 255, 0.4); }
+
+                    &:focus {
+                        border-color: rgba(99, 215, 255, 0.6);
+                        background: rgba(255, 255, 255, 0.08);
+                    }
+
+                    &:disabled { opacity: 0.5; cursor: not-allowed; }
+                }
+
+                .wm-ai-send-btn {
+                    background: #63d7ff;
+                    color: #0a0f1e;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 8px;
+                    font-weight: 600;
+                    font-size: 13px;
+                    cursor: pointer;
+                    white-space: nowrap;
+                    transition: all 0.2s;
+
+                    &:hover:not(:disabled) {
+                        background: #93e7ff;
+                        transform: translateY(-1px);
+                    }
+                    &:disabled { opacity: 0.5; cursor: not-allowed; }
+                }
+
+                .wm-ai-clear-btn {
+                    background: transparent;
+                    border: 1px solid rgba(255, 80, 80, 0.4);
+                    color: rgba(255, 120, 120, 0.8);
+                    padding: 8px 12px;
+                    border-radius: 8px;
+                    font-size: 12px;
+                    cursor: pointer;
+                    white-space: nowrap;
+                    transition: all 0.2s;
+
+                    &:hover {
+                        border-color: #ff5050;
+                        color: #ff5050;
+                        background: rgba(255, 80, 80, 0.08);
+                    }
+                }
+            }
+        }
+
+        /* ── Cards Area (flex wrap) ── */
+        .wm-ai-cards-area {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            padding: 18px 20px;
+            min-height: 80px;
+        }
+
+        /* ── Empty State ── */
+        .wm-ai-empty {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 28px 20px;
+            color: rgba(99, 215, 255, 0.35);
+            text-align: center;
+
+            .wm-ai-empty-icon { font-size: 36px; margin-bottom: 8px; }
+
+            .wm-ai-empty-text {
+                font-size: 14px;
+                font-weight: 600;
+                color: rgba(99, 215, 255, 0.5);
+                margin-bottom: 4px;
+            }
+
+            .wm-ai-empty-hint {
+                font-size: 12px;
+                color: rgba(99, 215, 255, 0.3);
+                max-width: 320px;
+                line-height: 1.5;
+            }
+        }
+
+        /* ── Individual AI Card ── */
+        .wm-ai-card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(99, 215, 255, 0.15);
+            border-radius: 12px;
+            padding: 14px 16px;
+            width: 320px;
+            min-width: 260px;
+            max-width: 380px;
+            flex-shrink: 0;
+            position: relative;
+            transition: box-shadow 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+
+            &:hover { box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3); }
+
+            /* Priority border accents */
+            &.wm-ai-card--urgent {
+                border-left: 3px solid #ff4d4d;
+                background: rgba(255, 77, 77, 0.05);
+            }
+            &.wm-ai-card--high {
+                border-left: 3px solid #ff9d3a;
+                background: rgba(255, 157, 58, 0.05);
+            }
+            &.wm-ai-card--normal {
+                border-left: 3px solid #63d7ff;
+            }
+            &.wm-ai-card--thinking {
+                border: 1px dashed rgba(99, 215, 255, 0.3);
+                background: rgba(99, 215, 255, 0.03);
+                animation: pulse-border 1.5s ease-in-out infinite;
+                min-width: 180px;
+                max-width: 220px;
+                align-items: center;
+            }
+
+            /* Card Header row */
+            .wm-ai-card-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 6px;
+
+                .wm-ai-card-meta {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    flex-wrap: wrap;
+                }
+            }
+
+            /* Type badge */
+            .wm-ai-type-badge {
+                font-size: 10px;
+                font-weight: 700;
+                padding: 2px 8px;
+                border-radius: 4px;
+                letter-spacing: 0.5px;
+                background: rgba(99, 215, 255, 0.12);
+                color: #63d7ff;
+
+                &.wm-ai-type--in      { background: rgba(80, 220, 100, 0.12); color: #50dc64; }
+                &.wm-ai-type--out     { background: rgba(80, 130, 255, 0.12); color: #5082ff; }
+                &.wm-ai-type--pick    { background: rgba(30, 210, 200, 0.12); color: #1ed2c8; }
+                &.wm-ai-type--pack    { background: rgba(180, 80, 255, 0.12); color: #b450ff; }
+                &.wm-ai-type--sale    { background: rgba(255, 200, 50, 0.12); color: #ffc832; }
+                &.wm-ai-type--purchase { background: rgba(255, 140, 50, 0.12); color: #ff8c32; }
+                &.wm-ai-type--question { background: rgba(99, 215, 255, 0.12); color: #63d7ff; }
+                &.wm-ai-type--thinking { background: rgba(99, 215, 255, 0.08); color: rgba(99, 215, 255, 0.5); }
+            }
+
+            /* Priority badge */
+            .wm-ai-priority-badge {
+                font-size: 10px;
+                font-weight: 700;
+                padding: 2px 8px;
+                border-radius: 4px;
+
+                &.wm-ai-priority--urgent { background: rgba(255, 77, 77, 0.15); color: #ff6666; }
+                &.wm-ai-priority--high   { background: rgba(255, 157, 58, 0.15); color: #ff9d3a; }
+                &.wm-ai-priority--normal { background: rgba(99, 215, 255, 0.12); color: #63d7ff; }
+            }
+
+            /* Dismiss button */
+            .wm-ai-dismiss-btn {
+                background: transparent;
+                border: none;
+                color: rgba(99, 215, 255, 0.3);
+                font-size: 14px;
+                cursor: pointer;
+                padding: 0 2px;
+                line-height: 1;
+                transition: color 0.2s;
+                flex-shrink: 0;
+
+                &:hover { color: #ff6666; }
+            }
+
+            /* Headline */
+            .wm-ai-card-headline {
+                font-size: 12px;
+                font-weight: 600;
+                color: #c8e8ff;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            /* Timestamp */
+            .wm-ai-card-time {
+                font-size: 10px;
+                color: rgba(99, 215, 255, 0.4);
+            }
+
+            /* User question */
+            .wm-ai-question-text {
+                font-size: 12px;
+                color: rgba(99, 215, 255, 0.6);
+                font-style: italic;
+                line-height: 1.4;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            /* Divider */
+            .wm-ai-card-divider {
+                height: 1px;
+                background: rgba(99, 215, 255, 0.1);
+                margin: 2px 0;
+            }
+
+            /* Analysis text */
+            .wm-ai-analysis {
+                font-size: 12px;
+                color: #b8d4f0;
+                line-height: 1.6;
+            }
+
+            /* Actions checklist */
+            .wm-ai-actions-list {
+                list-style: none;
+                padding: 0;
+                margin: 0;
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+
+                .wm-ai-action-item {
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 6px;
+                    font-size: 12px;
+                    color: #a0c8e0;
+                    line-height: 1.4;
+
+                    .wm-ai-action-check { font-size: 11px; flex-shrink: 0; margin-top: 1px; }
+                }
+            }
+
+            /* Thinking content inside thinking card */
+            .wm-ai-thinking-content {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 10px;
+                padding: 16px 0 8px;
+                color: rgba(99, 215, 255, 0.5);
+                font-size: 12px;
+
+                .wm-ai-thinking-dots {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+
+                    .wm-ai-pulse-dot {
+                        width: 8px;
+                        height: 8px;
+                        background: #63d7ff;
+                        border-radius: 50%;
+                        opacity: 0.3;
+                        animation: bounce-dot 1.4s ease-in-out infinite;
+
+                        &:nth-child(2) { animation-delay: 0.2s; }
+                        &:nth-child(3) { animation-delay: 0.4s; }
+                    }
+                }
+            }
+        }
+    }
+
+    @keyframes pulse-border {
+        0%, 100% { border-color: rgba(99, 215, 255, 0.15); }
+        50%       { border-color: rgba(99, 215, 255, 0.45); }
+    }
+
+    @keyframes bounce-dot {
+        0%, 60%, 100% { transform: translateY(0); opacity: 0.3; }
+        30%            { transform: translateY(-5px); opacity: 1; }
+    }
+
+} // end .hlv_warehouse_monitor_dashboard

@@ -5,3 +5,5 @@ access_warehouse_monitor_event_manager,warehouse.monitor.event.manager,model_war
 access_warehouse_monitor_config_base,warehouse.monitor.config.base,model_warehouse_monitor_config,base.group_user,1,0,0,0
 access_warehouse_monitor_config_manager,warehouse.monitor.config.manager,model_warehouse_monitor_config,group_warehouse_monitor_manager,1,1,1,1
 access_warehouse_monitor_config_user,warehouse.monitor.config.user,model_warehouse_monitor_config,group_warehouse_monitor_user,1,0,0,0
+access_wm_ai_insight_base,warehouse.monitor.ai.insight.base,model_warehouse_monitor_ai_insight,base.group_user,1,1,1,0
+access_wm_ai_insight_manager,warehouse.monitor.ai.insight.manager,model_warehouse_monitor_ai_insight,group_warehouse_monitor_manager,1,1,1,1

@@ -51,6 +51,8 @@
             "hlv_warehouse_monitor/static/src/components/queue_screen/queue_screen.js",
             # Delivery Planner (Phase 2)
             "hlv_warehouse_monitor/static/src/components/monitor_dashboard/monitor_dashboard_delivery.xml",
+            # AI Assistant Panel (Phase 3)
+            "hlv_warehouse_monitor/static/src/components/monitor_dashboard/monitor_dashboard_ai.xml",
         ],
     },
     "installable": True,

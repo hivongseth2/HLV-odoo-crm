@@ -33,6 +33,12 @@ export class WarehouseMonitorDashboard extends Component {
                 totalTrips: 0,
                 expandedTrip: null,
             },
+            aiPanel: {
+                isThinking: false,
+                cards: [],
+                lastEventId: null,
+                userQuestion: "",
+            },
             kpi: {
                 total_events_today: 0,
                 in_today: 0,
@@ -50,6 +56,8 @@ export class WarehouseMonitorDashboard extends Component {
 
         onWillStart(async () => {
             await this.fetchData();
+            // Load previously stored AI insights
+            await this.loadAIInsights();
             // 1-second ticker: counts down and triggers refresh every 30s
             this._refreshInterval = setInterval(() => {
                 this.state.countdown -= 1;
@@ -90,6 +98,10 @@ export class WarehouseMonitorDashboard extends Component {
             this.state.kpi = result.kpi || this.state.kpi;
             this.state.isLoading = false;
             this.state.isRefreshing = false;
+            // Anchor lastEventId so first silentRefresh doesn't re-analyze old events
+            if (this.state.aiPanel.lastEventId === null && this.state.events.length > 0) {
+                this.state.aiPanel.lastEventId = this.state.events[0].id;
+            }
         } catch (error) {
             console.error("[HLV Monitor] Error fetching data:", error);
             this.state.isLoading = false;
@@ -127,6 +139,22 @@ export class WarehouseMonitorDashboard extends Component {
                         { type: "warning", sticky: false }
                     );
                 }
+            }
+
+            // Auto-analyze if a new significant event appeared
+            const SIGNIFICANT_ACTIONS = new Set(["validate", "confirm", "priority_set"]);
+            const SIGNIFICANT_TYPES = new Set(["in", "pick", "pack", "out", "sale", "purchase"]);
+            const latestEvent = this.state.events[0];
+            if (
+                latestEvent &&
+                latestEvent.id !== this.state.aiPanel.lastEventId &&
+                SIGNIFICANT_ACTIONS.has(latestEvent.action) &&
+                SIGNIFICANT_TYPES.has(latestEvent.event_type)
+            ) {
+                this.state.aiPanel.lastEventId = latestEvent.id;
+                this.analyzeLatestEvent(latestEvent.id);
+            } else if (latestEvent) {
+                this.state.aiPanel.lastEventId = latestEvent.id;
             }
 
             // Auto-refresh delivery plan if it was previously loaded
@@ -254,6 +282,116 @@ export class WarehouseMonitorDashboard extends Component {
     toggleTripExpand(tripId) {
         this.state.deliveryPlan.expandedTrip =
             this.state.deliveryPlan.expandedTrip === tripId ? null : tripId;
+    }
+
+    // ── Phase 3: AI Assistant ────────────────────────────────
+
+    /** Load existing (not dismissed) insights stored in Odoo DB. */
+    async loadAIInsights() {
+        try {
+            const insights = await this.orm.call(
+                "warehouse.monitor.event",
+                "get_ai_insights",
+                [],
+                { limit: 15, warehouse_id: this.state.warehouseId }
+            );
+            this.state.aiPanel.cards = insights || [];
+        } catch (e) {
+            console.warn("[WM AI] Could not load insights:", e);
+        }
+    }
+
+    /** Analyze a specific event via OpenAI and prepend result card. */
+    async analyzeLatestEvent(eventId) {
+        if (this.state.aiPanel.isThinking) return;
+        this.state.aiPanel.isThinking = true;
+        try {
+            const insight = await this.orm.call(
+                "warehouse.monitor.event",
+                "analyze_event",
+                [],
+                { event_id: eventId }
+            );
+            if (insight && !insight.error) {
+                // Prepend and cap at 15 cards
+                this.state.aiPanel.cards = [insight, ...this.state.aiPanel.cards].slice(0, 15);
+            } else if (insight && insight.no_key) {
+                // API key not configured — silent (no spam notification)
+                console.info("[WM AI] OpenAI key not configured, skipping auto-analysis.");
+            } else if (insight && insight.error) {
+                console.warn("[WM AI] analyze_event error:", insight.error);
+            }
+        } catch (e) {
+            console.warn("[WM AI] analyzeLatestEvent failed:", e);
+        } finally {
+            this.state.aiPanel.isThinking = false;
+        }
+    }
+
+    /** Send free-form user question to AI. */
+    async askAI() {
+        const q = (this.state.aiPanel.userQuestion || "").trim();
+        if (!q) return;
+        if (this.state.aiPanel.isThinking) return;
+
+        this.state.aiPanel.userQuestion = "";
+        this.state.aiPanel.isThinking = true;
+        try {
+            const insight = await this.orm.call(
+                "warehouse.monitor.event",
+                "ask_ai",
+                [],
+                {
+                    question: q,
+                    context_event_id: this.state.aiPanel.lastEventId || false,
+                }
+            );
+            if (insight && !insight.error) {
+                this.state.aiPanel.cards = [insight, ...this.state.aiPanel.cards].slice(0, 15);
+            } else if (insight && insight.error) {
+                this.notification.add("AI: " + insight.error, { type: "warning" });
+            }
+        } catch (e) {
+            console.warn("[WM AI] askAI failed:", e);
+            this.notification.add("Lỗi gọi AI trợ lý", { type: "danger" });
+        } finally {
+            this.state.aiPanel.isThinking = false;
+        }
+    }
+
+    onAiQuestionInput(ev) {
+        this.state.aiPanel.userQuestion = ev.target.value;
+    }
+
+    onAiQuestionKeydown(ev) {
+        if (ev.key === "Enter") {
+            this.askAI();
+        }
+    }
+
+    /** Dismiss one insight card (hide from view + mark dismissed in DB). */
+    async dismissInsight(insightId) {
+        this.state.aiPanel.cards = this.state.aiPanel.cards.filter((c) => c.id !== insightId);
+        try {
+            await this.orm.call(
+                "warehouse.monitor.event",
+                "dismiss_ai_insight",
+                [],
+                { insight_id: insightId }
+            );
+        } catch {
+            // non-critical
+        }
+    }
+
+    /** Clear all insight cards. */
+    async clearAllInsights() {
+        this.state.aiPanel.cards = [];
+        try {
+            await this.orm.call("warehouse.monitor.event", "clear_ai_insights", [], {});
+        } catch {
+            // non-critical
+        }
     }
 
     // ── Helpers ─────────────────────────────────────────────
