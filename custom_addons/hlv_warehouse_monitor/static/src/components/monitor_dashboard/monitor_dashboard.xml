@@ -41,6 +41,10 @@
                                 t-on-click="() => this.refresh()">
                             🔄 Làm mới
                         </button>
+                        <div class="monitor-countdown">
+                            <span class="countdown-num" t-esc="state.countdown"/>
+                            <span class="countdown-label">giây</span>
+                        </div>
                     </div>
                 </div>
 

@@ -118,6 +118,33 @@ $monitor-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
                     pointer-events: none;
                 }
             }
+
+            .monitor-countdown {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                min-width: 36px;
+                padding: 0 4px;
+                border-left: 1px solid $monitor-border;
+                margin-left: 4px;
+
+                .countdown-num {
+                    font-size: 18px;
+                    font-weight: 700;
+                    color: $monitor-accent;
+                    line-height: 1;
+                    font-variant-numeric: tabular-nums;
+                    font-family: 'Courier New', monospace;
+                }
+
+                .countdown-label {
+                    font-size: 9px;
+                    color: $monitor-text-muted;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    margin-top: 1px;
+                }
+            }
         }
     }
 

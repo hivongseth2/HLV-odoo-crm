@@ -23,6 +23,7 @@ export class WarehouseMonitorDashboard extends Component {
             totalCount: 0,
             offset: 0,
             pageSize: 50,
+            countdown: 30,
             kpi: {
                 total_events_today: 0,
                 in_today: 0,
@@ -40,8 +41,14 @@ export class WarehouseMonitorDashboard extends Component {
 
         onWillStart(async () => {
             await this.fetchData();
-            // Auto-refresh every 30 seconds
-            this._refreshInterval = setInterval(() => this.silentRefresh(), 30000);
+            // 1-second ticker: counts down and triggers refresh every 30s
+            this._refreshInterval = setInterval(() => {
+                this.state.countdown -= 1;
+                if (this.state.countdown <= 0) {
+                    this.state.countdown = 30;
+                    this.silentRefresh();
+                }
+            }, 1000);
         });
 
         onWillUnmount(() => {
@@ -120,6 +127,7 @@ export class WarehouseMonitorDashboard extends Component {
     // ── Actions ─────────────────────────────────────────────
     async refresh() {
         this.state.isRefreshing = true;
+        this.state.countdown = 30;
         this.state.offset = 0;
         await this.fetchData();
     }
