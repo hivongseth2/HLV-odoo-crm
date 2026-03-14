@@ -3,7 +3,7 @@
   <template id="inventory_page" name="Public Inventory Page">
     <t t-call="website.layout">
       <style>
-        /* --- GIỮ NGUYÊN CSS CŨ --- */
+        /* --- GIỮ NGUYÊN CSS --- */
         .search-wrapper { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid #ced4da; border-radius: 0.375rem; background-color: #fff; min-height: 45px; cursor: text; transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out; }
         .search-wrapper:focus-within { border-color: #86b7fe; outline: 0; box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25); }
         .search-chip { display: inline-flex; align-items: center; background-color: #e9ecef; color: #495057; font-size: 0.9rem; padding: 4px 10px; border-radius: 16px; user-select: none; max-width: 100%; }
@@ -11,9 +11,7 @@
         .search-chip .btn-close-chip { margin-left: 6px; cursor: pointer; color: #adb5bd; font-weight: bold; line-height: 1; font-size: 16px; }
         .search-input-field { border: none; outline: none; flex-grow: 1; min-width: 120px; font-size: 16px; padding: 0; margin: 0; background: transparent; color: #212529; }
         #search-suggestions { border-radius: 0.5rem; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15); border: 1px solid rgba(0,0,0,.05); max-height: 60vh; }
-        
         /* Sticky Header for Desktop */
-       /* Sticky Header for Desktop */
         @media (min-width: 769px) {
             /* 1. Quan trọng: Phải ép các thẻ cha không được để overflow: hidden hoặc auto */
             #wrap, 
@@ -30,26 +28,31 @@
                 border-left: 1px solid #dee2e6;
             }
 
-            #inv-table > thead > tr > th, #inv-table > tbody > tr > td {
+            #inv-table th, #inv-table td {
                 border-right: 1px solid #dee2e6;
                 text-align: center !important; /* Căn giữa nội dung */
                 vertical-align: middle;
             }
 
             /* 3. Thiết lập cho dòng header */
-            #inv-table > thead > tr > th {
-                position: -webkit-sticky; /* Hỗ trợ Safari */
-                position: sticky;
-                top: 0; /* Mặc định lên sát mép trên */
-                background-color: #f8f9fa !important; /* Phải có nền để không bị lộ chữ bên dưới khi cuộn */
-                z-index: 1020; /* Nằm trên các nội dung khác */
-                box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4); /* Tạo đường kẻ đổ bóng thay cho border-bottom bị mất khi dùng sticky */
-                border-bottom: 2px solid #dee2e6;
+            #inv-table thead th {
+                  position: -webkit-sticky;
+                  position: sticky;
+                  top: 0; /* Nếu có navbar Odoo thì để 56px, nếu không thì để 0 */
+                  background-color: #f8f9fa !important;
+                  z-index: 1020; /* Ưu tiên cao nhất */
+                  box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4);
+                  border-bottom: 2px solid #dee2e6;
+              }
+            .detail-row thead th {
+                position: static !important; /* Trả về hiển thị bình thường, không dính nữa */
+                background-color: #ffffff;
+                z-index: 1;
             }
 
             /* Nếu website Odoo của bạn có thanh navbar cố định phía trên (thường cao 56px-70px)
               Hãy điều chỉnh top bằng đúng chiều cao đó để không bị che mất header bảng */
-            .o_header_standard + #wrap #inv-table > thead > tr > th {
+            .o_header_standard + #wrap #inv-table thead th {
                 top: 56px; 
             }
         }
@@ -58,7 +61,7 @@
             #search-form .col-md-5, #search-form .col-md-2, #search-form .col-md-3 { margin-bottom: 10px; }
             #search-form .col-md-3 { justify-content: space-between !important; background: #f8f9fa; padding: 10px; border-radius: 8px; }
 
-            /* CARD CHÍNH (SẢN PHẨM) */
+            /* CARD SẢN PHẨM CHÍNH */
             #inv-table thead { display: none; }
             #inv-table tbody tr.main-row {
                 display: grid;
@@ -126,9 +129,9 @@
             
             /* Labels for new prices */
             #inv-table tbody tr.main-row td:nth-child(9):before { content: "Giá Web:"; color: #6c757d; font-size: 0.9rem; }
-            #inv-table tbody tr.main-row td:nth-child(10):before { content: "Giá sàn TMDT:"; color: #6c757d; font-size: 0.9rem; }
+            #inv-table tbody tr.main-row td:nth-child(10):before { content: "Giá TMDT:"; color: #6c757d; font-size: 0.9rem; }
             #inv-table tbody tr.main-row td:nth-child(11):before { content: "Giá niêm yết:"; color: #6c757d; font-size: 0.9rem; }
-            #inv-table tbody tr.main-row td:nth-child(12):before { content: "Giá thương mại:"; color: #6c757d; font-size: 0.9rem; }
+            #inv-table tbody tr.main-row td:nth-child(12):before { content: "Giá TM:"; color: #6c757d; font-size: 0.9rem; }
             #inv-table tbody tr.main-row td:nth-child(13):before { content: "Giá bán:"; color: #6c757d; font-size: 0.9rem; }
             
             #inv-table tbody tr.main-row td:nth-child(13) { font-weight: bold; color: #198754; }
@@ -138,7 +141,7 @@
             #inv-table tbody tr.main-row td:nth-child(7), #inv-table tbody tr.main-row td:nth-child(14)
              { display: none; }
 
-            /* CSS CHO PHẦN CHI TIẾT */
+            /* CSS CHI TIẾT (GRID 3 CỘT) */
             #inv-table tbody tr.detail-row { display: block; padding: 0; margin-top: -10px; margin-bottom: 15px; border: none; }
             #inv-table tbody tr.detail-row td { display: block; padding: 0 !important; border: none; }
             
@@ -193,6 +196,7 @@
             .wh-stat-col.highlight .wh-label { color: #198754; opacity: 0.8; }
             .wh-stat-col.highlight .wh-val { color: #198754; font-size: 1.2rem; font-weight: 800; }
             .wh-stat-col.dim .wh-val { color: #ced4da; }
+            .combo-comp-title { font-size: 0.9rem; font-weight: bold; color: #d63384; margin-bottom: 4px; padding-left: 4px; }
         }
       </style>
 
@@ -216,48 +220,33 @@
 
         <t t-if="pw_ok">
           <section>
-            <div class="container-fluid px-4 mt-3 mb-6">
-              <div class="d-flex justify-content-between align-items-center mb-4 gap-2 flex-wrap">
-                  <h2 class="text-primary fw-bold mb-0">Tra cứu tồn kho</h2>
-
-                  <!-- Desktop: nút hiển thị thẳng hàng -->
-                  <div class="d-none d-md-flex gap-2 flex-wrap justify-content-end">
-                      <a href="/search_stock" class="btn btn-primary fw-bold">
-                          <i class="fa fa-cubes me-1"></i> Tra cứu tồn kho
-                      </a>
-                      <a href="/search_order" class="btn btn-secondary fw-bold">
-                          <i class="fa fa-file-text me-1"></i> Tra cứu chứng từ mua hàng
-                      </a>
-                      <a href="/sale_plan" class="btn btn-success fw-bold">
-                          <i class="fa fa-tasks me-1"></i> Tình trạng đơn hàng
-                      </a>
-                      <a href="/search_invoice" class="btn btn-info fw-bold text-white">
-                          <i class="fa fa-file-invoice me-1"></i> Tra cứu Hóa đơn MISA
-                      </a>
-                  </div>
-
-                  <!-- Mobile: dropdown gọn -->
-                  <div class="d-md-none dropdown">
-                      <button class="btn btn-outline-secondary dropdown-toggle" type="button"
-                              id="nav-pages-mobile" data-bs-toggle="dropdown" aria-expanded="false">
-                          <i class="fa fa-bars me-1"></i> Menu
-                      </button>
-                      <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="nav-pages-mobile">
-                          <li><a class="dropdown-item fw-bold text-primary" href="/search_stock">
-                              <i class="fa fa-cubes me-2"></i> Tra cứu tồn kho
-                          </a></li>
-                          <li><a class="dropdown-item fw-bold text-secondary" href="/search_order">
-                              <i class="fa fa-file-text me-2"></i> Tra cứu chứng từ mua hàng
-                          </a></li>
-                          <li><a class="dropdown-item fw-bold text-success" href="/sale_plan">
-                              <i class="fa fa-tasks me-2"></i> Tình trạng đơn hàng
-                          </a></li>
-                          <li><a class="dropdown-item fw-bold text-info" href="/search_invoice">
-                              <i class="fa fa-file-invoice me-2"></i> Tra cứu Hóa đơn MISA
-                          </a></li>
-                      </ul>
-                  </div>
+            <div class="container-fluid mt-3 mb-6" style="max-width: 1550px;">
+              <!-- Navigation Tabs -->
+              <div style="border-bottom: 2px solid #e9ecef; padding-bottom: 16px; margin-bottom: 1.5rem;">
+                <ul class="nav nav-pills justify-content-center flex-wrap gap-2">
+                  <li class="nav-item">
+                    <a class="nav-link active bg-primary text-white px-3 py-2" href="/search_stock" style="font-weight:600;font-size:.9rem;">
+                      <i class="fa fa-cubes me-1"></i><span>Tồn kho</span>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a class="nav-link text-dark px-3 py-2" href="/misa/purchase/lookup" style="font-weight:500;font-size:.9rem;background:#f8f9fa;">
+                      <i class="fa fa-shopping-cart me-1"></i><span>Chứng từ mua</span>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a class="nav-link text-dark px-3 py-2" href="/search_invoice" style="font-weight:500;font-size:.9rem;background:#f8f9fa;">
+                      <i class="fa fa-file-text me-1"></i><span>Hóa đơn MISA</span>
+                    </a>
+                  </li>
+                  <li class="nav-item">
+                    <a class="nav-link text-dark px-3 py-2" href="/sale_plan" style="font-weight:500;font-size:.9rem;background:#f8f9fa;">
+                      <i class="fa fa-truck me-1"></i><span>Tình trạng đơn</span>
+                    </a>
+                  </li>
+                </ul>
               </div>
+              
               <form t-att-action="request.httprequest.path" method="get" class="row g-2 mb-4" id="search-form">
                 <div class="col-md-5 position-relative">
                     <input type="hidden" name="q" id="real-search-q" t-att-value="q"/>
@@ -290,24 +279,24 @@
 
               <t t-if="rows">
                 <div class="card shadow-sm border-0 bg-transparent">
-                    <div class="table-responsive" style="overflow-x: auto; max-width: 100%;">
-                      <table class="table table-hover align-middle mb-0" id="inv-table">
+                    <div class="table-responsive" style="overflow-x: auto;">
+                      <table class="table table-sm table-hover align-middle mb-0" id="inv-table" style="border-collapse: separate; border-spacing: 0;">
                         <thead class="bg-light">
                           <tr>
-                            <th></th>
-                            <th>Ảnh</th>
+                            <th style="width:40px;"></th>
+                            <th style="width:70px;">Ảnh</th>
                             <th>Mã</th>
-                            <th>Tên sản phẩm</th>
+                            <th>Sản phẩm</th>
                             <th>Barcode</th>
                             <th>ĐVT</th>
-                            <th class="text-end">Dự báo</th>
-                            <th class="text-end fw-bold">Thực tế</th>
+                            <th class="text-end" style="width:80px">Dự báo</th>
+                            <th class="text-end fw-bold" style="width:80px">Thực tế</th>
                             <th class="text-end">Giá Web</th>
                             <th class="text-end">Giá TMDT</th>
-                            <th class="text-end">Giá niêm yết</th>
-                            <th class="text-end">Giá thương mại</th>
+                            <th class="text-end">Niêm yết</th>
+                            <th class="text-end">Giá TM</th>
                             <th class="text-end">Giá bán</th>
-                            <th></th>
+                            <th style="width:50px;"></th>
                           </tr>
                         </thead>
                         <tbody>
@@ -318,7 +307,7 @@
                                 <button type="button" class="btn btn-sm btn-light text-primary btn-expand rounded-circle"
                                         t-att-data-pid="r['id']"
                                         t-att-data-is-combo="str(bool(r.get('is_combo'))).lower()">
-                                  <i class="fa fa-minus"></i>
+                                  <i class="fa fa-plus"></i>
                                 </button>
                               </td>
                               <td>
@@ -522,7 +511,7 @@
        <script type="text/javascript"><![CDATA[
             (function () {
               var searchTimeout = null;
-              // ... INIT CHIP & DEBOUNCE FUNCTIONS GIỮ NGUYÊN ...
+              // ... INIT CHIP ...
               function initChipInput() {
                   var $realInput = $('#real-search-q');
                   var $container = $('#chip-container');
@@ -559,6 +548,7 @@
                   $container.on('click', function(e) { if(e.target === this) $visualInput.focus(); });
               }
 
+              // ... DEBOUNCE & SEARCH AJAX ...
               function debounce(func, wait) {
                 return function() { clearTimeout(searchTimeout); var context=this, args=arguments; searchTimeout = setTimeout(function() { func.apply(context, args); }, wait); };
               }
@@ -584,7 +574,7 @@
                    else if (q > 5) badgeClass = 'bg-info';
                    else if (q > 0) badgeClass = 'bg-warning text-dark';
                    
-                   var qtyInfo = (q > 0) ? ('<span class="badge ' + badgeClass + ' text-white border ms-2">Tồn: ' + fmt(q) + '</span>') : '<span class="badge bg-light text-danger border ms-2">Hết hàng</span>';
+                   var qtyInfo = (q > 0) ? ('<span class="badge ' + badgeClass + ' text-white border ms-2">Tồn: ' + fmt(q) + '</span>') : '<span class="badge bg-light text-muted border ms-2">Hết hàng</span>';
                    if (q > 0 && q <= 5) qtyInfo = '<span class="badge ' + badgeClass + ' border ms-2">Tồn: ' + fmt(q) + '</span>';
                    
                    html += '<div class="suggestion-item border-bottom p-2" data-name="' + displayName + '" style="cursor:pointer;">';
@@ -603,6 +593,40 @@
                 $dropdown.html(html).show();
               }
 
+              // --- HÀM TÁCH RIÊNG: CHỊU TRÁCH NHIỆM TẢI AJAX ---
+              // Hàm này chỉ tải và hiển thị, KHÔNG đóng lại
+              function loadDetailRow($btn) {
+                   var pid = $btn.data('pid');
+                   var isCombo = String($btn.data('is-combo')) === 'true';
+                   var $row = $btn.closest('tr'); 
+                   
+                   // Kiểm tra nếu đã có detail-row rồi thì thôi, không tải nữa (tránh trùng)
+                   var $next = $row.next();
+                   if ($next.length && $next.hasClass('detail-row')) return;
+
+                   var colCount = $row.children('td').length;
+                   var $detail = $('<tr class="detail-row"><td colspan="' + colCount + '"><div class="p-3 bg-light text-center"><span class="spinner-border spinner-border-sm me-2"></span>Đang tải...</div></td></tr>');
+                   $row.after($detail);
+                   $btn.html('<i class="fa fa-minus"></i>');
+
+                   var currentWid = $('select[name="warehouse_id"]').val() || '';
+                   var detailMode = isCombo ? 'per_warehouse' : null;
+
+                   $.ajax({
+                      url: "/search_stock/product_breakdown",
+                      type: "POST", dataType: "json", contentType: "application/json",
+                      data: JSON.stringify({jsonrpc: "2.0", method: "call", params: { product_id: pid, warehouse_id: currentWid, detail_mode: detailMode }, id: 1}),
+                      success: function(resp) {
+                          var res = (resp && resp.result) ? resp.result : {};
+                          if(res.ok) {
+                              $detail.find('td').html(buildDetailTable(res));
+                          } else {
+                              $detail.find('td').html('<div class="text-danger small p-3">Lỗi: ' + (res.error || 'Unknown') + '</div>');
+                          }
+                      }
+                   });
+              }
+
               $(document).ready(function() {
                 initChipInput(); 
                 var $visualInput = $('#visual-search-input');
@@ -618,11 +642,12 @@
                 });
                 $(document).on('click', function(e) { if (!$(e.target).closest('#chip-container, #search-suggestions').length) $dropdown.hide(); });
                 
-                // --- TOGGLE DETAIL ROW ---
+                // --- SỰ KIỆN CLICK (THỦ CÔNG) ---
+                // Khi bấm tay thì giữ logic Toggle: Đang mở -> Đóng, Đang đóng -> Mở
                 $(document).on('click', '.btn-expand', function () {
                    var $btn = $(this);
-                   var $row = $btn.closest('tr'); 
-                   var $next = $row.next('.detail-row');
+                   var $row = $btn.closest('tr');
+                   var $next = $row.next();
 
                    if ($next.is(':visible')) { 
                        $next.hide(); 
@@ -692,6 +717,68 @@
               });
               
               function fmt(n) { return (parseFloat(n)||0).toLocaleString('en-US'); }
+              
+              function buildDetailTable(data) {
+                  var html = '';
+                  var rows = data.rows || [];
+
+                  // CASE 1: COMBO
+                  if(data.mode === 'components_by_warehouse') {
+                      html += '<div class="p-3 detail-container-mobile"><div class="row g-3">';
+                      rows.forEach(function(c){
+                          var imgUrl = c.image_url || '/web/static/img/placeholder.png';
+                          html += '<div class="col-12 col-md-12">';
+                          html += '  <div class="card h-100 border shadow-sm">';
+                          html += '    <div class="card-header bg-white d-flex align-items-center py-2">';
+                          html += '      <img src="' + imgUrl + '" class=" me-3" style="width:40px; height:40px; object-fit:contain;">';
+                          html += '      <div class="flex-grow-1">';
+                          html += '        <div class="fw-bold text-primary">' + c.name + '</div>';
+                          html += '        <div class="small text-muted">SL Combo: <b>' + fmt(c.component_qty_in_combo) + '</b></div>';
+                          html += '      </div>';
+                          html += '    </div>';
+                          html += '    <div class="card-body p-0">';
+                          (c.warehouses||[]).forEach(function(w){
+                              html += '<div class="border-bottom p-2">';
+                              html += '  <div class="fw-bold small mb-1">' + w.warehouse_name + '</div>';
+                              html += '  <div class="d-flex">';
+                              html += '    <div class="flex-fill text-center border-end"><div class="small text-muted">Sẵn sàng</div><div class="fw-bold text-success">' + fmt(w.qty_available) + '</div></div>';
+                              html += '    <div class="flex-fill text-center"><div class="small text-muted">Thực tế</div><div>' + fmt(w.qty_total) + '</div></div>';
+                              html += '  </div>';
+                              html += '</div>';
+                          });
+                          html += '    </div></div></div>';
+                      });
+                      html += '</div></div>';
+                  } 
+                  
+                  // CASE 2: SẢN PHẨM THƯỜNG
+                  else {
+                      html += '<div class="detail-container-mobile">';
+                      html += '<div class="d-none d-md-block p-3 bg-white">';
+                      html += '<table class="table table-sm mb-0"><thead><tr><th>Kho hàng</th><th class="text-end">Tồn</th><th class="text-end">Giữ</th><th class="text-end">Sẵn sàng</th></tr></thead><tbody>';
+                      rows.forEach(function(r){
+                          var availClass = (r.qty_available > 0) ? 'text-success fw-bold' : 'text-muted';
+                          html += '<tr><td>' + r.warehouse_name + '</td><td class="text-end">' + fmt(r.qty_total) + '</td><td class="text-end">' + fmt(r.qty_reserved) + '</td><td class="text-end ' + availClass + '">' + fmt(r.qty_available) + '</td></tr>';
+                      });
+                      html += '</tbody></table></div>';
+
+                      html += '<div class="d-md-none">';
+                      rows.forEach(function(r){
+                           html += '<div class="wh-card">';
+                           html += '  <div class="wh-header">' + r.warehouse_name + '</div>';
+                           html += '  <div class="wh-stats">';
+                           html += '    <div class="wh-stat-col ' + (r.qty_total==0 ? 'dim':'') + '"><div class="wh-label">Tổng</div><div class="wh-val">' + fmt(r.qty_total) + '</div></div>';
+                           html += '    <div class="wh-stat-col ' + (r.qty_reserved==0 ? 'dim':'') + '"><div class="wh-label">Đã giữ</div><div class="wh-val text-muted">' + fmt(r.qty_reserved) + '</div></div>';
+                           html += '    <div class="wh-stat-col highlight"><div class="wh-label">Có thể bán</div><div class="wh-val">' + fmt(r.qty_available) + '</div></div>';
+                           html += '  </div>';
+                           html += '</div>';
+                      });
+                      html += '</div>';
+                      html += '</div>';
+                  }
+                  
+                  return html;
+              }
 
             })();
           ]]></script>

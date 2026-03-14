@@ -4,101 +4,135 @@
     <template id="misa_purchase_lookup" name="MISA Purchase Voucher Lookup">
         <t t-call="website.layout">
             <div class="misa-lookup-container">
-                <div class="misa-main-card">
-                    <!-- 1. Header Section -->
-                    <div class="misa-header-section">
-                        <h1>Tra cứu Chứng từ Mua hàng MISA</h1>
-                    </div>
-
-                    <!-- 2. Search Section -->
-                    <div class="misa-search-section">
-                        <form method="get" action="/misa/purchase/lookup" class="misa-search-form">
-                            <div class="input-group">
-                                <input type="text" 
-                                       name="journal_memo" 
-                                       class="form-control" 
-                                       placeholder="Nhập mã diễn giải (VD: DH1...)"
-                                       t-att-value="journal_memo"/>
-                                <button type="submit" class="btn btn-primary">
-                                    Tìm kiếm
-                                </button>
+                <!-- LOGIN FORM (If not authenticated) -->
+                <t t-if="not pw_ok">
+                    <div class="misa-main-card" style="max-width: 500px; margin-top: 100px;">
+                        <h2 class="text-center mb-4 font-weight-bold">Đăng nhập</h2>
+                        <t t-if="pw_err">
+                            <div class="alert alert-danger mb-3">Mật khẩu không đúng. Vui lòng thử lại.</div>
+                        </t>
+                        <form method="post" t-att-action="request.httprequest.path">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            <div class="form-group mb-3">
+                                <label class="mb-2 font-weight-bold">Mật khẩu truy cập</label>
+                                <input type="password" name="inv_password" class="form-control" required="required" placeholder="Nhập mật khẩu..."/>
                             </div>
+                            <button type="submit" class="btn btn-primary w-100">Xác nhận</button>
                         </form>
                     </div>
+                </t>
 
-                    <!-- 3. Error Message -->
-                    <t t-if="error">
-                        <div class="alert alert-danger mb-4" role="alert">
-                            <strong>Lỗi:</strong> <t t-esc="error"/>
+                <!-- MAIN CONTENT (If authenticated) -->
+                <t t-if="pw_ok">
+                    <div class="misa-main-card">
+                        <!-- Navigation Tabs -->
+                        <ul class="nav nav-pills mb-4 justify-content-center" style="border-bottom: 2px solid #f3f4f6; padding-bottom: 20px;">
+                            <li class="nav-item mx-1">
+                                <a class="nav-link text-dark" href="/search_stock" style="font-weight: 500;">Tra cứu tồn kho</a>
+                            </li>
+                            <li class="nav-item mx-1">
+                                <a class="nav-link active bg-dark text-white" href="/misa/purchase/lookup" style="font-weight: 600;">Tra cứu chứng từ mua hàng</a>
+                            </li>
+                            <li class="nav-item mx-1">
+                                <a class="nav-link text-dark" href="/search_invoice" style="font-weight: 500;">Tra cứu hóa đơn</a>
+                            </li>
+                        </ul>
+
+                        <!-- 1. Header Section -->
+                        <div class="misa-header-section">
+                            <h1>Tra cứu Chứng từ Mua hàng MISA</h1>
                         </div>
-                    </t>
 
-                    <!-- 4. Results Section -->
-                    <t t-if="searched and not error">
-                        <div class="misa-results-section">
-                            <t t-if="voucher_count > 0">
-                                <span class="misa-status-text text-success">
-                                    Tìm thấy <t t-esc="voucher_count"/> chứng từ
-                                </span>
-                            </t>
-                            <t t-else="">
-                                <span class="misa-status-text text-warning">
-                                    Không tìm thấy chứng từ nào
-                                </span>
-                            </t>
+                        <!-- 2. Search Section -->
+                        <div class="misa-search-section">
+                            <form method="get" action="/misa/purchase/lookup" class="misa-search-form">
+                                <div class="input-group">
+                                    <input type="text" 
+                                           name="journal_memo" 
+                                           class="form-control" 
+                                           placeholder="Nhập mã diễn giải (VD: DH1...)"
+                                           t-att-value="journal_memo"/>
+                                    <button type="submit" class="btn btn-primary">
+                                        Tìm kiếm
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
 
-                            <t t-if="voucher_count > 0">
-                                <div class="table-responsive mt-3">
-                                    <table class="table misa-lookup-table">
-                                        <thead>
-                                            <tr>
-                                                <th class="text-left" style="width: 120px;">Ngày HT</th>
-                                                <th class="text-left" style="width: 130px;">Số chứng từ</th>
-                                                <th class="text-left" style="width: 130px;">Số hóa đơn</th>
-                                                <th class="text-left" style="min-width: 200px;">Nhà cung cấp</th>
-                                                <th class="text-left" style="min-width: 200px;">Diễn giải</th>
-                                                <th class="text-left" style="width: 140px;">TT hóa đơn</th>
-                                                <th class="text-left" style="width: 140px;">TT thanh toán</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <t t-foreach="vouchers" t-as="v">
+                        <!-- 3. Error Message -->
+                        <t t-if="error">
+                            <div class="alert alert-danger mb-4" role="alert">
+                                <strong>Lỗi:</strong> <t t-esc="error"/>
+                            </div>
+                        </t>
+
+                        <!-- 4. Results Section -->
+                        <t t-if="searched and not error">
+                            <div class="misa-results-section">
+                                <t t-if="voucher_count > 0">
+                                    <span class="misa-status-text text-success">
+                                        Tìm thấy <t t-esc="voucher_count"/> chứng từ
+                                    </span>
+                                </t>
+                                <t t-else="">
+                                    <span class="misa-status-text text-warning">
+                                        Không tìm thấy chứng từ nào
+                                    </span>
+                                </t>
+
+                                <t t-if="voucher_count > 0">
+                                    <div class="table-responsive mt-3">
+                                        <table class="table misa-lookup-table">
+                                            <thead>
                                                 <tr>
-                                                    <td class="text-left"><t t-esc="v['posted_date']"/></td>
-                                                    <td class="text-left"><span class="refno"><t t-esc="v['refno_finance']"/></span></td>
-                                                    <td class="text-left"><span class="refno" style="background:none; padding:0; font-weight:400;"><t t-esc="v['inv_no']"/></span></td>
-                                                    <td>
-                                                        <span class="vendor-name"><t t-esc="v['account_object_name']"/></span>
-                                                        <span class="vendor-code" t-if="v['account_object_code']"><t t-esc="v['account_object_code']"/></span>
-                                                    </td>
-                                                    <td class="text-dark"><t t-esc="v['journal_memo']"/></td>
-                                                    <td class="text-left">
-                                                        <span t-attf-class="badge #{v['include_invoice']['class']}" t-esc="v['include_invoice']['label']"/>
-                                                    </td>
-                                                    <td class="text-left">
-                                                        <span t-attf-class="badge #{v['paid_status']['class']}" t-esc="v['paid_status']['label']"/>
-                                                    </td>
+                                                    <th class="text-left" style="width: 120px;">Ngày HT</th>
+                                                    <th class="text-left" style="width: 130px;">Số chứng từ</th>
+                                                    <th class="text-left" style="width: 130px;">Số hóa đơn</th>
+                                                    <th class="text-left" style="min-width: 200px;">Nhà cung cấp</th>
+                                                    <th class="text-left" style="min-width: 200px;">Diễn giải</th>
+                                                    <th class="text-left" style="width: 140px;">TT hóa đơn</th>
+                                                    <th class="text-left" style="width: 140px;">TT thanh toán</th>
                                                 </tr>
-                                            </t>
-                                        </tbody>
-                                    </table>
-                                </div>
-                                
-                                <!-- Pagination -->
-                                <div class="products_pager form-inline justify-content-center mt-3">
-                                    <t t-call="website.pager"/>
-                                </div>
-                            </t>
-                        </div>
-                    </t>
+                                            </thead>
+                                            <tbody>
+                                                <t t-foreach="vouchers" t-as="v">
+                                                    <tr>
+                                                        <td class="text-left"><t t-esc="v['posted_date']"/></td>
+                                                        <td class="text-left"><span class="refno"><t t-esc="v['refno_finance']"/></span></td>
+                                                        <td class="text-left"><span class="refno" style="background:none; padding:0; font-weight:400;"><t t-esc="v['inv_no']"/></span></td>
+                                                        <td>
+                                                            <span class="vendor-name"><t t-esc="v['account_object_name']"/></span>
+                                                            <span class="vendor-code" t-if="v['account_object_code']"><t t-esc="v['account_object_code']"/></span>
+                                                        </td>
+                                                        <td class="text-dark"><t t-esc="v['journal_memo']"/></td>
+                                                        <td class="text-left">
+                                                            <span t-attf-class="badge #{v['include_invoice']['class']}" t-esc="v['include_invoice']['label']"/>
+                                                        </td>
+                                                        <td class="text-left">
+                                                            <span t-attf-class="badge #{v['paid_status']['class']}" t-esc="v['paid_status']['label']"/>
+                                                        </td>
+                                                    </tr>
+                                                </t>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    <!-- Pagination -->
+                                    <div class="products_pager form-inline justify-content-center mt-3">
+                                        <t t-call="website.pager"/>
+                                    </div>
+                                </t>
+                            </div>
+                        </t>
 
-                    <!-- 5. Instructions -->
-                    <t t-if="not searched">
-                        <div class="misa-instructions">
-                            <p>Nhập mã để tìm kiếm</p>
-                        </div>
-                    </t>
-                </div>
+                        <!-- 5. Instructions -->
+                        <t t-if="not searched">
+                            <div class="misa-instructions">
+                                <p>Nhập mã để tìm kiếm</p>
+                            </div>
+                        </t>
+                    </div>
+                </t>
             </div>
         </t>
     </template>
