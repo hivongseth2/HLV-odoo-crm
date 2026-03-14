@@ -299,14 +299,22 @@ document.addEventListener("DOMContentLoaded", function () {
       if (checkEl) {
         const maxQty = parseFloat(checkEl.getAttribute('data-max-qty') || 0);
         const input = checkEl.querySelector(".done-input");
-        const currentDone = parseFloat(input ? input.value : (checkEl.querySelector(".done")?.innerText || 0));
+        // [FIX] Dùng dataset.currentQty (giá trị server-confirmed cuối cùng) thay vì input.value
+        // vì khi nhập tay, input.value đã bị thay đổi trước khi gọi updateQty,
+        // dẫn đến check (newVal + delta) > maxQty thay vì (oldVal + delta) > maxQty
+        const currentDone = parseFloat(
+          input ? (input.dataset.currentQty !== undefined && input.dataset.currentQty !== ''
+            ? input.dataset.currentQty
+            : input.value)
+            : (checkEl.querySelector(".done")?.innerText || 0)
+        );
 
         // Allow slight floating point tolerance if needed, but strict for > logic
-        if (maxQty > 0 && (currentDone + delta) > maxQty) {
+        if (maxQty > 0 && (currentDone + delta) > maxQty + 0.001) {
           toast.warn(`❌ Không được nhập quá số lượng yêu cầu (${maxQty})!`);
           playError();
-          // Reset input if it was manual change (heuristic)
-          if (input && Math.abs(currentDone - parseFloat(input.value)) > 0.001) {
+          // Reset input nếu nhập tay vượt quá
+          if (input) {
             input.value = input.dataset.currentQty || 0;
           }
           return;
