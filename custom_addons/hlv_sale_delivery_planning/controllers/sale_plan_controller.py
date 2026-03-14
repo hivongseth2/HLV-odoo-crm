@@ -144,7 +144,7 @@ class SalePlanPublicController(http.Controller):
             )
             return False, 'not_configured'
         try:
-            uid = request.session.authenticate(request.db, VIEWER_LOGIN, viewer_pw)
+            uid = request.session.authenticate(VIEWER_LOGIN, viewer_pw)
             if uid:
                 return True, ''
             return False, 'bad_credentials'
