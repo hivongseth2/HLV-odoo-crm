@@ -4,7 +4,12 @@ from dateutil.relativedelta import relativedelta
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
-    @api.model
+    x_plan_need_cancel = fields.Boolean(
+        string='Cần hủy (Báo cáo)',
+        default=False,
+        copy=False,
+        help='Được đánh dấu khi người dùng báo cáo đơn hàng cần hủy từ trang sale_plan',
+    )
     def get_delivery_dashboard_data(self, search_query='', filter_warehouse_id='all', filter_delivery_status='all', filter_stock_status='all', filter_packing_status='all', filter_date_from='', filter_date_to='', filter_po_date_from='', filter_po_date_to='', filter_po_status='all', filter_saler_code='', limit=12, offset=0):
         """
         Fetch SOs and matching POs to display on the OWL dashboard.

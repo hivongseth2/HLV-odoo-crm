@@ -2,6 +2,7 @@
 import logging
 import time
 from collections import defaultdict
+from markupsafe import Markup
 from odoo import http
 from odoo.http import request
 
@@ -51,7 +52,7 @@ _LOGIN = """<!DOCTYPE html>
 
 _PAGE = r"""<!DOCTYPE html>
 <html lang="vi"><head><meta charset="utf-8"/>
-<title>Tình trạng đơn hàng</title>
+<title>Điều phối Giao hàng</title>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
@@ -131,12 +132,18 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 /* Load more */
 #btn-load-more{font-weight:600;padding:4px 32px}
 @media(max-width:768px){#drawer{width:100%} .kanban-col{min-width:100%}}
+/* Report button */
+.btn-report{font-size:.72rem;padding:2px 7px;border:1px solid #fed7d7;color:#c53030;background:#fff5f5;border-radius:3px;cursor:pointer;transition:.15s;line-height:1.4}
+.btn-report:hover{background:#fed7d7;border-color:#c53030}
+/* Report modal */
+#report-modal{display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.5);align-items:center;justify-content:center}
+#report-modal .rmod-card{background:#fff;max-width:440px;width:90%;border-radius:4px;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,.2)}
 </style>
 </head><body>
 <div id="loading" class="loading-overlay d-none"><div class="spinner-border text-primary"></div></div>
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-3" style="border-radius:0!important">
 <div class="container-fluid">
-  <a class="navbar-brand fw-bold" href="/sale_plan"> Tình trạng đơn hàng</a>
+  <a class="navbar-brand fw-bold" href="/sale_plan">&#128666; Điều phối Giao hàng</a>
   <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#nav1"><span class="navbar-toggler-icon"></span></button>
   <div class="collapse navbar-collapse" id="nav1">
     <ul class="navbar-nav ms-auto">
@@ -246,12 +253,24 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
   <div id="dr-body" class="p-3"></div>
   <div class="p-3 border-top bg-light fw-bold" id="dr-footer"></div>
 </div>
+<!-- Report modal -->
+<div id="report-modal">
+  <div class="rmod-card">
+    <h6 class="fw-bold mb-1"><i class="fa fa-flag text-danger me-1"></i> Báo cáo đơn hàng</h6>
+    <p class="text-muted small mb-3" id="report-so-name"></p>
+    <textarea id="report-reason" class="form-control mb-3" rows="3" placeholder="Mô tả vấn đề (tùy chọn)..."></textarea>
+    <div class="d-flex gap-2">
+      <button class="btn btn-danger btn-sm flex-fill" id="report-submit"><i class="fa fa-flag me-1"></i>Gửi báo cáo</button>
+      <button class="btn btn-outline-secondary btn-sm" id="report-cancel">Hủy</button>
+    </div>
+  </div>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 (function(){
 "use strict";
 var S={limit:250,total:0,viewMode:'kanban',kanbanGroupBy:'packing_status',
-  orders:[],warehouses:[],stats:{},whLoaded:false,kanbanColPageSize:{}};
+  orders:[],warehouses:[],stats:{},whLoaded:false,kanbanColPageSize:{},reportedIds:{}};
 
 var DL={unshipped:'CHƯA GIAO',pending:'CHƯA GIAO',partial:'Giao 1 phần',full:'Đã giao đủ'};
 var DC={unshipped:'badge-del-pending',pending:'badge-del-pending',partial:'badge-del-partial',full:'badge-del-full'};
@@ -425,7 +444,8 @@ function getCardBorderClass(o){
 function renderSOCard(o){
   var bc=getCardBorderClass(o);
   var rd=o.real_delivery_status||o.delivery_status;
-  var h='<div class="card so-card cursor-pointer '+bc+'" data-so-id="'+o.id+'">'
+  var reported=S.reportedIds&&S.reportedIds[o.id];
+  var h='<div class="card so-card cursor-pointer '+bc+(reported?' opacity-75':'')+'" data-so-id="'+o.id+'">'
     +'<div class="card-header py-2">'
     +'<div class="d-flex flex-wrap gap-1 mb-1">'
     +b(DC[rd]||'badge-del-pending',DL[rd]||rd)
@@ -440,6 +460,13 @@ function renderSOCard(o){
     +'<span class="fw-bold">'+fm(o.amount_total)+'</span>';
   var pc=o.pos?o.pos.length:0;
   if(pc>0) h+='<span class="badge bg-info text-dark">'+pc+' PO</span>';
+  h+='</div>';
+  h+='<div class="d-flex justify-content-end mt-2">';
+  if(reported){
+    h+='<span class="text-muted" style="font-size:.72rem"><i class="fa fa-flag text-danger me-1"></i>Đã báo cáo</span>';
+  } else {
+    h+='<button class="btn-report" data-so-id="'+o.id+'" data-so-name="'+esc(o.name)+'"><i class="fa fa-flag me-1"></i>Báo cáo</button>';
+  }
   h+='</div></div></div>';
   return h;
 }
@@ -451,6 +478,10 @@ function renderList(){
     var tr=document.createElement('tr');
     tr.className='cursor-pointer';
     tr.setAttribute('data-so-id',o.id);
+    var isReported=S.reportedIds&&S.reportedIds[o.id];
+    var reportCell=isReported
+      ?'<td><span class="text-muted" style="font-size:.72rem"><i class="fa fa-flag text-danger"></i></span></td>'
+      :'<td><button class="btn-report" data-so-id="'+o.id+'" data-so-name="'+esc(o.name)+'"><i class="fa fa-flag"></i></button></td>';
     tr.innerHTML='<td class="fw-bold text-primary">'+esc(o.name)+'</td>'
       +'<td>'+esc(partnerName(o))+'</td>'
       +'<td>'+esc(whName(o))+'</td>'
@@ -459,7 +490,8 @@ function renderList(){
       +'<td class="text-end">'+fm(o.amount_total)+'</td>'
       +'<td>'+b(DC[rd]||'',DL[rd]||'')+'</td>'
       +'<td>'+b(SC[o.stock_status]||'',SL[o.stock_status]||'')+'</td>'
-      +'<td>'+b(PC[o.packing_status]||'',PL[o.packing_status]||'')+'</td>';
+      +'<td>'+b(PC[o.packing_status]||'',PL[o.packing_status]||'')+'</td>'
+      +reportCell;
     tb.appendChild(tr);
   });
 }
@@ -559,6 +591,8 @@ document.addEventListener('click',function(e){
     if(el){el.value=chipX.dataset.fr||'';}
     load(false);return;
   }
+  var rBtn=e.target.closest('.btn-report');
+  if(rBtn){e.stopPropagation();e.preventDefault();openReportModal(parseInt(rBtn.dataset.soId,10),rBtn.dataset.soName);return;}
   if(e.target.closest('#clear-all-filters')){e.preventDefault();clearAll();return;}
   var colMore=e.target.closest('.btn-col-more');
   if(colMore){
@@ -622,7 +656,45 @@ $('btn-list').addEventListener('click',function(){
 
 $('dr-close').addEventListener('click',closeDrawer);
 $('drawer-overlay').addEventListener('click',closeDrawer);
-document.addEventListener('keydown',function(e){if(e.key==='Escape')closeDrawer();});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeDrawer();closeReportModal();}});
+
+// --- Report modal ---
+var _reportSoId=null;
+function openReportModal(id,name){
+  _reportSoId=id;
+  $('report-so-name').textContent='Đơn hàng: '+name;
+  $('report-reason').value='';
+  var m=$('report-modal');m.style.display='flex';
+  setTimeout(function(){$('report-reason').focus();},80);
+}
+function closeReportModal(){
+  $('report-modal').style.display='none';
+  _reportSoId=null;
+}
+$('report-cancel').addEventListener('click',closeReportModal);
+$('report-modal').addEventListener('click',function(e){if(e.target===this)closeReportModal();});
+$('report-submit').addEventListener('click',function(){
+  if(!_reportSoId)return;
+  var reason=$('report-reason').value.trim()||'(Không có mô tả)';
+  var btn=this;btn.disabled=true;btn.innerHTML='<i class="fa fa-spinner fa-spin me-1"></i>Đang gửi...';
+  fetch('/api/sale_plan/report_order',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{order_id:_reportSoId,reason:reason}})})
+  .then(function(r){return r.json();})
+  .then(function(j){
+    btn.disabled=false;btn.innerHTML='<i class="fa fa-flag me-1"></i>Gửi báo cáo';
+    if(j.result&&j.result.status==='success'){
+      S.reportedIds[_reportSoId]=true;
+      closeReportModal();
+      render();
+      var toast=document.createElement('div');
+      toast.style.cssText='position:fixed;bottom:24px;right:24px;z-index:3000;background:#38a169;color:#fff;padding:12px 20px;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.2);font-weight:600';
+      toast.innerHTML='<i class="fa fa-check me-1"></i>Đã gửi báo cáo cho admin';
+      document.body.appendChild(toast);setTimeout(function(){toast.remove();},3500);
+    } else {
+      alert('Lỗi gửi báo cáo: '+(j.result&&j.result.message||'Lỗi không xác định'));
+    }
+  }).catch(function(){btn.disabled=false;btn.innerHTML='<i class="fa fa-flag me-1"></i>Gửi báo cáo';alert('Lỗi kết nối.');});
+});
 
 load(false);
 })();
@@ -685,4 +757,24 @@ class SalePlanPublicController(http.Controller):
             return {'status': 'success', 'data': result}
         except Exception as e:
             _logger.exception('sale_plan API error')
+            return {'status': 'error', 'message': str(e)}
+
+    @http.route('/api/sale_plan/report_order', type='json', auth='public', methods=['POST'])
+    def api_report_order(self, order_id=None, reason='', **kwargs):
+        if not request.session.get(SESSION_KEY_OK):
+            return {'status': 'error', 'message': 'Unauthorized'}
+        try:
+            so = request.env['sale.order'].sudo().browse(int(order_id))
+            if not so.exists():
+                return {'status': 'error', 'message': 'Order not found'}
+            safe_reason = Markup.escape(reason or '(Không có mô tả)')
+            body = Markup(
+                '<p>🚩 <strong>Báo cáo từ trang công khai (sale_plan):</strong></p>'
+                '<blockquote>%s</blockquote>'
+            ) % safe_reason
+            so.message_post(body=body, message_type='comment', subtype_xmlid='mail.mt_note')
+            so.x_plan_need_cancel = True
+            return {'status': 'success'}
+        except Exception as e:
+            _logger.exception('report_order error')
             return {'status': 'error', 'message': str(e)}
