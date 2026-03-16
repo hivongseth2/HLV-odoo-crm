@@ -911,6 +911,44 @@ class InventoryCheck(models.Model):
         return {'success': False, 'error': f'Không tìm thấy vị trí: {barcode}'}
 
     @api.model
+    def get_location_stock(self, barcode):
+        """Trả về tồn kho tại vị trí ứng với barcode (chỉ xem, không sửa)"""
+        location = self.env['stock.location'].search([
+            ('barcode', '=', barcode),
+            ('usage', '=', 'internal')
+        ], limit=1)
+        if not location:
+            location = self.env['stock.location'].search([
+                ('complete_name', 'ilike', barcode),
+                ('usage', '=', 'internal')
+            ], limit=1)
+        if not location:
+            return {'success': False, 'error': f'Không tìm thấy vị trí: {barcode}'}
+
+        quants = self.env['stock.quant'].search([
+            ('location_id', '=', location.id),
+            ('product_id.active', '=', True),
+        ])
+        items = []
+        for q in quants.sorted(key=lambda r: r.product_id.display_name):
+            if q.quantity == 0:
+                continue
+            items.append({
+                'product_id': q.product_id.id,
+                'product_name': q.product_id.display_name,
+                'product_code': q.product_id.default_code or '',
+                'lot_name': q.lot_id.name if q.lot_id else '',
+                'quantity': q.quantity,
+                'uom_name': q.product_id.uom_id.name,
+            })
+        return {
+            'success': True,
+            'location_id': location.id,
+            'location_name': location.display_name,
+            'items': items,
+        }
+
+    @api.model
     def search_product(self, barcode):
         """Tìm product theo barcode, default_code, hoặc name"""
         product = self.env['product.product'].search([('barcode', '=', barcode)], limit=1)

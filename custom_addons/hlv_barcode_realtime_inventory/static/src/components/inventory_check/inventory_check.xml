@@ -91,6 +91,10 @@
                             <i class="fa fa-bar-chart"/>
                             <span>Thống Kê</span>
                         </button>
+                        <button class="hlv-nav-btn" t-on-click="goToLocationViewer">
+                            <i class="fa fa-search"/>
+                            <span>Xem Vị Trí</span>
+                        </button>
                         <t t-if="state.settings and state.settings.is_manager">
                             <button class="hlv-nav-btn" t-on-click="goToApprovals">
                                 <i class="fa fa-check-square-o"/>
@@ -799,6 +803,72 @@
                             <div class="hlv-detail-table__empty">Chưa có sản phẩm nào</div>
                         </t>
                     </div>
+                </div>
+            </t>
+
+            <!-- =================== LOCATION VIEWER VIEW =================== -->
+            <t t-if="state.view === 'location_viewer'">
+                <div class="hlv-lv">
+                    <div class="hlv-page-header">
+                        <button class="hlv-icon-btn hlv-icon-btn--ghost" t-on-click="goHome">
+                            <i class="fa fa-arrow-left"/>
+                        </button>
+                        <h2>Xem Vị Trí</h2>
+                        <div/>
+                    </div>
+
+                    <div class="hlv-lv__search">
+                        <input type="text" class="hlv-lv-input"
+                            t-model="state.location_viewer_barcode"
+                            t-on-keydown="onLocationViewerInput"
+                            placeholder="Nhập hoặc quét mã vị trí..."
+                            inputmode="text"/>
+                        <button class="hlv-btn hlv-btn--ghost hlv-lv__cam-btn" t-on-click="openCameraForLocationViewer">
+                            <i class="fa fa-camera"/>
+                        </button>
+                    </div>
+
+                    <t t-if="!state.location_viewer">
+                        <div class="hlv-empty-state" style="padding-top: 60px;">
+                            <i class="fa fa-map-marker hlv-empty-state__icon"/>
+                            <p>Quét mã vị trí để xem tồn kho</p>
+                            <small>Không điều chỉnh tồn kho</small>
+                        </div>
+                    </t>
+
+                    <t t-if="state.location_viewer">
+                        <div class="hlv-lv__result-header">
+                            <i class="fa fa-map-marker"/> <strong t-esc="state.location_viewer.location_name"/>
+                            <span class="hlv-badge hlv-badge--info" style="margin-left: 8px;">
+                                <t t-esc="state.location_viewer.items.length"/> sản phẩm
+                            </span>
+                        </div>
+
+                        <t t-if="state.location_viewer.items.length === 0">
+                            <div class="hlv-empty-state" style="padding-top: 40px;">
+                                <i class="fa fa-inbox hlv-empty-state__icon"/>
+                                <p>Vị trí này không có hàng</p>
+                            </div>
+                        </t>
+
+                        <div class="hlv-lv__list">
+                            <t t-foreach="state.location_viewer.items" t-as="item" t-key="item.product_id + '_' + item.lot_name">
+                                <div class="hlv-lv__row">
+                                    <div class="hlv-lv__row-info">
+                                        <div class="hlv-lv__row-name" t-esc="item.product_name"/>
+                                        <div t-if="item.product_code" class="hlv-lv__row-sku" t-esc="item.product_code"/>
+                                        <div t-if="item.lot_name" class="hlv-lv__row-lot">
+                                            <i class="fa fa-tag"/> <t t-esc="item.lot_name"/>
+                                        </div>
+                                    </div>
+                                    <div class="hlv-lv__row-qty">
+                                        <span class="hlv-lv__qty-val" t-esc="item.quantity"/>
+                                        <span class="hlv-lv__qty-uom" t-esc="item.uom_name"/>
+                                    </div>
+                                </div>
+                            </t>
+                        </div>
+                    </t>
                 </div>
             </t>
 
