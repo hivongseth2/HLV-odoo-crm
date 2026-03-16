@@ -355,6 +355,7 @@
                                         <label>Lý Do <span class="hlv-required">*</span></label>
                                         <select class="hlv-select" t-model="state.discrepancy_dialog.reason">
                                             <option value="">-- Chọn lý do --</option>
+                                            <option value="kiem_ton">Kiểm tồn</option>
                                             <option value="damaged">Hỏng / Mất</option>
                                             <option value="expired">Hết hạn / Cũ</option>
                                             <option value="unknown_location">Không tìm thấy</option>
@@ -660,6 +661,22 @@
                                     </div>
                                 </div>
                                 <div t-att-class="'hlv-toggle ' + (state.settings.auto_confirm ? 'hlv-toggle--on' : '')">
+                                    <div class="hlv-toggle__track">
+                                        <div class="hlv-toggle__thumb"/>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="hlv-setting-row" t-on-click="toggleSkipDiscrepancyReason">
+                                <div class="hlv-setting-row__info">
+                                    <div class="hlv-setting-row__title">
+                                        <i class="fa fa-forward"/> Bỏ Qua Nhập Lí Do Chênh Lệch
+                                    </div>
+                                    <div class="hlv-setting-row__desc">
+                                        Tự động ghi nhận lý do mặc định là “Kiểm tồn”, không hiện hộp thoại nhập lý do
+                                    </div>
+                                </div>
+                                <div t-att-class="'hlv-toggle ' + (state.settings.skip_discrepancy_reason ? 'hlv-toggle--on' : '')">
                                     <div class="hlv-toggle__track">
                                         <div class="hlv-toggle__thumb"/>
                                     </div>

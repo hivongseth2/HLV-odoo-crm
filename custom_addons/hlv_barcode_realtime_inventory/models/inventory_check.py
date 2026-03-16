@@ -824,17 +824,19 @@ class InventoryCheck(models.Model):
             'success': True,
             'approval_required': ICP.get_param('hlv_inventory.approval_required', 'False') == 'True',
             'auto_confirm': ICP.get_param('hlv_inventory.auto_confirm', 'False') == 'True',
+            'skip_discrepancy_reason': ICP.get_param('hlv_inventory.skip_discrepancy_reason', 'False') == 'True',
             'is_manager': is_manager,
         }
 
     @api.model
-    def save_scanner_settings(self, approval_required, auto_confirm):
+    def save_scanner_settings(self, approval_required, auto_confirm, skip_discrepancy_reason=False):
         """Lưu cấu hình scanner (chỉ manager)"""
         if not self.env.user.has_group('stock.group_stock_manager'):
             return {'success': False, 'error': _('Chỉ quản lý kho mới được thay đổi cài đặt')}
         ICP = self.env['ir.config_parameter'].sudo()
         ICP.set_param('hlv_inventory.approval_required', 'True' if approval_required else 'False')
         ICP.set_param('hlv_inventory.auto_confirm', 'True' if auto_confirm else 'False')
+        ICP.set_param('hlv_inventory.skip_discrepancy_reason', 'True' if skip_discrepancy_reason else 'False')
         return {'success': True}
 
     @api.model

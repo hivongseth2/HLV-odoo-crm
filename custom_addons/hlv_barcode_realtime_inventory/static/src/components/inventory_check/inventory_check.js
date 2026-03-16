@@ -452,11 +452,29 @@ export class InventoryCheckScanner extends Component {
     // ========== Discrepancy Dialog ==========
     addDiscrepancyHandler(event) {
         const btn = event.target.closest('button');
-        this.openDiscrepancyDialog(
-            parseInt(btn.dataset.lineId),
-            btn.dataset.productName,
-            parseFloat(btn.dataset.difference)
-        );
+        const line_id = parseInt(btn.dataset.lineId);
+        const product_name = btn.dataset.productName;
+        const difference = parseFloat(btn.dataset.difference);
+        if (this.state.settings && this.state.settings.skip_discrepancy_reason) {
+            this._autoSaveDiscrepancy(line_id);
+        } else {
+            this.openDiscrepancyDialog(line_id, product_name, difference);
+        }
+    }
+
+    async _autoSaveDiscrepancy(line_id) {
+        try {
+            const r = await this.orm.call('inventory.check', 'save_discrepancy', [line_id, 'kiem_ton', ''], {});
+            if (r.success) {
+                this._showNotification('Đã ghi nhận: Kiểm tồn', 'success');
+                await this._refreshCheckData();
+                this._focusOnBarcodeInput();
+            } else {
+                this._showError(r.error || 'Lỗi');
+            }
+        } catch (error) {
+            this._showError('Lỗi: ' + error.message);
+        }
     }
 
     openDiscrepancyDialog(line_id, product_name, difference) {
@@ -492,11 +510,27 @@ export class InventoryCheckScanner extends Component {
     }
 
     // ========== Confirm Check (inline) ==========
-    openConfirmDialog() {
+    async openConfirmDialog() {
         const pending = this.state.lines.filter(l => l.difference !== 0 && !l.discrepancy_id);
         if (pending.length > 0) {
-            this._showError(`Cần ghi nhận lý do chênh lệch cho ${pending.length} sản phẩm`);
-            return;
+            if (this.state.settings && this.state.settings.skip_discrepancy_reason) {
+                this.state.is_loading = true;
+                try {
+                    for (const l of pending) {
+                        await this.orm.call('inventory.check', 'save_discrepancy', [l.id, 'kiem_ton', ''], {});
+                    }
+                    await this._refreshCheckData();
+                } catch (error) {
+                    this._showError('Lỗi tự động ghi nhận: ' + error.message);
+                    this.state.is_loading = false;
+                    return;
+                } finally {
+                    this.state.is_loading = false;
+                }
+            } else {
+                this._showError(`Cần ghi nhận lý do chênh lệch cho ${pending.length} sản phẩm`);
+                return;
+            }
         }
         this.state.confirm_dialog = true;
     }
@@ -631,12 +665,18 @@ export class InventoryCheckScanner extends Component {
         await this._saveSettings();
     }
 
+    async toggleSkipDiscrepancyReason() {
+        const s = this.state.settings;
+        s.skip_discrepancy_reason = !s.skip_discrepancy_reason;
+        await this._saveSettings();
+    }
+
     async _saveSettings() {
         const s = this.state.settings;
         try {
             const r = await this.orm.call(
                 'inventory.check', 'save_scanner_settings',
-                [s.approval_required, s.auto_confirm], {}
+                [s.approval_required, s.auto_confirm, s.skip_discrepancy_reason], {}
             );
             if (r.success) {
                 this._showNotification('Đã lưu cài đặt', 'success');
