@@ -32,6 +32,7 @@ export class WarehouseMonitorDashboard extends Component {
                 totalOrders: 0,
                 totalTrips: 0,
                 expandedTrip: null,
+                actionSummary: { need_pick: 0, need_pack: 0, ready_ship: 0 },
             },
             aiPanel: {
                 isThinking: false,
@@ -274,6 +275,7 @@ export class WarehouseMonitorDashboard extends Component {
             this.state.deliveryPlan.poNotifications = result.po_notify || [];
             this.state.deliveryPlan.totalOrders = result.total_orders || 0;
             this.state.deliveryPlan.totalTrips = result.total_trips || 0;
+            this.state.deliveryPlan.actionSummary = result.action_summary || { need_pick: 0, need_pack: 0, ready_ship: 0 };
             this.state.deliveryPlan.loaded = true;
 
             if ((result.po_notify || []).length > 0) {

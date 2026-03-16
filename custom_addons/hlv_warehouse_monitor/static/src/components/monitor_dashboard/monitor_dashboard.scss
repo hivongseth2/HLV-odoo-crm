@@ -940,7 +940,72 @@ $monitor-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 
                             &.dp-no-coords { color: $monitor-text-muted; opacity: 0.6; }
                         }
+
+                        // Action-needed badge on each order row
+                        .dp-action-badge {
+                            padding: 1px 7px;
+                            border-radius: 4px;
+                            font-size: 10px;
+                            font-weight: 800;
+                            letter-spacing: 0.3px;
+                            text-transform: uppercase;
+                            white-space: nowrap;
+
+                            &.dp-action-pick {
+                                background: rgba(#9b5de5, 0.18);
+                                color: #b779ff;
+                                border: 1px solid rgba(#9b5de5, 0.35);
+                            }
+                            &.dp-action-pack {
+                                background: rgba($monitor-amber, 0.18);
+                                color: $monitor-amber;
+                                border: 1px solid rgba($monitor-amber, 0.35);
+                            }
+                            &.dp-action-ship {
+                                background: rgba($monitor-green, 0.18);
+                                color: $monitor-green;
+                                border: 1px solid rgba($monitor-green, 0.35);
+                            }
+                        }
                     }
+                }
+            }
+        }
+
+        // Action summary chips bar (above trips)
+        .dp-action-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 8px 12px;
+            background: rgba(#fff, 0.02);
+            border-bottom: 1px solid rgba($monitor-border, 0.4);
+
+            .dp-action-chip {
+                padding: 3px 10px;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 700;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+
+                strong { font-weight: 900; }
+
+                &.dp-chip-pick {
+                    background: rgba(#9b5de5, 0.15);
+                    color: #b779ff;
+                    border: 1px solid rgba(#9b5de5, 0.3);
+                }
+                &.dp-chip-pack {
+                    background: rgba($monitor-amber, 0.15);
+                    color: $monitor-amber;
+                    border: 1px solid rgba($monitor-amber, 0.3);
+                }
+                &.dp-chip-ship {
+                    background: rgba($monitor-green, 0.15);
+                    color: $monitor-green;
+                    border: 1px solid rgba($monitor-green, 0.3);
                 }
             }
         }

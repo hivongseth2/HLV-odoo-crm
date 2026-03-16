@@ -196,6 +196,41 @@ class WarehouseMonitorEventAI(models.Model):
 
         return packable
 
+    def _ai_collect_ready_to_ship(self):
+        """Find all out-pickings in assigned state (ready for delivery)."""
+        domain = [
+            ("state", "=", "assigned"),
+            ("picking_type_code", "=", "outgoing"),
+        ]
+        if self.warehouse_id:
+            domain.append(("picking_type_id.warehouse_id", "=", self.warehouse_id.id))
+        out_picks = self.env["stock.picking"].sudo().search(
+            domain, limit=30, order="scheduled_date asc, id asc"
+        )
+        result = []
+        seen_so = set()
+        for pk in out_picks:
+            so = None
+            if hasattr(pk.group_id, "sale_id") and pk.group_id.sale_id:
+                so = pk.group_id.sale_id.sudo()
+            elif hasattr(pk, "sale_id") and pk.sale_id:
+                so = pk.sale_id.sudo()
+            if so and so.id not in seen_so:
+                seen_so.add(so.id)
+                info = self._ai_get_so_delivery_info(so)
+            else:
+                info = {
+                    "so_name": pk.origin or pk.name,
+                    "customer": pk.partner_id.name if pk.partner_id else "",
+                    "commitment_date": "",
+                    "htgh": "",
+                    "address": "",
+                }
+            info["out_picking"] = pk.name
+            info["scheduled_date"] = str(pk.scheduled_date)[:16] if pk.scheduled_date else ""
+            result.append(info)
+        return result
+
     def _ai_build_context(self):
         """Build a rich context dict for AI analysis from this event."""
         self.ensure_one()
@@ -322,7 +357,13 @@ class WarehouseMonitorEventAI(models.Model):
                         ctx["po_linked_so"] = self._ai_get_so_delivery_info(so_rec)
                         break
             ctx["packable_orders"] = self._ai_collect_packable_orders()
+        # ── For PICK validate: collect packable orders for packing suggestion ──────
+        if self.event_type == "pick" and self.action == "validate":
+            ctx["packable_orders"] = self._ai_collect_packable_orders()
 
+        # ── For PACK validate: collect orders ready to ship ───────────────────────
+        if self.event_type == "pack" and self.action == "validate":
+            ctx["ready_to_ship"] = self._ai_collect_ready_to_ship()
         # ── Recent context events (same warehouse, last 1h) ────────────
         one_hour_ago = datetime.now() - timedelta(hours=1)
         recent = self.sudo().search(
@@ -424,6 +465,20 @@ class WarehouseMonitorEventAI(models.Model):
                 if details:
                     lines.append(f"     {' | '.join(details)}")
 
+        if ctx.get("ready_to_ship"):
+            items = ctx["ready_to_ship"]
+            lines.append(f"\n--- {len(items)} ĐƠN SẴN SÀNG XUẤT KHO (OUT assigned) ---")
+            for i, r in enumerate(items[:15], 1):
+                deadline = f" | Hẹn: {r.get('commitment_date', '')}" if r.get("commitment_date") else ""
+                lines.append(f"  {i}. {r.get('so_name', '')} – {r.get('customer', '')}{deadline}")
+                details = []
+                if r.get("htgh"):
+                    details.append(f"Giao: {r['htgh']}")
+                if r.get("address"):
+                    details.append(f"ĐC: {r['address']}")
+                if details:
+                    lines.append(f"     {' | '.join(details)}")
+
         if ctx.get("recent_events"):
             lines.append("\n--- 5 sự kiện gần nhất cùng kho ---")
             for re_ev in ctx["recent_events"]:
@@ -436,22 +491,53 @@ class WarehouseMonitorEventAI(models.Model):
             lines.append("")
             lines.append("Trả lời câu hỏi trên dựa vào ngữ cảnh kho ở trên.")
         elif ctx.get("packable_orders"):
-            lines.append("=== YÊU CẦU (Sự kiện nhập kho) ===")
+            ev_type = ev.get("type", "")
+            if ev_type == "pick":
+                lines.append("=== YÊU CẦU (Sau khi lấy hàng xong) ===")
+                lines.append(
+                    "Lấy hàng (PICK) vừa hoàn thành. Dựa trên danh sách đơn chờ đóng gói, hãy:\n"
+                    "1. Xác nhận đơn bán vừa lấy hàng đã sẵn sàng chuyển sang ĐÓNG GÓI chưa.\n"
+                    "2. Đề xuất nhóm đơn nên đóng gói tiếp theo (ưu tiên đơn hẹn giao sớm nhất).\n"
+                    "3. Gợi ý gom 2-3 nhóm xe/tuyến cụ thể (ví dụ: Nhóm xe máy Q.1 – DH001, DH002; "
+                    "Nhóm xe tải Bình Dương – DH003...).\n"
+                    "4. Đánh giá mức khẩn cấp."
+                )
+            else:
+                lines.append("=== YÊU CẦU (Sự kiện nhập kho) ===")
+                lines.append(
+                    "Hàng vừa nhập kho. Dựa trên danh sách đơn bán đang chờ đóng gói, hãy:\n"
+                    "1. Xác định ngay đơn bán nào liên kết với PO này cần đóng gói trước.\n"
+                    "2. Nhóm các đơn có địa chỉ CÙNG TUYẾN/QUẬN để đóng gói chung 1 chuyến.\n"
+                    "3. Ưu tiên theo: ngày hẹn giao gần nhất → cùng tuyến → cùng hình thức giao.\n"
+                    "4. Gợi ý 2-3 nhóm xe cụ thể (ví dụ: Nhóm xe máy Quận 1 – gồm SO1, SO2; "
+                    "Nhóm xe tải Bình Dương – gồm SO3, SO4...).\n"
+                    "5. Đánh giá mức khẩn cấp."
+                )
+        elif ctx.get("ready_to_ship"):
+            lines.append("=== YÊU CẦU (Sau khi đóng gói xong) ===")
             lines.append(
-                "Hàng vừa nhập kho. Dựa trên danh sách đơn bán đang chờ đóng gói, hãy:\n"
-                "1. Xác định ngay đơn bán nào liên kết với PO này cần đóng gói trước.\n"
-                "2. Nhóm các đơn có địa chỉ CÙNG TUYẾN/QUẬN để đóng gói chung 1 chuyến.\n"
-                "3. Ưu tiên theo: ngày hẹn giao gần nhất → cùng tuyến → cùng hình thức giao.\n"
-                "4. Gợi ý 2-3 nhóm xe cụ thể (ví dụ: Nhóm xe máy Quận 1 – gồm SO1, SO2; "
-                "Nhóm xe tải Bình Dương – gồm SO3, SO4...).\n"
-                "5. Đánh giá mức khẩn cấp."
+                "Đóng gói (PACK) vừa hoàn thành. Dựa trên danh sách đơn sẵn sàng xuất kho, hãy:\n"
+                "1. Xác nhận đơn bán vừa đóng gói có phiếu xuất (OUT) sẵn sàng giao chưa.\n"
+                "2. Đề xuất gộp chuyến với các đơn cùng khu vực/phương tiện.\n"
+                "3. Nêu thứ tự ưu tiên giao hàng: đơn trễ hạn → đơn hôm nay → đơn bình thường.\n"
+                "4. Đánh giá mức khẩn cấp."
+            )
+        elif ev.get("type") == "sale" and ev.get("action") == "confirm":
+            lines.append("=== YÊU CẦU (Đơn bán mới xác nhận) ===")
+            lines.append(
+                "Đơn bán vừa được xác nhận. Hãy:\n"
+                "1. Kiểm tra tình trạng tồn kho: đủ hàng → xác nhận lấy hàng ngay (PICK).\n"
+                "2. Nếu thiếu hàng → kiểm tra PO đang về có thể cung ứng kịp không.\n"
+                "3. Xem ngày hẹn giao: có đủ thời gian xử lý không?\n"
+                "4. Đề xuất hành động cụ thể: [Xác nhận PICK] / [Chờ PO X về] / "
+                "[Liên hệ khách điều chỉnh ngày giao]."
             )
         else:
             lines.append("=== YÊU CẦU ===")
             lines.append(
                 "Dựa vào toàn bộ thông tin trên, hãy:\n"
-                "1. Phân tích ngắn gọn tình huống (2-3 câu, tiếng Việt)\n"
-                "2. Liệt kê 2-4 hành động tiếp theo cụ thể, ưu tiên nhất\n"
+                "1. Tóm tắt tình huống và tác động đến luồng kho (2-3 câu)\n"
+                "2. Đề xuất 2-4 hành động cụ thể, khả thi ngay (tên phiếu / bước thực hiện)\n"
                 "3. Đánh giá mức độ khẩn cấp: urgent / high / normal"
             )
 
