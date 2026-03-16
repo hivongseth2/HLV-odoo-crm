@@ -31,7 +31,10 @@
             <!-- PO Notifications (in-transit → pack now) -->
             <t t-if="state.deliveryPlan.poNotifications.length > 0">
                 <div class="dp-po-notifications">
-                    <div class="dp-po-title">📦 PO đang về kho – chuẩn bị đóng gói</div>
+                    <div class="dp-po-title">
+                        📦 PO đang về kho – chuẩn bị đóng gói
+                        <span class="dp-po-count" t-esc="'(' + state.deliveryPlan.poNotifications.length + ' đơn)'"/>
+                    </div>
                     <t t-foreach="state.deliveryPlan.poNotifications" t-as="notif" t-key="notif_index">
                         <div class="dp-po-card">
                             <span class="dp-po-icon">🚛</span>
@@ -85,6 +88,7 @@
             </t>
 
             <!-- Trip cards -->
+            <div class="dp-trips-scroll">
             <t t-foreach="state.deliveryPlan.trips" t-as="trip" t-key="trip.id">
                 <div t-att-class="'dp-trip-card dp-priority-' + trip.priority">
                     <!-- Trip header -->
@@ -92,6 +96,9 @@
                          t-on-click="() => this.toggleTripExpand(trip.id)">
                         <div class="dp-trip-left">
                             <span class="dp-trip-vehicle" t-esc="trip.vehicle_type_label"/>
+                            <t t-if="trip.route_label">
+                                <span class="dp-route-label" t-esc="trip.route_label"/>
+                            </t>
                             <div class="dp-trip-stats">
                                 <span class="dp-stat">
                                     <span class="dp-stat-num" t-esc="trip.order_count"/>
@@ -180,6 +187,7 @@
                     </t>
                 </div>
             </t>
+            </div>
         </div>
     </t>
 

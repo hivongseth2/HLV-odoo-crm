@@ -248,7 +248,7 @@ class SaleOrderDeliveryPlanner(models.Model):
         return "waiting"
 
     def _wm_get_po_status(self):
-        """Check related PO(s) receipt status. Returns (status_key, po_ref_str)."""
+        """Check related PO(s) receipt status. Returns (status_key, po_name_str)."""
         self.ensure_one()
         PO = self.env["purchase.order"].sudo()
         pos = PO.search([("origin", "ilike", self.name)], limit=10)
@@ -262,7 +262,8 @@ class SaleOrderDeliveryPlanner(models.Model):
             ("state", "not in", ("done", "cancel")),
         ], limit=3)
         if incoming:
-            return "in_transit", ", ".join(p.name for p in incoming)
+            # Return PO name (e.g. "P00001"), not the picking transfer name
+            return "in_transit", ", ".join(pos[:3].mapped("name"))
         if done_pos and not pending:
             return "received", ", ".join(done_pos[:3].mapped("name"))
         if pending:
@@ -344,8 +345,8 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
             htgh_cat, htgh_val = o._wm_classify_htgh()
             stock_st = o._wm_get_stock_status()
 
-            # PO notification: watch self_wait orders whose stock is still waiting
-            if htgh_cat in ("self_wait", "self") and stock_st == "waiting":
+            # PO notification: any order with waiting stock and an in-transit PO
+            if stock_st == "waiting":
                 po_st, po_ref = o._wm_get_po_status()
                 if po_st == "in_transit":
                     po_notify.append({
@@ -464,6 +465,7 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
         # ── 6. Build trip suggestions ──────────────────────────────────
         trips = []
         trip_seq = 1
+        vehicle_type_counters = {}   # count trips per vehicle type for route labelling
         for cluster in clusters:
             n = len(cluster)
             avg_dist = (
@@ -492,10 +494,14 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
                 )
                 priority = "overdue" if has_overdue else ("urgent" if has_urgent else "normal")
 
+                vehicle_type_counters[vtype] = vehicle_type_counters.get(vtype, 0) + 1
+                route_num = vehicle_type_counters[vtype]
+
                 trips.append({
                     "id": trip_seq,
                     "vehicle_type": vtype,
                     "vehicle_type_label": vtype_label,
+                    "route_num": route_num,
                     "suggested_vehicle": vehicles[vtype][0] if vehicles[vtype] else None,
                     "available_vehicles": vehicles[vtype][:5],
                     "order_count": len(sub),
@@ -522,6 +528,13 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
                     ],
                 })
                 trip_seq += 1
+
+        # Post-process: add route label only for vehicle types that have multiple trips
+        for trip in trips:
+            if vehicle_type_counters.get(trip["vehicle_type"], 0) > 1:
+                trip["route_label"] = "Tuyến %d" % trip["route_num"]
+            else:
+                trip["route_label"] = ""
 
         return {
             "trips": trips,
