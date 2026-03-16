@@ -180,7 +180,8 @@ class GoogleAdsAccount(models.Model):
         }
         
         try:
-            return GoogleAdsClient.load_from_dict(credentials, version="v15")
+            # Sử dụng v17 là phiên bản ổn định và phổ biến hiện nay
+            return GoogleAdsClient.load_from_dict(credentials, version="v17")
         except Exception as e:
             raise UserError(_("Không thể khởi tạo Google Ads Client. Chi tiết lỗi: %s") % str(e))
 
