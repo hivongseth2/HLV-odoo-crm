@@ -218,7 +218,7 @@ export class InventoryCheckScanner extends Component {
         setTimeout(() => {
             const inp = document.querySelector('.hlv-lv-input');
             if (inp) inp.focus();
-        }, 100);
+        }, 300);
     }
 
     async onLocationViewerInput(event) {
@@ -795,6 +795,7 @@ export class InventoryCheckScanner extends Component {
             if (active) {
                 const tag = active.tagName;
                 if (active.classList.contains('hlv-qty-input')) return;
+                if (active.classList.contains('hlv-lv-input')) return;
                 if (active.closest && active.closest('.hlv-discrepancy-dialog')) return;
                 if (active.closest && active.closest('.hlv-confirm-dialog')) return;
                 // Don't steal from non-scan inputs (qty, search, settings, etc.)
@@ -802,6 +803,11 @@ export class InventoryCheckScanner extends Component {
                     !active.classList.contains('hlv-input--scan') &&
                     !active.classList.contains('hlv-input--lg') &&
                     !active.classList.contains('hlv-location-hidden-input')) return;
+            }
+            if (this.state.view === 'location_viewer') {
+                const lvInput = document.querySelector('.hlv-lv-input');
+                if (lvInput && document.activeElement !== lvInput) lvInput.focus();
+                return;
             }
             const selector = !this.state.location_id
                 ? '.hlv-location-hidden-input'
