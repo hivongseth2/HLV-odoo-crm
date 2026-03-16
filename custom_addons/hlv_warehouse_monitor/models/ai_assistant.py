@@ -109,6 +109,93 @@ class WarehouseMonitorEventAI(models.Model):
 
     # ── Internal: context builders ────────────────────────────────────────
 
+    def _ai_get_so_delivery_info(self, so):
+        """Return a delivery-info dict for a single sale.order record."""
+        htgh_val = ""
+        if hasattr(so, "x_studio_htgh") and so.x_studio_htgh:
+            fld = so._fields.get("x_studio_htgh")
+            if fld and fld.type == "selection":
+                sel = fld.selection
+                if callable(sel):
+                    sel = sel(so)
+                htgh_val = dict(sel).get(so.x_studio_htgh, str(so.x_studio_htgh))
+            else:
+                htgh_val = str(so.x_studio_htgh)
+
+        # Prefer misa_shipping_address (custom field), else partner address
+        address = ""
+        if hasattr(so, "misa_shipping_address") and so.misa_shipping_address:
+            address = so.misa_shipping_address
+        else:
+            ship = so.partner_shipping_id if hasattr(so, "partner_shipping_id") and so.partner_shipping_id else so.partner_id
+            if ship:
+                address = ", ".join(filter(None, [ship.street, ship.street2, ship.city]))
+
+        # Find PACK picking state for this SO
+        pack_picking = ""
+        pack_state = ""
+        if hasattr(so, "picking_ids"):
+            for pk in so.picking_ids.sudo():
+                if (pk.picking_type_id.sequence_code or "").upper() == "PACK":
+                    pack_picking = pk.name
+                    pack_state = pk.state
+                    break
+
+        return {
+            "so_name": so.name,
+            "customer": so.partner_id.name if so.partner_id else "",
+            "state": so.state,
+            "commitment_date": str(so.commitment_date)[:16] if so.commitment_date else "",
+            "htgh": htgh_val,
+            "address": address,
+            "amount": so.amount_total,
+            "pack_picking": pack_picking,
+            "pack_state": pack_state,
+        }
+
+    def _ai_collect_packable_orders(self):
+        """Find all SOs with PACK picking in confirmed/waiting/assigned state.
+
+        Returns list of dicts sorted by commitment_date (urgent first).
+        """
+        # Build domain for PACK pickings not yet done
+        domain = [
+            ("state", "in", ("confirmed", "waiting", "assigned")),
+            ("picking_type_id.sequence_code", "=", "PACK"),
+        ]
+        if self.warehouse_id:
+            domain.append(("picking_type_id.warehouse_id", "=", self.warehouse_id.id))
+
+        pack_pickings = self.env["stock.picking"].sudo().search(
+            domain, limit=40, order="scheduled_date asc, id asc"
+        )
+
+        seen_so = set()
+        packable = []
+        for pk in pack_pickings:
+            so = None
+            if hasattr(pk.group_id, "sale_id") and pk.group_id.sale_id:
+                so = pk.group_id.sale_id.sudo()
+            elif hasattr(pk, "sale_id") and pk.sale_id:
+                so = pk.sale_id.sudo()
+            elif pk.origin:
+                so_rec = self.env["sale.order"].sudo().search(
+                    [("name", "=", pk.origin.strip())], limit=1
+                )
+                if so_rec:
+                    so = so_rec
+            if not so or so.id in seen_so:
+                continue
+            seen_so.add(so.id)
+
+            info = self._ai_get_so_delivery_info(so)
+            info["pack_picking"] = pk.name
+            info["pack_state"] = pk.state
+            info["scheduled_date"] = str(pk.scheduled_date)[:16] if pk.scheduled_date else ""
+            packable.append(info)
+
+        return packable
+
     def _ai_build_context(self):
         """Build a rich context dict for AI analysis from this event."""
         self.ensure_one()
@@ -218,6 +305,24 @@ class WarehouseMonitorEventAI(models.Model):
                 "date_planned": str(po.date_approve or po.date_order)[:16] if po.date_order else "",
             }
 
+        # ── For IN events: resolve PO.origin→SO + collect all packable orders ─
+        if self.event_type == "in" and self.action in ("validate", "done"):
+            po_info = ctx.get("purchase_order", {})
+            po_origin = po_info.get("origin", "")
+            if po_origin:
+                # po.origin might be a single SO name or a few separated by ", "
+                for candidate in re.split(r"[,\s]+", po_origin):
+                    candidate = candidate.strip()
+                    if not candidate:
+                        continue
+                    so_rec = self.env["sale.order"].sudo().search(
+                        [("name", "=", candidate)], limit=1
+                    )
+                    if so_rec:
+                        ctx["po_linked_so"] = self._ai_get_so_delivery_info(so_rec)
+                        break
+            ctx["packable_orders"] = self._ai_collect_packable_orders()
+
         # ── Recent context events (same warehouse, last 1h) ────────────
         one_hour_ago = datetime.now() - timedelta(hours=1)
         recent = self.sudo().search(
@@ -288,7 +393,36 @@ class WarehouseMonitorEventAI(models.Model):
             lines.append(f"\n--- Đơn mua: {po['name']} ---")
             lines.append(f"NCC: {po['partner']} | Trạng thái: {po['state']}")
             if po["origin"]:
-                lines.append(f"Gốc: {po['origin']}")
+                lines.append(f"Gốc (PO.origin = tên đơn bán liên kết): {po['origin']}")
+
+        # ── PO-linked SO (for IN events) ──────────────────────────────
+        if ctx.get("po_linked_so"):
+            ls = ctx["po_linked_so"]
+            lines.append(f"\n--- ĐƠN BÁN LIÊN KẾT với PO này: {ls['so_name']} ---")
+            lines.append(f"Khách hàng: {ls['customer']} | Giá trị: {ls['amount']:,.0f} VNĐ")
+            if ls["commitment_date"]:
+                lines.append(f"Ngày hẹn giao: {ls['commitment_date']}")
+            if ls["htgh"]:
+                lines.append(f"Hình thức giao hàng: {ls['htgh']}")
+            if ls["address"]:
+                lines.append(f"Địa chỉ giao: {ls['address']}")
+            if ls["pack_picking"]:
+                lines.append(f"Phiếu ĐÓNG GÓI: {ls['pack_picking']} (trạng thái: {ls['pack_state']})")
+
+        # ── All packable orders (for IN events) ──────────────────────
+        if ctx.get("packable_orders"):
+            orders = ctx["packable_orders"]
+            lines.append(f"\n--- {len(orders)} ĐƠN BÁN ĐANG CHỜ ĐÓNG GÓI (PACK sẵn sàng) ---")
+            for i, o in enumerate(orders[:20], 1):
+                deadline = f" | Hẹn: {o['commitment_date']}" if o["commitment_date"] else ""
+                lines.append(f"  {i}. {o['so_name']} – {o['customer']}{deadline}")
+                details = []
+                if o["htgh"]:
+                    details.append(f"Giao: {o['htgh']}")
+                if o["address"]:
+                    details.append(f"ĐC: {o['address']}")
+                if details:
+                    lines.append(f"     {' | '.join(details)}")
 
         if ctx.get("recent_events"):
             lines.append("\n--- 5 sự kiện gần nhất cùng kho ---")
@@ -301,6 +435,17 @@ class WarehouseMonitorEventAI(models.Model):
             lines.append(question)
             lines.append("")
             lines.append("Trả lời câu hỏi trên dựa vào ngữ cảnh kho ở trên.")
+        elif ctx.get("packable_orders"):
+            lines.append("=== YÊU CẦU (Sự kiện nhập kho) ===")
+            lines.append(
+                "Hàng vừa nhập kho. Dựa trên danh sách đơn bán đang chờ đóng gói, hãy:\n"
+                "1. Xác định ngay đơn bán nào liên kết với PO này cần đóng gói trước.\n"
+                "2. Nhóm các đơn có địa chỉ CÙNG TUYẾN/QUẬN để đóng gói chung 1 chuyến.\n"
+                "3. Ưu tiên theo: ngày hẹn giao gần nhất → cùng tuyến → cùng hình thức giao.\n"
+                "4. Gợi ý 2-3 nhóm xe cụ thể (ví dụ: Nhóm xe máy Quận 1 – gồm SO1, SO2; "
+                "Nhóm xe tải Bình Dương – gồm SO3, SO4...).\n"
+                "5. Đánh giá mức khẩn cấp."
+            )
         else:
             lines.append("=== YÊU CẦU ===")
             lines.append(
@@ -349,7 +494,7 @@ class WarehouseMonitorEventAI(models.Model):
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.3,
-                "max_tokens": 600,
+                "max_tokens": 900,
             },
             timeout=20,
         )

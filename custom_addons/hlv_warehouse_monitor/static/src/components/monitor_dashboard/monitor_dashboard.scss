@@ -1328,9 +1328,299 @@ $monitor-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     }
 
     /* ═══════════════════════════════════════════════════
-       Phase 3 — AI Assistant Panel
+       Phase 3 — AI Assistant Panel (right column)
     ═══════════════════════════════════════════════════ */
     .wm-ai-panel {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        background: $monitor-card-bg;
+        border: 1px solid rgba(99, 215, 255, 0.2);
+        border-radius: 12px;
+        overflow: hidden;
+
+        // Header
+        .wm-ai-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px 10px;
+            border-bottom: 1px solid rgba(99, 215, 255, 0.12);
+            flex-shrink: 0;
+
+            .wm-ai-title-group {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+
+                .wm-ai-robot-icon { font-size: 16px; }
+
+                .wm-ai-title {
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #63d7ff;
+                }
+
+                .wm-ai-badge {
+                    background: #63d7ff;
+                    color: #0b1220;
+                    font-size: 10px;
+                    font-weight: 800;
+                    padding: 1px 6px;
+                    border-radius: 20px;
+                    line-height: 16px;
+                }
+            }
+
+            .wm-ai-clear-btn {
+                background: transparent;
+                border: 1px solid rgba(255,255,255,0.1);
+                color: rgba(255,255,255,0.3);
+                font-size: 12px;
+                padding: 3px 8px;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: all 0.2s;
+                &:hover {
+                    border-color: rgba(255,80,80,0.4);
+                    color: rgba(255,80,80,0.7);
+                }
+            }
+        }
+
+        // Thinking bar
+        .wm-ai-thinking-bar {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 6px 14px;
+            background: rgba(99, 215, 255, 0.06);
+            font-size: 11px;
+            color: rgba(99, 215, 255, 0.6);
+            font-style: italic;
+            flex-shrink: 0;
+            border-bottom: 1px solid rgba(99, 215, 255, 0.08);
+
+            .wm-ai-pulse-dot {
+                width: 5px;
+                height: 5px;
+                background: #63d7ff;
+                border-radius: 50%;
+                animation: bounce-dot 1.2s ease-in-out infinite;
+                &:nth-child(2) { animation-delay: 0.2s; }
+                &:nth-child(3) { animation-delay: 0.4s; }
+            }
+        }
+
+        // Ask input row
+        .wm-ai-ask-area {
+            display: flex;
+            gap: 6px;
+            padding: 10px 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            flex-shrink: 0;
+
+            .wm-ai-input {
+                flex: 1;
+                background: rgba(255,255,255,0.05);
+                border: 1px solid rgba(99, 215, 255, 0.18);
+                color: #e8edf4;
+                padding: 7px 12px;
+                border-radius: 18px;
+                font-size: 12px;
+                outline: none;
+                transition: border-color 0.2s;
+                min-width: 0;
+
+                &::placeholder { color: rgba(255,255,255,0.25); }
+                &:focus { border-color: #63d7ff; }
+            }
+
+            .wm-ai-send-btn {
+                flex-shrink: 0;
+                width: 30px;
+                height: 30px;
+                background: rgba(99, 215, 255, 0.15);
+                border: 1px solid rgba(99, 215, 255, 0.3);
+                color: #63d7ff;
+                border-radius: 50%;
+                font-size: 13px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s;
+
+                &:not(:disabled):hover {
+                    background: rgba(99, 215, 255, 0.3);
+                    transform: translateY(-1px);
+                }
+                &:disabled { opacity: 0.35; cursor: not-allowed; }
+            }
+        }
+
+        // Vertical scrolling cards
+        .wm-ai-cards-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+
+            &::-webkit-scrollbar { width: 3px; }
+            &::-webkit-scrollbar-thumb {
+                background: rgba(99, 215, 255, 0.15);
+                border-radius: 3px;
+            }
+        }
+
+        // Empty state
+        .wm-ai-empty {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 32px 16px;
+            text-align: center;
+
+            .wm-ai-empty-icon {
+                font-size: 32px;
+                opacity: 0.25;
+                margin-bottom: 8px;
+            }
+            .wm-ai-empty-text {
+                font-size: 12px;
+                color: rgba(255,255,255,0.25);
+                font-weight: 500;
+                margin-bottom: 6px;
+            }
+            .wm-ai-empty-hint {
+                font-size: 11px;
+                color: rgba(255,255,255,0.15);
+                line-height: 1.5;
+            }
+        }
+
+        // Individual card
+        .wm-ai-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-left: 3px solid transparent;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 12px;
+            transition: background 0.2s;
+
+            &:hover { background: rgba(255,255,255,0.055); }
+
+            &.wm-ai-card--urgent { border-left-color: #ff6b6b; }
+            &.wm-ai-card--high   { border-left-color: #f0a500; }
+            &.wm-ai-card--normal { border-left-color: #63d7ff; }
+
+            // Top bar: badges + time + dismiss
+            .wm-ai-card-topbar {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 5px;
+
+                .wm-ai-card-badges {
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                }
+            }
+
+            .wm-ai-type-badge {
+                font-size: 9px;
+                font-weight: 800;
+                padding: 1px 5px;
+                border-radius: 4px;
+                text-transform: uppercase;
+                letter-spacing: 0.4px;
+
+                &.wm-ai-type--in       { background: rgba(72,200,120,0.15); color: #48c878; }
+                &.wm-ai-type--out      { background: rgba(72,133,237,0.15); color: #4885ed; }
+                &.wm-ai-type--pick     { background: rgba(99,215,255,0.15); color: #63d7ff; }
+                &.wm-ai-type--pack     { background: rgba(165,125,255,0.15); color: #a57dff; }
+                &.wm-ai-type--sale     { background: rgba(240,165,0,0.15); color: #f0a500; }
+                &.wm-ai-type--purchase { background: rgba(255,140,70,0.15); color: #ff8c46; }
+                &.wm-ai-type--question { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6); }
+                &.wm-ai-type--other    { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.4); }
+            }
+
+            .wm-ai-priority-badge { font-size: 12px; }
+
+            .wm-ai-card-time {
+                font-size: 10px;
+                color: rgba(255,255,255,0.28);
+            }
+
+            .wm-ai-dismiss-btn {
+                background: transparent;
+                border: none;
+                color: rgba(255,255,255,0.18);
+                font-size: 11px;
+                cursor: pointer;
+                padding: 0;
+                line-height: 1;
+                transition: color 0.15s;
+                &:hover { color: rgba(255,80,80,0.6); }
+            }
+
+            .wm-ai-card-headline {
+                font-size: 12px;
+                font-weight: 600;
+                color: #dde4ee;
+                margin-bottom: 5px;
+                line-height: 1.35;
+            }
+
+            .wm-ai-question-text {
+                font-size: 11px;
+                color: rgba(99,215,255,0.65);
+                font-style: italic;
+                margin-bottom: 5px;
+                background: rgba(99,215,255,0.05);
+                padding: 4px 8px;
+                border-radius: 5px;
+            }
+
+            .wm-ai-analysis {
+                font-size: 12px;
+                color: rgba(232,237,244,0.8);
+                line-height: 1.6;
+                margin-bottom: 6px;
+                white-space: pre-wrap;
+            }
+
+            .wm-ai-actions-list {
+                list-style: none;
+                padding: 0;
+                margin: 0;
+                border-top: 1px solid rgba(255,255,255,0.06);
+                padding-top: 6px;
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+
+                .wm-ai-action-item {
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 5px;
+                    font-size: 11.5px;
+                    color: rgba(232,237,244,0.75);
+                    line-height: 1.45;
+
+                    .wm-ai-action-check { flex-shrink: 0; font-size: 11px; }
+                }
+            }
+        }
+    }
+
+} // end .hlv_warehouse_monitor_dashboard
         margin: 0 24px 20px;
         background: rgba(14, 22, 35, 0.85);
         border: 1px solid rgba(99, 215, 255, 0.25);

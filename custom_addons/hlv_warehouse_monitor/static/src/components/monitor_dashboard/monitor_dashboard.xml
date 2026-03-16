@@ -51,13 +51,10 @@
                 <!-- KPI Cards -->
                 <t t-call="hlv_warehouse_monitor.KPICards"/>
 
-                <!-- AI Assistant Panel -->
-                <t t-call="hlv_warehouse_monitor.AIAssistant"/>
-
-                <!-- Main Content: Timeline + Suggestions -->
+                <!-- Main Content: Timeline + AI Assistant -->
                 <div class="monitor-content">
                     <t t-call="hlv_warehouse_monitor.Timeline"/>
-                    <t t-call="hlv_warehouse_monitor.Suggestions"/>
+                    <t t-call="hlv_warehouse_monitor.AIAssistant"/>
                 </div>
             </t>
         </div>
