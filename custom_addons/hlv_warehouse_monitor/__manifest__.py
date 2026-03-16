@@ -33,6 +33,7 @@
         "security/ir.model.access.csv",
         "views/warehouse_monitor_event_views.xml",
         "views/warehouse_monitor_config_views.xml",
+        "views/delivery_config_views.xml",
         "views/warehouse_monitor_dashboard_views.xml",
         "views/warehouse_monitor_menus.xml",
     ],
@@ -53,6 +54,8 @@
             "hlv_warehouse_monitor/static/src/components/monitor_dashboard/monitor_dashboard_delivery.xml",
             # AI Assistant Panel (Phase 3)
             "hlv_warehouse_monitor/static/src/components/monitor_dashboard/monitor_dashboard_ai.xml",
+            # Map Modal (Phase 4)
+            "hlv_warehouse_monitor/static/src/components/monitor_dashboard/monitor_dashboard_map.xml",
         ],
     },
     "installable": True,

@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- ═══════════════════════════════════════════════════════
+         wm.customer.ignore — Views
+    ═══════════════════════════════════════════════════════ -->
+
+    <record id="view_wm_customer_ignore_list" model="ir.ui.view">
+        <field name="name">wm.customer.ignore.list</field>
+        <field name="model">wm.customer.ignore</field>
+        <field name="arch" type="xml">
+            <list string="Khách hàng bỏ qua" editable="top">
+                <field name="name"/>
+                <field name="pattern"/>
+                <field name="active"/>
+                <field name="note" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_wm_customer_ignore_form" model="ir.ui.view">
+        <field name="name">wm.customer.ignore.form</field>
+        <field name="model">wm.customer.ignore</field>
+        <field name="arch" type="xml">
+            <form string="Mẫu bỏ qua khách hàng">
+                <sheet>
+                    <group>
+                        <field name="name" placeholder="Ví dụ: Bán lẻ tại quầy"/>
+                        <field name="pattern" placeholder="Ví dụ: ^quầy|POS|counter|vãng lai"/>
+                        <field name="active"/>
+                        <field name="note"/>
+                    </group>
+                    <div class="alert alert-info" role="alert">
+                        <strong>Hướng dẫn regex:</strong> Nhập biểu thức chính quy Python
+                        (không phân biệt hoa/thường) để so khớp tên đối tác. Ví dụ:
+                        <code>^quầy</code> bỏ qua tên bắt đầu bằng "quầy";
+                        <code>POS|counter|tại chỗ</code> bỏ qua tên chứa bất kỳ từ nào.
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_wm_customer_ignore" model="ir.actions.act_window">
+        <field name="name">Khách hàng bỏ qua phân tích tuyến</field>
+        <field name="res_model">wm.customer.ignore</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════
+         wm.customer.address — Views
+    ═══════════════════════════════════════════════════════ -->
+
+    <record id="view_wm_customer_address_list" model="ir.ui.view">
+        <field name="name">wm.customer.address.list</field>
+        <field name="model">wm.customer.address</field>
+        <field name="arch" type="xml">
+            <list string="Sổ địa chỉ khách hàng" editable="top">
+                <field name="customer_name"/>
+                <field name="address_text"/>
+                <field name="lat" optional="show"/>
+                <field name="lng" optional="show"/>
+                <field name="last_geocoded" optional="show" readonly="1"/>
+                <field name="note" optional="show"/>
+                <button name="action_geocode" type="object" string="🗺️ Geocode"
+                        icon="fa-map-marker" title="Lấy toạ độ từ địa chỉ"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_wm_customer_address_form" model="ir.ui.view">
+        <field name="name">wm.customer.address.form</field>
+        <field name="model">wm.customer.address</field>
+        <field name="arch" type="xml">
+            <form string="Địa chỉ khách hàng">
+                <header>
+                    <button name="action_geocode" type="object"
+                            string="🗺️ Lấy toạ độ từ địa chỉ"
+                            class="btn-primary"/>
+                </header>
+                <sheet>
+                    <group col="2">
+                        <group string="Thông tin khách hàng">
+                            <field name="customer_name"
+                                   placeholder="Tên chính xác như trong hệ thống"/>
+                            <field name="address_text"
+                                   placeholder="Địa chỉ đầy đủ để geocode (VD: 123 Đường ABC, Quận 1, HCM)"/>
+                            <field name="note"/>
+                        </group>
+                        <group string="Toạ độ (tự động điền khi geocode)">
+                            <field name="lat"/>
+                            <field name="lng"/>
+                            <field name="last_geocoded" readonly="1"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-info" role="alert">
+                        <strong>Cách dùng:</strong> Nhập đúng tên khách hàng như trong hệ thống Odoo,
+                        sau đó nhấn <em>Lấy toạ độ</em>. Lần sau khi AI phân tích tuyến gặp khách hàng
+                        này, hệ thống sẽ dùng toạ độ đã lưu thay vì gọi API geocode.
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_wm_customer_address" model="ir.actions.act_window">
+        <field name="name">Sổ địa chỉ khách hàng</field>
+        <field name="res_model">wm.customer.address</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+</odoo>

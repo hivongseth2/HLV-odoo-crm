@@ -1807,7 +1807,6 @@ $r-full: 9999px;
             display: flex;
             align-items: center;
             gap: 8px;
-            flex:8;
             padding: 12px 16px;
             background: $white;
             border-bottom: 1px solid $gray-200;
@@ -1900,7 +1899,7 @@ $r-full: 9999px;
     }
 
     .hlv-lv-input {
-        flex: 1;
+        flex: 8;
         border: 1px solid $gray-300;
         border-radius: $r-sm;
         padding: 10px 12px;

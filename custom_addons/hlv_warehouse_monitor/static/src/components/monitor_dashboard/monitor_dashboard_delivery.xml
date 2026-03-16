@@ -41,7 +41,26 @@
                 </div>
             </t>
 
-            <!-- Not loaded yet -->
+            <!-- Action Summary Bar -->
+            <t t-if="state.deliveryPlan.loaded and state.deliveryPlan.totalOrders > 0">
+                <div class="dp-action-summary">
+                    <t t-if="state.deliveryPlan.actionSummary.need_pick > 0">
+                        <span class="dp-action-chip dp-chip-pick">
+                            🏗️ Cần lấy hàng: <strong t-esc="state.deliveryPlan.actionSummary.need_pick"/>
+                        </span>
+                    </t>
+                    <t t-if="state.deliveryPlan.actionSummary.need_pack > 0">
+                        <span class="dp-action-chip dp-chip-pack">
+                            📦 Cần đóng gói: <strong t-esc="state.deliveryPlan.actionSummary.need_pack"/>
+                        </span>
+                    </t>
+                    <t t-if="state.deliveryPlan.actionSummary.ready_ship > 0">
+                        <span class="dp-action-chip dp-chip-ship">
+                            🚚 Sẵn sàng giao: <strong t-esc="state.deliveryPlan.actionSummary.ready_ship"/>
+                        </span>
+                    </t>
+                </div>
+            </t>
             <t t-if="!state.deliveryPlan.loaded and !state.deliveryPlan.isLoading">
                 <div class="dp-empty-state">
                     <div class="dp-empty-icon">🗺️</div>
@@ -61,7 +80,7 @@
             <t t-if="state.deliveryPlan.loaded and !state.deliveryPlan.isLoading and state.deliveryPlan.trips.length === 0">
                 <div class="dp-empty-state">
                     <div class="dp-empty-icon">✅</div>
-                    <div class="dp-empty-text">Không có đơn hàng nào cần giao (hoặc tất cả dùng đơn vị vận chuyển ngoài)</div>
+                    <div class="dp-empty-text">Không có đơn hàng nào đang chờ xử lý</div>
                 </div>
             </t>
 
@@ -90,8 +109,9 @@
                                 <t t-if="trip.priority === 'overdue'">🔴 TRỄ HẠN</t>
                                 <t t-elif="trip.priority === 'urgent'">⚡ HÔM NAY</t>
                                 <t t-else="">📅 BÌNH THƯỜNG</t>
-                            </span>
-                            <span t-att-class="'dp-expand-icon' + (state.deliveryPlan.expandedTrip === trip.id ? ' expanded' : '')">▶</span>
+                            </span>                            <button class="dp-map-btn"
+                                    t-on-click.stop="() => this.openMapModal(trip)"
+                                    title="Xem tuyến trên bản đồ">🗺️</button>                            <span t-att-class="'dp-expand-icon' + (state.deliveryPlan.expandedTrip === trip.id ? ' expanded' : '')">▶</span>
                         </div>
                     </div>
 
@@ -112,6 +132,16 @@
                                         <span class="dp-order-partner" t-esc="ord.partner"/>
                                     </div>
                                     <div class="dp-order-meta">
+                                        <!-- Action needed badge -->
+                                        <t t-if="ord.action_needed === 'need_pick'">
+                                            <span class="dp-action-badge dp-action-pick">🏗️ LẤY HÀNG</span>
+                                        </t>
+                                        <t t-elif="ord.action_needed === 'need_pack'">
+                                            <span class="dp-action-badge dp-action-pack">📦 ĐÓNG GÓI</span>
+                                        </t>
+                                        <t t-elif="ord.action_needed === 'ready_ship'">
+                                            <span class="dp-action-badge dp-action-ship">🚚 SẴN SÀNG</span>
+                                        </t>
                                         <!-- Stock status -->
                                         <span t-att-class="'dp-stock dp-stock-' + ord.stock_status">
                                             <t t-if="ord.stock_status === 'ready'">✅ Đủ hàng</t>

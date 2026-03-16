@@ -10,6 +10,7 @@ Reuses ai_delivery_coordinator config params for API keys & warehouse.
 """
 import math
 import logging
+import re
 import requests
 from datetime import datetime
 
@@ -31,6 +32,32 @@ def _haversine(lat1, lng1, lat2, lng2):
          + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2))
          * math.sin(dlng / 2) ** 2)
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def _wm_detect_action_needed(order):
+    """Return 'need_pick' | 'need_pack' | 'ready_ship' | 'none'."""
+    if not hasattr(order, "picking_ids"):
+        return "none"
+    picks = order.sudo().picking_ids
+    pick_pend = picks.filtered(
+        lambda p: (p.picking_type_id.sequence_code or "").upper() == "PICK"
+        and p.state not in ("done", "cancel")
+    )
+    if pick_pend:
+        return "need_pick"
+    pack_pend = picks.filtered(
+        lambda p: (p.picking_type_id.sequence_code or "").upper() == "PACK"
+        and p.state not in ("done", "cancel")
+    )
+    if pack_pend:
+        return "need_pack"
+    out_pend = picks.filtered(
+        lambda p: p.picking_type_code == "outgoing"
+        and p.state not in ("done", "cancel")
+    )
+    if out_pend:
+        return "ready_ship"
+    return "none"
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -134,6 +161,25 @@ class SaleOrderDeliveryPlanner(models.Model):
             return
         if self.wm_geocoded_query == query and self.wm_delivery_lat:
             return  # already up-to-date
+
+        # ── Check manual address book first (avoids API call) ──────────
+        partner_name = self.partner_id.name or ""
+        cached_lat, cached_lng = self.env["wm.customer.address"].find_cached_coords(partner_name)
+        if cached_lat and cached_lng:
+            wh_lat, wh_lng = self._wm_get_warehouse_coords()
+            dist = _haversine(wh_lat, wh_lng, cached_lat, cached_lng) if wh_lat and wh_lng else 0.0
+            self.sudo().write({
+                "wm_delivery_lat": cached_lat,
+                "wm_delivery_lng": cached_lng,
+                "wm_distance_km": round(dist, 1),
+                "wm_geocoded_query": query,
+            })
+            _logger.info(
+                "[WM Geocode] %s → addrbook %.4f, %.4f – %.1f km",
+                self.name, cached_lat, cached_lng, dist,
+            )
+            return
+
         lat, lng = self._wm_rapidapi_geocode(query)
         if lat and lng:
             wh_lat, wh_lng = self._wm_get_warehouse_coords()
@@ -271,7 +317,21 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
         candidates = []
         po_notify = []
 
+        # ── Load customer ignore patterns ────────────────────────────────
+        compiled_ignores = []
+        for spec in self.env["wm.customer.ignore"].sudo().search([("active", "=", True)]):
+            try:
+                compiled_ignores.append(re.compile(spec.pattern, re.IGNORECASE))
+            except re.error as err:
+                _logger.warning("[WM Planner] Invalid ignore pattern '%s': %s", spec.pattern, err)
+
         for o in all_orders:
+            # Skip customers matching ignore patterns (counter/POS sales)
+            if compiled_ignores:
+                _partner_name = o.partner_id.name or ""
+                if any(p.search(_partner_name) for p in compiled_ignores):
+                    continue
+
             # Skip fully delivered
             out_done = o.picking_ids.filtered(
                 lambda p: p.picking_type_code == "outgoing" and p.state == "done"
@@ -282,13 +342,10 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
                 continue
 
             htgh_cat, htgh_val = o._wm_classify_htgh()
-            if htgh_cat == "external":
-                continue  # third-party carrier, skip
-
             stock_st = o._wm_get_stock_status()
 
-            # self_wait: only include if stock ready; but check PO for notification
-            if htgh_cat == "self_wait" and stock_st not in ("ready", "partial"):
+            # PO notification: watch self_wait orders whose stock is still waiting
+            if htgh_cat in ("self_wait", "self") and stock_st == "waiting":
                 po_st, po_ref = o._wm_get_po_status()
                 if po_st == "in_transit":
                     po_notify.append({
@@ -299,6 +356,10 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
                             po_ref or "?", o.name, o.partner_id.name or ""
                         ),
                     })
+
+            # Only include orders that still have something to do
+            action_needed = _wm_detect_action_needed(o)
+            if action_needed == "none":
                 continue
 
             overdue = False
@@ -323,6 +384,7 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
                 "dist": o.wm_distance_km or 0.0,
                 "has_coords": bool(o.wm_delivery_lat and o.wm_delivery_lng),
                 "amount_total": o.amount_total,
+                "action_needed": action_needed,
             })
 
         if not candidates:
@@ -449,7 +511,10 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
                             "overdue": c["overdue"],
                             "distance_km": round(c["dist"], 1),
                             "has_coords": c["has_coords"],
+                            "lat": c["lat"],
+                            "lng": c["lng"],
                             "amount_total": c["amount_total"],
+                            "action_needed": c["action_needed"],
                         }
                         for c in sub
                     ],
@@ -461,4 +526,22 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
             "po_notify": po_notify,
             "total_orders": len(candidates),
             "total_trips": len(trips),
+            "action_summary": {
+                "need_pick": len([c for c in candidates if c["action_needed"] == "need_pick"]),
+                "need_pack": len([c for c in candidates if c["action_needed"] == "need_pack"]),
+                "ready_ship": len([c for c in candidates if c["action_needed"] == "ready_ship"]),
+            },
         }
+
+    @api.model
+    def get_warehouse_coords(self):
+        """Return warehouse lat/lng for map center."""
+        ICP = self.env["ir.config_parameter"].sudo()
+        try:
+            lat = float(ICP.get_param("hlv.wm.warehouse_lat") or 0)
+            lng = float(ICP.get_param("hlv.wm.warehouse_lng") or 0)
+        except (TypeError, ValueError):
+            return {"lat": None, "lng": None}
+        if lat and lng:
+            return {"lat": lat, "lng": lng}
+        return {"lat": None, "lng": None}

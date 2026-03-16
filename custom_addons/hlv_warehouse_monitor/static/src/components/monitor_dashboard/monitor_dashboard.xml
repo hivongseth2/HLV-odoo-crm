@@ -51,11 +51,19 @@
                 <!-- KPI Cards -->
                 <t t-call="hlv_warehouse_monitor.KPICards"/>
 
+                <!-- Delivery Planner -->
+                <t t-call="hlv_warehouse_monitor.DeliveryPlanner"/>
+
                 <!-- Main Content: Timeline + AI Assistant -->
                 <div class="monitor-content">
                     <t t-call="hlv_warehouse_monitor.Timeline"/>
                     <t t-call="hlv_warehouse_monitor.AIAssistant"/>
                 </div>
+
+                <!-- Map Modal overlay (rendered when open) -->
+                <t t-if="state.mapModal.open">
+                    <t t-call="hlv_warehouse_monitor.MapModal"/>
+                </t>
             </t>
         </div>
     </t>

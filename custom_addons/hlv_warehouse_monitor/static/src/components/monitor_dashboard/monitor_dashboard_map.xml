@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ═══════════════════════════════════════════════════════
+         Map Modal — Leaflet route visualizer (Phase 4)
+    ═══════════════════════════════════════════════════════ -->
+
+    <t t-name="hlv_warehouse_monitor.MapModal">
+        <!-- Overlay: click outside to close -->
+        <div class="wm-map-overlay" t-on-click="closeMapModal">
+            <!-- Modal box: stop propagation -->
+            <div class="wm-map-modal" t-on-click.stop="">
+
+                <!-- Header -->
+                <div class="wm-map-modal-header">
+                    <div class="wm-map-modal-title">
+                        <span>🗺️ Tuyến giao</span>
+                        <t t-if="state.mapModal.trip">
+                            <span class="wm-map-modal-trip-id">
+                                Chuyến <t t-esc="state.mapModal.trip.id"/>
+                            </span>
+                            <span class="wm-map-modal-meta">
+                                · <t t-esc="state.mapModal.trip.order_count"/> đơn
+                                · <t t-esc="state.mapModal.trip.vehicle_type_label"/>
+                                · <t t-esc="state.mapModal.trip.avg_distance_km"/> km tb
+                            </span>
+                        </t>
+                    </div>
+                    <button class="wm-map-close-btn" t-on-click="closeMapModal"
+                            title="Đóng bản đồ">✕</button>
+                </div>
+
+                <!-- Leaflet map container -->
+                <div id="wm-leaflet-map" class="wm-map-container"/>
+
+                <!-- Legend -->
+                <div class="wm-map-legend">
+                    <span class="wm-map-legend-item">
+                        <span class="wm-map-legend-dot" style="background:#1565c0"/>🏭 Kho
+                    </span>
+                    <span class="wm-map-legend-item">
+                        <span class="wm-map-legend-dot" style="background:#2e7d32"/>● Đơn bình thường
+                    </span>
+                    <span class="wm-map-legend-item">
+                        <span class="wm-map-legend-dot" style="background:#ef6c00"/>● Giao hôm nay
+                    </span>
+                    <span class="wm-map-legend-item">
+                        <span class="wm-map-legend-dot" style="background:#e53935"/>● Trễ hạn
+                    </span>
+                </div>
+
+                <!-- Order list below map -->
+                <div class="wm-map-order-list">
+                    <t t-if="state.mapModal.trip">
+                        <t t-foreach="state.mapModal.trip.orders" t-as="ord" t-key="ord.id">
+                            <div t-att-class="'wm-map-order-row' + (ord.overdue ? ' is-overdue' : (ord.days_left !== null and ord.days_left &lt;= 1 ? ' is-urgent' : ''))">
+                                <span class="wm-map-order-num" t-esc="ord_index + 1"/>
+                                <div class="wm-map-order-info">
+                                    <span class="wm-map-order-name" t-esc="ord.name"/>
+                                    <span class="wm-map-order-partner" t-esc="ord.partner"/>
+                                </div>
+                                <div class="wm-map-order-badges">
+                                    <t t-if="ord.has_coords">
+                                        <span class="wm-map-coord-tag">
+                                            📍 <t t-esc="ord.distance_km"/> km
+                                        </span>
+                                    </t>
+                                    <t t-else="">
+                                        <span class="wm-map-no-coord">Chưa geocode</span>
+                                    </t>
+                                    <t t-if="ord.overdue">
+                                        <span class="wm-map-status-tag wm-tag-overdue">🔴 Trễ</span>
+                                    </t>
+                                    <t t-elif="ord.days_left !== null and ord.days_left &lt;= 1">
+                                        <span class="wm-map-status-tag wm-tag-urgent">⚡ Hôm nay</span>
+                                    </t>
+                                </div>
+                            </div>
+                        </t>
+                    </t>
+                </div>
+
+            </div>
+        </div>
+    </t>
+
+</templates>

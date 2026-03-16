@@ -55,4 +55,16 @@
               parent="menu_warehouse_monitor_config_root"
               sequence="1"/>
 
+    <menuitem id="menu_wm_customer_ignore"
+              name="Khách hàng bỏ qua tuyến"
+              action="action_wm_customer_ignore"
+              parent="menu_warehouse_monitor_config_root"
+              sequence="2"/>
+
+    <menuitem id="menu_wm_customer_address"
+              name="Sổ địa chỉ khách hàng"
+              action="action_wm_customer_address"
+              parent="menu_warehouse_monitor_config_root"
+              sequence="3"/>
+
 </odoo>
