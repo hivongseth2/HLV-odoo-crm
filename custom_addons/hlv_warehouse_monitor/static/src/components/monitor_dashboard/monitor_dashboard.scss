@@ -33,6 +33,7 @@ html .o_web_client > .o_action_manager > .o_action:has(.hlv_warehouse_monitor_da
     color: $monitor-text;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     padding: 0;
+     overflow: auto !important;
 
     /* ── Header ─────────────────────────────────────── */
     .monitor-header {
