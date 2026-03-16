@@ -841,6 +841,20 @@ $monitor-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
                         }
                     }
 
+                    .dp-boost-btn {
+                        padding: 3px 9px;
+                        border-radius: 5px;
+                        border: 1px solid rgba($monitor-amber, 0.45);
+                        background: rgba($monitor-amber, 0.12);
+                        color: $monitor-amber;
+                        font-size: 11px;
+                        font-weight: 700;
+                        cursor: pointer;
+                        white-space: nowrap;
+                        transition: all 0.2s;
+                        &:hover { background: rgba($monitor-amber, 0.28); }
+                    }
+
                     .dp-expand-icon {
                         font-size: 10px;
                         color: $monitor-text-muted;
@@ -1265,27 +1279,27 @@ $monitor-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
             }
 
             .wm-ai-card-headline {
-                font-size: 12px;
-                font-weight: 600;
+                font-size: 13.5px;
+                font-weight: 700;
                 color: #dde4ee;
-                margin-bottom: 5px;
-                line-height: 1.35;
+                margin-bottom: 6px;
+                line-height: 1.4;
             }
 
             .wm-ai-question-text {
-                font-size: 11px;
+                font-size: 12px;
                 color: rgba(99,215,255,0.65);
                 font-style: italic;
-                margin-bottom: 5px;
+                margin-bottom: 6px;
                 background: rgba(99,215,255,0.05);
-                padding: 4px 8px;
+                padding: 5px 10px;
                 border-radius: 5px;
             }
 
             .wm-ai-analysis {
-                font-size: 12px;
-                color: rgba(232,237,244,0.8);
-                line-height: 1.6;
+                font-size: 13px;
+                color: rgba(232,237,244,0.85);
+                line-height: 1.65;
                 margin-bottom: 6px;
                 white-space: pre-wrap;
             }

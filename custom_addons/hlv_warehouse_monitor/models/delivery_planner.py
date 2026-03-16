@@ -40,13 +40,13 @@ def _wm_detect_action_needed(order):
         return "none"
     picks = order.sudo().picking_ids
     pick_pend = picks.filtered(
-        lambda p: (p.picking_type_id.sequence_code or "").upper() == "PICK"
+        lambda p: "PICK" in (p.picking_type_id.sequence_code or "").upper()
         and p.state not in ("done", "cancel")
     )
     if pick_pend:
         return "need_pick"
     pack_pend = picks.filtered(
-        lambda p: (p.picking_type_id.sequence_code or "").upper() == "PACK"
+        lambda p: "PACK" in (p.picking_type_id.sequence_code or "").upper()
         and p.state not in ("done", "cancel")
     )
     if pack_pend:
@@ -313,7 +313,7 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
             except Exception:
                 pass
 
-        all_orders = SO.search(domain, limit=200, order="commitment_date asc nulls last, id desc")
+        all_orders = SO.search(domain, limit=500, order="commitment_date asc nulls last, id desc")
         candidates = []
         po_notify = []
 
@@ -391,6 +391,8 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
             return {
                 "trips": [], "po_notify": po_notify,
                 "total_orders": 0, "total_trips": 0,
+                "action_summary": {"need_pick": 0, "need_pack": 0, "ready_ship": 0},
+                "priority_boosted": [],
             }
 
         # ── 2. Trigger lazy geocoding for orders without coords (batch ≤10) ──
@@ -531,7 +533,33 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
                 "need_pack": len([c for c in candidates if c["action_needed"] == "need_pack"]),
                 "ready_ship": len([c for c in candidates if c["action_needed"] == "ready_ship"]),
             },
+            "priority_boosted": self._auto_boost_urgent_pickings(candidates, SO),
         }
+
+    def _auto_boost_urgent_pickings(self, candidates, SO):
+        """Automatically set priority=1 on pickings for overdue/today orders.
+
+        This makes them appear as URGENT (orange) in Queue Monitor — so staff
+        can see what to handle next without any manual intervention.
+        Returns list of boosted picking names.
+        """
+        boosted = []
+        urgent_ids = [
+            c["id"] for c in candidates
+            if c["overdue"] or (c["days_left"] is not None and c["days_left"] <= 1)
+        ]
+        if not urgent_ids:
+            return boosted
+        orders = SO.browse(urgent_ids)
+        for order in orders:
+            for pk in order.sudo().picking_ids:
+                if pk.state not in ("done", "cancel") and pk.priority != "1":
+                    try:
+                        pk.write({"priority": "1"})
+                        boosted.append(pk.name)
+                    except Exception as exc:
+                        _logger.warning("[WM Planner] Could not boost priority for %s: %s", pk.name, exc)
+        return boosted
 
     @api.model
     def get_warehouse_coords(self):
@@ -545,3 +573,22 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
         if lat and lng:
             return {"lat": lat, "lng": lng}
         return {"lat": None, "lng": None}
+
+    @api.model
+    def boost_picking_priority(self, so_ids):
+        """Set priority=1 on all pending pickings for the given sale.order IDs.
+
+        Called from the UI when the user or AI recommends immediate action.
+        Returns list of boosted picking names.
+        """
+        SO = self.env["sale.order"].sudo()
+        boosted = []
+        for order in SO.browse([int(i) for i in so_ids if i]):
+            for pk in order.picking_ids:
+                if pk.state not in ("done", "cancel") and pk.priority != "1":
+                    try:
+                        pk.write({"priority": "1"})
+                        boosted.append(pk.name)
+                    except Exception as exc:
+                        _logger.warning("[WM Planner] boost_picking_priority %s: %s", pk.name, exc)
+        return boosted

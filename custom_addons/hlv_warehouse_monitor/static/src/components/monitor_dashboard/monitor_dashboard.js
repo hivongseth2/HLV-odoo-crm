@@ -66,6 +66,8 @@ export class WarehouseMonitorDashboard extends Component {
             await this.fetchData();
             // Load previously stored AI insights
             await this.loadAIInsights();
+            // Auto-load delivery plan immediately on open
+            this.loadDeliveryPlan();
             // 1-second ticker: counts down and triggers refresh every 30s
             this._refreshInterval = setInterval(() => {
                 this.state.countdown -= 1;
@@ -278,6 +280,15 @@ export class WarehouseMonitorDashboard extends Component {
             this.state.deliveryPlan.actionSummary = result.action_summary || { need_pick: 0, need_pack: 0, ready_ship: 0 };
             this.state.deliveryPlan.loaded = true;
 
+            // Notify if priority was auto-boosted for urgent orders
+            const boosted = result.priority_boosted || [];
+            if (boosted.length > 0) {
+                this.notification.add(
+                    `⚡ Đã tự đẩy ưu tiên cho ${boosted.length} phiếu: ${boosted.slice(0, 3).join(", ")}${boosted.length > 3 ? "..." : ""}`,
+                    { type: "warning", sticky: false }
+                );
+            }
+
             if ((result.po_notify || []).length > 0) {
                 this.notification.add(
                     `${result.po_notify.length} PO đang về kho – chuẩn bị đóng gói!`,
@@ -295,6 +306,29 @@ export class WarehouseMonitorDashboard extends Component {
     toggleTripExpand(tripId) {
         this.state.deliveryPlan.expandedTrip =
             this.state.deliveryPlan.expandedTrip === tripId ? null : tripId;
+    }
+
+    async boostTripPriority(trip, ev) {
+        ev.stopPropagation();
+        const soIds = trip.orders.map((o) => o.id);
+        try {
+            const boosted = await this.orm.call(
+                "warehouse.monitor.event",
+                "boost_picking_priority",
+                [],
+                { so_ids: soIds }
+            );
+            if (boosted.length > 0) {
+                this.notification.add(
+                    `⚡ Đẩy ưu tiên: ${boosted.slice(0, 3).join(", ")}${boosted.length > 3 ? " +" + (boosted.length - 3) : ""}`,
+                    { type: "success", sticky: false }
+                );
+            } else {
+                this.notification.add("Đã ưu tiên nhất rồi", { type: "info" });
+            }
+        } catch (e) {
+            this.notification.add("Lỗi đẩy ưu tiên", { type: "danger" });
+        }
     }
 
     // ── Phase 4: Map Modal ───────────────────────────────────

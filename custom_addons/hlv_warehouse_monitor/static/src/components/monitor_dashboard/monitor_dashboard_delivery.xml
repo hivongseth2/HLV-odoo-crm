@@ -109,7 +109,11 @@
                                 <t t-if="trip.priority === 'overdue'">🔴 TRỄ HẠN</t>
                                 <t t-elif="trip.priority === 'urgent'">⚡ HÔM NAY</t>
                                 <t t-else="">📅 BÌNH THƯỜNG</t>
-                            </span>                            <button class="dp-map-btn"
+                            </span>
+                            <button class="dp-boost-btn"
+                                    t-on-click="(ev) => this.boostTripPriority(trip, ev)"
+                                    title="Đẩy ưu tiên lên Queue Monitor">⚡ Ưu tiên</button>
+                            <button class="dp-map-btn"
                                     t-on-click.stop="() => this.openMapModal(trip)"
                                     title="Xem tuyến trên bản đồ">🗺️</button>                            <span t-att-class="'dp-expand-icon' + (state.deliveryPlan.expandedTrip === trip.id ? ' expanded' : '')">▶</span>
                         </div>
