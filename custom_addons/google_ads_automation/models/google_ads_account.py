@@ -180,16 +180,23 @@ class GoogleAdsAccount(models.Model):
         }
         
         try:
-            # Tự động tìm phiên bản API khả dụng (v18, v17, v16, v15...)
-            # Odoo.sh có thể cài các phiên bản thư viện google-ads khác nhau
-            available_versions = ["v18", "v17", "v16", "v15"]
+            # 1. Thử để thư viện tự nhận diện phiên bản mới nhất (với google-ads bản mới)
+            try:
+                client = GoogleAdsClient.load_from_dict(credentials)
+                client.get_service("GoogleAdsService")
+                _logger.info("Đã kết nối Google Ads API (Tự động nhận diện phiên bản)")
+                return client
+            except Exception:
+                _logger.info("Không thể tự nhận diện phiên bản, thử chế độ thủ công...")
+
+            # 2. Fallback: Thủ công tìm phiên bản API khả dụng (v18, v17, v16, v15, v14...)
+            available_versions = ["v18", "v17", "v16", "v15", "v14"]
             client = None
             last_error = None
             
             for version in available_versions:
                 try:
                     client = GoogleAdsClient.load_from_dict(credentials, version=version)
-                    # Thử lấy một service để đảm bảo version này thực sự tồn tại
                     client.get_service("GoogleAdsService")
                     _logger.info("Đã kết nối Google Ads API phiên bản: %s", version)
                     return client
