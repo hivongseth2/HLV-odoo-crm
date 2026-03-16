@@ -520,7 +520,7 @@ function openDrawer(id){
   grouped.forEach(function(l){
     var pname=l.product_id?l.product_id[1]:'Unknown';
     var wfree=l.qty_warehouse_free||0;
-    var shortage=Math.max((l.product_uom_qty||0)-(l.qty_delivered||0)-wfree,0);
+    var shortage=Math.max((l.product_uom_qty||0)-(l.qty_delivered||0)-(l.qty_packed||0)-wfree,0);
     var pending=(l.product_uom_qty||0)-(l.qty_delivered||0);
     var rc=pending>0?'table-warning':'table-success';
     var packCls=l.qty_packed>=l.product_uom_qty&&l.qty_packed>0?'cell-packed-full':(l.qty_packed>0?'cell-packed-partial':'cell-packed-zero');
