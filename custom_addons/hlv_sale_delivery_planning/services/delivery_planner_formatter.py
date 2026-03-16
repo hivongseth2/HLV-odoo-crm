@@ -124,10 +124,13 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             # Raw warehouse free_qty (không capped theo line) để hiển thị "Tồn Kho"
             if is_kit:
                 raw_free = qty_avail  # Kit giữ nguyên logic kit
+                reserved_line = 0.0  # Kit qty_avail đã bao gồm reservations rồi
             elif product_wh_key:
                 raw_free = product_availabilities.get(product_wh_key, 0.0)
+                reserved_line = reserved_here  # reuse biến đã tính ở trên
             else:
                 raw_free = 0.0
+                reserved_line = 0.0
 
             so_lines_data.append({
                 'id': line.id,
@@ -137,6 +140,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'qty_packed': qty_packed,
                 'qty_available': qty_avail,
                 'qty_warehouse_free': raw_free,
+                'qty_reserved_here': reserved_line,
                 'product_type': p_type,
                 'is_kit': is_kit,
             })

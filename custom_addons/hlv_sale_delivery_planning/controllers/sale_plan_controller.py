@@ -294,12 +294,13 @@ function groupLines(lines){
     if(map[pid]){
       map[pid].product_uom_qty+=l.product_uom_qty||0;
       map[pid].qty_delivered+=l.qty_delivered||0;
-      // qty_available, qty_warehouse_free: keep first (same product/warehouse = same stock)
+      map[pid].qty_reserved_here+=(l.qty_reserved_here||0); // sum reservations across lines
+      // qty_warehouse_free: keep first (product-level, same for all lines of same product/wh)
     } else {
       map[pid]={product_id:l.product_id,product_uom_qty:l.product_uom_qty||0,
         qty_delivered:l.qty_delivered||0,qty_packed:l.qty_packed||0,
         qty_available:l.qty_available||0,qty_warehouse_free:l.qty_warehouse_free||0,
-        is_kit:l.is_kit||false};
+        qty_reserved_here:l.qty_reserved_here||0,is_kit:l.is_kit||false};
       order.push(pid);
     }
   });
@@ -519,7 +520,7 @@ function openDrawer(id){
   var grouped=groupLines(o.lines||[]);
   grouped.forEach(function(l){
     var pname=l.product_id?l.product_id[1]:'Unknown';
-    var wfree=l.qty_warehouse_free||0;
+    var wfree=(l.qty_warehouse_free||0)+(l.qty_reserved_here||0);
     var shortage=Math.max((l.product_uom_qty||0)-(l.qty_delivered||0)-(l.qty_packed||0)-wfree,0);
     var pending=(l.product_uom_qty||0)-(l.qty_delivered||0);
     var rc=pending>0?'table-warning':'table-success';
