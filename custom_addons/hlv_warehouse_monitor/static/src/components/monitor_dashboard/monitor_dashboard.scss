@@ -21,6 +21,11 @@ $monitor-orange: #f97316;
 $monitor-cyan: #06b6d4;
 $monitor-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 
+/* Override Odoo's overflow:hidden on .o_action so the dashboard page can scroll */
+html .o_web_client > .o_action_manager > .o_action:has(.hlv_warehouse_monitor_dashboard) {
+    overflow-y: auto !important;
+}
+
 .hlv_warehouse_monitor_dashboard {
     background: $monitor-bg;
     min-height: 100vh;
