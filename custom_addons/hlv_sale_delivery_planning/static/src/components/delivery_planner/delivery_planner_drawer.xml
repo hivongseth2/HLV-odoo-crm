@@ -83,9 +83,9 @@
                                     <t t-esc="this.formatQty(line.qty_warehouse_free || 0)"/>
                                 </td>
                                 <td class="text-primary"><t t-esc="this.formatQty(line.qty_delivered)"/></td>
-                                <td t-att-class="'fw-bold ' + (Math.max(line.product_uom_qty - line.qty_delivered - (line.qty_warehouse_free || 0), 0) > 0 ? 'text-danger' : 'text-muted opacity-50')">
+                                <td t-att-class="'fw-bold ' + (Math.max(line.product_uom_qty - line.qty_delivered - (line.qty_packed || 0) - (line.qty_warehouse_free || 0), 0) > 0 ? 'text-danger' : 'text-muted opacity-50')">
                                     <t t-if="line.is_kit"><span class="small">-</span></t>
-                                    <t t-else=""><t t-esc="this.formatQty(Math.max(line.product_uom_qty - line.qty_delivered - (line.qty_warehouse_free || 0), 0))"/></t>
+                                    <t t-else=""><t t-esc="this.formatQty(Math.max(line.product_uom_qty - line.qty_delivered - (line.qty_packed || 0) - (line.qty_warehouse_free || 0), 0))"/></t>
                                 </td>
                             </tr>
                         </t>
