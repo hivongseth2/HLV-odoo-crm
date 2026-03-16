@@ -12,7 +12,8 @@ import math
 import logging
 import re
 import requests
-from datetime import datetime
+from collections import defaultdict
+from datetime import date, datetime
 
 from odoo import api, fields, models
 
@@ -303,20 +304,25 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
         """
         SO = self.env["sale.order"].sudo()
         now = datetime.now()
+        today = date.today()
 
-        # ── 1. Collect candidate SOs ───────────────────────────────────
-        domain = [("state", "=", "sale")]
+        # ── Resolve warehouse ─────────────────────────────────────────
+        wh_id = False
         if warehouse_id and str(warehouse_id) not in ("all", "False", ""):
             try:
                 wh = self.env["stock.warehouse"].sudo().browse(int(warehouse_id))
                 if wh.exists():
-                    domain += [("warehouse_id", "=", wh.id)]
+                    wh_id = wh.id
             except Exception:
                 pass
 
+        # ── 1. Collect candidate SOs ───────────────────────────────────
+        domain = [("state", "=", "sale")]
+        if wh_id:
+            domain += [("warehouse_id", "=", wh_id)]
+
         all_orders = SO.search(domain, limit=500, order="commitment_date asc nulls last, id desc")
         candidates = []
-        po_notify = []
 
         # ── Load customer ignore patterns ────────────────────────────────
         compiled_ignores = []
@@ -345,19 +351,6 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
             htgh_cat, htgh_val = o._wm_classify_htgh()
             stock_st = o._wm_get_stock_status()
 
-            # PO notification: any order with waiting stock and an in-transit PO
-            if stock_st == "waiting":
-                po_st, po_ref = o._wm_get_po_status()
-                if po_st == "in_transit":
-                    po_notify.append({
-                        "order": o.name,
-                        "partner": o.partner_id.name or "",
-                        "po_ref": po_ref or "",
-                        "message": "PO %s đang về → chuẩn bị PACK cho %s (%s)" % (
-                            po_ref or "?", o.name, o.partner_id.name or ""
-                        ),
-                    })
-
             # Only include orders that still have something to do
             action_needed = _wm_detect_action_needed(o)
             if action_needed == "none":
@@ -365,10 +358,16 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
 
             overdue = False
             days_left = None
+            dp = today
             if o.commitment_date:
                 delta = o.commitment_date - now
                 days_left = round(delta.total_seconds() / 86400, 1)
                 overdue = days_left < 0
+                dp = o.commitment_date.date()
+                if dp < today:
+                    dp = today
+
+            province = self.env["wm.delivery.route"]._extract_province_for_so(o)
 
             candidates.append({
                 "id": o.id,
@@ -386,7 +385,12 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
                 "has_coords": bool(o.wm_delivery_lat and o.wm_delivery_lng),
                 "amount_total": o.amount_total,
                 "action_needed": action_needed,
+                "province": province,
+                "date_plan": dp,
             })
+
+        # ── PO notifications (PO-centric: all pending incoming receipts) ──
+        po_notify = self.env["wm.delivery.route"]._get_po_notifications(wh_id or False)
 
         if not candidates:
             return {
@@ -424,28 +428,11 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
             )
         candidates.sort(key=_sort_key)
 
-        # ── 4. Greedy proximity clustering ────────────────────────────
-        with_coords = [c for c in candidates if c["has_coords"]]
-        without_coords = [c for c in candidates if not c["has_coords"]]
-
-        clusters = []
-        used = set()
-        for anchor in with_coords:
-            if anchor["id"] in used:
-                continue
-            cluster = [anchor]
-            used.add(anchor["id"])
-            for cand in with_coords:
-                if cand["id"] in used:
-                    continue
-                if _haversine(anchor["lat"], anchor["lng"], cand["lat"], cand["lng"]) <= _CLUSTER_RADIUS_KM:
-                    cluster.append(cand)
-                    used.add(cand["id"])
-            clusters.append(cluster)
-
-        # Orders without coords: each becomes a separate single-order cluster
-        for c in without_coords:
-            clusters.append([c])
+        # ── 4. Group by province + date plan (matches Route Board) ────
+        province_groups = defaultdict(list)
+        for c in candidates:
+            province_groups[(c["province"], str(c["date_plan"]))].append(c)
+        clusters = list(province_groups.values())
 
         # ── 5. Query available fleet vehicles ─────────────────────────
         vehicles = {"motorbike": [], "truck": []}
@@ -468,6 +455,7 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
         vehicle_type_counters = {}   # count trips per vehicle type for route labelling
         for cluster in clusters:
             n = len(cluster)
+            province = cluster[0].get("province", "Chưa xác định") if cluster else ""
             avg_dist = (
                 sum(c["dist"] for c in cluster if c["dist"]) / max(1, sum(1 for c in cluster if c["dist"]))
             )
@@ -502,6 +490,7 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
                     "vehicle_type": vtype,
                     "vehicle_type_label": vtype_label,
                     "route_num": route_num,
+                    "province": province,
                     "suggested_vehicle": vehicles[vtype][0] if vehicles[vtype] else None,
                     "available_vehicles": vehicles[vtype][:5],
                     "order_count": len(sub),
@@ -529,12 +518,9 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
                 })
                 trip_seq += 1
 
-        # Post-process: add route label only for vehicle types that have multiple trips
+        # Post-process: route label = province (matches Route Board grouping)
         for trip in trips:
-            if vehicle_type_counters.get(trip["vehicle_type"], 0) > 1:
-                trip["route_label"] = "Tuyến %d" % trip["route_num"]
-            else:
-                trip["route_label"] = ""
+            trip["route_label"] = trip.get("province", "")
 
         return {
             "trips": trips,

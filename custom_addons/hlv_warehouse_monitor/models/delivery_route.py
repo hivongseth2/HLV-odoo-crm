@@ -472,30 +472,47 @@ class WmDeliveryRoute(models.Model):
 
     @api.model
     def _get_po_notifications(self, warehouse_id=False):
-        """List orders whose stock is waiting and have an in-transit PO."""
-        SO = self.env["sale.order"].sudo()
-        domain = [("state", "=", "sale")]
-        if warehouse_id:
-            domain += [("warehouse_id", "=", warehouse_id)]
+        """List all confirmed POs with pending incoming receipts (PO-centric).
+
+        Previously went SO→PO via origin field which failed because PO
+        origins contain MISA codes, not SO names. Now searches POs directly.
+        """
+        PO = self.env["purchase.order"].sudo()
+        domain = [("state", "=", "purchase")]
+        pos = PO.search(domain, order="date_planned asc", limit=200)
+
         notify = []
-        for o in SO.search(domain, limit=200):
-            stock_st = o._wm_get_stock_status() if hasattr(o, "_wm_get_stock_status") else "unknown"
-            if stock_st != "waiting":
-                continue
-            po_st, po_ref = (
-                o._wm_get_po_status()
-                if hasattr(o, "_wm_get_po_status")
-                else (None, None)
+        for po in pos:
+            incoming = po.picking_ids.filtered(
+                lambda p: p.picking_type_code == "incoming"
+                and p.state not in ("done", "cancel")
             )
-            if po_st == "in_transit":
-                notify.append({
-                    "order": o.name,
-                    "partner": o.partner_id.name or "",
-                    "po_ref": po_ref or "",
-                    "message": "PO %s đang về → chuẩn bị PACK cho %s (%s)" % (
-                        po_ref or "?", o.name, o.partner_id.name or ""
-                    ),
-                })
+            if not incoming:
+                continue
+
+            # Try to find linked SO names via purchase_line → sale_line
+            linked_sos = []
+            for pol in po.order_line:
+                if hasattr(pol, "sale_line_ids"):
+                    for sl in pol.sale_line_ids:
+                        so_name = sl.order_id.name
+                        if so_name and so_name not in linked_sos:
+                            linked_sos.append(so_name)
+
+            so_text = ", ".join(linked_sos[:3]) if linked_sos else ""
+            notify.append({
+                "po_ref": po.name,
+                "partner": po.partner_id.name or "",
+                "order": so_text,
+                "date_planned": str(po.date_planned)[:10] if po.date_planned else "",
+                "picking_count": len(incoming),
+                "message": "PO %s từ %s – %d phiếu nhập chờ về%s" % (
+                    po.name,
+                    po.partner_id.name or "?",
+                    len(incoming),
+                    (" → " + so_text) if so_text else "",
+                ),
+            })
         return notify
 
     # ── Refresh after PO receipt ──────────────────────────────────────────────

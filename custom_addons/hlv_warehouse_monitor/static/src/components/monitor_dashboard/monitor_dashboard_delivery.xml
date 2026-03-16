@@ -32,13 +32,19 @@
             <t t-if="state.deliveryPlan.poNotifications.length > 0">
                 <div class="dp-po-notifications">
                     <div class="dp-po-title">
-                        📦 PO đang về kho – chuẩn bị đóng gói
-                        <span class="dp-po-count" t-esc="'(' + state.deliveryPlan.poNotifications.length + ' đơn)'"/>
+                        📦 PO chưa nhận kho
+                        <span class="dp-po-count" t-esc="'(' + state.deliveryPlan.poNotifications.length + ' PO)'"/>
                     </div>
-                    <t t-foreach="state.deliveryPlan.poNotifications" t-as="notif" t-key="notif_index">
+                    <t t-foreach="state.deliveryPlan.poNotifications.slice(0, 20)" t-as="notif" t-key="notif_index">
                         <div class="dp-po-card">
                             <span class="dp-po-icon">🚛</span>
                             <span class="dp-po-msg" t-esc="notif.message"/>
+                        </div>
+                    </t>
+                    <t t-if="state.deliveryPlan.poNotifications.length > 20">
+                        <div class="dp-po-card">
+                            <span class="dp-po-icon">📋</span>
+                            <span class="dp-po-msg" t-esc="'+ ' + (state.deliveryPlan.poNotifications.length - 20) + ' PO khác...'"/>
                         </div>
                     </t>
                 </div>

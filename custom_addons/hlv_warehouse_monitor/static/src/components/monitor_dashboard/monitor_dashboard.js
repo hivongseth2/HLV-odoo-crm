@@ -306,7 +306,7 @@ export class WarehouseMonitorDashboard extends Component {
 
             if ((result.po_notify || []).length > 0) {
                 this.notification.add(
-                    `${result.po_notify.length} PO đang về kho – chuẩn bị đóng gói!`,
+                    `📦 ${result.po_notify.length} PO chưa nhận kho`,
                     { type: "warning", sticky: false }
                 );
             }

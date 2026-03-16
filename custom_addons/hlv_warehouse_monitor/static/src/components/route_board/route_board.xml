@@ -38,11 +38,15 @@
             <!-- ── PO đang về ──────────────────────────────────── -->
             <t t-if="state.routeBoard.poNotifications.length > 0">
                 <div class="rb-po-bar">
-                    <span class="rb-po-label">📦 PO đang về:</span>
-                    <t t-foreach="state.routeBoard.poNotifications" t-as="notif" t-key="notif_index">
+                    <span class="rb-po-label">📦 PO chưa nhận: <strong t-esc="state.routeBoard.poNotifications.length"/> PO</span>
+                    <t t-foreach="state.routeBoard.poNotifications.slice(0, 20)" t-as="notif" t-key="notif_index">
                         <span class="rb-po-chip">
-                            <strong t-esc="notif.po_ref"/> → <t t-esc="notif.order"/>
+                            <strong t-esc="notif.po_ref"/> – <t t-esc="notif.partner"/>
+                            <t t-if="notif.order"> → <t t-esc="notif.order"/></t>
                         </span>
+                    </t>
+                    <t t-if="state.routeBoard.poNotifications.length > 20">
+                        <span class="rb-po-chip">+<t t-esc="state.routeBoard.poNotifications.length - 20"/> PO khác...</span>
                     </t>
                 </div>
             </t>
