@@ -2,6 +2,7 @@
 import logging
 import time
 from collections import defaultdict
+from markupsafe import Markup
 from odoo import http
 from odoo.http import request
 
@@ -766,11 +767,13 @@ class SalePlanPublicController(http.Controller):
             so = request.env['sale.order'].sudo().browse(int(order_id))
             if not so.exists():
                 return {'status': 'error', 'message': 'Order not found'}
-            body = (
-                '<p>&#x1F6A9; <strong>Báo cáo từ trang công khai (sale_plan):</strong></p>'
+            safe_reason = Markup.escape(reason or '(Không có mô tả)')
+            body = Markup(
+                '<p>🚩 <strong>Báo cáo từ trang công khai (sale_plan):</strong></p>'
                 '<blockquote>%s</blockquote>'
-            ) % (reason or '(Không có mô tả)')
+            ) % safe_reason
             so.message_post(body=body, message_type='comment', subtype_xmlid='mail.mt_note')
+            so.x_plan_need_cancel = True
             return {'status': 'success'}
         except Exception as e:
             _logger.exception('report_order error')

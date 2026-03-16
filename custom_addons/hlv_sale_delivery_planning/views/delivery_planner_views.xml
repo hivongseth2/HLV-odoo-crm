@@ -11,4 +11,29 @@
               action="action_delivery_planner_dashboard"
               parent="sale.sale_order_menu"
               sequence="15"/>
+
+    <!-- Thêm cột + filter "Cần hủy" vào danh sách đơn bán -->
+    <record id="view_sale_order_tree_need_cancel" model="ir.ui.view">
+        <field name="name">sale.order.tree.need.cancel</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="before">
+                <field name="x_plan_need_cancel" string="Cần hủy" widget="boolean_toggle" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_sale_order_search_need_cancel" model="ir.ui.view">
+        <field name="name">sale.order.search.need.cancel</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_sales_order_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[last()]" position="after">
+                <separator/>
+                <filter string="Cần hủy (báo cáo)" name="need_cancel"
+                        domain="[('x_plan_need_cancel', '=', True)]"/>
+            </xpath>
+        </field>
+    </record>
 </odoo>
