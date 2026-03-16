@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Top-level Menu                                        -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <menuitem id="menu_warehouse_monitor_root"
+              name="Giám sát Kho"
+              web_icon="hlv_warehouse_monitor,static/description/icon.png"
+              sequence="25"/>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Dashboard Menu                                        -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <menuitem id="menu_warehouse_monitor_dashboard"
+              name="Dashboard"
+              action="action_warehouse_monitor_dashboard"
+              parent="menu_warehouse_monitor_root"
+              sequence="1"/>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Queue Screen Menu                                     -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <menuitem id="menu_warehouse_monitor_queue_screen"
+              name="Màn hình hàng đợi PICK/PACK"
+              action="action_warehouse_monitor_queue_screen"
+              parent="menu_warehouse_monitor_root"
+              sequence="2"/>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Events Menu                                           -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <menuitem id="menu_warehouse_monitor_events"
+              name="Sự kiện"
+              action="action_warehouse_monitor_events"
+              parent="menu_warehouse_monitor_root"
+              sequence="5"/>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Config Menu                                           -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <menuitem id="menu_warehouse_monitor_config_root"
+              name="Cấu hình"
+              parent="menu_warehouse_monitor_root"
+              sequence="99"/>
+
+    <menuitem id="menu_warehouse_monitor_config"
+              name="Cấu hình kho"
+              action="action_warehouse_monitor_config"
+              parent="menu_warehouse_monitor_config_root"
+              sequence="1"/>
+
+</odoo>

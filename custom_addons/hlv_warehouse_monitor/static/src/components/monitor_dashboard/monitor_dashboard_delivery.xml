@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Delivery Planner Panel (Phase 2)                      -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <t t-name="hlv_warehouse_monitor.DeliveryPlanner">
+        <div class="delivery-planner-panel">
+
+            <!-- Header -->
+            <div class="dp-header">
+                <div class="dp-title">
+                    <span class="dp-icon">🚚</span>
+                    <span>Kế hoạch giao hàng AI</span>
+                    <span t-if="state.deliveryPlan.totalOrders > 0"
+                          class="dp-badge" t-esc="state.deliveryPlan.totalOrders + ' đơn'"/>
+                </div>
+                <div class="dp-header-actions">
+                    <span t-if="state.deliveryPlan.isLoading" class="dp-loading-indicator">⟳ Đang tính...</span>
+                    <button t-att-class="'dp-btn-load' + (state.deliveryPlan.isLoading ? ' is-loading' : '')"
+                            t-on-click="() => this.loadDeliveryPlan()">
+                        <t t-if="state.deliveryPlan.trips.length === 0 and !state.deliveryPlan.loaded">
+                            🗺️ Tải kế hoạch
+                        </t>
+                        <t t-else="">🔄 Làm mới</t>
+                    </button>
+                </div>
+            </div>
+
+            <!-- PO Notifications (in-transit → pack now) -->
+            <t t-if="state.deliveryPlan.poNotifications.length > 0">
+                <div class="dp-po-notifications">
+                    <div class="dp-po-title">📦 PO đang về kho – chuẩn bị đóng gói</div>
+                    <t t-foreach="state.deliveryPlan.poNotifications" t-as="notif" t-key="notif_index">
+                        <div class="dp-po-card">
+                            <span class="dp-po-icon">🚛</span>
+                            <span class="dp-po-msg" t-esc="notif.message"/>
+                        </div>
+                    </t>
+                </div>
+            </t>
+
+            <!-- Not loaded yet -->
+            <t t-if="!state.deliveryPlan.loaded and !state.deliveryPlan.isLoading">
+                <div class="dp-empty-state">
+                    <div class="dp-empty-icon">🗺️</div>
+                    <div class="dp-empty-text">Nhấn "Tải kế hoạch" để AI gom nhóm đơn hàng theo khoảng cách và ưu tiên</div>
+                </div>
+            </t>
+
+            <!-- Loading -->
+            <t t-if="state.deliveryPlan.isLoading and state.deliveryPlan.trips.length === 0">
+                <div class="dp-empty-state">
+                    <div class="dp-loading-spinner"/>
+                    <div class="dp-empty-text">Đang geocode địa chỉ và phân nhóm đơn hàng...</div>
+                </div>
+            </t>
+
+            <!-- No trips found -->
+            <t t-if="state.deliveryPlan.loaded and !state.deliveryPlan.isLoading and state.deliveryPlan.trips.length === 0">
+                <div class="dp-empty-state">
+                    <div class="dp-empty-icon">✅</div>
+                    <div class="dp-empty-text">Không có đơn hàng nào cần giao (hoặc tất cả dùng đơn vị vận chuyển ngoài)</div>
+                </div>
+            </t>
+
+            <!-- Trip cards -->
+            <t t-foreach="state.deliveryPlan.trips" t-as="trip" t-key="trip.id">
+                <div t-att-class="'dp-trip-card dp-priority-' + trip.priority">
+                    <!-- Trip header -->
+                    <div class="dp-trip-header"
+                         t-on-click="() => this.toggleTripExpand(trip.id)">
+                        <div class="dp-trip-left">
+                            <span class="dp-trip-vehicle" t-esc="trip.vehicle_type_label"/>
+                            <div class="dp-trip-stats">
+                                <span class="dp-stat">
+                                    <span class="dp-stat-num" t-esc="trip.order_count"/>
+                                    <span class="dp-stat-label"> đơn</span>
+                                </span>
+                                <span class="dp-stat-sep">·</span>
+                                <span class="dp-stat">
+                                    <span class="dp-stat-num" t-esc="trip.avg_distance_km"/>
+                                    <span class="dp-stat-label"> km tb</span>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="dp-trip-right">
+                            <span t-att-class="'dp-priority-badge dp-pb-' + trip.priority">
+                                <t t-if="trip.priority === 'overdue'">🔴 TRỄ HẠN</t>
+                                <t t-elif="trip.priority === 'urgent'">⚡ HÔM NAY</t>
+                                <t t-else="">📅 BÌNH THƯỜNG</t>
+                            </span>
+                            <span t-att-class="'dp-expand-icon' + (state.deliveryPlan.expandedTrip === trip.id ? ' expanded' : '')">▶</span>
+                        </div>
+                    </div>
+
+                    <!-- Suggested vehicle -->
+                    <t t-if="trip.suggested_vehicle">
+                        <div class="dp-trip-vehicle-suggestion">
+                            🔑 Gợi ý xe: <strong t-esc="trip.suggested_vehicle.name"/>
+                        </div>
+                    </t>
+
+                    <!-- Order list (collapsible) -->
+                    <t t-if="state.deliveryPlan.expandedTrip === trip.id">
+                        <div class="dp-order-list">
+                            <t t-foreach="trip.orders" t-as="ord" t-key="ord.id">
+                                <div t-att-class="'dp-order-row' + (ord.overdue ? ' dp-order-overdue' : '')">
+                                    <div class="dp-order-main">
+                                        <span class="dp-order-name" t-esc="ord.name"/>
+                                        <span class="dp-order-partner" t-esc="ord.partner"/>
+                                    </div>
+                                    <div class="dp-order-meta">
+                                        <!-- Stock status -->
+                                        <span t-att-class="'dp-stock dp-stock-' + ord.stock_status">
+                                            <t t-if="ord.stock_status === 'ready'">✅ Đủ hàng</t>
+                                            <t t-elif="ord.stock_status === 'partial'">🟡 Một phần</t>
+                                            <t t-elif="ord.stock_status === 'waiting'">⏳ Chờ hàng</t>
+                                            <t t-else="">❓ Chưa rõ</t>
+                                        </span>
+                                        <!-- HTGH note -->
+                                        <t t-if="ord.htgh_val">
+                                            <span class="dp-htgh" t-esc="ord.htgh_val"/>
+                                        </t>
+                                        <!-- Deadline -->
+                                        <t t-if="ord.commitment_date">
+                                            <span t-att-class="'dp-deadline' + (ord.overdue ? ' overdue' : (ord.days_left !== null and ord.days_left &lt;= 1 ? ' urgent' : ''))">
+                                                📅
+                                                <t t-if="ord.overdue">TRỄ <t t-esc="Math.abs(ord.days_left.toFixed(0))"/> ngày</t>
+                                                <t t-elif="ord.days_left !== null and ord.days_left &lt;= 1">Hôm nay</t>
+                                                <t t-else=""><t t-esc="ord.days_left !== null ? ord.days_left.toFixed(0) + ' ngày' : ''"/></t>
+                                            </span>
+                                        </t>
+                                        <!-- Distance -->
+                                        <t t-if="ord.has_coords">
+                                            <span class="dp-dist">📍 <t t-esc="ord.distance_km"/> km</span>
+                                        </t>
+                                        <t t-else="">
+                                            <span class="dp-dist dp-no-coords">📍 Chưa geocode</span>
+                                        </t>
+                                    </div>
+                                </div>
+                            </t>
+                        </div>
+                    </t>
+                </div>
+            </t>
+        </div>
+    </t>
+
+</templates>

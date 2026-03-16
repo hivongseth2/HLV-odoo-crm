@@ -69,11 +69,15 @@ export class InventoryCheckScanner extends Component {
             // Last scanned line (flash highlight)
             last_scanned_line_id: null,
 
+            // Location Viewer
+            location_viewer: null,  // { location_name, items: [] }
+            location_viewer_barcode: '',
+
             // Camera
             camera_active: false,
             camera_status: '',
             camera_status_type: 'info',
-            camera_mode: 'product',  // 'product' | 'location'
+            camera_mode: 'product',  // 'product' | 'location' | 'location_viewer'
 
             // Device
             device_id: this._generateDeviceId(),
@@ -205,6 +209,51 @@ export class InventoryCheckScanner extends Component {
         }
         this.state.view = 'approvals';
         this._loadApprovals();
+    }
+
+    goToLocationViewer() {
+        this.state.location_viewer = null;
+        this.state.location_viewer_barcode = '';
+        this.state.view = 'location_viewer';
+        setTimeout(() => {
+            const inp = document.querySelector('.hlv-lv-input');
+            if (inp) inp.focus();
+        }, 300);
+    }
+
+    async onLocationViewerInput(event) {
+        if (event.key !== 'Enter') return;
+        const barcode = this.state.location_viewer_barcode.trim();
+        if (!barcode) return;
+        await this._loadLocationStock(barcode);
+    }
+
+    async onLocationViewerCameraResult(barcode) {
+        this.state.location_viewer_barcode = barcode;
+        await this._loadLocationStock(barcode);
+    }
+
+    async _loadLocationStock(barcode) {
+        this.state.is_loading = true;
+        try {
+            const r = await this.orm.call('inventory.check', 'get_location_stock', [barcode], {});
+            if (r.success) {
+                this.state.location_viewer = r;
+                this.state.location_viewer_barcode = '';
+            } else {
+                this._showError(r.error);
+                this.state.location_viewer = null;
+            }
+        } catch (error) {
+            this._showError('Lỗi: ' + error.message);
+        } finally {
+            this.state.is_loading = false;
+        }
+    }
+
+    openCameraForLocationViewer() {
+        this.state.camera_mode = 'location_viewer';
+        this.openCamera('location_viewer');
     }
 
     // ========== Session Resume ==========
@@ -452,11 +501,29 @@ export class InventoryCheckScanner extends Component {
     // ========== Discrepancy Dialog ==========
     addDiscrepancyHandler(event) {
         const btn = event.target.closest('button');
-        this.openDiscrepancyDialog(
-            parseInt(btn.dataset.lineId),
-            btn.dataset.productName,
-            parseFloat(btn.dataset.difference)
-        );
+        const line_id = parseInt(btn.dataset.lineId);
+        const product_name = btn.dataset.productName;
+        const difference = parseFloat(btn.dataset.difference);
+        if (this.state.settings && this.state.settings.skip_discrepancy_reason) {
+            this._autoSaveDiscrepancy(line_id);
+        } else {
+            this.openDiscrepancyDialog(line_id, product_name, difference);
+        }
+    }
+
+    async _autoSaveDiscrepancy(line_id) {
+        try {
+            const r = await this.orm.call('inventory.check', 'save_discrepancy', [line_id, 'kiem_ton', ''], {});
+            if (r.success) {
+                this._showNotification('Đã ghi nhận: Kiểm tồn', 'success');
+                await this._refreshCheckData();
+                this._focusOnBarcodeInput();
+            } else {
+                this._showError(r.error || 'Lỗi');
+            }
+        } catch (error) {
+            this._showError('Lỗi: ' + error.message);
+        }
     }
 
     openDiscrepancyDialog(line_id, product_name, difference) {
@@ -492,11 +559,27 @@ export class InventoryCheckScanner extends Component {
     }
 
     // ========== Confirm Check (inline) ==========
-    openConfirmDialog() {
+    async openConfirmDialog() {
         const pending = this.state.lines.filter(l => l.difference !== 0 && !l.discrepancy_id);
         if (pending.length > 0) {
-            this._showError(`Cần ghi nhận lý do chênh lệch cho ${pending.length} sản phẩm`);
-            return;
+            if (this.state.settings && this.state.settings.skip_discrepancy_reason) {
+                this.state.is_loading = true;
+                try {
+                    for (const l of pending) {
+                        await this.orm.call('inventory.check', 'save_discrepancy', [l.id, 'kiem_ton', ''], {});
+                    }
+                    await this._refreshCheckData();
+                } catch (error) {
+                    this._showError('Lỗi tự động ghi nhận: ' + error.message);
+                    this.state.is_loading = false;
+                    return;
+                } finally {
+                    this.state.is_loading = false;
+                }
+            } else {
+                this._showError(`Cần ghi nhận lý do chênh lệch cho ${pending.length} sản phẩm`);
+                return;
+            }
         }
         this.state.confirm_dialog = true;
     }
@@ -631,12 +714,18 @@ export class InventoryCheckScanner extends Component {
         await this._saveSettings();
     }
 
+    async toggleSkipDiscrepancyReason() {
+        const s = this.state.settings;
+        s.skip_discrepancy_reason = !s.skip_discrepancy_reason;
+        await this._saveSettings();
+    }
+
     async _saveSettings() {
         const s = this.state.settings;
         try {
             const r = await this.orm.call(
                 'inventory.check', 'save_scanner_settings',
-                [s.approval_required, s.auto_confirm], {}
+                [s.approval_required, s.auto_confirm, s.skip_discrepancy_reason], {}
             );
             if (r.success) {
                 this._showNotification('Đã lưu cài đặt', 'success');
@@ -706,6 +795,7 @@ export class InventoryCheckScanner extends Component {
             if (active) {
                 const tag = active.tagName;
                 if (active.classList.contains('hlv-qty-input')) return;
+                if (active.classList.contains('hlv-lv-input')) return;
                 if (active.closest && active.closest('.hlv-discrepancy-dialog')) return;
                 if (active.closest && active.closest('.hlv-confirm-dialog')) return;
                 // Don't steal from non-scan inputs (qty, search, settings, etc.)
@@ -713,6 +803,11 @@ export class InventoryCheckScanner extends Component {
                     !active.classList.contains('hlv-input--scan') &&
                     !active.classList.contains('hlv-input--lg') &&
                     !active.classList.contains('hlv-location-hidden-input')) return;
+            }
+            if (this.state.view === 'location_viewer') {
+                const lvInput = document.querySelector('.hlv-lv-input');
+                if (lvInput && document.activeElement !== lvInput) lvInput.focus();
+                return;
             }
             const selector = !this.state.location_id
                 ? '.hlv-location-hidden-input'
@@ -861,7 +956,12 @@ export class InventoryCheckScanner extends Component {
     }
 
     _processCameraBarcode(code) {
-        if (this.state.camera_mode === 'location') {
+        if (this.state.camera_mode === 'location_viewer') {
+            this.state.camera_active = false;
+            this.state.camera_status = '';
+            this._stopCameraStream();
+            this.onLocationViewerCameraResult(code);
+        } else if (this.state.camera_mode === 'location') {
             // Close camera first, then navigate to location
             this.state.camera_active = false;
             this.state.camera_status = '';

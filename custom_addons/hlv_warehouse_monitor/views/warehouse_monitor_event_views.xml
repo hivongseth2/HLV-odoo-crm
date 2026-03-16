@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Event - Tree View                                     -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <record id="view_warehouse_monitor_event_tree" model="ir.ui.view">
+        <field name="name">warehouse.monitor.event.tree</field>
+        <field name="model">warehouse.monitor.event</field>
+        <field name="arch" type="xml">
+            <list string="Sự kiện kho" decoration-danger="priority == 'urgent'"
+                  decoration-warning="priority == 'high'"
+                  decoration-info="is_suggestion == True and is_read == False"
+                  default_order="timestamp desc">
+                <field name="timestamp" widget="datetime"/>
+                <field name="name"/>
+                <field name="event_type" widget="badge"
+                       decoration-success="event_type in ('in', 'pick')"
+                       decoration-info="event_type in ('pack', 'out')"
+                       decoration-warning="event_type == 'sale'"
+                       decoration-danger="event_type == 'return'"/>
+                <field name="action" widget="badge"/>
+                <field name="warehouse_id"/>
+                <field name="origin"/>
+                <field name="state_before"/>
+                <field name="state_after"/>
+                <field name="user_id" widget="many2one_avatar_user"/>
+                <field name="priority" widget="priority"/>
+                <field name="is_read" widget="boolean_toggle"/>
+                <field name="is_suggestion" invisible="1"/>
+                <field name="suggestion" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Event - Form View                                     -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <record id="view_warehouse_monitor_event_form" model="ir.ui.view">
+        <field name="name">warehouse.monitor.event.form</field>
+        <field name="model">warehouse.monitor.event</field>
+        <field name="arch" type="xml">
+            <form string="Sự kiện kho" create="false">
+                <header>
+                    <button name="action_mark_read" type="object"
+                            string="Đánh dấu đã xem" class="btn-primary"
+                            invisible="is_read"/>
+                    <button name="action_mark_unread" type="object"
+                            string="Đánh dấu chưa xem"
+                            invisible="not is_read"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group string="Thông tin sự kiện">
+                            <field name="event_type"/>
+                            <field name="action"/>
+                            <field name="priority" widget="priority"/>
+                            <field name="timestamp"/>
+                            <field name="user_id" widget="many2one_avatar_user"/>
+                        </group>
+                        <group string="Liên kết">
+                            <field name="warehouse_id"/>
+                            <field name="origin"/>
+                            <field name="picking_id"/>
+                            <field name="sale_id"/>
+                            <field name="purchase_id"/>
+                            <field name="picking_type_code"/>
+                        </group>
+                    </group>
+                    <group string="Trạng thái">
+                        <field name="state_before"/>
+                        <field name="state_after"/>
+                    </group>
+                    <group string="Chi tiết">
+                        <field name="summary"/>
+                        <field name="product_summary"/>
+                    </group>
+                    <group string="Đề xuất" invisible="not is_suggestion">
+                        <field name="suggestion"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Event - Search View                                   -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <record id="view_warehouse_monitor_event_search" model="ir.ui.view">
+        <field name="name">warehouse.monitor.event.search</field>
+        <field name="model">warehouse.monitor.event</field>
+        <field name="arch" type="xml">
+            <search string="Tìm sự kiện">
+                <field name="name"/>
+                <field name="origin"/>
+                <field name="warehouse_id"/>
+                <field name="picking_id"/>
+                <field name="sale_id"/>
+                <field name="purchase_id"/>
+                <separator/>
+                <filter string="Hôm nay" name="filter_today"
+                        domain="[('timestamp', '>=', (context_today()).strftime('%%Y-%%m-%%d 00:00:00'))]"/>
+                <filter string="Chưa xem" name="filter_unread"
+                        domain="[('is_read', '=', False)]"/>
+                <filter string="Có đề xuất" name="filter_suggestions"
+                        domain="[('is_suggestion', '=', True), ('is_read', '=', False)]"/>
+                <separator/>
+                <filter string="Nhập kho" name="filter_in" domain="[('event_type', '=', 'in')]"/>
+                <filter string="Lấy hàng" name="filter_pick" domain="[('event_type', '=', 'pick')]"/>
+                <filter string="Đóng gói" name="filter_pack" domain="[('event_type', '=', 'pack')]"/>
+                <filter string="Xuất kho" name="filter_out" domain="[('event_type', '=', 'out')]"/>
+                <filter string="Bán hàng" name="filter_sale" domain="[('event_type', '=', 'sale')]"/>
+                <filter string="Mua hàng" name="filter_purchase" domain="[('event_type', '=', 'purchase')]"/>
+                <separator/>
+                <filter string="Khẩn cấp" name="filter_urgent" domain="[('priority', '=', 'urgent')]"/>
+                <filter string="Cao" name="filter_high" domain="[('priority', '=', 'high')]"/>
+                <separator/>
+                <group expand="0" string="Nhóm theo">
+                    <filter string="Kho" name="group_warehouse" context="{'group_by': 'warehouse_id'}"/>
+                    <filter string="Loại" name="group_type" context="{'group_by': 'event_type'}"/>
+                    <filter string="Hành động" name="group_action" context="{'group_by': 'action'}"/>
+                    <filter string="Ngày" name="group_date" context="{'group_by': 'timestamp:day'}"/>
+                    <filter string="Người thực hiện" name="group_user" context="{'group_by': 'user_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Event - Action                                        -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <record id="action_warehouse_monitor_events" model="ir.actions.act_window">
+        <field name="name">Sự kiện kho</field>
+        <field name="res_model">warehouse.monitor.event</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_warehouse_monitor_event_search"/>
+        <field name="context">{'search_default_filter_today': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Chưa có sự kiện nào được ghi nhận
+            </p>
+            <p>
+                Các sự kiện sẽ được tự động ghi nhận khi có thay đổi trong luồng bán hàng, mua hàng và kho.
+            </p>
+        </field>
+    </record>
+
+</odoo>

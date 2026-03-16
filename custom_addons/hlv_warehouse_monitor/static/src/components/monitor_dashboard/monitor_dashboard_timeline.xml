@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Event Timeline                                        -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <t t-name="hlv_warehouse_monitor.Timeline">
+        <div class="timeline-panel">
+            <div class="timeline-header">
+                <h3>⏱️ Dòng thời gian sự kiện</h3>
+                <div class="timeline-filter-tabs">
+                    <button t-att-class="{'active': state.eventTypeFilter === 'all'}"
+                            t-on-click="() => this.filterByType('all')">Tất cả</button>
+                    <button t-att-class="{'active': state.eventTypeFilter === 'in'}"
+                            t-on-click="() => this.filterByType('in')">Nhập</button>
+                    <button t-att-class="{'active': state.eventTypeFilter === 'pick'}"
+                            t-on-click="() => this.filterByType('pick')">Lấy</button>
+                    <button t-att-class="{'active': state.eventTypeFilter === 'pack'}"
+                            t-on-click="() => this.filterByType('pack')">Gói</button>
+                    <button t-att-class="{'active': state.eventTypeFilter === 'out'}"
+                            t-on-click="() => this.filterByType('out')">Xuất</button>
+                    <button t-att-class="{'active': state.eventTypeFilter === 'sale'}"
+                            t-on-click="() => this.filterByType('sale')">Bán</button>
+                    <button t-att-class="{'active': state.eventTypeFilter === 'purchase'}"
+                            t-on-click="() => this.filterByType('purchase')">Mua</button>
+                </div>
+            </div>
+            <div class="timeline-body">
+                <t t-if="state.events.length === 0">
+                    <div class="empty-state">
+                        <div class="empty-icon">📋</div>
+                        <div class="empty-text">Chưa có sự kiện nào</div>
+                    </div>
+                </t>
+                <t t-foreach="state.events" t-as="ev" t-key="ev.id">
+                    <div t-att-class="'event-row' + (ev.is_read ? '' : ' unread')"
+                         t-on-click="() => this.openEventDetail(ev)">
+                        <div t-att-class="'event-type-badge type-' + ev.event_type">
+                            <t t-esc="this.getTypeIcon(ev.event_type)"/>
+                        </div>
+                        <div class="event-content">
+                            <div class="event-title" t-esc="ev.name"/>
+                            <div class="event-summary" t-esc="ev.summary"/>
+                            <div class="event-tags">
+                                <span class="event-tag tag-warehouse"
+                                      t-if="ev.warehouse_name"
+                                      t-esc="ev.warehouse_name"/>
+                                <span class="event-tag tag-origin"
+                                      t-if="ev.origin"
+                                      t-esc="ev.origin"/>
+                                <span class="event-tag"
+                                      t-if="ev.state_after"
+                                      t-esc="ev.state_after"/>
+                            </div>
+                        </div>
+                        <div class="event-time" t-esc="this.formatTime(ev.timestamp)"/>
+                    </div>
+                </t>
+            </div>
+            <!-- Pagination -->
+            <div class="pagination-bar" t-if="state.totalCount > state.pageSize">
+                <div class="page-info">
+                    Hiện <t t-esc="state.offset + 1"/> - <t t-esc="Math.min(state.offset + state.pageSize, state.totalCount)"/> / <t t-esc="state.totalCount"/>
+                </div>
+                <div class="page-buttons">
+                    <button t-on-click="() => this.prevPage()"
+                            t-att-disabled="state.offset === 0">← Trước</button>
+                    <button t-on-click="() => this.nextPage()"
+                            t-att-disabled="state.offset + state.pageSize >= state.totalCount">Sau →</button>
+                </div>
+            </div>
+        </div>
+    </t>
+
+</templates>

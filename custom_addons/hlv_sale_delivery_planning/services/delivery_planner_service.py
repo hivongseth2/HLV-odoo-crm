@@ -12,7 +12,7 @@ class DeliveryPlannerService(models.AbstractModel):
         filter_delivery_status='all', filter_stock_status='all',
         filter_packing_status='all', filter_date_from='', filter_date_to='',
         filter_po_date_from='', filter_po_date_to='', filter_po_status='all',
-        limit=12, offset=0,
+        limit=12, offset=0, filter_saler_code='',
     ):
         """
         Äiá»ƒm vÃ o chÃ­nh: tá»•ng há»£p dá»¯ liá»‡u dashboard giao hÃ ng.
@@ -21,6 +21,7 @@ class DeliveryPlannerService(models.AbstractModel):
         domain = self._build_search_domain(
             search_query, filter_warehouse_id,
             filter_delivery_status, filter_date_from, filter_date_to,
+            filter_saler_code=filter_saler_code,
         )
         sales = self.env['sale.order'].search(
             domain,

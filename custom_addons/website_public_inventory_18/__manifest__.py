@@ -7,7 +7,7 @@
     "website": "https://example.com",
     "category": "Website/Inventory",
     "license": "LGPL-3",
-    "depends": ["website", "stock", "sale", "misa_fetch_po_button"],
+    "depends": ["website", "stock", "sale", "mrp", "misa_fetch_po_button"],
     "data": [
         "views/templates.xml",
         "views/order_lookup_templates.xml",

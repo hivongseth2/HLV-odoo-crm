@@ -1,0 +1,1632 @@
+/* ============================================
+   Public Order Lookup Page - Customer-Friendly Design
+   Responsive, Modern & Simple Interface
+   ============================================ */
+
+/* ============================================
+   Global Styles & Variables
+   ============================================ */
+:root {
+    --primary-color: #4a90e2;
+    --primary-hover: #357abd;
+    --success-color: #5cb85c;
+    --warning-color: #f0ad4e;
+    --danger-color: #d9534f;
+    --info-color: #5bc0de;
+    --light-bg: #f8f9fa;
+    --border-color: #e0e0e0;
+    --text-dark: #2c3e50;
+    --text-muted: #6c757d;
+    --shadow-sm: 0 2px 4px rgba(0,0,0,0.08);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+
+.o_order_lookup_page {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    color: var(--text-dark);
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    min-height: 100vh;
+    padding-bottom: 3rem;
+}
+
+/* ============================================
+   Header Section
+   ============================================ */
+.o_order_lookup_page .o_page_header {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+    /* padding: 2.5rem 0; */
+    box-shadow: var(--shadow-md);
+    position: relative;
+    overflow: hidden;
+}
+
+.o_order_lookup_page .o_page_header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    opacity: 0.3;
+}
+
+.o_order_lookup_page .o_page_header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    /* margin-bottom: 0.5rem; */
+    position: relative;
+    z-index: 1;
+}
+
+.o_order_lookup_page .o_page_header .lead {
+    font-size: 1.1rem;
+    font-weight: 400;
+    position: relative;
+    z-index: 1;
+}
+
+.o_order_lookup_page .o_page_header .row {
+    display: flex;
+    align-items: center;
+}
+
+.o_order_lookup_page .o_page_header .order-code {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    width: 100%;
+    line-height: 1;
+    min-height: 0;
+}
+
+.o_order_lookup_page .o_page_header .order-code h2,
+.o_order_lookup_page .o_page_header .order-code h1,
+.o_order_lookup_page .o_page_header .order-code p {
+    margin: 0;
+}
+
+@media (max-width: 768px) {
+    .o_order_lookup_page .o_page_header {
+         /* padding: 1.5rem 0 2rem; */
+    }
+    
+    .o_order_lookup_page .o_page_header h1 {
+        font-size: 1rem;
+    }
+    
+    .o_order_lookup_page .o_page_header .lead {
+        font-size: 0.95rem;
+    }
+}
+
+/* ============================================
+   Cards & Containers
+   ============================================ */
+.o_order_lookup_page .card {
+    border: none;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    transition: all 0.3s ease;
+    background: white;
+    margin-bottom: 1.5rem;
+}
+
+.o_order_lookup_page .card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.o_order_lookup_page .card-header {
+    background: white;
+    border-bottom: 2px solid var(--light-bg);
+    padding: 1.25rem 1.5rem;
+    border-radius: var(--radius-md) var(--radius-md) 0 0 !important;
+}
+
+.o_order_lookup_page .card-header h5 {
+    color: var(--text-dark);
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.o_order_lookup_page .card-body {
+    padding: 1.5rem;
+}
+
+/* ============================================
+   Search Form
+   ============================================ */
+
+/* Search card container */
+.o_order_lookup_page .search-card {
+    border: none;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    background: white;
+}
+
+.o_order_lookup_page .search-card .card-body {
+    padding: 1.5rem;
+}
+
+/* Search form container - optimized layout */
+.o_order_lookup_page .search-form-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* Input row - responsive, wraps on mobile */
+.o_order_lookup_page .search-input-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.o_order_lookup_page .search-input-group {
+    flex: 1 1 100%;
+    min-width: 0;
+}
+
+.o_order_lookup_page .search-input-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+/* Search button on mobile (below input on small screens) */
+.o_order_lookup_page .btn-search-mobile {
+    flex: 1 1 auto;
+    min-width: 80px;
+    padding: 0.625rem 1rem;
+    align-self: flex-end;
+    height: auto;
+    min-height: 2.5rem;
+    white-space: nowrap;
+}
+
+/* Action row - desktop layout */
+.o_order_lookup_page .search-action-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding-top: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.o_order_lookup_page .search-action-row .btn {
+    flex-shrink: 0;
+}
+
+/* Form label */
+.o_order_lookup_page .form-label {
+    font-weight: 600;
+    color: var(--text-dark);
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.o_order_lookup_page .form-control {
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    background-color: white;
+    width: 100%;
+}
+
+.o_order_lookup_page .form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(74, 144, 226, 0.15);
+    outline: none;
+}
+
+.o_order_lookup_page .form-control::placeholder {
+    color: #adb5bd;
+    font-size: 0.95rem;
+}
+
+.o_order_lookup_page .form-text {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+/* ============================================
+   Mobile Search Form Optimization (<768px)
+   ============================================ */
+@media (max-width: 768px) {
+    .o_order_lookup_page .search-card .card-body {
+        padding: 1rem;
+    }
+    
+    .o_order_lookup_page .search-form-container {
+        gap: 0.5rem;
+    }
+    
+    /* Mobile: Input full-width, button below */
+    .o_order_lookup_page .search-input-row {
+        gap: 0.5rem;
+        align-items: stretch;
+    }
+    
+    .o_order_lookup_page .search-input-group {
+        flex: 1 1 100%;
+    }
+    
+    /* Button full-width on mobile */
+    .o_order_lookup_page .btn-search-mobile {
+        flex: 0 1 auto;
+        width: 100%;
+        min-width: auto;
+        height: 2.5rem;
+        padding: 0.5rem 1rem;
+        white-space: nowrap;
+    }
+    
+    .o_order_lookup_page .form-label {
+        font-size: 0.85rem;
+        margin-bottom: 0.35rem;
+    }
+    
+    .o_order_lookup_page .form-control {
+        padding: 0.625rem 0.875rem;
+        font-size: 0.95rem;
+        height: 2.5rem;
+    }
+    
+    .o_order_lookup_page .form-text {
+        font-size: 0.75rem;
+        margin-top: 0.2rem;
+    }
+}
+
+/* ============================================
+   Extra Small Mobile (<576px)
+   ============================================ */
+@media (max-width: 576px) {
+    .o_order_lookup_page .search-card .card-body {
+        padding: 0.75rem;
+    }
+    
+    .o_order_lookup_page .search-form-container {
+        gap: 0.5rem;
+    }
+    
+    .o_order_lookup_page .search-input-row {
+        gap: 0.5rem;
+    }
+    
+    .o_order_lookup_page .btn-search-mobile {
+        width: 100%;
+        height: 2.25rem;
+        padding: 0.4rem 0.75rem;
+        font-size: 0.85rem;
+    }
+    
+    .o_order_lookup_page .form-control {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.9rem;
+        height: 2.25rem;
+    }
+    
+    .o_order_lookup_page .form-label {
+        font-size: 0.8rem;
+        margin-bottom: 0.25rem;
+    }
+    
+    .o_order_lookup_page .form-text {
+        font-size: 0.7rem;
+        margin-top: 0.15rem;
+    }
+}
+
+/* ============================================
+   Buttons
+   ============================================ */
+.o_order_lookup_page .btn {
+    padding: 0.75rem 2rem;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    border: none;
+    box-shadow: var(--shadow-sm);
+}
+
+.o_order_lookup_page .btn-primary {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+    color: white;
+}
+
+.o_order_lookup_page .btn-primary:hover {
+    background: linear-gradient(135deg, var(--primary-hover) 0%, #2a5f8f 100%);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.o_order_lookup_page .btn-primary:active {
+    transform: translateY(0);
+}
+
+/* ============================================
+   Alerts
+   ============================================ */
+.o_order_lookup_page .alert {
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    box-shadow: var(--shadow-sm);
+    border-left: 4px solid;
+}
+
+.o_order_lookup_page .alert-danger {
+    background-color: #fef5f5;
+    color: #c53030;
+    border-left-color: var(--danger-color);
+}
+
+.o_order_lookup_page .alert-warning {
+    background-color: #fffbf0;
+    color: #9c6d1f;
+    border-left-color: var(--warning-color);
+}
+
+/* ============================================
+   Customer Information Section
+   ============================================ */
+.o_order_lookup_page .customer-info {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    padding: 1.5rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 1.5rem;
+}
+
+.o_order_lookup_page .customer-info label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+}
+
+.o_order_lookup_page .customer-info p {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-dark);
+}
+
+/* ============================================
+   Table Styles
+   ============================================ */
+.o_order_lookup_page .table-responsive {
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.o_order_lookup_page table {
+    margin-bottom: 0;
+    width: 100%;
+    table-layout: fixed;
+}
+
+.o_order_lookup_page table thead {
+    background: linear-gradient(135deg, var(--light-bg) 0%, #e9ecef 100%);
+}
+
+.o_order_lookup_page table thead th {
+    font-weight: 700;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-dark);
+    padding: 0.875rem 0.5rem;
+    border: none;
+    white-space: nowrap;
+}
+
+.o_order_lookup_page table tbody td {
+    padding: 1rem 0.75rem;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border-color);
+    background-color: white;
+    font-size: 0.9rem;
+}
+
+.o_order_lookup_page table tbody tr {
+    transition: all 0.2s ease;
+}
+
+.o_order_lookup_page table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Remove hover effects for cleaner look */
+.o_order_lookup_page table tbody tr:hover {
+    background-color: white !important;
+}
+
+/* Product name styling */
+.o_order_lookup_page table tbody td strong {
+    color: var(--text-dark);
+    font-weight: 600;
+}
+
+.o_order_lookup_page table tbody td .text-muted {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    display: block;
+    margin-top: 0.25rem;
+}
+
+/* Combo product styling */
+.o_order_lookup_page .combo-parent {
+    font-weight: 600;
+    color: var(--text-dark);
+    font-size: 0.95rem;
+}
+
+.o_order_lookup_page .combo-component {
+    padding-left: 2.5rem;
+    font-size: 0.875rem;
+    color: #6c757d;
+    position: relative;
+    font-style: italic;
+    line-height: 1.4;
+}
+
+.o_order_lookup_page .combo-component::before {
+    content: ' ';
+    position: absolute;
+    left: 0.75rem;
+    color: #adb5bd;
+    font-style: normal;
+    font-weight: normal;
+}
+
+@media (max-width: 768px) {
+    .o_order_lookup_page .combo-component {
+        padding-left: 1.75rem;
+        font-size: 0.8rem;
+    }
+    
+    .o_order_lookup_page .combo-component::before {
+        left: 0.5rem;
+        content: ' ';
+    }
+}
+
+/* ============================================
+   Invoice/Bill Style
+   ============================================ */
+.o_order_lookup_page .invoice-container {
+    background: white;
+    padding: 0;
+}
+
+.o_order_lookup_page .invoice-table {
+    margin-bottom: 0;
+}
+
+.o_order_lookup_page .invoice-table thead {
+    background: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.o_order_lookup_page .invoice-table thead th {
+    font-weight: 700;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-dark);
+    padding: 0.875rem 1rem;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.o_order_lookup_page .invoice-table tbody td {
+    padding: 1rem;
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: top;
+}
+
+.o_order_lookup_page .invoice-table tbody tr:last-child td {
+    border-bottom: 2px solid #dee2e6;
+}
+
+.o_order_lookup_page .invoice-table tbody tr.combo-row td {
+    padding: 0.5rem 1rem;
+    border-bottom: none;
+    background: #fafafa;
+}
+
+/* Bill Summary */
+.o_order_lookup_page .bill-summary {
+    background: #f8f9fa;
+    padding: 1.5rem;
+    border-top: 2px solid #dee2e6;
+    margin-top: 0;
+}
+
+.o_order_lookup_page .status-info {
+    padding: 1rem;
+    background: white;
+    border-radius: var(--radius-sm);
+    border: 1px solid #dee2e6;
+}
+
+.o_order_lookup_page .status-item {
+    font-size: 0.9rem;
+    color: var(--text-dark);
+}
+
+/* .o_order_lookup_page .total-summary {
+    background: white;
+    padding: 1rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid #dee2e6;
+} */
+
+.o_order_lookup_page .summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    font-size: 0.95rem;
+    color: var(--text-dark);
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.o_order_lookup_page .summary-row:last-child {
+    border-bottom: none;
+}
+
+.o_order_lookup_page .summary-row .amount {
+    font-weight: 600;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    color: #2c3e50;
+}
+
+.o_order_lookup_page .summary-row.total-row {
+    padding-top: 0.75rem;
+    margin-top: 0.5rem;
+    /* border-top: 2px solid #2c3e50; */
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.o_order_lookup_page .amount-total {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #2c3e50;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
+.o_order_lookup_page .amount-total .currency {
+    font-size: 0.85rem;
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.order-code .badge {
+    font-size: 0.95rem;
+    border: 1px solid #e3e6ea;
+    border-radius: 8px;
+}
+
+/* Mobile Bill Style */
+@media (max-width: 768px) {
+    .o_order_lookup_page .invoice-table thead th,
+    .o_order_lookup_page .invoice-table tbody td {
+        padding: 0.625rem 0.5rem;
+        font-size: 0.85rem;
+    }
+    
+    .o_order_lookup_page .bill-summary {
+        padding: 1rem;
+    }
+    
+    .o_order_lookup_page .status-info,
+    /* .o_order_lookup_page .total-summary {
+        margin-bottom: 1rem;
+    } */
+    
+    .o_order_lookup_page .amount-total {
+        font-size: 1.25rem;
+    }
+    
+    .o_order_lookup_page .summary-row {
+        font-size: 0.875rem;
+        padding: 0.4rem 0;
+    }
+    
+    /* .o_order_lookup_page .total-summary {
+        padding: 0.75rem;
+        background: linear-gradient(135deg, #f8f9fa 0%, #fff 100%);
+        border: 2px solid var(--primary-color);
+        border-radius: var(--radius-sm);
+    }
+     */
+    .o_order_lookup_page .summary-row.total-row {
+        padding-top: 0.5rem;
+        margin-top: 0.35rem;
+        /* border-top: 2px solid var(--text-dark); */
+        font-size: 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .o_order_lookup_page .amount-total {
+        font-size: 1.15rem;
+        line-height: 1.2;
+    }
+}
+
+/* ============================================
+   Order Cards (List View)
+   ============================================ */
+.o_order_lookup_page .orders-list {
+    background: transparent;
+}
+
+.o_order_lookup_page .order-card {
+    background: white;
+    border-radius: var(--radius-md);
+    border: 2px solid var(--border-color);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.o_order_lookup_page .order-card:hover {
+    border-color: var(--primary-color);
+    box-shadow: var(--shadow-md);
+}
+
+.o_order_lookup_page .order-card.expanded {
+    border-color: var(--primary-color);
+}
+
+.o_order_lookup_page .order-card-header {
+    padding: 1.25rem 1.5rem;
+    background: white;
+    border-bottom: 1px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.o_order_lookup_page .order-card.expanded .order-card-header {
+    border-bottom-color: var(--border-color);
+    background: var(--light-bg);
+}
+
+.o_order_lookup_page .order-card-header h5 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+.o_order_lookup_page .order-card-body {
+    padding: 1.5rem;
+    background: white;
+    border-top: 1px solid var(--border-color);
+}
+
+.o_order_lookup_page .order-summary {
+    background: var(--light-bg);
+    border: 1px solid var(--border-color);
+}
+
+/* Toggle button */
+.o_order_lookup_page .toggle-order-details {
+    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-sm);
+    transition: all 0.3s ease;
+}
+
+.o_order_lookup_page .toggle-order-details:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Mobile order cards */
+@media (max-width: 768px) {
+    .o_order_lookup_page .orders-list {
+        padding: 1rem !important;
+    }
+    
+    .o_order_lookup_page .order-card {
+        margin-bottom: 1rem !important;
+    }
+    
+    .o_order_lookup_page .order-card-header {
+        padding: 1rem;
+    }
+    
+    .o_order_lookup_page .order-card-header h5 {
+        font-size: 0.95rem;
+    }
+    
+    .o_order_lookup_page .order-card-header h4 {
+        font-size: 1.25rem;
+    }
+    
+    .o_order_lookup_page .order-card-body {
+        padding: 1rem;
+    }
+    
+    .o_order_lookup_page .toggle-order-details {
+        font-size: 0.8rem;
+        padding: 0.4rem 0.8rem;
+    }
+    
+    .o_order_lookup_page .order-summary {
+        padding: 0.75rem !important;
+    }
+}
+
+/* ============================================
+   Badges
+   ============================================ */
+.o_order_lookup_page .badge {
+    padding: 0.4rem 0.8rem;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.75rem;
+    letter-spacing: 0.3px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.o_order_lookup_page .badge-lg {
+    padding: 0.6rem 1.2rem;
+    border-radius: 25px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: 0.4px;
+}
+
+.o_order_lookup_page .badge-primary {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+    color: white;
+}
+
+.o_order_lookup_page .badge-success {
+    background: linear-gradient(135deg, var(--success-color), #449d44);
+    color: white;
+}
+
+.o_order_lookup_page .badge-warning {
+    background: linear-gradient(135deg, var(--warning-color), #ec971f);
+    color: white;
+}
+
+.o_order_lookup_page .badge-danger {
+    background: linear-gradient(135deg, var(--danger-color), #c9302c);
+    color: white;
+}
+
+.o_order_lookup_page .badge-info {
+    background: linear-gradient(135deg, var(--info-color), #31b0d5);
+    color: white;
+}
+
+.o_order_lookup_page .badge-secondary {
+    background: linear-gradient(135deg, #6c757d, #5a6268);
+    color: white;
+}
+
+.o_order_lookup_page .badge-light {
+    background: #e9ecef;
+    color: var(--text-dark);
+    border: 1px solid var(--border-color);
+}
+
+/* ============================================
+   Order Summary Cards
+   ============================================ */
+.o_order_lookup_page .order-summary-section {
+    background: white;
+    padding: 1.5rem;
+    border-top: 2px solid var(--border-color);
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.o_order_lookup_page .summary-card {
+    background: white;
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    text-align: center;
+    height: 100%;
+}
+
+.o_order_lookup_page .summary-card .summary-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+}
+
+.o_order_lookup_page .summary-card .summary-value {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin-bottom: 0;
+}
+
+.o_order_lookup_page .summary-card .summary-value small {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+/* ============================================
+   Empty State
+   ============================================ */
+.o_order_lookup_page .o_nocontent_help {
+    padding: 4rem 2rem;
+    text-align: center;
+    background: white;
+    border-radius: var(--radius-md);
+}
+
+.o_order_lookup_page .o_nocontent_help i {
+    color: var(--border-color);
+    margin-bottom: 1rem;
+}
+
+.o_order_lookup_page .o_nocontent_help h4 {
+    color: var(--text-dark);
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.o_order_lookup_page .o_nocontent_help p {
+    color: var(--text-muted);
+    font-size: 1rem;
+}
+
+/* ============================================
+   Pagination
+   ============================================ */
+.o_order_lookup_page .card-footer {
+    background: var(--light-bg);
+    /* border-top: 2px solid var(--border-color); */
+    padding: 1rem 1.5rem;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.o_order_lookup_page .pagination {
+    margin: 0;
+}
+
+.o_order_lookup_page .page-item {
+    margin: 0 0.15rem;
+}
+
+.o_order_lookup_page .page-link {
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-dark);
+    padding: 0.5rem 0.75rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.o_order_lookup_page .page-link:hover {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+}
+
+.o_order_lookup_page .page-item.active .page-link {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+    box-shadow: var(--shadow-sm);
+}
+
+.o_order_lookup_page .page-item.disabled .page-link {
+    background-color: var(--light-bg);
+    border-color: var(--border-color);
+    color: var(--text-muted);
+}
+
+/* ============================================
+   Responsive Design - Mobile First
+   ============================================ */
+
+/* Tablets and below */
+@media (max-width: 992px) {
+    .o_order_lookup_page .card-body {
+        padding: 1.25rem;
+    }
+    
+    .o_order_lookup_page table thead th,
+    .o_order_lookup_page table tbody td {
+        padding: 0.75rem 0.5rem;
+        font-size: 0.85rem;
+    }
+    
+    .o_order_lookup_page .summary-card .summary-value {
+        font-size: 1.25rem;
+    }
+}
+
+/* Mobile phones - product list optimization */
+@media (max-width: 768px) {
+    .o_order_lookup_page .mobile-product-list {
+        padding: 0.5rem;
+        gap: 0.5rem;
+    }
+    
+    .o_order_lookup_page .mobile-product-card {
+        padding: 0.85rem;
+        border-radius: 6px;
+    }
+    
+    .o_order_lookup_page .mobile-product-card.is-component {
+        margin-left: 0.25rem;
+        padding: 0.7rem 0.85rem;
+    }
+    
+    .o_order_lookup_page .product-name {
+        font-size: 0.9rem;
+    }
+    
+    .o_order_lookup_page .product-name.component-name {
+        font-size: 0.8rem;
+    }
+    
+    .o_order_lookup_page .mobile-product-details {
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+    }
+}
+
+
+    
+    .o_order_lookup_page .card {
+        margin-bottom: 1rem;
+    }
+    
+    .o_order_lookup_page .card-header {
+        padding: 1rem;
+    }
+    
+    .o_order_lookup_page .card-body {
+        padding: 1rem;
+    }
+    
+    .o_order_lookup_page .form-control {
+        padding: 0.625rem 0.875rem;
+        font-size: 0.95rem;
+    }
+    
+    .o_order_lookup_page .btn {
+        padding: 0.625rem 1.5rem;
+        font-size: 0.95rem;
+        width: 100%;
+    }
+    
+    /* Stack table horizontally on mobile */
+    .o_order_lookup_page .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .o_order_lookup_page table {
+        min-width: 800px;
+    }
+    
+    .o_order_lookup_page table thead th,
+    .o_order_lookup_page table tbody td {
+        padding: 0.625rem 0.4rem;
+        font-size: 0.8rem;
+    }
+    
+    /* Mobile-friendly customer info */
+    .o_order_lookup_page .customer-info {
+        padding: 1rem;
+    }
+    
+    .o_order_lookup_page .customer-info p {
+        font-size: 0.9rem;
+    }
+    
+    /* Mobile summary cards */
+    .o_order_lookup_page .order-summary-section {
+        padding: 1rem;
+    }
+    
+    .o_order_lookup_page .order-summary-section > div {
+        justify-content: center !important;
+    }
+    
+    .o_order_lookup_page .summary-card {
+        margin-bottom: 0.5rem;
+        padding: 0.75rem;
+        min-width: 100px !important;
+    }
+    
+    .o_order_lookup_page .summary-card .summary-label {
+        font-size: 0.65rem;
+    }
+    
+    .o_order_lookup_page .summary-card .summary-value {
+        font-size: 1rem;
+    }
+    
+    .o_order_lookup_page .summary-card .summary-value small {
+        font-size: 0.75rem;
+    }
+    
+    .o_order_lookup_page .badge-lg {
+        padding: 0.5rem 1rem;
+        font-size: 0.85rem;
+    }
+    
+    /* Mobile pagination */
+    .o_order_lookup_page .card-footer {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+    
+    .o_order_lookup_page .pagination {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .o_order_lookup_page .page-link {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.85rem;
+    }
+    
+    /* Mobile empty state */
+    .o_order_lookup_page .o_nocontent_help {
+        padding: 2rem 1rem;
+    }
+    
+    .o_order_lookup_page .o_nocontent_help i {
+        font-size: 3rem !important;
+    }
+}
+
+/* Small mobile phones */
+@media (max-width: 576px) {
+    .o_order_lookup_page .card-header h5 {
+        font-size: 0.95rem;
+    }
+    
+    .o_order_lookup_page .badge {
+        font-size: 0.65rem;
+        padding: 0.25rem 0.5rem;
+    }
+    
+    .o_order_lookup_page table {
+        min-width: 650px;
+    }
+    
+    .o_order_lookup_page table thead th,
+    .o_order_lookup_page table tbody td {
+        font-size: 0.75rem;
+        padding: 0.5rem 0.25rem;
+    }
+    
+    .o_order_lookup_page .combo-component {
+        font-size: 0.7rem;
+        padding-left: 0.75rem;
+    }
+    
+    /* Mobile product card optimizations */
+    .o_order_lookup_page .mobile-product-card {
+        padding: 0.75rem;
+    }
+    
+    .o_order_lookup_page .product-name {
+        font-size: 0.9rem;
+    }
+    
+    .o_order_lookup_page .product-name.component-name {
+        font-size: 0.8rem;
+    }
+    
+    .o_order_lookup_page .mobile-product-details {
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+    }
+    
+    .o_order_lookup_page .detail-label {
+        font-size: 0.7rem;
+    }
+    
+    .o_order_lookup_page .detail-value {
+        font-size: 0.85rem;
+    }
+    
+    .o_order_lookup_page .mobile-product-details .detail-item.total .detail-value {
+        font-size: 0.95rem;
+    }
+    
+    /* Mobile total summary */
+    .o_order_lookup_page .total-summary {
+        padding: 0.45rem;
+        margin-top: 0.55rem;
+    }
+    
+    .o_order_lookup_page .summary-row {
+        font-size: 0.8rem;
+        padding: 0.35rem 0;
+    }
+    
+    .o_order_lookup_page .amount-total {
+        font-size: 1rem;
+    }
+    
+    .o_order_lookup_page .amount-total .currency {
+        font-size: 0.75rem;
+    }
+}
+
+/* ============================================
+   Print Styles
+   ============================================ */
+@media print {
+    .o_order_lookup_page {
+        background: white;
+    }
+    
+    .o_order_lookup_page .o_page_header,
+    .o_order_lookup_page form,
+    .o_order_lookup_page .btn,
+    .o_order_lookup_page .alert,
+    .o_order_lookup_page .pagination,
+    .o_order_lookup_page .toggle-order-details {
+        display: none !important;
+    }
+    
+    .o_order_lookup_page .order-card {
+        box-shadow: none !important;
+        border: 2px solid #000;
+        page-break-inside: avoid;
+        margin-bottom: 2cm;
+    }
+    
+    .o_order_lookup_page .order-card-body {
+        display: block !important;
+    }
+    
+    .o_order_lookup_page .order-card-header {
+        border-bottom: 2px solid #000 !important;
+        background: white !important;
+    }
+    
+    .o_order_lookup_page .invoice-table thead {
+        background: #f0f0f0 !important;
+        border-bottom: 2px solid #000 !important;
+    }
+    
+    .o_order_lookup_page .invoice-table tbody tr:last-child td {
+        border-bottom: 2px solid #000 !important;
+    }
+    
+    .o_order_lookup_page .bill-summary {
+        /* border-top: 2px solid #000 !important; */
+        background: white !important;
+        page-break-inside: avoid;
+    }
+    
+    /* .o_order_lookup_page .total-summary {
+        border: 2px solid #000 !important;
+    } */
+    
+    .o_order_lookup_page .amount-total {
+        color: #000 !important;
+    }
+}
+
+/* ============================================
+   Accessibility Improvements
+   ============================================ */
+.o_order_lookup_page *:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+.o_order_lookup_page .btn:focus,
+.o_order_lookup_page .form-control:focus,
+.o_order_lookup_page .page-link:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* Loading state */
+.o_order_lookup_page .btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* ============================================
+   Custom Scrollbar
+   ============================================ */
+.o_order_lookup_page .table-responsive::-webkit-scrollbar {
+    height: 8px;
+}
+
+.o_order_lookup_page .table-responsive::-webkit-scrollbar-track {
+    background: var(--light-bg);
+    border-radius: 4px;
+}
+
+.o_order_lookup_page .table-responsive::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+.o_order_lookup_page .table-responsive::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+/* ===== Delivery status: tối giản, không màu mè ===== */
+.o_order_lookup_page .delivery-status{
+  display:inline-block;      /* để đứng ngang hàng như các giá trị khác */
+  font-weight:600;
+  font-size:1rem;            /* = cỡ chữ các ô khác ở desktop */
+  line-height:1.25;
+  color: var(--text-dark);
+  vertical-align:middle;
+  white-space:nowrap;        /* tránh xuống dòng lẻ */
+  margin:0;                  /* khớp line-height */
+}
+
+/* Mobile: cho to hơn chút để dễ đọc */
+@media (max-width: 768px){
+  .o_order_lookup_page .delivery-status{ font-size:1.15rem; }
+}
+@media (max-width: 576px){
+  .o_order_lookup_page .delivery-status{ font-size:1.25rem; }
+}
+
+
+/* ============================================
+   Mobile Product List - Card View
+   ============================================ */
+.o_order_lookup_page .mobile-product-list {
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.o_order_lookup_page .mobile-product-card {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    transition: all 0.2s ease;
+    overflow: hidden;
+}
+
+.o_order_lookup_page .mobile-product-card:active {
+    background: var(--light-bg);
+    border-color: var(--primary-color);
+}
+
+.o_order_lookup_page .mobile-product-card.is-component {
+    background: #fafafa;
+    border-left: 3px solid var(--text-muted);
+    margin-left: 0.5rem;
+    padding: 0.75rem 1rem;
+}
+
+/* Product name area */
+.o_order_lookup_page .product-name-wrapper {
+    margin-bottom: 0.5rem;
+    min-width: 0;
+}
+
+.o_order_lookup_page .product-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-dark);
+    line-height: 1.4;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+}
+
+.o_order_lookup_page .product-name.component-name {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.o_order_lookup_page .product-name.combo-name {
+    font-weight: 700;
+    color: var(--text-dark);
+}
+
+/* Delivery info */
+.o_order_lookup_page .delivery-info {
+    font-size: 0.8rem;
+    padding: 0.5rem 0;
+    color: #666;
+}
+
+.o_order_lookup_page .delivery-info strong {
+    color: var(--text-dark);
+    font-weight: 600;
+}
+
+/* Product details grid */
+.o_order_lookup_page .mobile-product-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #e9ecef;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.o_order_lookup_page .mobile-product-details .detail-item.total {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--light-bg);
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    margin-top: 0.25rem;
+}
+
+.o_order_lookup_page .detail-item {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: #f7f8fa;
+    border-radius: 4px;
+    min-height: 2.25rem;
+    box-sizing: border-box;
+}
+
+.o_order_lookup_page .detail-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+    white-space: nowrap;
+    min-width: 56px;
+}
+
+.o_order_lookup_page .detail-value {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-dark);
+    text-align: right;
+    flex-grow: 1;
+    min-width: 0;
+    word-break: break-word;
+}
+
+.o_order_lookup_page .mobile-product-details .detail-item.total .detail-value {
+    font-size: 1rem;
+    color: var(--primary-color);
+}
+
+/* ===== Nút theo dõi & quay lại ===== */
+.o_order_lookup_page .btn-track,
+.o_order_lookup_page .btn-back{
+  display:inline-flex;
+  align-items:center;
+  gap:.5rem;
+}
+
+/* Desktop: giữ kích thước cân đối với nút khác */
+@media (min-width:768px){
+  .o_order_lookup_page .btn-track{ min-width:180px; }
+  .o_order_lookup_page .btn-back { min-width:120px; }
+  .o_order_lookup_page .btn-track:hover{
+    box-shadow:var(--shadow-md);
+    transform:translateY(-1px);
+  }
+  .o_order_lookup_page .btn-back:hover{
+    background:#f8f9fa;
+    box-shadow:var(--shadow-sm);
+  }
+}
+
+/* --- Mobile button UX: gọn gàng, cân giữa, dễ bấm --- */
+@media (max-width: 768px){
+
+  /* Container flex đã có gap, nên căn giữa và giới hạn độ rộng */
+  .o_order_lookup_page .btn-track,
+  .o_order_lookup_page .btn-back {
+    width: 92%;                   /* bớt chiếm ngang màn hình */
+    max-width: 340px;             /* không vượt quá ~340px */
+    margin-left: auto;
+    margin-right: auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease-in-out;
+  }
+
+  /* Nút chính: Theo dõi vận chuyển */
+  .o_order_lookup_page .btn-track {
+    padding: 0.7rem 1rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    background: linear-gradient(135deg,var(--primary-hover),var(--primary-color));
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    border: none;
+  }
+
+  .o_order_lookup_page .btn-track:active {
+    transform: scale(0.98);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    background: linear-gradient(135deg,var(--primary-color),var(--primary-hover));
+  }
+
+  .o_order_lookup_page .btn-track .text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+  }
+  .o_order_lookup_page .btn-track .line-1 { font-weight: 700; }
+  .o_order_lookup_page .btn-track .line-2 {
+    font-size: 0.8rem;
+    opacity: 0.85;
+    margin-top: 0.1rem;
+  }
+
+  /* Nút phụ: Quay lại */
+  .o_order_lookup_page .btn-back {
+    background: #fff;
+    border: 2px solid var(--border-color);
+    color: var(--text-dark);
+    font-weight: 600;
+    padding: 0.7rem 1rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+
+  .o_order_lookup_page .btn-back:active {
+    transform: scale(0.98);
+    background: #f8f9fa;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  }
+
+  /* Mobile product details improvements */
+  .o_order_lookup_page .mobile-product-details {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  .o_order_lookup_page .mobile-product-details .detail-item {
+    padding: 0.4rem 0.6rem;
+    min-height: 2rem;
+  }
+
+  .o_order_lookup_page .mobile-product-details .detail-label {
+    font-size: 0.7rem;
+    min-width: 48px;
+  }
+
+  .o_order_lookup_page .mobile-product-details .detail-value {
+    font-size: 0.85rem;
+  }
+}
+
+/* Tablets (768px to 992px) - optimize product details */
+@media (min-width: 576px) and (max-width: 992px) {
+  .o_order_lookup_page .mobile-product-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+  }
+
+  .o_order_lookup_page .mobile-product-details .detail-item {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 0.5rem 0.7rem;
+    min-height: 2rem;
+    gap: 0.5rem;
+  }
+
+  .o_order_lookup_page .mobile-product-details .detail-label {
+    font-size: 0.75rem;
+    min-width: 50px;
+    flex-shrink: 0;
+  }
+
+  .o_order_lookup_page .mobile-product-details .detail-value {
+    font-size: 0.9rem;
+    text-align: right;
+    flex-grow: 1;
+  }
+
+  .o_order_lookup_page .mobile-product-details .detail-item.total {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 0.75rem;
+    margin-top: 0.5rem;
+  }
+
+  .o_order_lookup_page .mobile-product-details .detail-item.total .detail-value {
+    font-size: 0.95rem;
+  }
+}
+
+/* Extra small mobile (<576px) - mobile product details */
+@media (max-width: 576px) {
+  .o_order_lookup_page .mobile-product-details {
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
+
+  .o_order_lookup_page .mobile-product-details .detail-item {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    min-height: auto;
+    gap: 0.5rem;
+  }
+
+  .o_order_lookup_page .mobile-product-details .detail-label {
+    font-size: 0.7rem;
+    min-width: auto;
+    flex-shrink: 0;
+  }
+
+  .o_order_lookup_page .mobile-product-details .detail-value {
+    font-size: 0.85rem;
+    text-align: right;
+    flex-grow: 1;
+  }
+
+  .o_order_lookup_page .mobile-product-details .detail-item.total {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #eef4ff;
+    padding: 0.6rem 0.75rem;
+    margin-top: 0.5rem;
+  }
+
+  .o_order_lookup_page .mobile-product-details .detail-item.total .detail-label {
+    order: 1;
+  }
+
+  .o_order_lookup_page .mobile-product-details .detail-item.total .detail-value {
+    order: 2;
+    font-size: 0.95rem;
+  }
+}
+

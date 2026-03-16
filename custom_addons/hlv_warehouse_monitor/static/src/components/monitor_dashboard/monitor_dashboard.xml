@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Main Dashboard Template                               -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <t t-name="hlv_warehouse_monitor.Dashboard">
+        <div class="o_action hlv_warehouse_monitor_dashboard">
+
+            <!-- Loading -->
+            <t t-if="state.isLoading">
+                <div class="monitor-loading">
+                    <div class="spinner"/>
+                    <div>Đang tải dữ liệu giám sát...</div>
+                </div>
+            </t>
+
+            <t t-else="">
+                <!-- Header -->
+                <div class="monitor-header">
+                    <div class="monitor-title">
+                        <div class="monitor-icon">🏭</div>
+                        <div>
+                            <h1>Giám sát Kho</h1>
+                            <div class="monitor-subtitle">
+                                Theo dõi hoạt động nhập - xuất - lấy - gói - chuyển - kiểm
+                            </div>
+                        </div>
+                    </div>
+                    <div class="monitor-controls">
+                        <select t-on-change="(ev) => this.onWarehouseChange(ev)">
+                            <option value="all">🏭 Tất cả kho</option>
+                            <t t-foreach="state.warehouses" t-as="wh" t-key="wh.id">
+                                <option t-att-value="wh.id"
+                                        t-att-selected="state.warehouseId == wh.id"
+                                        t-esc="wh.name"/>
+                            </t>
+                        </select>
+                        <button t-att-class="'btn-refresh' + (state.isRefreshing ? ' is-loading' : '')"
+                                t-on-click="() => this.refresh()">
+                            🔄 Làm mới
+                        </button>
+                        <div class="monitor-countdown">
+                            <span class="countdown-num" t-esc="state.countdown"/>
+                            <span class="countdown-label">giây</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KPI Cards -->
+                <t t-call="hlv_warehouse_monitor.KPICards"/>
+
+                <!-- Main Content: Timeline + AI Assistant -->
+                <div class="monitor-content">
+                    <t t-call="hlv_warehouse_monitor.Timeline"/>
+                    <t t-call="hlv_warehouse_monitor.AIAssistant"/>
+                </div>
+            </t>
+        </div>
+    </t>
+
+</templates>

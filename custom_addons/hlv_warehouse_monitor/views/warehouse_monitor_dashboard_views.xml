@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Main Monitor Dashboard — Client Action (OWL)          -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <record id="action_warehouse_monitor_dashboard" model="ir.actions.client">
+        <field name="name">Giám sát Kho</field>
+        <field name="tag">hlv_warehouse_monitor.dashboard</field>
+        <field name="target">main</field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Queue Screen — Hospital-style Order Display           -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <record id="action_warehouse_monitor_queue_screen" model="ir.actions.client">
+        <field name="name">Màn hình hàng đợi PICK/PACK</field>
+        <field name="tag">hlv_warehouse_monitor.queue_screen</field>
+        <field name="target">main</field>
+    </record>
+
+</odoo>

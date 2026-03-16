@@ -824,17 +824,19 @@ class InventoryCheck(models.Model):
             'success': True,
             'approval_required': ICP.get_param('hlv_inventory.approval_required', 'False') == 'True',
             'auto_confirm': ICP.get_param('hlv_inventory.auto_confirm', 'False') == 'True',
+            'skip_discrepancy_reason': ICP.get_param('hlv_inventory.skip_discrepancy_reason', 'False') == 'True',
             'is_manager': is_manager,
         }
 
     @api.model
-    def save_scanner_settings(self, approval_required, auto_confirm):
+    def save_scanner_settings(self, approval_required, auto_confirm, skip_discrepancy_reason=False):
         """Lưu cấu hình scanner (chỉ manager)"""
         if not self.env.user.has_group('stock.group_stock_manager'):
             return {'success': False, 'error': _('Chỉ quản lý kho mới được thay đổi cài đặt')}
         ICP = self.env['ir.config_parameter'].sudo()
         ICP.set_param('hlv_inventory.approval_required', 'True' if approval_required else 'False')
         ICP.set_param('hlv_inventory.auto_confirm', 'True' if auto_confirm else 'False')
+        ICP.set_param('hlv_inventory.skip_discrepancy_reason', 'True' if skip_discrepancy_reason else 'False')
         return {'success': True}
 
     @api.model
@@ -907,6 +909,44 @@ class InventoryCheck(models.Model):
                 'location_name': location.display_name
             }
         return {'success': False, 'error': f'Không tìm thấy vị trí: {barcode}'}
+
+    @api.model
+    def get_location_stock(self, barcode):
+        """Trả về tồn kho tại vị trí ứng với barcode (chỉ xem, không sửa)"""
+        location = self.env['stock.location'].search([
+            ('barcode', '=', barcode),
+            ('usage', '=', 'internal')
+        ], limit=1)
+        if not location:
+            location = self.env['stock.location'].search([
+                ('complete_name', 'ilike', barcode),
+                ('usage', '=', 'internal')
+            ], limit=1)
+        if not location:
+            return {'success': False, 'error': f'Không tìm thấy vị trí: {barcode}'}
+
+        quants = self.env['stock.quant'].search([
+            ('location_id', '=', location.id),
+            ('product_id.active', '=', True),
+        ])
+        items = []
+        for q in quants.sorted(key=lambda r: r.product_id.display_name):
+            if q.quantity == 0:
+                continue
+            items.append({
+                'product_id': q.product_id.id,
+                'product_name': q.product_id.display_name,
+                'product_code': q.product_id.default_code or '',
+                'lot_name': q.lot_id.name if q.lot_id else '',
+                'quantity': q.quantity,
+                'uom_name': q.product_id.uom_id.name,
+            })
+        return {
+            'success': True,
+            'location_id': location.id,
+            'location_name': location.display_name,
+            'items': items,
+        }
 
     @api.model
     def search_product(self, barcode):
