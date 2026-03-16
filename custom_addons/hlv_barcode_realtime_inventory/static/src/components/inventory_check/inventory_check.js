@@ -69,11 +69,15 @@ export class InventoryCheckScanner extends Component {
             // Last scanned line (flash highlight)
             last_scanned_line_id: null,
 
+            // Location Viewer
+            location_viewer: null,  // { location_name, items: [] }
+            location_viewer_barcode: '',
+
             // Camera
             camera_active: false,
             camera_status: '',
             camera_status_type: 'info',
-            camera_mode: 'product',  // 'product' | 'location'
+            camera_mode: 'product',  // 'product' | 'location' | 'location_viewer'
 
             // Device
             device_id: this._generateDeviceId(),
@@ -205,6 +209,51 @@ export class InventoryCheckScanner extends Component {
         }
         this.state.view = 'approvals';
         this._loadApprovals();
+    }
+
+    goToLocationViewer() {
+        this.state.location_viewer = null;
+        this.state.location_viewer_barcode = '';
+        this.state.view = 'location_viewer';
+        setTimeout(() => {
+            const inp = document.querySelector('.hlv-lv-input');
+            if (inp) inp.focus();
+        }, 100);
+    }
+
+    async onLocationViewerInput(event) {
+        if (event.key !== 'Enter') return;
+        const barcode = this.state.location_viewer_barcode.trim();
+        if (!barcode) return;
+        await this._loadLocationStock(barcode);
+    }
+
+    async onLocationViewerCameraResult(barcode) {
+        this.state.location_viewer_barcode = barcode;
+        await this._loadLocationStock(barcode);
+    }
+
+    async _loadLocationStock(barcode) {
+        this.state.is_loading = true;
+        try {
+            const r = await this.orm.call('inventory.check', 'get_location_stock', [barcode], {});
+            if (r.success) {
+                this.state.location_viewer = r;
+                this.state.location_viewer_barcode = '';
+            } else {
+                this._showError(r.error);
+                this.state.location_viewer = null;
+            }
+        } catch (error) {
+            this._showError('Lỗi: ' + error.message);
+        } finally {
+            this.state.is_loading = false;
+        }
+    }
+
+    openCameraForLocationViewer() {
+        this.state.camera_mode = 'location_viewer';
+        this.openCamera('location_viewer');
     }
 
     // ========== Session Resume ==========
@@ -901,7 +950,12 @@ export class InventoryCheckScanner extends Component {
     }
 
     _processCameraBarcode(code) {
-        if (this.state.camera_mode === 'location') {
+        if (this.state.camera_mode === 'location_viewer') {
+            this.state.camera_active = false;
+            this.state.camera_status = '';
+            this._stopCameraStream();
+            this.onLocationViewerCameraResult(code);
+        } else if (this.state.camera_mode === 'location') {
             // Close camera first, then navigate to location
             this.state.camera_active = false;
             this.state.camera_status = '';
