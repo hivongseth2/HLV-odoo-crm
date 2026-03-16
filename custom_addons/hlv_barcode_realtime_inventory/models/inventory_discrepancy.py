@@ -43,6 +43,7 @@ class InventoryDiscrepancy(models.Model):
 
     reason = fields.Selection(
         [
+            ('kiem_ton', 'Kiểm tồn'),
             ('damaged', 'Hỏng/Mất'),
             ('expired', 'Hết hạn/Cũ'),
             ('unknown_location', 'Không tìm thấy'),
