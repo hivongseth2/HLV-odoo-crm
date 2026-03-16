@@ -39,6 +39,12 @@ export class WarehouseMonitorDashboard extends Component {
                 lastEventId: null,
                 userQuestion: "",
             },
+            mapModal: {
+                open: false,
+                trip: null,
+                warehouseLat: null,
+                warehouseLng: null,
+            },
             kpi: {
                 total_events_today: 0,
                 in_today: 0,
@@ -53,6 +59,7 @@ export class WarehouseMonitorDashboard extends Component {
 
         // Auto-refresh interval
         this._refreshInterval = null;
+        this._leafletMap = null;
 
         onWillStart(async () => {
             await this.fetchData();
@@ -72,6 +79,10 @@ export class WarehouseMonitorDashboard extends Component {
             if (this._refreshInterval) {
                 clearInterval(this._refreshInterval);
                 this._refreshInterval = null;
+            }
+            if (this._leafletMap) {
+                this._leafletMap.remove();
+                this._leafletMap = null;
             }
         });
     }
@@ -284,7 +295,124 @@ export class WarehouseMonitorDashboard extends Component {
             this.state.deliveryPlan.expandedTrip === tripId ? null : tripId;
     }
 
-    // ── Phase 3: AI Assistant ────────────────────────────────
+    // ── Phase 4: Map Modal ───────────────────────────────────
+
+    async openMapModal(trip) {
+        this.state.mapModal.trip = trip;
+        this.state.mapModal.open = true;
+        try {
+            const wh = await this.orm.call(
+                "warehouse.monitor.event",
+                "get_warehouse_coords",
+                [],
+                {},
+            );
+            this.state.mapModal.warehouseLat = wh.lat;
+            this.state.mapModal.warehouseLng = wh.lng;
+        } catch (e) {
+            console.warn("[WM Map] Could not get warehouse coords:", e);
+        }
+        setTimeout(() => this._initLeafletMap(), 120);
+    }
+
+    closeMapModal() {
+        if (this._leafletMap) {
+            this._leafletMap.remove();
+            this._leafletMap = null;
+        }
+        this.state.mapModal.open = false;
+        this.state.mapModal.trip = null;
+    }
+
+    async _ensureLeaflet() {
+        if (window.L) return;
+        await new Promise((resolve, reject) => {
+            const link = document.createElement("link");
+            link.rel = "stylesheet";
+            link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+            document.head.appendChild(link);
+            const script = document.createElement("script");
+            script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    }
+
+    async _initLeafletMap() {
+        const trip = this.state.mapModal.trip;
+        if (!trip) return;
+        await this._ensureLeaflet();
+        const L = window.L;
+        const container = document.getElementById("wm-leaflet-map");
+        if (!container) return;
+        if (this._leafletMap) {
+            this._leafletMap.remove();
+            this._leafletMap = null;
+        }
+        const wh_lat = this.state.mapModal.warehouseLat;
+        const wh_lng = this.state.mapModal.warehouseLng;
+        const ordersWithCoords = trip.orders.filter((o) => o.has_coords);
+        const centerLat = wh_lat || (ordersWithCoords[0] ? ordersWithCoords[0].lat : 10.8231);
+        const centerLng = wh_lng || (ordersWithCoords[0] ? ordersWithCoords[0].lng : 106.6297);
+
+        this._leafletMap = L.map(container).setView([centerLat, centerLng], 12);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "\u00a9 OpenStreetMap contributors",
+            maxZoom: 18,
+        }).addTo(this._leafletMap);
+
+        const points = [];
+
+        // Warehouse marker
+        if (wh_lat && wh_lng) {
+            const whIcon = L.divIcon({
+                html: '<div style="background:#1565c0;color:#fff;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5)">&#127981;</div>',
+                iconSize: [34, 34],
+                iconAnchor: [17, 17],
+                className: "",
+            });
+            L.marker([wh_lat, wh_lng], { icon: whIcon })
+                .addTo(this._leafletMap)
+                .bindPopup("<b>&#127981; Kho h\u00e0ng</b>");
+            points.push([wh_lat, wh_lng]);
+        }
+
+        // Order markers (numbered, colour-coded by urgency)
+        ordersWithCoords.forEach((ord, idx) => {
+            const color = ord.overdue
+                ? "#e53935"
+                : ord.days_left !== null && ord.days_left <= 1
+                ? "#ef6c00"
+                : "#2e7d32";
+            const icon = L.divIcon({
+                html: `<div style="background:${color};color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4)">${idx + 1}</div>`,
+                iconSize: [28, 28],
+                iconAnchor: [14, 14],
+                className: "",
+            });
+            L.marker([ord.lat, ord.lng], { icon })
+                .addTo(this._leafletMap)
+                .bindPopup(
+                    `<b>${ord.name}</b><br>${ord.partner}<br>\uD83D\uDCCD ${ord.distance_km} km`,
+                );
+            points.push([ord.lat, ord.lng]);
+        });
+
+        // Route polyline: warehouse → orders
+        if (points.length >= 2) {
+            L.polyline(points, {
+                color: "#4fc3f7",
+                weight: 3,
+                opacity: 0.85,
+                dashArray: "8 5",
+            }).addTo(this._leafletMap);
+        }
+
+        if (points.length > 0) {
+            this._leafletMap.fitBounds(points, { padding: [40, 40] });
+        }
+    }
 
     /** Load existing (not dismissed) insights stored in Odoo DB. */
     async loadAIInsights() {

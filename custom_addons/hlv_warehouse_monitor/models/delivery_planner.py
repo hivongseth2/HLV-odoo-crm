@@ -10,6 +10,7 @@ Reuses ai_delivery_coordinator config params for API keys & warehouse.
 """
 import math
 import logging
+import re
 import requests
 from datetime import datetime
 
@@ -134,6 +135,25 @@ class SaleOrderDeliveryPlanner(models.Model):
             return
         if self.wm_geocoded_query == query and self.wm_delivery_lat:
             return  # already up-to-date
+
+        # ── Check manual address book first (avoids API call) ──────────
+        partner_name = self.partner_id.name or ""
+        cached_lat, cached_lng = self.env["wm.customer.address"].find_cached_coords(partner_name)
+        if cached_lat and cached_lng:
+            wh_lat, wh_lng = self._wm_get_warehouse_coords()
+            dist = _haversine(wh_lat, wh_lng, cached_lat, cached_lng) if wh_lat and wh_lng else 0.0
+            self.sudo().write({
+                "wm_delivery_lat": cached_lat,
+                "wm_delivery_lng": cached_lng,
+                "wm_distance_km": round(dist, 1),
+                "wm_geocoded_query": query,
+            })
+            _logger.info(
+                "[WM Geocode] %s → addrbook %.4f, %.4f – %.1f km",
+                self.name, cached_lat, cached_lng, dist,
+            )
+            return
+
         lat, lng = self._wm_rapidapi_geocode(query)
         if lat and lng:
             wh_lat, wh_lng = self._wm_get_warehouse_coords()
@@ -271,7 +291,21 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
         candidates = []
         po_notify = []
 
+        # ── Load customer ignore patterns ────────────────────────────────
+        compiled_ignores = []
+        for spec in self.env["wm.customer.ignore"].sudo().search([("active", "=", True)]):
+            try:
+                compiled_ignores.append(re.compile(spec.pattern, re.IGNORECASE))
+            except re.error as err:
+                _logger.warning("[WM Planner] Invalid ignore pattern '%s': %s", spec.pattern, err)
+
         for o in all_orders:
+            # Skip customers matching ignore patterns (counter/POS sales)
+            if compiled_ignores:
+                _partner_name = o.partner_id.name or ""
+                if any(p.search(_partner_name) for p in compiled_ignores):
+                    continue
+
             # Skip fully delivered
             out_done = o.picking_ids.filtered(
                 lambda p: p.picking_type_code == "outgoing" and p.state == "done"
@@ -449,6 +483,8 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
                             "overdue": c["overdue"],
                             "distance_km": round(c["dist"], 1),
                             "has_coords": c["has_coords"],
+                            "lat": c["lat"],
+                            "lng": c["lng"],
                             "amount_total": c["amount_total"],
                         }
                         for c in sub
@@ -462,3 +498,16 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
             "total_orders": len(candidates),
             "total_trips": len(trips),
         }
+
+    @api.model
+    def get_warehouse_coords(self):
+        """Return warehouse lat/lng for map center."""
+        ICP = self.env["ir.config_parameter"].sudo()
+        try:
+            lat = float(ICP.get_param("hlv.wm.warehouse_lat") or 0)
+            lng = float(ICP.get_param("hlv.wm.warehouse_lng") or 0)
+        except (TypeError, ValueError):
+            return {"lat": None, "lng": None}
+        if lat and lng:
+            return {"lat": lat, "lng": lng}
+        return {"lat": None, "lng": None}

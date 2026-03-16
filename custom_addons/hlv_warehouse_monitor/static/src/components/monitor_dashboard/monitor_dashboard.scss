@@ -1608,3 +1608,279 @@ $monitor-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 
 
 // end .hlv_warehouse_monitor_dashboard
+
+
+/* ═══════════════════════════════════════════════════════════
+   Phase 4 — Map Modal (Leaflet route viewer)
+   ═══════════════════════════════════════════════════════════ */
+
+.wm-map-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: wm-fade-in 0.15s ease;
+}
+
+@keyframes wm-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+.wm-map-modal {
+    background: #141b2d;
+    border: 1px solid rgba(99, 215, 255, 0.22);
+    border-radius: 14px;
+    width: min(92vw, 900px);
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.65);
+    animation: wm-slide-up 0.18s ease;
+}
+
+@keyframes wm-slide-up {
+    from { transform: translateY(20px); opacity: 0.6; }
+    to   { transform: translateY(0);    opacity: 1;   }
+}
+
+.wm-map-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px 11px;
+    border-bottom: 1px solid rgba(99, 215, 255, 0.13);
+    background: rgba(0, 0, 0, 0.18);
+    flex-shrink: 0;
+
+    .wm-map-modal-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 700;
+        color: #e2e8f0;
+    }
+
+    .wm-map-modal-trip-id {
+        background: rgba(99, 215, 255, 0.15);
+        color: #63d7ff;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 10px;
+    }
+
+    .wm-map-modal-meta {
+        font-size: 12px;
+        font-weight: 400;
+        color: #94a3b8;
+    }
+
+    .wm-map-close-btn {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #94a3b8;
+        font-size: 16px;
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s, color 0.15s;
+
+        &:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #e2e8f0;
+        }
+    }
+}
+
+.wm-map-container {
+    height: 400px;
+    flex-shrink: 0;
+    background: #1a2230;
+
+    /* Leaflet popup customisation */
+    .leaflet-popup-content-wrapper {
+        background: #1e2d40;
+        color: #e2e8f0;
+        border-radius: 8px;
+        border: 1px solid rgba(99, 215, 255, 0.2);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    }
+    .leaflet-popup-tip {
+        background: #1e2d40;
+    }
+}
+
+.wm-map-legend {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 6px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 11px;
+    color: #94a3b8;
+    flex-shrink: 0;
+
+    .wm-map-legend-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .wm-map-legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        border: 1.5px solid rgba(255,255,255,0.3);
+        display: inline-block;
+        flex-shrink: 0;
+    }
+}
+
+.wm-map-order-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+
+    &::-webkit-scrollbar { width: 4px; }
+    &::-webkit-scrollbar-thumb {
+        background: rgba(99, 215, 255, 0.18);
+        border-radius: 4px;
+    }
+}
+
+.wm-map-order-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 10px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    transition: background 0.12s;
+
+    &:hover { background: rgba(255, 255, 255, 0.065); }
+
+    &.is-overdue {
+        border-color: rgba(229, 57, 53, 0.35);
+        background: rgba(229, 57, 53, 0.07);
+    }
+
+    &.is-urgent {
+        border-color: rgba(239, 108, 0, 0.3);
+        background: rgba(239, 108, 0, 0.06);
+    }
+}
+
+.wm-map-order-num {
+    width: 22px;
+    height: 22px;
+    background: #2e7d32;
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+
+    .is-overdue & { background: #e53935; }
+    .is-urgent  & { background: #ef6c00; }
+}
+
+.wm-map-order-info {
+    flex: 1;
+    min-width: 0;
+
+    .wm-map-order-name {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: #e2e8f0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .wm-map-order-partner {
+        display: block;
+        font-size: 11px;
+        color: #94a3b8;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
+.wm-map-order-badges {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+
+    .wm-map-coord-tag {
+        font-size: 11px;
+        color: #4fc3f7;
+        background: rgba(79, 195, 247, 0.1);
+        padding: 2px 6px;
+        border-radius: 4px;
+        white-space: nowrap;
+    }
+
+    .wm-map-no-coord {
+        font-size: 11px;
+        color: #475569;
+    }
+
+    .wm-map-status-tag {
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+    }
+
+    .wm-tag-overdue {
+        background: rgba(229, 57, 53, 0.18);
+        color: #ef9a9a;
+    }
+
+    .wm-tag-urgent {
+        background: rgba(239, 108, 0, 0.18);
+        color: #ffcc80;
+    }
+}
+
+/* Map button on trip card */
+.dp-map-btn {
+    background: rgba(79, 195, 247, 0.1);
+    border: 1px solid rgba(79, 195, 247, 0.25);
+    color: #4fc3f7;
+    font-size: 14px;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+
+    &:hover {
+        background: rgba(79, 195, 247, 0.22);
+        border-color: rgba(79, 195, 247, 0.5);
+    }
+}
