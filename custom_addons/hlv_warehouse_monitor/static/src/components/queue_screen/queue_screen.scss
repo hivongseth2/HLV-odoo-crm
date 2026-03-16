@@ -96,6 +96,16 @@ $q-pack-color: #9b59b6;
                     font-weight: 900;
                     line-height: 1;
                 }
+
+                .count-waiting {
+                    font-size: 11px;
+                    font-weight: 600;
+                    opacity: 0.65;
+                    padding: 1px 6px;
+                    border-radius: 10px;
+                    background: rgba(255,255,255,0.08);
+                    white-space: nowrap;
+                }
             }
         }
 
@@ -212,6 +222,18 @@ $q-pack-color: #9b59b6;
 
                 &.pick-title h2 { color: $q-pick-color; }
                 &.pack-title h2 { color: $q-pack-color; }
+
+                .col-waiting-badge {
+                    font-size: 11px;
+                    font-weight: 700;
+                    opacity: 0.6;
+                    padding: 2px 8px;
+                    border-radius: 10px;
+                    background: rgba(255,255,255,0.07);
+                    border: 1px solid rgba(255,255,255,0.1);
+                    white-space: nowrap;
+                    align-self: center;
+                }
             }
 
             .col-count {

@@ -31,12 +31,18 @@
                         <div class="queue-count-badge badge-pick">
                             <span>🏗️ PICK</span>
                             <span class="count-num" t-esc="state.pickQueue.length"/>
-                            <span>đơn đang chờ</span>
+                            <span>sẵn sàng</span>
+                            <t t-if="state.pickWaitingCount > 0">
+                                <span class="count-waiting">⏳ <t t-esc="state.pickWaitingCount"/> chờ hàng</span>
+                            </t>
                         </div>
                         <div class="queue-count-badge badge-pack">
                             <span>📦 PACK</span>
                             <span class="count-num" t-esc="state.packQueue.length"/>
-                            <span>đơn đang chờ</span>
+                            <span>sẵn sàng</span>
+                            <t t-if="state.packWaitingCount > 0">
+                                <span class="count-waiting">⏳ <t t-esc="state.packWaitingCount"/> chờ hàng</span>
+                            </t>
                         </div>
                     </div>
 
@@ -67,6 +73,9 @@
                             <div class="col-title pick-title">
                                 <div class="col-icon">🏗️</div>
                                 <h2>Lấy hàng (PICK)</h2>
+                                <t t-if="state.pickWaitingCount > 0">
+                                    <span class="col-waiting-badge">⏳ <t t-esc="state.pickWaitingCount"/> chờ hàng</span>
+                                </t>
                             </div>
                             <div class="col-count" t-esc="state.pickQueue.length"/>
                         </div>
@@ -93,6 +102,9 @@
                             <div class="col-title pack-title">
                                 <div class="col-icon">📦</div>
                                 <h2>Đóng gói (PACK)</h2>
+                                <t t-if="state.packWaitingCount > 0">
+                                    <span class="col-waiting-badge">⏳ <t t-esc="state.packWaitingCount"/> chờ hàng</span>
+                                </t>
                             </div>
                             <div class="col-count" t-esc="state.packQueue.length"/>
                         </div>

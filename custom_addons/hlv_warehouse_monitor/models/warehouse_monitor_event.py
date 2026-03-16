@@ -423,26 +423,34 @@ class WarehouseMonitorEvent(models.Model):
                 })
             return result
 
-        # Active PICK queue: confirmed + assigned, ordered urgent first then oldest
-        pick_domain = [("state", "in", ["confirmed", "assigned"])]
+        # ── PICK queue: ONLY assigned (stock reserved → nhân viên có thể lấy ngay)
+        # Confirmed/waiting pickings = chưa có hàng → không hiện để tránh nhầm lẫn
+        pick_ready_domain = [("state", "=", "assigned")]
+        pick_wait_domain  = [("state", "in", ["confirmed", "waiting"])]
         if pick_types:
-            pick_domain.append(("picking_type_id", "in", pick_types.ids))
+            pick_ready_domain.append(("picking_type_id", "in", pick_types.ids))
+            pick_wait_domain.append(("picking_type_id", "in", pick_types.ids))
         else:
-            # Fallback: outgoing internal with PICK in name
-            pick_domain.append(("picking_type_id.sequence_code", "ilike", "PICK"))
+            pick_ready_domain.append(("picking_type_id.sequence_code", "ilike", "PICK"))
+            pick_wait_domain.append(("picking_type_id.sequence_code", "ilike", "PICK"))
         pick_pickings = StockPicking.search(
-            pick_domain, order="scheduled_date asc", limit=50
+            pick_ready_domain, order="scheduled_date asc", limit=50
         )
+        pick_waiting_count = StockPicking.search_count(pick_wait_domain)
 
-        # Active PACK queue
-        pack_domain = [("state", "in", ["confirmed", "assigned"])]
+        # ── PACK queue: ONLY assigned (items staged in pack zone → đóng gói được)
+        pack_ready_domain = [("state", "=", "assigned")]
+        pack_wait_domain  = [("state", "in", ["confirmed", "waiting"])]
         if pack_types:
-            pack_domain.append(("picking_type_id", "in", pack_types.ids))
+            pack_ready_domain.append(("picking_type_id", "in", pack_types.ids))
+            pack_wait_domain.append(("picking_type_id", "in", pack_types.ids))
         else:
-            pack_domain.append(("picking_type_id.sequence_code", "ilike", "PACK"))
+            pack_ready_domain.append(("picking_type_id.sequence_code", "ilike", "PACK"))
+            pack_wait_domain.append(("picking_type_id.sequence_code", "ilike", "PACK"))
         pack_pickings = StockPicking.search(
-            pack_domain, order="scheduled_date asc", limit=50
+            pack_ready_domain, order="scheduled_date asc", limit=50
         )
+        pack_waiting_count = StockPicking.search_count(pack_wait_domain)
 
         warehouses = self.env["stock.warehouse"].sudo().search([])
         return {
@@ -451,4 +459,6 @@ class WarehouseMonitorEvent(models.Model):
             "warehouses": [{"id": w.id, "name": w.name} for w in warehouses],
             "pick_count": len(pick_pickings),
             "pack_count": len(pack_pickings),
+            "pick_waiting_count": pick_waiting_count,
+            "pack_waiting_count": pack_waiting_count,
         }

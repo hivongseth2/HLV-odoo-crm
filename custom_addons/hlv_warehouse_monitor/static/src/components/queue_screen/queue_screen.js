@@ -18,6 +18,8 @@ export class WarehouseQueueScreen extends Component {
             warehouseId: "all",
             pickQueue: [],
             packQueue: [],
+            pickWaitingCount: 0,
+            packWaitingCount: 0,
             warehouses: [],
             clockTime: "",
             countdownSec: REFRESH_INTERVAL_SEC,
@@ -51,6 +53,8 @@ export class WarehouseQueueScreen extends Component {
             );
             this.state.pickQueue = result.pick_queue || [];
             this.state.packQueue = result.pack_queue || [];
+            this.state.pickWaitingCount = result.pick_waiting_count || 0;
+            this.state.packWaitingCount = result.pack_waiting_count || 0;
             this.state.warehouses = result.warehouses || [];
             this.state.isLoading = false;
         } catch (err) {
@@ -72,6 +76,8 @@ export class WarehouseQueueScreen extends Component {
             const prevPackCount = this.state.packQueue.length;
             this.state.pickQueue = result.pick_queue || [];
             this.state.packQueue = result.pack_queue || [];
+            this.state.pickWaitingCount = result.pick_waiting_count || 0;
+            this.state.packWaitingCount = result.pack_waiting_count || 0;
 
             // Notify if new items appeared
             if (result.pick_queue.length > prevPickCount) {
