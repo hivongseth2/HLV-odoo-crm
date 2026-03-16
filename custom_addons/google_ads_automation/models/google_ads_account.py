@@ -180,8 +180,27 @@ class GoogleAdsAccount(models.Model):
         }
         
         try:
-            # Sử dụng v17 là phiên bản ổn định và phổ biến hiện nay
-            return GoogleAdsClient.load_from_dict(credentials, version="v17")
+            # Tự động tìm phiên bản API khả dụng (v18, v17, v16, v15...)
+            # Odoo.sh có thể cài các phiên bản thư viện google-ads khác nhau
+            available_versions = ["v18", "v17", "v16", "v15"]
+            client = None
+            last_error = None
+            
+            for version in available_versions:
+                try:
+                    client = GoogleAdsClient.load_from_dict(credentials, version=version)
+                    # Thử lấy một service để đảm bảo version này thực sự tồn tại
+                    client.get_service("GoogleAdsService")
+                    _logger.info("Đã kết nối Google Ads API phiên bản: %s", version)
+                    return client
+                except Exception as e:
+                    last_error = e
+                    continue
+            
+            if not client and last_error:
+                raise last_error
+                
+            return client
         except Exception as e:
             raise UserError(_("Không thể khởi tạo Google Ads Client. Chi tiết lỗi: %s") % str(e))
 
@@ -268,22 +287,30 @@ class GoogleAdsAccount(models.Model):
                 }
             }
         # ── Real mode ───────────────────────────
+        _logger.info("Bắt đầu kiểm tra kết nối Google Ads thật...")
         client = self._get_google_ads_client()
-        customer_service = client.get_service("CustomerService")
         
-        # We try to load a customer to verify credentials. We will use the operating_customer_id.
-        resource_name = customer_service.customer_path(self.operating_customer_id)
+        # Lấy thông tin tài khoản để kiểm tra
+        # Thay vì dùng CustomerService (có thể thay đổi), dùng GoogleAdsService để truy vấn
+        ga_service = client.get_service("GoogleAdsService")
+        query = f"SELECT customer.id, customer.descriptive_name FROM customer WHERE customer.id = '{self.operating_customer_id}'"
         
         try:
-            response = customer_service.get_customer(resource_name=resource_name)
+            # Thử gọi một query đơn giản nhất
+            response = ga_service.search(customer_id=self.operating_customer_id, query=query)
+            descriptive_name = "Tài khoản Google Ads"
+            for row in response:
+                descriptive_name = row.customer.descriptive_name
+                break
+                
             self.state = 'connected'
-            self.message_post(body=_("Kết nối thành công! Đã kết nối với tài khoản: %s") % response.descriptive_name)
+            self.message_post(body=_("Kết nối thành công! Đã kết nối với tài khoản: %s") % descriptive_name)
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
                 'params': {
                     'title': _('Thành Công'),
-                    'message': _('Kết nối thành công tới tài khoản: %s') % response.descriptive_name,
+                    'message': _('Kết nối thành công tới tài khoản: %s') % descriptive_name,
                     'type': 'success',
                     'sticky': False,
                 }
@@ -296,7 +323,7 @@ class GoogleAdsAccount(models.Model):
             raise UserError(_("Lỗi Google Ads API: \n%s") % '\n'.join(error_details))
         except Exception as e:
             self.state = 'error'
-            raise UserError(_("Kết nối thất bại: %s") % str(e))
+            raise UserError(_("Kết nối thất bại (Lỗi hệ thống): %s") % str(e))
 
     def action_sync_all_data(self):
         """Đồng bộ toàn bộ Dữ liệu Chiến dịch & Chỉ số hiệu suất"""
