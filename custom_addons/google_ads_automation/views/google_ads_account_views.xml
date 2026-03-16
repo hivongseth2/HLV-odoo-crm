@@ -48,11 +48,33 @@
                                     <group string="OAuth 2.0" class="border-0">
                                         <field name="client_id" password="True"/>
                                         <field name="client_secret" password="True"/>
-                                        <field name="refresh_token" password="True"/>
                                         <field name="developer_token" password="True" invisible="is_demo"/>
+                                        <field name="refresh_token" password="True"/>
                                     </group>
+                                </group>
+                                
+                                <div class="alert alert-info border-0 shadow-sm" role="alert" invisible="is_demo">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="fa fa-google fa-2x me-3"></i>
+                                        <div>
+                                            <strong>Ủy Quyền Tự Động (Khuyên dùng)</strong><br/>
+                                            Nhấn nút bên dưới để đăng nhập bằng tài khoản Google MCC của bạn. 
+                                            Hệ thống sẽ tự động điền <i>Refresh Token</i> sau khi bạn cấp quyền.
+                                        </div>
+                                    </div>
+                                    <hr/>
+                                    <p class="mb-2"><small><i>Lưu ý:</i> Phải thêm URIs chuyển hướng này vào <b>Authorized redirect URIs</b> của Client ID trên Google Cloud:</small></p>
+                                    <code class="d-block p-2 bg-white text-dark rounded border mb-3">https://[your-odoo-domain]/google_ads/auth_callback</code>
+                                    
+                                    <button name="action_generate_auth_url" string="1. Đăng Nhập Với Google" type="object" 
+                                            class="btn btn-outline-primary fw-bold" icon="fa-sign-in" invisible="is_demo"/>
+                                </div>
+                                
+                                <group>
                                     <group string="Service Account" class="border-0">
                                         <field name="service_account_json" placeholder='{"type": "service_account", ...}'/>
+                                        <button name="action_test_service_account" string="Kiểm Tra JSON" type="object" 
+                                            class="btn btn-secondary mt-2 w-100" icon="fa-check-square-o"/>
                                     </group>
                                 </group>
                             </div>

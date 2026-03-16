@@ -1,8 +1,10 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 from markupsafe import Markup
+import json
 import logging
 import random
+from urllib.parse import urlencode
 
 _logger = logging.getLogger(__name__)
 
@@ -45,6 +47,14 @@ class GoogleAdsAccount(models.Model):
         help='ID của tài khoản Ads bạn muốn quản lý trực tiếp. Định dạng: 1234567890 (không có dấu -)'
     )
     
+    @api.onchange('login_customer_id', 'operating_customer_id')
+    def _onchange_sanitize_customer_ids(self):
+        """Tự động loại bỏ dấu gạch ngang và khoảng trắng từ ID dán vào."""
+        if self.login_customer_id:
+            self.login_customer_id = self.login_customer_id.replace('-', '').replace(' ', '')
+        if self.operating_customer_id:
+            self.operating_customer_id = self.operating_customer_id.replace('-', '').replace(' ', '')
+
     service_account_json = fields.Text(
         string='File JSON Service Account',
         help='Dành cho các kết nối liên quan đến Google Analytics, GTM, v.v.',
@@ -173,6 +183,68 @@ class GoogleAdsAccount(models.Model):
             return GoogleAdsClient.load_from_dict(credentials, version="v15")
         except Exception as e:
             raise UserError(_("Không thể khởi tạo Google Ads Client. Chi tiết lỗi: %s") % str(e))
+
+    def action_generate_auth_url(self):
+        """Tạo URL Đăng nhập Google để lấy Refresh Token tự động."""
+        self.ensure_one()
+        if not self.client_id or not self.client_secret:
+            raise UserError(_('Vui lòng nhập Client ID và Client Secret trước khi Xác thực!'))
+            
+        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
+        redirect_uri = f"{base_url}/google_ads/auth_callback"
+        
+        # Scope cần thiết cho Google Ads API
+        scopes = ['https://www.googleapis.com/auth/adwords']
+        
+        auth_url = 'https://accounts.google.com/o/oauth2/v2/auth'
+        params = {
+            'client_id': self.client_id,
+            'redirect_uri': redirect_uri,
+            'response_type': 'code',
+            'scope': ' '.join(scopes),
+            'access_type': 'offline',
+            'prompt': 'consent',  # Buộc Google sinh ra refresh token
+            'state': str(self.id), # Gửi kèm ID để callback biết lưu vào tài khoản nào
+        }
+        
+        url = f"{auth_url}?{urlencode(params)}"
+        
+        return {
+            'type': 'ir.actions.act_url',
+            'url': url,
+            'target': 'self',
+        }
+
+    def action_test_service_account(self):
+        """Kiểm tra tính hợp lệ của Service Account JSON"""
+        self.ensure_one()
+        if not self.service_account_json:
+            raise UserError(_('Chưa có dữ liệu JSON để kiểm tra!'))
+            
+        try:
+            data = json.loads(self.service_account_json)
+            if data.get('type') != 'service_account':
+                raise UserError(_('File JSON không phải là loại Service Account! (Thiếu type: service_account)'))
+            if not data.get('client_email'):
+                raise UserError(_('File JSON thiếu trường client_email quan trọng!'))
+            if not data.get('private_key'):
+                raise UserError(_('File JSON thiếu trường private_key quan trọng!'))
+                
+            self.message_post(body=Markup(_("<b>Kiểm tra JSON:</b> Thành công! <br/>Tài khoản Service: <code>%s</code>") % data.get('client_email')))
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('JSON Hợp lệ'),
+                    'message': _('Cấu trúc file JSON Service Account đã đúng.'),
+                    'type': 'success',
+                    'sticky': False,
+                }
+            }
+        except json.JSONDecodeError as e:
+            raise UserError(_('Chuỗi JSON không hợp lệ. Vui lòng kiểm tra lại cú pháp (dấu ngoặc, nháy kép).\nLỗi: %s') % str(e))
+        except Exception as e:
+            raise UserError(_('Đã có lỗi xảy ra: %s') % str(e))
 
     def action_test_connection(self):
         self.ensure_one()
