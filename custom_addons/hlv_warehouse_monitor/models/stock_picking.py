@@ -262,6 +262,28 @@ class StockPicking(models.Model):
 
         return {p.id: "1" for p in pick_pickings}
 
+    def _get_linked_so_ids_from_in(self):
+        """Return set of sale.order IDs linked to this incoming picking via PO."""
+        self.ensure_one()
+        so_ids = set()
+        po = self._monitor_find_related_purchase()
+        if not po:
+            return so_ids
+        SO = self.env["sale.order"]
+        # Via PO.origin (may contain SO names)
+        if po.origin:
+            for ref in po.origin.split(","):
+                ref = ref.strip()
+                if ref:
+                    so = SO.search([("name", "=", ref)], limit=1)
+                    if so:
+                        so_ids.add(so.id)
+        # Via purchase line → sale line link
+        for line in po.order_line:
+            if hasattr(line, "sale_line_id") and line.sale_line_id:
+                so_ids.add(line.sale_line_id.order_id.id)
+        return so_ids
+
     def _auto_prioritize_picks_after_in(self):
         """Orchestrate: find PICKs → AI-score → write priority → log event."""
         self.ensure_one()
@@ -424,6 +446,13 @@ class StockPicking(models.Model):
                     # After IN validated: auto-score and prioritize related PICKs (uses AI)
                     if picking._monitor_get_event_type() == "in":
                         picking._auto_prioritize_picks_after_in()
+                        # Refresh delivery route board for affected SOs
+                        try:
+                            so_ids = picking._get_linked_so_ids_from_in()
+                            if so_ids:
+                                self.env["wm.delivery.route"].refresh_line_states_for_sos(so_ids)
+                        except Exception as exc:
+                            _logger.warning("[WM Route] refresh_line_states_for_sos error: %s", exc)
             except Exception:
                 _logger.exception("[HLV Monitor] Error logging picking validate: %s", picking.name)
         return result

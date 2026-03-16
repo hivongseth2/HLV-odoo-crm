@@ -11,3 +11,7 @@ access_wm_customer_ignore_user,wm.customer.ignore.user,model_wm_customer_ignore,
 access_wm_customer_ignore_manager,wm.customer.ignore.manager,model_wm_customer_ignore,group_warehouse_monitor_manager,1,1,1,1
 access_wm_customer_address_user,wm.customer.address.user,model_wm_customer_address,base.group_user,1,0,0,0
 access_wm_customer_address_manager,wm.customer.address.manager,model_wm_customer_address,group_warehouse_monitor_manager,1,1,1,1
+access_wm_delivery_route_user,wm.delivery.route.user,model_wm_delivery_route,base.group_user,1,1,1,0
+access_wm_delivery_route_manager,wm.delivery.route.manager,model_wm_delivery_route,group_warehouse_monitor_manager,1,1,1,1
+access_wm_delivery_route_line_user,wm.delivery.route.line.user,model_wm_delivery_route_line,base.group_user,1,1,1,0
+access_wm_delivery_route_line_manager,wm.delivery.route.line.manager,model_wm_delivery_route_line,group_warehouse_monitor_manager,1,1,1,1

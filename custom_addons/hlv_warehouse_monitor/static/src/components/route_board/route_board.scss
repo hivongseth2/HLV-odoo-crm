@@ -1,0 +1,398 @@
+/* ═══════════════════════════════════════════════════════════
+   Route Board Styles  (Phase 2b – hlv_warehouse_monitor)
+   ═══════════════════════════════════════════════════════════ */
+
+$monitor-bg: #0f1923;
+$monitor-card-bg: #1a2733;
+$monitor-card-hover: #223344;
+$monitor-border: #2a3a4a;
+$monitor-text: #e0e6ed;
+$monitor-text-muted: #8899aa;
+$monitor-accent: #00d4aa;
+$monitor-blue: #3b82f6;
+$monitor-amber: #f59e0b;
+$monitor-red: #ef4444;
+$monitor-green: #10b981;
+$monitor-cyan: #06b6d4;
+
+// ── Panel wrapper ────────────────────────────────────────────────────────────
+.route-board-panel {
+    padding: 0 24px 24px;
+
+    // ── Header ──────────────────────────────────────────────────────────────
+    .rb-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 0 10px;
+        border-bottom: 2px solid $monitor-border;
+        margin-bottom: 12px;
+        gap: 12px;
+        flex-wrap: wrap;
+
+        .rb-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 700;
+            color: #fff;
+
+            .rb-icon { font-size: 18px; }
+
+            .rb-badge {
+                background: rgba($monitor-accent, 0.2);
+                color: $monitor-accent;
+                border: 1px solid rgba($monitor-accent, 0.3);
+                border-radius: 20px;
+                padding: 2px 8px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+
+            .rb-last-rebuild {
+                font-size: 10px;
+                color: $monitor-text-muted;
+                font-weight: 400;
+                margin-left: 4px;
+            }
+        }
+
+        .rb-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+
+            .rb-loading-indicator {
+                font-size: 11px;
+                color: $monitor-text-muted;
+                animation: rbBlink 1s linear infinite;
+                @keyframes rbBlink {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0.3; }
+                }
+            }
+
+            .rb-btn-rebuild {
+                background: rgba($monitor-accent, 0.15);
+                border: 1px solid rgba($monitor-accent, 0.35);
+                color: $monitor-accent;
+                padding: 6px 14px;
+                border-radius: 6px;
+                font-size: 12px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s;
+
+                &:hover { background: rgba($monitor-accent, 0.3); }
+                &.is-loading { opacity: 0.6; pointer-events: none; }
+            }
+
+            .rb-btn-refresh {
+                background: rgba($monitor-border, 0.5);
+                border: 1px solid $monitor-border;
+                color: $monitor-text-muted;
+                padding: 6px 10px;
+                border-radius: 6px;
+                font-size: 13px;
+                cursor: pointer;
+                transition: all 0.2s;
+
+                &:hover { background: rgba($monitor-blue, 0.15); color: $monitor-blue; }
+                &.is-loading { opacity: 0.6; pointer-events: none; }
+            }
+        }
+    }
+
+    // ── PO in-transit bar ────────────────────────────────────────────────────
+    .rb-po-bar {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        background: rgba($monitor-amber, 0.08);
+        border: 1px solid rgba($monitor-amber, 0.3);
+        border-radius: 8px;
+        padding: 8px 12px;
+        margin-bottom: 12px;
+        font-size: 12px;
+
+        .rb-po-label {
+            font-weight: 700;
+            color: $monitor-amber;
+            margin-right: 2px;
+        }
+
+        .rb-po-chip {
+            background: rgba($monitor-amber, 0.15);
+            border: 1px solid rgba($monitor-amber, 0.3);
+            color: $monitor-text;
+            border-radius: 12px;
+            padding: 2px 8px;
+            font-size: 11px;
+        }
+    }
+
+    // ── Empty / loading ──────────────────────────────────────────────────────
+    .rb-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 32px 16px;
+        color: $monitor-text-muted;
+        font-size: 13px;
+        text-align: center;
+
+        .rb-empty-icon { font-size: 36px; opacity: 0.4; }
+
+        .rb-spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid rgba($monitor-accent, 0.2);
+            border-top-color: $monitor-accent;
+            border-radius: 50%;
+            animation: rbSpin 0.8s linear infinite;
+            @keyframes rbSpin { to { transform: rotate(360deg); } }
+        }
+    }
+
+    // ── Route column grid ────────────────────────────────────────────────────
+    .rb-grid {
+        display: flex;
+        gap: 12px;
+        overflow-x: auto;
+        padding-bottom: 8px;
+        align-items: flex-start;
+
+        &::-webkit-scrollbar { height: 4px; }
+        &::-webkit-scrollbar-thumb {
+            background: $monitor-border;
+            border-radius: 4px;
+        }
+    }
+
+    // ── Individual route column ──────────────────────────────────────────────
+    .rb-route-col {
+        flex: 0 0 240px;
+        background: $monitor-card-bg;
+        border: 1px solid $monitor-border;
+        border-radius: 10px;
+        overflow: hidden;
+        transition: border-color 0.2s;
+
+        &.rb-priority-overdue {
+            border-color: rgba($monitor-red, 0.55);
+            background: rgba($monitor-red, 0.04);
+        }
+        &.rb-priority-urgent {
+            border-color: rgba($monitor-amber, 0.5);
+        }
+        &.rb-new-stock {
+            box-shadow: 0 0 0 2px rgba($monitor-green, 0.5);
+            border-color: rgba($monitor-green, 0.5);
+        }
+
+        .rb-route-header {
+            padding: 10px 12px 8px;
+            border-bottom: 1px solid $monitor-border;
+            background: rgba(#000, 0.15);
+
+            .rb-route-top {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                margin-bottom: 6px;
+
+                .rb-vehicle-label {
+                    font-size: 12px;
+                    font-weight: 700;
+                    color: $monitor-text;
+                }
+
+                .rb-province {
+                    font-size: 13px;
+                    font-weight: 800;
+                    color: $monitor-cyan;
+                }
+            }
+
+            .rb-route-meta {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+                margin-bottom: 4px;
+
+                .rb-date-badge, .rb-count-badge, .rb-ready-badge, .rb-wait-badge {
+                    font-size: 10px;
+                    border-radius: 4px;
+                    padding: 2px 6px;
+                    font-weight: 600;
+                }
+
+                .rb-date-badge {
+                    background: rgba($monitor-blue, 0.18);
+                    color: $monitor-blue;
+                    &.rb-date-overdue {
+                        background: rgba($monitor-red, 0.2);
+                        color: $monitor-red;
+                    }
+                    &.rb-date-urgent {
+                        background: rgba($monitor-amber, 0.2);
+                        color: $monitor-amber;
+                    }
+                }
+                .rb-count-badge {
+                    background: rgba($monitor-text-muted, 0.12);
+                    color: $monitor-text-muted;
+                }
+                .rb-ready-badge {
+                    background: rgba($monitor-green, 0.15);
+                    color: $monitor-green;
+                }
+                .rb-wait-badge {
+                    background: rgba($monitor-amber, 0.12);
+                    color: $monitor-amber;
+                }
+            }
+
+            .rb-vehicle-name {
+                font-size: 10px;
+                color: $monitor-text-muted;
+                margin-top: 2px;
+            }
+
+            .rb-new-stock-badge {
+                margin-top: 4px;
+                font-size: 10px;
+                font-weight: 700;
+                color: $monitor-green;
+                background: rgba($monitor-green, 0.12);
+                border-radius: 4px;
+                padding: 2px 6px;
+                display: inline-block;
+                animation: rbPulse 1.5s ease-in-out infinite;
+                @keyframes rbPulse {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0.5; }
+                }
+            }
+        }
+
+        // ── Order list ────────────────────────────────────────────────────────
+        .rb-order-list {
+            max-height: 480px;
+            overflow-y: auto;
+            padding: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+
+            &::-webkit-scrollbar { width: 3px; }
+            &::-webkit-scrollbar-thumb {
+                background: $monitor-border;
+                border-radius: 3px;
+            }
+        }
+
+        // ── Order card ────────────────────────────────────────────────────────
+        .rb-order-card {
+            background: rgba(#fff, 0.03);
+            border: 1px solid rgba($monitor-border, 0.5);
+            border-radius: 6px;
+            padding: 7px 8px;
+            transition: background 0.15s;
+
+            &:hover { background: rgba($monitor-card-hover, 0.7); }
+
+            &.rb-overdue {
+                border-left: 3px solid $monitor-red;
+            }
+            &.rb-state-changed {
+                border-left: 3px solid $monitor-green;
+            }
+            &.rb-state-ready_ship {
+                background: rgba($monitor-green, 0.04);
+            }
+            &.rb-state-waiting_stock {
+                opacity: 0.75;
+            }
+
+            .rb-order-header {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                margin-bottom: 2px;
+
+                .rb-state-icon { font-size: 12px; flex-shrink: 0; }
+
+                .rb-order-name {
+                    font-size: 12px;
+                    font-weight: 700;
+                    color: $monitor-text;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+            }
+
+            .rb-order-partner {
+                font-size: 10px;
+                color: $monitor-text-muted;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                margin-bottom: 4px;
+            }
+
+            .rb-order-footer {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+                align-items: center;
+
+                .rb-state-label {
+                    font-size: 9px;
+                    font-weight: 700;
+                    border-radius: 3px;
+                    padding: 1px 5px;
+                    text-transform: uppercase;
+
+                    &.rb-sl-waiting_stock {
+                        background: rgba($monitor-amber, 0.15);
+                        color: $monitor-amber;
+                    }
+                    &.rb-sl-ready_pick {
+                        background: rgba($monitor-cyan, 0.15);
+                        color: $monitor-cyan;
+                    }
+                    &.rb-sl-ready_pack {
+                        background: rgba(148, 103, 189, 0.2);
+                        color: #c39bd3;
+                    }
+                    &.rb-sl-ready_ship {
+                        background: rgba($monitor-green, 0.15);
+                        color: $monitor-green;
+                    }
+                    &.rb-sl-done {
+                        background: rgba($monitor-text-muted, 0.15);
+                        color: $monitor-text-muted;
+                    }
+                }
+
+                .rb-deadline {
+                    font-size: 9px;
+                    color: $monitor-text-muted;
+                    &.overdue { color: $monitor-red; font-weight: 700; }
+                    &.urgent { color: $monitor-amber; font-weight: 700; }
+                }
+
+                .rb-dist {
+                    font-size: 9px;
+                    color: $monitor-text-muted;
+                    margin-left: auto;
+                }
+            }
+        }
+    }
+}

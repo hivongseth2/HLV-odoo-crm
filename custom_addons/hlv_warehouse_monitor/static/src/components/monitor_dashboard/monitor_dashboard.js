@@ -34,6 +34,15 @@ export class WarehouseMonitorDashboard extends Component {
                 expandedTrip: null,
                 actionSummary: { need_pick: 0, need_pack: 0, ready_ship: 0 },
             },
+            routeBoard: {
+                isLoading: false,
+                loaded: false,
+                routes: [],
+                poNotifications: [],
+                totalRoutes: 0,
+                totalOrders: 0,
+                lastRebuild: null,
+            },
             aiPanel: {
                 isThinking: false,
                 cards: [],
@@ -68,6 +77,8 @@ export class WarehouseMonitorDashboard extends Component {
             await this.loadAIInsights();
             // Auto-load delivery plan immediately on open
             this.loadDeliveryPlan();
+            // Load route board
+            this.loadRouteBoard();
             // 1-second ticker: counts down and triggers refresh every 30s
             this._refreshInterval = setInterval(() => {
                 this.state.countdown -= 1;
@@ -174,6 +185,10 @@ export class WarehouseMonitorDashboard extends Component {
             // Auto-refresh delivery plan if it was previously loaded
             if (this.state.deliveryPlan.loaded) {
                 this.loadDeliveryPlan();
+            }
+            // Auto-refresh route board if it was previously loaded
+            if (this.state.routeBoard.loaded) {
+                this.loadRouteBoard();
             }
         } catch {
             // Silent fail on auto-refresh
@@ -328,6 +343,68 @@ export class WarehouseMonitorDashboard extends Component {
             }
         } catch (e) {
             this.notification.add("Lỗi đẩy ưu tiên", { type: "danger" });
+        }
+    }
+
+    // ── Phase 2b: Route Board ────────────────────────────────
+
+    async loadRouteBoard() {
+        if (this.state.routeBoard.isLoading) return;
+        this.state.routeBoard.isLoading = true;
+        try {
+            const result = await this.orm.call(
+                "wm.delivery.route",
+                "get_board",
+                [],
+                { warehouse_id: this.state.warehouseId }
+            );
+            this._applyRouteBoardResult(result);
+        } catch (e) {
+            console.error("[WM RouteBoard] fetch error:", e);
+        } finally {
+            this.state.routeBoard.isLoading = false;
+        }
+    }
+
+    async rebuildRoutes() {
+        if (this.state.routeBoard.isLoading) return;
+        this.state.routeBoard.isLoading = true;
+        try {
+            const result = await this.orm.call(
+                "wm.delivery.route",
+                "rebuild_routes",
+                [],
+                { warehouse_id: this.state.warehouseId }
+            );
+            this._applyRouteBoardResult(result);
+            this.notification.add(
+                `📋 Đã xây dựng ${result.total_routes} tuyến giao (${result.total_orders} đơn)`,
+                { type: "success", sticky: false }
+            );
+        } catch (e) {
+            console.error("[WM RouteBoard] rebuild error:", e);
+            this.notification.add("Lỗi xây dựng tuyến", { type: "danger" });
+        } finally {
+            this.state.routeBoard.isLoading = false;
+        }
+    }
+
+    _applyRouteBoardResult(result) {
+        this.state.routeBoard.routes = result.routes || [];
+        this.state.routeBoard.poNotifications = result.po_notifications || [];
+        this.state.routeBoard.totalRoutes = result.total_routes || 0;
+        this.state.routeBoard.totalOrders = result.total_orders || 0;
+        this.state.routeBoard.lastRebuild = result.last_rebuild || null;
+        this.state.routeBoard.loaded = true;
+
+        // Alert on routes with new stock arrived
+        const newStockRoutes = (result.routes || []).filter((r) => r.has_new_stock);
+        if (newStockRoutes.length > 0) {
+            const names = newStockRoutes.map((r) => r.province).join(", ");
+            this.notification.add(
+                `📦 Hàng vừa về cho tuyến: ${names}`,
+                { type: "warning", sticky: false }
+            );
         }
     }
 
