@@ -10,6 +10,8 @@ class SaleOrder(models.Model):
         copy=False,
         help='Được đánh dấu khi người dùng báo cáo đơn hàng cần hủy từ trang sale_plan',
     )
+
+    @api.model
     def get_delivery_dashboard_data(self, search_query='', filter_warehouse_id='all', filter_delivery_status='all', filter_stock_status='all', filter_packing_status='all', filter_date_from='', filter_date_to='', filter_po_date_from='', filter_po_date_to='', filter_po_status='all', filter_saler_code='', limit=12, offset=0):
         """
         Fetch SOs and matching POs to display on the OWL dashboard.
