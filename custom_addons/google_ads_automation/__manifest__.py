@@ -1,6 +1,6 @@
 {
     "name": "Google Ads Automation",
-    "version": "18.0.2.0.2",
+    "version": "18.0.2.0.3",
     "category": "Marketing",
     "summary": "Tích hợp và tự động hóa quảng cáo Google Ads dựa trên tồn kho & lợi nhuận",
     "description": """
