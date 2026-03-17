@@ -22,6 +22,8 @@ class BarcodeScanLog(models.Model):
             ("package", "Package"),
             ("product", "Product"),
             ("complete", "Complete Order"),
+            ("receive", "Receive"),
+            ("return", "Return"),
         ],
         string="Scan Type",
         required=True,
