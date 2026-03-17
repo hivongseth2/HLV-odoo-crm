@@ -1376,9 +1376,31 @@ class BarcodeShipper {
     updateReceiveConfirmBar() {
         const count = this.receiveSelectedIds.size;
         const bar = document.getElementById('receive-confirm-bar');
-        const info = document.getElementById('receive-selected-info');
-        if (bar) bar.style.display = count > 0 ? 'flex' : 'none';
-        if (info) info.textContent = `${count} phiếu đã chọn`;
+        if (!bar) return;
+        bar.style.display = count > 0 ? 'block' : 'none';
+        if (count === 0) return;
+
+        // Build chips for each selected picking
+        const chips = Array.from(this.receiveSelectedIds).map(id => {
+            const info = this.receiveAvailableData[id]?.info;
+            const name = info?.name || `#${id}`;
+            return `<span class="receive-chip">${name}<button class="receive-chip-remove" data-id="${id}" title="B\u1ecf ch\u1ecdn">&times;</button></span>`;
+        }).join('');
+
+        bar.innerHTML = `
+            <div class="receive-chips-row">${chips}</div>
+            <button id="confirm-receive-selected-btn" class="btn btn-success btn-sm">
+                <i class="fa fa-check-circle"></i> X\u00e1c nh\u1eadn nh\u1eadn ${count} phi\u1ebfu
+            </button>
+        `;
+
+        bar.querySelectorAll('.receive-chip-remove').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleReceivePickingSelection(parseInt(btn.dataset.id));
+            });
+        });
+        bar.querySelector('#confirm-receive-selected-btn')?.addEventListener('click', () => this.confirmReceiveSelected());
     }
 
     async confirmReceiveSelected() {
@@ -1535,7 +1557,7 @@ class BarcodeShipper {
                 const inp = document.getElementById('receive-barcode-input');
                 if (inp) inp.value = '';
                 // Refresh available list and return list
-                this.loadAvailableToReceive();
+                this._showReceivePrompt();
                 this.loadReturnList();
             } else {
                 const errMsg = res.error || 'Lỗi xác nhận nhận hàng';

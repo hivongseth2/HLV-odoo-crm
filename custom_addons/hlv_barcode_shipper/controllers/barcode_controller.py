@@ -638,6 +638,7 @@ class BarcodeShipperController(http.Controller):
                     "shipper_received": True,
                     "shipper_receive_time": fields.Datetime.now(),
                     "shipper_received_by": request.env.user.id,
+                    "shipper_user_id": request.env.user.id,
                 })
                 received.append(picking.name)
 
