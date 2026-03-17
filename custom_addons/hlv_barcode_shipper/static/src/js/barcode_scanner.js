@@ -1185,10 +1185,20 @@ class BarcodeShipper {
                     container.appendChild(notFound);
                     this.showMessage('receive-scan-result', `Không tìm thấy phiếu nào chứa "${query}"`, 'warning');
                 } else {
-                    this.renderReceiveAccordion();
-                    this.updateReceiveConfirmBar();
-                    this.showMessage('receive-scan-result',
-                        `Tìm thấy ${res.total} phiếu chứa "${query}"`, 'info');
+                    const autoIds = res.auto_select_ids || [];
+                    if (autoIds.length > 0) {
+                        autoIds.forEach(id => this.receiveSelectedIds.add(id));
+                        this.updateReceiveConfirmBar();
+                        this.renderReceiveAccordion(autoIds);
+                        this.showMessage('receive-scan-result',
+                            `Đã chọn ${autoIds.length} phiếu khớp chính xác`, 'success');
+                        this.playSound('success');
+                    } else {
+                        this.renderReceiveAccordion();
+                        this.updateReceiveConfirmBar();
+                        this.showMessage('receive-scan-result',
+                            `Tìm thấy ${res.total} phiếu chứa "${query}"`, 'info');
+                    }
                 }
             } else {
                 this.showMessage('receive-scan-result', res.error || 'Lỗi tìm kiếm', 'danger');
