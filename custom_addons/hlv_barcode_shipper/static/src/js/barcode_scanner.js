@@ -1258,9 +1258,14 @@ class BarcodeShipper {
             return el;
         };
 
-        // --- "Đã chọn" section: ALL currently selected pickings ---
+        // IDs currently in search results
+        const searchResultIds = new Set(
+            this.receiveSoGroups.flatMap(g => (g.pickings || []).map(p => p.id))
+        );
+
+        // --- Section 1: "Đã chọn" --- selected pickings NOT in current search results
         const pinnedIds = Array.from(this.receiveSelectedIds).filter(
-            id => this.receiveAvailableData[id]?.info
+            id => !searchResultIds.has(id) && this.receiveAvailableData[id]?.info
         );
         if (pinnedIds.length > 0) {
             const pinnedEl = document.createElement('div');
@@ -1279,36 +1284,41 @@ class BarcodeShipper {
             container.appendChild(pinnedEl);
         }
 
-        // --- SO groups: only show UNSELECTED pickings ---
-        this.receiveSoGroups.forEach(group => {
-            const unselected = (group.pickings || []).filter(p => !this.receiveSelectedIds.has(p.id));
-            if (unselected.length === 0) return;
-
-            const hasHighlight = highlightIds && unselected.some(p => highlightIds.includes(p.id));
-            const groupEl = document.createElement('div');
-            groupEl.className = 'so-group' + (hasHighlight ? ' expanded' : '');
-            groupEl.innerHTML = `
-                <div class="so-group-header">
-                    <span class="so-name">${group.so_name}</span>
-                    <span class="so-count">${unselected.length} phiếu</span>
-                </div>
-                <div class="so-group-content"></div>
-            `;
-            groupEl.querySelector('.so-group-header').addEventListener('click', () => {
-                groupEl.classList.toggle('expanded');
-            });
-            const contentDiv = groupEl.querySelector('.so-group-content');
-            unselected.forEach(p => contentDiv.appendChild(buildPickingEl(p)));
-            container.appendChild(groupEl);
-        });
-
-        // Footer (only when SO groups results exist)
+        // --- Section 2: "Kết quả tìm kiếm" --- ALL search results, selected stay visible
         if (this.receiveSoGroups.length > 0) {
-            const shownCount = this.receiveSoGroups.reduce((s, g) => s + (g.pickings || []).length, 0);
+            const totalInSearch = this.receiveSoGroups.reduce((s, g) => s + (g.pickings || []).length, 0);
+            const searchHeader = document.createElement('div');
+            searchHeader.className = 'receive-search-section-header';
+            searchHeader.innerHTML = `
+                <span><i class="fa fa-search"></i> Kết quả tìm kiếm</span>
+                <span class="so-count" style="background:#6c757d;">${totalInSearch} phiếu</span>
+            `;
+            container.appendChild(searchHeader);
+
+            this.receiveSoGroups.forEach(group => {
+                const hasHighlight = highlightIds && group.pickings.some(p => highlightIds.includes(p.id));
+                const groupEl = document.createElement('div');
+                groupEl.className = 'so-group' + (hasHighlight ? ' expanded' : '');
+                groupEl.innerHTML = `
+                    <div class="so-group-header">
+                        <span class="so-name">${group.so_name}</span>
+                        <span class="so-count">${group.pickings.length} phiếu</span>
+                    </div>
+                    <div class="so-group-content"></div>
+                `;
+                groupEl.querySelector('.so-group-header').addEventListener('click', () => {
+                    groupEl.classList.toggle('expanded');
+                });
+                const contentDiv = groupEl.querySelector('.so-group-content');
+                // Show ALL pickings — selected remain visible with checkmark
+                (group.pickings || []).forEach(p => contentDiv.appendChild(buildPickingEl(p)));
+                container.appendChild(groupEl);
+            });
+
             const footerEl = document.createElement('div');
             footerEl.className = 'receive-list-footer';
             footerEl.innerHTML = `
-                <span class="receive-list-count">Hiển thị ${shownCount} / ${this.receiveLoadTotal || shownCount} phiếu</span>
+                <span class="receive-list-count">Hiển thị ${totalInSearch} / ${this.receiveLoadTotal || totalInSearch} phiếu</span>
                 ${this.receiveHasMore
                     ? `<button id="receive-load-more-btn" class="btn btn-outline btn-sm">Tải thêm</button>`
                     : ''}

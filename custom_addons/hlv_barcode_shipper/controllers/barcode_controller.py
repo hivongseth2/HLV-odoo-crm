@@ -252,13 +252,16 @@ class BarcodeShipperController(http.Controller):
 
             # 3. Tìm tất cả OUT của Partner này đã được shipper nhận (shipper_received=True)
             # Chỉ hiển thị phiếu đã nhận bởi shipper hiện tại, chưa trả lại
+            uid = request.env.user.id
             all_partner_outs = request.env["stock.picking"].sudo().search([
                 ("partner_id", "=", partner.id),
                 ("picking_type_id.code", "=", "outgoing"),
                 ("state", "in", ["assigned", "partially_available"]),
                 ("shipper_received", "=", True),
                 ("shipper_returned", "=", False),
-                ("shipper_received_by", "=", request.env.user.id),
+                "|",
+                ("shipper_received_by", "=", uid),
+                ("shipper_user_id", "=", uid),
             ])
 
             if not all_partner_outs:
