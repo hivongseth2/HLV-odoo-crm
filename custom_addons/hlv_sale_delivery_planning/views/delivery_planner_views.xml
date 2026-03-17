@@ -33,6 +33,8 @@
                 <separator/>
                 <filter string="Cần hủy (báo cáo)" name="need_cancel"
                         domain="[('x_plan_need_cancel', '=', True)]"/>
+                <separator/>
+                <field name="tag_ids" string="Tags"/>
             </xpath>
         </field>
     </record>

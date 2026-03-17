@@ -46,8 +46,9 @@ class DeliveryPlannerServiceDomain(models.AbstractModel):
 
         if filter_tag_ids:
             try:
-                tag_id = int(filter_tag_ids)
-                domain += [('tag_ids', 'in', [tag_id])]
+                ids = [int(x.strip()) for x in str(filter_tag_ids).split(',') if x.strip()]
+                if ids:
+                    domain += [('tag_ids', 'in', ids)]
             except (ValueError, TypeError):
                 pass
 
