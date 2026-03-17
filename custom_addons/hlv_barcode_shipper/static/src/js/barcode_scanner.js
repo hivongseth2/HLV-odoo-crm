@@ -1124,20 +1124,23 @@ class BarcodeShipper {
     }
 
     _showReceivePrompt() {
-        const container = document.getElementById('receive-available-accordion');
-        if (!container) return;
-        // Keep receiveSelectedIds and receiveAvailableData so selections persist
-        // across multiple searches — only clear the paginated result groups
         this.receiveSoGroups = [];
         this.receiveLoadOffset = 0;
         this.receiveLoadTotal = 0;
         this.receiveHasMore = false;
         this.updateReceiveConfirmBar();
-        container.innerHTML = `
-            <div class="empty-state">
-                <i class="fa fa-search" style="font-size:2.5rem;color:#ddd;display:block;margin-bottom:10px;"></i>
-                <div style="color:#aaa;">Nhập mã phiếu hoặc đơn hàng để tìm kiếm</div>
-            </div>`;
+        if (this.receiveSelectedIds.size > 0) {
+            // Show "Đã chọn" section even without search results
+            this.renderReceiveAccordion();
+        } else {
+            const container = document.getElementById('receive-available-accordion');
+            if (!container) return;
+            container.innerHTML = `
+                <div class="empty-state">
+                    <i class="fa fa-search" style="font-size:2.5rem;color:#ddd;display:block;margin-bottom:10px;"></i>
+                    <div style="color:#aaa;">Nhập mã phiếu hoặc đơn hàng để tìm kiếm</div>
+                </div>`;
+        }
     }
 
     async searchReceivePickings(query) {
@@ -1207,12 +1210,57 @@ class BarcodeShipper {
         if (!container) return;
         container.innerHTML = '';
 
-        // --- Pinned section: selected pickings NOT in current search results ---
-        const groupedIds = new Set(
-            this.receiveSoGroups.flatMap(g => (g.pickings || []).map(p => p.id))
-        );
+        // Helper: build a picking card element
+        const buildPickingEl = (p, extraClass = '') => {
+            const isSelected = this.receiveSelectedIds.has(p.id);
+            const isExpanded = this.receiveExpandedPickingIds.has(p.id);
+            const isHighlighted = !!(highlightIds && highlightIds.includes(p.id));
+            const el = document.createElement('div');
+            el.className = `receive-picking-item${isSelected ? ' selected' : ''}${isHighlighted ? ' highlighted' : ''}${extraClass ? ' ' + extraClass : ''}`;
+            el.id = `receive-p-${p.id}`;
+            el.innerHTML = `
+                <div class="receive-picking-header">
+                    <div class="receive-picking-checkbox${isSelected ? ' checked' : ''}" data-id="${p.id}">
+                        <i class="fa fa-check"></i>
+                    </div>
+                    <div class="receive-picking-info" data-id="${p.id}" style="flex:1;min-width:0;">
+                        <div class="receive-picking-name">
+                            ${p.name}
+                            ${p.origin ? `<span class="receive-picking-origin">${p.origin}</span>` : ''}
+                        </div>
+                        <div class="receive-picking-meta">
+                            <i class="fa fa-user"></i> ${p.partner_name || ''}
+                            ${p.scheduled_date ? `<span style="margin-left:8px;"><i class="fa fa-calendar"></i> ${p.scheduled_date}</span>` : ''}
+                            ${p.item_count ? `<span style="margin-left:8px;"><i class="fa fa-boxes"></i> ${p.item_count}</span>` : ''}
+                        </div>
+                    </div>
+                    <button class="receive-expand-btn${isExpanded ? ' expanded' : ''}" data-id="${p.id}" title="Xem chi tiết">
+                        <i class="fa fa-chevron-${isExpanded ? 'up' : 'down'}"></i>
+                    </button>
+                </div>
+                <div class="receive-picking-items" id="receive-items-${p.id}" style="${isExpanded ? '' : 'display:none;'}">
+                    ${isExpanded && this.receiveAvailableData[p.id]?.items
+                        ? this._renderReceiveItemsList(this.receiveAvailableData[p.id].items)
+                        : '<div class="loading-placeholder" style="padding:10px;"><i class="fa fa-spinner fa-spin"></i></div>'}
+                </div>
+            `;
+            el.querySelector('.receive-picking-checkbox').addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleReceivePickingSelection(p.id);
+            });
+            el.querySelector('.receive-picking-info').addEventListener('click', () => {
+                this.toggleReceivePickingSelection(p.id);
+            });
+            el.querySelector('.receive-expand-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleReceivePickingExpand(p.id);
+            });
+            return el;
+        };
+
+        // --- "Đã chọn" section: ALL currently selected pickings ---
         const pinnedIds = Array.from(this.receiveSelectedIds).filter(
-            id => !groupedIds.has(id) && this.receiveAvailableData[id]?.info
+            id => this.receiveAvailableData[id]?.info
         );
         if (pinnedIds.length > 0) {
             const pinnedEl = document.createElement('div');
@@ -1225,131 +1273,50 @@ class BarcodeShipper {
                 <div class="so-group-content"></div>
             `;
             const pinnedContent = pinnedEl.querySelector('.so-group-content');
-            pinnedIds.forEach(id => {
-                const p = this.receiveAvailableData[id].info;
-                const isExpanded = this.receiveExpandedPickingIds.has(id);
-                const pickingEl = document.createElement('div');
-                pickingEl.className = 'receive-picking-item selected pinned-selected';
-                pickingEl.id = `receive-p-${p.id}`;
-                pickingEl.innerHTML = `
-                    <div class="receive-picking-header">
-                        <div class="receive-picking-checkbox checked" data-id="${p.id}"><i class="fa fa-check"></i></div>
-                        <div class="receive-picking-info" data-id="${p.id}" style="flex:1;min-width:0;">
-                            <div class="receive-picking-name">${p.name}</div>
-                            <div class="receive-picking-meta">
-                                <i class="fa fa-user"></i> ${p.partner_name || ''}
-                                ${p.scheduled_date ? `<span style="margin-left:8px;"><i class="fa fa-calendar"></i> ${p.scheduled_date}</span>` : ''}
-                                ${p.item_count ? `<span style="margin-left:8px;"><i class="fa fa-boxes"></i> ${p.item_count}</span>` : ''}
-                            </div>
-                        </div>
-                        <button class="receive-expand-btn${isExpanded ? ' expanded' : ''}" data-id="${p.id}" title="Xem chi tiết">
-                            <i class="fa fa-chevron-${isExpanded ? 'up' : 'down'}"></i>
-                        </button>
-                    </div>
-                    <div class="receive-picking-items" id="receive-items-${p.id}" style="${isExpanded ? '' : 'display:none;'}">
-                        ${isExpanded && this.receiveAvailableData[p.id]?.items
-                            ? this._renderReceiveItemsList(this.receiveAvailableData[p.id].items)
-                            : '<div class="loading-placeholder" style="padding:10px;"><i class="fa fa-spinner fa-spin"></i></div>'}
-                    </div>
-                `;
-                pickingEl.querySelector('.receive-picking-checkbox').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.toggleReceivePickingSelection(p.id);
-                });
-                pickingEl.querySelector('.receive-picking-info').addEventListener('click', () => {
-                    this.toggleReceivePickingSelection(p.id);
-                });
-                pickingEl.querySelector('.receive-expand-btn').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.toggleReceivePickingExpand(p.id);
-                });
-                pinnedContent.appendChild(pickingEl);
-            });
+            pinnedIds.forEach(id => pinnedContent.appendChild(
+                buildPickingEl(this.receiveAvailableData[id].info, 'pinned-selected')
+            ));
             container.appendChild(pinnedEl);
         }
 
+        // --- SO groups: only show UNSELECTED pickings ---
         this.receiveSoGroups.forEach(group => {
-            const hasHighlight = highlightIds && group.pickings.some(p => highlightIds.includes(p.id));
+            const unselected = (group.pickings || []).filter(p => !this.receiveSelectedIds.has(p.id));
+            if (unselected.length === 0) return;
 
+            const hasHighlight = highlightIds && unselected.some(p => highlightIds.includes(p.id));
             const groupEl = document.createElement('div');
             groupEl.className = 'so-group' + (hasHighlight ? ' expanded' : '');
-
             groupEl.innerHTML = `
                 <div class="so-group-header">
                     <span class="so-name">${group.so_name}</span>
-                    <span class="so-count">${group.pickings.length} phiếu</span>
+                    <span class="so-count">${unselected.length} phiếu</span>
                 </div>
                 <div class="so-group-content"></div>
             `;
             groupEl.querySelector('.so-group-header').addEventListener('click', () => {
                 groupEl.classList.toggle('expanded');
             });
-
             const contentDiv = groupEl.querySelector('.so-group-content');
-            (group.pickings || []).forEach(p => {
-                const isSelected = this.receiveSelectedIds.has(p.id);
-                const isExpanded = this.receiveExpandedPickingIds.has(p.id);
-                const isHighlighted = !!(highlightIds && highlightIds.includes(p.id));
-
-                const pickingEl = document.createElement('div');
-                pickingEl.className = `receive-picking-item${isSelected ? ' selected' : ''}${isHighlighted ? ' highlighted' : ''}`;
-                pickingEl.id = `receive-p-${p.id}`;
-
-                pickingEl.innerHTML = `
-                    <div class="receive-picking-header">
-                        <div class="receive-picking-checkbox${isSelected ? ' checked' : ''}" data-id="${p.id}">
-                            <i class="fa fa-check"></i>
-                        </div>
-                        <div class="receive-picking-info" data-id="${p.id}" style="flex:1;min-width:0;">
-                            <div class="receive-picking-name">${p.name}</div>
-                            <div class="receive-picking-meta">
-                                <i class="fa fa-user"></i> ${p.partner_name || ''}
-                                ${p.scheduled_date ? `<span style="margin-left:8px;"><i class="fa fa-calendar"></i> ${p.scheduled_date}</span>` : ''}
-                                ${p.item_count ? `<span style="margin-left:8px;"><i class="fa fa-boxes"></i> ${p.item_count}</span>` : ''}
-                            </div>
-                        </div>
-                        <button class="receive-expand-btn${isExpanded ? ' expanded' : ''}" data-id="${p.id}" title="Xem chi tiết">
-                            <i class="fa fa-chevron-${isExpanded ? 'up' : 'down'}"></i>
-                        </button>
-                    </div>
-                    <div class="receive-picking-items" id="receive-items-${p.id}" style="${isExpanded ? '' : 'display:none;'}">
-                        ${isExpanded && this.receiveAvailableData[p.id]?.items
-                            ? this._renderReceiveItemsList(this.receiveAvailableData[p.id].items)
-                            : '<div class="loading-placeholder" style="padding:10px;"><i class="fa fa-spinner fa-spin"></i></div>'}
-                    </div>
-                `;
-
-                pickingEl.querySelector('.receive-picking-checkbox').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.toggleReceivePickingSelection(p.id);
-                });
-                pickingEl.querySelector('.receive-picking-info').addEventListener('click', () => {
-                    this.toggleReceivePickingSelection(p.id);
-                });
-                pickingEl.querySelector('.receive-expand-btn').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.toggleReceivePickingExpand(p.id);
-                });
-
-                contentDiv.appendChild(pickingEl);
-            });
-
+            unselected.forEach(p => contentDiv.appendChild(buildPickingEl(p)));
             container.appendChild(groupEl);
         });
 
-        // Load-more footer
-        const shownCount = this.receiveSoGroups.reduce((s, g) => s + (g.pickings || []).length, 0);
-        const footerEl = document.createElement('div');
-        footerEl.className = 'receive-list-footer';
-        footerEl.innerHTML = `
-            <span class="receive-list-count">Hiển thị ${shownCount} / ${this.receiveLoadTotal || shownCount} phiếu</span>
-            ${this.receiveHasMore
-                ? `<button id="receive-load-more-btn" class="btn btn-outline btn-sm">Tải thêm</button>`
-                : ''}
-        `;
-        container.appendChild(footerEl);
-        if (this.receiveHasMore) {
-            document.getElementById('receive-load-more-btn')?.addEventListener('click', () => this.loadMoreReceive());
+        // Footer (only when SO groups results exist)
+        if (this.receiveSoGroups.length > 0) {
+            const shownCount = this.receiveSoGroups.reduce((s, g) => s + (g.pickings || []).length, 0);
+            const footerEl = document.createElement('div');
+            footerEl.className = 'receive-list-footer';
+            footerEl.innerHTML = `
+                <span class="receive-list-count">Hiển thị ${shownCount} / ${this.receiveLoadTotal || shownCount} phiếu</span>
+                ${this.receiveHasMore
+                    ? `<button id="receive-load-more-btn" class="btn btn-outline btn-sm">Tải thêm</button>`
+                    : ''}
+            `;
+            container.appendChild(footerEl);
+            if (this.receiveHasMore) {
+                document.getElementById('receive-load-more-btn')?.addEventListener('click', () => this.loadMoreReceive());
+            }
         }
     }
 
@@ -1359,14 +1326,8 @@ class BarcodeShipper {
         } else {
             this.receiveSelectedIds.add(pickingId);
         }
-        const isSelected = this.receiveSelectedIds.has(pickingId);
-        const el = document.getElementById(`receive-p-${pickingId}`);
-        if (el) {
-            el.classList.toggle('selected', isSelected);
-            const cb = el.querySelector('.receive-picking-checkbox');
-            if (cb) cb.classList.toggle('checked', isSelected);
-        }
         this.updateReceiveConfirmBar();
+        this.renderReceiveAccordion();
     }
 
     async toggleReceivePickingExpand(pickingId) {
@@ -1439,27 +1400,11 @@ class BarcodeShipper {
         if (!bar) return;
         bar.style.display = count > 0 ? 'block' : 'none';
         if (count === 0) return;
-
-        // Build chips for each selected picking
-        const chips = Array.from(this.receiveSelectedIds).map(id => {
-            const info = this.receiveAvailableData[id]?.info;
-            const name = info?.name || `#${id}`;
-            return `<span class="receive-chip">${name}<button class="receive-chip-remove" data-id="${id}" title="B\u1ecf ch\u1ecdn">&times;</button></span>`;
-        }).join('');
-
         bar.innerHTML = `
-            <div class="receive-chips-row">${chips}</div>
-            <button id="confirm-receive-selected-btn" class="btn btn-success btn-sm">
+            <button id="confirm-receive-selected-btn" class="btn btn-success">
                 <i class="fa fa-check-circle"></i> X\u00e1c nh\u1eadn nh\u1eadn ${count} phi\u1ebfu
             </button>
         `;
-
-        bar.querySelectorAll('.receive-chip-remove').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.toggleReceivePickingSelection(parseInt(btn.dataset.id));
-            });
-        });
         bar.querySelector('#confirm-receive-selected-btn')?.addEventListener('click', () => this.confirmReceiveSelected());
     }
 
