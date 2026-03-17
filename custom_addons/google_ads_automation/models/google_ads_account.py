@@ -184,9 +184,10 @@ class GoogleAdsAccount(models.Model):
             "client_id": self.client_id,
             "client_secret": self.client_secret,
             "refresh_token": self.refresh_token,
-            "login_customer_id": self.login_customer_id,
             "use_proto_plus": True
         }
+        if self.login_customer_id:
+            credentials["login_customer_id"] = self.login_customer_id.replace('-', '').replace(' ', '').strip()
         
         # ── Debug Logging (Masked) ──────────────────
         _logger.info("Building Google Ads Client for Account: %s (ID: %s)", self.name, self.id)
@@ -341,15 +342,56 @@ class GoogleAdsAccount(models.Model):
                     'sticky': False,
                 }
             }
-        except GoogleAdsException as ex:
-            error_details = []
-            for error in ex.failure.errors:
-                error_details.append(f"{error.error_code}: {error.message}")
-            self.state = 'error'
-            raise UserError(_("Lỗi Google Ads API: \n%s") % '\n'.join(error_details))
         except Exception as e:
+            error_msg = str(e)
+            _logger.warning("Lỗi Test Connection: %s", error_msg)
+            
+            hint = ""
+            if "USER_PERMISSION_DENIED" in error_msg or "PERMISSION_DENIED" in error_msg:
+                # Trích xuất request_id nếú có
+                import re
+                request_id_match = re.search(r'request_id:\s*"([^"]+)"', error_msg)
+                req_id_str = f" (Request ID: {request_id_match.group(1)})" if request_id_match else ""
+                
+                hint = _("\n\n💡 GỢI Ý KHẮC PHỤC:\n"
+                         "1. XÓA TRẮNG ô 'Login Customer ID (MCC)' nếu bạn không chắc chắn tài khoản này thuộc MCC nào.\n"
+                         "2. Đảm bảo email bạn vừa dùng để xác thực có quyền truy cập vào tài khoản ID: %s.\n"
+                         "3. Nếu bạn truy cập tài khoản con thông qua MCC, hãy chắc chắn ID MCC được điền đúng vào ô 'Login Customer ID'.\n"
+                         "4. Bạn có thể dùng tính năng 'Kiểm tra quyền truy cập' trong menu Action của bản ghi này để xem danh sách các ID bạn thực sự có quyền.") % (self.operating_customer_id)
+            
             self.state = 'error'
-            raise UserError(_("Kết nối thất bại (Lỗi hệ thống): %s") % str(e))
+            raise UserError(_("Không thể kết nối Google Ads: %s%s") % (error_msg, hint))
+
+    def action_list_accessible_customers(self):
+        """Diagnostic: Liệt kê tất cả Customer ID mà Refresh Token này có quyền thấy."""
+        self.ensure_one()
+        client = self._get_google_ads_client()
+        customer_service = client.get_service("CustomerService")
+        
+        try:
+            accessible_customers = customer_service.list_accessible_customers()
+            resource_names = accessible_customers.resource_names
+            
+            # resource_names có dạng "customers/1234567890"
+            ids = [name.split('/')[-1] for name in resource_names]
+            
+            msg = _("Danh sách Customer IDs mà tài khoản Google của bạn có quyền truy cập:\n\n%s\n\n"
+                  "LƯU Ý:\n"
+                  "- Nếu Operating ID (%s) KHÔNG có trong danh sách này, nghĩa là email Oauth của bạn không có quyền xem nó.\n"
+                  "- Nếu có danh sách ID, hãy thử dùng các ID này làm 'Login Customer ID' nếu tài khoản Operating nằm bên dưới chúng.") % ("\n".join(ids), self.operating_customer_id)
+            
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('Danh mục ID khả dụng'),
+                    'message': msg,
+                    'sticky': True,
+                    'type': 'info',
+                }
+            }
+        except Exception as e:
+            raise UserError(_("Không thể liệt kê tài khoản: %s") % str(e))
 
     def action_sync_all_data(self):
         """Đồng bộ toàn bộ Dữ liệu Chiến dịch & Chỉ số hiệu suất"""
