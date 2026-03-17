@@ -656,7 +656,15 @@ body {
   border-left: 3px solid #4caf50;
 }
 
-.receive-picking-origin {\n  display: inline-block;\n  font-size: 0.72rem;\n  font-weight: 500;\n  color: var(--text-muted);\n  background: #f0f2f5;\n  border-radius: 4px;\n  padding: 1px 6px;\n  margin-left: 5px;\n  vertical-align: middle;\n}\n\n.receive-search-section-header {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  padding: 10px 15px 6px;\n  font-size: 0.82rem;\n  font-weight: 600;\n  color: var(--text-muted);\n  text-transform: uppercase;\n  letter-spacing: 0.03em;\n}
+.receive-picking-origin-line {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.receive-picking-origin-line i {
+  margin-right: 3px;
+  font-size: 0.7rem;
+}\n\n.receive-search-section-header {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  padding: 10px 15px 6px;\n  font-size: 0.82rem;\n  font-weight: 600;\n  color: var(--text-muted);\n  text-transform: uppercase;\n  letter-spacing: 0.03em;\n}
 
 .so-name {
   font-weight: 700;

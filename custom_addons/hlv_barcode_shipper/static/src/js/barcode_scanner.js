@@ -1174,26 +1174,21 @@ class BarcodeShipper {
                     });
                 });
                 if (this.receiveSoGroups.length === 0) {
-                    container.innerHTML = `<div class="empty-state">Không tìm thấy phiếu nào chứa "${query}"</div>`;
+                    this.renderReceiveAccordion();
+                    if (this.receiveSelectedIds.size === 0) {
+                        container.querySelector('.receive-search-section-header')?.remove();
+                    }
+                    // Append "not found" message after the pinned section
+                    const notFound = document.createElement('div');
+                    notFound.className = 'empty-state';
+                    notFound.textContent = `Không tìm thấy phiếu nào chứa "${query}"`;
+                    container.appendChild(notFound);
                     this.showMessage('receive-scan-result', `Không tìm thấy phiếu nào chứa "${query}"`, 'warning');
                 } else {
-                    const autoIds = res.auto_select_ids || [];
-                    if (autoIds.length > 0) {
-                        autoIds.forEach(id => this.receiveSelectedIds.add(id));
-                        this.updateReceiveConfirmBar();
-                        this.renderReceiveAccordion(autoIds);
-                        this.showMessage('receive-scan-result',
-                            `Đã chọn ${autoIds.length} phiếu khớp chính xác`, 'success');
-                        this.playSound('success');
-                        setTimeout(() => {
-                            const el = document.getElementById(`receive-p-${autoIds[0]}`);
-                            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }, 200);
-                    } else {
-                        this.renderReceiveAccordion();
-                        this.showMessage('receive-scan-result',
-                            `Tìm thấy ${res.total} phiếu chứa "${query}"`, 'info');
-                    }
+                    this.renderReceiveAccordion();
+                    this.updateReceiveConfirmBar();
+                    this.showMessage('receive-scan-result',
+                        `Tìm thấy ${res.total} phiếu chứa "${query}"`, 'info');
                 }
             } else {
                 this.showMessage('receive-scan-result', res.error || 'Lỗi tìm kiếm', 'danger');
@@ -1224,10 +1219,8 @@ class BarcodeShipper {
                         <i class="fa fa-check"></i>
                     </div>
                     <div class="receive-picking-info" data-id="${p.id}" style="flex:1;min-width:0;">
-                        <div class="receive-picking-name">
-                            ${p.name}
-                            ${p.origin ? `<span class="receive-picking-origin">${p.origin}</span>` : ''}
-                        </div>
+                        <div class="receive-picking-name">${p.name}</div>
+                        ${p.origin ? `<div class="receive-picking-origin-line"><i class="fa fa-file-alt"></i> ${p.origin}</div>` : ''}
                         <div class="receive-picking-meta">
                             <i class="fa fa-user"></i> ${p.partner_name || ''}
                             ${p.scheduled_date ? `<span style="margin-left:8px;"><i class="fa fa-calendar"></i> ${p.scheduled_date}</span>` : ''}
