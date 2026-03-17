@@ -491,7 +491,7 @@ function renderSOCard(o){
   h+='<div class="d-flex justify-content-between align-items-center">'
     +'<span class="fw-bold">'+fm(o.amount_total)+'</span>';
   var pc=o.pos?o.pos.length:0;
-  if(pc>0) h+='<span class="badge bg-info text-dark">'+pc+' PO</span>';
+  if(pc>0) h+='<span class="badge bg-info text-dark">'+pc+' DMH</span>';
   h+='</div>';
   h+='<div class="d-flex justify-content-end mt-2">';
   if(reported){
