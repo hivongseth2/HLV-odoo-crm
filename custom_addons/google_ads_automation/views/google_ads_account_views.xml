@@ -7,9 +7,9 @@
             <form string="Tài Khoản Google Ads" class="o_google_ads_premium_form">
                 <header>
                     <button name="action_test_connection" string="Kết Nối API" type="object"
-                            class="btn-primary" invisible="state == 'connected'"/>
+                            class="btn-primary" invisible="state == 'connected' or is_demo"/>
                     <button name="action_list_accessible_customers" string="Kiểm Tra Quyền Truy Cập" type="object"
-                            class="btn-secondary" invisible="state == 'connected'"/>
+                            class="btn-secondary" invisible="is_demo"/>
                     <button name="action_sync_all_data" string="Đồng Bộ Ngay" type="object"
                             class="btn-success" invisible="state != 'connected'"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,connected,error"/>
