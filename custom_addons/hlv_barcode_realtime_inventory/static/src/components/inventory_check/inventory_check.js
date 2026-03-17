@@ -381,6 +381,8 @@ export class InventoryCheckScanner extends Component {
     async scanProduct() {
         const barcode = this.state.product_barcode.trim();
         if (!barcode) return;
+        // Small delay for UI to settle (camera continuous mode)
+        await new Promise(r => setTimeout(r, 100));
         // Don't block UI with loading overlay for scans
         try {
             const pr = await this.orm.call(
@@ -1012,18 +1014,11 @@ export class InventoryCheckScanner extends Component {
     // ========== Audio Feedback ==========
     _beepSuccess() {
         try {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(1047, ctx.currentTime);   // C6
-            gain.gain.setValueAtTime(0.35, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
-            osc.start(ctx.currentTime);
-            osc.stop(ctx.currentTime + 0.18);
-            osc.onended = () => ctx.close();
+            if (!this._successAudio) {
+                this._successAudio = new Audio('/custom_barcode_scan_redirect/static/src/sound/success.mp3');
+            }
+            this._successAudio.currentTime = 0;
+            this._successAudio.play().catch(() => {});
         } catch(e) {}
     }
 
