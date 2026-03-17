@@ -68,25 +68,30 @@
                             <div class="o_premium_card p-0 mt-3 border-0 shadow-sm overflow-hidden">
                                 <field name="line_ids" mode="list">
                                     <list editable="bottom" limit="50" class="table-hover">
-                                        <field name="product_default_code" optional="show" class="fw-bold"/>
-                                        <field name="product_id"/>
+                                        <field name="product_default_code" optional="show" class="fw-bold" readonly="1"/>
+                                        <field name="product_id" readonly="1"/>
                                         <field name="qty_available" string="Tồn Thực" 
+                                               readonly="1"
                                                decoration-danger="qty_available &lt;= 0"
                                                decoration-warning="qty_available &gt; 0 and qty_available &lt; 10"
                                                sum="Tổng Tồn" class="text-end"/>
                                         <field name="avg_daily_sales" string="Vận Tốc"
+                                               readonly="1"
                                                decoration-info="avg_daily_sales &gt; 5"
                                                sum="Tổng Vận Tốc" class="text-end"/>
                                         <field name="stock_status" string="Tình Trạng" widget="badge"
+                                               readonly="1"
                                                decoration-danger="stock_status == 'critical'"
                                                decoration-warning="stock_status == 'low'"
                                                decoration-success="stock_status == 'normal'"
                                                decoration-info="stock_status == 'high'"/>
                                         <field name="days_of_stock" string="Dự Kiến Tồn"
+                                               readonly="1"
                                                decoration-danger="days_of_stock &lt; 7"
                                                decoration-warning="days_of_stock &gt;= 7 and days_of_stock &lt; 20"
                                                optional="show" class="text-end"/>
                                         <field name="margin_percent" string="LN (%)" widget="badge"
+                                               readonly="1"
                                                decoration-danger="margin_percent &lt; 15"
                                                decoration-warning="margin_percent &gt;= 15 and margin_percent &lt; 25"
                                                decoration-success="margin_percent &gt;= 25"

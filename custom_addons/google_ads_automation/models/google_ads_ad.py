@@ -68,8 +68,8 @@ class GoogleAdsAd(models.Model):
             rec.hero_header_html = Markup(html)
 
     name = fields.Char(string='Tên/Tiêu Đề Quảng Cáo')
-    ad_group_id = fields.Many2one('google.ads.ad.group', string='Nhóm Quảng Cáo', required=True, ondelete='cascade')
-    google_ad_id = fields.Char(string='Google Ad ID', required=True, index=True)
+    ad_group_id = fields.Many2one('google.ads.ad.group', string='Nhóm Quảng Cáo', required=True, ondelete='cascade', readonly=True)
+    google_ad_id = fields.Char(string='Google Ad ID', required=True, index=True, readonly=True)
     product_ids = fields.Many2many('product.template', 'google_ads_ad_product_rel', 
                                     'ad_id', 'product_id', string='Sản Phẩm')
 
@@ -79,7 +79,7 @@ class GoogleAdsAd(models.Model):
         ('enabled', 'Đang hoạt động'),
         ('paused', 'Tạm dừng'),
         ('removed', 'Đã xóa'),
-    ], string='Trạng Thái', default='unknown')
+    ], string='Trạng Thái', default='unknown', readonly=True)
 
     type = fields.Selection([
         ('RESPONSIVE_SEARCH_AD',    'Tìm Kiếm Thích Ứng (RSA)'),
@@ -94,15 +94,15 @@ class GoogleAdsAd(models.Model):
         ('DISCOVERY_CAROUSEL_AD',   'Khám Phá Dạng Băng Chuyền'),
         ('PERFORMANCE_MAX',         'Tối Đa Hiệu Suất (PMax)'),
         ('UNKNOWN',                 'Không rõ'),
-    ], string='Loại Quảng Cáo')
+    ], string='Loại Quảng Cáo', readonly=True)
 
-    final_urls = fields.Char(string='URL Đích (Final URL)')
+    final_urls = fields.Char(string='URL Đích (Final URL)', readonly=True)
 
     # Metrics
-    clicks = fields.Integer(string='Lượt Nhấp', default=0)
-    impressions = fields.Integer(string='Lượt Hiển Thị', default=0)
-    cost = fields.Float(string='Chi Phí', default=0.0)
-    conversions = fields.Float(string='Lượt Chuyển Đổi', default=0.0)
+    clicks = fields.Integer(string='Lượt Nhấp', default=0, readonly=True)
+    impressions = fields.Integer(string='Lượt Hiển Thị', default=0, readonly=True)
+    cost = fields.Float(string='Chi Phí', default=0.0, readonly=True)
+    conversions = fields.Float(string='Lượt Chuyển Đổi', default=0.0, readonly=True)
 
     # Computed Metrics for UI
     conversion_rate = fields.Float(

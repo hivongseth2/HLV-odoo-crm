@@ -20,31 +20,32 @@ class GoogleAdsConversion(models.Model):
 
     account_id = fields.Many2one(
         'google.ads.account', string='Tài Khoản Google Ads',
-        required=True, ondelete='cascade', index=True,
+        required=True, ondelete='cascade', index=True, readonly=True,
     )
     campaign_id = fields.Many2one(
         'google.ads.campaign', string='Chiến Dịch',
-        ondelete='set null', index=True,
+        ondelete='set null', index=True, readonly=True,
     )
 
     # ── Thông tin đơn hàng ───────────────────────
-    order_ref = fields.Char(string='Mã Đơn Hàng', required=True, index=True)
-    order_date = fields.Datetime(string='Ngày Đặt Hàng', required=True)
-    revenue = fields.Float(string='Doanh Thu (VNĐ)', required=True)
-    product_names = fields.Char(string='Sản Phẩm')
-    customer_name = fields.Char(string='Khách Hàng')
+    order_ref = fields.Char(string='Mã Đơn Hàng', required=True, index=True, readonly=True)
+    order_date = fields.Datetime(string='Ngày Đặt Hàng', required=True, readonly=True)
+    revenue = fields.Float(string='Doanh Thu (VNĐ)', required=True, readonly=True)
+    product_names = fields.Char(string='Sản Phẩm', readonly=True)
+    customer_name = fields.Char(string='Khách Hàng', readonly=True)
     order_status = fields.Selection([
         ('pending',    'Chờ Thanh Toán'),
         ('processing', 'Đang Xử Lý'),
         ('completed',  'Hoàn Thành'),
         ('cancelled',  'Đã Hủy'),
         ('refunded',   'Đã Hoàn Tiền'),
-    ], string='Trạng Thái Đơn', default='completed')
+    ], string='Trạng Thái Đơn', default='completed', readonly=True)
 
     # ── Google Ads Attribution ───────────────────
     gclid = fields.Char(
         string='Google Click ID (gclid)',
         help='ID click từ Google Ads, lưu trong meta WooCommerce khi khách click QC rồi mua hàng',
+        readonly=True,
     )
 
     # ── Computed ROI ─────────────────────────────

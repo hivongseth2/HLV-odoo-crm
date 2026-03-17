@@ -7,7 +7,7 @@ class GoogleAdsCampaign(models.Model):
 
     name = fields.Char(string='Tên Chiến Dịch', required=True)
     account_id = fields.Many2one('google.ads.account', string='Tài Khoản Google Ads', required=True, ondelete='cascade')
-    google_campaign_id = fields.Char(string='Google Campaign ID', required=True, index=True)
+    google_campaign_id = fields.Char(string='Google Campaign ID', required=True, index=True, readonly=True)
     feed_line_ids = fields.Many2many(
         'google.ads.product.feed.line', 'google_ads_feed_line_campaign_rel',
         'campaign_id', 'feed_line_id',
@@ -31,7 +31,7 @@ class GoogleAdsCampaign(models.Model):
         ('enabled', 'Đang hoạt động'),
         ('paused', 'Tạm dừng'),
         ('removed', 'Đã xóa'),
-    ], string='Trạng Thái', default='unknown')
+    ], string='Trạng Thái', default='unknown', readonly=True)
 
     channel_type = fields.Selection([
         ('SEARCH',          'Tìm Kiếm (Search)'),
@@ -45,13 +45,13 @@ class GoogleAdsCampaign(models.Model):
         ('DISCOVERY',       'Khám Phá (Discovery)'),
         ('HOTEL',           'Khách Sạn (Hotel)'),
         ('UNKNOWN',         'Không rõ'),
-    ], string='Loại Kênh', help='Loại kênh quảng cáo từ Google Ads')
+    ], string='Loại Kênh', help='Loại kênh quảng cáo từ Google Ads', readonly=True)
 
     # Metrics (Chỉ số hiệu suất cơ bản)
-    clicks = fields.Integer(string='Lượt Nhấp', default=0)
-    impressions = fields.Integer(string='Lượt Hiển Thị', default=0)
-    cost = fields.Float(string='Chi Phí', default=0.0)
-    conversions = fields.Float(string='Lượt Chuyển Đổi', default=0.0)
+    clicks = fields.Integer(string='Lượt Nhấp', default=0, readonly=True)
+    impressions = fields.Integer(string='Lượt Hiển Thị', default=0, readonly=True)
+    cost = fields.Float(string='Chi Phí', default=0.0, readonly=True)
+    conversions = fields.Float(string='Lượt Chuyển Đổi', default=0.0, readonly=True)
 
     # Computed Metrics for UI
     conversion_rate = fields.Float(

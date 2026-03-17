@@ -40,7 +40,7 @@
                                     <field name="name" class="oe_inline fw-bold" placeholder="Tên Quảng Cáo..."/>
                                     <field name="ad_group_id" options="{'no_create': True}"/>
                                     <field name="product_ids" widget="many2many_tags" options="{'no_create': True}"/>
-                                    <field name="google_ad_id" placeholder="VD: 123456789 (Bắt buộc)"/>
+                                    <field name="google_ad_id" readonly="1"/>
                                     <field name="final_urls" widget="url"/>
                                 </group>
                             </div>
@@ -59,7 +59,7 @@
                             <field name="impressions" readonly="1"/>
                             <field name="cost" readonly="1"/>
                             <field name="conversions" readonly="1"/>
-                            <field name="conversion_rate" widget="progressbar"/>
+                            <field name="conversion_rate" widget="progressbar" readonly="1"/>
                             <field name="roas" readonly="1" widget="badge"
                                    decoration-success="roas &gt;= 3" 
                                    decoration-danger="roas &lt; 1" 

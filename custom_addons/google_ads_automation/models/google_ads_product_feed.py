@@ -221,30 +221,30 @@ class GoogleAdsProductFeedLine(models.Model):
 
     # -- Computed stock & price fields (from Odoo) --
     product_default_code = fields.Char(
-        related='product_id.default_code', string='Mã SP', store=True,
+        related='product_id.default_code', string='Mã SP', store=True, readonly=True
     )
     qty_available = fields.Float(
-        string='Tồn Kho Thực Tế', compute='_compute_stock_fields', store=True,
+        string='Tồn Kho Thực Tế', compute='_compute_stock_fields', store=True, readonly=True
     )
     virtual_available = fields.Float(
-        string='Tồn Kho Dự Kiến', compute='_compute_stock_fields', store=True,
+        string='Tồn Kho Dự Kiến', compute='_compute_stock_fields', store=True, readonly=True
     )
     sale_price = fields.Float(
-        string='Giá Bán', compute='_compute_stock_fields', store=True,
+        string='Giá Bán', compute='_compute_stock_fields', store=True, readonly=True
     )
     cost_price = fields.Float(
-        string='Giá Vốn', compute='_compute_stock_fields', store=True,
+        string='Giá Vốn', compute='_compute_stock_fields', store=True, readonly=True
     )
     margin_percent = fields.Float(
-        string='Biên LN (%)', compute='_compute_margin_percent', store=True,
+        string='Biên LN (%)', compute='_compute_margin_percent', store=True, readonly=True,
         help='(Giá Bán - Giá Vốn) / Giá Bán × 100',
     )
     avg_daily_sales = fields.Float(
-        string='TB Bán/Ngày (30d)', compute='_compute_avg_daily_sales', store=True,
+        string='TB Bán/Ngày (30d)', compute='_compute_avg_daily_sales', store=True, readonly=True,
         help='Số lượng bán trung bình mỗi ngày trong 30 ngày gần nhất',
     )
     days_of_stock = fields.Float(
-        string='Số Ngày Tồn', compute='_compute_days_of_stock', store=True,
+        string='Số Ngày Tồn', compute='_compute_days_of_stock', store=True, readonly=True,
         help='Tồn kho / TB bán mỗi ngày → bao nhiêu ngày nữa thì hết hàng',
     )
 
@@ -254,7 +254,7 @@ class GoogleAdsProductFeedLine(models.Model):
         ('low',      'Tồn Thấp'),
         ('normal',   'Bình Thường'),
         ('high',     'Tồn Cao'),
-    ], string='Trạng Thái Tồn', compute='_compute_stock_status', store=True)
+    ], string='Trạng Thái Tồn', compute='_compute_stock_status', store=True, readonly=True)
 
     @api.depends('product_id', 'product_id.qty_available',
                  'product_id.virtual_available', 'product_id.list_price',

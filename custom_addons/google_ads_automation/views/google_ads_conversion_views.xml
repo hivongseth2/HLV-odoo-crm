@@ -58,11 +58,12 @@
                             <div class="o_premium_card h-100">
                                 <h4 class="mb-4 text-primary fw-bold"><i class="fa fa-file-text-o me-2"></i>Chi Tiết Giao Dịch</h4>
                                 <group>
-                                    <field name="order_ref"/>
-                                    <field name="order_date"/>
-                                    <field name="customer_name"/>
-                                    <field name="product_names" placeholder="Sản phẩm trong đơn..."/>
+                                    <field name="order_ref" readonly="1"/>
+                                    <field name="order_date" readonly="1"/>
+                                    <field name="customer_name" readonly="1"/>
+                                    <field name="product_names" readonly="1"/>
                                     <field name="order_status" widget="badge"
+                                           readonly="1"
                                            decoration-success="order_status == 'completed'"
                                            decoration-warning="order_status == 'processing'"
                                            decoration-danger="order_status == 'cancelled'"/>
@@ -76,10 +77,10 @@
                                     <i class="fa fa-link me-1"></i> Dữ liệu này giúp bộ máy Google Ads tối ưu hóa theo giá trị đơn hàng thực tế.
                                 </div>
                                 <group>
-                                    <field name="campaign_id" options="{'no_create': True}"/>
+                                    <field name="campaign_id" options="{'no_create': True}" readonly="1"/>
                                     <field name="account_id" invisible="1"/>
                                     <field name="gclid" readonly="1"/>
-                                    <field name="campaign_cost" widget="monetary"/>
+                                    <field name="campaign_cost" widget="monetary" readonly="1"/>
                                 </group>
                             </div>
                         </div>

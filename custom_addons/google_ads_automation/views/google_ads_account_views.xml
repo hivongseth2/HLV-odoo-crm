@@ -26,15 +26,15 @@
                     <div class="o_kpi_dashboard">
                         <div class="o_kpi_tile shadow-sm border-0">
                             <span class="o_kpi_label">SỐ CHIẾN DỊCH</span>
-                            <span class="o_kpi_value text-primary"><field name="total_campaigns"/></span>
+                            <span class="o_kpi_value text-primary"><field name="total_campaigns" readonly="1"/></span>
                         </div>
                         <div class="o_kpi_tile shadow-sm border-0">
                             <span class="o_kpi_label">TỔNG CHI PHÍ</span>
-                            <span class="o_kpi_value text-danger"><field name="total_spend" widget="monetary"/></span>
+                            <span class="o_kpi_value text-danger"><field name="total_spend" widget="monetary" readonly="1"/></span>
                         </div>
                         <div class="o_kpi_tile shadow-sm border-0">
                             <span class="o_kpi_label">CHUYỂN ĐỔI</span>
-                            <span class="o_kpi_value text-success"><field name="total_conversions"/></span>
+                            <span class="o_kpi_value text-success"><field name="total_conversions" readonly="1"/></span>
                         </div>
                         <div class="o_kpi_tile shadow-sm border-0">
                             <span class="o_kpi_label">ROAS TB</span>
@@ -87,8 +87,8 @@
                                 <group>
                                     <field name="is_demo" widget="boolean_toggle"/>
                                     <field name="active" widget="boolean_toggle"/>
-                                    <field name="login_customer_id" placeholder="MCC ID" invisible="is_demo"/>
-                                    <field name="operating_customer_id" placeholder="1234567890" invisible="is_demo"/>
+                                    <field name="login_customer_id" placeholder="MCC ID" invisible="is_demo" readonly="state == 'connected'"/>
+                                    <field name="operating_customer_id" placeholder="1234567890" invisible="is_demo" readonly="state == 'connected'"/>
                                 </group>
                                 <div invisible="not is_demo" class="alert alert-warning mt-4 border-0 shadow-sm rounded-3">
                                     <i class="fa fa-info-circle me-1"></i> <b>Chế độ Demo đang bật.</b> Tài khoản này sẽ sử dụng dữ liệu giả lập để thử nghiệm.

@@ -36,15 +36,15 @@
                     <div class="o_kpi_dashboard mt-n4">
                         <div class="o_kpi_tile shadow-sm border-0">
                             <span class="o_kpi_label">LƯỢT NHẤP</span>
-                            <span class="o_kpi_value text-primary"><field name="clicks"/></span>
+                            <span class="o_kpi_value text-primary"><field name="clicks" readonly="1"/></span>
                         </div>
                         <div class="o_kpi_tile shadow-sm border-0">
                             <span class="o_kpi_label">CHI PHÍ</span>
-                            <span class="o_kpi_value text-danger"><field name="cost" widget="monetary"/></span>
+                            <span class="o_kpi_value text-danger"><field name="cost" widget="monetary" readonly="1"/></span>
                         </div>
                         <div class="o_kpi_tile shadow-sm border-0">
                             <span class="o_kpi_label">CHUYỂN ĐỔI</span>
-                            <span class="o_kpi_value text-success"><field name="conversions"/></span>
+                            <span class="o_kpi_value text-success"><field name="conversions" readonly="1"/></span>
                         </div>
                         <div class="o_kpi_tile shadow-sm border-0">
                             <span class="o_kpi_label">ROAS</span>
@@ -61,10 +61,10 @@
                                 </div>
                                 <group>
                                     <field name="product_ids" widget="many2many_tags" readonly="1"/>
-                                    <field name="impressions"/>
-                                    <field name="conversion_rate" widget="progressbar"/>
-                                    <field name="channel_type"/>
-                                    <field name="google_campaign_id" placeholder="VD: 123456789 (Bắt buộc)"/>
+                                    <field name="impressions" readonly="1"/>
+                                    <field name="conversion_rate" widget="progressbar" readonly="1"/>
+                                    <field name="channel_type" readonly="1"/>
+                                    <field name="google_campaign_id" readonly="1"/>
                                 </group>
                             </div>
                         </div>
@@ -76,6 +76,7 @@
                                 </div>
                                 <group>
                                     <field name="status" widget="badge"
+                                           readonly="1"
                                            decoration-success="status == 'enabled'"
                                            decoration-warning="status == 'paused'"
                                            decoration-danger="status == 'removed'"/>
