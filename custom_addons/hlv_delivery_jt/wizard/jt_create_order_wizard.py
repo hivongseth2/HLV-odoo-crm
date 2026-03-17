@@ -787,6 +787,7 @@ class JTCreateOrderWizard(models.TransientModel):
             },
             "payType": self.pay_type,
             "partSign": "1" if self.part_sign else "0",
+            "isInsured": 1 if self.is_insured else 0,
             "goodsValue": goods_val_str,
             "codMoney": cod_money_str,
             "remark": self.remark or "",
