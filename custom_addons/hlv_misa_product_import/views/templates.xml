@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+<template id="page_product_import" name="MISA Product Import">
+<t t-call="website.layout">
+<div class="container py-4" style="max-width:700px;">
+
+    <!-- ===== LOGIN ===== -->
+    <t t-if="not pw_ok">
+        <div class="card mt-5">
+            <div class="card-body p-4">
+                <h3 class="text-center mb-3">Đăng nhập</h3>
+                <t t-if="pw_err">
+                    <div class="alert alert-danger">Mật khẩu không đúng.</div>
+                </t>
+                <form method="post" action="/misa/product/import">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <div class="mb-3">
+                        <input type="password" name="inv_password" class="form-control form-control-lg"
+                               placeholder="Nhập mật khẩu..." required="required" autofocus="autofocus"/>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 btn-lg">Xác nhận</button>
+                </form>
+            </div>
+        </div>
+    </t>
+
+    <!-- ===== MAIN ===== -->
+    <t t-if="pw_ok">
+        <h2 class="mb-4 text-center">Import sản phẩm từ MISA CRM</h2>
+
+        <!-- Error -->
+        <t t-if="error">
+            <div class="alert alert-danger mb-3">
+                <t t-esc="error"/>
+            </div>
+        </t>
+
+        <!-- ===== STEP: INPUT (search form) ===== -->
+        <t t-if="step == 'input' or step == 'confirm'">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form method="post" action="/misa/product/search">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <label class="form-label fw-bold">Mã sản phẩm (default_code)</label>
+                        <div class="input-group">
+                            <input type="text" name="product_code" class="form-control form-control-lg"
+                                   placeholder="VD: BT60G" required="required"
+                                   t-att-value="code or ''"/>
+                            <button type="submit" class="btn btn-primary btn-lg">Tìm kiếm</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </t>
+
+        <!-- ===== STEP: CONFIRM (show CRM data + create button) ===== -->
+        <t t-if="step == 'confirm' and product">
+            <div class="card border-success mb-4">
+                <div class="card-header bg-success text-white">
+                    <strong>Tìm thấy sản phẩm trên MISA CRM</strong>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless mb-0">
+                        <tr>
+                            <td class="fw-bold" style="width:40%">Mã SP</td>
+                            <td><t t-esc="product.get('code')"/></td>
+                        </tr>
+                        <tr>
+                            <td class="fw-bold">Tên SP</td>
+                            <td><t t-esc="product.get('name')"/></td>
+                        </tr>
+                        <tr>
+                            <td class="fw-bold">Giá bán</td>
+                            <td><t t-esc="'{:,.0f}'.format(product.get('price') or 0)"/> ₫</td>
+                        </tr>
+                        <tr>
+                            <td class="fw-bold">Đơn vị</td>
+                            <td><t t-esc="product.get('unit') or '-'"/></td>
+                        </tr>
+                        <tr>
+                            <td class="fw-bold">Nhóm SP</td>
+                            <td><t t-esc="product.get('category') or '-'"/></td>
+                        </tr>
+                        <tr>
+                            <td class="fw-bold">Thuế</td>
+                            <td><t t-esc="product.get('tax') or '-'"/></td>
+                        </tr>
+                        <tr>
+                            <td class="fw-bold">Loại</td>
+                            <td><t t-esc="product.get('type') or '-'"/></td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="card-footer">
+                    <form method="post" action="/misa/product/create">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <input type="hidden" name="product_code" t-att-value="product.get('code') or code"/>
+                        <input type="hidden" name="product_name" t-att-value="product.get('name')"/>
+                        <input type="hidden" name="product_price" t-att-value="product.get('price') or 0"/>
+                        <input type="hidden" name="product_unit" t-att-value="product.get('unit') or ''"/>
+                        <input type="hidden" name="product_tax" t-att-value="product.get('tax') or ''"/>
+                        <button type="submit" class="btn btn-success btn-lg w-100">
+                            Tạo sản phẩm vào Odoo
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </t>
+
+        <!-- ===== STEP: DONE ===== -->
+        <t t-if="step == 'done' and created_product">
+            <div class="card border-primary mb-4">
+                <div class="card-header bg-primary text-white">
+                    <strong>Tạo sản phẩm thành công!</strong>
+                </div>
+                <div class="card-body text-center">
+                    <p class="fs-5 mb-1"><strong><t t-esc="created_product.get('name')"/></strong></p>
+                    <p class="text-muted mb-3">Mã: <t t-esc="created_product.get('code')"/> | ID: <t t-esc="created_product.get('id')"/></p>
+                    <a href="/misa/product/import" class="btn btn-outline-primary btn-lg">
+                        Import thêm sản phẩm khác
+                    </a>
+                </div>
+            </div>
+        </t>
+
+    </t>
+</div>
+</t>
+</template>
+</odoo>
