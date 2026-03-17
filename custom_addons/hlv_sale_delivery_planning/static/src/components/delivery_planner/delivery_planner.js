@@ -34,6 +34,9 @@ export class DeliveryPlannerDashboard extends Component {
             filterPOStatus: "all",
             filterPackingStatus: "all",
             filterSalerCode: "",
+            filterHtgh: "",
+            filterDeliveryType: "all",
+            filterTagIds: "",
 
             // Stats
             dashboardStats: { total: 0, ready: 0, partial: 0, out_of_stock: 0 },
@@ -92,6 +95,9 @@ export class DeliveryPlannerDashboard extends Component {
                     filter_po_status: this.state.filterPOStatus,
                     filter_packing_status: this.state.filterPackingStatus,
                     filter_saler_code: this.state.filterSalerCode.trim(),
+                    filter_htgh: this.state.filterHtgh.trim(),
+                    filter_delivery_type: this.state.filterDeliveryType,
+                    filter_tag_ids: this.state.filterTagIds,
                     // Kanban tải theo batch, không phân trang backend
                     limit: isKanban ? this.state.kanbanBatchSize : this.state.itemsPerPage,
                     offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
@@ -694,7 +700,10 @@ export class DeliveryPlannerDashboard extends Component {
             this.state.filterPODateTo ||
             this.state.filterPOStatus !== "all" ||
             this.state.filterPackingStatus !== "all" ||
-            this.state.filterSalerCode;
+            this.state.filterSalerCode ||
+            this.state.filterHtgh ||
+            this.state.filterDeliveryType !== "all" ||
+            this.state.filterTagIds;
     }
 
     resetFilters() {
@@ -709,6 +718,9 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.filterPOStatus = "all";
         this.state.filterPackingStatus = "all";
         this.state.filterSalerCode = "";
+        this.state.filterHtgh = "";
+        this.state.filterDeliveryType = "all";
+        this.state.filterTagIds = "";
         this.state.currentPage = 1;
         this.fetchData();
     }
