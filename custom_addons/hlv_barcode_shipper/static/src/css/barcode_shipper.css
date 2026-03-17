@@ -642,6 +642,20 @@ body {
   color: var(--primary-color);
 }
 
+.so-group-pinned {
+  background: #e8f5e9 !important;
+  color: #2e7d32 !important;
+}
+.so-group-pinned .so-name {
+  color: #2e7d32;
+}
+.so-group-pinned .so-count {
+  background: #4caf50;
+}
+.receive-picking-item.pinned-selected {
+  border-left: 3px solid #4caf50;
+}
+
 .so-name {
   font-weight: 700;
   font-size: 1.05rem;

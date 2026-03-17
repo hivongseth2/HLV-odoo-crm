@@ -673,10 +673,13 @@ class BarcodeShipperController(http.Controller):
             if not access["success"]:
                 return access
 
+            uid = request.env.user.id
             pickings = request.env["stock.picking"].sudo().search([
                 ("shipper_received", "=", True),
                 ("shipper_returned", "=", False),
-                ("shipper_received_by", "=", request.env.user.id),
+                "|",
+                ("shipper_received_by", "=", uid),
+                ("shipper_user_id", "=", uid),
                 ("picking_type_id.code", "=", "outgoing"),
                 ("state", "in", ["assigned", "partially_available"]),
             ], order="shipper_receive_time desc")
