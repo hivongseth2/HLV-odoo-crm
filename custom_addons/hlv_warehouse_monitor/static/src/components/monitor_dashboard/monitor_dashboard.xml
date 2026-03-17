@@ -54,6 +54,9 @@
                 <!-- Delivery Planner -->
                 <t t-call="hlv_warehouse_monitor.DeliveryPlanner"/>
 
+                <!-- Route Board (Phase 2b) -->
+                <t t-call="hlv_warehouse_monitor.RouteBoard"/>
+
                 <!-- Main Content: Timeline + AI Assistant -->
                 <div class="monitor-content">
                     <t t-call="hlv_warehouse_monitor.Timeline"/>

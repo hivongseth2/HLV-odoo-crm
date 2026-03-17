@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!--  Delivery Route Board (Phase 2b)                       -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <t t-name="hlv_warehouse_monitor.RouteBoard">
+        <div class="route-board-panel">
+
+            <!-- ── Header ──────────────────────────────────────── -->
+            <div class="rb-header">
+                <div class="rb-title">
+                    <span class="rb-icon">📋</span>
+                    <span>Bảng tuyến giao hàng</span>
+                    <span t-if="state.routeBoard.totalOrders > 0"
+                          class="rb-badge"
+                          t-esc="state.routeBoard.totalOrders + ' đơn'"/>
+                    <span t-if="state.routeBoard.lastRebuild"
+                          class="rb-last-rebuild"
+                          t-esc="'Cập nhật: ' + state.routeBoard.lastRebuild"/>
+                </div>
+                <div class="rb-header-actions">
+                    <span t-if="state.routeBoard.isLoading" class="rb-loading-indicator">⟳ Đang tính...</span>
+                    <button t-att-class="'rb-btn-rebuild' + (state.routeBoard.isLoading ? ' is-loading' : '')"
+                            t-on-click="() => this.rebuildRoutes()"
+                            title="Phân tích lại toàn bộ đơn và gom thành tuyến">
+                        🔧 Xây dựng tuyến
+                    </button>
+                    <button t-att-class="'rb-btn-refresh' + (state.routeBoard.isLoading ? ' is-loading' : '')"
+                            t-on-click="() => this.loadRouteBoard()"
+                            title="Làm mới dữ liệu tuyến">
+                        🔄
+                    </button>
+                </div>
+            </div>
+
+            <!-- ── PO đang về ──────────────────────────────────── -->
+            <t t-if="state.routeBoard.poNotifications.length > 0">
+                <div class="rb-po-bar">
+                    <span class="rb-po-label">📦 PO chưa nhận: <strong t-esc="state.routeBoard.poNotifications.length"/> PO</span>
+                    <t t-foreach="state.routeBoard.poNotifications.slice(0, 20)" t-as="notif" t-key="notif_index">
+                        <span class="rb-po-chip">
+                            <strong t-esc="notif.po_ref"/> – <t t-esc="notif.partner"/>
+                            <t t-if="notif.order"> → <t t-esc="notif.order"/></t>
+                        </span>
+                    </t>
+                    <t t-if="state.routeBoard.poNotifications.length > 20">
+                        <span class="rb-po-chip">+<t t-esc="state.routeBoard.poNotifications.length - 20"/> PO khác...</span>
+                    </t>
+                </div>
+            </t>
+
+            <!-- ── Loading / empty ────────────────────────────── -->
+            <t t-if="state.routeBoard.isLoading and state.routeBoard.routes.length === 0">
+                <div class="rb-empty">
+                    <div class="rb-spinner"/>
+                    <div>Đang phân tích đơn hàng...</div>
+                </div>
+            </t>
+            <t t-if="!state.routeBoard.isLoading and !state.routeBoard.loaded">
+                <div class="rb-empty">
+                    <div class="rb-empty-icon">📋</div>
+                    <div>Nhấn "Xây dựng tuyến" để gom đơn hàng theo tỉnh + ngày hẹn giao</div>
+                </div>
+            </t>
+            <t t-if="state.routeBoard.loaded and !state.routeBoard.isLoading and state.routeBoard.routes.length === 0">
+                <div class="rb-empty">
+                    <div class="rb-empty-icon">✅</div>
+                    <div>Không có đơn nào đang chờ xử lý</div>
+                </div>
+            </t>
+
+            <!-- ── Route column grid ──────────────────────────── -->
+            <t t-if="state.routeBoard.routes.length > 0">
+                <div class="rb-grid">
+                    <t t-foreach="state.routeBoard.routes" t-as="route" t-key="route.id">
+                        <div t-att-class="'rb-route-col rb-priority-' + route.priority + (route.has_new_stock ? ' rb-new-stock' : '')">
+
+                            <!-- Route header -->
+                            <div class="rb-route-header">
+                                <div class="rb-route-top">
+                                    <span class="rb-vehicle-label" t-esc="route.vehicle_type_label"/>
+                                    <span class="rb-province" t-esc="route.province"/>
+                                </div>
+                                <div class="rb-route-meta">
+                                    <span t-att-class="'rb-date-badge rb-date-' + (route.priority === 'overdue' ? 'overdue' : route.priority === 'urgent' ? 'urgent' : 'normal')">
+                                        📅 <t t-esc="route.date_plan_label"/>
+                                    </span>
+                                    <span class="rb-count-badge">
+                                        <t t-esc="route.order_count"/> đơn
+                                    </span>
+                                    <t t-if="route.ready_count > 0">
+                                        <span class="rb-ready-badge">✅ <t t-esc="route.ready_count"/> sẵn sàng</span>
+                                    </t>
+                                    <t t-if="route.waiting_count > 0">
+                                        <span class="rb-wait-badge">⏳ <t t-esc="route.waiting_count"/> chờ hàng</span>
+                                    </t>
+                                </div>
+                                <t t-if="route.vehicle_name">
+                                    <div class="rb-vehicle-name">🚗 <t t-esc="route.vehicle_name"/></div>
+                                </t>
+                                <t t-if="route.has_new_stock">
+                                    <div class="rb-new-stock-badge">🆕 Vừa có hàng!</div>
+                                </t>
+                            </div>
+
+                            <!-- Order cards inside this route -->
+                            <div class="rb-order-list">
+                                <t t-foreach="route.orders" t-as="ord" t-key="ord.id">
+                                    <div t-att-class="'rb-order-card rb-state-' + ord.state + (ord.state_changed ? ' rb-state-changed' : '') + (ord.overdue ? ' rb-overdue' : '')">
+                                        <div class="rb-order-header">
+                                            <span class="rb-state-icon" t-esc="ord.state_icon"/>
+                                            <span class="rb-order-name" t-esc="ord.name"/>
+                                        </div>
+                                        <div class="rb-order-partner" t-esc="ord.partner"/>
+                                        <div class="rb-order-footer">
+                                            <span t-att-class="'rb-state-label rb-sl-' + ord.state"
+                                                  t-esc="ord.state_label"/>
+                                            <t t-if="ord.commitment_date">
+                                                <span t-att-class="'rb-deadline' + (ord.overdue ? ' overdue' : (ord.days_left !== null and ord.days_left &lt;= 1 ? ' urgent' : ''))">
+                                                    📅
+                                                    <t t-if="ord.overdue">TRỄ <t t-esc="Math.abs(Math.round(ord.days_left))"/> ngày</t>
+                                                    <t t-elif="ord.days_left !== null and ord.days_left &lt;= 1">Hôm nay</t>
+                                                    <t t-else=""><t t-esc="ord.days_left !== null ? Math.round(ord.days_left) + ' ngày' : ''"/></t>
+                                                </span>
+                                            </t>
+                                            <t t-if="ord.distance_km">
+                                                <span class="rb-dist">📍 <t t-esc="ord.distance_km"/> km</span>
+                                            </t>
+                                        </div>
+                                    </div>
+                                </t>
+                            </div>
+
+                        </div>
+                    </t>
+                </div>
+            </t>
+
+        </div>
+    </t>
+
+</templates>

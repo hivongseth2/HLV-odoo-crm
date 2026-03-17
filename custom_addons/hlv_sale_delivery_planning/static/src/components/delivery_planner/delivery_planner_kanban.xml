@@ -231,7 +231,33 @@
                     </span>
                 </div>
 
-                <!-- Row 5: POs count + warehouse -->
+                <!-- Row 5: Delivery type + HTGH -->
+                <div t-if="so.x_studio_delivery_type or so.x_studio_htgh"
+                     class="mt-1 pt-1 border-top" style="font-size: 0.68rem;">
+                    <span t-if="so.x_studio_delivery_type" class="badge bg-info bg-opacity-25 text-dark me-1" style="font-size:0.62rem;">
+                        <i class="fa fa-truck me-1"></i><t t-esc="so.x_studio_delivery_type"/>
+                    </span>
+                    <span t-if="so.x_studio_htgh" class="text-muted">
+                        <i class="fa fa-info-circle me-1"></i><t t-esc="so.x_studio_htgh"/>
+                    </span>
+                </div>
+
+                <!-- Row 6: Shipping address -->
+                <div t-if="so.misa_shipping_address" class="mt-1 text-muted" style="font-size:0.68rem; line-height:1.3;">
+                    <i class="fa fa-map-marker me-1 text-danger"></i><t t-esc="so.misa_shipping_address"/>
+                </div>
+
+                <!-- Row 7: Tags -->
+                <div t-if="so.tag_ids and so.tag_ids.length" class="d-flex flex-wrap gap-1 mt-1">
+                    <t t-foreach="so.tag_ids" t-as="tag" t-key="tag[0]">
+                        <span class="badge" style="font-size:0.58rem;"
+                              t-att-style="'font-size:0.58rem;background-color:' + this.getTagColor(tag[2]) + ';color:' + this.getTagTextColor(tag[2])">
+                            <t t-esc="tag[1]"/>
+                        </span>
+                    </t>
+                </div>
+
+                <!-- Row 8: POs count + warehouse -->
                 <div class="d-flex justify-content-between align-items-center mt-1 pt-1 border-top"
                      style="font-size: 0.68rem;" t-if="so.pos and so.pos.length">
                     <span class="text-muted">

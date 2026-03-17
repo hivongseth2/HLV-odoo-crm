@@ -8,6 +8,7 @@
             <xpath expr="//group" position="after">
                 <group string="MISA Sync Configuration">
                     <field name="misa_keywords" placeholder="Ví dụ: long thành, tam phước (phân cách dấu phẩy)"/>
+                    <field name="misa_ignore_htgh_patterns" placeholder="Mỗi dòng 1 regex. Ví dụ:&#10;tự vận chuyển&#10;pick.up&#10;^nội thành"/>
                 </group>
             </xpath>
         </field>
@@ -20,6 +21,7 @@
         <field name="arch" type="xml">
             <field name="name" position="after">
                 <field name="misa_keywords" optional="show"/>
+                <field name="misa_ignore_htgh_patterns" optional="hide"/>
             </field>
         </field>
     </record>

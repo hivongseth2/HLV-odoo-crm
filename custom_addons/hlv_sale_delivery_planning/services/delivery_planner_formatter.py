@@ -215,4 +215,8 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             'lines': so_lines_data,
             'packages': package_groups,
             'total_packages_count': total_packages_count,
+            'misa_shipping_address': so.misa_shipping_address or '',
+            'x_studio_htgh': so.x_studio_htgh or '',
+            'x_studio_delivery_type': so.x_studio_delivery_type or '',
+            'tag_ids': [[t.id, t.name, t.color] for t in so.tag_ids] if so.tag_ids else [],
         }

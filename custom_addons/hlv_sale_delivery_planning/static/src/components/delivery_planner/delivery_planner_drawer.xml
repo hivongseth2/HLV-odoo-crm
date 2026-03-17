@@ -38,6 +38,38 @@
                             <t t-esc="state.selectedOrder.warehouse_id ? state.selectedOrder.warehouse_id[1] : 'Chưa định thông tin'"/>
                         </div>
                     </div>
+                    <div class="col-md-6 mb-2" t-if="state.selectedOrder.x_studio_delivery_type">
+                        <h6 class="text-muted text-uppercase small mb-2">Loại Vận Chuyển</h6>
+                        <span class="badge bg-info bg-opacity-25 text-dark fs-6">
+                            <i class="fa fa-truck me-1"></i>
+                            <t t-esc="state.selectedOrder.x_studio_delivery_type"/>
+                        </span>
+                    </div>
+                    <div class="col-md-6 mb-2" t-if="state.selectedOrder.x_studio_htgh">
+                        <h6 class="text-muted text-uppercase small mb-2">HTGH</h6>
+                        <div class="text-muted small">
+                            <i class="fa fa-info-circle me-1"></i>
+                            <t t-esc="state.selectedOrder.x_studio_htgh"/>
+                        </div>
+                    </div>
+                    <div class="col-md-12 mb-2" t-if="state.selectedOrder.misa_shipping_address">
+                        <h6 class="text-muted text-uppercase small mb-2">Địa Chỉ Giao</h6>
+                        <div class="text-muted small">
+                            <i class="fa fa-map-marker me-1"></i>
+                            <t t-esc="state.selectedOrder.misa_shipping_address"/>
+                        </div>
+                    </div>
+                    <div class="col-md-12 mb-0" t-if="state.selectedOrder.tag_ids and state.selectedOrder.tag_ids.length">
+                        <h6 class="text-muted text-uppercase small mb-2">Tags</h6>
+                        <div class="d-flex flex-wrap gap-1">
+                            <t t-foreach="state.selectedOrder.tag_ids" t-as="tag" t-key="tag[0]">
+                                <span class="badge" style="font-size:0.75rem;"
+                                      t-att-style="'font-size:0.75rem;background-color:' + this.getTagColor(tag[2]) + ';color:' + this.getTagTextColor(tag[2])">
+                                    <i class="fa fa-tag me-1"></i><t t-esc="tag[1]"/>
+                                </span>
+                            </t>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Chi tiết sản phẩm -->

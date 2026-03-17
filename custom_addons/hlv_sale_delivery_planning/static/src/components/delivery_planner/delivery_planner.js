@@ -20,6 +20,7 @@ export class DeliveryPlannerDashboard extends Component {
         this.state = useState({
             saleOrders: [],
             warehouses: [],
+            tags: [],
             isLoading: true,
 
             // Search & Filters
@@ -34,6 +35,9 @@ export class DeliveryPlannerDashboard extends Component {
             filterPOStatus: "all",
             filterPackingStatus: "all",
             filterSalerCode: "",
+            filterHtgh: "",
+            filterDeliveryType: "all",
+            filterTagIds: [],
 
             // Stats
             dashboardStats: { total: 0, ready: 0, partial: 0, out_of_stock: 0 },
@@ -92,6 +96,9 @@ export class DeliveryPlannerDashboard extends Component {
                     filter_po_status: this.state.filterPOStatus,
                     filter_packing_status: this.state.filterPackingStatus,
                     filter_saler_code: this.state.filterSalerCode.trim(),
+                    filter_htgh: this.state.filterHtgh.trim(),
+                    filter_delivery_type: this.state.filterDeliveryType,
+                    filter_tag_ids: this.state.filterTagIds.join(','),
                     // Kanban tải theo batch, không phân trang backend
                     limit: isKanban ? this.state.kanbanBatchSize : this.state.itemsPerPage,
                     offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
@@ -139,6 +146,9 @@ export class DeliveryPlannerDashboard extends Component {
             this.state.totalCount = result.total_count || 0;
             if (this.state.warehouses.length === 0) {
                 this.state.warehouses = result.warehouses || [];
+            }
+            if (this.state.tags.length === 0) {
+                this.state.tags = result.tags || [];
             }
         } catch (error) {
             console.error("Lỗi khi tải dữ liệu bảng điều phối:", error);
@@ -461,6 +471,38 @@ export class DeliveryPlannerDashboard extends Component {
         }
     }
 
+    async onTagFilterChange(ev) {
+        this.state.filterTagIds = Array.from(ev.target.selectedOptions)
+            .map(o => parseInt(o.value))
+            .filter(v => !isNaN(v));
+        this.state.currentPage = 1;
+        await this.fetchData();
+    }
+
+    // Odoo crm.tag color integer → background color
+    getTagColor(colorInt) {
+        const COLORS = [
+            '#adb5bd', // 0 grey
+            '#dc3545', // 1 red
+            '#fd7e14', // 2 orange
+            '#ffc107', // 3 yellow
+            '#20c997', // 4 teal
+            '#6610f2', // 5 indigo
+            '#d63384', // 6 pink
+            '#0d6efd', // 7 blue
+            '#6f42c1', // 8 purple
+            '#e91e63', // 9 fuchsia
+            '#198754', // 10 green
+            '#0dcaf0', // 11 cyan
+        ];
+        return COLORS[colorInt] || COLORS[0];
+    }
+
+    getTagTextColor(colorInt) {
+        // Dark text for light backgrounds (yellow, teal, cyan), white for others
+        return [3, 4, 11].includes(colorInt) ? '#000' : '#fff';
+    }
+
     openSaleOrder(soId) {
         this.actionService.doAction({
             type: "ir.actions.act_window",
@@ -694,7 +736,10 @@ export class DeliveryPlannerDashboard extends Component {
             this.state.filterPODateTo ||
             this.state.filterPOStatus !== "all" ||
             this.state.filterPackingStatus !== "all" ||
-            this.state.filterSalerCode;
+            this.state.filterSalerCode ||
+            this.state.filterHtgh ||
+            this.state.filterDeliveryType !== "all" ||
+            this.state.filterTagIds.length > 0;
     }
 
     resetFilters() {
@@ -709,6 +754,9 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.filterPOStatus = "all";
         this.state.filterPackingStatus = "all";
         this.state.filterSalerCode = "";
+        this.state.filterHtgh = "";
+        this.state.filterDeliveryType = "all";
+        this.state.filterTagIds = [];
         this.state.currentPage = 1;
         this.fetchData();
     }

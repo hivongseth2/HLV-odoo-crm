@@ -40,6 +40,28 @@
                    t-on-click="() => { state.filterSalerCode = ''; this.fetchData(); }"></i>
             </span>
 
+            <span t-if="state.filterHtgh"
+                  class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
+                HTGH: <t t-esc="state.filterHtgh"/>
+                <i class="fa fa-times cursor-pointer ms-1" title="Xóa"
+                   t-on-click="() => { state.filterHtgh = ''; this.fetchData(); }"></i>
+            </span>
+
+            <span t-if="state.filterDeliveryType !== 'all'"
+                  class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
+                Vận chuyển: <t t-esc="state.filterDeliveryType"/>
+                <i class="fa fa-times cursor-pointer ms-1" title="Xóa"
+                   t-on-click="() => { state.filterDeliveryType = 'all'; this.fetchData(); }"></i>
+            </span>
+
+            <t t-foreach="state.filterTagIds" t-as="tagId" t-key="tagId">
+                <span class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
+                    Tag: <t t-esc="state.tags.find(t => t.id === tagId)?.name || tagId"/>
+                    <i class="fa fa-times cursor-pointer ms-1" title="Xóa"
+                       t-on-click="() => { state.filterTagIds = state.filterTagIds.filter(id => id !== tagId); this.fetchData(); }"></i>
+                </span>
+            </t>
+
             <span t-if="state.filterDeliveryStatus !== 'all'"
                   class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
                 Giao hàng: <t t-esc="this.translateDeliveryStatus(state.filterDeliveryStatus)"/>
@@ -204,6 +226,46 @@
                            t-model="state.filterSalerCode"
                            t-on-keyup="onSearchKeyup"/>
                 </div>
+            </div>
+            <!-- HTGH -->
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted mb-1">HTGH</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light px-2">
+                        <i class="fa fa-info-circle text-secondary"></i>
+                    </span>
+                    <input type="text" class="form-control px-2"
+                           placeholder="Hình thức giao hàng..."
+                           t-model="state.filterHtgh"
+                           t-on-keyup="onSearchKeyup"/>
+                </div>
+            </div>
+            <!-- Loại vận chuyển -->
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted mb-1">Loại vận chuyển</label>
+                <select class="form-select" t-model="state.filterDeliveryType" t-on-change="fetchData">
+                    <option value="all">Tất cả</option>
+                    <option value="HLV vận chuyển">HLV vận chuyển</option>
+                    <option value="GHN">GHN</option>
+                    <option value="J&amp;T">J&amp;T</option>
+                </select>
+            </div>
+            <!-- Tags multi-select -->
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted mb-1">
+                    <i class="fa fa-tags me-1"></i> Tags
+                    <small class="text-muted fw-normal">(Ctrl/⌘ chọn nhiều)</small>
+                </label>
+                <select multiple="multiple" class="form-select"
+                        style="min-height:38px; max-height:110px;"
+                        t-on-change="onTagFilterChange">
+                    <t t-foreach="state.tags" t-as="tag" t-key="tag.id">
+                        <option t-att-value="tag.id"
+                                t-att-selected="state.filterTagIds.includes(tag.id)">
+                            <t t-esc="tag.name"/>
+                        </option>
+                    </t>
+                </select>
             </div>
         </div>
     </t>

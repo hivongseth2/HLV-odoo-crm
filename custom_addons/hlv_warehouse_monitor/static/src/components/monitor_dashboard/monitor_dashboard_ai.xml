@@ -102,14 +102,15 @@
 
                         <!-- Suggested Actions -->
                         <t t-if="card.actions and card.actions.length > 0">
-                            <ul class="wm-ai-actions-list">
+                            <div class="wm-ai-actions-header">🎯 Hành động tiếp theo</div>
+                            <ol class="wm-ai-actions-list">
                                 <t t-foreach="card.actions" t-as="act" t-key="act_index">
                                     <li class="wm-ai-action-item">
-                                        <span class="wm-ai-action-check">✅</span>
+                                        <span class="wm-ai-action-num" t-esc="act_index + 1"/>
                                         <span t-esc="act"/>
                                     </li>
                                 </t>
-                            </ul>
+                            </ol>
                         </t>
 
                     </div>

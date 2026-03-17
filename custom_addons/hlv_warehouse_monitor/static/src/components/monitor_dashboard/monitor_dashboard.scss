@@ -21,12 +21,19 @@ $monitor-orange: #f97316;
 $monitor-cyan: #06b6d4;
 $monitor-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 
+/* Override Odoo's overflow:hidden on .o_action so the dashboard page can scroll */
+html .o_web_client > .o_action_manager > .o_action:has(.hlv_warehouse_monitor_dashboard) {
+    overflow-y: auto !important;
+}
+
 .hlv_warehouse_monitor_dashboard {
     background: $monitor-bg;
     min-height: 100vh;
+    overflow-y: auto;
     color: $monitor-text;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     padding: 0;
+     overflow: auto !important;
 
     /* ── Header ─────────────────────────────────────── */
     .monitor-header {
@@ -713,6 +720,20 @@ $monitor-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
                 margin-bottom: 6px;
                 text-transform: uppercase;
                 letter-spacing: 0.5px;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+
+                .dp-po-count {
+                    background: rgba($monitor-amber, 0.2);
+                    color: $monitor-amber;
+                    border-radius: 20px;
+                    padding: 1px 7px;
+                    font-size: 11px;
+                    font-weight: 700;
+                    text-transform: none;
+                    letter-spacing: 0;
+                }
             }
 
             .dp-po-card {
@@ -754,6 +775,19 @@ $monitor-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
                 @keyframes dpSpinner {
                     to { transform: rotate(360deg); }
                 }
+            }
+        }
+
+        /* Scrollable trip cards container */
+        .dp-trips-scroll {
+            max-height: calc(100vh - 320px);
+            overflow-y: auto;
+            padding-bottom: 4px;
+
+            &::-webkit-scrollbar { width: 4px; }
+            &::-webkit-scrollbar-thumb {
+                background: $monitor-border;
+                border-radius: 4px;
             }
         }
 
@@ -799,6 +833,18 @@ $monitor-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
                         color: $monitor-text;
                     }
 
+                    .dp-route-label {
+                        font-size: 10px;
+                        font-weight: 700;
+                        background: rgba($monitor-blue, 0.2);
+                        color: $monitor-blue;
+                        border: 1px solid rgba($monitor-blue, 0.3);
+                        border-radius: 4px;
+                        padding: 1px 6px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
+                    }
+
                     .dp-trip-stats {
                         display: flex;
                         align-items: center;
@@ -839,6 +885,20 @@ $monitor-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
                             background: rgba($monitor-green, 0.15);
                             color: $monitor-green;
                         }
+                    }
+
+                    .dp-boost-btn {
+                        padding: 3px 9px;
+                        border-radius: 5px;
+                        border: 1px solid rgba($monitor-amber, 0.45);
+                        background: rgba($monitor-amber, 0.12);
+                        color: $monitor-amber;
+                        font-size: 11px;
+                        font-weight: 700;
+                        cursor: pointer;
+                        white-space: nowrap;
+                        transition: all 0.2s;
+                        &:hover { background: rgba($monitor-amber, 0.28); }
                     }
 
                     .dp-expand-icon {
@@ -1265,50 +1325,77 @@ $monitor-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
             }
 
             .wm-ai-card-headline {
-                font-size: 12px;
-                font-weight: 600;
+                font-size: 13.5px;
+                font-weight: 700;
                 color: #dde4ee;
-                margin-bottom: 5px;
-                line-height: 1.35;
+                margin-bottom: 6px;
+                line-height: 1.4;
             }
 
             .wm-ai-question-text {
-                font-size: 11px;
+                font-size: 12px;
                 color: rgba(99,215,255,0.65);
                 font-style: italic;
-                margin-bottom: 5px;
+                margin-bottom: 6px;
                 background: rgba(99,215,255,0.05);
-                padding: 4px 8px;
+                padding: 5px 10px;
                 border-radius: 5px;
             }
 
             .wm-ai-analysis {
-                font-size: 12px;
-                color: rgba(232,237,244,0.8);
-                line-height: 1.6;
+                font-size: 13px;
+                color: rgba(232,237,244,0.85);
+                line-height: 1.65;
                 margin-bottom: 6px;
                 white-space: pre-wrap;
+            }
+
+            .wm-ai-actions-header {
+                font-size: 11px;
+                font-weight: 800;
+                letter-spacing: 0.5px;
+                text-transform: uppercase;
+                color: #63d7ff;
+                margin: 10px 0 6px;
+                padding-top: 9px;
+                border-top: 1px solid rgba(99,215,255,0.15);
             }
 
             .wm-ai-actions-list {
                 list-style: none;
                 padding: 0;
                 margin: 0;
-                border-top: 1px solid rgba(255,255,255,0.06);
-                padding-top: 6px;
                 display: flex;
                 flex-direction: column;
-                gap: 4px;
+                gap: 6px;
 
                 .wm-ai-action-item {
                     display: flex;
                     align-items: flex-start;
-                    gap: 5px;
-                    font-size: 11.5px;
-                    color: rgba(232,237,244,0.75);
-                    line-height: 1.45;
+                    gap: 8px;
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: #e8edf4;
+                    line-height: 1.5;
+                    padding: 7px 10px;
+                    border-radius: 8px;
+                    background: rgba(99,215,255,0.06);
+                    border: 1px solid rgba(99,215,255,0.12);
 
-                    .wm-ai-action-check { flex-shrink: 0; font-size: 11px; }
+                    .wm-ai-action-num {
+                        flex-shrink: 0;
+                        width: 20px;
+                        height: 20px;
+                        border-radius: 50%;
+                        background: rgba(99,215,255,0.2);
+                        color: #63d7ff;
+                        font-size: 11px;
+                        font-weight: 900;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        margin-top: 1px;
+                    }
                 }
             }
         }
@@ -1583,28 +1670,66 @@ $monitor-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
                 line-height: 1.6;
             }
 
-            // Action items list
+            // Action items — prominent "what to do next" block
+            .wm-ai-actions-header {
+                font-size: 11px;
+                font-weight: 800;
+                letter-spacing: 0.5px;
+                text-transform: uppercase;
+                color: #63d7ff;
+                margin: 10px 0 6px;
+                padding-top: 9px;
+                border-top: 1px solid rgba(99,215,255,0.15);
+            }
+
             .wm-ai-actions-list {
                 list-style: none;
                 padding: 0;
                 margin: 0;
                 display: flex;
                 flex-direction: column;
-                gap: 5px;
+                gap: 7px;
 
                 .wm-ai-action-item {
                     display: flex;
                     align-items: flex-start;
-                    gap: 6px;
-                    font-size: 12px;
-                    color: rgba(232,237,244,0.8);
-                    line-height: 1.45;
+                    gap: 9px;
+                    font-size: 13.5px;
+                    font-weight: 600;
+                    color: #e8edf4;
+                    line-height: 1.5;
+                    padding: 7px 10px;
+                    border-radius: 8px;
+                    background: rgba(99,215,255,0.06);
+                    border: 1px solid rgba(99,215,255,0.12);
 
-                    .wm-ai-action-check {
+                    .wm-ai-action-num {
                         flex-shrink: 0;
-                        font-size: 12px;
+                        width: 20px;
+                        height: 20px;
+                        border-radius: 50%;
+                        background: rgba(99,215,255,0.2);
+                        color: #63d7ff;
+                        font-size: 11px;
+                        font-weight: 900;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        margin-top: 1px;
                     }
                 }
+            }
+
+            // Per-priority: tint action items to match urgency
+            &.wm-ai-card--urgent .wm-ai-action-item {
+                background: rgba(255,107,107,0.06);
+                border-color: rgba(255,107,107,0.18);
+                .wm-ai-action-num { background: rgba(255,107,107,0.2); color: #ff6b6b; }
+            }
+            &.wm-ai-card--high .wm-ai-action-item {
+                background: rgba(240,165,0,0.06);
+                border-color: rgba(240,165,0,0.18);
+                .wm-ai-action-num { background: rgba(240,165,0,0.2); color: #f0a500; }
             }
 
             // Thinking animation card

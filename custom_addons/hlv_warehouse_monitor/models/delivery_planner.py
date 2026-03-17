@@ -12,7 +12,8 @@ import math
 import logging
 import re
 import requests
-from datetime import datetime
+from collections import defaultdict
+from datetime import date, datetime
 
 from odoo import api, fields, models
 
@@ -40,13 +41,13 @@ def _wm_detect_action_needed(order):
         return "none"
     picks = order.sudo().picking_ids
     pick_pend = picks.filtered(
-        lambda p: (p.picking_type_id.sequence_code or "").upper() == "PICK"
+        lambda p: "PICK" in (p.picking_type_id.sequence_code or "").upper()
         and p.state not in ("done", "cancel")
     )
     if pick_pend:
         return "need_pick"
     pack_pend = picks.filtered(
-        lambda p: (p.picking_type_id.sequence_code or "").upper() == "PACK"
+        lambda p: "PACK" in (p.picking_type_id.sequence_code or "").upper()
         and p.state not in ("done", "cancel")
     )
     if pack_pend:
@@ -248,7 +249,7 @@ class SaleOrderDeliveryPlanner(models.Model):
         return "waiting"
 
     def _wm_get_po_status(self):
-        """Check related PO(s) receipt status. Returns (status_key, po_ref_str)."""
+        """Check related PO(s) receipt status. Returns (status_key, po_name_str)."""
         self.ensure_one()
         PO = self.env["purchase.order"].sudo()
         pos = PO.search([("origin", "ilike", self.name)], limit=10)
@@ -262,7 +263,8 @@ class SaleOrderDeliveryPlanner(models.Model):
             ("state", "not in", ("done", "cancel")),
         ], limit=3)
         if incoming:
-            return "in_transit", ", ".join(p.name for p in incoming)
+            # Return PO name (e.g. "P00001"), not the picking transfer name
+            return "in_transit", ", ".join(pos[:3].mapped("name"))
         if done_pos and not pending:
             return "received", ", ".join(done_pos[:3].mapped("name"))
         if pending:
@@ -302,20 +304,25 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
         """
         SO = self.env["sale.order"].sudo()
         now = datetime.now()
+        today = date.today()
 
-        # ── 1. Collect candidate SOs ───────────────────────────────────
-        domain = [("state", "=", "sale")]
+        # ── Resolve warehouse ─────────────────────────────────────────
+        wh_id = False
         if warehouse_id and str(warehouse_id) not in ("all", "False", ""):
             try:
                 wh = self.env["stock.warehouse"].sudo().browse(int(warehouse_id))
                 if wh.exists():
-                    domain += [("warehouse_id", "=", wh.id)]
+                    wh_id = wh.id
             except Exception:
                 pass
 
-        all_orders = SO.search(domain, limit=200, order="commitment_date asc nulls last, id desc")
+        # ── 1. Collect candidate SOs ───────────────────────────────────
+        domain = [("state", "=", "sale")]
+        if wh_id:
+            domain += [("warehouse_id", "=", wh_id)]
+
+        all_orders = SO.search(domain, limit=500, order="commitment_date asc nulls last, id desc")
         candidates = []
-        po_notify = []
 
         # ── Load customer ignore patterns ────────────────────────────────
         compiled_ignores = []
@@ -344,19 +351,6 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
             htgh_cat, htgh_val = o._wm_classify_htgh()
             stock_st = o._wm_get_stock_status()
 
-            # PO notification: watch self_wait orders whose stock is still waiting
-            if htgh_cat in ("self_wait", "self") and stock_st == "waiting":
-                po_st, po_ref = o._wm_get_po_status()
-                if po_st == "in_transit":
-                    po_notify.append({
-                        "order": o.name,
-                        "partner": o.partner_id.name or "",
-                        "po_ref": po_ref or "",
-                        "message": "PO %s đang về → chuẩn bị PACK cho %s (%s)" % (
-                            po_ref or "?", o.name, o.partner_id.name or ""
-                        ),
-                    })
-
             # Only include orders that still have something to do
             action_needed = _wm_detect_action_needed(o)
             if action_needed == "none":
@@ -364,10 +358,16 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
 
             overdue = False
             days_left = None
+            dp = today
             if o.commitment_date:
                 delta = o.commitment_date - now
                 days_left = round(delta.total_seconds() / 86400, 1)
                 overdue = days_left < 0
+                dp = o.commitment_date.date()
+                if dp < today:
+                    dp = today
+
+            province = self.env["wm.delivery.route"]._extract_province_for_so(o)
 
             candidates.append({
                 "id": o.id,
@@ -385,12 +385,19 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
                 "has_coords": bool(o.wm_delivery_lat and o.wm_delivery_lng),
                 "amount_total": o.amount_total,
                 "action_needed": action_needed,
+                "province": province,
+                "date_plan": dp,
             })
+
+        # ── PO notifications (PO-centric: all pending incoming receipts) ──
+        po_notify = self.env["wm.delivery.route"]._get_po_notifications(wh_id or False)
 
         if not candidates:
             return {
                 "trips": [], "po_notify": po_notify,
                 "total_orders": 0, "total_trips": 0,
+                "action_summary": {"need_pick": 0, "need_pack": 0, "ready_ship": 0},
+                "priority_boosted": [],
             }
 
         # ── 2. Trigger lazy geocoding for orders without coords (batch ≤10) ──
@@ -421,28 +428,11 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
             )
         candidates.sort(key=_sort_key)
 
-        # ── 4. Greedy proximity clustering ────────────────────────────
-        with_coords = [c for c in candidates if c["has_coords"]]
-        without_coords = [c for c in candidates if not c["has_coords"]]
-
-        clusters = []
-        used = set()
-        for anchor in with_coords:
-            if anchor["id"] in used:
-                continue
-            cluster = [anchor]
-            used.add(anchor["id"])
-            for cand in with_coords:
-                if cand["id"] in used:
-                    continue
-                if _haversine(anchor["lat"], anchor["lng"], cand["lat"], cand["lng"]) <= _CLUSTER_RADIUS_KM:
-                    cluster.append(cand)
-                    used.add(cand["id"])
-            clusters.append(cluster)
-
-        # Orders without coords: each becomes a separate single-order cluster
-        for c in without_coords:
-            clusters.append([c])
+        # ── 4. Group by province + date plan (matches Route Board) ────
+        province_groups = defaultdict(list)
+        for c in candidates:
+            province_groups[(c["province"], str(c["date_plan"]))].append(c)
+        clusters = list(province_groups.values())
 
         # ── 5. Query available fleet vehicles ─────────────────────────
         vehicles = {"motorbike": [], "truck": []}
@@ -462,8 +452,10 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
         # ── 6. Build trip suggestions ──────────────────────────────────
         trips = []
         trip_seq = 1
+        vehicle_type_counters = {}   # count trips per vehicle type for route labelling
         for cluster in clusters:
             n = len(cluster)
+            province = cluster[0].get("province", "Chưa xác định") if cluster else ""
             avg_dist = (
                 sum(c["dist"] for c in cluster if c["dist"]) / max(1, sum(1 for c in cluster if c["dist"]))
             )
@@ -490,10 +482,15 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
                 )
                 priority = "overdue" if has_overdue else ("urgent" if has_urgent else "normal")
 
+                vehicle_type_counters[vtype] = vehicle_type_counters.get(vtype, 0) + 1
+                route_num = vehicle_type_counters[vtype]
+
                 trips.append({
                     "id": trip_seq,
                     "vehicle_type": vtype,
                     "vehicle_type_label": vtype_label,
+                    "route_num": route_num,
+                    "province": province,
                     "suggested_vehicle": vehicles[vtype][0] if vehicles[vtype] else None,
                     "available_vehicles": vehicles[vtype][:5],
                     "order_count": len(sub),
@@ -521,6 +518,10 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
                 })
                 trip_seq += 1
 
+        # Post-process: route label = province (matches Route Board grouping)
+        for trip in trips:
+            trip["route_label"] = trip.get("province", "")
+
         return {
             "trips": trips,
             "po_notify": po_notify,
@@ -531,7 +532,33 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
                 "need_pack": len([c for c in candidates if c["action_needed"] == "need_pack"]),
                 "ready_ship": len([c for c in candidates if c["action_needed"] == "ready_ship"]),
             },
+            "priority_boosted": self._auto_boost_urgent_pickings(candidates, SO),
         }
+
+    def _auto_boost_urgent_pickings(self, candidates, SO):
+        """Automatically set priority=1 on pickings for overdue/today orders.
+
+        This makes them appear as URGENT (orange) in Queue Monitor — so staff
+        can see what to handle next without any manual intervention.
+        Returns list of boosted picking names.
+        """
+        boosted = []
+        urgent_ids = [
+            c["id"] for c in candidates
+            if c["overdue"] or (c["days_left"] is not None and c["days_left"] <= 1)
+        ]
+        if not urgent_ids:
+            return boosted
+        orders = SO.browse(urgent_ids)
+        for order in orders:
+            for pk in order.sudo().picking_ids:
+                if pk.state not in ("done", "cancel") and pk.priority != "1":
+                    try:
+                        pk.write({"priority": "1"})
+                        boosted.append(pk.name)
+                    except Exception as exc:
+                        _logger.warning("[WM Planner] Could not boost priority for %s: %s", pk.name, exc)
+        return boosted
 
     @api.model
     def get_warehouse_coords(self):
@@ -545,3 +572,22 @@ class WarehouseMonitorDeliveryPlanner(models.Model):
         if lat and lng:
             return {"lat": lat, "lng": lng}
         return {"lat": None, "lng": None}
+
+    @api.model
+    def boost_picking_priority(self, so_ids):
+        """Set priority=1 on all pending pickings for the given sale.order IDs.
+
+        Called from the UI when the user or AI recommends immediate action.
+        Returns list of boosted picking names.
+        """
+        SO = self.env["sale.order"].sudo()
+        boosted = []
+        for order in SO.browse([int(i) for i in so_ids if i]):
+            for pk in order.picking_ids:
+                if pk.state not in ("done", "cancel") and pk.priority != "1":
+                    try:
+                        pk.write({"priority": "1"})
+                        boosted.append(pk.name)
+                    except Exception as exc:
+                        _logger.warning("[WM Planner] boost_picking_priority %s: %s", pk.name, exc)
+        return boosted

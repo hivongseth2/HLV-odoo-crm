@@ -27,7 +27,7 @@ class MisaTagUpdateWizard(models.TransientModel):
             if not addr:
                 continue
 
-            tag_ids = misa_utils.map_address_to_tag_ids(self.env, addr)
+            tag_ids = misa_utils.map_address_to_tag_ids(self.env, addr, htgh_str=order.x_studio_htgh)
             
             if tag_ids:
                 order.write({'tag_ids': tag_ids})
