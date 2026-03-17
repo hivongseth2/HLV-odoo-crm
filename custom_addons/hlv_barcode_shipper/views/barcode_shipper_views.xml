@@ -101,46 +101,56 @@
                         <!-- ==================== TAB: NHẬN HÀNG ==================== -->
                         <div id="tab-receive" class="tab-content active">
 
-                            <!-- Receive Step 1: Scan phiếu -->
+                            <!-- Receive Step 1: Danh sách phiếu sẵn sàng nhận -->
                             <div id="receive-step-scan" class="scan-step active">
-                                <div class="card-box">
-                                    <div class="step-header">
-                                        <div class="step-icon"><i class="fa fa-inbox"></i></div>
-                                        <div class="step-info">
-                                            <div class="step-title">Quét phiếu nhận hàng</div>
-                                            <p class="step-desc">Quét mã phiếu để xác nhận nhận hàng giao.</p>
-                                        </div>
-                                    </div>
 
-                                    <div id="receive-scan-result" class="alert"></div>
-
-                                    <div class="camera-section" id="camera-receive">
-                                        <div id="reader-receive" class="camera-reader"></div>
-                                        <div class="camera-controls">
-                                            <button class="btn btn-secondary btn-sm" onclick="window.barcodeShipper.stopCamera()">
-                                                <i class="fa fa-times"></i> Đóng Camera
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div class="action-area">
-                                        <button id="btn-open-camera-receive" class="btn btn-primary btn-lg btn-block mb-3">
-                                            <i class="fa fa-camera"></i> Mở Camera Quét Mã
+                                <!-- Camera (hidden by default) -->
+                                <div class="camera-section" id="camera-receive">
+                                    <div id="reader-receive" class="camera-reader"></div>
+                                    <div class="camera-controls">
+                                        <button class="btn btn-secondary btn-sm" id="btn-close-camera-receive">
+                                            <i class="fa fa-times"></i> Đóng Camera
                                         </button>
-                                        <div class="separator">hoặc nhập thủ công</div>
-                                        <div class="input-group-row">
-                                            <input type="text" id="receive-barcode-input" class="form-control" placeholder="Nhập mã phiếu..." autocomplete="off"/>
-                                            <button id="receive-scan-btn" class="btn btn-secondary">
-                                                <i class="fa fa-arrow-right"></i>
-                                            </button>
-                                        </div>
                                     </div>
                                 </div>
 
-                                <!-- Today's received list -->
-                                <div id="receive-today-list" style="display: none;">
-                                    <div class="section-title"><i class="fa fa-check-circle"></i> Đã nhận hôm nay</div>
-                                    <div id="receive-today-items"></div>
+                                <!-- Scan / search bar -->
+                                <div class="scan-bar-card">
+                                    <div id="receive-scan-result" class="alert"></div>
+                                    <div class="input-group-row" style="margin-bottom:0;">
+                                        <input type="text" id="receive-barcode-input" class="form-control"
+                                            placeholder="Quét mã phiếu / đơn hàng để tìm nhanh..."
+                                            autocomplete="off"/>
+                                        <button id="receive-scan-btn" class="btn btn-secondary" title="Tìm kiếm">
+                                            <i class="fa fa-search"></i>
+                                        </button>
+                                        <button id="btn-open-camera-receive" class="btn btn-primary" title="Mở camera">
+                                            <i class="fa fa-camera"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Available pickings accordion (rendered by JS) -->
+                                <div id="receive-available-accordion">
+                                    <div class="loading-placeholder">
+                                        <i class="fa fa-spinner fa-spin" style="font-size:1.5rem;color:#aaa;"></i>
+                                        <div style="color:#888;margin-top:8px;">Đang tải danh sách phiếu...</div>
+                                    </div>
+                                </div>
+
+                                <!-- Refresh button -->
+                                <div style="text-align:center;margin:10px 0 70px;">
+                                    <button id="btn-refresh-receive" class="btn btn-outline btn-sm">
+                                        <i class="fa fa-sync-alt"></i> Làm mới danh sách
+                                    </button>
+                                </div>
+
+                                <!-- Sticky confirm bar (shown when pickings selected) -->
+                                <div id="receive-confirm-bar" class="sticky-confirm-bar" style="display:none;">
+                                    <span id="receive-selected-info" style="font-weight:600;color:#333;">0 phiếu đã chọn</span>
+                                    <button id="confirm-receive-selected-btn" class="btn btn-success">
+                                        <i class="fa fa-check-circle"></i> Xác nhận nhận hàng
+                                    </button>
                                 </div>
                             </div>
 

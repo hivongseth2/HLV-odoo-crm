@@ -241,18 +241,25 @@ class BarcodeShipperController(http.Controller):
             if not partner:
                 return {"success": False, "error": f"Phiếu {initial_out_pickings[0].name} không có thông tin Khách hàng."}
 
-            # 3. Tìm tất cả OUT của Partner này
-            # State: assigned (Sẵn sàng), partially_available (Sẵn sàng một phần)
-            # Type: outgoing
+            # 3. Tìm tất cả OUT của Partner này đã được shipper nhận (shipper_received=True)
+            # Chỉ hiển thị phiếu đã nhận bởi shipper hiện tại, chưa trả lại
             all_partner_outs = request.env["stock.picking"].sudo().search([
                 ("partner_id", "=", partner.id),
                 ("picking_type_id.code", "=", "outgoing"),
                 ("state", "in", ["assigned", "partially_available"]),
+                ("shipper_received", "=", True),
+                ("shipper_returned", "=", False),
+                ("shipper_received_by", "=", request.env.user.id),
             ])
 
             if not all_partner_outs:
-                # Should not happen since initial_out_pickings exists
-                 return {"success": False, "error": "Không tìm thấy phiếu xuất kho của khách hàng này."}
+                return {
+                    "success": False,
+                    "error": (
+                        f"Không tìm thấy phiếu nào bạn đã nhận của khách hàng này. "
+                        f"Vui lòng vào tab 'Nhận hàng' để nhận phiếu trước khi giao."
+                    ),
+                }
 
             # 4. Group by SO (Origin)
             so_groups_map = {}
@@ -735,4 +742,103 @@ class BarcodeShipperController(http.Controller):
             }
         except Exception as e:
             _logger.exception("Error in return_pickings")
+            return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}
+
+    # ===== API: get all available pickings to receive =====
+    @http.route(
+        "/api/barcode/get_available_to_receive",
+        type="json",
+        auth="user",
+        methods=["POST"],
+        csrf=False,
+    )
+    def get_available_to_receive(self, **kwargs):
+        """Return all outgoing pickings available to be received (not yet received)."""
+        try:
+            access = self._check_shipper_access()
+            if not access["success"]:
+                return access
+
+            pickings = request.env["stock.picking"].sudo().search([
+                ("company_id", "=", request.env.company.id),
+                ("picking_type_id.code", "=", "outgoing"),
+                ("state", "in", ["assigned", "partially_available"]),
+                ("shipper_received", "=", False),
+            ], order="scheduled_date asc, name asc")
+
+            so_groups_map = {}
+            for p in pickings:
+                group_key = p.origin or p.name
+                if group_key not in so_groups_map:
+                    so_groups_map[group_key] = {"so_name": group_key, "pickings": []}
+                item_count = len(p.package_level_ids) + len(
+                    p.move_line_ids.filtered(lambda ml: not ml.result_package_id)
+                )
+                so_groups_map[group_key]["pickings"].append({
+                    "id": p.id,
+                    "name": p.name,
+                    "state": p.state,
+                    "origin": p.origin or "",
+                    "partner_name": p.partner_id.name or "",
+                    "partner_id": p.partner_id.id,
+                    "scheduled_date": p.scheduled_date.strftime("%d/%m/%Y") if p.scheduled_date else "",
+                    "item_count": item_count,
+                })
+
+            so_groups_list = sorted(so_groups_map.values(), key=lambda x: x["so_name"])
+            return {
+                "success": True,
+                "so_groups": so_groups_list,
+                "total": len(pickings),
+            }
+        except Exception as e:
+            _logger.exception("Error in get_available_to_receive")
+            return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}
+
+    # ===== API: scan picking barcode for receive tab =====
+    @http.route(
+        "/api/barcode/scan_pick_receive",
+        type="json",
+        auth="user",
+        methods=["POST"],
+        csrf=False,
+    )
+    def scan_pick_for_receive(self, **kwargs):
+        """Find pickings by barcode for the receive tab."""
+        barcode = ""
+        try:
+            access = self._check_shipper_access()
+            if not access["success"]:
+                return access
+
+            data = json.loads(request.httprequest.data.decode("utf-8"))
+            barcode = data.get("barcode", "").strip()
+            if not barcode:
+                return {"success": False, "error": "Vui lòng nhập mã vạch"}
+
+            initial_outs = self._find_out_pickings_by_pick_name(barcode)
+            if not initial_outs:
+                return {"success": False, "error": f"Không tìm thấy phiếu: {barcode}"}
+
+            # Only consider pickings not yet received
+            unreceived = initial_outs.filtered(lambda p: not p.shipper_received)
+            if not unreceived:
+                already = initial_outs.filtered(lambda p: p.shipper_received)
+                names = ", ".join(already.mapped("name"))
+                return {
+                    "success": False,
+                    "error": f"Tất cả phiếu liên quan đã được nhận rồi ({names})",
+                }
+
+            partner = unreceived[0].partner_id
+            return {
+                "success": True,
+                "related_ids": unreceived.ids,
+                "partner_name": partner.name or "",
+                "message": f"Tìm thấy {len(unreceived)} phiếu của {partner.name}",
+            }
+        except UserError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            _logger.exception("Error in scan_pick_for_receive")
             return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}
