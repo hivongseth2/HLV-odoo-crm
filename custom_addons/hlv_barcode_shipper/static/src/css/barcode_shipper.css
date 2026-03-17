@@ -780,6 +780,125 @@ body {
   margin: 15px 0 8px 0;
 }
 
+/* =========== TAB NAVIGATION =========== */
+.tab-nav {
+  display: flex;
+  background: var(--white);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 15px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 12px 8px;
+  border: none;
+  background: var(--white);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  position: relative;
+}
+
+.tab-btn:not(:last-child) {
+  border-right: 1px solid var(--border-color);
+}
+
+.tab-btn.active {
+  color: var(--primary-color);
+  background: #eef2f7;
+}
+
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 15%;
+  width: 70%;
+  height: 3px;
+  background: var(--primary-color);
+  border-radius: 3px 3px 0 0;
+}
+
+.tab-btn i {
+  display: block;
+  font-size: 1.1rem;
+  margin-bottom: 4px;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* Return tab - card selection */
+.picking-select-card.selected {
+  border-color: var(--primary-color);
+  background: #eef2f7;
+}
+
+.picking-select-card.selected .check-circle {
+  background: var(--primary-color);
+  color: var(--white);
+}
+
+.picking-select-card .check-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: transparent;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+/* Return reason */
+.return-reason-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid var(--border-color);
+  border-radius: 10px;
+  font-size: 0.9rem;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.return-reason-input:focus {
+  border-color: var(--primary-color);
+  outline: none;
+}
+
+/* Receive today list */
+#receive-today-list {
+  margin-top: 15px;
+}
+
+#receive-today-list .section-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--primary-color);
+  margin-bottom: 8px;
+}
+
+/* Deliver received list */
+#deliver-received-list {
+  margin-bottom: 15px;
+}
+
 /* Picking Selection Card */
 /* Picking Selection Card */
 .picking-select-card {

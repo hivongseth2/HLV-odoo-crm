@@ -4,7 +4,7 @@
 import json
 import logging
 
-from odoo import http
+from odoo import http, fields
 from odoo.http import request
 from odoo.exceptions import UserError
 
@@ -12,7 +12,7 @@ _logger = logging.getLogger(__name__)
 
 
 class BarcodeShipperController(http.Controller):
-    # ===== Helper =====
+    # ===== Helpe12r =====
     def _check_shipper_access(self):
         """Check if current user has shipper access."""
         if not request.env.user.has_group("hlv_barcode_shipper.group_shipper"):
@@ -557,3 +557,182 @@ class BarcodeShipperController(http.Controller):
         return request.render(
             "hlv_barcode_shipper.shipper_interface", {"user": request.env.user}
         )
+
+    # ===== API: get settings =====
+    @http.route(
+        "/api/barcode/get_settings",
+        type="json",
+        auth="user",
+        methods=["POST"],
+        csrf=False,
+    )
+    def get_settings(self, **kwargs):
+        """Return barcode shipper config settings for JS frontend."""
+        try:
+            access = self._check_shipper_access()
+            if not access["success"]:
+                return access
+
+            company = request.env.company
+            return {
+                "success": True,
+                "settings": {
+                    "skip_package_scan": company.hlv_barcode_skip_package_scan,
+                    "skip_product_scan": company.hlv_barcode_skip_product_scan,
+                    "receive_require_detail_scan": company.hlv_barcode_receive_require_detail_scan,
+                    "receive_skip_package_scan": company.hlv_barcode_receive_skip_package_scan,
+                    "receive_skip_product_scan": company.hlv_barcode_receive_skip_product_scan,
+                    "return_require_detail_scan": company.hlv_barcode_return_require_detail_scan,
+                    "return_skip_package_scan": company.hlv_barcode_return_skip_package_scan,
+                    "return_skip_product_scan": company.hlv_barcode_return_skip_product_scan,
+                },
+            }
+        except Exception as e:
+            _logger.exception("Error in get_settings")
+            return {"success": False, "error": "Lỗi tải cấu hình"}
+
+    # ===== API: receive pickings =====
+    @http.route(
+        "/api/barcode/receive_pickings",
+        type="json",
+        auth="user",
+        methods=["POST"],
+        csrf=False,
+    )
+    def receive_pickings(self, **kwargs):
+        """Shipper confirms receiving pickings for delivery."""
+        try:
+            access = self._check_shipper_access()
+            if not access["success"]:
+                return access
+
+            data = json.loads(request.httprequest.data.decode("utf-8"))
+            picking_ids = data.get("picking_ids", [])
+
+            if not picking_ids:
+                return {"success": False, "error": "Chưa chọn phiếu nào"}
+
+            pickings = request.env["stock.picking"].sudo().browse(picking_ids)
+            received = []
+
+            for picking in pickings:
+                if not picking.exists():
+                    continue
+                picking.write({
+                    "shipper_received": True,
+                    "shipper_receive_time": fields.Datetime.now(),
+                    "shipper_received_by": request.env.user.id,
+                })
+                received.append(picking.name)
+
+                self._log_scan(
+                    barcode=picking.name,
+                    scan_type="receive",
+                    picking_id=picking.id,
+                    status="success",
+                    message=f"Shipper nhận phiếu {picking.name}",
+                )
+
+            return {
+                "success": True,
+                "message": f"Đã nhận {len(received)} phiếu thành công!",
+            }
+        except Exception as e:
+            _logger.exception("Error in receive_pickings")
+            return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}
+
+    # ===== API: get my received pickings =====
+    @http.route(
+        "/api/barcode/get_my_received",
+        type="json",
+        auth="user",
+        methods=["POST"],
+        csrf=False,
+    )
+    def get_my_received(self, **kwargs):
+        """Get pickings received by current shipper that are not yet delivered or returned."""
+        try:
+            access = self._check_shipper_access()
+            if not access["success"]:
+                return access
+
+            pickings = request.env["stock.picking"].sudo().search([
+                ("shipper_received", "=", True),
+                ("shipper_returned", "=", False),
+                ("shipper_received_by", "=", request.env.user.id),
+                ("picking_type_id.code", "=", "outgoing"),
+                ("state", "in", ["assigned", "partially_available"]),
+            ], order="shipper_receive_time desc")
+
+            result = []
+            for p in pickings:
+                item_count = len(p.package_level_ids) + len(
+                    p.move_line_ids.filtered(lambda ml: not ml.result_package_id)
+                )
+                result.append({
+                    "id": p.id,
+                    "name": p.name,
+                    "origin": p.origin or "",
+                    "partner_name": p.partner_id.name or "",
+                    "item_count": item_count,
+                    "receive_time": p.shipper_receive_time.strftime("%H:%M %d/%m") if p.shipper_receive_time else "",
+                })
+
+            return {"success": True, "pickings": result}
+        except Exception as e:
+            _logger.exception("Error in get_my_received")
+            return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}
+
+    # ===== API: return pickings =====
+    @http.route(
+        "/api/barcode/return_pickings",
+        type="json",
+        auth="user",
+        methods=["POST"],
+        csrf=False,
+    )
+    def return_pickings(self, **kwargs):
+        """Shipper returns pickings back to warehouse."""
+        try:
+            access = self._check_shipper_access()
+            if not access["success"]:
+                return access
+
+            data = json.loads(request.httprequest.data.decode("utf-8"))
+            picking_ids = data.get("picking_ids", [])
+            reason = data.get("reason", "").strip()
+
+            if not picking_ids:
+                return {"success": False, "error": "Chưa chọn phiếu nào"}
+            if not reason:
+                return {"success": False, "error": "Vui lòng nhập lý do trả hàng"}
+
+            pickings = request.env["stock.picking"].sudo().browse(picking_ids)
+            returned = []
+
+            for picking in pickings:
+                if not picking.exists():
+                    continue
+                picking.write({
+                    "shipper_returned": True,
+                    "shipper_return_time": fields.Datetime.now(),
+                    "shipper_return_reason": reason,
+                    "shipper_received": False,
+                })
+                returned.append(picking.name)
+
+                self._log_scan(
+                    barcode=picking.name,
+                    scan_type="return",
+                    picking_id=picking.id,
+                    status="success",
+                    message=f"Shipper trả phiếu {picking.name}: {reason}",
+                )
+
+            return {
+                "success": True,
+                "message": f"Đã trả {len(returned)} phiếu thành công!",
+            }
+        except Exception as e:
+            _logger.exception("Error in return_pickings")
+            return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}

@@ -8,8 +8,10 @@
         <field name="arch" type="xml">
             <xpath expr="//block[@name='barcode_setting_container']" position="after">
                 <h2 class="mt32">HLV Barcode Shipper</h2>
+
+                <!-- ===== Giao hàng ===== -->
+                <h3 class="mt16">Giao hàng</h3>
                 <div class="row mt16 o_settings_container">
-                    <!-- Bỏ qua quét Package -->
                     <div class="col-12 col-lg-6 o_setting_box">
                         <div class="o_setting_left_pane">
                             <field name="hlv_barcode_skip_package_scan"/>
@@ -21,7 +23,6 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Bỏ qua quét Sản phẩm lẻ -->
                     <div class="col-12 col-lg-6 o_setting_box">
                         <div class="o_setting_left_pane">
                             <field name="hlv_barcode_skip_product_scan"/>
@@ -31,6 +32,78 @@
                             <div class="text-muted">
                                 Nếu bật, các sản phẩm lẻ sẽ tự động được coi là đã quét, shipper không cần quét từng sản phẩm.
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ===== Nhận hàng ===== -->
+                <h3 class="mt16">Nhận hàng</h3>
+                <div class="row mt16 o_settings_container">
+                    <div class="col-12 col-lg-6 o_setting_box">
+                        <div class="o_setting_left_pane">
+                            <field name="hlv_barcode_receive_require_detail_scan"/>
+                        </div>
+                        <div class="o_setting_right_pane">
+                            <label for="hlv_barcode_receive_require_detail_scan"/>
+                            <div class="text-muted">
+                                Nếu bật, shipper phải quét từng kiện/SP khi nhận hàng. Nếu tắt, chỉ cần quét phiếu là đủ.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-6 o_setting_box"
+                         invisible="not hlv_barcode_receive_require_detail_scan">
+                        <div class="o_setting_left_pane">
+                            <field name="hlv_barcode_receive_skip_package_scan"/>
+                        </div>
+                        <div class="o_setting_right_pane">
+                            <label for="hlv_barcode_receive_skip_package_scan"/>
+                            <div class="text-muted">Bỏ qua quét kiện khi nhận hàng.</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-6 o_setting_box"
+                         invisible="not hlv_barcode_receive_require_detail_scan">
+                        <div class="o_setting_left_pane">
+                            <field name="hlv_barcode_receive_skip_product_scan"/>
+                        </div>
+                        <div class="o_setting_right_pane">
+                            <label for="hlv_barcode_receive_skip_product_scan"/>
+                            <div class="text-muted">Bỏ qua quét sản phẩm lẻ khi nhận hàng.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ===== Trả hàng ===== -->
+                <h3 class="mt16">Trả hàng</h3>
+                <div class="row mt16 o_settings_container">
+                    <div class="col-12 col-lg-6 o_setting_box">
+                        <div class="o_setting_left_pane">
+                            <field name="hlv_barcode_return_require_detail_scan"/>
+                        </div>
+                        <div class="o_setting_right_pane">
+                            <label for="hlv_barcode_return_require_detail_scan"/>
+                            <div class="text-muted">
+                                Nếu bật, shipper phải quét từng kiện/SP khi trả hàng. Nếu tắt, chỉ cần chọn phiếu là đủ.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-6 o_setting_box"
+                         invisible="not hlv_barcode_return_require_detail_scan">
+                        <div class="o_setting_left_pane">
+                            <field name="hlv_barcode_return_skip_package_scan"/>
+                        </div>
+                        <div class="o_setting_right_pane">
+                            <label for="hlv_barcode_return_skip_package_scan"/>
+                            <div class="text-muted">Bỏ qua quét kiện khi trả hàng.</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-6 o_setting_box"
+                         invisible="not hlv_barcode_return_require_detail_scan">
+                        <div class="o_setting_left_pane">
+                            <field name="hlv_barcode_return_skip_product_scan"/>
+                        </div>
+                        <div class="o_setting_right_pane">
+                            <label for="hlv_barcode_return_skip_product_scan"/>
+                            <div class="text-muted">Bỏ qua quét sản phẩm lẻ khi trả hàng.</div>
                         </div>
                     </div>
                 </div>
