@@ -327,6 +327,7 @@ function groupLines(lines){
 }
 
 function partnerName(o){return o.partner_id?o.partner_id[1]:'';}
+function whName(o){return o.warehouse_id?o.warehouse_id[1]:'';}
 
 function load(append){
   showLoading();
