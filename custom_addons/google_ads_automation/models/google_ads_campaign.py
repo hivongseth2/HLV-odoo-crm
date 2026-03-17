@@ -7,7 +7,11 @@ class GoogleAdsCampaign(models.Model):
 
     name = fields.Char(string='Tên Chiến Dịch', required=True)
     account_id = fields.Many2one('google.ads.account', string='Tài Khoản Google Ads', required=True, ondelete='cascade')
-    google_campaign_id = fields.Char(string='Google Campaign ID', required=True, index=True, readonly=True)
+    google_campaign_id = fields.Char(string='Google Campaign ID', index=True, readonly=True)
+    state = fields.Selection([
+        ('draft', 'Nháp (Local)'),
+        ('synced', 'Đã đồng bộ Google'),
+    ], string='Trạng thái bộ máy', default='draft', required=True, tracking=True)
     feed_line_ids = fields.Many2many(
         'google.ads.product.feed.line', 'google_ads_feed_line_campaign_rel',
         'campaign_id', 'feed_line_id',
@@ -167,6 +171,40 @@ class GoogleAdsCampaign(models.Model):
         # Odoo 18 automation: product_ids is now computed via feed_line_ids.
         # No manual sync logic needed here.
         return super().write(vals)
+
+    def action_sync_to_google(self):
+        """Đẩy chiến dịch lên Google Ads API"""
+        self.ensure_one()
+        if self.state == 'synced' and not self.env.context.get('force_sync'):
+            return True
+
+        if self.account_id.is_demo:
+            self.google_campaign_id = f"DEMO_SYNC_{self.id}"
+            self.state = 'synced'
+            self.message_post(body=_("[DEMO] Chiến dịch đã được giả lập đồng bộ thành công."))
+            return True
+
+        client = self.account_id._get_google_ads_client()
+        customer_id = self.account_id.operating_customer_id
+        
+        vals = {
+            'name': self.name,
+            'channel_type': self.channel_type,
+        }
+        
+        from ..services.google_ads_mutate import GoogleAdsMutateService
+        ok, result = GoogleAdsMutateService.create_campaign(client, customer_id, vals)
+        
+        if ok:
+            # result is the resource name like "customers/123/campaigns/456"
+            google_id = result.split('/')[-1]
+            self.write({
+                'google_campaign_id': google_id,
+                'state': 'synced',
+            })
+            self.message_post(body=_("Chiến dịch đã được tạo trên Google Ads. ID: %s") % google_id)
+        else:
+            raise UserError(_("Đồng bộ thất bại: %s") % result)
 
     _sql_constraints = [
         ('google_campaign_id_uniq', 'unique(google_campaign_id)', 'Google Campaign ID phải là duy nhất!'),

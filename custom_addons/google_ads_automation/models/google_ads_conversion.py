@@ -58,6 +58,48 @@ class GoogleAdsConversion(models.Model):
         help='Revenue / Campaign Cost',
     )
 
+    def action_upload_to_google(self):
+        """Đẩy lượt chuyển đổi này lên Google Ads API (Bỏ qua GTM)"""
+        self.ensure_one()
+        if not self.gclid:
+            raise UserError(_("Không có GCLID để đồng bộ."))
+
+        # Tìm hành động chuyển đổi phù hợp (VD: 'Purchase' hoặc 'Purchase (Offline)')
+        actions = self.env['google.ads.conversion.action'].search([
+            ('account_id', '=', self.account_id.id),
+            ('active', '=', True)
+        ], limit=1)
+        
+        if not actions:
+            raise UserError(_("Vui lòng cấu hình ít nhất một 'Hành động chuyển đổi' (Conversion Action) Google Ads."))
+
+        if self.account_id.is_demo:
+            self.message_post(body=_("[DEMO] Đã giả lập upload chuyển đổi lên Google Ads thành công."))
+            return True
+
+        client = self.account_id._get_google_ads_client()
+        customer_id = self.account_id.operating_customer_id
+        
+        # Định dạng ngày giờ chuẩn ISO with Timezone (Google yêu cầu yyyy-mm-dd hh:mm:ss+tz)
+        # Odoo lưu UTC, chúng ta giả định +07:00 (Vietnam) để tối ưu
+        dt_str = self.order_date.strftime('%Y-%m-%d %H:%M:%S+0700')
+        
+        conversion_data = {
+            'gclid': self.gclid,
+            'conversion_action_id': actions.google_conversion_id,
+            'conversion_date_time': dt_str,
+            'conversion_value': self.revenue,
+            'currency_code': 'VND',
+        }
+        
+        from ..services.google_ads_conversion_service import GoogleAdsConversionService
+        ok, result = GoogleAdsConversionService.upload_click_conversion(client, customer_id, conversion_data)
+        
+        if ok:
+            self.message_post(body=_("Đã upload chuyển đổi lên Google Ads API thành công tại: %s") % result)
+        else:
+            raise UserError(_("Lỗi upload: %s") % result)
+
     @api.depends('revenue', 'campaign_id.cost')
     def _compute_roas(self):
         for rec in self:

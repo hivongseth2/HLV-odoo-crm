@@ -69,7 +69,11 @@ class GoogleAdsAdGroup(models.Model):
 
     name = fields.Char(string='Tên Nhóm Quảng Cáo', required=True)
     campaign_id = fields.Many2one('google.ads.campaign', string='Chiến Dịch', required=True, ondelete='cascade', readonly=True)
-    google_ad_group_id = fields.Char(string='Google Ad Group ID', required=True, index=True, readonly=True)
+    google_ad_group_id = fields.Char(string='Google Ad Group ID', index=True, readonly=True)
+    state = fields.Selection([
+        ('draft', 'Nháp (Local)'),
+        ('synced', 'Đã đồng bộ Google'),
+    ], string='Trạng thái bộ máy', default='draft', required=True)
     product_ids = fields.Many2many('product.template', 'google_ads_ad_group_product_rel', 
                                     'ad_group_id', 'product_id', string='Sản Phẩm')
 
@@ -125,6 +129,31 @@ class GoogleAdsAdGroup(models.Model):
                 rec.roas = (rec.conversions * 500000) / rec.cost
             else:
                 rec.roas = 0.0
+
+    def action_sync_to_google(self):
+        self.ensure_one()
+        if self.state == 'synced': return True
+        if self.campaign_id.state == 'draft':
+            raise UserError(_("Vui lòng đồng bộ Chiến dịch cha trước."))
+
+        if self.account_id.is_demo:
+            self.google_ad_group_id = f"DEMO_AG_SYNC_{self.id}"
+            self.state = 'synced'
+            return True
+
+        client = self.account_id._get_google_ads_client()
+        customer_id = self.account_id.operating_customer_id
+        
+        vals = {'name': self.name}
+        from ..services.google_ads_mutate import GoogleAdsMutateService
+        ok, result = GoogleAdsMutateService.create_ad_group(
+            client, customer_id, self.campaign_id.google_campaign_id, vals
+        )
+        
+        if ok:
+            self.write({'google_ad_group_id': result.split('/')[-1], 'state': 'synced'})
+        else:
+            raise UserError(_("Đồng bộ Ad Group thất bại: %s") % result)
 
     _sql_constraints = [
         ('google_ad_group_id_uniq', 'unique(google_ad_group_id)', 'Google Ad Group ID phải là duy nhất!'),

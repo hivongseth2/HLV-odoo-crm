@@ -71,6 +71,91 @@ class GoogleAdsMutateService:
             return False, str(e)
 
     @staticmethod
+    def create_campaign(client, customer_id, vals):
+        """Tạo campaign mới trên Google Ads"""
+        try:
+            campaign_service = client.get_service("CampaignService")
+            campaign_operation = client.get_type("CampaignOperation")
+            campaign = campaign_operation.create
+
+            campaign.name = vals.get('name')
+            campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum[vals.get('channel_type', 'SEARCH')]
+            campaign.status = client.enums.CampaignStatusEnum.PAUSED # Always start paused for safety
+            
+            # Budget handling (simplified for now)
+            # Note: Real implementation needs to create a CampaignBudget first
+            # but for this module we assume a default or existing budget if provided.
+            if vals.get('budget_resource_name'):
+                campaign.campaign_budget = vals.get('budget_resource_name')
+
+            response = campaign_service.mutate_campaigns(
+                customer_id=customer_id,
+                operations=[campaign_operation],
+            )
+            return True, response.results[0].resource_name
+        except Exception as e:
+            _logger.error("Create campaign failed: %s", str(e))
+            return False, str(e)
+
+    @staticmethod
+    def create_ad_group(client, customer_id, campaign_id, vals):
+        """Tạo Ad Group trong một Campaign"""
+        try:
+            ad_group_service = client.get_service("AdGroupService")
+            ad_group_operation = client.get_type("AdGroupOperation")
+            ad_group = ad_group_operation.create
+
+            ad_group.name = vals.get('name')
+            ad_group.status = client.enums.AdGroupStatusEnum.ENABLED
+            ad_group.campaign = client.get_service("CampaignService").campaign_path(customer_id, campaign_id)
+            ad_group.type_ = client.enums.AdGroupTypeEnum.SEARCH_STANDARD
+
+            response = ad_group_service.mutate_ad_groups(
+                customer_id=customer_id,
+                operations=[ad_group_operation],
+            )
+            return True, response.results[0].resource_name
+        except Exception as e:
+            _logger.error("Create ad group failed: %s", str(e))
+            return False, str(e)
+
+    @staticmethod
+    def create_ad(client, customer_id, ad_group_id, vals):
+        """Tạo Responsive Search Ad (RSA) trong một Ad Group"""
+        try:
+            ad_group_ad_service = client.get_service("AdGroupAdService")
+            ad_group_ad_operation = client.get_type("AdGroupAdOperation")
+            ad_group_ad = ad_group_ad_operation.create
+
+            ad_group_ad.ad_group = client.get_service("AdGroupService").ad_group_path(customer_id, ad_group_id)
+            ad_group_ad.status = client.enums.AdGroupAdStatusEnum.ENABLED
+            
+            ad = ad_group_ad.ad
+            ad.final_urls.append(vals.get('final_url'))
+            
+            # Responsive Search Ad content
+            rsa = ad.responsive_search_ad
+            
+            # Headline
+            headline = client.get_type("AdTextAsset")
+            headline.text = vals.get('headline')[:30] # Max 30 chars
+            rsa.headlines.append(headline)
+            
+            # Description
+            description = client.get_type("AdTextAsset")
+            description.text = vals.get('description')[:90] # Max 90 chars
+            rsa.descriptions.append(description)
+
+            response = ad_group_ad_service.mutate_ad_group_ads(
+                customer_id=customer_id,
+                operations=[ad_group_ad_operation],
+            )
+            return True, response.results[0].resource_name
+        except Exception as e:
+            _logger.error("Create ad failed: %s", str(e))
+            return False, str(e)
+
+    @staticmethod
     def update_campaign_budget(client, customer_id, campaign_resource_name, new_budget_micros):
         """Cập nhật budget cho campaign
         

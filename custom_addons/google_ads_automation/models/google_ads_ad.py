@@ -69,7 +69,11 @@ class GoogleAdsAd(models.Model):
 
     name = fields.Char(string='Tên/Tiêu Đề Quảng Cáo')
     ad_group_id = fields.Many2one('google.ads.ad.group', string='Nhóm Quảng Cáo', required=True, ondelete='cascade', readonly=True)
-    google_ad_id = fields.Char(string='Google Ad ID', required=True, index=True, readonly=True)
+    google_ad_id = fields.Char(string='Google Ad ID', index=True, readonly=True)
+    state = fields.Selection([
+        ('draft', 'Nháp (Local)'),
+        ('synced', 'Đã đồng bộ Google'),
+    ], string='Trạng thái bộ máy', default='draft', required=True)
     product_ids = fields.Many2many('product.template', 'google_ads_ad_product_rel', 
                                     'ad_id', 'product_id', string='Sản Phẩm')
 
@@ -96,7 +100,11 @@ class GoogleAdsAd(models.Model):
         ('UNKNOWN',                 'Không rõ'),
     ], string='Loại Quảng Cáo', readonly=True)
 
-    final_urls = fields.Char(string='URL Đích (Final URL)', readonly=True)
+    final_urls = fields.Char(string='URL Đích (Final URL)')
+    
+    # Creation fields
+    headline = fields.Char(string='Tiêu đề chính')
+    description = fields.Text(string='Mô tả quảng cảo')
 
     # Metrics
     clicks = fields.Integer(string='Lượt Nhấp', default=0, readonly=True)
@@ -128,6 +136,35 @@ class GoogleAdsAd(models.Model):
                 rec.roas = (rec.conversions * 500000) / rec.cost
             else:
                 rec.roas = 0.0
+
+    def action_sync_to_google(self):
+        self.ensure_one()
+        if self.state == 'synced': return True
+        if self.ad_group_id.state == 'draft':
+            raise UserError(_("Vui lòng đồng bộ Nhóm quảng cáo cha trước."))
+
+        if self.account_id.is_demo:
+            self.google_ad_id = f"DEMO_AD_SYNC_{self.id}"
+            self.state = 'synced'
+            return True
+
+        client = self.account_id._get_google_ads_client()
+        customer_id = self.account_id.operating_customer_id
+        
+        vals = {
+            'headline': self.headline or self.name,
+            'description': self.description or self.name,
+            'final_url': self.final_urls,
+        }
+        from ..services.google_ads_mutate import GoogleAdsMutateService
+        ok, result = GoogleAdsMutateService.create_ad(
+            client, customer_id, self.ad_group_id.google_ad_group_id, vals
+        )
+        
+        if ok:
+            self.write({'google_ad_id': result.split('/')[-1], 'state': 'synced'})
+        else:
+            raise UserError(_("Đồng bộ Ad thất bại: %s") % result)
 
     _sql_constraints = [
         ('google_ad_id_uniq', 'unique(google_ad_id)', 'Google Ad ID phải là duy nhất!'),

@@ -55,10 +55,10 @@ Module được thiết kế theo cấu trúc Domino, Data từ Frontend (Web) c
 - Tự động sinh Script Code (`<head>`, `<body>`, PHP cho WooCommerce) dựa trên `GTM Container ID` hoặc `AW-ID`.
 - **GTM API Sync (Đồng bộ GTM):** Kết nối Google API v2 kéo danh sách Tags, Triggers, Variables về lưu tại `google.ads.gtm.item`. Toàn bộ quá trình là **GET Request (Read-Only)**, sử dụng Scope `tagmanager.readonly` đảm bảo an toàn tuyệt đối 100% không làm hỏng cấu hình GTM thực tế.
 
-### 2.2. Conversion Tracking (`google.ads.conversion`)
-- Lưu trữ các sự kiện chuyển đổi (Purchase, Lead...) có gắn `gclid` (Google Click ID) hoặc Campaign ID.
-- Link trực tiếp tới `sale.order` (trong Demo mode) để ghi nhận Doanh thu thực tế.
-- **Tính toán ROAS thực (Return On Ad Spend):** Doanh Thu / Chi phí Quảng Cáo của Campaign. Con số ROAS này làm dữ liệu đầu vào sống còn cho Strategy.
+### 2.2. Conversion Tracking & Offline Upload (`google.ads.conversion`)
+- Lưu trữ các sự kiện chuyển đổi (Purchase, Lead...) có gắn `gclid`.
+- **Upload Offline (Bỏ qua GTM):** Cho phép đẩy trực tiếp dữ liệu chuyển đổi lên Google Ads API qua `GoogleAdsConversionService`. Giúp ghi nhận doanh thu chính xác ngay cả khi GTM bị chặn.
+- **Tính toán ROAS thực:** Doanh Thu / Chi phí Quảng Cáo của Campaign.
 
 ### 2.3. Product Feed (`google.ads.product.feed`)
 - Liên kết Database sản phẩm vật lý (`product.template`) vào Chiến dịch Google Ads.
@@ -96,4 +96,6 @@ Tính năng cốt lõi cho việc testing/UAT. Khi `google.ads.account.is_demo =
   1. Khai báo Enum trong `google_ads_rule.py`.
   2. Code logic xử lý so sánh (`<`, `>`, `=`) trong hàm `_evaluate_condition_value()`.
 - **Phát triển Mutate API:**
-  Bổ sung hàm định dạng JSON Request Google Ads API v16+ trong file `services/google_ads_mutate.py` (Ví dụ: `update_budget`). Đảm bảo bắt trọn lỗi `GoogleAdsException`.
+  Bổ sung hàm định dạng Resource trong file `services/google_ads_mutate.py` (Ví dụ: `create_campaign`).
+- **Nâng cấp Offline Conversion:**
+  Chỉnh sửa `GoogleAdsConversionService` để hỗ trợ thêm các field metadata (`user_identifier`, hay `custom_variable`).
