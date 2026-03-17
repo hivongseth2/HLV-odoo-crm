@@ -1,20 +1,47 @@
 // hlv_barcode_shipper/static/src/js/barcode_scanner.js
 /**
- * HLV Barcode Shipper JavaScript (Refactored for SO Grouping)
+ * HLV Barcode Shipper JavaScript
+ * Supports 3 tabs: Nhận hàng / Giao hàng / Trả hàng
+ * Supports hardware barcode scanner (keyboard Enter) + camera (html5-qrcode)
  */
 
 class BarcodeShipper {
     constructor() {
-        // Multi-picking state
-        this.pickingDataMap = {};       // Map: pickingId -> { info, items, progress, so_name }
-        this.soGroups = [];             // List of SO groups for rendering
-        this.activePickingId = null;    // Current focused picking
+        // ---- Deliver state ----
+        this.pickingDataMap = {};
+        this.soGroups = [];
+        this.activePickingId = null;
         this.customerName = '';
-
         this.scannedBarcodes = new Set();
+
+        // ---- Receive state ----
+        this.receivePickingIds = [];
+        this.receiveItems = null;
+
+        // ---- Return state ----
+        this.returnPickings = [];
+        this.returnSelectedIds = new Set();
+        this.returnPickingId = null;
+        this.returnReason = '';
+        this.returnDetailItems = null;
+
+        // ---- Camera state ----
         this.html5QrCode = null;
         this.isCameraRunning = false;
         this.currentCameraSection = null;
+        this.currentCameraMode = null;
+
+        // ---- Settings ----
+        this.settings = {
+            skip_package_scan: false,
+            skip_product_scan: false,
+            receive_require_detail_scan: false,
+            receive_skip_package_scan: false,
+            receive_skip_product_scan: false,
+            return_require_detail_scan: false,
+            return_skip_package_scan: false,
+            return_skip_product_scan: false,
+        };
 
         this.sessionId = this.generateSessionId();
         this.init();
@@ -24,12 +51,13 @@ class BarcodeShipper {
         return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     }
 
-    init() {
+    async init() {
+        await this.loadSettings();
         this.bindEvents();
         this.setupBarcodeInputs();
-        this.showStep('step-scan-pick');
+        this.switchTab('receive');
+        this.loadReturnList();
 
-        // Reload warning
         window.addEventListener('beforeunload', (e) => {
             if (Object.keys(this.pickingDataMap).length > 0) {
                 const msg = '⚠️ CẢNH BÁO: Tiến độ quét sẽ bị MẤT nếu bạn tải lại trang!';
@@ -40,25 +68,103 @@ class BarcodeShipper {
         });
     }
 
+    async loadSettings() {
+        try {
+            const res = await this.apiCall('/api/barcode/get_settings', {});
+            if (res && res.success && res.settings) {
+                this.settings = { ...this.settings, ...res.settings };
+            }
+        } catch (e) {
+            console.warn('Failed to load settings, using defaults');
+        }
+    }
+
+    // ========================= TAB MANAGEMENT =========================
+
+    switchTab(tabName) {
+        this.stopCamera();
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === tabName);
+        });
+        document.querySelectorAll('.tab-content').forEach(tc => {
+            tc.classList.toggle('active', tc.id === `tab-${tabName}`);
+        });
+        if (tabName === 'receive') {
+            this.showReceiveStep('receive-step-scan');
+        } else if (tabName === 'deliver') {
+            this.showDeliverStep('step-scan-pick');
+        } else if (tabName === 'return') {
+            this.showReturnStep('return-step-list');
+            this.loadReturnList();
+        }
+    }
+
+    showDeliverStep(id) {
+        document.querySelectorAll('#tab-deliver .scan-step').forEach(s => s.classList.remove('active'));
+        const step = document.getElementById(id);
+        if (step) { step.classList.add('active'); this.focusCurrentInput(); }
+    }
+
+    showReceiveStep(id) {
+        document.querySelectorAll('#tab-receive .scan-step').forEach(s => s.classList.remove('active'));
+        const step = document.getElementById(id);
+        if (step) { step.classList.add('active'); this.focusCurrentInput(); }
+    }
+
+    showReturnStep(id) {
+        document.querySelectorAll('#tab-return .scan-step').forEach(s => s.classList.remove('active'));
+        const step = document.getElementById(id);
+        if (step) { step.classList.add('active'); this.focusCurrentInput(); }
+    }
+
+    // Backward-compat alias for deliver tab
+    showStep(id) { this.showDeliverStep(id); }
+
     bindEvents() {
-        // Buttons
+        // Tab switching
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => this.switchTab(btn.dataset.tab));
+        });
+
+        // === DELIVER TAB ===
         document.getElementById('scan-pick-btn')?.addEventListener('click', () => this.scanPickOrder());
         document.getElementById('scan-item-btn')?.addEventListener('click', () => this.scanItem());
         document.getElementById('complete-all-btn')?.addEventListener('click', () => this.completeAllDelivery());
         document.getElementById('reset-scan-btn')?.addEventListener('click', () => this.resetScan());
         document.getElementById('new-delivery-btn')?.addEventListener('click', () => this.startNewDelivery());
-        document.getElementById('show-history-btn')?.addEventListener('click', () => this.showHistory());
-        document.getElementById('help-btn')?.addEventListener('click', () => this.showHelp());
-
-        // Camera Buttons (Manual)
         document.getElementById('btn-open-camera-pick')?.addEventListener('click', () => this.startCamera('camera-pick', 'reader-pick', 'pick'));
         document.getElementById('btn-open-camera-item')?.addEventListener('click', () => this.startCamera('camera-item', 'reader-item', 'item'));
 
-        // Modals
+        // === RECEIVE TAB ===
+        document.getElementById('receive-scan-btn')?.addEventListener('click', () => this.scanReceivePicking());
+        document.getElementById('receive-detail-scan-btn')?.addEventListener('click', () => this.scanReceiveDetail());
+        document.getElementById('confirm-receive-btn')?.addEventListener('click', () => this.confirmReceive());
+        document.getElementById('receive-back-btn')?.addEventListener('click', () => {
+            this.stopCamera();
+            this.receivePickingIds = [];
+            this.receiveItems = null;
+            this.showReceiveStep('receive-step-scan');
+        });
+        document.getElementById('btn-open-camera-receive')?.addEventListener('click', () => this.startCamera('camera-receive', 'reader-receive', 'receive'));
+        document.getElementById('btn-open-camera-receive-detail')?.addEventListener('click', () => this.startCamera('camera-receive-detail', 'reader-receive-detail', 'receive-detail'));
+
+        // === RETURN TAB ===
+        document.getElementById('confirm-return-btn')?.addEventListener('click', () => this.confirmReturn());
+        document.getElementById('return-detail-scan-btn')?.addEventListener('click', () => this.scanReturnDetail());
+        document.getElementById('confirm-return-detail-btn')?.addEventListener('click', () => this.confirmReturnDetail());
+        document.getElementById('return-detail-back-btn')?.addEventListener('click', () => {
+            this.stopCamera();
+            this.showReturnStep('return-step-list');
+        });
+        document.getElementById('btn-open-camera-return-detail')?.addEventListener('click', () => this.startCamera('camera-return-detail', 'reader-return-detail', 'return-detail'));
+
+        // Common
+        document.getElementById('show-history-btn')?.addEventListener('click', () => this.showHistory());
+        document.getElementById('help-btn')?.addEventListener('click', () => this.showHelp());
+
         document.querySelectorAll('.modal-close').forEach(btn => {
             btn.addEventListener('click', e => this.closeModal(e.target.closest('.modal-overlay')));
         });
-
         document.querySelectorAll('.modal-overlay').forEach(modal => {
             modal.addEventListener('click', e => {
                 if (e.target === modal) this.closeModal(modal);
@@ -67,34 +173,29 @@ class BarcodeShipper {
     }
 
     setupBarcodeInputs() {
-        const pickInput = document.getElementById('pick-barcode-input');
-        const itemInput = document.getElementById('item-barcode-input');
-
-        if (pickInput) {
-            pickInput.addEventListener('keypress', e => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    this.scanPickOrder();
-                }
-            });
-        }
-
-        if (itemInput) {
-            itemInput.addEventListener('keypress', e => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    this.scanItem();
-                }
-            });
-        }
-
+        const inputs = [
+            ['pick-barcode-input', () => this.scanPickOrder()],
+            ['item-barcode-input', () => this.scanItem()],
+            ['receive-barcode-input', () => this.scanReceivePicking()],
+            ['receive-detail-barcode-input', () => this.scanReceiveDetail()],
+            ['return-detail-barcode-input', () => this.scanReturnDetail()],
+        ];
+        inputs.forEach(([id, handler]) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('keypress', e => {
+                    if (e.key === 'Enter') { e.preventDefault(); handler(); }
+                });
+            }
+        });
         this.focusCurrentInput();
     }
 
     focusCurrentInput() {
         setTimeout(() => {
-            const step = document.querySelector('.scan-step.active');
-            const input = step && step.querySelector('.form-control');
+            const activeTab = document.querySelector('.tab-content.active');
+            const activeStep = activeTab && activeTab.querySelector('.scan-step.active');
+            const input = activeStep && activeStep.querySelector('.form-control');
             if (input) input.focus();
         }, 100);
     }
@@ -171,22 +272,27 @@ class BarcodeShipper {
         }
     }
 
-    // --- Camera Logic ---
+    // ========================= CAMERA =========================
+
     async startCamera(sectionId, readerId, mode) {
         if (this.isCameraRunning && this.currentCameraSection === sectionId) return;
-
         if (this.isCameraRunning) await this.stopCamera();
 
         const section = document.getElementById(sectionId);
         if (section) section.classList.add('active');
         this.currentCameraSection = sectionId;
+        this.currentCameraMode = mode;
 
-        // Hide manual button if auto-started
-        if (mode === 'pick') {
-            const btn = document.getElementById('btn-open-camera-pick');
-            if (btn) btn.style.display = 'none';
-        } else if (mode === 'item') {
-            const btn = document.getElementById('btn-open-camera-item');
+        const btnMap = {
+            'pick': 'btn-open-camera-pick',
+            'item': 'btn-open-camera-item',
+            'receive': 'btn-open-camera-receive',
+            'receive-detail': 'btn-open-camera-receive-detail',
+            'return-detail': 'btn-open-camera-return-detail',
+        };
+        const btnId = btnMap[mode];
+        if (btnId) {
+            const btn = document.getElementById(btnId);
             if (btn) btn.style.display = 'none';
         }
 
@@ -197,19 +303,17 @@ class BarcodeShipper {
             await this.html5QrCode.start(
                 { facingMode: "environment" },
                 config,
-                (decodedText, decodedResult) => this.onScanSuccess(decodedText, mode),
-                (errorMessage) => { }
+                (decodedText) => this.onScanSuccess(decodedText, mode),
+                () => {}
             );
             this.isCameraRunning = true;
         } catch (err) {
-            console.error("Error starting camera", err);
-            // Show manual button if camera fails
-            if (mode === 'pick') {
-                document.getElementById('btn-open-camera-pick').style.display = 'block';
-            } else if (mode === 'item') {
-                document.getElementById('btn-open-camera-item').style.display = 'block';
+            console.error("Error starting camera:", err);
+            if (btnId) {
+                const btn = document.getElementById(btnId);
+                if (btn) btn.style.display = 'block';
             }
-            section.classList.remove('active');
+            if (section) section.classList.remove('active');
         }
     }
 
@@ -218,35 +322,52 @@ class BarcodeShipper {
             try {
                 await this.html5QrCode.stop();
                 this.html5QrCode.clear();
-                this.isCameraRunning = false;
-                this.currentCameraSection = null;
             } catch (e) {
                 console.error("Failed to stop camera", e);
             }
         }
-        document.querySelectorAll('.camera-section').forEach(el => el.classList.remove('active'));
+        this.isCameraRunning = false;
+        this.currentCameraSection = null;
+        this.currentCameraMode = null;
 
-        const btnPick = document.getElementById('btn-open-camera-pick');
-        const btnItem = document.getElementById('btn-open-camera-item');
-        if (btnPick) btnPick.style.display = 'block';
-        if (btnItem) btnItem.style.display = 'block';
+        document.querySelectorAll('.camera-section').forEach(el => el.classList.remove('active'));
+        ['btn-open-camera-pick', 'btn-open-camera-item', 'btn-open-camera-receive',
+            'btn-open-camera-receive-detail', 'btn-open-camera-return-detail'].forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) btn.style.display = 'block';
+        });
     }
 
     onScanSuccess(decodedText, mode) {
         if (mode === 'pick') {
             const input = document.getElementById('pick-barcode-input');
-            if (input) {
-                input.value = decodedText;
-                this.scanPickOrder();
-                this.stopCamera();
-            }
+            if (input) { input.value = decodedText; this.scanPickOrder(); this.stopCamera(); }
         } else if (mode === 'item') {
             const input = document.getElementById('item-barcode-input');
             if (input) {
                 input.value = decodedText;
                 this.scanItem();
-                this.html5QrCode.pause();
-                setTimeout(() => this.html5QrCode.resume(), 500);
+                this.html5QrCode?.pause();
+                setTimeout(() => this.html5QrCode?.resume(), 500);
+            }
+        } else if (mode === 'receive') {
+            const input = document.getElementById('receive-barcode-input');
+            if (input) { input.value = decodedText; this.scanReceivePicking(); this.stopCamera(); }
+        } else if (mode === 'receive-detail') {
+            const input = document.getElementById('receive-detail-barcode-input');
+            if (input) {
+                input.value = decodedText;
+                this.scanReceiveDetail();
+                this.html5QrCode?.pause();
+                setTimeout(() => this.html5QrCode?.resume(), 500);
+            }
+        } else if (mode === 'return-detail') {
+            const input = document.getElementById('return-detail-barcode-input');
+            if (input) {
+                input.value = decodedText;
+                this.scanReturnDetail();
+                this.html5QrCode?.pause();
+                setTimeout(() => this.html5QrCode?.resume(), 500);
             }
         }
     }
@@ -483,7 +604,7 @@ class BarcodeShipper {
                 // Show Step 2
                 document.getElementById('customer-name').textContent = this.customerName;
                 document.getElementById('customer-info').style.display = 'block';
-                this.showStep('step-scan-items');
+                this.showDeliverStep('step-scan-items');
                 this.showMessage('pick-result', 'Đã tải xong dữ liệu.', 'success');
             } else {
                 this.showMessage('pick-result', res.error || 'Lỗi tải dữ liệu', 'danger');
@@ -774,7 +895,7 @@ class BarcodeShipper {
             if (res.success) {
                 // Show success screen
                 document.getElementById('completion-result').textContent = res.message;
-                this.showStep('step-complete');
+                this.showDeliverStep('step-complete');
                 this.playSound('success');
                 this.pickingDataMap = {}; // clear
             } else {
@@ -812,7 +933,7 @@ class BarcodeShipper {
         document.getElementById('global-progress-text').textContent = '0 / 0';
         document.getElementById('customer-info').style.display = 'none';
 
-        this.showStep('step-scan-pick');
+        this.showDeliverStep('step-scan-pick');
     }
 
     // Reuse history...
@@ -897,6 +1018,350 @@ class BarcodeShipper {
         }
 
         return json;
+    }
+
+    // ========================= RECEIVE TAB =========================
+
+    async scanReceivePicking() {
+        const input = document.getElementById('receive-barcode-input');
+        const barcode = (input?.value || '').trim();
+        if (!barcode) {
+            this.showMessage('receive-scan-result', 'Vui lòng nhập mã phiếu', 'danger');
+            return;
+        }
+        this.showMessage('receive-scan-result', 'Đang tìm phiếu...', 'warning');
+        try {
+            const res = await this.apiCall('/api/barcode/scan_pick', { barcode });
+            if (res.success && res.so_groups) {
+                const allPickingIds = [];
+                res.so_groups.forEach(g => { (g.pickings || []).forEach(p => allPickingIds.push(p.id)); });
+
+                if (allPickingIds.length === 0) {
+                    this.showMessage('receive-scan-result', 'Không tìm thấy phiếu xuất nào', 'danger');
+                    this.playSound('error');
+                    return;
+                }
+                this.receivePickingIds = allPickingIds;
+
+                if (this.settings.receive_require_detail_scan) {
+                    const detailRes = await this.apiCall('/api/barcode/get_multiple_outs', { picking_ids: allPickingIds });
+                    if (detailRes.success) {
+                        this.receiveItems = [];
+                        detailRes.data.forEach(d => {
+                            (d.items || []).forEach(i => {
+                                const autoSkip =
+                                    (i.type === 'package' && this.settings.receive_skip_package_scan) ||
+                                    (i.type === 'product' && this.settings.receive_skip_product_scan);
+                                this.receiveItems.push({ ...i, scanned_qty: autoSkip ? (i.qty || 0) : 0 });
+                            });
+                        });
+                        const customerName = res.customer_name || '';
+                        const nameEl = document.getElementById('receive-customer-name');
+                        const infoEl = document.getElementById('receive-customer-info');
+                        if (nameEl) nameEl.textContent = customerName;
+                        if (infoEl) infoEl.style.display = customerName ? 'block' : 'none';
+                        this.renderReceiveItems();
+                        this.updateReceiveProgress();
+                        if (input) input.value = '';
+                        this.showReceiveStep('receive-step-detail');
+                    } else {
+                        this.showMessage('receive-scan-result', detailRes.error || 'Lỗi tải chi tiết phiếu', 'danger');
+                    }
+                } else {
+                    if (input) input.value = '';
+                    await this.doConfirmReceive();
+                }
+            } else {
+                this.showMessage('receive-scan-result', res.error || 'Không tìm thấy phiếu', 'danger');
+                this.playSound('error');
+            }
+        } catch (e) {
+            console.error(e);
+            this.showMessage('receive-scan-result', 'Lỗi kết nối server', 'danger');
+            this.playSound('error');
+        }
+    }
+
+    async scanReceiveDetail() {
+        const input = document.getElementById('receive-detail-barcode-input');
+        const barcode = (input?.value || '').trim();
+        if (!barcode || !this.receiveItems) return;
+
+        const item = this.receiveItems.find(i => i.barcode === barcode && (i.scanned_qty || 0) < (i.qty || 0));
+        if (!item) {
+            const full = this.receiveItems.find(i => i.barcode === barcode);
+            this.showMessage('receive-detail-result', full ? 'Sản phẩm đã đủ số lượng!' : `Không tìm thấy: ${barcode}`, full ? 'warning' : 'danger');
+            this.playSound('error');
+            if (input) { input.value = ''; input.focus(); }
+            return;
+        }
+        item.type === 'package' ? item.scanned_qty = item.qty : item.scanned_qty++;
+        this.renderReceiveItems();
+        this.updateReceiveProgress();
+        this.playSound('success');
+        this.showMessage('receive-detail-result', `✓ ${item.name}`, 'success');
+        if (input) { input.value = ''; input.focus(); }
+    }
+
+    renderReceiveItems() {
+        const container = document.getElementById('receive-so-accordion');
+        if (!container || !this.receiveItems) return;
+        container.innerHTML = '';
+        this.receiveItems.forEach(item => {
+            const isFull = (item.scanned_qty || 0) >= (item.qty || 0);
+            const div = document.createElement('div');
+            div.className = `item-card ${isFull ? 'scanned' : ''}`;
+            div.innerHTML = `
+                <div class="item-info">
+                    <div class="item-name">${item.name || ''}</div>
+                    <div class="item-details" style="display:flex;gap:10px;font-size:0.8rem;color:#666;">
+                        <span><i class="fa fa-barcode"></i> ${item.barcode || ''}</span>
+                        <span>SL: <b>${item.scanned_qty}/${item.qty}</b></span>
+                    </div>
+                </div>
+                <div class="item-status-icon">
+                    ${isFull ? '<i class="fa fa-check-circle" style="color:var(--success-color)"></i>' : (item.type === 'package' ? '<i class="fa fa-box"></i>' : '<i class="fa fa-cube"></i>')}
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    updateReceiveProgress() {
+        if (!this.receiveItems) return;
+        const total = this.receiveItems.reduce((s, i) => s + (i.qty || 0), 0);
+        const scanned = this.receiveItems.reduce((s, i) => s + (i.scanned_qty || 0), 0);
+        const percent = total ? (scanned / total * 100) : 0;
+        const text = document.getElementById('receive-progress-text');
+        const fill = document.getElementById('receive-progress-fill');
+        const btn = document.getElementById('confirm-receive-btn');
+        if (text) text.textContent = `${scanned} / ${total}`;
+        if (fill) fill.style.width = `${percent}%`;
+        if (btn) btn.style.display = (scanned >= total && total > 0) ? 'block' : 'none';
+    }
+
+    async confirmReceive() { await this.doConfirmReceive(); }
+
+    async doConfirmReceive() {
+        if (!this.receivePickingIds || this.receivePickingIds.length === 0) return;
+        this.showMessage('receive-scan-result', 'Đang xác nhận nhận hàng...', 'warning');
+        this.showMessage('receive-detail-result', 'Đang xác nhận nhận hàng...', 'warning');
+        try {
+            const res = await this.apiCall('/api/barcode/receive_pickings', { picking_ids: this.receivePickingIds });
+            if (res.success) {
+                this.playSound('success');
+                this.showMessage('receive-scan-result', res.message || 'Đã nhận hàng thành công!', 'success');
+                this.receivePickingIds = [];
+                this.receiveItems = null;
+                this.showReceiveStep('receive-step-scan');
+                const inp = document.getElementById('receive-barcode-input');
+                if (inp) inp.value = '';
+                this.loadReturnList();
+            } else {
+                const errMsg = res.error || 'Lỗi xác nhận nhận hàng';
+                this.showMessage('receive-detail-result', errMsg, 'danger');
+                this.showMessage('receive-scan-result', errMsg, 'danger');
+                this.playSound('error');
+            }
+        } catch (e) {
+            console.error(e);
+            this.showMessage('receive-detail-result', 'Lỗi kết nối server', 'danger');
+            this.playSound('error');
+        }
+    }
+
+    // ========================= RETURN TAB =========================
+
+    async loadReturnList() {
+        const container = document.getElementById('return-picking-list');
+        if (!container) return;
+        container.innerHTML = '<div style="text-align:center;padding:20px;color:#888;"><i class="fa fa-spinner fa-spin"></i> Đang tải...</div>';
+        try {
+            const res = await this.apiCall('/api/barcode/get_my_received', {});
+            if (res.success && res.pickings && res.pickings.length > 0) {
+                this.returnPickings = res.pickings;
+                this.returnSelectedIds = new Set();
+                this.renderReturnPickingList(res.pickings);
+            } else {
+                this.returnPickings = [];
+                container.innerHTML = '<div style="text-align:center;padding:20px;color:#888;"><i class="fa fa-inbox" style="font-size:2rem;display:block;margin-bottom:8px;"></i>Chưa có phiếu nào đã nhận.</div>';
+                const actions = document.getElementById('return-actions');
+                if (actions) actions.style.display = 'none';
+            }
+        } catch (e) {
+            container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--danger-color);">Lỗi tải danh sách.</div>';
+        }
+    }
+
+    renderReturnPickingList(pickings) {
+        const container = document.getElementById('return-picking-list');
+        if (!container) return;
+        container.innerHTML = '';
+        this.returnSelectedIds = new Set();
+        const actions = document.getElementById('return-actions');
+        if (actions) actions.style.display = 'none';
+
+        pickings.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'return-picking-card picking-select-card';
+            card.dataset.id = p.id;
+            card.innerHTML = `
+                <div style="flex:1;">
+                    <div style="font-weight:700;font-size:1rem;color:var(--primary-color);">${p.name}</div>
+                    <div style="font-size:0.82rem;color:#888;margin-top:3px;">
+                        <i class="fa fa-user"></i> ${p.partner_name || ''}
+                        ${p.receive_time ? ` &nbsp;·&nbsp; <i class="fa fa-clock"></i> ${p.receive_time}` : ''}
+                        ${p.item_count ? ` &nbsp;·&nbsp; <i class="fa fa-box"></i> ${p.item_count} kiện` : ''}
+                    </div>
+                </div>
+                <div class="check-circle"><i class="fa fa-check"></i></div>
+            `;
+            card.addEventListener('click', () => {
+                const id = p.id;
+                if (this.returnSelectedIds.has(id)) {
+                    this.returnSelectedIds.delete(id);
+                    card.classList.remove('selected');
+                } else {
+                    this.returnSelectedIds.add(id);
+                    card.classList.add('selected');
+                }
+                if (actions) actions.style.display = this.returnSelectedIds.size > 0 ? 'block' : 'none';
+            });
+            container.appendChild(card);
+        });
+    }
+
+    async confirmReturn() {
+        if (this.returnSelectedIds.size === 0) {
+            this.showMessage('return-result', 'Vui lòng chọn ít nhất một phiếu để trả', 'danger');
+            return;
+        }
+        const reason = document.getElementById('return-reason-input')?.value?.trim() || '';
+        if (!reason) {
+            this.showMessage('return-result', 'Vui lòng nhập lý do trả hàng', 'danger');
+            document.getElementById('return-reason-input')?.focus();
+            return;
+        }
+        const selectedArray = Array.from(this.returnSelectedIds);
+
+        if (this.settings.return_require_detail_scan && selectedArray.length === 1) {
+            this.returnPickingId = selectedArray[0];
+            this.returnReason = reason;
+            try {
+                const res = await this.apiCall('/api/barcode/get_multiple_outs', { picking_ids: selectedArray });
+                if (res.success) {
+                    this.returnDetailItems = [];
+                    res.data.forEach(d => {
+                        (d.items || []).forEach(i => {
+                            const autoSkip =
+                                (i.type === 'package' && this.settings.return_skip_package_scan) ||
+                                (i.type === 'product' && this.settings.return_skip_product_scan);
+                            this.returnDetailItems.push({ ...i, scanned_qty: autoSkip ? (i.qty || 0) : 0 });
+                        });
+                    });
+                    this.renderReturnDetailItems();
+                    this.updateReturnProgress();
+                    this.showReturnStep('return-step-detail');
+                } else {
+                    this.showMessage('return-result', res.error || 'Lỗi tải chi tiết phiếu', 'danger');
+                }
+            } catch (e) {
+                this.showMessage('return-result', 'Lỗi kết nối server', 'danger');
+            }
+        } else {
+            await this.doConfirmReturn(selectedArray, reason);
+        }
+    }
+
+    async scanReturnDetail() {
+        const input = document.getElementById('return-detail-barcode-input');
+        const barcode = (input?.value || '').trim();
+        if (!barcode || !this.returnDetailItems) return;
+
+        const item = this.returnDetailItems.find(i => i.barcode === barcode && (i.scanned_qty || 0) < (i.qty || 0));
+        if (!item) {
+            const full = this.returnDetailItems.find(i => i.barcode === barcode);
+            this.showMessage('return-detail-result', full ? 'Đã đủ số lượng!' : `Không tìm thấy: ${barcode}`, full ? 'warning' : 'danger');
+            this.playSound('error');
+            if (input) { input.value = ''; input.focus(); }
+            return;
+        }
+        item.type === 'package' ? item.scanned_qty = item.qty : item.scanned_qty++;
+        this.renderReturnDetailItems();
+        this.updateReturnProgress();
+        this.playSound('success');
+        this.showMessage('return-detail-result', `✓ ${item.name}`, 'success');
+        if (input) { input.value = ''; input.focus(); }
+    }
+
+    renderReturnDetailItems() {
+        const container = document.getElementById('return-so-accordion');
+        if (!container || !this.returnDetailItems) return;
+        container.innerHTML = '';
+        this.returnDetailItems.forEach(item => {
+            const isFull = (item.scanned_qty || 0) >= (item.qty || 0);
+            const div = document.createElement('div');
+            div.className = `item-card ${isFull ? 'scanned' : ''}`;
+            div.innerHTML = `
+                <div class="item-info">
+                    <div class="item-name">${item.name || ''}</div>
+                    <div class="item-details" style="display:flex;gap:10px;font-size:0.8rem;color:#666;">
+                        <span><i class="fa fa-barcode"></i> ${item.barcode || ''}</span>
+                        <span>SL: <b>${item.scanned_qty}/${item.qty}</b></span>
+                    </div>
+                </div>
+                <div class="item-status-icon">
+                    ${isFull ? '<i class="fa fa-check-circle" style="color:var(--success-color)"></i>' : (item.type === 'package' ? '<i class="fa fa-box"></i>' : '<i class="fa fa-cube"></i>')}
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    updateReturnProgress() {
+        if (!this.returnDetailItems) return;
+        const total = this.returnDetailItems.reduce((s, i) => s + (i.qty || 0), 0);
+        const scanned = this.returnDetailItems.reduce((s, i) => s + (i.scanned_qty || 0), 0);
+        const percent = total ? (scanned / total * 100) : 0;
+        const text = document.getElementById('return-progress-text');
+        const fill = document.getElementById('return-progress-fill');
+        const btn = document.getElementById('confirm-return-detail-btn');
+        if (text) text.textContent = `${scanned} / ${total}`;
+        if (fill) fill.style.width = `${percent}%`;
+        if (btn) btn.style.display = (scanned >= total && total > 0) ? 'block' : 'none';
+    }
+
+    async confirmReturnDetail() {
+        await this.doConfirmReturn([this.returnPickingId], this.returnReason);
+    }
+
+    async doConfirmReturn(pickingIds, reason) {
+        this.showMessage('return-result', 'Đang xử lý trả hàng...', 'warning');
+        this.showMessage('return-detail-result', 'Đang xử lý trả hàng...', 'warning');
+        try {
+            const res = await this.apiCall('/api/barcode/return_pickings', { picking_ids: pickingIds, reason });
+            if (res.success) {
+                this.playSound('success');
+                this.showMessage('return-result', res.message || 'Đã trả hàng thành công!', 'success');
+                this.returnSelectedIds = new Set();
+                this.returnPickingId = null;
+                this.returnDetailItems = null;
+                this.returnReason = '';
+                const ri = document.getElementById('return-reason-input');
+                if (ri) ri.value = '';
+                this.showReturnStep('return-step-list');
+                await this.loadReturnList();
+            } else {
+                const errMsg = res.error || 'Lỗi xác nhận trả hàng';
+                this.showMessage('return-detail-result', errMsg, 'danger');
+                this.showMessage('return-result', errMsg, 'danger');
+                this.playSound('error');
+            }
+        } catch (e) {
+            console.error(e);
+            this.showMessage('return-detail-result', 'Lỗi kết nối server', 'danger');
+            this.playSound('error');
+        }
     }
 }
 
