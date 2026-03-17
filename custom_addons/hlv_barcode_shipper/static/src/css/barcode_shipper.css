@@ -642,6 +642,30 @@ body {
   color: var(--primary-color);
 }
 
+.so-group-pinned {
+  background: #e8f5e9 !important;
+  color: #2e7d32 !important;
+}
+.so-group-pinned .so-name {
+  color: #2e7d32;
+}
+.so-group-pinned .so-count {
+  background: #4caf50;
+}
+.receive-picking-item.pinned-selected {
+  border-left: 3px solid #4caf50;
+}
+
+.receive-picking-origin-line {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.receive-picking-origin-line i {
+  margin-right: 3px;
+  font-size: 0.7rem;
+}\n\n.receive-search-section-header {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  padding: 10px 15px 6px;\n  font-size: 0.82rem;\n  font-weight: 600;\n  color: var(--text-muted);\n  text-transform: uppercase;\n  letter-spacing: 0.03em;\n}
+
 .so-name {
   font-weight: 700;
   font-size: 1.05rem;
@@ -1027,34 +1051,7 @@ body {
   border-color: #b7eb8f;
 }
 
-/* Return Picking Card */
-.return-picking-card {
-  display: flex;
-  align-items: center;
-  padding: 14px 16px;
-  background: #fff;
-  border: 2px solid var(--border-color);
-  border-radius: 10px;
-  margin-bottom: 10px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.return-picking-card:active {
-  background: #f5f6f8;
-}
-
-.return-picking-card.selected {
-  border-color: var(--primary-color);
-  background: #eef2f7;
-}
-
-.return-picking-card.selected .check-circle {
-  background: var(--primary-color);
-  color: var(--white);
-  border-color: var(--primary-color);
-}
-
+/* Return Picking Card — now structured with header + expand */
 .return-picking-card .check-circle {
   width: 30px;
   height: 30px;
@@ -1067,5 +1064,272 @@ body {
   color: transparent;
   transition: all 0.2s ease;
   flex-shrink: 0;
-  margin-left: 12px;
 }
+
+.return-picking-card.selected .check-circle {
+  background: var(--primary-color);
+  color: var(--white);
+  border-color: var(--primary-color);
+}
+
+/* ========================= RECEIVE TAB ACCORDION ========================= */
+
+.scan-bar-card {
+  background: var(--white);
+  padding: 14px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.loading-placeholder {
+  text-align: center;
+  padding: 30px 20px;
+  color: #888;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #888;
+  font-size: 0.95rem;
+}
+
+/* Receive picking item card */
+.receive-picking-item {
+  border: 1.5px solid var(--border-color);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s, background 0.2s;
+  background: var(--white);
+}
+
+.receive-picking-item.selected {
+  border-color: var(--primary-color);
+  background: #eef2f7;
+}
+
+.receive-picking-item.highlighted {
+  border-color: var(--warning-color);
+  animation: highlightPulse 0.6s ease;
+}
+
+@keyframes highlightPulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.5); }
+  70% { box-shadow: 0 0 0 8px rgba(255, 193, 7, 0); }
+  100% { box-shadow: none; }
+}
+
+.receive-picking-header {
+  display: flex;
+  align-items: center;
+  padding: 11px 12px;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.receive-picking-checkbox {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid #ccc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  flex-shrink: 0;
+  transition: all 0.2s;
+  font-size: 0.75rem;
+}
+
+.receive-picking-checkbox.checked {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #fff;
+}
+
+.receive-picking-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-color);
+}
+
+.receive-picking-meta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.receive-expand-btn {
+  background: none;
+  border: none;
+  padding: 6px 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.receive-expand-btn:hover {
+  background: var(--border-color);
+  color: var(--text-color);
+}
+
+.receive-picking-items {
+  background: #f9fafb;
+  border-top: 1px solid var(--border-color);
+  padding: 8px 12px;
+}
+
+.receive-item-row {
+  display: flex;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid #f0f0f0;
+  align-items: flex-start;
+}
+
+.receive-item-row:last-child {
+  border-bottom: none;
+}
+
+.receive-item-icon {
+  color: var(--secondary-color);
+  flex-shrink: 0;
+  font-size: 1rem;
+  padding-top: 2px;
+  width: 18px;
+  text-align: center;
+}
+
+.receive-item-name {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.receive-item-meta {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Children inside a package */
+.receive-item-children {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #e0e0e0;
+}
+
+.receive-item-child {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 0.8rem;
+  color: #555;
+}
+
+.receive-item-child-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.receive-item-child-barcode {
+  font-size: 0.72rem;
+  color: #999;
+  background: #f0f0f0;
+  border-radius: 4px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+}
+
+.receive-item-child-qty {
+  font-weight: 600;
+  color: #333;
+  flex-shrink: 0;
+}
+
+/* Sticky confirm bar */
+.sticky-confirm-bar {
+  position: sticky;
+  bottom: 0;
+  background: var(--white);
+  padding: 12px 16px;
+  display: block;
+  border-top: 1px solid var(--border-color);
+  box-shadow: 0 -3px 10px rgba(0, 0, 0, 0.08);
+  z-index: 100;
+  border-radius: 12px 12px 0 0;
+  margin: 0 -15px;
+}
+
+.sticky-confirm-bar .btn {
+  width: 100%;
+}
+
+/* Receive list footer */
+.receive-list-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 4px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.receive-list-count {
+  font-style: italic;
+}
+
+/* ========================= RETURN CARD EXPAND ========================= */
+.return-picking-card {
+  border: 1.5px solid var(--border-color);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  background: var(--white);
+  transition: border-color 0.2s;
+}
+
+.return-picking-card.selected {
+  border-color: var(--primary-color);
+  background: #eef2f7;
+}
+
+.return-card-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  cursor: pointer;
+  gap: 10px;
+}
+
+.return-expand-btn {
+  background: none;
+  border: none;
+  padding: 6px 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: background 0.15s;
+  font-size: 0.85rem;
+}
+
+.return-expand-btn:hover {
+  background: var(--border-color);
+  color: var(--text-color);
+}
+
+.return-card-items {
+  background: #f9fafb;
+  border-top: 1px solid var(--border-color);
+  padding: 8px 14px;
+}
+
