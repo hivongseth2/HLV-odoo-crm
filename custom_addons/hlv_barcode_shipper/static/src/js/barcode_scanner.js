@@ -21,6 +21,9 @@ class BarcodeShipper {
         this.receiveAvailableData = {};   // id -> { info, items }
         this.receiveSelectedIds = new Set();
         this.receiveExpandedPickingIds = new Set();
+        this.receiveLoadOffset = 0;
+        this.receiveLoadTotal = 0;
+        this.receiveHasMore = false;
 
         // ---- Return state ----
         this.returnPickings = [];
@@ -28,6 +31,8 @@ class BarcodeShipper {
         this.returnPickingId = null;
         this.returnReason = '';
         this.returnDetailItems = null;
+        this.returnExpandedIds = new Set();
+        this.returnItemCache = {};
 
         // ---- Camera state ----
         this.html5QrCode = null;
@@ -141,7 +146,10 @@ class BarcodeShipper {
         document.getElementById('btn-open-camera-item')?.addEventListener('click', () => this.startCamera('camera-item', 'reader-item', 'item'));
 
         // === RECEIVE TAB ===
-        document.getElementById('receive-scan-btn')?.addEventListener('click', () => this.scanReceivePicking());
+        document.getElementById('receive-scan-btn')?.addEventListener('click', () => {
+            const q = document.getElementById('receive-barcode-input')?.value?.trim() || '';
+            this.searchReceivePickings(q);
+        });
         document.getElementById('btn-close-camera-receive')?.addEventListener('click', () => this.stopCamera());
         document.getElementById('btn-refresh-receive')?.addEventListener('click', () => this.loadAvailableToReceive());
         document.getElementById('confirm-receive-selected-btn')?.addEventListener('click', () => this.confirmReceiveSelected());
@@ -184,7 +192,10 @@ class BarcodeShipper {
         const inputs = [
             ['pick-barcode-input', () => this.scanPickOrder()],
             ['item-barcode-input', () => this.scanItem()],
-            ['receive-barcode-input', () => this.scanReceivePicking()],
+            ['receive-barcode-input', () => {
+                const q = document.getElementById('receive-barcode-input')?.value?.trim() || '';
+                this.searchReceivePickings(q);
+            }],
             ['receive-detail-barcode-input', () => this.scanReceiveDetail()],
             ['return-detail-barcode-input', () => this.scanReturnDetail()],
         ];
@@ -360,7 +371,9 @@ class BarcodeShipper {
             }
         } else if (mode === 'receive') {
             const input = document.getElementById('receive-barcode-input');
-            if (input) { input.value = decodedText; this.scanReceivePicking(); this.stopCamera(); }
+            if (input) input.value = decodedText;
+            this.stopCamera();
+            this.searchReceivePickings(decodedText);
         } else if (mode === 'receive-detail') {
             const input = document.getElementById('receive-detail-barcode-input');
             if (input) {
@@ -1033,19 +1046,26 @@ class BarcodeShipper {
     async loadAvailableToReceive() {
         const container = document.getElementById('receive-available-accordion');
         if (!container) return;
+        this.receiveSelectedIds = new Set();
+        this.receiveExpandedPickingIds = new Set();
+        this.receiveAvailableData = {};
+        this.receiveSoGroups = [];
+        this.receiveLoadOffset = 0;
+        this.receiveLoadTotal = 0;
+        this.receiveHasMore = false;
+        this.updateReceiveConfirmBar();
         container.innerHTML = `
             <div class="loading-placeholder">
                 <i class="fa fa-spinner fa-spin" style="font-size:1.5rem;color:#aaa;"></i>
                 <div style="color:#888;margin-top:8px;">Đang tải danh sách phiếu...</div>
             </div>`;
-        this.receiveSelectedIds = new Set();
-        this.receiveExpandedPickingIds = new Set();
-        this.updateReceiveConfirmBar();
         try {
-            const res = await this.apiCall('/api/barcode/get_available_to_receive', {});
+            const res = await this.apiCall('/api/barcode/get_available_to_receive', { limit: 20, offset: 0 });
             if (res.success) {
                 this.receiveSoGroups = res.so_groups || [];
-                this.receiveAvailableData = {};
+                this.receiveLoadOffset = res.shown || 0;
+                this.receiveLoadTotal = res.total || 0;
+                this.receiveHasMore = res.has_more || false;
                 this.receiveSoGroups.forEach(g => {
                     (g.pickings || []).forEach(p => {
                         this.receiveAvailableData[p.id] = { info: p, items: null };
@@ -1066,6 +1086,102 @@ class BarcodeShipper {
         } catch (e) {
             console.error(e);
             container.innerHTML = `<div class="empty-state" style="color:var(--danger-color);">Lỗi kết nối</div>`;
+        }
+    }
+
+    async loadMoreReceive() {
+        const btn = document.getElementById('receive-load-more-btn');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Đang tải...'; }
+        try {
+            const res = await this.apiCall('/api/barcode/get_available_to_receive', {
+                limit: 20,
+                offset: this.receiveLoadOffset,
+            });
+            if (res.success) {
+                (res.so_groups || []).forEach(newGroup => {
+                    const existing = this.receiveSoGroups.find(g => g.so_name === newGroup.so_name);
+                    if (existing) {
+                        existing.pickings.push(...(newGroup.pickings || []));
+                    } else {
+                        this.receiveSoGroups.push(newGroup);
+                    }
+                });
+                (res.so_groups || []).forEach(g => {
+                    (g.pickings || []).forEach(p => {
+                        if (!this.receiveAvailableData[p.id]) {
+                            this.receiveAvailableData[p.id] = { info: p, items: null };
+                        }
+                    });
+                });
+                this.receiveLoadOffset += (res.shown || 0);
+                this.receiveHasMore = res.has_more || false;
+                this.renderReceiveAccordion();
+            }
+        } catch (e) {
+            console.error(e);
+            if (btn) { btn.disabled = false; btn.innerHTML = 'Tải thêm'; }
+        }
+    }
+
+    async searchReceivePickings(query) {
+        const input = document.getElementById('receive-barcode-input');
+        const container = document.getElementById('receive-available-accordion');
+        if (!container) return;
+
+        if (!query) {
+            if (input) input.value = '';
+            this.loadAvailableToReceive();
+            return;
+        }
+        if (input) input.value = '';
+
+        container.innerHTML = `
+            <div class="loading-placeholder">
+                <i class="fa fa-spinner fa-spin" style="font-size:1.5rem;color:#aaa;"></i>
+                <div style="color:#888;margin-top:8px;">Đang tìm "${query}"...</div>
+            </div>`;
+        try {
+            const res = await this.apiCall('/api/barcode/get_available_to_receive', { search: query });
+            if (res.success) {
+                this.receiveSoGroups = res.so_groups || [];
+                this.receiveHasMore = false;
+                this.receiveLoadTotal = res.total || 0;
+                this.receiveSoGroups.forEach(g => {
+                    (g.pickings || []).forEach(p => {
+                        if (!this.receiveAvailableData[p.id]) {
+                            this.receiveAvailableData[p.id] = { info: p, items: null };
+                        }
+                    });
+                });
+                if (this.receiveSoGroups.length === 0) {
+                    container.innerHTML = `<div class="empty-state">Không tìm thấy phiếu nào chứa "${query}"</div>`;
+                    this.showMessage('receive-scan-result', `Không tìm thấy phiếu nào chứa "${query}"`, 'warning');
+                } else {
+                    const autoIds = res.auto_select_ids || [];
+                    if (autoIds.length > 0) {
+                        autoIds.forEach(id => this.receiveSelectedIds.add(id));
+                        this.updateReceiveConfirmBar();
+                        this.renderReceiveAccordion(autoIds);
+                        this.showMessage('receive-scan-result',
+                            `Đã chọn ${autoIds.length} phiếu khớp chính xác`, 'success');
+                        this.playSound('success');
+                        setTimeout(() => {
+                            const el = document.getElementById(`receive-p-${autoIds[0]}`);
+                            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 200);
+                    } else {
+                        this.renderReceiveAccordion();
+                        this.showMessage('receive-scan-result',
+                            `Tìm thấy ${res.total} phiếu chứa "${query}"`, 'info');
+                    }
+                }
+            } else {
+                this.showMessage('receive-scan-result', res.error || 'Lỗi tìm kiếm', 'danger');
+                this.playSound('error');
+            }
+        } catch (e) {
+            console.error(e);
+            this.showMessage('receive-scan-result', 'Lỗi kết nối', 'danger');
         }
     }
 
@@ -1142,6 +1258,21 @@ class BarcodeShipper {
 
             container.appendChild(groupEl);
         });
+
+        // Load-more footer
+        const shownCount = Object.keys(this.receiveAvailableData).length;
+        const footerEl = document.createElement('div');
+        footerEl.className = 'receive-list-footer';
+        footerEl.innerHTML = `
+            <span class="receive-list-count">Hiển thị ${shownCount} / ${this.receiveLoadTotal || shownCount} phiếu</span>
+            ${this.receiveHasMore
+                ? `<button id="receive-load-more-btn" class="btn btn-outline btn-sm">Tải thêm</button>`
+                : ''}
+        `;
+        container.appendChild(footerEl);
+        if (this.receiveHasMore) {
+            document.getElementById('receive-load-more-btn')?.addEventListener('click', () => this.loadMoreReceive());
+        }
     }
 
     toggleReceivePickingSelection(pickingId) {
@@ -1417,25 +1548,36 @@ class BarcodeShipper {
         if (!container) return;
         container.innerHTML = '';
         this.returnSelectedIds = new Set();
+        this.returnExpandedIds = new Set();
+        this.returnItemCache = {};
         const actions = document.getElementById('return-actions');
         if (actions) actions.style.display = 'none';
 
         pickings.forEach(p => {
             const card = document.createElement('div');
-            card.className = 'return-picking-card picking-select-card';
+            card.className = 'return-picking-card';
+            card.id = `return-pc-${p.id}`;
             card.dataset.id = p.id;
             card.innerHTML = `
-                <div style="flex:1;">
-                    <div style="font-weight:700;font-size:1rem;color:var(--primary-color);">${p.name}</div>
-                    <div style="font-size:0.82rem;color:#888;margin-top:3px;">
-                        <i class="fa fa-user"></i> ${p.partner_name || ''}
-                        ${p.receive_time ? ` &nbsp;·&nbsp; <i class="fa fa-clock"></i> ${p.receive_time}` : ''}
-                        ${p.item_count ? ` &nbsp;·&nbsp; <i class="fa fa-box"></i> ${p.item_count} kiện` : ''}
+                <div class="return-card-header">
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-weight:700;font-size:1rem;color:var(--primary-color);">${p.name}</div>
+                        <div style="font-size:0.82rem;color:#888;margin-top:3px;">
+                            <i class="fa fa-user"></i> ${p.partner_name || ''}
+                            ${p.receive_time ? ` &nbsp;·&nbsp; <i class="fa fa-clock"></i> ${p.receive_time}` : ''}
+                            ${p.item_count ? ` &nbsp;·&nbsp; <i class="fa fa-box"></i> ${p.item_count} kiện` : ''}
+                        </div>
                     </div>
+                    <button class="return-expand-btn" data-id="${p.id}" title="Xem hàng hóa">
+                        <i class="fa fa-chevron-down"></i>
+                    </button>
+                    <div class="check-circle"><i class="fa fa-check"></i></div>
                 </div>
-                <div class="check-circle"><i class="fa fa-check"></i></div>
+                <div class="return-card-items" id="return-items-${p.id}" style="display:none;"></div>
             `;
-            card.addEventListener('click', () => {
+
+            // Header click → toggle selection
+            card.querySelector('.return-card-header').addEventListener('click', (e) => {
                 const id = p.id;
                 if (this.returnSelectedIds.has(id)) {
                     this.returnSelectedIds.delete(id);
@@ -1446,8 +1588,50 @@ class BarcodeShipper {
                 }
                 if (actions) actions.style.display = this.returnSelectedIds.size > 0 ? 'block' : 'none';
             });
+
+            // Expand button → show items (stopPropagation prevents selection)
+            card.querySelector('.return-expand-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleReturnPickingExpand(p.id);
+            });
+
             container.appendChild(card);
         });
+    }
+
+    async toggleReturnPickingExpand(pickingId) {
+        const isExpanded = this.returnExpandedIds.has(pickingId);
+        const itemsDiv = document.getElementById(`return-items-${pickingId}`);
+        const btn = document.querySelector(`#return-pc-${pickingId} .return-expand-btn`);
+
+        if (isExpanded) {
+            this.returnExpandedIds.delete(pickingId);
+            if (itemsDiv) itemsDiv.style.display = 'none';
+            if (btn) btn.innerHTML = '<i class="fa fa-chevron-down"></i>';
+        } else {
+            this.returnExpandedIds.add(pickingId);
+            if (btn) btn.innerHTML = '<i class="fa fa-chevron-up"></i>';
+            if (itemsDiv) {
+                itemsDiv.style.display = 'block';
+                if (this.returnItemCache[pickingId]) {
+                    itemsDiv.innerHTML = this._renderReceiveItemsList(this.returnItemCache[pickingId]);
+                } else {
+                    itemsDiv.innerHTML = '<div class="loading-placeholder" style="padding:10px;"><i class="fa fa-spinner fa-spin"></i> Đang tải...</div>';
+                    try {
+                        const res = await this.apiCall('/api/barcode/get_multiple_outs', { picking_ids: [pickingId] });
+                        if (res.success && res.data && res.data[0]) {
+                            const items = res.data[0].items || [];
+                            this.returnItemCache[pickingId] = items;
+                            itemsDiv.innerHTML = this._renderReceiveItemsList(items);
+                        } else {
+                            itemsDiv.innerHTML = '<div style="padding:10px;color:#888;">Không có dữ liệu</div>';
+                        }
+                    } catch (e) {
+                        itemsDiv.innerHTML = '<div style="padding:10px;color:var(--danger-color);">Lỗi tải</div>';
+                    }
+                }
+            }
+        }
     }
 
     async confirmReturn() {

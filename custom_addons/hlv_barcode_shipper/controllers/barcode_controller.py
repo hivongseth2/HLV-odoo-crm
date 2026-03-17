@@ -753,18 +753,44 @@ class BarcodeShipperController(http.Controller):
         csrf=False,
     )
     def get_available_to_receive(self, **kwargs):
-        """Return all outgoing pickings available to be received (not yet received)."""
+        """Return outgoing pickings available to be received (not yet received).
+        Supports search, limit, offset for pagination."""
         try:
             access = self._check_shipper_access()
             if not access["success"]:
                 return access
 
-            pickings = request.env["stock.picking"].sudo().search([
+            data = json.loads(request.httprequest.data.decode("utf-8"))
+            search_query = (data.get("search") or "").strip()
+            limit = int(data.get("limit") or 20)
+            offset = int(data.get("offset") or 0)
+
+            domain = [
                 ("company_id", "=", request.env.company.id),
                 ("picking_type_id.code", "=", "outgoing"),
                 ("state", "in", ["assigned", "partially_available"]),
                 ("shipper_received", "=", False),
-            ], order="scheduled_date asc, name asc")
+            ]
+            if search_query:
+                domain += ['|', ("name", "ilike", search_query), ("origin", "ilike", search_query)]
+
+            Picking = request.env["stock.picking"].sudo()
+            total = Picking.search_count(domain)
+
+            if search_query:
+                # Return all matches when searching (no pagination)
+                pickings = Picking.search(domain, order="scheduled_date asc, name asc")
+            else:
+                pickings = Picking.search(domain, order="scheduled_date asc, name asc", limit=limit, offset=offset)
+
+            # Exact match detection for auto-select (name OR origin matches exactly)
+            auto_select_ids = []
+            if search_query:
+                q_upper = search_query.upper()
+                exact = pickings.filtered(
+                    lambda p: p.name.upper() == q_upper or (p.origin or "").upper() == q_upper
+                )
+                auto_select_ids = exact.ids
 
             so_groups_map = {}
             for p in pickings:
@@ -786,10 +812,14 @@ class BarcodeShipperController(http.Controller):
                 })
 
             so_groups_list = sorted(so_groups_map.values(), key=lambda x: x["so_name"])
+            shown = len(pickings)
             return {
                 "success": True,
                 "so_groups": so_groups_list,
-                "total": len(pickings),
+                "total": total,
+                "shown": shown,
+                "has_more": (not search_query) and ((offset + shown) < total),
+                "auto_select_ids": auto_select_ids,
             }
         except Exception as e:
             _logger.exception("Error in get_available_to_receive")

@@ -1027,34 +1027,7 @@ body {
   border-color: #b7eb8f;
 }
 
-/* Return Picking Card */
-.return-picking-card {
-  display: flex;
-  align-items: center;
-  padding: 14px 16px;
-  background: #fff;
-  border: 2px solid var(--border-color);
-  border-radius: 10px;
-  margin-bottom: 10px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.return-picking-card:active {
-  background: #f5f6f8;
-}
-
-.return-picking-card.selected {
-  border-color: var(--primary-color);
-  background: #eef2f7;
-}
-
-.return-picking-card.selected .check-circle {
-  background: var(--primary-color);
-  color: var(--white);
-  border-color: var(--primary-color);
-}
-
+/* Return Picking Card — now structured with header + expand */
 .return-picking-card .check-circle {
   width: 30px;
   height: 30px;
@@ -1067,7 +1040,12 @@ body {
   color: transparent;
   transition: all 0.2s ease;
   flex-shrink: 0;
-  margin-left: 12px;
+}
+
+.return-picking-card.selected .check-circle {
+  background: var(--primary-color);
+  color: var(--white);
+  border-color: var(--primary-color);
 }
 
 /* ========================= RECEIVE TAB ACCORDION ========================= */
@@ -1229,3 +1207,64 @@ body {
   border-radius: 12px 12px 0 0;
   margin: 0 -15px;
 }
+
+/* Receive list footer */
+.receive-list-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 4px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.receive-list-count {
+  font-style: italic;
+}
+
+/* ========================= RETURN CARD EXPAND ========================= */
+.return-picking-card {
+  border: 1.5px solid var(--border-color);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  background: var(--white);
+  transition: border-color 0.2s;
+}
+
+.return-picking-card.selected {
+  border-color: var(--primary-color);
+  background: #eef2f7;
+}
+
+.return-card-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  cursor: pointer;
+  gap: 10px;
+}
+
+.return-expand-btn {
+  background: none;
+  border: none;
+  padding: 6px 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: background 0.15s;
+  font-size: 0.85rem;
+}
+
+.return-expand-btn:hover {
+  background: var(--border-color);
+  color: var(--text-color);
+}
+
+.return-card-items {
+  background: #f9fafb;
+  border-top: 1px solid var(--border-color);
+  padding: 8px 14px;
+}
+
