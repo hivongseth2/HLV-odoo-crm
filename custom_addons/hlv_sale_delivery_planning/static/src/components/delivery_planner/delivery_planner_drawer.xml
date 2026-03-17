@@ -63,7 +63,8 @@
                         <h6 class="text-muted text-uppercase small mb-2">Tags</h6>
                         <div class="d-flex flex-wrap gap-1">
                             <t t-foreach="state.selectedOrder.tag_ids" t-as="tag" t-key="tag[0]">
-                                <span class="badge bg-secondary bg-opacity-25 text-dark" style="font-size:0.75rem;">
+                                <span class="badge" style="font-size:0.75rem;"
+                                      t-att-style="'font-size:0.75rem;background-color:' + this.getTagColor(tag[2]) + ';color:' + this.getTagTextColor(tag[2])">
                                     <i class="fa fa-tag me-1"></i><t t-esc="tag[1]"/>
                                 </span>
                             </t>

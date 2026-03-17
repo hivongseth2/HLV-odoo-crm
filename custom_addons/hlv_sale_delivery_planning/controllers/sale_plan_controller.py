@@ -214,7 +214,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
       <option value="GHN">GHN</option>
       <option value="J&T">J&amp;T</option>
     </select></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Tag</label><select id="f-tag" class="form-select form-select-sm"><option value="">Tất cả</option></select></div>
+  <div class="col-md-2"><label class="form-label small mb-0">Tag <small class="text-muted">(Ctrl+click chọn nhiều)</small></label><select id="f-tag" multiple class="form-select form-select-sm" style="max-height:90px"></select></div>
   <div class="col-md-2"><label class="form-label small mb-0">Nhận hàng từ</label><input type="date" id="f-po-date-from" class="form-control form-control-sm"/></div>
   <div class="col-md-2"><label class="form-label small mb-0">Nhận hàng đến</label><input type="date" id="f-po-date-to" class="form-control form-control-sm"/></div>
   <div class="col-md-2"><label class="form-label small mb-0">Trạng Thái (Mua hàng)</label>
@@ -296,6 +296,11 @@ function fm(v){return(v||0).toLocaleString('vi-VN')+'₫'}
 function fq(v){var n=parseFloat(v)||0;return n%1===0?n.toLocaleString('vi-VN'):n.toLocaleString('vi-VN',{minimumFractionDigits:0,maximumFractionDigits:2})}
 function b(cls,label){return'<span class="badge '+cls+' me-1">'+label+'</span>'}
 function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function gv(id){var e=$(id);return e?e.value:'';}
+function getTagIds(){var e=$('f-tag');if(!e)return'';return Array.from(e.selectedOptions).map(function(o){return o.value;}).filter(Boolean).join(',');}
+var TAG_BG=['#adb5bd','#dc3545','#fd7e14','#ffc107','#20c997','#6610f2','#d63384','#0d6efd','#6f42c1','#e91e63','#198754','#0dcaf0'];
+var TAG_FG=[0,0,0,1,1,0,0,0,0,0,0,1]; // 1=dark text
+function tagBadge(tag){var c=tag[2]||0;var bg=TAG_BG[c]||TAG_BG[0];var fg=TAG_FG[c]?'#000':'#fff';return'<span class="badge me-1" style="background-color:'+bg+';color:'+fg+'">'+esc(tag[1])+'</span>';}
 function groupLines(lines){
   var map={},order=[];
   lines.forEach(function(l){
@@ -315,12 +320,8 @@ function groupLines(lines){
   });
   return order.map(function(pid){return map[pid];});
 }
-function gv(id){var e=$(id);return e?e.value:'';}
-function partnerName(o){return o.partner_id?o.partner_id[1]:'';}
-function whName(o){return o.warehouse_id?o.warehouse_id[1]:'';}
 
-function showLoading(){$('loading').classList.remove('d-none')}
-function hideLoading(){$('loading').classList.add('d-none')}
+function partnerName(o){return o.partner_id?o.partner_id[1]:'';}
 
 function load(append){
   showLoading();
@@ -331,7 +332,7 @@ function load(append){
     date_from:gv('f-date-from'),date_to:gv('f-date-to'),
     po_date_from:gv('f-po-date-from'),po_date_to:gv('f-po-date-to'),
     po_status:gv('f-po-status'),saler_code:gv('f-saler'),
-    htgh:gv('f-htgh'),delivery_type:gv('f-dtype'),tag_ids:gv('f-tag'),
+    htgh:gv('f-htgh'),delivery_type:gv('f-dtype'),tag_ids:getTagIds(),
     limit:lim,offset:offset};
   fetch('/api/sale_plan/data',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({jsonrpc:'2.0',method:'call',params:body})})
@@ -358,7 +359,9 @@ function load(append){
     }
     if(d.tags&&!S.tagsLoaded){
       var tsel=$('f-tag');
+      S.tagsMap={};
       d.tags.forEach(function(t){
+        S.tagsMap[t.id]=t;
         var o=document.createElement('option');o.value=t.id;o.textContent=t.name;tsel.appendChild(o);
       });
       S.tagsLoaded=true;
@@ -476,7 +479,9 @@ function renderSOCard(o){
     +'</div><div class="card-body py-2">';
   if(o.commitment_date) h+='<small class="text-muted"><i class="fa fa-calendar"></i> '+fd(o.commitment_date)+'</small><br>';
   if(o.x_studio_delivery_type) h+='<small class="text-muted"><i class="fa fa-truck me-1"></i>'+esc(o.x_studio_delivery_type)+'</small><br>';
-  if(o.tag_ids&&o.tag_ids.length) h+='<div class="mt-1">'+o.tag_ids.map(function(t){return'<span class="badge bg-secondary bg-opacity-25 text-dark me-1" style="font-size:10px">'+esc(t[1])+'</span>';}).join('')+'</div>';
+  if(o.x_studio_htgh) h+='<small class="text-muted"><i class="fa fa-info-circle me-1"></i>'+esc(o.x_studio_htgh)+'</small><br>';
+  if(o.misa_shipping_address) h+='<small class="text-muted" style="font-size:.7rem"><i class="fa fa-map-marker me-1 text-danger"></i>'+esc(o.misa_shipping_address)+'</small><br>';
+  if(o.tag_ids&&o.tag_ids.length) h+='<div class="mt-1">'+o.tag_ids.map(tagBadge).join('')+'</div>';
   h+='<div class="d-flex justify-content-between align-items-center">'
     +'<span class="fw-bold">'+fm(o.amount_total)+'</span>';
   var pc=o.pos?o.pos.length:0;
@@ -535,7 +540,7 @@ function openDrawer(id){
     +(o.x_studio_delivery_type?'<div><i class="fa fa-truck text-muted me-2"></i><span class="text-muted">'+esc(o.x_studio_delivery_type)+'</span></div>':'')
     +(o.x_studio_htgh?'<div><i class="fa fa-info-circle text-muted me-2"></i><span class="text-muted">HTGH: '+esc(o.x_studio_htgh)+'</span></div>':'')
     +(o.misa_shipping_address?'<div><i class="fa fa-map-marker text-muted me-2"></i><span class="text-muted">'+esc(o.misa_shipping_address)+'</span></div>':'')
-    +(o.tag_ids&&o.tag_ids.length?'<div><i class="fa fa-tags text-muted me-2"></i>'+o.tag_ids.map(function(t){return'<span class="badge bg-secondary bg-opacity-25 text-dark me-1" style="font-size:10px">'+esc(t[1])+'</span>';}).join('')+'</div>':'')
+    +(o.tag_ids&&o.tag_ids.length?'<div><i class="fa fa-tags text-muted me-2"></i>'+o.tag_ids.map(tagBadge).join('')+'</div>':'')
     +'</div>'
     +'</div>';
   h+='<table class="table table-sm table-bordered table-lines"><thead class="table-light"><tr>'
@@ -600,13 +605,18 @@ function updFilters(){
   if(gv('f-saler')) chips.push({k:'f-saler',v:'NV MISA: '+gv('f-saler'),reset:''});
   if(gv('f-htgh')) chips.push({k:'f-htgh',v:'HTGH: '+gv('f-htgh'),reset:''});
   if(gv('f-dtype')!=='all'){var s6=$('f-dtype');chips.push({k:'f-dtype',v:'Vận chuyển: '+s6.options[s6.selectedIndex].text,reset:'all'});}
-  if(gv('f-tag')){var s7=$('f-tag');chips.push({k:'f-tag',v:'Tag: '+s7.options[s7.selectedIndex].text,reset:'all'});}
+  // per-tag chips
+  var tsel=$('f-tag');
+  if(tsel){Array.from(tsel.selectedOptions).forEach(function(opt){
+    chips.push({k:'f-tag-'+opt.value,v:'Tag: '+opt.text,tagId:opt.value});
+  });}
   if(!chips.length){box.classList.add('d-none');return;}
   box.classList.remove('d-none');
   box.innerHTML='<i class="fa fa-filter text-muted small"></i> <small class="text-muted">Bộ lọc đang chọn:</small> '
     +chips.map(function(c){
-      return '<span class="badge bg-success filter-chip" data-fk="'+c.k+'" data-fr="'+c.reset+'">'
-        +esc(c.v)+' <span class="chip-x" data-fk="'+c.k+'" data-fr="'+c.reset+'">&times;</span></span>';
+      var attr=c.tagId!==undefined?'data-tag-id="'+c.tagId+'"':'data-fk="'+c.k+'" data-fr="'+(c.reset||'')+'"';
+      return '<span class="badge bg-success filter-chip" '+attr+'>'
+        +esc(c.v)+' <span class="chip-x" '+attr+'>&times;</span></span>';
     }).join('')
     +' <a href="#" id="clear-all-filters" class="small text-danger ms-1"><i class="fa fa-trash"></i> Xóa tất cả bộ lọc</a>';
 }
@@ -615,8 +625,13 @@ document.addEventListener('click',function(e){
   var chipX=e.target.closest('.chip-x');
   if(chipX){
     e.preventDefault();e.stopPropagation();
-    var el=$(chipX.dataset.fk);
-    if(el){el.value=chipX.dataset.fr||'';}
+    if(chipX.dataset.tagId){
+      var tsel=$('f-tag');
+      if(tsel){Array.from(tsel.options).forEach(function(o){if(o.value===chipX.dataset.tagId)o.selected=false;});}
+    } else {
+      var el=$(chipX.dataset.fk);
+      if(el){el.value=chipX.dataset.fr||'';}
+    }
     load(false);return;
   }
   var rBtn=e.target.closest('.btn-report');
@@ -637,7 +652,7 @@ function clearAll(){
   ['f-q','f-date-from','f-date-to','f-po-date-from','f-po-date-to','f-saler','f-htgh'].forEach(function(id){var e=$(id);if(e)e.value='';});
   ['f-wh','f-stk','f-pack','f-po-status','f-dtype'].forEach(function(id){var e=$(id);if(e)e.value='all';});
   $('f-del').value='pending_partial';
-  var ft=$('f-tag');if(ft)ft.value='';
+  var ft=$('f-tag');if(ft){Array.from(ft.options).forEach(function(o){o.selected=false;});}
   S.kanbanColPageSize={};
   load(false);
 }
