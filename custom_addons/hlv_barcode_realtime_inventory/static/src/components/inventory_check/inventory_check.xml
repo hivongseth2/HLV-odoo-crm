@@ -252,7 +252,7 @@
                                         inputmode="none"
                                         autofocus="autofocus"/>
                                     <button class="hlv-input-group__btn hlv-input-group__btn--camera"
-                                            t-on-click="openCamera"
+                                            t-on-click="() => this.openCamera('product')"
                                             title="Quét bằng camera">
                                         <i class="fa fa-camera"/>
                                     </button>
