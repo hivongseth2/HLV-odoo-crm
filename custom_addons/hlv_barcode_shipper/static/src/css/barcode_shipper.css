@@ -1192,6 +1192,45 @@ body {
   margin-top: 2px;
 }
 
+/* Children inside a package */
+.receive-item-children {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #e0e0e0;
+}
+
+.receive-item-child {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 0.8rem;
+  color: #555;
+}
+
+.receive-item-child-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.receive-item-child-barcode {
+  font-size: 0.72rem;
+  color: #999;
+  background: #f0f0f0;
+  border-radius: 4px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+}
+
+.receive-item-child-qty {
+  font-weight: 600;
+  color: #333;
+  flex-shrink: 0;
+}
+
 /* Sticky confirm bar */
 .sticky-confirm-bar {
   position: sticky;

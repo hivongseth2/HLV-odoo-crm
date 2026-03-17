@@ -122,6 +122,14 @@ class BarcodeShipperController(http.Controller):
         for pl in picking.package_level_ids:
             if not pl.package_id:
                 continue
+            children = []
+            for ml in pl.move_line_ids:
+                if ml.product_id:
+                    children.append({
+                        "name": ml.product_id.display_name,
+                        "barcode": ml.product_id.barcode or ml.product_id.default_code or "",
+                        "qty": ml.quantity,
+                    })
             items.append(
                 {
                     "type": "package",
@@ -131,6 +139,7 @@ class BarcodeShipperController(http.Controller):
                     "qty": pl.move_line_ids and sum(pl.move_line_ids.mapped("quantity")) or 0,
                     "scanned": skip_package,  # True = tự động đã quét
                     "picking_id": picking.id, # Link item to picking
+                    "children": children,
                 }
             )
 

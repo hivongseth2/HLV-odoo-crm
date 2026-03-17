@@ -100,7 +100,7 @@ class BarcodeShipper {
         });
         if (tabName === 'receive') {
             this.showReceiveStep('receive-step-scan');
-            this.loadAvailableToReceive();
+            this._showReceivePrompt();
         } else if (tabName === 'deliver') {
             this.showDeliverStep('step-scan-pick');
         } else if (tabName === 'return') {
@@ -1123,6 +1123,24 @@ class BarcodeShipper {
         }
     }
 
+    _showReceivePrompt() {
+        const container = document.getElementById('receive-available-accordion');
+        if (!container) return;
+        this.receiveSoGroups = [];
+        this.receiveAvailableData = {};
+        this.receiveSelectedIds = new Set();
+        this.receiveExpandedPickingIds = new Set();
+        this.receiveLoadOffset = 0;
+        this.receiveLoadTotal = 0;
+        this.receiveHasMore = false;
+        this.updateReceiveConfirmBar();
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fa fa-search" style="font-size:2.5rem;color:#ddd;display:block;margin-bottom:10px;"></i>
+                <div style="color:#aaa;">Nhập mã phiếu hoặc đơn hàng để tìm kiếm</div>
+            </div>`;
+    }
+
     async searchReceivePickings(query) {
         const input = document.getElementById('receive-barcode-input');
         const container = document.getElementById('receive-available-accordion');
@@ -1130,7 +1148,7 @@ class BarcodeShipper {
 
         if (!query) {
             if (input) input.value = '';
-            this.loadAvailableToReceive();
+            this._showReceivePrompt();
             return;
         }
         if (input) input.value = '';
@@ -1260,7 +1278,7 @@ class BarcodeShipper {
         });
 
         // Load-more footer
-        const shownCount = Object.keys(this.receiveAvailableData).length;
+        const shownCount = this.receiveSoGroups.reduce((s, g) => s + (g.pickings || []).length, 0);
         const footerEl = document.createElement('div');
         footerEl.className = 'receive-list-footer';
         footerEl.innerHTML = `
@@ -1328,7 +1346,17 @@ class BarcodeShipper {
         if (!items || items.length === 0) {
             return '<div style="padding:10px;color:#888;text-align:center;">Không có mặt hàng</div>';
         }
-        return items.map(i => `
+        return items.map(i => {
+            const childrenHtml = (i.type === 'package' && i.children && i.children.length)
+                ? `<div class="receive-item-children">${i.children.map(c => `
+                    <div class="receive-item-child">
+                        <i class="fa fa-cube" style="color:#aaa;font-size:0.75rem;"></i>
+                        <span class="receive-item-child-name">${c.name}</span>
+                        ${c.barcode ? `<span class="receive-item-child-barcode">${c.barcode}</span>` : ''}
+                        <span class="receive-item-child-qty">x${c.qty}</span>
+                    </div>`).join('')}</div>`
+                : '';
+            return `
             <div class="receive-item-row">
                 <div class="receive-item-icon">
                     ${i.type === 'package' ? '<i class="fa fa-box"></i>' : '<i class="fa fa-cube"></i>'}
@@ -1336,11 +1364,13 @@ class BarcodeShipper {
                 <div class="receive-item-info">
                     <div class="receive-item-name">${i.name || ''}</div>
                     <div class="receive-item-meta">
-                        ${i.barcode ? `<span><i class="fa fa-barcode"></i> ${i.barcode}</span>` : ''}
-                        <span style="margin-left:6px;">SL: <b>${i.qty || 0}</b></span>
+                        ${i.barcode && i.type !== 'package' ? `<span><i class="fa fa-barcode"></i> ${i.barcode}</span>` : ''}
+                        <span style="margin-left:${i.type !== 'package' ? '6' : '0'}px;">SL: <b>${i.qty || 0}</b></span>
                     </div>
+                    ${childrenHtml}
                 </div>
-            </div>`).join('');
+            </div>`;
+        }).join('');
     }
 
     updateReceiveConfirmBar() {
@@ -1562,6 +1592,7 @@ class BarcodeShipper {
                 <div class="return-card-header">
                     <div style="flex:1;min-width:0;">
                         <div style="font-weight:700;font-size:1rem;color:var(--primary-color);">${p.name}</div>
+                        ${p.origin ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:1px;"><i class="fa fa-file-alt"></i> ${p.origin}</div>` : ''}
                         <div style="font-size:0.82rem;color:#888;margin-top:3px;">
                             <i class="fa fa-user"></i> ${p.partner_name || ''}
                             ${p.receive_time ? ` &nbsp;·&nbsp; <i class="fa fa-clock"></i> ${p.receive_time}` : ''}
