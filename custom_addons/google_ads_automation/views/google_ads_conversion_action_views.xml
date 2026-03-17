@@ -2,7 +2,7 @@
 <odoo>
     <record id="view_google_ads_conversion_action_list" model="ir.ui.view">
         <field name="name">google.ads.conversion.action.list</field>
-        <field name="model">google.ads.conversion.action</field>
+        <field name="model">google.ads.conversion_action</field>
         <field name="arch" type="xml">
             <list string="Hành Động Chuyển Đổi" editable="bottom">
                 <field name="name"/>
@@ -16,14 +16,14 @@
 
     <record id="action_google_ads_conversion_action" model="ir.actions.act_window">
         <field name="name">Cấu Hình Chuyển Đổi</field>
-        <field name="res_model">google.ads.conversion.action</field>
+        <field name="res_model">google.ads.conversion_action</field>
         <field name="view_mode">list</field>
     </record>
 
     <!-- Menu Item under Configuration/Settings -->
     <menuitem id="menu_google_ads_conversion_action"
               name="Conversion Actions"
-              parent="menu_google_ads_config"
+              parent="menu_google_ads_configuration"
               action="action_google_ads_conversion_action"
               sequence="50"/>
 </odoo>

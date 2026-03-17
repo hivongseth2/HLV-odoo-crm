@@ -65,7 +65,7 @@ class GoogleAdsConversion(models.Model):
             raise UserError(_("Không có GCLID để đồng bộ."))
 
         # Tìm hành động chuyển đổi phù hợp (VD: 'Purchase' hoặc 'Purchase (Offline)')
-        actions = self.env['google.ads.conversion.action'].search([
+        actions = self.env['google.ads.conversion_action'].search([
             ('account_id', '=', self.account_id.id),
             ('active', '=', True)
         ], limit=1)

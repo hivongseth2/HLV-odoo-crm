@@ -22,7 +22,7 @@ access_google_ads_conversion_user,google.ads.conversion.user,model_google_ads_co
 access_google_ads_conversion_manager,google.ads.conversion.manager,model_google_ads_conversion,group_google_ads_manager,1,1,1,1
 access_google_ads_tag_user,google.ads.tag.user,model_google_ads_tag,group_google_ads_user,1,0,0,0
 access_google_ads_tag_manager,google.ads.tag.manager,model_google_ads_tag,group_google_ads_manager,1,1,1,1
-access_google_ads_conversion_action_user,google.ads.conversion.action.user,model_google_ads_conversion_action,group_google_ads_user,1,0,0,0
-access_google_ads_conversion_action_manager,google.ads.conversion.action.manager,model_google_ads_conversion_action,group_google_ads_manager,1,1,1,1
+access_google_ads_conversion_action_user,google.ads.conversion_action.user,model_google_ads_conversion_action,group_google_ads_user,1,0,0,0
+access_google_ads_conversion_action_manager,google.ads.conversion_action.manager,model_google_ads_conversion_action,group_google_ads_manager,1,1,1,1
 access_google_ads_gtm_item_user,google.ads.gtm.item.user,model_google_ads_gtm_item,group_google_ads_user,1,0,0,0
 access_google_ads_gtm_item_manager,google.ads.gtm.item.manager,model_google_ads_gtm_item,group_google_ads_manager,1,1,1,1

@@ -1,7 +1,7 @@
 from odoo import fields, models
 
 class GoogleAdsConversionAction(models.Model):
-    _name = 'google.ads.conversion.action'
+    _name = 'google.ads.conversion_action'
     _description = 'Hành động Chuyển đổi Google Ads'
 
     name = fields.Char(string='Tên Hành Động', required=True)
