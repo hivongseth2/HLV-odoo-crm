@@ -47,13 +47,22 @@ class GoogleAdsAccount(models.Model):
         help='ID của tài khoản Ads bạn muốn quản lý trực tiếp. Định dạng: 1234567890 (không có dấu -)'
     )
     
-    @api.onchange('login_customer_id', 'operating_customer_id')
-    def _onchange_sanitize_customer_ids(self):
-        """Tự động loại bỏ dấu gạch ngang và khoảng trắng từ ID dán vào."""
-        if self.login_customer_id:
-            self.login_customer_id = self.login_customer_id.replace('-', '').replace(' ', '')
-        if self.operating_customer_id:
-            self.operating_customer_id = self.operating_customer_id.replace('-', '').replace(' ', '')
+    @api.onchange('login_customer_id', 'operating_customer_id', 'client_id', 'client_secret', 'developer_token')
+    def _onchange_sanitize_credentials(self):
+        """Tự động loại bỏ dấu gạch ngang và khoảng trắng từ các thông tin dán vào."""
+        fields_to_sanitize = [
+            'login_customer_id', 'operating_customer_id', 
+            'client_id', 'client_secret', 'developer_token'
+        ]
+        for field in fields_to_sanitize:
+            val = getattr(self, field)
+            if val:
+                # Với Customer ID: xóa gạch ngang và spaces
+                if 'customer_id' in field:
+                    setattr(self, field, val.replace('-', '').replace(' ', '').strip())
+                else:
+                    # Với Token/Secret: chỉ strip spaces
+                    setattr(self, field, val.strip())
 
     service_account_json = fields.Text(
         string='File JSON Service Account',
