@@ -52,7 +52,7 @@ _LOGIN = """<!DOCTYPE html>
 
 _PAGE = r"""<!DOCTYPE html>
 <html lang="vi"><head><meta charset="utf-8"/>
-<title>Điều phối Giao hàng</title>
+<title>Tình trạng đơn hàng</title>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
@@ -143,7 +143,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 <div id="loading" class="loading-overlay d-none"><div class="spinner-border text-primary"></div></div>
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-3" style="border-radius:0!important">
 <div class="container-fluid">
-  <a class="navbar-brand fw-bold" href="/sale_plan">&#128666; Điều phối Giao hàng</a>
+  <a class="navbar-brand fw-bold" href="/sale_plan">&#128666; Tình trạng đơn hàng</a>
   <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#nav1"><span class="navbar-toggler-icon"></span></button>
   <div class="collapse navbar-collapse" id="nav1">
     <ul class="navbar-nav ms-auto">
@@ -214,7 +214,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
       <option value="GHN">GHN</option>
       <option value="J&T">J&amp;T</option>
     </select></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Tag <small class="text-muted">(Ctrl+click chọn nhiều)</small></label><select id="f-tag" multiple class="form-select form-select-sm" style="max-height:90px"></select></div>
   <div class="col-md-2"><label class="form-label small mb-0">Nhận hàng từ</label><input type="date" id="f-po-date-from" class="form-control form-control-sm"/></div>
   <div class="col-md-2"><label class="form-label small mb-0">Nhận hàng đến</label><input type="date" id="f-po-date-to" class="form-control form-control-sm"/></div>
   <div class="col-md-2"><label class="form-label small mb-0">Trạng Thái (Mua hàng)</label>
@@ -223,6 +222,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
       <option value="partial">Nhận 1 phần</option><option value="full">Đã nhận đủ</option>
     </select></div>
 </div>
+  <div class="col-md-2"><label class="form-label small mb-0">Tag <small class="text-muted">(Ctrl+click chọn nhiều)</small></label><select id="f-tag" multiple class="form-select form-select-sm" style="max-height:90px"></select></div>
+
 </div></div>
 <!-- View toggle -->
 <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
