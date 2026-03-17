@@ -841,6 +841,7 @@ export class InventoryCheckScanner extends Component {
     }
 
     async openCamera(mode = 'product') {
+        if (typeof mode !== 'string') mode = 'product';
         this.state.camera_mode = mode;
         this._lastScannedCode = '';
         this._lastScanTime = 0;
