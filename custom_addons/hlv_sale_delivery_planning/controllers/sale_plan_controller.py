@@ -297,6 +297,8 @@ function fq(v){var n=parseFloat(v)||0;return n%1===0?n.toLocaleString('vi-VN'):n
 function b(cls,label){return'<span class="badge '+cls+' me-1">'+label+'</span>'}
 function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function gv(id){var e=$(id);return e?e.value:'';}
+function showLoading(){var l=$('loading');if(l)l.classList.remove('d-none');}
+function hideLoading(){var l=$('loading');if(l)l.classList.add('d-none');}
 function getTagIds(){var e=$('f-tag');if(!e)return'';return Array.from(e.selectedOptions).map(function(o){return o.value;}).filter(Boolean).join(',');}
 var TAG_BG=['#adb5bd','#dc3545','#fd7e14','#ffc107','#20c997','#6610f2','#d63384','#0d6efd','#6f42c1','#e91e63','#198754','#0dcaf0'];
 var TAG_FG=[0,0,0,1,1,0,0,0,0,0,0,1]; // 1=dark text
