@@ -382,7 +382,7 @@ export class InventoryCheckScanner extends Component {
         const barcode = this.state.product_barcode.trim();
         if (!barcode) return;
         // Small delay for UI to settle (camera continuous mode)
-        await new Promise(r => setTimeout(r, 100));
+        await new Promise(r => setTimeout(r, 50));
         // Don't block UI with loading overlay for scans
         try {
             const pr = await this.orm.call(
