@@ -477,7 +477,7 @@ function renderSOCard(o){
   if(o.commitment_date) h+='<small class="text-muted"><i class="fa fa-calendar"></i> '+fd(o.commitment_date)+'</small><br>';
   if(o.x_studio_delivery_type) h+='<small class="text-muted"><i class="fa fa-truck me-1"></i>'+esc(o.x_studio_delivery_type)+'</small><br>';
   if(o.tag_ids&&o.tag_ids.length) h+='<div class="mt-1">'+o.tag_ids.map(function(t){return'<span class="badge bg-secondary bg-opacity-25 text-dark me-1" style="font-size:10px">'+esc(t[1])+'</span>';}).join('')+'</div>';
-  h+='<div class="d-flex justify-content-between align-items-center">
+  h+='<div class="d-flex justify-content-between align-items-center">'
     +'<span class="fw-bold">'+fm(o.amount_total)+'</span>';
   var pc=o.pos?o.pos.length:0;
   if(pc>0) h+='<span class="badge bg-info text-dark">'+pc+' PO</span>';
