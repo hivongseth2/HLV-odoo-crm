@@ -216,13 +216,15 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
     </select></div>
   <div class="col-md-2"><label class="form-label small mb-0">Nhận hàng từ</label><input type="date" id="f-po-date-from" class="form-control form-control-sm"/></div>
   <div class="col-md-2"><label class="form-label small mb-0">Nhận hàng đến</label><input type="date" id="f-po-date-to" class="form-control form-control-sm"/></div>
+  <div class="col-md-2"><label class="form-label small mb-0">Tag <small class="text-muted">(Ctrl+click chọn nhiều)</small></label><select id="f-tag" multiple class="form-select form-select-sm" style="max-height:90px"></select></div>
+
   <div class="col-md-2"><label class="form-label small mb-0">Trạng Thái (Mua hàng)</label>
+  
     <select id="f-po-status" class="form-select form-select-sm">
       <option value="all">Tất cả</option><option value="pending">Chưa nhận hàng</option>
       <option value="partial">Nhận 1 phần</option><option value="full">Đã nhận đủ</option>
     </select></div>
-</div>
-  <div class="col-md-2"><label class="form-label small mb-0">Tag <small class="text-muted">(Ctrl+click chọn nhiều)</small></label><select id="f-tag" multiple class="form-select form-select-sm" style="max-height:90px"></select></div>
+  </div>
 
 </div></div>
 <!-- View toggle -->
