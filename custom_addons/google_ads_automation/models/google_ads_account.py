@@ -179,6 +179,13 @@ class GoogleAdsAccount(models.Model):
             "use_proto_plus": True
         }
         
+        # ── Debug Logging (Masked) ──────────────────
+        _logger.info("Building Google Ads Client for Account: %s (ID: %s)", self.name, self.id)
+        _logger.info(" - Operating Customer ID: %s", self.operating_customer_id)
+        _logger.info(" - Login Customer ID (MCC): %s", self.login_customer_id)
+        _logger.info(" - Developer Token: %s...%s", (self.developer_token or "")[:5], (self.developer_token or "")[-3:])
+        _logger.info(" - Client ID: %s...%s", (self.client_id or "")[:10], (self.client_id or "")[-5:])
+        
         try:
             # 1. Thử để thư viện tự nhận diện phiên bản mới nhất (với google-ads bản mới)
             try:
@@ -301,6 +308,9 @@ class GoogleAdsAccount(models.Model):
         # Thay vì dùng CustomerService (có thể thay đổi), dùng GoogleAdsService để truy vấn
         ga_service = client.get_service("GoogleAdsService")
         query = f"SELECT customer.id, customer.descriptive_name FROM customer WHERE customer.id = '{self.operating_customer_id}'"
+        
+        _logger.info("Executing GoogleAdsService.search on customer_id: %s", self.operating_customer_id)
+        _logger.info("Query: %s", query)
         
         try:
             # Thử gọi một query đơn giản nhất
