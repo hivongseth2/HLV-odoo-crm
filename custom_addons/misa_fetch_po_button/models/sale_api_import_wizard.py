@@ -1125,7 +1125,7 @@ class SaleApiImportWizard(models.TransientModel):
                         sale_vals['x_studio_crm_elivery'] = True
 
                     # Ánh xạ địa chỉ sang tags (Tuyến)
-                    tag_ids = misa_utils.map_address_to_tag_ids(self.env, delivery_contact.street or shipping_address_str)
+                    tag_ids = misa_utils.map_address_to_tag_ids(self.env, delivery_contact.street or shipping_address_str, htgh_str=owner_date.get('htgh'))
                     if tag_ids:
                         sale_vals['tag_ids'] = tag_ids
 
@@ -1459,7 +1459,7 @@ class SaleApiImportWizard(models.TransientModel):
                             sale_vals['x_studio_crm_elivery'] = True
 
                         # Ánh xạ địa chỉ sang tags (Tuyến)
-                        tag_ids = misa_utils.map_address_to_tag_ids(self.env, delivery_contact.street or shipping_address_str)
+                        tag_ids = misa_utils.map_address_to_tag_ids(self.env, delivery_contact.street or shipping_address_str, htgh_str=owner_date.get('htgh'))
                         if tag_ids:
                             sale_vals['tag_ids'] = tag_ids
 

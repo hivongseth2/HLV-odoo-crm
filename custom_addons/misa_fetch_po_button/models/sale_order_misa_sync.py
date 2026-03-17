@@ -592,7 +592,7 @@ class SaleOrder(models.Model):
 
         # Ánh xạ địa chỉ sang tags (Tuyến)
         misa_utils = env['misa.api.utils']
-        tag_ids = misa_utils.map_address_to_tag_ids(env, shipping_addr)
+        tag_ids = misa_utils.map_address_to_tag_ids(env, shipping_addr, htgh_str=owner_date.get('htgh'))
         if tag_ids:
             vals_create['tag_ids'] = tag_ids
 
@@ -1548,7 +1548,7 @@ class SaleOrder(models.Model):
         misa_utils = self.env['misa.api.utils']
         addr = self.partner_shipping_id.street or self.partner_id.street
         if addr:
-            tag_ids = misa_utils.map_address_to_tag_ids(self.env, addr)
+            tag_ids = misa_utils.map_address_to_tag_ids(self.env, addr, htgh_str=self.x_studio_htgh)
             if tag_ids:
                 self.write({'tag_ids': tag_ids})
                 return {
@@ -1599,7 +1599,7 @@ class SaleOrder(models.Model):
             if addr:
                 # Gọi hàm map bên model utils (theo code mẫu bạn cung cấp)
                 # Lưu ý: map_address_to_tag_ids trả về dạng [(6, 0, [ids])]
-                tag_ids = misa_utils.map_address_to_tag_ids(self.env, addr)
+                tag_ids = misa_utils.map_address_to_tag_ids(self.env, addr, htgh_str=order.x_studio_htgh)
                 
                 if tag_ids:
                     order.write({'tag_ids': tag_ids})

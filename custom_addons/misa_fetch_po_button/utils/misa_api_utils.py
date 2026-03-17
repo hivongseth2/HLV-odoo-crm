@@ -1010,14 +1010,19 @@ class MisaApiUtils(models.AbstractModel):
         _logger.info("FormDataNew(Account) OK id=%s tax=%s acc=%s", result["id"], result["taxcode"], result["account_number"])
         return result
 
-    def map_address_to_tag_ids(self, env, addr_str):
+    def map_address_to_tag_ids(self, env, addr_str, htgh_str=None):
         """
         Ánh xạ địa chỉ sang tag_ids (Tuyến) dựa trên cấu hình Keywords trong crm.tag.
+        htgh_str: giá trị trường x_studio_htgh của đơn hàng.
+                  Nếu trường này khớp với bất kỳ regex nào trong misa_ignore_htgh_patterns
+                  của tag đó, tag sẽ bị bỏ qua (không gắn).
         """
         if not addr_str:
             return []
         
+        import re
         addr_lower = addr_str.lower()
+        htgh_check = (htgh_str or "").strip()
         
         # 1. Lấy tất cả các tag có cấu hình keywords
         tags_with_keywords = env['crm.tag'].search([('misa_keywords', '!=', False)])
@@ -1029,8 +1034,25 @@ class MisaApiUtils(models.AbstractModel):
             keywords = [k.strip().lower() for k in tag.misa_keywords.split(',') if k.strip()]
             
             # Kiểm tra xem có từ khóa nào khớp với địa chỉ không
-            if any(kw in addr_lower for kw in keywords):
-                matching_tags |= tag
+            if not any(kw in addr_lower for kw in keywords):
+                continue
+
+            # Kiểm tra ignore patterns theo x_studio_htgh
+            if htgh_check and tag.misa_ignore_htgh_patterns:
+                patterns = [p.strip() for p in tag.misa_ignore_htgh_patterns.splitlines() if p.strip()]
+                ignored = False
+                for pattern in patterns:
+                    try:
+                        if re.search(pattern, htgh_check, re.IGNORECASE):
+                            ignored = True
+                            break
+                    except re.error:
+                        _logger.warning("⚠️ Regex pattern không hợp lệ trong tag '%s': %s", tag.name, pattern)
+                if ignored:
+                    _logger.info("🚫 Tag '%s' bị bỏ qua do x_studio_htgh='%s' khớp ignore pattern", tag.name, htgh_check)
+                    continue
+
+            matching_tags |= tag
                 
         if not matching_tags:
             return []
