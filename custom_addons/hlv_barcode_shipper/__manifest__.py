@@ -4,7 +4,7 @@
 {
     "name": "HLV Barcode Shipper",
     "summary": "Mobile barcode screen for shipper to scan PICK -> OUT",
-    "version": "18.0.3.8.0",
+    "version": "18.0.3.9.1",
     "author": "Hoang Long Vu",
     "website": "https://hoanglongvu.com",
     "category": "Inventory/Barcode",

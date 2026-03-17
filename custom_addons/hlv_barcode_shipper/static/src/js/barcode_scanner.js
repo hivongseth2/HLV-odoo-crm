@@ -106,6 +106,8 @@ class BarcodeShipper {
         } else if (tabName === 'return') {
             this.showReturnStep('return-step-list');
             this.loadReturnList();
+        } else if (tabName === 'delivered') {
+            this.loadDeliveredList();
         }
     }
 
@@ -151,7 +153,6 @@ class BarcodeShipper {
             this.searchReceivePickings(q);
         });
         document.getElementById('btn-close-camera-receive')?.addEventListener('click', () => this.stopCamera());
-        document.getElementById('btn-refresh-receive')?.addEventListener('click', () => this.loadAvailableToReceive());
         document.getElementById('confirm-receive-selected-btn')?.addEventListener('click', () => this.confirmReceiveSelected());
         document.getElementById('receive-detail-scan-btn')?.addEventListener('click', () => this.scanReceiveDetail());
         document.getElementById('confirm-receive-btn')?.addEventListener('click', () => this.confirmReceive());
@@ -402,6 +403,7 @@ class BarcodeShipper {
             this.showMessage('pick-result', 'Vui lòng nhập mã PICK', 'danger');
             return;
         }
+        if (input) input.value = '';
 
         this.showMessage('pick-result', 'Đang tìm phiếu giao hàng...', 'warning');
         try {
@@ -1318,18 +1320,7 @@ class BarcodeShipper {
                 container.appendChild(groupEl);
             });
 
-            const footerEl = document.createElement('div');
-            footerEl.className = 'receive-list-footer';
-            footerEl.innerHTML = `
-                <span class="receive-list-count">Hiển thị ${totalInSearch} / ${this.receiveLoadTotal || totalInSearch} phiếu</span>
-                ${this.receiveHasMore
-                    ? `<button id="receive-load-more-btn" class="btn btn-outline btn-sm">Tải thêm</button>`
-                    : ''}
-            `;
-            container.appendChild(footerEl);
-            if (this.receiveHasMore) {
-                document.getElementById('receive-load-more-btn')?.addEventListener('click', () => this.loadMoreReceive());
-            }
+
         }
     }
 
@@ -1836,6 +1827,51 @@ class BarcodeShipper {
             this.showMessage('return-detail-result', 'Lỗi kết nối server', 'danger');
             this.playSound('error');
         }
+    }
+
+    // ========================= DELIVERED TAB =========================
+
+    async loadDeliveredList() {
+        const container = document.getElementById('delivered-list');
+        if (!container) return;
+        container.innerHTML = '<div style="text-align:center;padding:20px;color:#888;"><i class="fa fa-spinner fa-spin"></i> Đang tải...</div>';
+        try {
+            const res = await this.apiCall('/api/barcode/get_delivered', {});
+            if (res.success && res.pickings && res.pickings.length > 0) {
+                this.renderDeliveredList(res.pickings);
+            } else {
+                container.innerHTML = '<div style="text-align:center;padding:20px;color:#888;"><i class="fa fa-clipboard-check" style="font-size:2rem;display:block;margin-bottom:8px;"></i>Chưa có đơn hàng nào đã giao.</div>';
+            }
+        } catch (e) {
+            container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--danger-color);">Lỗi tải danh sách.</div>';
+        }
+    }
+
+    renderDeliveredList(pickings) {
+        const container = document.getElementById('delivered-list');
+        if (!container) return;
+        container.innerHTML = '';
+
+        pickings.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'delivered-card';
+            card.innerHTML = `
+                <div style="display:flex;align-items:flex-start;gap:10px;">
+                    <div style="flex-shrink:0;width:36px;height:36px;border-radius:50%;background:#e8f5e9;display:flex;align-items:center;justify-content:center;">
+                        <i class="fa fa-check" style="color:#43a047;font-size:1rem;"></i>
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-weight:700;font-size:0.95rem;color:var(--primary-color);">${p.name}</div>
+                        ${p.origin ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:1px;"><i class="fa fa-file-alt"></i> ${p.origin}</div>` : ''}
+                        <div style="font-size:0.82rem;color:#888;margin-top:3px;">
+                            ${p.partner_name ? `<i class="fa fa-user"></i> ${p.partner_name}` : ''}
+                            ${p.date_done ? ` &nbsp;·&nbsp; <i class="fa fa-clock"></i> ${p.date_done}` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+        });
     }
 }
 

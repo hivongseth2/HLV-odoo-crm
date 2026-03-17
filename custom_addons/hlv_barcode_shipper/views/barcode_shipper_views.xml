@@ -96,6 +96,9 @@
                             <button class="tab-btn" data-tab="return">
                                 <i class="fa fa-undo-alt"></i> Trả hàng
                             </button>
+                            <button class="tab-btn" data-tab="delivered">
+                                <i class="fa fa-clipboard-check"></i> Đã giao
+                            </button>
                         </div>
 
                         <!-- ==================== TAB: NHẬN HÀNG ==================== -->
@@ -136,13 +139,6 @@
                                         <i class="fa fa-spinner fa-spin" style="font-size:1.5rem;color:#aaa;"></i>
                                         <div style="color:#888;margin-top:8px;">Đang tải danh sách phiếu...</div>
                                     </div>
-                                </div>
-
-                                <!-- Refresh button -->
-                                <div style="text-align:center;margin:10px 0 70px;">
-                                    <button id="btn-refresh-receive" class="btn btn-outline btn-sm">
-                                        <i class="fa fa-sync-alt"></i> Làm mới danh sách
-                                    </button>
                                 </div>
 
                                 <!-- Sticky confirm bar (shown when pickings selected) -->
@@ -408,6 +404,25 @@
                                         <button id="return-detail-back-btn" class="btn btn-outline btn-block mt-2">
                                             <i class="fa fa-arrow-left"></i> Quay lại
                                         </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ==================== TAB: ĐÃ GIAO ==================== -->
+                        <div id="tab-delivered" class="tab-content">
+                            <div class="card-box">
+                                <div class="step-header">
+                                    <div class="step-icon"><i class="fa fa-clipboard-check"></i></div>
+                                    <div class="step-info">
+                                        <div class="step-title">Đơn hàng đã giao</div>
+                                        <div class="step-subtitle">Danh sách phiếu đã giao thành công.</div>
+                                    </div>
+                                </div>
+                                <div id="delivered-list" style="margin-top:10px;">
+                                    <div class="empty-state" style="padding:20px;">
+                                        <i class="fa fa-clipboard-check" style="font-size:2rem;color:#ddd;display:block;margin-bottom:8px;"></i>
+                                        Chọn tab để xem danh sách.
                                     </div>
                                 </div>
                             </div>
