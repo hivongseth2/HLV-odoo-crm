@@ -515,6 +515,45 @@ class BarcodeShipperController(http.Controller):
             _logger.exception("Error in complete_out")
             return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}
 
+    # ===== API: get delivered pickings =====
+    @http.route(
+        "/api/barcode/get_delivered",
+        type="json",
+        auth="user",
+        methods=["POST"],
+        csrf=False,
+    )
+    def get_delivered(self, **kwargs):
+        """Return pickings delivered (state=done) by the current shipper."""
+        try:
+            access = self._check_shipper_access()
+            if not access["success"]:
+                return access
+
+            uid = request.env.user.id
+            pickings = request.env["stock.picking"].sudo().search([
+                ("picking_type_id.code", "=", "outgoing"),
+                ("state", "=", "done"),
+                "|",
+                ("shipper_received_by", "=", uid),
+                ("shipper_user_id", "=", uid),
+            ], order="date_done desc", limit=50)
+
+            result = []
+            for p in pickings:
+                result.append({
+                    "id": p.id,
+                    "name": p.name,
+                    "origin": p.origin or "",
+                    "partner_name": p.partner_id.name or "",
+                    "date_done": p.date_done.strftime("%H:%M %d/%m/%Y") if p.date_done else "",
+                })
+
+            return {"success": True, "pickings": result}
+        except Exception as e:
+            _logger.exception("Error in get_delivered")
+            return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}
+
     # ===== API: history =====
     @http.route(
         "/api/barcode/scan_history",
