@@ -7,7 +7,7 @@ class DeliveryPlannerServiceDomain(models.AbstractModel):
     def _build_search_domain(
         self, search_query, filter_warehouse_id,
         filter_delivery_status, filter_date_from, filter_date_to,
-        filter_saler_code='',
+        filter_saler_code='', filter_htgh='', filter_delivery_type='all', filter_tag_ids='',
     ):
         """Xây dựng domain tìm kiếm Sale Order dựa trên các bộ lọc."""
         domain = [('state', 'in', ['sale', 'done'])]
@@ -37,5 +37,18 @@ class DeliveryPlannerServiceDomain(models.AbstractModel):
 
         if filter_saler_code:
             domain += [('x_studio_misa_saler_code', 'ilike', filter_saler_code)]
+
+        if filter_htgh:
+            domain += [('x_studio_htgh', 'ilike', filter_htgh)]
+
+        if filter_delivery_type and filter_delivery_type != 'all':
+            domain += [('x_studio_delivery_type', '=', filter_delivery_type)]
+
+        if filter_tag_ids:
+            try:
+                tag_id = int(filter_tag_ids)
+                domain += [('tag_ids', 'in', [tag_id])]
+            except (ValueError, TypeError):
+                pass
 
         return domain

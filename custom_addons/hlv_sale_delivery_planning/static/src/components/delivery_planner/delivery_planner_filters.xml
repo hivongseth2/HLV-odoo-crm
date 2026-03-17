@@ -40,6 +40,20 @@
                    t-on-click="() => { state.filterSalerCode = ''; this.fetchData(); }"></i>
             </span>
 
+            <span t-if="state.filterHtgh"
+                  class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
+                HTGH: <t t-esc="state.filterHtgh"/>
+                <i class="fa fa-times cursor-pointer ms-1" title="Xóa"
+                   t-on-click="() => { state.filterHtgh = ''; this.fetchData(); }"></i>
+            </span>
+
+            <span t-if="state.filterDeliveryType !== 'all'"
+                  class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
+                Vận chuyển: <t t-esc="state.filterDeliveryType"/>
+                <i class="fa fa-times cursor-pointer ms-1" title="Xóa"
+                   t-on-click="() => { state.filterDeliveryType = 'all'; this.fetchData(); }"></i>
+            </span>
+
             <span t-if="state.filterDeliveryStatus !== 'all'"
                   class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
                 Giao hàng: <t t-esc="this.translateDeliveryStatus(state.filterDeliveryStatus)"/>
@@ -204,6 +218,29 @@
                            t-model="state.filterSalerCode"
                            t-on-keyup="onSearchKeyup"/>
                 </div>
+            </div>
+            <!-- HTGH -->
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted mb-1">HTGH</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light px-2">
+                        <i class="fa fa-info-circle text-secondary"></i>
+                    </span>
+                    <input type="text" class="form-control px-2"
+                           placeholder="Hình thức giao hàng..."
+                           t-model="state.filterHtgh"
+                           t-on-keyup="onSearchKeyup"/>
+                </div>
+            </div>
+            <!-- Loại vận chuyển -->
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted mb-1">Loại vận chuyển</label>
+                <select class="form-select" t-model="state.filterDeliveryType" t-on-change="fetchData">
+                    <option value="all">Tất cả</option>
+                    <option value="HLV vận chuyển">HLV vận chuyển</option>
+                    <option value="GHN">GHN</option>
+                    <option value="J&amp;T">J&amp;T</option>
+                </select>
             </div>
         </div>
     </t>

@@ -13,6 +13,7 @@ class DeliveryPlannerService(models.AbstractModel):
         filter_packing_status='all', filter_date_from='', filter_date_to='',
         filter_po_date_from='', filter_po_date_to='', filter_po_status='all',
         limit=12, offset=0, filter_saler_code='',
+        filter_htgh='', filter_delivery_type='all', filter_tag_ids='',
     ):
         """
         Äiá»ƒm vÃ o chÃ­nh: tá»•ng há»£p dá»¯ liá»‡u dashboard giao hÃ ng.
@@ -22,6 +23,9 @@ class DeliveryPlannerService(models.AbstractModel):
             search_query, filter_warehouse_id,
             filter_delivery_status, filter_date_from, filter_date_to,
             filter_saler_code=filter_saler_code,
+            filter_htgh=filter_htgh,
+            filter_delivery_type=filter_delivery_type,
+            filter_tag_ids=filter_tag_ids,
         )
         sales = self.env['sale.order'].search(
             domain,
@@ -51,10 +55,12 @@ class DeliveryPlannerService(models.AbstractModel):
             for so in page_sales
         ]
         warehouses = self.env['stock.warehouse'].search_read([], ['id', 'name'])
+        tags = self.env['crm.tag'].search_read([], ['id', 'name'])
 
         return {
             'orders': result,
             'warehouses': warehouses,
+            'tags': tags,
             'total_count': total_count,
             'dashboard_stats': dashboard_stats,
         }
