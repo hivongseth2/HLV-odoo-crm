@@ -597,6 +597,28 @@ document.addEventListener("DOMContentLoaded", function () {
     toast.info(`Mã barcode tạo: ${autoPackageBarcode}`, { ms: 1000 });
   });
 
+  // Nút Bỏ đóng gói toàn bộ
+  document.getElementById('btnUnpackAll')?.addEventListener('click', async function () {
+    if (!confirm('Bạn có chắc muốn bỏ đóng gói TOÀN BỘ sản phẩm trong phiếu này?')) return;
+    try {
+      const res = await fetch('/pack_scan/unpack_all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: { picking_id: pickingId } }),
+      });
+      const json = await res.json();
+      const data = json.result || json;
+      if (data.error) {
+        toast.error(data.error);
+      } else {
+        toast.success(data.message || 'Đã bỏ đóng gói thành công!');
+        setTimeout(() => location.reload(), 800);
+      }
+    } catch (e) {
+      toast.error('Lỗi khi bỏ đóng gói: ' + e.message);
+    }
+  });
+
 
   input?.addEventListener("keypress", async function (event) {
 

@@ -545,25 +545,15 @@ class CustomBarcodeScanController(http.Controller):
                 target_move_from_fe = None
 
         if target_ml:
-            # [FIX] Detect "same-package flow": Odoo tự gán package_id = result_package_id khi PICK
-            # validate có kiện, PACK thừa kế package đó. Đây không phải "đã đóng gói"
-            # mà là đang đi chuyển kiện, cần quét để xác nhận số lượng.
-            is_same_pkg_flow = bool(
-                target_ml.package_id and
-                target_ml.result_package_id and
-                target_ml.package_id.id == target_ml.result_package_id.id
-            )
-
             # [SMART-REDIRECT-2024-V3.4] Logic lấp đầy toàn diện (Universal Balanced)
             # Cho phép Redirect ngay cả khi target_ml đã gắn package 
             is_target_packed = target_ml.result_package_id or target_ml.package_id
             target_res = getattr(target_ml, 'reserved_qty', 0) or getattr(target_ml, 'reserved_uom_qty', 0) or 0
             
-            # Chỉ redirect nếu:
+            # Chỉ redirect nếu: 
             # 1. Target là hàng lẻ
             # 2. HOẶC Target là package nhưng không có giới hạn (Reserved=0) và đã có hàng (Done > 0)
-            # 3. Và KHÔNG phải same-package flow (vì loại này không có candidate hợp lệ để redirect sang)
-            if (not is_target_packed or (target_res == 0 and target_ml.qty_done > 0)) and not is_same_pkg_flow:
+            if not is_target_packed or (target_res == 0 and target_ml.qty_done > 0):
                 # [FIX] Khi có move_id, chỉ tìm trong cùng 1 stock.move để không nhảy sang dòng khác
                 if target_move_from_fe:
                     all_product_mls = target_move_from_fe.move_line_ids.filtered(
@@ -639,9 +629,8 @@ class CustomBarcodeScanController(http.Controller):
                     # Nếu reservation = 0, ta cho phép điền vào (vì logic Redirect đã chọn nó làm ứng viên).
                     _logger.info(f"Target line {target_ml.id} is packed ({is_packed.name}) and reaches Reserved Qty ({reserved_qty}). Skipping.")
                     target_ml = None
-                elif target_ml.result_package_id and reserved_qty == 0 and target_ml.qty_done > 0 and not is_same_pkg_flow:
+                elif target_ml.result_package_id and reserved_qty == 0 and target_ml.qty_done > 0:
                     # [FIX-2024] Dòng đã đóng gói xong (ko dự kiến) thì không tự động độn thêm khi scan hàng lẻ.
-                    # Ngoại lệ: same-package flow (package_id == result_package_id) thì cho phép tiếp tục.
                     _logger.info(f"Target line {target_ml.id} is already fully packed with no reserved qty. Skipping.")
                     target_ml = None
                 else:
@@ -670,29 +659,10 @@ class CustomBarcodeScanController(http.Controller):
                 candidate_open_move = None  # Move có dư demand nhưng chưa có line phù hợp
                 
                 for ml in all_move_lines:
-                    # Lấy reserved_qty (product_uom_qty) hoặc reserved_uom_qty tùy version Odoo
-                    # Trong Odoo 16+, có trường reserved_qty hoặc product_uom_qty trên move_line
                     reserved_qty = getattr(ml, 'reserved_qty', 0) or getattr(ml, 'reserved_uom_qty', 0) or getattr(ml, 'product_uom_qty', 0) or 0
                     remaining_in_line = reserved_qty - ml.qty_done
                     
-                    # [FIX] Detect same-package flow cho fallback
-                    ml_is_same_pkg = bool(
-                        ml.package_id and ml.result_package_id and
-                        ml.package_id.id == ml.result_package_id.id
-                    )
-                    
-                    _logger.info(f"CHECK MOVE_LINE {ml.id}: Move={ml.move_id.id}, Reserved={reserved_qty}, Done={ml.qty_done}, Remain={remaining_in_line}, SamePkg={ml_is_same_pkg}, PackageId={ml.package_id.id if ml.package_id else 'None'}, ResultPkg={ml.result_package_id.id if ml.result_package_id else 'None'}")
-                    
-                    # [FIX] Same-package flow: reserved=0 nhưng move vẫn có demand → cho phép chọn
-                    # nếu move chưa đủ số lượng (move_done < move.product_uom_qty)
-                    if ml_is_same_pkg:
-                        mv_done_check = sum(l.qty_done for l in ml.move_id.move_line_ids)
-                        if mv_done_check < ml.move_id.product_uom_qty:
-                            target_ml = ml
-                            _logger.info(f"Selected same-pkg move_line {ml.id} (Move demand: {mv_done_check}/{ml.move_id.product_uom_qty})")
-                            found_target = True
-                            break
-                        continue  # Move đã đủ → bỏ qua, thử line tiếp theo
+                    _logger.info(f"CHECK MOVE_LINE {ml.id}: Move={ml.move_id.id}, Reserved={reserved_qty}, Done={ml.qty_done}, Remain={remaining_in_line}, PackageId={ml.package_id.id if ml.package_id else 'None'}, ResultPkg={ml.result_package_id.id if ml.result_package_id else 'None'}")
                     
                     # [FIX-2024] Điều kiện: move_line còn chỗ. 
                     # Không check result_package_id để hỗ trợ các dòng được gán package sẵn (pre-configured)
@@ -1146,6 +1116,38 @@ class CustomBarcodeScanController(http.Controller):
             }
         except Exception as e:
             _logger.exception("UNPACK error")
+            return {"error": str(e)}
+
+    @http.route('/pack_scan/unpack_all', type='json', auth='user', csrf=False)
+    def unpack_all(self, **kwargs):
+        """
+        Bỏ đóng gói toàn bộ: xóa package_id và result_package_id
+        khỏi tất cả move_lines trong phiếu, đưa hàng về trạng thái chưa đóng gói.
+        """
+        picking_id = kwargs.get("picking_id")
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
+        if not picking.exists():
+            return {"error": "Phiếu không tồn tại"}
+
+        try:
+            mls = picking.move_line_ids.filtered(
+                lambda l: l.package_id or l.result_package_id
+            )
+            if not mls:
+                return {"success": True, "message": "Không có dòng nào cần bỏ đóng gói."}
+
+            count = len(mls)
+            mls.write({'package_id': False, 'result_package_id': False})
+            _logger.info(
+                "UNPACK_ALL picking %s: cleared package on %d move_lines",
+                picking.name, count,
+            )
+            return {
+                "success": True,
+                "message": f"✅ Đã bỏ đóng gói {count} dòng trong {picking.name}",
+            }
+        except Exception as e:
+            _logger.exception("UNPACK_ALL error")
             return {"error": str(e)}
 
     @http.route('/pack_scan/add_to_pack', type='json', auth='user', csrf=False)
