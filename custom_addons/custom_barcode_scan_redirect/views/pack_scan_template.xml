@@ -24,7 +24,7 @@
             <button id="btnPrintLabel" title="In nhãn dán sản phẩm">In nhãn</button>
             <button id="btnPrintLabel80x80" title="In nhãn 80x80">In nhãn 80x80</button>
             <button id="btnPartialPack" title="Tạo partial pack">Đóng gói</button>
-            <button id="btnUnpackAll" title="Bỏ đóng gói toàn bộ sản phẩm" style="background:#e74c3c;color:#fff;">Bỏ đóng gói</button>
+            <button t-if="has_packed_lines" id="btnUnpackAll" title="Bỏ đóng gói toàn bộ sản phẩm" style="background:#e74c3c;color:#fff;">Bỏ đóng gói</button>
             <button id="btnDriveSwitch">Đổi tài khoản Drive</button>
           </div>
         </div>
