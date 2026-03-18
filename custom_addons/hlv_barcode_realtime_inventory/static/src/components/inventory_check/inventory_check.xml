@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <templates xml:space="preserve">
 
     <t t-name="hlv_barcode_realtime_inventory.inventory_check">
@@ -707,6 +707,22 @@
                                     </div>
                                 </div>
                                 <div t-att-class="'hlv-toggle ' + (state.settings.skip_discrepancy_reason ? 'hlv-toggle--on' : '')">
+                                    <div class="hlv-toggle__track">
+                                        <div class="hlv-toggle__thumb"/>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="hlv-setting-row" t-on-click="toggleContinueCounting">
+                                <div class="hlv-setting-row__info">
+                                    <div class="hlv-setting-row__title">
+                                        <i class="fa fa-play-circle"/> Đếm Tiếp Tục
+                                    </div>
+                                    <div class="hlv-setting-row__desc">
+                                        Khi quét vị trí, tự động điền số lượng thực tế = tồn kho lý thuyết. Chỉ cần quét sản phẩm mới thêm vào.
+                                    </div>
+                                </div>
+                                <div t-att-class="'hlv-toggle ' + (state.settings.continue_counting ? 'hlv-toggle--on' : '')">
                                     <div class="hlv-toggle__track">
                                         <div class="hlv-toggle__thumb"/>
                                     </div>

@@ -610,6 +610,10 @@ class InventoryCheck(models.Model):
             ('quantity', '>', 0),
         ])
 
+        # Check continue_counting setting
+        ICP = self.env['ir.config_parameter'].sudo()
+        continue_counting = ICP.get_param('hlv_inventory.continue_counting', 'False') == 'True'
+
         for quant in quants:
             existing = self.env['inventory.check.line'].search([
                 ('check_id', '=', check_id),
@@ -625,7 +629,7 @@ class InventoryCheck(models.Model):
                     'location_id': location_id,
                     'lot_id': quant.lot_id.id if quant.lot_id else False,
                     'package_id': quant.package_id.id if quant.package_id else False,
-                    'scanned_qty': 0,
+                    'scanned_qty': quant.quantity if continue_counting else 0,
                     'theoretical_qty': quant.quantity,
                 })
 
@@ -825,11 +829,12 @@ class InventoryCheck(models.Model):
             'approval_required': ICP.get_param('hlv_inventory.approval_required', 'False') == 'True',
             'auto_confirm': ICP.get_param('hlv_inventory.auto_confirm', 'False') == 'True',
             'skip_discrepancy_reason': ICP.get_param('hlv_inventory.skip_discrepancy_reason', 'False') == 'True',
+            'continue_counting': ICP.get_param('hlv_inventory.continue_counting', 'False') == 'True',
             'is_manager': is_manager,
         }
 
     @api.model
-    def save_scanner_settings(self, approval_required, auto_confirm, skip_discrepancy_reason=False):
+    def save_scanner_settings(self, approval_required, auto_confirm, skip_discrepancy_reason=False, continue_counting=False):
         """Lưu cấu hình scanner (chỉ manager)"""
         if not self.env.user.has_group('stock.group_stock_manager'):
             return {'success': False, 'error': _('Chỉ quản lý kho mới được thay đổi cài đặt')}
@@ -837,6 +842,7 @@ class InventoryCheck(models.Model):
         ICP.set_param('hlv_inventory.approval_required', 'True' if approval_required else 'False')
         ICP.set_param('hlv_inventory.auto_confirm', 'True' if auto_confirm else 'False')
         ICP.set_param('hlv_inventory.skip_discrepancy_reason', 'True' if skip_discrepancy_reason else 'False')
+        ICP.set_param('hlv_inventory.continue_counting', 'True' if continue_counting else 'False')
         return {'success': True}
 
     @api.model

@@ -722,12 +722,18 @@ export class InventoryCheckScanner extends Component {
         await this._saveSettings();
     }
 
+    async toggleContinueCounting() {
+        const s = this.state.settings;
+        s.continue_counting = !s.continue_counting;
+        await this._saveSettings();
+    }
+
     async _saveSettings() {
         const s = this.state.settings;
         try {
             const r = await this.orm.call(
                 'inventory.check', 'save_scanner_settings',
-                [s.approval_required, s.auto_confirm, s.skip_discrepancy_reason], {}
+                [s.approval_required, s.auto_confirm, s.skip_discrepancy_reason, s.continue_counting], {}
             );
             if (r.success) {
                 this._showNotification('Đã lưu cài đặt', 'success');
