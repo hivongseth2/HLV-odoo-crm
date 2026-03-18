@@ -567,6 +567,14 @@
                                                 <div t-att-class="'hlv-check-item__dot ' + (chk.state === 'confirmed' ? 'hlv-check-item__dot--green' : chk.state === 'pending_approval' ? 'hlv-check-item__dot--amber' : 'hlv-check-item__dot--blue')"/>
                                                 <div class="hlv-check-item__info">
                                                     <span class="hlv-check-item__loc" t-esc="chk.location_name"/>
+                                                    <span t-att-class="'hlv-check-item__state hlv-check-item__state--' + chk.state">
+                                                        <t t-if="chk.state === 'draft'">Nháp</t>
+                                                        <t t-elif="chk.state === 'in_progress'">Đang Kiểm Kê</t>
+                                                        <t t-elif="chk.state === 'pending_approval'">Chờ Duyệt</t>
+                                                        <t t-elif="chk.state === 'confirmed'">Đã Xác Nhận</t>
+                                                        <t t-elif="chk.state === 'locked'">Bị Khóa</t>
+                                                        <t t-elif="chk.state === 'cancelled'">Đã Hủy</t>
+                                                    </span>
                                                     <span class="hlv-check-item__time">
                                                         <i class="fa fa-clock"/> <t t-esc="chk.start_time"/>
                                                         <t t-if="chk.confirmed_time"> → <t t-esc="chk.confirmed_time"/></t>
@@ -882,7 +890,10 @@
                         <div class="hlv-lv__result-header">
                             <i class="fa fa-map-marker"/> <strong t-esc="state.location_viewer.location_name"/>
                             <span class="hlv-badge hlv-badge--info" style="margin-left: 8px;">
-                                <t t-esc="state.location_viewer.items.length"/> sản phẩm
+                                <t t-esc="state.location_viewer.items.length"/> SP
+                            </span>
+                            <span class="hlv-badge hlv-badge--info" style="margin-left: 4px;">
+                                Tổng: <t t-esc="state.location_viewer.total_quantity"/>
                             </span>
                         </div>
 

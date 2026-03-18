@@ -947,11 +947,13 @@ class InventoryCheck(models.Model):
                 'quantity': q.quantity,
                 'uom_name': q.product_id.uom_id.name,
             })
+        total_quantity = sum(i['quantity'] for i in items)
         return {
             'success': True,
             'location_id': location.id,
             'location_name': location.display_name,
             'items': items,
+            'total_quantity': total_quantity,
         }
 
     @api.model
