@@ -1315,6 +1315,23 @@ $r-full: 9999px;
             text-overflow: ellipsis;
         }
 
+        &__state {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 1px 7px;
+            border-radius: $r-full;
+            margin-top: 2px;
+            margin-bottom: 2px;
+
+            &--draft            { background: rgba($gray-400, .15); color: $gray-500; }
+            &--in_progress      { background: rgba($blue, .12);      color: $blue;     }
+            &--pending_approval { background: rgba($amber, .15);     color: $amber;    }
+            &--confirmed        { background: rgba($green, .12);     color: $green;    }
+            &--locked           { background: rgba($gray-600, .12);  color: $gray-600; }
+            &--cancelled        { background: rgba($red, .1);        color: $red;      }
+        }
+
         &__time {
             display: block;
             font-size: 11px;
