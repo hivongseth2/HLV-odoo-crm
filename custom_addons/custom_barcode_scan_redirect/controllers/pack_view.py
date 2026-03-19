@@ -94,6 +94,12 @@ class PackViewController(http.Controller):
         ))
         is_repack = has_source_packages and not has_packed_lines
 
+        # Auto-unpack: nếu là re-pack, tự động xóa kiện cũ rồi redirect lại
+        if is_repack:
+            _logger.info(f"[REPACK] Auto-unpacking source packages for {picking.name}")
+            self._auto_unpack_sources(picking)
+            return request.redirect(f'/custom_barcode_scan/pack_view/{picking_id}')
+
         return request.render("custom_barcode_scan_redirect.pack_scan_template", {
             'picking': picking,
             'lines': lines,
@@ -102,8 +108,63 @@ class PackViewController(http.Controller):
             'sibling_packs': sibling_packs,
             'picking_packages': picking_packages,
             'has_packed_lines': has_packed_lines,
-            'is_repack': is_repack,
+            'is_repack': False,
         })
+
+    def _auto_unpack_sources(self, picking):
+        """Auto-unpack source packages for re-pack scenario.
+        Moves quants out of old packages → clears package_id → re-reserves.
+        After this, all items become loose and ready for fresh packing.
+        """
+        mls = picking.move_line_ids.filtered(
+            lambda l: l.package_id and not l.result_package_id
+        )
+        if not mls:
+            return
+
+        location = picking.location_id
+        packages = mls.mapped('package_id').filtered(lambda p: p)
+
+        # 1. Unreserve
+        picking.do_unreserve()
+
+        # 2. Move quants out of old packages
+        Quant = request.env['stock.quant'].sudo()
+        for pkg in packages:
+            pkg_quants = Quant.search([
+                ('package_id', '=', pkg.id),
+                ('location_id', '=', location.id),
+                ('quantity', '!=', 0),
+            ])
+            for q in pkg_quants:
+                existing = Quant.search([
+                    ('product_id', '=', q.product_id.id),
+                    ('location_id', '=', q.location_id.id),
+                    ('lot_id', '=', q.lot_id.id if q.lot_id else False),
+                    ('package_id', '=', False),
+                    ('owner_id', '=', q.owner_id.id if q.owner_id else False),
+                ], limit=1)
+                if existing:
+                    existing.quantity += q.quantity
+                else:
+                    Quant.create({
+                        'product_id': q.product_id.id,
+                        'location_id': q.location_id.id,
+                        'lot_id': q.lot_id.id if q.lot_id else False,
+                        'package_id': False,
+                        'owner_id': q.owner_id.id if q.owner_id else False,
+                        'quantity': q.quantity,
+                    })
+                q.quantity = 0
+
+        # 3. Clear only source package refs (keep result_package_id for any packed lines)
+        mls.write({'package_id': False})
+
+        # 4. Re-reserve
+        picking.action_assign()
+        _logger.info(
+            f"[REPACK] Auto-unpacked {len(mls)} lines from {len(packages)} source packages for {picking.name}"
+        )
 
     def _build_package_list(self, picking, origin_pick):
         """Collect DESTINATION packages from current picking.
