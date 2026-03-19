@@ -53,10 +53,16 @@
                       Barcode: <span t-if="line.product_id.barcode" t-esc="line.product_id.barcode"/>
                       <span t-else="" style="color: #dc3545; font-style: italic;">Không có</span>
                     </div>
-                    <t t-set="_packed_pkg_names" t-value="', '.join(line.move_line_ids.filtered(lambda x: x.result_package_id).mapped('result_package_id').mapped('name'))"/>
-                    <t t-if="_packed_pkg_names">
+                    <t t-set="_done_pkg_mls" t-value="line.move_line_ids.filtered(lambda x: x.result_package_id and x.qty_done > 0)"/>
+                    <t t-set="_pend_pkg_mls" t-value="line.move_line_ids.filtered(lambda x: x.result_package_id and x.qty_done == 0)"/>
+                    <t t-if="_done_pkg_mls or _pend_pkg_mls">
                       <div class="pkg-indicator">
-                        <span class="pkg-badge">&#128230; Trong kiện: <t t-esc="_packed_pkg_names"/></span>
+                        <t t-foreach="_done_pkg_mls.mapped('result_package_id')" t-as="_pk">
+                          <span class="pkg-badge pkg-badge-done">&#128230; <t t-esc="_pk.name"/></span>
+                        </t>
+                        <t t-foreach="_pend_pkg_mls.mapped('result_package_id')" t-as="_pk">
+                          <span class="pkg-badge pkg-badge-pending">&#128203; <t t-esc="_pk.name"/> (chưa quét)</span>
+                        </t>
                       </div>
                     </t>
                   </div>
@@ -150,56 +156,54 @@
 
               <div class="panel-body" style="flex: 1; overflow-y: auto;">
                 <t t-if="picking_packages">
-                  <ul class="panel-packages-list" style="list-style: none; padding: 0; margin: 0;">
+                  <ul class="panel-packages-list" style="list-style: none; padding: 0.75rem; margin: 0; display: flex; flex-direction: column; gap: 0.75rem;">
                     <t t-foreach="picking_packages" t-as="pkg">
-                      <li class="package-item-card" t-att-data-package-id="pkg['id']" style="background: white; border-radius: 10px;; margin-bottom: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.03); border: 1px solid #f1f3f5;">
-                        <div class="package-item-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;  border-bottom: 1px solid #f8f9fa;">
-                          <strong class="package-item-name" t-esc="pkg['name']" style="font-size: 0.95rem; color: #212529; font-weight: 600;"/>
-                          <span class="badge" style="background: #e7f5ff; color: #1c7ed6; border-radius: 6px; font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 0.25rem;">
-                            <t t-esc="pkg['qty']"/>
+                      <t t-set="_is_full" t-value="pkg['done_qty'] >= pkg['demand_qty'] and pkg['demand_qty'] > 0"/>
+                      <t t-set="_is_empty" t-value="pkg['done_qty'] == 0"/>
+                      <li class="package-item-card" t-att-data-package-id="pkg['id']"
+                          t-attf-style="background:white; border-radius:10px; border:1px solid #{'#b2f2bb' if _is_full else '#ced4da'}; overflow:hidden;">
+
+                        <!-- Header: tên + progress số -->
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.6rem 0.85rem 0.4rem;">
+                          <strong style="font-size:0.95rem; color:#212529;"><t t-esc="pkg['name']"/></strong>
+                          <span t-attf-style="font-size:0.8rem; font-weight:700; padding:2px 10px; border-radius:10px; background:#{'#d3f9d8' if _is_full else ('#fff3cd' if not _is_empty else '#f1f3f5')}; color:#{'#2f9e44' if _is_full else ('#7a5600' if not _is_empty else '#868e96')};">
+                            <t t-esc="pkg['done_qty']"/> / <t t-esc="pkg['demand_qty']"/>
                           </span>
                         </div>
-                        
-                        <div class="package-items-preview" style="margin-bottom: 1rem; font-size: 0.85rem; color: #495057; max-height: 100px; overflow-y: auto;">
-                          <t t-if="pkg.get('package_lines')">
-                            <t t-foreach="pkg['package_lines']" t-as="line">
-                              <div class="preview-item" t-if="line['product_qty'] > 0" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
-                                <span class="preview-item-name" t-esc="line['product_name']" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;"/>
-                                <span class="preview-item-qty" style="font-weight: 600; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px;">
-                                  x<t t-esc="line['product_qty']"/>
-                                  <t t-if="line.get('reserved_qty') and line['reserved_qty'] > 0">
-                                    / <t t-esc="line['reserved_qty']"/>
-                                  </t>
-                                </span>
-                              </div>
-                            </t>
-                          </t>
-                         <t t-elif="pkg.get('move_line_ids')">
-                            <t t-foreach="pkg['move_line_ids']" t-as="line">
-                              <div class="preview-item" t-if="line['product_qty'] > 0" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
-                                <span class="preview-item-name" t-esc="line['product_name']" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;"/>
-                                <span class="preview-item-qty" style="font-weight: 600; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px;">
-                                  x<t t-esc="line['product_qty']"/>
-                                  <t t-if="line.get('reserved_qty') and line['reserved_qty'] > 0">
-                                    / <t t-esc="line['reserved_qty']"/>
-                                  </t>
-                                </span>
-                              </div>
-                            </t>
+
+                        <!-- Progress bar -->
+                        <t t-set="_pct" t-value="int(pkg['done_qty'] / pkg['demand_qty'] * 100) if pkg['demand_qty'] > 0 else 0"/>
+                        <div style="height:4px; background:#f1f3f5; margin:0 0.85rem;">
+                          <div t-attf-style="height:4px; width:#{ str(_pct) }%; background:#{'#2f9e44' if _is_full else '#228be6'}; transition:width .3s;"></div>
+                        </div>
+
+                        <!-- Product lines -->
+                        <div style="padding:0.5rem 0.85rem; font-size:0.83rem; color:#495057; max-height:120px; overflow-y:auto;">
+                          <t t-foreach="pkg['package_lines']" t-as="pl">
+                            <div style="display:flex; justify-content:space-between; align-items:center; padding:3px 0; border-bottom:1px solid #f8f9fa;">
+                              <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:65%;"><t t-esc="pl['product_name']"/></span>
+                              <span style="font-weight:600; white-space:nowrap;">
+                                <t t-esc="pl['done_qty']"/><span style="color:#adb5bd;"> / <t t-esc="pl['demand_qty']"/></span>
+                                <span style="color:#adb5bd; font-weight:400;"> <t t-esc="pl['product_uom']"/></span>
+                              </span>
+                            </div>
                           </t>
                         </div>
 
-                        <button class="btn-package-edit" t-att-data-package-id="pkg['id']" onclick="openPackageEditModal(event)" style="width: 100%; padding: 0.6rem; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; color: #495057; font-weight: 600; cursor: pointer;">
-                          Chỉnh sửa
-                        </button>
+                        <div style="padding:0.5rem 0.85rem 0.75rem;">
+                          <button class="btn-package-edit" t-att-data-package-id="pkg['id']" onclick="openPackageEditModal(event)"
+                                  style="width:100%; padding:0.45rem; background:#f8f9fa; border:1px solid #dee2e6; border-radius:6px; color:#495057; font-weight:600; cursor:pointer; font-size:0.83rem;">
+                            Chỉnh sửa
+                          </button>
+                        </div>
                       </li>
                     </t>
                   </ul>
                 </t>
-                
+
                 <t t-if="not picking_packages">
-                  <div class="panel-empty-state" style="text-align: center; padding: 2rem 1rem; color: #adb5bd; background: white; border-radius: 10px; border: 1px dashed #dee2e6;">
-                    <p style="margin: 0; font-size: 0.9rem;">Chưa có gói hàng.</p>
+                  <div style="text-align:center; padding:2rem 1rem; color:#adb5bd;">
+                    <p style="margin:0; font-size:0.9rem;">Chưa có gói hàng.</p>
                   </div>
                 </t>
                 

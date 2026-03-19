@@ -108,13 +108,24 @@
 
 .pkg-badge {
   display: inline-block;
-  background: #fff3cd;
-  color: #7a5600;
-  border: 1px solid #ffc107;
   border-radius: 10px;
   padding: 1px 9px;
   font-size: 0.78rem;
   font-weight: 600;
+}
+
+/* Đã quét vào kiện */
+.pkg-badge-done {
+  background: #d3f9d8;
+  color: #2f9e44;
+  border: 1px solid #8ce99a;
+}
+
+/* Chưa quét, chỉ được gán sẵn */
+.pkg-badge-pending {
+  background: #fff3cd;
+  color: #7a5600;
+  border: 1px solid #ffc107;
 }
 
 /* Complete pack button - original design */

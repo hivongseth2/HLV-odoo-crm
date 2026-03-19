@@ -451,29 +451,31 @@ class CustomBarcodeScanController(http.Controller):
                 
                 # Tính qty: nếu từ origin thì lấy quantity/qty_done từ PICK
                 if is_from_origin:
-                    total_qty = sum(getattr(ml, 'quantity', 0) or getattr(ml, 'qty_done', 0) or 0 for ml in pkg_mls)
+                    total_demand = sum(getattr(ml, 'quantity', 0) or getattr(ml, 'qty_done', 0) or 0 for ml in pkg_mls)
+                    total_done = total_demand  # PICK đã done
                     package_lines = [{
                         'product_name': ml.product_id.display_name,
-                        'product_qty': getattr(ml, 'quantity', 0) or getattr(ml, 'qty_done', 0) or 0,
+                        'done_qty': getattr(ml, 'quantity', 0) or getattr(ml, 'qty_done', 0) or 0,
+                        'demand_qty': getattr(ml, 'quantity', 0) or getattr(ml, 'qty_done', 0) or 0,
                         'product_uom': ml.product_uom_id.name,
-                        'reserved_qty': getattr(ml, 'quantity', 0) or getattr(ml, 'qty_done', 0) or 0,
                     } for ml in pkg_mls]
                 else:
-                    total_qty = sum(ml.qty_done for ml in pkg_mls)
+                    total_done = sum(ml.qty_done for ml in pkg_mls)
+                    total_demand = sum(self._get_ml_demand(ml) for ml in pkg_mls)
                     package_lines = [{
                         'product_name': ml.product_id.display_name,
-                        'product_qty': ml.qty_done,
+                        'done_qty': ml.qty_done,
+                        'demand_qty': self._get_ml_demand(ml),
                         'product_uom': ml.product_uom_id.name,
-                        # [V3.6] Hiển thị reservation thông minh (truy vết từ PICK nếu cần)
-                        'reserved_qty': self._get_ml_demand(ml),
                     } for ml in pkg_mls]
-                
+
                 picking_packages.append({
                     'id': pkg.id,
                     'name': pkg.name,
-                    'qty': total_qty,
+                    'done_qty': total_done,
+                    'demand_qty': total_demand,
                     'package_lines': package_lines,
-                    'is_from_origin': is_from_origin,  # Flag để UI biết đây là package từ PICK
+                    'is_from_origin': is_from_origin,
                 })
 
         # Check nếu có move_line nào đang có package → hiện nút "Bỏ đóng gói"
