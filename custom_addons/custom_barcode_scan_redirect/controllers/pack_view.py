@@ -82,17 +82,17 @@ class PackViewController(http.Controller):
         # Lấy danh sách packages
         picking_packages = self._build_package_list(picking, origin_pick)
 
-        # Check nếu có move_line nào đang có package → hiện nút "Bỏ đóng gói"
-        packed_mls = picking.move_line_ids.filtered(
-            lambda l: l.package_id or l.result_package_id
-        )
-        has_packed_lines = bool(packed_mls)
+        # Check nếu có move_line nào đang có result_package → hiện nút "Bỏ đóng gói"
+        has_packed_lines = bool(picking.move_line_ids.filtered(
+            lambda l: l.result_package_id
+        ))
 
-        # Detect re-pack: tất cả move_line đã gán package nhưng qty_done = 0
-        # → phiếu đã đóng gói trước đó, giờ trả về để đóng lại
-        is_repack = has_packed_lines and all(
-            ml.qty_done == 0 for ml in packed_mls
-        )
+        # Detect re-pack: có source package (package_id) nhưng chưa có destination package
+        # → hàng nằm trong kiện cũ, cần đóng gói lại
+        has_source_packages = bool(picking.move_line_ids.filtered(
+            lambda l: l.package_id and not l.result_package_id
+        ))
+        is_repack = has_source_packages and not has_packed_lines
 
         return request.render("custom_barcode_scan_redirect.pack_scan_template", {
             'picking': picking,
@@ -106,66 +106,36 @@ class PackViewController(http.Controller):
         })
 
     def _build_package_list(self, picking, origin_pick):
-        """Collect packages from current picking + origin PICK."""
+        """Collect DESTINATION packages from current picking.
+        Only shows packages being created (result_package_id),
+        NOT source packages (package_id) to avoid confusion in re-pack scenarios.
+        """
         picking_packages = []
 
-        # 1. Packages từ phiếu PACK hiện tại
-        all_pkgs = (picking.move_line_ids.mapped('result_package_id') | picking.move_line_ids.mapped('package_id'))
+        # Chỉ lấy packages ĐÍCH (result_package_id) — kiện đang được tạo/đóng gói
+        all_pkgs = picking.move_line_ids.mapped('result_package_id')
 
-        # 2. Truy vết packages từ phiếu PICK gốc qua move_orig_ids
-        origin_pkgs = request.env['stock.quant.package'].sudo()
-        origin_pkg_mls_map = {}
-
-        for move in picking.move_ids:
-            for orig_move in move.move_orig_ids:
-                for orig_ml in orig_move.move_line_ids:
-                    if orig_ml.result_package_id:
-                        origin_pkgs |= orig_ml.result_package_id
-                        pkg_id = orig_ml.result_package_id.id
-                        if pkg_id not in origin_pkg_mls_map:
-                            origin_pkg_mls_map[pkg_id] = request.env['stock.move.line'].sudo()
-                        origin_pkg_mls_map[pkg_id] |= orig_ml
-
-        # 3. Gộp tất cả packages
-        all_pkgs = all_pkgs | origin_pkgs
-
-        _logger.info(f"[PACK_VIEW] Picking {picking.name}: Found {len(all_pkgs)} packages (local + origin)")
+        _logger.info(f"[PACK_VIEW] Picking {picking.name}: Found {len(all_pkgs)} destination packages")
 
         if not all_pkgs:
             return picking_packages
 
         for pkg in all_pkgs:
             pkg_mls = picking.move_line_ids.filtered(
-                lambda ml: ml.result_package_id.id == pkg.id or ml.package_id.id == pkg.id
+                lambda ml: ml.result_package_id.id == pkg.id
             )
-
-            is_from_origin = False
-            if not pkg_mls and pkg.id in origin_pkg_mls_map:
-                pkg_mls = origin_pkg_mls_map[pkg.id]
-                is_from_origin = True
-                _logger.info(f"[PACK_VIEW] Package {pkg.name} loaded from origin PICK with {len(pkg_mls)} lines")
 
             if not pkg_mls:
                 continue
 
-            if is_from_origin:
-                total_demand = sum(getattr(ml, 'quantity', 0) or getattr(ml, 'qty_done', 0) or 0 for ml in pkg_mls)
-                total_done = total_demand
-                package_lines = [{
-                    'product_name': ml.product_id.display_name,
-                    'done_qty': getattr(ml, 'quantity', 0) or getattr(ml, 'qty_done', 0) or 0,
-                    'demand_qty': getattr(ml, 'quantity', 0) or getattr(ml, 'qty_done', 0) or 0,
-                    'product_uom': ml.product_uom_id.name,
-                } for ml in pkg_mls]
-            else:
-                total_done = sum(ml.qty_done for ml in pkg_mls)
-                total_demand = sum(get_ml_demand(ml) for ml in pkg_mls)
-                package_lines = [{
-                    'product_name': ml.product_id.display_name,
-                    'done_qty': ml.qty_done,
-                    'demand_qty': get_ml_demand(ml),
-                    'product_uom': ml.product_uom_id.name,
-                } for ml in pkg_mls]
+            total_done = sum(ml.qty_done for ml in pkg_mls)
+            total_demand = sum(get_ml_demand(ml) for ml in pkg_mls)
+            package_lines = [{
+                'product_name': ml.product_id.display_name,
+                'done_qty': ml.qty_done,
+                'demand_qty': get_ml_demand(ml),
+                'product_uom': ml.product_uom_id.name,
+            } for ml in pkg_mls]
 
             picking_packages.append({
                 'id': pkg.id,
@@ -173,7 +143,6 @@ class PackViewController(http.Controller):
                 'done_qty': total_done,
                 'demand_qty': total_demand,
                 'package_lines': package_lines,
-                'is_from_origin': is_from_origin,
             })
 
         return picking_packages

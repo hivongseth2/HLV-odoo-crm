@@ -24,7 +24,7 @@
             <button id="btnPrintLabel" title="In nhãn dán sản phẩm">In nhãn</button>
             <button id="btnPrintLabel80x80" title="In nhãn 80x80">In nhãn 80x80</button>
             <button id="btnPartialPack" title="Tạo partial pack">Đóng gói</button>
-            <button t-if="has_packed_lines" id="btnUnpackAll" title="Bỏ đóng gói toàn bộ sản phẩm">Bỏ đóng gói</button>
+            <button t-if="has_packed_lines or is_repack" id="btnUnpackAll" title="Bỏ đóng gói toàn bộ sản phẩm">Bỏ đóng gói</button>
             <button id="btnDriveSwitch">Đổi tài khoản Drive</button>
           </div>
         </div>
@@ -70,7 +70,7 @@
                     </div>
                     <t t-set="_done_pkg_mls" t-value="line.move_line_ids.filtered(lambda x: x.result_package_id and x.qty_done > 0)"/>
                     <t t-set="_pend_pkg_mls" t-value="line.move_line_ids.filtered(lambda x: x.result_package_id and x.qty_done == 0)"/>
-                    <t t-if="(_done_pkg_mls or _pend_pkg_mls) and not is_repack">
+                    <t t-if="_done_pkg_mls or _pend_pkg_mls">
                       <div class="pkg-indicator">
                         <t t-foreach="_done_pkg_mls.mapped('result_package_id')" t-as="_pk">
                           <span class="pkg-badge pkg-badge-done">&#128230; <t t-esc="_pk.name"/></span>
@@ -78,13 +78,6 @@
                         <t t-foreach="_pend_pkg_mls.mapped('result_package_id')" t-as="_pk">
                           <span class="pkg-badge pkg-badge-pending">&#128203; <t t-esc="_pk.name"/> (chưa quét)</span>
                         </t>
-                      </div>
-                    </t>
-                    <t t-if="(_done_pkg_mls or _pend_pkg_mls) and is_repack">
-                      <div class="pkg-indicator">
-                        <span class="pkg-badge" style="background: #ffe8cc; color: #e67700; border: 1px solid #ffc078; font-size: 0.75rem; padding: 2px 8px; border-radius: 10px;">
-                          ⚠️ Kiện cũ — cần bỏ đóng gói
-                        </span>
                       </div>
                     </t>
                   </div>
