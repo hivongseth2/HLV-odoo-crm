@@ -693,6 +693,29 @@ document.addEventListener("DOMContentLoaded", function () {
             });
           });
 
+          // Cập nhật pkg-badge trên dòng sản phẩm
+          items.forEach(item => {
+            document.querySelectorAll('#product_list .product-item').forEach(el => {
+              if (el.dataset.barcode === item.barcode) {
+                let indicator = el.querySelector('.pkg-indicator');
+                if (!indicator) {
+                  indicator = document.createElement('div');
+                  indicator.className = 'pkg-indicator';
+                  el.querySelector('div')?.appendChild(indicator);
+                }
+                // Kiểm tra badge cho kiện này đã có chưa
+                const existing = indicator.querySelector(`[data-pkg-id="${result.package_id}"]`);
+                if (!existing) {
+                  const badge = document.createElement('span');
+                  badge.className = 'pkg-badge pkg-badge-done';
+                  badge.dataset.pkgId = result.package_id;
+                  badge.textContent = '\uD83D\uDCE6 ' + result.package_name;
+                  indicator.appendChild(badge);
+                }
+              }
+            });
+          });
+
           // Render gói mới vào side panel (không reload)
           renderNewPackageToPanel(result.package_id, result.package_name, items);
         } else {

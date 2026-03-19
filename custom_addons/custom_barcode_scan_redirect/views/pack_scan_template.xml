@@ -178,18 +178,9 @@
                       <li class="package-item-card" t-att-data-package-id="pkg['id']"
                           t-attf-style="background:white; border-radius:10px; border:1px solid #{'#b2f2bb' if _is_full else '#ced4da'}; overflow:hidden;">
 
-                        <!-- Header: tên + progress số -->
+                        <!-- Header: tên kiện -->
                         <div style="display:flex; justify-content:space-between; align-items:center; padding:0.6rem 0.85rem 0.4rem;">
                           <strong style="font-size:0.95rem; color:#212529;"><t t-esc="pkg['name']"/></strong>
-                          <span t-attf-style="font-size:0.8rem; font-weight:700; padding:2px 10px; border-radius:10px; background:#{'#d3f9d8' if _is_full else ('#fff3cd' if not _is_empty else '#f1f3f5')}; color:#{'#2f9e44' if _is_full else ('#7a5600' if not _is_empty else '#868e96')};">
-                            <t t-esc="pkg['done_qty']"/> / <t t-esc="pkg['demand_qty']"/>
-                          </span>
-                        </div>
-
-                        <!-- Progress bar -->
-                        <t t-set="_pct" t-value="int(pkg['done_qty'] / pkg['demand_qty'] * 100) if pkg['demand_qty'] > 0 else 0"/>
-                        <div style="height:4px; background:#f1f3f5; margin:0 0.85rem;">
-                          <div t-attf-style="height:4px; width:#{ str(_pct) }%; background:#{'#2f9e44' if _is_full else '#228be6'}; transition:width .3s;"></div>
                         </div>
 
                         <!-- Product lines -->
