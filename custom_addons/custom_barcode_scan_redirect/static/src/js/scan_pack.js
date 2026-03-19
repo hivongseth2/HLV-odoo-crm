@@ -680,6 +680,19 @@ document.addEventListener("DOMContentLoaded", function () {
             });
           }
 
+          // Fallback: clear "chưa đóng gói" cho tất cả items vừa đóng
+          items.forEach(item => {
+            document.querySelectorAll('#product_list .product-item').forEach(el => {
+              if (el.dataset.barcode === item.barcode) {
+                // packed_qty = currentDone → unpacked = 0
+                const input = el.querySelector('.done-input');
+                const currentDone = parseFloat(input ? input.value : 0) || 0;
+                el.setAttribute('data-packed-qty', currentDone);
+                updateUnpackedLabel(el);
+              }
+            });
+          });
+
           // Render gói mới vào side panel (không reload)
           renderNewPackageToPanel(result.package_id, result.package_name, items);
         } else {
