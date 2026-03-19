@@ -99,7 +99,7 @@ class PackViewController(http.Controller):
         ))
         is_repack = has_source_packages and not has_packed_lines
 
-        return request.render("custom_barcode_scan_redirect.pack_scan_template", {
+        response = request.render("custom_barcode_scan_redirect.pack_scan_template", {
             'picking': picking,
             'lines': lines,
             'origin_pick_name': origin_pick.name if origin_pick else '',
@@ -109,6 +109,9 @@ class PackViewController(http.Controller):
             'has_packed_lines': has_packed_lines,
             'is_repack': is_repack,
         })
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        return response
 
     def _auto_clean_source_packages(self, picking):
         """Auto-clean pass-through package lines for re-pack scenarios.
