@@ -128,16 +128,8 @@ class PackScanController(http.Controller):
                         _logger.info(f"REDIRECT FOUND (Loose Line Match): ML {l.id} | No Package")
                         break
 
-            # Bước 2: Fallback — tìm dòng PACKAGE còn chỗ (nếu không có loose)
-            if not candidate:
-                for l in sorted_mls:
-                    is_pkg = bool(l.package_id or l.result_package_id)
-                    res = get_ml_demand(l)
-                    if is_pkg:
-                        if (res > 0 and l.qty_done < res) or (res == 0 and l.qty_done == 0):
-                            candidate = l
-                            _logger.info(f"REDIRECT FOUND (Package Match): ML {l.id} | Package: {l.package_id.name or l.result_package_id.name}")
-                            break
+            # Bước 2: Bỏ — KHÔNG fallback vào dòng đã đóng gói.
+            # Nếu không tìm thấy loose line, trả về None để auto-find tạo dòng mới.
 
             if candidate:
                 _logger.info(f"REDIRECT EXECUTE: ML {target_ml.id} -> ML {candidate.id}")
@@ -152,11 +144,8 @@ class PackScanController(http.Controller):
             if mv_done >= mv.product_uom_qty:
                 _logger.info(f"Target line {target_ml.id} belongs to FULL Move {mv.id} ({mv_done}/{mv.product_uom_qty}). Switching to find another.")
                 target_ml = None
-            elif is_packed and reserved_qty > 0 and target_ml.qty_done >= reserved_qty:
-                _logger.info(f"Target line {target_ml.id} is packed ({is_packed.name}) and reaches Reserved Qty ({reserved_qty}). Skipping.")
-                target_ml = None
-            elif target_ml.result_package_id and reserved_qty == 0 and target_ml.qty_done > 0:
-                _logger.info(f"Target line {target_ml.id} is already fully packed with no reserved qty. Skipping.")
+            elif target_ml.result_package_id:
+                _logger.info(f"Target line {target_ml.id} is already packed in {target_ml.result_package_id.name}. Rejecting to allow new package creation.")
                 target_ml = None
             else:
                 _logger.info(f"Target line {target_ml.id} is valid (Space: {target_ml.qty_done}/{reserved_qty} | Move: {mv_done}/{mv.product_uom_qty}). Keeping it.")
@@ -202,6 +191,11 @@ class PackScanController(http.Controller):
         candidate_open_move = None
 
         for ml in all_move_lines:
+            # Skip packed lines — đã đóng gói rồi, không thêm vào nữa
+            if ml.result_package_id:
+                _logger.info(f"SKIP MOVE_LINE {ml.id}: Already packed in {ml.result_package_id.name}")
+                continue
+
             reserved_qty = getattr(ml, 'reserved_qty', 0) or getattr(ml, 'reserved_uom_qty', 0) or getattr(ml, 'product_uom_qty', 0) or 0
             remaining_in_line = reserved_qty - ml.qty_done
 
@@ -209,7 +203,7 @@ class PackScanController(http.Controller):
 
             if remaining_in_line > 0:
                 target_ml = ml
-                _logger.info(f"Selected move_line {ml.id} (Packed: {bool(ml.result_package_id)}) with remaining {remaining_in_line}")
+                _logger.info(f"Selected move_line {ml.id} (Loose) with remaining {remaining_in_line}")
                 return target_ml
 
         # Kiểm tra move có dư demand không
