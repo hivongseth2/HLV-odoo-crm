@@ -53,7 +53,7 @@
                       Barcode: <span t-if="line.product_id.barcode" t-esc="line.product_id.barcode"/>
                       <span t-else="" style="color: #dc3545; font-style: italic;">Không có</span>
                     </div>
-                    <t t-set="_packed_pkg_names" t-value="', '.join(line.move_line_ids.filtered(lambda x: x.result_package_id and x.qty_done > 0).mapped('result_package_id').mapped('name'))"/>
+                    <t t-set="_packed_pkg_names" t-value="', '.join(line.move_line_ids.filtered(lambda x: x.result_package_id).mapped('result_package_id').mapped('name'))"/>
                     <t t-if="_packed_pkg_names">
                       <div class="pkg-indicator">
                         <span class="pkg-badge">&#128230; Trong kiện: <t t-esc="_packed_pkg_names"/></span>
