@@ -46,6 +46,7 @@
 #btnPrintLabel,
 #btnPrintLabel80x80,
 #btnPartialPack,
+#btnUnpackAll,
 #btnDriveSwitch {
   padding: 10px 20px;
   font-size: 14px;
@@ -64,6 +65,7 @@
 #btnPrintLabel:hover,
 #btnPrintLabel80x80:hover,
 #btnPartialPack:hover,
+#btnUnpackAll:hover,
 #btnDriveSwitch:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
@@ -85,9 +87,34 @@
   color: #fff;
 }
 
+#btnUnpackAll {
+  background: #e03131;
+  color: #fff;
+  border-color: rgba(255,255,255,0.2);
+}
+
 #btnDriveSwitch {
   background: #0b69d7;
   color: #fff;
+}
+
+/* Package indicator badge inside product row */
+.pkg-indicator {
+  margin-top: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pkg-badge {
+  display: inline-block;
+  background: #fff3cd;
+  color: #7a5600;
+  border: 1px solid #ffc107;
+  border-radius: 10px;
+  padding: 1px 9px;
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 /* Complete pack button - original design */
