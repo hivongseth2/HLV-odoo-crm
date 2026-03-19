@@ -32,6 +32,21 @@
         <div class="pack-grid" style="display: grid; grid-template-columns: 1.6fr 1.4fr; gap: 16px; height: calc(100vh - 100px); overflow: hidden;">
           
           <div class="scan-wrapper card" style="height: 100%; display: flex; flex-direction: column; overflow: hidden;">
+
+            <!-- Banner cảnh báo re-pack -->
+            <t t-if="is_repack">
+              <div class="repack-banner" style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 12px 16px; margin: 8px 12px; display: flex; align-items: center; gap: 12px; justify-content: space-between;">
+                <div style="font-size: 0.9rem; color: #664d03;">
+                  <strong>⚠️ Phiếu này đã đóng gói trước đó.</strong>
+                  <span>Nhấn "Bỏ đóng gói" để xóa kiện cũ và bắt đầu đóng lại.</span>
+                </div>
+                <button onclick="document.getElementById('btnUnpackAll')?.click()" 
+                        style="white-space: nowrap; padding: 6px 16px; background: #e03131; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem;">
+                  Bỏ đóng gói
+                </button>
+              </div>
+            </t>
+
             <!-- Hidden Input for Barcode Scanner -->
             <input id="pack_barcode_input" placeholder="Quét mã sản phẩm..." autofocus="autofocus" 
                    style="opacity: 0; width: 1px; height: 1px; position: absolute; top: -9999px; left: 0;"/>
@@ -55,7 +70,7 @@
                     </div>
                     <t t-set="_done_pkg_mls" t-value="line.move_line_ids.filtered(lambda x: x.result_package_id and x.qty_done > 0)"/>
                     <t t-set="_pend_pkg_mls" t-value="line.move_line_ids.filtered(lambda x: x.result_package_id and x.qty_done == 0)"/>
-                    <t t-if="_done_pkg_mls or _pend_pkg_mls">
+                    <t t-if="(_done_pkg_mls or _pend_pkg_mls) and not is_repack">
                       <div class="pkg-indicator">
                         <t t-foreach="_done_pkg_mls.mapped('result_package_id')" t-as="_pk">
                           <span class="pkg-badge pkg-badge-done">&#128230; <t t-esc="_pk.name"/></span>
@@ -63,6 +78,13 @@
                         <t t-foreach="_pend_pkg_mls.mapped('result_package_id')" t-as="_pk">
                           <span class="pkg-badge pkg-badge-pending">&#128203; <t t-esc="_pk.name"/> (chưa quét)</span>
                         </t>
+                      </div>
+                    </t>
+                    <t t-if="(_done_pkg_mls or _pend_pkg_mls) and is_repack">
+                      <div class="pkg-indicator">
+                        <span class="pkg-badge" style="background: #ffe8cc; color: #e67700; border: 1px solid #ffc078; font-size: 0.75rem; padding: 2px 8px; border-radius: 10px;">
+                          ⚠️ Kiện cũ — cần bỏ đóng gói
+                        </span>
                       </div>
                     </t>
                   </div>
@@ -236,6 +258,13 @@
         </script>
         <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="true"></div>
 
+        <script src="/custom_barcode_scan_redirect/static/src/js/toast.js"></script>
+        <script src="/custom_barcode_scan_redirect/static/src/js/ui_utils.js"></script>
+        <script src="/custom_barcode_scan_redirect/static/src/js/server_sync.js"></script>
+        <script src="/custom_barcode_scan_redirect/static/src/js/recording.js"></script>
+        <script src="/custom_barcode_scan_redirect/static/src/js/side_panel.js"></script>
+        <script src="/custom_barcode_scan_redirect/static/src/js/package_edit.js"></script>
+        <script src="/custom_barcode_scan_redirect/static/src/js/transfer_modal.js"></script>
         <script src="/custom_barcode_scan_redirect/static/src/js/scan_pack.js"></script>
       </div>
 

@@ -2,7 +2,7 @@
  * toast.js — Toast Notification System
  * Provides global `toast` object with success/error/info/warn/show methods.
  */
-const toast = (() => {
+var toast = (() => {
   let host = document.getElementById('toastHost');
   if (!host) {
     host = document.createElement('div');

@@ -70,7 +70,7 @@ document.addEventListener("DOMContentLoaded", function () {
   };
 
   window.handleManualQtyChange = async function (el) {
-    const newVal = parseFloat(el.value);
+    const newVal = parseFloat(el.value) || 0;
     const oldVal = parseFloat(el.dataset.currentQty || 0); // Value before change (from dataset)
 
     // 1. Check Negative
@@ -282,7 +282,7 @@ document.addEventListener("DOMContentLoaded", function () {
             ? input.dataset.currentQty
             : input.value)
             : (checkEl.querySelector(".done")?.innerText || 0)
-        );
+        ) || 0;
 
         if (maxQty > 0 && (currentDone + delta) > maxQty + 0.001) {
           toast.warn(`❌ Không được nhập quá số lượng yêu cầu (${maxQty})!`);
@@ -457,7 +457,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const input = item.querySelector(".done-input");
       const doneVal = input ? input.value : (item.querySelector(".done")?.innerText || 0);
-      const done = parseFloat(doneVal);
+      const done = parseFloat(doneVal) || 0;
 
       const requiredEl = input ? input.nextElementSibling.nextElementSibling : item.querySelectorAll("span")[1];
       const required = parseFloat(requiredEl?.innerText || 0);
@@ -616,7 +616,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const input = el.querySelector(".done-input");
         const doneVal = input ? input.value : (el.querySelector(".done")?.innerText || 0);
-        const currentDone = parseFloat(doneVal);
+        const currentDone = parseFloat(doneVal) || 0;
 
         const alreadyPacked = parseFloat(el.dataset.packedQty || 0);
         const qtyToPack = currentDone - alreadyPacked;

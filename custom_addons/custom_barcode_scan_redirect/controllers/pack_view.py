@@ -20,6 +20,11 @@ class PackViewController(http.Controller):
             _logger.error("❌ Không tìm thấy phiếu pack!")
             return request.not_found()
 
+        # Block truy cập phiếu đã hoàn tất hoặc đã hủy
+        if picking.state in ('done', 'cancel'):
+            _logger.warning(f"[PACK_VIEW] Blocked: picking {picking.name} is {picking.state}")
+            return request.redirect('/custom_barcode_scan/ui')
+
         # Auto-assign: Nếu phiếu PACK chưa được assign, tự động gọi action_assign
         if picking.state in ['confirmed', 'waiting']:
             try:
@@ -78,9 +83,16 @@ class PackViewController(http.Controller):
         picking_packages = self._build_package_list(picking, origin_pick)
 
         # Check nếu có move_line nào đang có package → hiện nút "Bỏ đóng gói"
-        has_packed_lines = bool(picking.move_line_ids.filtered(
+        packed_mls = picking.move_line_ids.filtered(
             lambda l: l.package_id or l.result_package_id
-        ))
+        )
+        has_packed_lines = bool(packed_mls)
+
+        # Detect re-pack: tất cả move_line đã gán package nhưng qty_done = 0
+        # → phiếu đã đóng gói trước đó, giờ trả về để đóng lại
+        is_repack = has_packed_lines and all(
+            ml.qty_done == 0 for ml in packed_mls
+        )
 
         return request.render("custom_barcode_scan_redirect.pack_scan_template", {
             'picking': picking,
@@ -90,6 +102,7 @@ class PackViewController(http.Controller):
             'sibling_packs': sibling_packs,
             'picking_packages': picking_packages,
             'has_packed_lines': has_packed_lines,
+            'is_repack': is_repack,
         })
 
     def _build_package_list(self, picking, origin_pick):
