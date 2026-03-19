@@ -35,6 +35,11 @@ class PackViewController(http.Controller):
             except Exception as e:
                 _logger.warning(f"[PACK_VIEW] Auto-assign failed: {e}")
 
+        # Auto-clean: Xử lý hàng từ kiện cũ (pass-through lines)
+        if picking.state in ['assigned', 'confirmed', 'in_progress']:
+            if self._auto_clean_source_packages(picking):
+                return request.redirect(f'/custom_barcode_scan/pack_view/{picking_id}')
+
         lines = picking.move_ids_without_package.filtered(lambda m: m.product_id)
 
         # Tìm PICK gốc để hiển thị
@@ -94,12 +99,6 @@ class PackViewController(http.Controller):
         ))
         is_repack = has_source_packages and not has_packed_lines
 
-        # Auto-unpack: nếu là re-pack, tự động xóa kiện cũ rồi redirect lại
-        if is_repack:
-            _logger.info(f"[REPACK] Auto-unpacking source packages for {picking.name}")
-            self._auto_unpack_sources(picking)
-            return request.redirect(f'/custom_barcode_scan/pack_view/{picking_id}')
-
         return request.render("custom_barcode_scan_redirect.pack_scan_template", {
             'picking': picking,
             'lines': lines,
@@ -108,63 +107,76 @@ class PackViewController(http.Controller):
             'sibling_packs': sibling_packs,
             'picking_packages': picking_packages,
             'has_packed_lines': has_packed_lines,
-            'is_repack': False,
+            'is_repack': is_repack,
         })
 
-    def _auto_unpack_sources(self, picking):
-        """Auto-unpack source packages for re-pack scenario.
-        Moves quants out of old packages → clears package_id → re-reserves.
-        After this, all items become loose and ready for fresh packing.
+    def _auto_clean_source_packages(self, picking):
+        """Auto-clean pass-through package lines for re-pack scenarios.
+
+        When goods are reserved from packages, Odoo creates move lines with
+        package_id=X AND result_package_id=X (pass-through). These phantom lines
+        cause double-counting in our scanning flow. This cleanup:
+        1. Unreserves to remove phantom lines (qty_done=0)
+        2. Moves quants out of source packages to loose
+        3. Re-reserves to create clean loose lines
         """
-        mls = picking.move_line_ids.filtered(
-            lambda l: l.package_id and not l.result_package_id
+        pass_through = picking.move_line_ids.filtered(
+            lambda l: l.package_id and l.result_package_id
+                      and l.package_id.id == l.result_package_id.id
         )
-        if not mls:
-            return
+        if not pass_through:
+            return False
 
+        source_packages = pass_through.mapped('package_id')
         location = picking.location_id
-        packages = mls.mapped('package_id').filtered(lambda p: p)
 
-        # 1. Unreserve
-        picking.do_unreserve()
-
-        # 2. Move quants out of old packages
-        Quant = request.env['stock.quant'].sudo()
-        for pkg in packages:
-            pkg_quants = Quant.search([
-                ('package_id', '=', pkg.id),
-                ('location_id', '=', location.id),
-                ('quantity', '!=', 0),
-            ])
-            for q in pkg_quants:
-                existing = Quant.search([
-                    ('product_id', '=', q.product_id.id),
-                    ('location_id', '=', q.location_id.id),
-                    ('lot_id', '=', q.lot_id.id if q.lot_id else False),
-                    ('package_id', '=', False),
-                    ('owner_id', '=', q.owner_id.id if q.owner_id else False),
-                ], limit=1)
-                if existing:
-                    existing.quantity += q.quantity
-                else:
-                    Quant.create({
-                        'product_id': q.product_id.id,
-                        'location_id': q.location_id.id,
-                        'lot_id': q.lot_id.id if q.lot_id else False,
-                        'package_id': False,
-                        'owner_id': q.owner_id.id if q.owner_id else False,
-                        'quantity': q.quantity,
-                    })
-                q.quantity = 0
-
-        # 3. Clear only source package refs (keep result_package_id for any packed lines)
-        mls.write({'package_id': False})
-
-        # 4. Re-reserve
-        picking.action_assign()
         _logger.info(
-            f"[REPACK] Auto-unpacked {len(mls)} lines from {len(packages)} source packages for {picking.name}"
+            "[AUTO-CLEAN] %s: %d pass-through lines, packages: %s",
+            picking.name, len(pass_through), source_packages.mapped('name')
         )
+
+        try:
+            # Step 1: Unreserve — removes pass-through lines (qty_done=0), keeps packed lines
+            picking.do_unreserve()
+
+            # Step 2: Move quants out of source packages to loose
+            Quant = request.env['stock.quant'].sudo()
+            for pkg in source_packages:
+                pkg_quants = Quant.search([
+                    ('package_id', '=', pkg.id),
+                    ('location_id', '=', location.id),
+                    ('quantity', '!=', 0),
+                ])
+                for q in pkg_quants:
+                    existing = Quant.search([
+                        ('product_id', '=', q.product_id.id),
+                        ('location_id', '=', q.location_id.id),
+                        ('lot_id', '=', q.lot_id.id if q.lot_id else False),
+                        ('package_id', '=', False),
+                        ('owner_id', '=', q.owner_id.id if q.owner_id else False),
+                    ], limit=1)
+                    if existing:
+                        existing.quantity += q.quantity
+                    else:
+                        Quant.create({
+                            'product_id': q.product_id.id,
+                            'location_id': q.location_id.id,
+                            'lot_id': q.lot_id.id if q.lot_id else False,
+                            'package_id': False,
+                            'owner_id': q.owner_id.id if q.owner_id else False,
+                            'quantity': q.quantity,
+                        })
+                    q.quantity = 0
+                _logger.info("[AUTO-CLEAN] Moved quants out of %s", pkg.name)
+
+            # Step 3: Re-reserve with clean loose quants
+            picking.action_assign()
+            _logger.info("[AUTO-CLEAN] %s: cleanup complete", picking.name)
+            return True
+
+        except Exception as e:
+            _logger.exception("[AUTO-CLEAN] Error cleaning %s: %s", picking.name, e)
+            return False
 
     def _build_package_list(self, picking, origin_pick):
         """Collect DESTINATION packages from current picking.
