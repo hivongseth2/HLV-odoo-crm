@@ -235,6 +235,14 @@ class CustomBarcodeScanController(http.Controller):
                     # Odoo 17 dùng quantity, Odoo cũ dùng qty_done (ta lấy cả 2 cho chắc)
                     total += getattr(ol, 'quantity', 0) or getattr(ol, 'qty_done', 0) or 0
                 return total
+
+        # 3. Fallback: lấy demand từ stock.move (product_uom_qty là demand gốc của move)
+        #    Dùng khi same-package flow: reserved_qty=0 nhưng move vẫn có demand thực
+        move_demand = ml.move_id.product_uom_qty or 0
+        if move_demand > 0:
+            # Chia đều nếu có nhiều move_lines trong cùng move
+            n_mls = len(ml.move_id.move_line_ids) or 1
+            return move_demand / n_mls
                 
         return 0
 
