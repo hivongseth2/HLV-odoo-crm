@@ -460,6 +460,9 @@ class CustomBarcodeScanController(http.Controller):
                     } for ml in pkg_mls]
                 else:
                     total_qty = sum(ml.qty_done for ml in pkg_mls)
+                    # Bỏ qua package rỗng (qty_done = 0 — chưa quét gì, chỉ được gán sẵn từ PICK)
+                    if total_qty == 0:
+                        continue
                     package_lines = [{
                         'product_name': ml.product_id.display_name,
                         'product_qty': ml.qty_done,
