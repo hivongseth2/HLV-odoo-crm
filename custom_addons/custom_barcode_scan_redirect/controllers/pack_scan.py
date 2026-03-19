@@ -118,6 +118,7 @@ class PackScanController(http.Controller):
 
             sorted_mls = sorted(all_product_mls, key=get_prio, reverse=True)
 
+            candidate = None
             # Bước 1: Tìm dòng HÀNG LẺ (ưu tiên loose trước)
             if not candidate:
                 for l in sorted_mls:
