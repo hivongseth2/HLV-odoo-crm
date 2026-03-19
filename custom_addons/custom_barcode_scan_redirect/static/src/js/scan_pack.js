@@ -666,10 +666,22 @@ document.addEventListener("DOMContentLoaded", function () {
         const result = response.result || response;
 
         if (result?.package_id) {
-          toast.success(`Tạo gói hàng ${result.package_name} thành công! Đang tải lại...`);
-          // Reload page to ensure DOM is fully in sync with server
-          // (packed lines, line IDs, qty updates all refreshed)
-          setTimeout(() => location.reload(), 800);
+          toast.success(`Tạo gói hàng ${result.package_name} thành công!`);
+
+          // Update packed_qty trên DOM từ sync_info
+          if (result.sync_info) {
+            result.sync_info.forEach(info => {
+              document.querySelectorAll('#product_list .product-item').forEach(el => {
+                if (el.dataset.barcode === info.product_barcode) {
+                  el.setAttribute('data-packed-qty', info.packed_qty);
+                  updateUnpackedLabel(el);
+                }
+              });
+            });
+          }
+
+          // Render gói mới vào side panel (không reload)
+          renderNewPackageToPanel(result.package_id, result.package_name, items);
         } else {
           toast.error(result?.error || "Lỗi tạo gói hàng");
           playError();
