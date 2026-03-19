@@ -118,18 +118,7 @@ class PackScanController(http.Controller):
 
             sorted_mls = sorted(all_product_mls, key=get_prio, reverse=True)
 
-            candidate = None
-            # Bước 1: Tìm dòng PACKAGE còn chỗ hoặc rỗng
-            for l in sorted_mls:
-                is_pkg = bool(l.package_id or l.result_package_id)
-                res = get_ml_demand(l)
-                if is_pkg:
-                    if (res > 0 and l.qty_done < res) or (res == 0 and l.qty_done == 0):
-                        candidate = l
-                        _logger.info(f"REDIRECT FOUND (Package Match): ML {l.id} | Package: {l.package_id.name or l.result_package_id.name}")
-                        break
-
-            # Bước 2: Tìm dòng HÀNG LẺ
+            # Bước 1: Tìm dòng HÀNG LẺ (ưu tiên loose trước)
             if not candidate:
                 for l in sorted_mls:
                     is_pkg = bool(l.package_id or l.result_package_id)
@@ -137,6 +126,17 @@ class PackScanController(http.Controller):
                         candidate = l
                         _logger.info(f"REDIRECT FOUND (Loose Line Match): ML {l.id} | No Package")
                         break
+
+            # Bước 2: Fallback — tìm dòng PACKAGE còn chỗ (nếu không có loose)
+            if not candidate:
+                for l in sorted_mls:
+                    is_pkg = bool(l.package_id or l.result_package_id)
+                    res = get_ml_demand(l)
+                    if is_pkg:
+                        if (res > 0 and l.qty_done < res) or (res == 0 and l.qty_done == 0):
+                            candidate = l
+                            _logger.info(f"REDIRECT FOUND (Package Match): ML {l.id} | Package: {l.package_id.name or l.result_package_id.name}")
+                            break
 
             if candidate:
                 _logger.info(f"REDIRECT EXECUTE: ML {target_ml.id} -> ML {candidate.id}")
@@ -189,9 +189,9 @@ class PackScanController(http.Controller):
         for m in scoped_moves:
             all_move_lines |= m.move_line_ids
 
-        # Ưu tiên các dòng đã được liên kết với package
+        # Ưu tiên các dòng HÀNG LẺ trước (chưa đóng gói), sau đó mới đến packed
         all_move_lines = all_move_lines.sorted(
-            key=lambda ml: (bool(ml.result_package_id or ml.package_id), ml.id), reverse=True
+            key=lambda ml: (not bool(ml.result_package_id or ml.package_id), ml.id), reverse=True
         )
 
         barcode = scoped_moves[0].product_id.barcode if scoped_moves else '?'

@@ -113,7 +113,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     try {
       // Pass lineId and moveId as explicit target
-      await updateQty(barcode, delta, lineId, moveId);
+      await updateQty(barcode, delta, lineId, moveId, true);
     } catch (e) {
       // Fail: Revert UI
       console.warn("Manual update failed, reverting...", e);
@@ -258,7 +258,7 @@ document.addEventListener("DOMContentLoaded", function () {
   };
 
   // §2.6 — updateQty (core scan → server flow)
-  async function updateQty(barcode, delta = 1, lineId = null, moveId = null) {
+  async function updateQty(barcode, delta = 1, lineId = null, moveId = null, skipValidation = false) {
     if (!lineId) {
       const found = findLineToUpdate(barcode);
       lineId = found?.lineId || null;
@@ -270,7 +270,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // [NEW] Client-side Over-Quantity Validation
-    if (lineId) {
+    if (lineId && !skipValidation) {
       const checkEl = moveId
         ? document.querySelector(`[data-move-id="${moveId}"]`)
         : document.querySelector(`[data-line-id="${lineId}"]`);
@@ -666,39 +666,10 @@ document.addEventListener("DOMContentLoaded", function () {
         const result = response.result || response;
 
         if (result?.package_id) {
-          toast.success(`Tạo gói hàng ${result.package_name} thành công!`);
-          const pkgId = result.package_id;
-          const pkgName = result.package_name;
-          renderNewPackageToPanel(pkgId, pkgName, items);
-
-          if (result.sync_info && result.sync_info.length > 0) {
-            console.log("[PACK UI] Using Server Sync Info");
-            applyServerSyncInfo(result.sync_info);
-          } else {
-            console.warn("[PACK UI] No Sync Info from Server -> Using Optimistic Update");
-            if (items && items.length > 0) {
-              items.forEach(item => {
-                const lineId = item.move_line_id;
-                const qty = parseFloat(item.qty || 0);
-                let el = document.querySelector(`#product_list .product-item[data-line-id="${lineId}"]`);
-
-                if (!el && item.barcode) {
-                  const code = normalizeCode(item.barcode).toUpperCase();
-                  el = document.querySelector(`#product_list .product-item[data-barcode="${CSS.escape(code)}"]`) ||
-                    document.querySelector(`#product_list .product-item[data-barcode="${code}"]`);
-                }
-
-                if (el) {
-                  const oldPacked = parseFloat(el.getAttribute('data-packed-qty') || 0);
-                  const newPacked = oldPacked + qty;
-                  el.setAttribute('data-packed-qty', newPacked);
-
-                  highlightElement(el, "#dbe4ff");
-                  updateUnpackedLabel(el);
-                }
-              });
-            }
-          }
+          toast.success(`Tạo gói hàng ${result.package_name} thành công! Đang tải lại...`);
+          // Reload page to ensure DOM is fully in sync with server
+          // (packed lines, line IDs, qty updates all refreshed)
+          setTimeout(() => location.reload(), 800);
         } else {
           toast.error(result?.error || "Lỗi tạo gói hàng");
           playError();
