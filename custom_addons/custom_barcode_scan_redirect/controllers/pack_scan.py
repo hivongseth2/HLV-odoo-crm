@@ -349,12 +349,12 @@ class PackScanController(http.Controller):
     def _check_stock_availability(self, move, ml, add_qty):
         """Check if enough stock exists at the source location. Returns error dict or None."""
         try:
-            quant = request.env['stock.quant'].sudo().search([
+            quants = request.env['stock.quant'].sudo().search([
                 ('product_id', '=', move.product_id.id),
                 ('location_id', '=', ml.location_id.id)
-            ], limit=1)
+            ])
 
-            available_in_loc = quant.quantity if quant else 0
+            available_in_loc = sum(q.quantity for q in quants)
 
             domain = [
                 ('product_id', '=', move.product_id.id),
