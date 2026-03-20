@@ -11,7 +11,12 @@
       <div class="oe_structure pack-screen">
         <div class="pack-topbar">
           <div class="left">
-            <h2>Đóng gói: <span class="hl" t-esc="picking.name"/></h2>
+            <h2>Đóng gói: <span class="hl" t-esc="picking.name"/>
+            
+            <button id="btnUnpackAll" title="Đặt lại toàn bộ số lượng đã quét / xóa gói đã tạo" style="display:none;">↺ Làm lại</button>
+
+            
+            </h2>
             
             <div class="sub">
               <span>Từ phiếu Pick:</span>
@@ -25,7 +30,6 @@
             <button id="btnPrintLabel" title="In nhãn dán sản phẩm">In nhãn</button>
             <button id="btnPrintLabel80x80" title="In nhãn 80x80">In nhãn 80x80</button>
             <button id="btnPartialPack" title="Tạo partial pack">📦 Đóng gói</button>
-            <button id="btnUnpackAll" title="Đặt lại toàn bộ số lượng đã quét / xóa gói đã tạo" style="display:none;">↺ Làm lại</button>
             <button id="btnDriveSwitch">Đổi tài khoản Drive</button>
           </div>
         </div>

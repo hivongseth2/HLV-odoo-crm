@@ -86,8 +86,8 @@
 
 /* Danger / ghost — Làm lại */
 #btnUnpackAll {
-  background: #fff;
-  color: #868e96;
+  background: #eeb7b7;
+  color: #ee2424;
   border-color: #dee2e6;
 }
 #btnUnpackAll:hover {
