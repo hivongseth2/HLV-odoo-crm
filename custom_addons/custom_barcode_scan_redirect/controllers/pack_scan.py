@@ -35,10 +35,10 @@ class PackScanController(http.Controller):
             return {"error": "⚠️ Sản phẩm này đã được quét đủ!"}
         updated_lines = []
 
-        # Chặn quét nếu kho không đủ hàng
+        # Chặn quét nếu kho không đủ hàng (dùng qty_on_hand để không bị chặn khi hàng đã được đặt trước)
         product = moves[0].product_id
         loc_id = moves[0].location_id.id
-        if product.type in ['product', 'consu'] and product.with_context(location=loc_id).qty_available <= 0:
+        if product.type in ['product', 'consu'] and product.with_context(location=loc_id).qty_on_hand <= 0:
             return {"error": f"⚠️ Sản phẩm {product.display_name} hiện không có tồn kho thực tế tại {moves[0].location_id.display_name}!"}
 
         # --- Tìm target move_line ---

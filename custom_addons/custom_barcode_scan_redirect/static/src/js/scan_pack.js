@@ -551,7 +551,31 @@ document.addEventListener("DOMContentLoaded", function () {
         toast.error(data.error);
       } else {
         toast.success(data.message || 'Đã bỏ đóng gói thành công!');
-        setTimeout(() => location.reload(), 800);
+        // Reset toàn bộ DOM về 0 (không reload để không cắt video)
+        document.querySelectorAll('#product_list .product-item').forEach(el => {
+          const input = el.querySelector('.done-input');
+          if (input) {
+            input.value = 0;
+            input.dataset.currentQty = 0;
+          }
+          el.setAttribute('data-packed-qty', 0);
+          el.querySelector('.pkg-indicator')?.remove();
+          el.querySelector('.unpacked-info')?.remove();
+          el.classList.remove('completed');
+        });
+        // Xóa tất cả thẻ kiện trong side panel
+        document.querySelector('.panel-packages-list')?.remove();
+        const emptyState = document.querySelector('.panel-empty-state');
+        if (!emptyState) {
+          const panelBody = document.querySelector('.pack-side-panel .panel-body');
+          if (panelBody) {
+            const empty = document.createElement('div');
+            empty.className = 'panel-empty-state';
+            empty.style.cssText = 'text-align:center; padding:2rem 1rem; color:#adb5bd;';
+            empty.innerHTML = '<p style="margin:0; font-size:0.9rem;">Chưa có gói hàng.</p>';
+            panelBody.appendChild(empty);
+          }
+        }
       }
     } catch (e) {
       toast.error('Lỗi khi bỏ đóng gói: ' + e.message);
