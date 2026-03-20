@@ -43,46 +43,47 @@ class StockMoveLine(models.Model):
             _logger.info('[QTY_LIMIT] SKIP: move state=%s', self.move_id.state)
             return
 
-        # Lấy tồn kho vật lý TẠI VỊ TRÍ NÀY (on-hand)
-        quant = self.env['stock.quant'].search([
+        # Lấy tồn kho vật lý TẠI VỊ TRÍ NÀY và sub-locations (on-hand)
+        quants = self.env['stock.quant'].search([
             ('product_id', '=', self.product_id.id),
-            ('location_id', '=', self.location_id.id),
-        ], limit=1)
-        stock_at_location = quant.quantity if quant else 0.0
+            ('location_id', 'child_of', self.location_id.id),
+        ])
+        stock_at_location = sum(q.quantity for q in quants)
 
-        # Tìm picking ID hiện tại
-        current_picking_id = self.picking_id.id if self.picking_id else (
-            self.move_id.picking_id.id if self.move_id and self.move_id.picking_id else False
+        # Tìm move ID thực (dùng _origin.id để lấy DB id, bền hơn trong onchange)
+        current_move_id = self._origin.move_id.id if self._origin and self._origin.move_id else (
+            self.move_id.id if self.move_id else False
         )
 
-        # Tổng done qty từ CÁC PICKING KHÁC tại cùng location
+        # Tổng done qty từ CÁC MOVE KHÁC tại cùng location (child_of)
         other_lines = self.env['stock.move.line'].search([
             ('product_id', '=', self.product_id.id),
-            ('location_id', '=', self.location_id.id),
+            ('location_id', 'child_of', self.location_id.id),
             ('state', 'not in', ['done', 'cancel']),
             ('quantity', '>', 0),
-            ('picking_id', '!=', current_picking_id),
+            ('move_id', '!=', current_move_id),
         ])
         other_done = sum(oml.quantity for oml in other_lines)
 
-        # Tổng done qty từ CÁC LINE KHÁC CÙNG PICKING tại cùng location
+        # Tổng done qty từ CÁC LINE KHÁC CÙNG MOVE tại cùng location
         # (trừ line hiện tại để không double count)
-        same_picking_other_lines = self.env['stock.move.line'].search([
+        current_line_origin_id = self._origin.id if self._origin else 0
+        same_move_other_lines = self.env['stock.move.line'].search([
             ('product_id', '=', self.product_id.id),
-            ('location_id', '=', self.location_id.id),
+            ('location_id', 'child_of', self.location_id.id),
             ('state', 'not in', ['done', 'cancel']),
             ('quantity', '>', 0),
-            ('picking_id', '=', current_picking_id),
-            ('id', '!=', self._origin.id if self._origin else 0),
+            ('move_id', '=', current_move_id),
+            ('id', '!=', current_line_origin_id),
         ])
-        same_picking_other_done = sum(oml.quantity for oml in same_picking_other_lines)
+        same_picking_other_done = sum(oml.quantity for oml in same_move_other_lines)
 
-        # max_allowed = tồn kho vật lý - đơn khác - cùng picking (line khác)
+        # max_allowed = tồn kho vật lý - đơn khác - cùng move (line khác)
         max_allowed = stock_at_location - other_done - same_picking_other_done
 
         _logger.info(
             '[QTY_LIMIT] Stock check | product=%s | location=%s | '
-            'on_hand=%s | other_pickings_done=%s | same_picking_other=%s | '
+            'on_hand=%s | other_moves_done=%s | same_move_other=%s | '
             'max_allowed=%s | qty_entered=%s',
             self.product_id.display_name,
             self.location_id.display_name,
