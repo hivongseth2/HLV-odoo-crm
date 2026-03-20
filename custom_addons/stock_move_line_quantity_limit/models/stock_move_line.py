@@ -54,8 +54,14 @@ class StockMoveLine(models.Model):
         # Giải pháp: available = 0 (do move này giữ) + move_db_holding = 4 → max = 4
         move_db_holding = 0.0
         move_id_int = None
-        if self.move_id and isinstance(self.move_id.id, int):
-            move_id_int = self.move_id.id
+        if self.move_id:
+            mid = self.move_id.id
+            # Với line mới trong one2many dialog, move_id.id có thể là virtual NewId
+            # → dùng _origin để lấy real DB id
+            if not isinstance(mid, int) and self.move_id._origin:
+                mid = self.move_id._origin.id
+            if isinstance(mid, int):
+                move_id_int = mid
         if move_id_int:
             sibling_lines = self.env['stock.move.line'].search([
                 ('move_id', '=', move_id_int),
