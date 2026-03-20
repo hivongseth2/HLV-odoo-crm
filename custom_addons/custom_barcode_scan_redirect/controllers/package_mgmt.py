@@ -87,6 +87,12 @@ class PackageManagementController(http.Controller):
             picking.do_unreserve()
             _logger.info("UNPACK_ALL %s: unreserved", picking.name)
 
+            # 2b. Reset qty_done trên các dòng còn lại (quét rồi nhưng chưa đóng gói)
+            remaining = picking.move_line_ids.filtered(lambda l: l.qty_done > 0)
+            if remaining:
+                remaining.sudo().with_context(skip_qty_validation=True).write({'qty_done': 0})
+                _logger.info("UNPACK_ALL %s: reset %d loose scanned lines to 0", picking.name, len(remaining))
+
             # 3. Chuyển quant ra khỏi package
             Quant = request.env['stock.quant'].sudo()
             for pkg in packages:
