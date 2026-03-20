@@ -76,8 +76,19 @@ class PackageManagementController(http.Controller):
             mls = picking.move_line_ids.filtered(
                 lambda l: l.package_id or l.result_package_id
             )
+            # Loose lines: quét rồi nhưng chưa đóng gói (không có package nào)
+            loose_scanned = picking.move_line_ids.filtered(
+                lambda l: not l.package_id and not l.result_package_id and l.qty_done > 0
+            )
+            if not mls and not loose_scanned:
+                return {"success": True, "message": "Không có gì cần làm lại."}
+
+            # Nếu chỉ có hàng lẻ đã quét (chưa đóng gói) → chỉ cần reset qty_done về 0
+            # Không cần unreserve vì reservation trên quant vẫn còn nguyên
             if not mls:
-                return {"success": True, "message": "Không có dòng nào cần bỏ đóng gói."}
+                loose_scanned.sudo().with_context(skip_qty_validation=True).write({'qty_done': 0})
+                _logger.info("UNPACK_ALL %s: reset %d loose scanned lines (no packages)", picking.name, len(loose_scanned))
+                return {"success": True, "message": f"✅ Đã làm lại {picking.name} (chưa có gói hàng)"}
 
             count = len(mls)
             location = picking.location_id
