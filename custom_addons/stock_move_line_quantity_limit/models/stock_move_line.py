@@ -96,25 +96,20 @@ class StockMoveLine(models.Model):
             old_qty = self.quantity
 
             if max_allowed <= 0.0:
-                # Không có hàng khả dụng — xóa line luôn thay vì để qty=0
+                # Không có hàng khả dụng — set qty=0, yêu cầu user xóa thủ công
+                # (không thể unlink() từ onchange vì sẽ crash form)
+                self.quantity = 0.0
                 _logger.warning(
-                    '[QTY_LIMIT] DELETE LINE | product=%s | location=%s | no stock available',
+                    '[QTY_LIMIT] NO STOCK | product=%s | location=%s | set qty=0',
                     self.product_id.display_name, location.display_name,
                 )
-                # Đánh dấu để Odoo xóa line khỏi one2many
-                if hasattr(self, '_origin') and isinstance(getattr(self._origin, 'id', None), int):
-                    self._origin.unlink()
-                else:
-                    # Line mới chưa save — set virtual flag để UI loại bỏ
-                    self.quantity = 0.0
-
                 return {
                     'warning': {
                         'title': _('Không có tồn kho tại vị trí!'),
                         'message': _(
                             'Vị trí "%s" không còn hàng khả dụng '
                             '(tồn kho: %s, đã giữ bởi đơn khác: %s).\n'
-                            'Dòng đã bị xóa tự động.'
+                            'Số lượng đã được đặt về 0. Vui lòng xóa dòng này.'
                         ) % (
                             location.display_name,
                             total_on_hand,
