@@ -82,9 +82,12 @@ class StockMove(models.Model):
         )
 
         if self.quantity > total_available:
+            old_qty = self.quantity
+            self.quantity = max(0.0, total_available)
+
             _logger.warning(
-                '[MOVE_QTY] OVER_LIMIT | product=%s | qty_entered=%s | max_available=%s',
-                self.product_id.display_name, self.quantity, total_available,
+                '[MOVE_QTY] BLOCKED | product=%s | qty_entered=%s | max_available=%s | adjusted_to=%s',
+                self.product_id.display_name, old_qty, total_available, self.quantity,
             )
 
             # Breakdown per location để user biết hàng ở đâu
@@ -93,14 +96,13 @@ class StockMove(models.Model):
                 for q in quants if q.quantity > 0
             )
 
-            # NOTE: KHÔNG tự reset self.quantity vì đây là computed field (aggregate từ move.lines).
-            # Việc reset thực sự do stock.move.line onchange xử lý ở cấp line.
             return {
                 'warning': {
                     'title': _('Vượt quá tồn kho khả dụng!'),
                     'message': _(
                         'Sản phẩm "%s" chỉ còn %s cái khả dụng tại "%s".\n'
-                        'Tồn kho vật lý: %s | Đang giữ bởi đơn khác: %s\n\n'
+                        'Tồn kho vật lý: %s | Đang giữ bởi đơn khác: %s\n'
+                        'Hệ thống đã điều chỉnh từ %s thành %s cái.\n\n'
                         'Chi tiết theo vị trí:\n%s'
                     ) % (
                         self.product_id.display_name,
@@ -108,6 +110,8 @@ class StockMove(models.Model):
                         self.location_id.display_name,
                         total_on_hand,
                         other_done,
+                        old_qty,
+                        self.quantity,
                         loc_details or '  (không có)',
                     )
                 }

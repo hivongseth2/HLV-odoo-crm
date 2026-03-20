@@ -8,7 +8,7 @@ _logger = logging.getLogger(__name__)
 class StockMoveLine(models.Model):
     _inherit = 'stock.move.line'
 
-    @api.onchange('quantity', 'location_id')
+    @api.onchange('quantity')
     def _onchange_quantity_check_stock(self):
         """
         Kiểm tra số lượng nhập tay không vượt quá tồn kho KHẢ DỤNG tại vị trí.
@@ -16,45 +16,26 @@ class StockMoveLine(models.Model):
         Công thức:
           max_allowed = available_quantity + current_line_holding
         
-        Lấy location chính xác:
-          - Line cũ: _origin.location_id (DB ground truth)
-          - Line mới: self.location_id, fallback move_id.location_id
+        Dùng self.location_id (có thể là parent) với child_of query để cover tất cả sub-locations.
+        Nếu Odoo truyền parent trong onchange, child_of vẫn tính đúng tổng available.
         """
         if not self.product_id:
             return
         if self.move_id and self.move_id.state in ['done', 'cancel']:
             return
 
-        # --- Xác định location chính xác ---
-        location = False
+        # Lấy location — ưu tiên self.location_id (form), fallback _origin (DB), fallback move
         is_existing_line = self._origin and isinstance(self._origin.id, int)
-
-        if is_existing_line:
-            # Line cũ: _origin.location_id là giá trị thực từ DB, không bị ảnh hưởng bởi form
+        location = self.location_id
+        if not location and is_existing_line:
             location = self._origin.location_id
-        
-        if not location and self.location_id:
-            location = self.location_id
-
-        if not location and self.move_id and self.move_id.location_id:
+        if not location and self.move_id:
             location = self.move_id.location_id
 
         if not location or location.usage != 'internal':
             return
 
-        # Nếu location là parent (có child locations), Odoo có thể đang truyền sai location
-        # vào onchange context (truyền location cha thay vì sub-location mà user chọn).
-        # Bỏ qua validation để tránh block nhầm — khi user chọn đúng leaf location,
-        # onchange sẽ fire lại với location chính xác.
-        if location.child_ids:
-            _logger.info(
-                '[QTY_LIMIT] SKIP - parent location (has children): %s (id=%s). '
-                'Waiting for leaf location selection.',
-                location.display_name, location.id,
-            )
-            return
-
-        # Tồn kho tại location + sub-locations (child_of để bao gồm trường hợp leaf có sub-bin)
+        # Tồn kho tại location + sub-locations (child_of cover cả sub-bin)
         quants = self.env['stock.quant'].search([
             ('product_id', '=', self.product_id.id),
             ('location_id', 'child_of', location.id),
@@ -72,14 +53,10 @@ class StockMoveLine(models.Model):
 
         _logger.info(
             '[QTY_LIMIT] onchange | product=%s | location=%s (id=%s) | '
-            'form_location=%s (id=%s) | origin_location=%s | '
             'on_hand=%s | available=%s | current_holding=%s | max_allowed=%s | qty_entered=%s',
             self.product_id.display_name,
             location.display_name,
             location.id,
-            self.location_id.display_name if self.location_id else 'N/A',
-            self.location_id.id if self.location_id else 'N/A',
-            self._origin.location_id.display_name if is_existing_line and self._origin.location_id else 'N/A',
             total_on_hand,
             total_available,
             current_holding,
