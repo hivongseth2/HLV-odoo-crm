@@ -42,7 +42,19 @@ class StockMoveLine(models.Model):
         if not location or location.usage != 'internal':
             return
 
-        # Tồn kho tại location + sub-locations
+        # Nếu location là parent (có child locations), Odoo có thể đang truyền sai location
+        # vào onchange context (truyền location cha thay vì sub-location mà user chọn).
+        # Bỏ qua validation để tránh block nhầm — khi user chọn đúng leaf location,
+        # onchange sẽ fire lại với location chính xác.
+        if location.child_ids:
+            _logger.info(
+                '[QTY_LIMIT] SKIP - parent location (has children): %s (id=%s). '
+                'Waiting for leaf location selection.',
+                location.display_name, location.id,
+            )
+            return
+
+        # Tồn kho tại location + sub-locations (child_of để bao gồm trường hợp leaf có sub-bin)
         quants = self.env['stock.quant'].search([
             ('product_id', '=', self.product_id.id),
             ('location_id', 'child_of', location.id),
