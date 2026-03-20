@@ -437,6 +437,9 @@ document.addEventListener("DOMContentLoaded", function () {
         highlightElement(el, "#ffd43b");
       });
 
+      // Show "Làm lại" nếu có qty_done > 0
+      toggleUnpackBtn();
+
     } catch (err) {
       toast.error("Lỗi kết nối: " + err.message);
       playError();
@@ -565,17 +568,8 @@ document.addEventListener("DOMContentLoaded", function () {
         });
         // Xóa tất cả thẻ kiện trong side panel
         document.querySelector('.panel-packages-list')?.remove();
-        const emptyState = document.querySelector('.panel-empty-state');
-        if (!emptyState) {
-          const panelBody = document.querySelector('.pack-side-panel .panel-body');
-          if (panelBody) {
-            const empty = document.createElement('div');
-            empty.className = 'panel-empty-state';
-            empty.style.cssText = 'text-align:center; padding:2rem 1rem; color:#adb5bd;';
-            empty.innerHTML = '<p style="margin:0; font-size:0.9rem;">Chưa có gói hàng.</p>';
-            panelBody.appendChild(empty);
-          }
-        }
+        // Ẩn nút "Làm lại" vì qty_done đã reset về 0
+        toggleUnpackBtn();
       }
     } catch (e) {
       toast.error('Lỗi khi bỏ đóng gói: ' + e.message);
@@ -800,6 +794,17 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
+  // Helper: show/hide "Làm lại" button based on any qty_done > 0
+  function toggleUnpackBtn() {
+    const btn = document.getElementById('btnUnpackAll');
+    if (!btn) return;
+    const hasAnyDone = [...document.querySelectorAll('#product_list .done-input')]
+      .some(inp => parseFloat(inp.value || 0) > 0);
+    const hasPackages = !!document.querySelector('.panel-packages-list .package-item-card');
+    btn.style.display = (hasAnyDone || hasPackages) ? '' : 'none';
+  }
+  window.toggleUnpackBtn = toggleUnpackBtn;
+
   // §2.10 — Page init
   setFocus();
   diag();
@@ -808,4 +813,5 @@ document.addEventListener("DOMContentLoaded", function () {
     document.querySelectorAll('#product_list .product-item').forEach(el => updateUnpackedLabel(el));
   }, 150);
   setTimeout(startRecording, 400);
+  setTimeout(toggleUnpackBtn, 200);
 });
