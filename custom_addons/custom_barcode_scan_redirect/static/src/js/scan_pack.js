@@ -568,7 +568,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
         // Xóa tất cả thẻ kiện trong side panel
         document.querySelector('.panel-packages-list')?.remove();
-        // Ẩn nút "Làm lại" vì qty_done đã reset về 0
+        // Ẩn nút "Làm lại" vì qty_done đã reset về 0 ###
         toggleUnpackBtn();
       }
     } catch (e) {
