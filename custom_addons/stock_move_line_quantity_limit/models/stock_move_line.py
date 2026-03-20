@@ -8,7 +8,7 @@ _logger = logging.getLogger(__name__)
 class StockMoveLine(models.Model):
     _inherit = 'stock.move.line'
 
-    @api.onchange('quantity')
+    @api.onchange('quantity', 'location_id')
     def _onchange_quantity_check_stock(self):
         """
         Kiểm tra số lượng nhập tay không vượt quá tồn kho KHẢ DỤNG tại vị trí.
@@ -16,29 +16,43 @@ class StockMoveLine(models.Model):
         Công thức:
           max_allowed = available_quantity + current_line_holding
         
-        - available_quantity: quant.quantity - quant.reserved_quantity (tính từ quant, ổn định)
-        - current_line_holding: phần mà line này ĐÃ giữ trước (từ _origin, 0 cho line mới)
-        
-        Cách này tránh query move_lines (NewId/False bug) mà vẫn tính đúng đơn khác đang giữ.
+        Lấy location chính xác:
+          - Line cũ: _origin.location_id (DB ground truth)
+          - Line mới: self.location_id, fallback move_id.location_id
         """
-        if not self.location_id or not self.product_id:
-            return
-        if self.location_id.usage != 'internal':
+        if not self.product_id:
             return
         if self.move_id and self.move_id.state in ['done', 'cancel']:
+            return
+
+        # --- Xác định location chính xác ---
+        location = False
+        is_existing_line = self._origin and isinstance(self._origin.id, int)
+
+        if is_existing_line:
+            # Line cũ: _origin.location_id là giá trị thực từ DB, không bị ảnh hưởng bởi form
+            location = self._origin.location_id
+        
+        if not location and self.location_id:
+            location = self.location_id
+
+        if not location and self.move_id and self.move_id.location_id:
+            location = self.move_id.location_id
+
+        if not location or location.usage != 'internal':
             return
 
         # Tồn kho tại location + sub-locations
         quants = self.env['stock.quant'].search([
             ('product_id', '=', self.product_id.id),
-            ('location_id', 'child_of', self.location_id.id),
+            ('location_id', 'child_of', location.id),
         ])
         total_on_hand = sum(q.quantity for q in quants)
         total_available = sum(q.available_quantity for q in quants)
 
         # Phần mà line này đã giữ trước khi user chỉnh (0 nếu line mới)
         current_holding = 0.0
-        if self._origin and isinstance(self._origin.id, int):
+        if is_existing_line:
             current_holding = self._origin.quantity or 0.0
 
         # max = hàng chưa ai giữ + phần line này đã giữ sẵn
@@ -46,10 +60,14 @@ class StockMoveLine(models.Model):
 
         _logger.info(
             '[QTY_LIMIT] onchange | product=%s | location=%s (id=%s) | '
+            'form_location=%s (id=%s) | origin_location=%s | '
             'on_hand=%s | available=%s | current_holding=%s | max_allowed=%s | qty_entered=%s',
             self.product_id.display_name,
-            self.location_id.display_name,
-            self.location_id.id,
+            location.display_name,
+            location.id,
+            self.location_id.display_name if self.location_id else 'N/A',
+            self.location_id.id if self.location_id else 'N/A',
+            self._origin.location_id.display_name if is_existing_line and self._origin.location_id else 'N/A',
             total_on_hand,
             total_available,
             current_holding,
@@ -65,7 +83,7 @@ class StockMoveLine(models.Model):
                 '[QTY_LIMIT] BLOCKED | product=%s | location=%s | '
                 'qty_entered=%s | max_allowed=%s | adjusted_to=%s',
                 self.product_id.display_name,
-                self.location_id.display_name,
+                location.display_name,
                 old_qty,
                 max_allowed,
                 self.quantity,
@@ -79,7 +97,7 @@ class StockMoveLine(models.Model):
                         '(tồn kho: %s, đã giữ bởi đơn khác: %s).\n'
                         'Hệ thống đã tự động điều chỉnh từ %s thành %s cái.'
                     ) % (
-                        self.location_id.display_name,
+                        location.display_name,
                         max_allowed,
                         total_on_hand,
                         total_on_hand - total_available - current_holding,
