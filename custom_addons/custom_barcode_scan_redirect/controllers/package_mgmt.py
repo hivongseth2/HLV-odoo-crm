@@ -61,8 +61,11 @@ class PackageManagementController(http.Controller):
     @http.route('/pack_scan/unpack_all', type='json', auth='user', csrf=False)
     def unpack_all(self, **kwargs):
         """
-        Bỏ đóng gói toàn bộ: unreserve → chuyển quant ra khỏi package → xóa
-        package trên move_lines → re-reserve.
+        Bỏ đóng gói toàn bộ: unreserve → chuyển quant ra khỏi SOURCE package (nếu có)
+        → xóa tất cả move_lines còn sót (qty_done > 0) → re-reserve.
+
+        Lưu ý: result_package_id là gói ĐÍCH — chưa có quant tại source (chỉ tạo khi validate).
+        Chỉ cần xử lý SOURCE package (package_id) khi có re-pack từ gói cũ.
         """
         picking_id = kwargs.get("picking_id")
         picking = request.env['stock.picking'].sudo().browse(picking_id)
@@ -79,54 +82,57 @@ class PackageManagementController(http.Controller):
             count = len(mls)
             location = picking.location_id
 
-            # 1. Thu thập packages liên quan
-            packages = mls.mapped('package_id') | mls.mapped('result_package_id')
-            packages = packages.filtered(lambda p: p)
+            # 1. Chỉ thu thập SOURCE packages (package_id) — không phải gói đích (result_package_id)
+            #    Gói đích chưa có quant nào tại source location cho đến khi validate
+            src_packages = mls.mapped('package_id').filtered(lambda p: p)
 
-            # 2. Unreserve picking trước
+            # 2. Unreserve picking
             picking.do_unreserve()
             _logger.info("UNPACK_ALL %s: unreserved", picking.name)
 
-            # 2b. Reset qty_done trên các dòng còn lại (quét rồi nhưng chưa đóng gói)
-            remaining = picking.move_line_ids.filtered(lambda l: l.qty_done > 0)
-            if remaining:
-                remaining.sudo().with_context(skip_qty_validation=True).write({'qty_done': 0})
-                _logger.info("UNPACK_ALL %s: reset %d loose scanned lines to 0", picking.name, len(remaining))
+            # 3. Chuyển quant ra khỏi SOURCE package (re-pack scenario)
+            #    Bình thường (đóng gói lần đầu) thì src_packages rỗng, bước này bỏ qua
+            if src_packages:
+                Quant = request.env['stock.quant'].sudo()
+                for pkg in src_packages:
+                    pkg_quants = Quant.search([
+                        ('package_id', '=', pkg.id),
+                        ('location_id', '=', location.id),
+                        ('quantity', '!=', 0),
+                    ])
+                    for q in pkg_quants:
+                        existing = Quant.search([
+                            ('product_id', '=', q.product_id.id),
+                            ('location_id', '=', q.location_id.id),
+                            ('lot_id', '=', q.lot_id.id if q.lot_id else False),
+                            ('package_id', '=', False),
+                            ('owner_id', '=', q.owner_id.id if q.owner_id else False),
+                        ], limit=1)
+                        if existing:
+                            existing.quantity += q.quantity
+                        else:
+                            Quant.create({
+                                'product_id': q.product_id.id,
+                                'location_id': q.location_id.id,
+                                'lot_id': q.lot_id.id if q.lot_id else False,
+                                'package_id': False,
+                                'owner_id': q.owner_id.id if q.owner_id else False,
+                                'quantity': q.quantity,
+                            })
+                        q.quantity = 0
+                    _logger.info("UNPACK_ALL: moved quants out of source package %s", pkg.name)
 
-            # 3. Chuyển quant ra khỏi package
-            Quant = request.env['stock.quant'].sudo()
-            for pkg in packages:
-                pkg_quants = Quant.search([
-                    ('package_id', '=', pkg.id),
-                    ('location_id', '=', location.id),
-                    ('quantity', '!=', 0),
-                ])
-                for q in pkg_quants:
-                    existing = Quant.search([
-                        ('product_id', '=', q.product_id.id),
-                        ('location_id', '=', q.location_id.id),
-                        ('lot_id', '=', q.lot_id.id if q.lot_id else False),
-                        ('package_id', '=', False),
-                        ('owner_id', '=', q.owner_id.id if q.owner_id else False),
-                    ], limit=1)
-                    if existing:
-                        existing.quantity += q.quantity
-                    else:
-                        Quant.create({
-                            'product_id': q.product_id.id,
-                            'location_id': q.location_id.id,
-                            'lot_id': q.lot_id.id if q.lot_id else False,
-                            'package_id': False,
-                            'owner_id': q.owner_id.id if q.owner_id else False,
-                            'quantity': q.quantity,
-                        })
-                    q.quantity = 0
-                _logger.info("UNPACK_ALL: moved quants out of package %s", pkg.name)
+            # 4. Xóa tất cả move_lines còn sót sau do_unreserve()
+            #    do_unreserve() xóa MLs có qty_done=0, nhưng giữ lại MLs có qty_done>0
+            #    → MLs có qty_done>0 này sẽ khiến action_assign() tính sai nhu cầu
+            #    → Phải xóa để action_assign() tạo ML mới sạch từ đầu
+            dead_mls = picking.move_line_ids.filtered(lambda l: l.qty_done > 0)
+            if dead_mls:
+                dead_mls.unlink()
+                _logger.info("UNPACK_ALL %s: deleted %d dead move_lines (qty_done>0)", picking.name, len(dead_mls))
 
-            # 4. Xóa package trên move_lines
-            mls.write({'package_id': False, 'result_package_id': False})
-
-            # 5. Re-reserve picking
+            # 5. Re-reserve picking với state mới (flush cache trước)
+            request.env.invalidate_all()
             picking.action_assign()
             _logger.info(
                 "UNPACK_ALL %s: cleared %d move_lines, re-assigned",
