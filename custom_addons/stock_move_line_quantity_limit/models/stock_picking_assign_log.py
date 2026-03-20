@@ -113,9 +113,16 @@ class StockPickingAssignLog(models.Model):
     def _fix_ghost_reservations_before_assign(self):
         """
         Tự động phát hiện và sửa ghost reservation trước khi assign.
-        Ghost reservation = quant.reserved_quantity > tổng move lines thực tế.
+
+        Có 2 loại ghost:
+        1. quant.reserved_quantity > tổng move lines thực tế (quant sai)
+        2. move line có qty > 0 nhưng location không có quant hoặc on_hand = 0
+           (xảy ra khi backorder được tạo sau khi picking gốc đã lấy hết hàng,
+            nhưng action_assign chạy trong cùng transaction chưa flush → thấy stale data)
         """
         for move in self.move_ids.filtered(lambda m: m.state not in ['done', 'cancel']):
+
+            # --- Ghost type 1: quant.reserved_quantity không khớp sum(move_lines) ---
             quants = self.env['stock.quant'].search([
                 ('product_id', '=', move.product_id.id),
                 ('location_id', 'child_of', move.location_id.id),
@@ -131,7 +138,7 @@ class StockPickingAssignLog(models.Model):
                 )
                 if abs(q.reserved_quantity - real_reserved) > 0.001:
                     _logger.warning(
-                        '[ASSIGN_LOG] AUTO-FIX ghost reservation | location=%s | '
+                        '[ASSIGN_LOG] AUTO-FIX ghost type-1 | location=%s | '
                         'quant.reserved=%s → fix to=%s (phantom=%s)',
                         q.location_id.display_name,
                         q.reserved_quantity,
@@ -139,6 +146,34 @@ class StockPickingAssignLog(models.Model):
                         q.reserved_quantity - real_reserved,
                     )
                     q.sudo().write({'reserved_quantity': real_reserved})
+
+            # --- Ghost type 2: move line tồn tại nhưng location không còn hàng ---
+            # Xảy ra khi backorder được tạo sau khi picking gốc đã validate (pick hết Thung-2),
+            # Odoo copy move line cũ sang backorder mà quant chưa reflect đúng.
+            for ml in move.move_line_ids.filtered(lambda l: l.state not in ['done', 'cancel'] and l.quantity > 0):
+                loc_quant = self.env['stock.quant'].search([
+                    ('product_id', '=', move.product_id.id),
+                    ('location_id', '=', ml.location_id.id),
+                ], limit=1)
+                loc_on_hand = loc_quant.quantity if loc_quant else 0.0
+
+                if loc_on_hand <= 0:
+                    _logger.warning(
+                        '[ASSIGN_LOG] AUTO-FIX ghost type-2 (empty location) | '
+                        'picking=%s | product=%s | location=%s | '
+                        'move_line_id=%s | ghost_qty=%s | loc_on_hand=%s → DELETE LINE',
+                        self.name,
+                        move.product_id.display_name,
+                        ml.location_id.complete_name,
+                        ml.id,
+                        ml.quantity,
+                        loc_on_hand,
+                    )
+                    # Unreserve quant trước (nếu có), rồi xóa move line
+                    if loc_quant and loc_quant.reserved_quantity > 0:
+                        loc_quant.sudo().write({'reserved_quantity': max(0.0, loc_quant.reserved_quantity - ml.quantity)})
+                    ml.sudo().write({'quantity': 0})
+                    ml.sudo().unlink()
 
     def button_validate(self):
         """
