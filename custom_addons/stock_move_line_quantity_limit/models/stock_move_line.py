@@ -48,18 +48,40 @@ class StockMoveLine(models.Model):
         if is_existing_line:
             current_holding = self._origin.quantity or 0.0
 
-        # max = hàng chưa ai giữ + phần line này đã giữ sẵn
-        max_allowed = total_available + current_holding
+        # Phần mà MOVE này đang giữ trong DB tại location này (các line khác của cùng move)
+        # Lý do cần: khi user xóa line cũ + thêm line mới trong cùng form chưa save,
+        # DB vẫn còn reservation cũ → available = 0 → bị block oan.
+        # Giải pháp: available = 0 (do move này giữ) + move_db_holding = 4 → max = 4
+        move_db_holding = 0.0
+        move_id_int = None
+        if self.move_id and isinstance(self.move_id.id, int):
+            move_id_int = self.move_id.id
+        if move_id_int:
+            sibling_lines = self.env['stock.move.line'].search([
+                ('move_id', '=', move_id_int),
+                ('product_id', '=', self.product_id.id),
+                ('location_id', 'child_of', location.id),
+                ('state', 'not in', ['done', 'cancel']),
+            ])
+            # Loại trừ chính line đang edit (đã tính trong current_holding)
+            if is_existing_line:
+                sibling_lines = sibling_lines.filtered(lambda l: l.id != self._origin.id)
+            move_db_holding = sum(l.quantity for l in sibling_lines)
+
+        # max = khả dụng + phần line này giữ + phần move này giữ trong DB
+        # Công thức đúng cho cả: edit line cũ / delete+recreate / cross-order block
+        max_allowed = total_available + current_holding + move_db_holding
 
         _logger.info(
             '[QTY_LIMIT] onchange | product=%s | location=%s (id=%s) | '
-            'on_hand=%s | available=%s | current_holding=%s | max_allowed=%s | qty_entered=%s',
+            'on_hand=%s | available=%s | current_holding=%s | move_db_holding=%s | max_allowed=%s | qty_entered=%s',
             self.product_id.display_name,
             location.display_name,
             location.id,
             total_on_hand,
             total_available,
             current_holding,
+            move_db_holding,
             max_allowed,
             self.quantity,
         )
