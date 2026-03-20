@@ -11,7 +11,22 @@
       <div class="oe_structure pack-screen">
         <div class="pack-topbar">
           <div class="left">
-            <h2>Đóng gói: <span class="hl" t-esc="picking.name"/></h2>
+            <h2>Đóng gói: <span class="hl" t-esc="picking.name"/> 
+            
+            <t t-if="is_repack">
+              <div class="repack-banner" style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 12px 16px; margin: 8px 12px; display: flex; align-items: center; gap: 12px; justify-content: space-between;">
+                <div style="font-size: 0.9rem; color: #664d03;">
+                  <strong>⚠️ Phiếu này đã đóng gói trước đó.</strong>
+                  <span>Nhấn "Làm lại" để xóa kiện cũ và bắt đầu đóng lại.</span>
+                </div>
+                <button onclick="document.getElementById('btnUnpackAll')?.click()" 
+                        style="white-space: nowrap; padding: 6px 16px; background: #e03131; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem;margin-left:3em">
+                  Làm lại
+                </button>
+              </div>
+            </t>
+            </h2>
+            
             <div class="sub">
               <span>Từ phiếu Pick:</span>
               <strong class="text-brand" t-esc="origin_pick_name"/>
@@ -33,18 +48,7 @@
           <div class="scan-wrapper card" style="height: 100%; display: flex; flex-direction: column; overflow: hidden;">
 
             <!-- Banner cảnh báo re-pack -->
-            <t t-if="is_repack">
-              <div class="repack-banner" style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 12px 16px; margin: 8px 12px; display: flex; align-items: center; gap: 12px; justify-content: space-between;">
-                <div style="font-size: 0.9rem; color: #664d03;">
-                  <strong>⚠️ Phiếu này đã đóng gói trước đó.</strong>
-                  <span>Nhấn "Làm lại" để xóa kiện cũ và bắt đầu đóng lại.</span>
-                </div>
-                <button onclick="document.getElementById('btnUnpackAll')?.click()" 
-                        style="white-space: nowrap; padding: 6px 16px; background: #e03131; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem;">
-                  Làm lại
-                </button>
-              </div>
-            </t>
+        
 
             <!-- Hidden Input for Barcode Scanner -->
             <input id="pack_barcode_input" placeholder="Quét mã sản phẩm..." autofocus="autofocus" 
@@ -141,11 +145,7 @@
             </ul>
             
             <div class="actions" style="display:flex; justify-content:space-between; align-items:center;">
-              <button id="btnUnpackAll"
-                      title="Đặt lại toàn bộ số lượng đã quét / xóa gói đã tạo"
-                      style="font-size:0.8rem; padding:6px 14px; background:transparent; color:#868e96; border:1px solid #ced4da; border-radius:8px; cursor:pointer; line-height:1.4;"
-                      onmouseover="this.style.color='#e03131';this.style.borderColor='#e03131';"
-                      onmouseout="this.style.color='#868e96';this.style.borderColor='#ced4da';">↺ Làm lại</button>
+            
               <button id="complete_pack_btn">Hoàn tất</button>
             </div>
           </div>
