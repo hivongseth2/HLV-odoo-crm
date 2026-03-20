@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
-        <!-- ============================================================ -->
-        <!--  SHIPPER BASIC: List view cho shipper (KHÔNG thêm field custom) -->
-        <!-- ============================================================ -->
+        <!-- List view cho shipper (KHÔNG thêm field custom) -->
         <record id="stock_picking_list_shipper" model="ir.ui.view">
             <field name="name">stock.picking.list.shipper</field>
             <field name="model">stock.picking</field>
@@ -34,7 +32,7 @@
             </field>
         </record>
 
-        <!-- Action riêng cho shipper -->
+        <!-- Action riêng cho shipper (không thay thế action stock mặc định) -->
         <record id="stock_picking_action_shipper" model="ir.actions.act_window">
             <field name="name">Delivery Orders (Shipper)</field>
             <field name="res_model">stock.picking</field>
@@ -50,139 +48,5 @@
                   parent="menu_barcode_scan_log_root"
                   action="stock_picking_action_shipper"
                   groups="hlv_barcode_shipper.group_shipper"/>
-
-        <!-- ============================================================ -->
-        <!--  MANAGEMENT: Quản lý nhận/giao hàng shipper                  -->
-        <!-- ============================================================ -->
-
-        <!-- Search view cho management -->
-        <record id="stock_picking_search_shipper_mgmt" model="ir.ui.view">
-            <field name="name">stock.picking.search.shipper.mgmt</field>
-            <field name="model">stock.picking</field>
-            <field name="arch" type="xml">
-                <search string="Quản lý Shipper">
-                    <field name="name" string="Mã phiếu"/>
-                    <field name="origin" string="Đơn hàng"/>
-                    <field name="partner_id" string="Khách hàng"/>
-                    <field name="shipper_received_by" string="Shipper nhận"/>
-                    <field name="shipper_user_id" string="Shipper giao"/>
-                    <separator/>
-                    <filter name="received" string="Đã nhận hàng" domain="[('shipper_received', '=', True)]"/>
-                    <filter name="not_received" string="Chưa nhận" domain="[('shipper_received', '=', False)]"/>
-                    <separator/>
-                    <filter name="delivered" string="Đã giao (done)" domain="[('state', '=', 'done')]"/>
-                    <filter name="in_transit" string="Đang giao" domain="[('shipper_received', '=', True), ('state', '!=', 'done'), ('shipper_returned', '=', False)]"/>
-                    <filter name="returned" string="Đã trả lại" domain="[('shipper_returned', '=', True)]"/>
-                    <separator/>
-                    <filter name="today" string="Hôm nay" domain="[('shipper_receive_time', '>=', (context_today()).strftime('%%Y-%%m-%%d'))]"/>
-                    <filter name="this_week" string="Tuần này" domain="[('shipper_receive_time', '>=', (context_today() - datetime.timedelta(days=context_today().weekday())).strftime('%%Y-%%m-%%d'))]"/>
-                    <separator/>
-                    <group expand="0" string="Nhóm theo">
-                        <filter name="group_shipper" string="Shipper nhận" context="{'group_by': 'shipper_received_by'}"/>
-                        <filter name="group_shipper_deliver" string="Shipper giao" context="{'group_by': 'shipper_user_id'}"/>
-                        <filter name="group_partner" string="Khách hàng" context="{'group_by': 'partner_id'}"/>
-                        <filter name="group_receive_date" string="Ngày nhận" context="{'group_by': 'shipper_receive_time:day'}"/>
-                        <filter name="group_state" string="Trạng thái" context="{'group_by': 'state'}"/>
-                    </group>
-                </search>
-            </field>
-        </record>
-
-        <!-- Tree view quản lý -->
-        <record id="stock_picking_list_shipper_mgmt" model="ir.ui.view">
-            <field name="name">stock.picking.list.shipper.mgmt</field>
-            <field name="model">stock.picking</field>
-            <field name="arch" type="xml">
-                <list string="Quản lý nhận/giao hàng" default_order="shipper_receive_time desc, write_date desc"
-                      decoration-success="state == 'done'"
-                      decoration-danger="shipper_returned == True"
-                      decoration-info="shipper_received == True and state != 'done' and shipper_returned == False">
-                    <field name="name" string="Phiếu"/>
-                    <field name="origin" string="Đơn hàng"/>
-                    <field name="partner_id" string="Khách hàng"/>
-                    <field name="shipper_received_by" string="Shipper nhận"/>
-                    <field name="shipper_receive_time" string="Thời gian nhận" widget="datetime"/>
-                    <field name="shipper_user_id" string="Shipper giao"/>
-                    <field name="shipper_scan_time" string="Thời gian giao" widget="datetime" optional="show"/>
-                    <field name="shipper_received" string="Đã nhận" widget="boolean"/>
-                    <field name="shipper_returned" string="Đã trả" widget="boolean"/>
-                    <field name="shipper_return_time" string="Thời gian trả" widget="datetime" optional="hide"/>
-                    <field name="shipper_return_reason" string="Lý do trả" optional="hide"/>
-                    <field name="state" string="Trạng thái" widget="badge"
-                           decoration-info="state == 'draft'"
-                           decoration-warning="state in ('waiting', 'confirmed')"
-                           decoration-success="state in ('assigned', 'done')"
-                           decoration-muted="state == 'cancel'"/>
-                </list>
-            </field>
-        </record>
-
-        <!-- Form view quản lý: inherit stock.picking form, thêm tab shipper -->
-        <record id="stock_picking_form_shipper_mgmt" model="ir.ui.view">
-            <field name="name">stock.picking.form.shipper.mgmt</field>
-            <field name="model">stock.picking</field>
-            <field name="inherit_id" ref="stock.view_picking_form"/>
-            <field name="priority">999</field>
-            <field name="arch" type="xml">
-                <xpath expr="//page[last()]" position="after">
-                    <page string="Shipper" name="shipper_info">
-                        <group>
-                            <group string="Nhận hàng">
-                                <field name="shipper_received" string="Đã nhận" readonly="1"/>
-                                <field name="shipper_received_by" string="Shipper nhận" readonly="1"/>
-                                <field name="shipper_receive_time" string="Thời gian nhận" readonly="1"/>
-                            </group>
-                            <group string="Giao hàng">
-                                <field name="shipper_scanned" string="Đã quét giao" readonly="1"/>
-                                <field name="shipper_user_id" string="Shipper giao" readonly="1"/>
-                                <field name="shipper_scan_time" string="Thời gian giao" readonly="1"/>
-                            </group>
-                        </group>
-                        <group>
-                            <group string="Trả hàng">
-                                <field name="shipper_returned" string="Đã trả lại" readonly="1"/>
-                                <field name="shipper_return_time" string="Thời gian trả" readonly="1"/>
-                                <field name="shipper_return_reason" string="Lý do trả" readonly="1"/>
-                            </group>
-                        </group>
-                        <separator string="Lịch sử quét barcode"/>
-                        <field name="scan_log_ids" readonly="1">
-                            <list default_order="scan_time desc" editable="bottom" create="false" delete="false">
-                                <field name="scan_time" string="Thời gian"/>
-                                <field name="user_id" string="Người quét"/>
-                                <field name="barcode" string="Mã quét"/>
-                                <field name="scan_type" string="Loại"/>
-                                <field name="status" string="Kết quả"
-                                       decoration-success="status == 'success'"
-                                       decoration-danger="status == 'error'"
-                                       decoration-warning="status == 'warning'"/>
-                                <field name="package_id" string="Kiện hàng" optional="show"/>
-                                <field name="product_id" string="Sản phẩm" optional="show"/>
-                                <field name="message" string="Chi tiết" optional="hide"/>
-                            </list>
-                        </field>
-                    </page>
-                </xpath>
-            </field>
-        </record>
-
-        <!-- Action quản lý nhận/giao -->
-        <record id="stock_picking_action_shipper_mgmt" model="ir.actions.act_window">
-            <field name="name">Quản lý nhận/giao hàng</field>
-            <field name="res_model">stock.picking</field>
-            <field name="view_mode">list,form</field>
-            <field name="search_view_id" ref="stock_picking_search_shipper_mgmt"/>
-            <field name="domain">[
-                ('picking_type_id.code', '=', 'outgoing'),
-                '|', ('shipper_received', '=', True),
-                '|', ('shipper_user_id', '!=', False),
-                     ('shipper_received_by', '!=', False),
-            ]</field>
-            <field name="context">{'search_default_received': 1}</field>
-            <field name="view_ids" eval="[(5, 0, 0),
-                (0, 0, {'view_mode': 'list', 'view_id': ref('stock_picking_list_shipper_mgmt')}),
-            ]"/>
-        </record>
-
     </data>
 </odoo>

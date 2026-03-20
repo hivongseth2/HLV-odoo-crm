@@ -1,64 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
-        <!-- Search view -->
-        <record id="barcode_scan_log_search" model="ir.ui.view">
-            <field name="name">barcode.scan.log.search</field>
-            <field name="model">barcode.scan.log</field>
-            <field name="arch" type="xml">
-                <search string="Scan Logs">
-                    <field name="barcode" string="Mã quét"/>
-                    <field name="user_id" string="Shipper"/>
-                    <field name="picking_id" string="Phiếu"/>
-                    <field name="product_id" string="Sản phẩm"/>
-                    <field name="package_id" string="Kiện hàng"/>
-                    <separator/>
-                    <filter name="success" string="Thành công" domain="[('status', '=', 'success')]"/>
-                    <filter name="error" string="Lỗi" domain="[('status', '=', 'error')]"/>
-                    <separator/>
-                    <filter name="type_receive" string="Nhận hàng" domain="[('scan_type', '=', 'receive')]"/>
-                    <filter name="type_pick" string="Quét PICK" domain="[('scan_type', '=', 'pick')]"/>
-                    <filter name="type_package" string="Quét kiện" domain="[('scan_type', '=', 'package')]"/>
-                    <filter name="type_complete" string="Hoàn thành" domain="[('scan_type', '=', 'complete')]"/>
-                    <filter name="type_return" string="Trả hàng" domain="[('scan_type', '=', 'return')]"/>
-                    <separator/>
-                    <filter name="today" string="Hôm nay" domain="[('scan_time', '>=', (context_today()).strftime('%%Y-%%m-%%d'))]"/>
-                    <separator/>
-                    <group expand="0" string="Nhóm theo">
-                        <filter name="group_user" string="Shipper" context="{'group_by': 'user_id'}"/>
-                        <filter name="group_type" string="Loại quét" context="{'group_by': 'scan_type'}"/>
-                        <filter name="group_status" string="Kết quả" context="{'group_by': 'status'}"/>
-                        <filter name="group_picking" string="Phiếu" context="{'group_by': 'picking_id'}"/>
-                        <filter name="group_date" string="Ngày" context="{'group_by': 'scan_time:day'}"/>
-                    </group>
-                </search>
-            </field>
-        </record>
-
-        <!-- List view -->
         <record id="barcode_scan_log_list" model="ir.ui.view">
             <field name="name">barcode.scan.log.list</field>
             <field name="model">barcode.scan.log</field>
             <field name="arch" type="xml">
                 <list string="Barcode Scan Logs" default_order="scan_time desc">
-                    <field name="scan_time" string="Thời gian"/>
-                    <field name="user_id" string="Shipper"/>
-                    <field name="barcode" string="Mã quét"/>
-                    <field name="scan_type" string="Loại"/>
-                    <field name="status" string="Kết quả"
+                    <field name="scan_time"/>
+                    <field name="user_id"/>
+                    <field name="barcode"/>
+                    <field name="scan_type"/>
+                    <field name="status"
                            decoration-success="status == 'success'"
                            decoration-danger="status == 'error'"
                            decoration-warning="status == 'warning'"/>
-                    <field name="picking_id" string="Phiếu" optional="show"/>
-                    <field name="package_id" string="Kiện hàng" optional="show"/>
-                    <field name="product_id" string="Sản phẩm" optional="hide"/>
-                    <field name="message" string="Chi tiết" optional="hide"/>
+                    <field name="picking_id" optional="show"/>
+                    <field name="package_id" optional="hide"/>
+                    <field name="product_id" optional="hide"/>
+                    <field name="message" optional="hide"/>
                     <field name="session_id" optional="hide"/>
                 </list>
             </field>
         </record>
 
-        <!-- Form view -->
         <record id="barcode_scan_log_form" model="ir.ui.view">
             <field name="name">barcode.scan.log.form</field>
             <field name="model">barcode.scan.log</field>
@@ -66,21 +30,21 @@
                 <form string="Barcode Scan Log" create="false" edit="false">
                     <sheet>
                         <group>
-                            <group string="Thông tin quét">
-                                <field name="barcode" string="Mã quét"/>
-                                <field name="scan_type" string="Loại"/>
-                                <field name="scan_time" string="Thời gian"/>
-                                <field name="user_id" string="Shipper"/>
-                                <field name="status" string="Kết quả"/>
+                            <group string="Scan Information">
+                                <field name="barcode"/>
+                                <field name="scan_type"/>
+                                <field name="scan_time"/>
+                                <field name="user_id"/>
+                                <field name="status"/>
                                 <field name="session_id"/>
                             </group>
-                            <group string="Liên kết">
-                                <field name="picking_id" string="Phiếu"/>
-                                <field name="package_id" string="Kiện hàng"/>
-                                <field name="product_id" string="Sản phẩm"/>
+                            <group string="Related Records">
+                                <field name="picking_id"/>
+                                <field name="package_id"/>
+                                <field name="product_id"/>
                             </group>
                         </group>
-                        <group string="Chi tiết">
+                        <group string="Message">
                             <field name="message" nolabel="1"/>
                         </group>
                     </sheet>
@@ -88,25 +52,12 @@
             </field>
         </record>
 
-        <!-- Action -->
-        <record id="barcode_scan_log_action" model="ir.actions.act_window">
-            <field name="name">Lịch sử quét barcode</field>
-            <field name="res_model">barcode.scan.log</field>
-            <field name="view_mode">list,form</field>
-            <field name="search_view_id" ref="barcode_scan_log_search"/>
-            <field name="context">{'search_default_today': 1}</field>
-        </record>
-
-        <!-- Legacy action (used in old menu) -->
         <record id="action_barcode_scan_log" model="ir.actions.act_window">
-            <field name="name">Lịch sử quét barcode</field>
+            <field name="name">Barcode Scan Logs</field>
             <field name="res_model">barcode.scan.log</field>
             <field name="view_mode">list,form</field>
-            <field name="search_view_id" ref="barcode_scan_log_search"/>
-            <field name="context">{'search_default_today': 1}</field>
         </record>
 
-        <!-- Menus under Inventory -->
         <menuitem id="menu_barcode_scan_log_root"
                   name="Barcode Shipper"
                   parent="stock.menu_stock_root"
