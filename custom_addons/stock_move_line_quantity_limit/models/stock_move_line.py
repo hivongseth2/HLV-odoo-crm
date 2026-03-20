@@ -50,33 +50,39 @@ class StockMoveLine(models.Model):
         ])
         stock_at_location = sum(q.quantity for q in quants)
 
-        # Tìm move ID thực (dùng _origin.id để lấy DB id, bền hơn trong onchange)
-        current_move_id = self._origin.move_id.id if self._origin and self._origin.move_id else (
-            self.move_id.id if self.move_id else False
-        )
+        # Lấy move_id thực (integer DB id).
+        # self._origin.move_id.id trả về NewId cho line mới → Odoo ignore domain → bug
+        # Dùng self.move_id.id trực tiếp, kiểm tra isinstance để chắc là real int
+        raw_move_id = self.move_id.id if self.move_id else None
+        current_move_id = raw_move_id if isinstance(raw_move_id, int) else None
 
-        # Tổng done qty từ CÁC MOVE KHÁC tại cùng location (child_of)
-        other_lines = self.env['stock.move.line'].search([
+        # Lấy line id thực (0 nếu line mới chưa save)
+        raw_line_id = self._origin.id if self._origin else None
+        current_line_id = raw_line_id if isinstance(raw_line_id, int) else 0
+
+        # Domain base cho product + location + active
+        base_domain = [
             ('product_id', '=', self.product_id.id),
             ('location_id', 'child_of', self.location_id.id),
             ('state', 'not in', ['done', 'cancel']),
             ('quantity', '>', 0),
-            ('move_id', '!=', current_move_id),
-        ])
+        ]
+
+        # Tổng done qty từ CÁC MOVE KHÁC (loại trừ move hiện tại nếu có real id)
+        other_domain = list(base_domain)
+        if current_move_id:
+            other_domain.append(('move_id', '!=', current_move_id))
+        other_lines = self.env['stock.move.line'].search(other_domain)
         other_done = sum(oml.quantity for oml in other_lines)
 
-        # Tổng done qty từ CÁC LINE KHÁC CÙNG MOVE tại cùng location
-        # (trừ line hiện tại để không double count)
-        current_line_origin_id = self._origin.id if self._origin else 0
-        same_move_other_lines = self.env['stock.move.line'].search([
-            ('product_id', '=', self.product_id.id),
-            ('location_id', 'child_of', self.location_id.id),
-            ('state', 'not in', ['done', 'cancel']),
-            ('quantity', '>', 0),
-            ('move_id', '=', current_move_id),
-            ('id', '!=', current_line_origin_id),
-        ])
-        same_picking_other_done = sum(oml.quantity for oml in same_move_other_lines)
+        # Tổng done qty từ CÁC LINE KHÁC CÙNG MOVE (trừ line này)
+        same_picking_other_done = 0.0
+        if current_move_id:
+            same_move_domain = list(base_domain) + [('move_id', '=', current_move_id)]
+            if current_line_id:
+                same_move_domain.append(('id', '!=', current_line_id))
+            same_move_other_lines = self.env['stock.move.line'].search(same_move_domain)
+            same_picking_other_done = sum(oml.quantity for oml in same_move_other_lines)
 
         # max_allowed = tồn kho vật lý - đơn khác - cùng move (line khác)
         max_allowed = stock_at_location - other_done - same_picking_other_done
