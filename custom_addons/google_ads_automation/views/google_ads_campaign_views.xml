@@ -35,8 +35,7 @@
                             type="object" class="btn-primary" 
                             invisible="state == 'synced'"/>
                     <button name="action_ask_adsroid" string="🪄 Phân tích bằng Adsroid"
-                            type="object" class="btn-info"
-                            invisible="state == 'draft'"/>
+                            type="object" class="btn-info"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,synced"/>
                 </header>
                 <sheet>

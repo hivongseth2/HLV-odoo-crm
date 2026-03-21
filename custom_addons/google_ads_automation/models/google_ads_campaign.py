@@ -212,6 +212,8 @@ class GoogleAdsCampaign(models.Model):
     def action_ask_adsroid(self):
         """Gửi dữ liệu chiến dịch lên Adsroid API để xin nhận định"""
         self.ensure_one()
+        if self.state == 'draft':
+            raise UserError(_("Chiến dịch chưa được đồng bộ với Google. Chạy Adsroid cần chiến dịch đã đồng bộ (có ID)."))
         if not self.account_id.use_adsroid:
             raise UserError(_("Tài khoản chưa bật tính năng tích hợp Adsroid AI!"))
         
