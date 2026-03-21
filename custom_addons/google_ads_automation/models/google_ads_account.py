@@ -33,7 +33,6 @@ class GoogleAdsAccount(models.Model):
     )
     adsroid_api_key = fields.Char(
         string='Adsroid API Key',
-        tracking=True,
         help='API Key lấy từ tài khoản Adsroid của bạn.'
     )
 
@@ -47,7 +46,7 @@ class GoogleAdsAccount(models.Model):
     )
 
     # API Credentials (không bắt buộc khi is_demo)
-    developer_token = fields.Char(string='Developer Token', tracking=True)
+    developer_token = fields.Char(string='Developer Token')
     client_id = fields.Char(string='Client ID')
     client_secret = fields.Char(string='Client Secret')
     refresh_token = fields.Char(string='Refresh Token')
