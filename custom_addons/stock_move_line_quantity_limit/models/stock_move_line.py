@@ -11,98 +11,120 @@ class StockMoveLine(models.Model):
     @api.onchange('quantity')
     def _onchange_quantity_check_stock(self):
         """
-        Kiểm tra số lượng nhập tay không vượt quá tồn kho TẠI VỊ TRÍ ĐÓ.
-        - Chỉ áp dụng cho kho nội bộ (internal locations)
-        - Bỏ qua các moves đã hoàn thành
-        - Tính cả done qty từ picking khác chưa validate
-        - Tự động giới hạn số lượng đến mức có sẵn tại vị trí
-
-        Công thức: max_allowed = on_hand_at_loc - other_pickings_done_at_loc
-        KHÔNG dùng quant.reserved_quantity (dễ bị ghost reservation).
+        Kiểm tra số lượng nhập tay không vượt quá tồn kho KHẢ DỤNG tại vị trí.
+        
+        Công thức:
+          max_allowed = available_quantity + current_line_holding
+        
+        Dùng self.location_id (có thể là parent) với child_of query để cover tất cả sub-locations.
+        Nếu Odoo truyền parent trong onchange, child_of vẫn tính đúng tổng available.
         """
-        _logger.info(
-            '[QTY_LIMIT] onchange trigger | product=%s (id=%s) | location=%s (id=%s) | qty_entered=%s',
-            self.product_id.display_name if self.product_id else 'N/A',
-            self.product_id.id if self.product_id else 'N/A',
-            self.location_id.display_name if self.location_id else 'N/A',
-            self.location_id.id if self.location_id else 'N/A',
-            self.quantity,
-        )
-
-        if not self.location_id or not self.product_id:
-            _logger.info('[QTY_LIMIT] SKIP: missing location or product')
+        if not self.product_id:
             return
-
-        # Chỉ kiểm tra kho nội bộ
-        if self.location_id.usage != 'internal':
-            _logger.info('[QTY_LIMIT] SKIP: location usage=%s (not internal)', self.location_id.usage)
-            return
-
-        # Bỏ qua moves đã hoàn thành hoặc hủy
         if self.move_id and self.move_id.state in ['done', 'cancel']:
-            _logger.info('[QTY_LIMIT] SKIP: move state=%s', self.move_id.state)
             return
 
-        # Lấy tồn kho vật lý TẠI VỊ TRÍ NÀY (on-hand)
-        quant = self.env['stock.quant'].search([
-            ('product_id', '=', self.product_id.id),
-            ('location_id', '=', self.location_id.id),
-        ], limit=1)
-        stock_at_location = quant.quantity if quant else 0.0
+        # Lấy location — ưu tiên self.location_id (form), fallback _origin (DB), fallback move
+        is_existing_line = self._origin and isinstance(self._origin.id, int)
+        location = self.location_id
+        if not location and is_existing_line:
+            location = self._origin.location_id
+        if not location and self.move_id:
+            location = self.move_id.location_id
 
-        # Tìm picking ID hiện tại
-        current_picking_id = self.picking_id.id if self.picking_id else (
-            self.move_id.picking_id.id if self.move_id and self.move_id.picking_id else False
-        )
+        if not location or location.usage != 'internal':
+            return
 
-        # Tổng done qty từ CÁC PICKING KHÁC tại cùng location
-        other_lines = self.env['stock.move.line'].search([
+        # Tồn kho tại location + sub-locations (child_of cover cả sub-bin)
+        quants = self.env['stock.quant'].search([
             ('product_id', '=', self.product_id.id),
-            ('location_id', '=', self.location_id.id),
-            ('state', 'not in', ['done', 'cancel']),
-            ('quantity', '>', 0),
-            ('picking_id', '!=', current_picking_id),
+            ('location_id', 'child_of', location.id),
         ])
-        other_done = sum(oml.quantity for oml in other_lines)
+        total_on_hand = sum(q.quantity for q in quants)
+        total_available = sum(q.available_quantity for q in quants)
 
-        # Tổng done qty từ CÁC LINE KHÁC CÙNG PICKING tại cùng location
-        # (trừ line hiện tại để không double count)
-        same_picking_other_lines = self.env['stock.move.line'].search([
-            ('product_id', '=', self.product_id.id),
-            ('location_id', '=', self.location_id.id),
-            ('state', 'not in', ['done', 'cancel']),
-            ('quantity', '>', 0),
-            ('picking_id', '=', current_picking_id),
-            ('id', '!=', self._origin.id if self._origin else 0),
-        ])
-        same_picking_other_done = sum(oml.quantity for oml in same_picking_other_lines)
+        # Phần mà line này đã giữ trước khi user chỉnh (0 nếu line mới)
+        current_holding = 0.0
+        if is_existing_line:
+            current_holding = self._origin.quantity or 0.0
 
-        # max_allowed = tồn kho vật lý - đơn khác - cùng picking (line khác)
-        max_allowed = stock_at_location - other_done - same_picking_other_done
+        # Phần mà MOVE này đang giữ trong DB tại location này (các line khác của cùng move)
+        # Lý do cần: khi user xóa line cũ + thêm line mới trong cùng form chưa save,
+        # DB vẫn còn reservation cũ → available = 0 → bị block oan.
+        # Giải pháp: available = 0 (do move này giữ) + move_db_holding = 4 → max = 4
+        move_db_holding = 0.0
+        move_id_int = None
+        if self.move_id:
+            mid = self.move_id.id
+            # Với line mới trong one2many dialog, move_id.id có thể là virtual NewId
+            # → dùng _origin để lấy real DB id
+            if not isinstance(mid, int) and self.move_id._origin:
+                mid = self.move_id._origin.id
+            if isinstance(mid, int):
+                move_id_int = mid
+        if move_id_int:
+            sibling_lines = self.env['stock.move.line'].search([
+                ('move_id', '=', move_id_int),
+                ('product_id', '=', self.product_id.id),
+                ('location_id', 'child_of', location.id),
+                ('state', 'not in', ['done', 'cancel']),
+            ])
+            # Loại trừ chính line đang edit (đã tính trong current_holding)
+            if is_existing_line:
+                sibling_lines = sibling_lines.filtered(lambda l: l.id != self._origin.id)
+            move_db_holding = sum(l.quantity for l in sibling_lines)
+
+        # max = khả dụng + phần line này giữ + phần move này giữ trong DB
+        # Công thức đúng cho cả: edit line cũ / delete+recreate / cross-order block
+        max_allowed = total_available + current_holding + move_db_holding
 
         _logger.info(
-            '[QTY_LIMIT] Stock check | product=%s | location=%s | '
-            'on_hand=%s | other_pickings_done=%s | same_picking_other=%s | '
-            'max_allowed=%s | qty_entered=%s',
+            '[QTY_LIMIT] onchange | product=%s | location=%s (id=%s) | '
+            'on_hand=%s | available=%s | current_holding=%s | move_db_holding=%s | max_allowed=%s | qty_entered=%s',
             self.product_id.display_name,
-            self.location_id.display_name,
-            stock_at_location,
-            other_done,
-            same_picking_other_done,
+            location.display_name,
+            location.id,
+            total_on_hand,
+            total_available,
+            current_holding,
+            move_db_holding,
             max_allowed,
             self.quantity,
         )
 
-        # Nếu số lượng nhập vào vượt quá giới hạn, điều chỉnh lại
         if self.quantity > max_allowed:
             old_qty = self.quantity
-            self.quantity = max(0.0, max_allowed)
+
+            if max_allowed <= 0.0:
+                # Không có hàng khả dụng — set qty=0, yêu cầu user xóa thủ công
+                # (không thể unlink() từ onchange vì sẽ crash form)
+                self.quantity = 0.0
+                _logger.warning(
+                    '[QTY_LIMIT] NO STOCK | product=%s | location=%s | set qty=0',
+                    self.product_id.display_name, location.display_name,
+                )
+                return {
+                    'warning': {
+                        'title': _('Không có tồn kho tại vị trí!'),
+                        'message': _(
+                            'Vị trí "%s" không còn hàng khả dụng '
+                            '(tồn kho: %s, đã giữ bởi đơn khác: %s).\n'
+                            'Số lượng đã được đặt về 0. Vui lòng xóa dòng này.'
+                        ) % (
+                            location.display_name,
+                            total_on_hand,
+                            total_on_hand - move_db_holding,
+                        )
+                    }
+                }
+
+            self.quantity = max_allowed
 
             _logger.warning(
                 '[QTY_LIMIT] BLOCKED | product=%s | location=%s | '
                 'qty_entered=%s | max_allowed=%s | adjusted_to=%s',
                 self.product_id.display_name,
-                self.location_id.display_name,
+                location.display_name,
                 old_qty,
                 max_allowed,
                 self.quantity,
@@ -113,18 +135,15 @@ class StockMoveLine(models.Model):
                     'title': _('Vượt quá tồn kho tại vị trí!'),
                     'message': _(
                         'Vị trí "%s" chỉ còn %s cái khả dụng '
-                        '(tồn kho: %s, đang giữ bởi đơn khác: %s).\n'
+                        '(tồn kho: %s, đã giữ bởi đơn khác: %s).\n'
                         'Hệ thống đã tự động điều chỉnh từ %s thành %s cái.'
                     ) % (
-                        self.location_id.display_name,
-                        max(0.0, max_allowed),
-                        stock_at_location,
-                        other_done,
+                        location.display_name,
+                        max_allowed,
+                        total_on_hand,
+                        total_on_hand - total_available - current_holding,
                         old_qty,
                         self.quantity,
                     )
                 }
             }
-
-        _logger.info('[QTY_LIMIT] OK | qty=%s <= max_allowed=%s | no adjustment needed',
-                     self.quantity, max_allowed)

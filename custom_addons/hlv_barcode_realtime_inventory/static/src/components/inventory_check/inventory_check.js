@@ -381,6 +381,8 @@ export class InventoryCheckScanner extends Component {
     async scanProduct() {
         const barcode = this.state.product_barcode.trim();
         if (!barcode) return;
+        // Small delay for UI to settle (camera continuous mode)
+        await new Promise(r => setTimeout(r, 100));
         // Don't block UI with loading overlay for scans
         try {
             const pr = await this.orm.call(
@@ -720,12 +722,18 @@ export class InventoryCheckScanner extends Component {
         await this._saveSettings();
     }
 
+    async toggleContinueCounting() {
+        const s = this.state.settings;
+        s.continue_counting = !s.continue_counting;
+        await this._saveSettings();
+    }
+
     async _saveSettings() {
         const s = this.state.settings;
         try {
             const r = await this.orm.call(
                 'inventory.check', 'save_scanner_settings',
-                [s.approval_required, s.auto_confirm, s.skip_discrepancy_reason], {}
+                [s.approval_required, s.auto_confirm, s.skip_discrepancy_reason, s.continue_counting], {}
             );
             if (r.success) {
                 this._showNotification('Đã lưu cài đặt', 'success');
@@ -839,6 +847,7 @@ export class InventoryCheckScanner extends Component {
     }
 
     async openCamera(mode = 'product') {
+        if (typeof mode !== 'string') mode = 'product';
         this.state.camera_mode = mode;
         this._lastScannedCode = '';
         this._lastScanTime = 0;
@@ -1012,18 +1021,11 @@ export class InventoryCheckScanner extends Component {
     // ========== Audio Feedback ==========
     _beepSuccess() {
         try {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(1047, ctx.currentTime);   // C6
-            gain.gain.setValueAtTime(0.35, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
-            osc.start(ctx.currentTime);
-            osc.stop(ctx.currentTime + 0.18);
-            osc.onended = () => ctx.close();
+            if (!this._successAudio) {
+                this._successAudio = new Audio('/custom_barcode_scan_redirect/static/src/sound/success.mp3');
+            }
+            this._successAudio.currentTime = 0;
+            this._successAudio.play().catch(() => {});
         } catch(e) {}
     }
 

@@ -235,6 +235,14 @@ class CustomBarcodeScanController(http.Controller):
                     # Odoo 17 dùng quantity, Odoo cũ dùng qty_done (ta lấy cả 2 cho chắc)
                     total += getattr(ol, 'quantity', 0) or getattr(ol, 'qty_done', 0) or 0
                 return total
+
+        # 3. Fallback: lấy demand từ stock.move (product_uom_qty là demand gốc của move)
+        #    Dùng khi same-package flow: reserved_qty=0 nhưng move vẫn có demand thực
+        move_demand = ml.move_id.product_uom_qty or 0
+        if move_demand > 0:
+            # Chia đều nếu có nhiều move_lines trong cùng move
+            n_mls = len(ml.move_id.move_line_ids) or 1
+            return move_demand / n_mls
                 
         return 0
 
@@ -451,30 +459,37 @@ class CustomBarcodeScanController(http.Controller):
                 
                 # Tính qty: nếu từ origin thì lấy quantity/qty_done từ PICK
                 if is_from_origin:
-                    total_qty = sum(getattr(ml, 'quantity', 0) or getattr(ml, 'qty_done', 0) or 0 for ml in pkg_mls)
+                    total_demand = sum(getattr(ml, 'quantity', 0) or getattr(ml, 'qty_done', 0) or 0 for ml in pkg_mls)
+                    total_done = total_demand  # PICK đã done
                     package_lines = [{
                         'product_name': ml.product_id.display_name,
-                        'product_qty': getattr(ml, 'quantity', 0) or getattr(ml, 'qty_done', 0) or 0,
+                        'done_qty': getattr(ml, 'quantity', 0) or getattr(ml, 'qty_done', 0) or 0,
+                        'demand_qty': getattr(ml, 'quantity', 0) or getattr(ml, 'qty_done', 0) or 0,
                         'product_uom': ml.product_uom_id.name,
-                        'reserved_qty': getattr(ml, 'quantity', 0) or getattr(ml, 'qty_done', 0) or 0,
                     } for ml in pkg_mls]
                 else:
-                    total_qty = sum(ml.qty_done for ml in pkg_mls)
+                    total_done = sum(ml.qty_done for ml in pkg_mls)
+                    total_demand = sum(self._get_ml_demand(ml) for ml in pkg_mls)
                     package_lines = [{
                         'product_name': ml.product_id.display_name,
-                        'product_qty': ml.qty_done,
+                        'done_qty': ml.qty_done,
+                        'demand_qty': self._get_ml_demand(ml),
                         'product_uom': ml.product_uom_id.name,
-                        # [V3.6] Hiển thị reservation thông minh (truy vết từ PICK nếu cần)
-                        'reserved_qty': self._get_ml_demand(ml),
                     } for ml in pkg_mls]
-                
+
                 picking_packages.append({
                     'id': pkg.id,
                     'name': pkg.name,
-                    'qty': total_qty,
+                    'done_qty': total_done,
+                    'demand_qty': total_demand,
                     'package_lines': package_lines,
-                    'is_from_origin': is_from_origin,  # Flag để UI biết đây là package từ PICK
+                    'is_from_origin': is_from_origin,
                 })
+
+        # Check nếu có move_line nào đang có package → hiện nút "Bỏ đóng gói"
+        has_packed_lines = bool(picking.move_line_ids.filtered(
+            lambda l: l.package_id or l.result_package_id
+        ))
 
         return request.render("custom_barcode_scan_redirect.pack_scan_template", {
             'picking': picking,
@@ -483,6 +498,7 @@ class CustomBarcodeScanController(http.Controller):
             'drive_connected': drive_connected,
             'sibling_packs': sibling_packs,
             'picking_packages': picking_packages,
+            'has_packed_lines': has_packed_lines,
         })
 
 
@@ -659,8 +675,6 @@ class CustomBarcodeScanController(http.Controller):
                 candidate_open_move = None  # Move có dư demand nhưng chưa có line phù hợp
                 
                 for ml in all_move_lines:
-                    # Lấy reserved_qty (product_uom_qty) hoặc reserved_uom_qty tùy version Odoo
-                    # Trong Odoo 16+, có trường reserved_qty hoặc product_uom_qty trên move_line
                     reserved_qty = getattr(ml, 'reserved_qty', 0) or getattr(ml, 'reserved_uom_qty', 0) or getattr(ml, 'product_uom_qty', 0) or 0
                     remaining_in_line = reserved_qty - ml.qty_done
                     
@@ -1118,6 +1132,83 @@ class CustomBarcodeScanController(http.Controller):
             }
         except Exception as e:
             _logger.exception("UNPACK error")
+            return {"error": str(e)}
+
+    @http.route('/pack_scan/unpack_all', type='json', auth='user', csrf=False)
+    def unpack_all(self, **kwargs):
+        """
+        Bỏ đóng gói toàn bộ: unreserve → chuyển quant ra khỏi package → xóa
+        package trên move_lines → re-reserve. Đảm bảo quant không bị lệch.
+        """
+        picking_id = kwargs.get("picking_id")
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
+        if not picking.exists():
+            return {"error": "Phiếu không tồn tại"}
+
+        try:
+            mls = picking.move_line_ids.filtered(
+                lambda l: l.package_id or l.result_package_id
+            )
+            if not mls:
+                return {"success": True, "message": "Không có dòng nào cần bỏ đóng gói."}
+
+            count = len(mls)
+            location = picking.location_id
+
+            # 1. Thu thập packages liên quan
+            packages = mls.mapped('package_id') | mls.mapped('result_package_id')
+            packages = packages.filtered(lambda p: p)  # loại False
+
+            # 2. Unreserve picking trước để giải phóng reservation trên quant
+            picking.do_unreserve()
+            _logger.info("UNPACK_ALL %s: unreserved", picking.name)
+
+            # 3. Chuyển quant ra khỏi package (set package_id=False trên quant)
+            Quant = request.env['stock.quant'].sudo()
+            for pkg in packages:
+                pkg_quants = Quant.search([
+                    ('package_id', '=', pkg.id),
+                    ('location_id', '=', location.id),
+                    ('quantity', '!=', 0),
+                ])
+                for q in pkg_quants:
+                    # Cộng vào quant không có package ở cùng location
+                    existing = Quant.search([
+                        ('product_id', '=', q.product_id.id),
+                        ('location_id', '=', q.location_id.id),
+                        ('lot_id', '=', q.lot_id.id if q.lot_id else False),
+                        ('package_id', '=', False),
+                        ('owner_id', '=', q.owner_id.id if q.owner_id else False),
+                    ], limit=1)
+                    if existing:
+                        existing.quantity += q.quantity
+                    else:
+                        Quant.create({
+                            'product_id': q.product_id.id,
+                            'location_id': q.location_id.id,
+                            'lot_id': q.lot_id.id if q.lot_id else False,
+                            'package_id': False,
+                            'owner_id': q.owner_id.id if q.owner_id else False,
+                            'quantity': q.quantity,
+                        })
+                    q.quantity = 0  # Zero out, Odoo sẽ tự dọn quant = 0
+                _logger.info("UNPACK_ALL: moved quants out of package %s", pkg.name)
+
+            # 4. Xóa package trên move_lines
+            mls.write({'package_id': False, 'result_package_id': False})
+
+            # 5. Re-reserve picking
+            picking.action_assign()
+            _logger.info(
+                "UNPACK_ALL %s: cleared %d move_lines, re-assigned",
+                picking.name, count,
+            )
+            return {
+                "success": True,
+                "message": f"✅ Đã bỏ đóng gói {count} dòng trong {picking.name}",
+            }
+        except Exception as e:
+            _logger.exception("UNPACK_ALL error")
             return {"error": str(e)}
 
     @http.route('/pack_scan/add_to_pack', type='json', auth='user', csrf=False)

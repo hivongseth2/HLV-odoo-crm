@@ -10,29 +10,27 @@ class StockMove(models.Model):
 
     def _get_other_pickings_total_done(self, product, location):
         """
-        Tính tổng qty (done) đã nhập từ CÁC PICKING KHÁC cùng product + location.
-        KHÔNG dùng quant.reserved_quantity vì nó thường bị ghost reservation.
-
-        Logic: Tìm tất cả move lines cùng product/location, chưa done/cancel,
-        lọc bỏ picking hiện tại → sum qty.
+        Tính tổng qty từ CÁC MOVE KHÁC cùng product + location.
+        Dùng self._origin.id (move id thực trên DB) thay vì picking_id
+        vì trong onchange context, self.picking_id có thể trả về False.
         """
-        current_picking_id = self.picking_id.id if self.picking_id else False
+        current_move_id = self._origin.id  # Stable DB id kể cả trong onchange
 
         other_move_lines = self.env['stock.move.line'].search([
             ('product_id', '=', product.id),
             ('location_id', 'child_of', location.id),
             ('state', 'not in', ['done', 'cancel']),
             ('quantity', '>', 0),
-            ('picking_id', '!=', current_picking_id),
+            ('move_id', '!=', current_move_id),  # Loại trừ theo move, không theo picking
         ])
 
         total = sum(ml.quantity for ml in other_move_lines)
 
         _logger.info(
             '[CROSS_PICK] product=%s | location=%s | '
-            'other_pickings_done_qty=%s | current_picking=%s',
+            'other_moves_qty=%s | current_move_id=%s',
             product.display_name, location.display_name,
-            total, current_picking_id,
+            total, current_move_id,
         )
 
         return total

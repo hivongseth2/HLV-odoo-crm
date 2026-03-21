@@ -15,8 +15,15 @@
     "license": "LGPL-3",
     "assets": {
         "web.assets_frontend": [
+            "custom_barcode_scan_redirect/static/src/js/toast.js",
+            "custom_barcode_scan_redirect/static/src/js/ui_utils.js",
+            "custom_barcode_scan_redirect/static/src/js/server_sync.js",
+            "custom_barcode_scan_redirect/static/src/js/recording.js",
+            "custom_barcode_scan_redirect/static/src/js/side_panel.js",
+            "custom_barcode_scan_redirect/static/src/js/package_edit.js",
+            "custom_barcode_scan_redirect/static/src/js/transfer_modal.js",
             "custom_barcode_scan_redirect/static/src/js/scan_pack.js",
-             "custom_barcode_scan_redirect/static/src/js/scan_ui.js"
+            "custom_barcode_scan_redirect/static/src/js/scan_ui.js",
         ]
     },
     # 'external_dependencies': {'python': ['pydrive2']},

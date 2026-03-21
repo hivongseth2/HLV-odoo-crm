@@ -1753,7 +1753,7 @@ class MisaApiUtils(models.AbstractModel):
             "AISearchKeyword": ""
         }
 
-        _logger.info(f"🔎 [MISA SEARCH] Tìm kiếm sản phẩm với tên: '{name}'")
+        _logger.info(f"🔎 [MISA SEARCH] Tìm kiếm sản phẩm - name: '{name}', code: '{code}'")
 
         session = self._get_retry_session()
         try:

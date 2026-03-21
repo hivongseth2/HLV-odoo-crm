@@ -561,6 +561,46 @@ $r-full: 9999px;
         flex-shrink: 0;
     }
 
+    // ===== INLINE CAMERA (replaces barcode input in scanning view) =====
+    .hlv-inline-camera {
+        flex-shrink: 0;
+        background: #000;
+        display: flex;
+        flex-direction: column;
+
+        &__feed {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16/9;
+            max-height: 220px;
+            overflow: hidden;
+            background: #111;
+        }
+
+        &__video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        &__close {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 10px;
+            border: none;
+            background: rgba($white, .08);
+            color: rgba($white, .8);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+
+            &:active { background: rgba($white, .15); }
+        }
+    }
+
     // ===== PRODUCT LIST =====
     .hlv-product-list {
         flex: 1;
@@ -1273,6 +1313,23 @@ $r-full: 9999px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+        }
+
+        &__state {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 1px 7px;
+            border-radius: $r-full;
+            margin-top: 2px;
+            margin-bottom: 2px;
+
+            &--draft            { background: rgba($gray-400, .15); color: $gray-500; }
+            &--in_progress      { background: rgba($blue, .12);      color: $blue;     }
+            &--pending_approval { background: rgba($amber, .15);     color: $amber;    }
+            &--confirmed        { background: rgba($green, .12);     color: $green;    }
+            &--locked           { background: rgba($gray-600, .12);  color: $gray-600; }
+            &--cancelled        { background: rgba($red, .1);        color: $red;      }
         }
 
         &__time {
