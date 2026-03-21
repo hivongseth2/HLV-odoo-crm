@@ -24,6 +24,19 @@ class GoogleAdsAccount(models.Model):
     name = fields.Char(string='Tên Tài Khoản', required=True)
     active = fields.Boolean(default=True, string='Kích Hoạt')
 
+    # ── Adsroid Integration ──────────────────────
+    use_adsroid = fields.Boolean(
+        string='Sử dụng Adsroid AI',
+        default=False,
+        tracking=True,
+        help='Tích hợp AI Agent Adsroid.com để phân tích và tối ưu hóa chiến dịch tự động.'
+    )
+    adsroid_api_key = fields.Char(
+        string='Adsroid API Key',
+        tracking=True,
+        help='API Key lấy từ tài khoản Adsroid của bạn.'
+    )
+
     # ── Demo Mode ────────────────────────────────
     is_demo = fields.Boolean(
         string='Chế Độ Demo',

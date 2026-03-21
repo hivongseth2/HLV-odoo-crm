@@ -79,6 +79,13 @@
                                             class="btn btn-secondary mt-2 w-100" icon="fa-check-square-o"/>
                                     </group>
                                 </group>
+
+                                <group>
+                                    <group string="Adsroid AI Integration" class="border-0">
+                                        <field name="use_adsroid" widget="boolean_toggle"/>
+                                        <field name="adsroid_api_key" password="True" invisible="not use_adsroid" required="use_adsroid"/>
+                                    </group>
+                                </group>
                             </div>
                         </div>
                         <div class="col-lg-4">

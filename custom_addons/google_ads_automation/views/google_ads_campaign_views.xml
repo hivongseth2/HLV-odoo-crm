@@ -34,6 +34,9 @@
                     <button name="action_sync_to_google" string="Đồng bộ lên Google" 
                             type="object" class="btn-primary" 
                             invisible="state == 'synced'"/>
+                    <button name="action_ask_adsroid" string="🪄 Phân tích bằng Adsroid"
+                            type="object" class="btn-info"
+                            invisible="state == 'draft'"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,synced"/>
                 </header>
                 <sheet>
@@ -87,6 +90,15 @@
                                            decoration-warning="status == 'paused'"
                                            decoration-danger="status == 'removed'"/>
                                 </group>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-4" invisible="not adsroid_last_insight">
+                        <div class="col-12">
+                            <div class="o_premium_card border-0 bg-light">
+                                <h4 class="mb-3 text-info fw-bold"><i class="fa fa-magic me-2"></i>Nhận định từ Adsroid AI</h4>
+                                <field name="adsroid_last_insight" widget="html" nolabel="1"/>
                             </div>
                         </div>
                     </div>

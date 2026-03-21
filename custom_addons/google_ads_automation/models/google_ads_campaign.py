@@ -23,6 +23,9 @@ class GoogleAdsCampaign(models.Model):
         help='Các sản phẩm được quảng cáo trong chiến dịch này (tự động lấy từ Product Feed)'
     )
 
+    # ── Adsroid Integration ──────────────────────
+    adsroid_last_insight = fields.Html(string='Nhận định AI (Adsroid)', readonly=True)
+
     @api.depends('feed_line_ids.product_id')
     def _compute_product_ids(self):
         for rec in self:
@@ -205,6 +208,66 @@ class GoogleAdsCampaign(models.Model):
             self.message_post(body=_("Chiến dịch đã được tạo trên Google Ads. ID: %s") % google_id)
         else:
             raise UserError(_("Đồng bộ thất bại: %s") % result)
+
+    def action_ask_adsroid(self):
+        """Gửi dữ liệu chiến dịch lên Adsroid API để xin nhận định"""
+        self.ensure_one()
+        if not self.account_id.use_adsroid:
+            raise UserError(_("Tài khoản chưa bật tính năng tích hợp Adsroid AI!"))
+        
+        from ..services.adsroid_api import AdsroidApiService
+        
+        campaign_data = {
+            "id": self.google_campaign_id,
+            "name": self.name,
+            "status": self.status,
+            "channel_type": self.channel_type,
+            "metrics": {
+                "clicks": self.clicks,
+                "impressions": self.impressions,
+                "cost": self.cost,
+                "conversions": self.conversions,
+                "roas": self.roas,
+            }
+        }
+        
+        # Lấy thông tin sản phẩm trong chiến dịch (từ Product Feed)
+        product_data = []
+        for line in self.feed_line_ids:
+            product_data.append({
+                "product_code": line.product_id.default_code,
+                "qty_available": line.qty_available,
+                "margin_percent": line.margin_percent,
+                "avg_daily_sales": line.avg_daily_sales,
+                "stock_status": line.stock_status,
+            })
+            
+        success, result = AdsroidApiService.analyze_campaign(self.account_id.adsroid_api_key, campaign_data, product_data)
+        
+        if success:
+            insight_html = f"""
+                <div class="alert alert-success">
+                    <strong>Điểm đánh giá (Score):</strong> {{result.get('score', 0)}}/100<br/>
+                    <strong>Hành động đề xuất:</strong> <span class="badge text-bg-warning">{{result.get('suggested_action', 'MAINTAIN')}}</span><br/>
+                    <strong>Nhận định từ AI:</strong><br/>
+                    {{result.get('insight', 'Không có nội dung.')}}
+                </div>
+            """
+            self.adsroid_last_insight = Markup(insight_html)
+            self.message_post(body=Markup(_("<b>Adsroid AI Insight:</b><br/>%s")) % Markup(insight_html))
+            
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('Adsroid Đã Phân Tích'),
+                    'message': _('Đã nhận được phản hồi từ AI Agent.'),
+                    'type': 'success',
+                    'sticky': False,
+                }
+            }
+        else:
+            raise UserError(_("Không thể lấy nhận định từ Adsroid: %s") % result)
 
     _sql_constraints = [
         ('google_campaign_id_uniq', 'unique(google_campaign_id)', 'Google Campaign ID phải là duy nhất!'),
