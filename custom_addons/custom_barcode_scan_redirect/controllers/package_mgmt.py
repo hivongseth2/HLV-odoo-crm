@@ -83,14 +83,10 @@ class PackageManagementController(http.Controller):
             if not mls and not loose_scanned:
                 return {"success": True, "message": "Không có gì cần làm lại."}
 
-            # Nếu chỉ có hàng lẻ đã quét (chưa đóng gói) → chỉ cần reset qty_done về 0
-            # Không cần unreserve vì reservation trên quant vẫn còn nguyên
-            if not mls:
-                loose_scanned.sudo().with_context(skip_qty_validation=True).write({'qty_done': 0})
-                _logger.info("UNPACK_ALL %s: reset %d loose scanned lines (no packages)", picking.name, len(loose_scanned))
-                return {"success": True, "message": f"✅ Đã làm lại {picking.name} (chưa có gói hàng)"}
-
-            count = len(mls)
+            # Luôn dùng full flow: do_unreserve → delete dead MLs → action_assign
+            # KHÔNG dùng write({'qty_done': 0}) vì trong Odoo 18 qty_done là alias
+            # của quantity, write sẽ trigger side-effect làm mất reservation trên quant.
+            count = len(mls) + len(loose_scanned)
             location = picking.location_id
 
             # 1. Chỉ thu thập SOURCE packages (package_id) — không phải gói đích (result_package_id)
