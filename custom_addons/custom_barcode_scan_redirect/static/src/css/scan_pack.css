@@ -42,52 +42,116 @@
   gap: 10px;
 }
 
-/* Topbar action buttons - original design */
+/* Topbar action buttons — clean professional design */
+.pack-topbar .right button,
+.pack-topbar .right .badge {
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all .18s ease;
+  white-space: nowrap;
+  border: 1.5px solid transparent;
+  line-height: 1.4;
+}
+
+/* Primary action — Đóng gói */
+#btnPartialPack {
+  background: #228be6;
+  color: #fff;
+  border-color: #1c7ed6;
+  box-shadow: 0 1px 3px rgba(34,139,230,.3);
+}
+#btnPartialPack:hover {
+  background: #1c7ed6;
+  box-shadow: 0 2px 6px rgba(34,139,230,.35);
+}
+
+/* Secondary / ghost buttons — In nhãn, Drive */
 #btnPrintLabel,
 #btnPrintLabel80x80,
-#btnPartialPack,
 #btnDriveSwitch {
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 700;
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  /* Viền nhẹ để rõ khối hơn */
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all .2s;
-  white-space: nowrap;
-  min-width: 80px;
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
-  /* Đổ bóng tĩnh để nổi bật */
+  background: #fff;
+  color: #495057;
+  border-color: #dee2e6;
 }
-
 #btnPrintLabel:hover,
 #btnPrintLabel80x80:hover,
-#btnPartialPack:hover,
 #btnDriveSwitch:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  opacity: 0.95;
+  background: #f1f3f5;
+  border-color: #ced4da;
+  color: #212529;
 }
 
-#btnPrintLabel {
-  background: #0b69d7;
-  color: #fff;
+/* Danger / ghost — Làm lại */
+#btnUnpackAll {
+     background: transparent;
+    color: #ee2424;
+    padding: 5px 10px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: rgba(0, 0, 0, 0.24) 0px 3px 8px;
+    transition: all .18s ease;
+    white-space: nowrap;
+    border: none;
+    line-height: 1.4;
+}
+#btnUnpackAll:hover {
+  background: #ffe5e5;
+  color: #e03131;
+  border-color: #e03131;
 }
 
-#btnPrintLabel80x80 {
-  background: #3c2bb3;
-  color: #fff;
+/* Badge tweaks */
+.pack-topbar .badge {
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-weight: 600;
+  cursor: default;
+}
+.badge-ok {
+  background: #d3f9d8;
+  color: #2b8a3e;
+  border-color: #8ce99a;
+}
+.badge-warn {
+  background: #fff3bf;
+  color: #e67700;
+  border-color: #ffd43b;
 }
 
-#btnPartialPack {
-  background: #0b69d7;
-  color: #fff;
+/* Package indicator badge inside product row */
+.pkg-indicator {
+  margin-top: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
-#btnDriveSwitch {
-  background: #0b69d7;
-  color: #fff;
+.pkg-badge {
+  display: inline-block;
+  border-radius: 10px;
+  padding: 1px 9px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+/* Đã quét vào kiện */
+.pkg-badge-done {
+  background: #d3f9d8;
+  color: #2f9e44;
+  border: 1px solid #8ce99a;
+}
+
+/* Chưa quét, chỉ được gán sẵn */
+.pkg-badge-pending {
+  background: #fff3cd;
+  color: #7a5600;
+  border: 1px solid #ffc107;
 }
 
 /* Complete pack button - original design */
