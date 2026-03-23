@@ -58,15 +58,6 @@
             <field name="view_mode">list,form</field>
         </record>
 
-        <menuitem id="menu_barcode_scan_log_root"
-                  name="Barcode Shipper"
-                  parent="stock.menu_stock_root"
-                  sequence="90"/>
 
-        <menuitem id="menu_barcode_scan_log"
-                  name="Scan Logs"
-                  parent="menu_barcode_scan_log_root"
-                  action="action_barcode_scan_log"
-                  groups="hlv_barcode_shipper.group_shipper_manager"/>
     </data>
 </odoo>

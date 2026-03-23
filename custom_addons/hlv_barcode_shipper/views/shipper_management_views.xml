@@ -76,9 +76,7 @@
                     <field name="shipper_receive_time" string="Thời gian nhận"
                            widget="datetime"/>
                     <field name="shipper_received" string="Đã nhận" widget="boolean"/>
-                    <field name="shipper_scanned" string="Đã quét giao" widget="boolean"
-                           optional="show"/>
-                    <field name="shipper_scan_time" string="Thời gian giao"
+                    <field name="date_done" string="Ngày giao xong"
                            widget="datetime" optional="show"/>
                     <field name="shipper_returned" string="Đã trả lại" widget="boolean"/>
                     <field name="shipper_return_time" string="Thời gian trả"
@@ -95,73 +93,6 @@
             </field>
         </record>
 
-        <!-- ==================== FORM VIEW - CHI TIẾT PHIẾU GIAO HÀNG ==================== -->
-        <record id="stock_picking_shipper_mgmt_form" model="ir.ui.view">
-            <field name="name">stock.picking.shipper.mgmt.form</field>
-            <field name="model">stock.picking</field>
-            <field name="inherit_id" ref="stock.view_picking_form"/>
-            <field name="priority">999</field>
-            <field name="arch" type="xml">
-                <xpath expr="//sheet" position="inside">
-                    <notebook position="inside">
-                        <page string="Thông tin Shipper" name="shipper_info">
-                            <group>
-                                <group string="Nhận hàng">
-                                    <field name="shipper_received" string="Đã nhận hàng"
-                                           readonly="1"/>
-                                    <field name="shipper_received_by" string="Shipper nhận"
-                                           readonly="1"/>
-                                    <field name="shipper_receive_time" string="Thời gian nhận"
-                                           readonly="1"/>
-                                </group>
-                                <group string="Giao hàng">
-                                    <field name="shipper_scanned" string="Đã quét giao"
-                                           readonly="1"/>
-                                    <field name="shipper_user_id" string="Shipper giao"
-                                           readonly="1"/>
-                                    <field name="shipper_scan_time" string="Thời gian giao"
-                                           readonly="1"/>
-                                </group>
-                            </group>
-                            <group>
-                                <group string="Trả hàng">
-                                    <field name="shipper_returned" string="Đã trả hàng"
-                                           readonly="1"/>
-                                    <field name="shipper_return_time" string="Thời gian trả"
-                                           readonly="1"/>
-                                    <field name="shipper_return_reason" string="Lý do trả hàng"
-                                           readonly="1"/>
-                                </group>
-                            </group>
-                            <separator string="Lịch sử quét mã vạch"/>
-                            <field name="scan_log_ids" string="" readonly="1">
-                                <list string="Lịch sử quét" default_order="scan_time desc"
-                                      decoration-success="status == 'success'"
-                                      decoration-danger="status == 'error'"
-                                      decoration-warning="status == 'warning'">
-                                    <field name="scan_time" string="Thời gian"/>
-                                    <field name="user_id" string="Người quét"
-                                           widget="many2one_avatar"/>
-                                    <field name="barcode" string="Mã vạch"/>
-                                    <field name="scan_type" string="Loại quét"/>
-                                    <field name="status" string="Kết quả" widget="badge"
-                                           decoration-success="status == 'success'"
-                                           decoration-danger="status == 'error'"
-                                           decoration-warning="status == 'warning'"/>
-                                    <field name="package_id" string="Kiện hàng"
-                                           optional="show"/>
-                                    <field name="product_id" string="Sản phẩm"
-                                           optional="show"/>
-                                    <field name="message" string="Ghi chú"
-                                           optional="hide"/>
-                                </list>
-                            </field>
-                        </page>
-                    </notebook>
-                </xpath>
-            </field>
-        </record>
-
         <!-- ==================== ACTION - QUẢN LÝ GIAO NHẬN ==================== -->
         <record id="action_shipper_mgmt_picking" model="ir.actions.act_window">
             <field name="name">Quản lý giao nhận hàng</field>
@@ -171,13 +102,12 @@
             <field name="search_view_id" ref="stock_picking_shipper_mgmt_search"/>
             <field name="domain">[
                 ('picking_type_id.code', '=', 'outgoing'),
-                '|',
-                ('shipper_received', '=', True),
-                ('shipper_scanned', '=', True),
+                ('name', 'not ilike', '/POS/'),
+                ('origin', 'not ilike', 'HOÀN TIỀN'),
+                ('origin', 'not ilike', 'Hoàn tiền'),
+                ('origin', 'not ilike', 'Shopee'),
             ]</field>
-            <field name="context">{
-                'search_default_filter_received': 1,
-            }</field>
+            <field name="context">{}</field>
             <field name="help" type="html">
                 <p class="o_view_nocontent_smiling_face">
                     Chưa có phiếu giao nhận nào
@@ -446,7 +376,7 @@
         <!-- ==================== MENU ITEMS - TRONG KHO HÀNG ==================== -->
         <menuitem id="menu_shipper_mgmt_root"
                   name="Quản lý Shipper"
-                  parent="stock.menu_stock_root"
+                  parent="stock.menu_stock_warehouse_mgmt"
                   sequence="85"
                   groups="hlv_barcode_shipper.group_shipper_manager"/>
 

@@ -42,11 +42,6 @@
             <field name="context">{}</field>
         </record>
 
-        <!-- Menu cho shipper -->
-        <menuitem id="menu_stock_picking_shipper"
-                  name="Delivery Orders"
-                  parent="menu_barcode_scan_log_root"
-                  action="stock_picking_action_shipper"
-                  groups="hlv_barcode_shipper.group_shipper"/>
+
     </data>
 </odoo>
