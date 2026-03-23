@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="shopee_escrow_detail_wizard_form" model="ir.ui.view">
+        <field name="name">shopee.escrow.detail.wizard.form</field>
+        <field name="model">shopee.escrow.detail.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Chi tiết phí &amp; chiết khấu Shopee (Escrow)">
+                <field name="order_id" invisible="1"/>
+                <div class="o_horizontal_separator">Bảng kê chi tiết thu nhập</div>
+                <field name="escrow_html" nolabel="1" readonly="1"/>
+                <footer>
+                    <button string="Đóng" class="btn-secondary" special="cancel" data-hotkey="z"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_shopee_escrow_detail_wizard" model="ir.actions.act_window">
+        <field name="name">Chi tiết Escrow Shopee</field>
+        <field name="res_model">shopee.escrow.detail.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>
