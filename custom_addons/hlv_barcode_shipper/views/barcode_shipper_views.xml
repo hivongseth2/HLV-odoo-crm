@@ -338,16 +338,16 @@
                                     <div id="return-result" class="alert"></div>
 
                                     <!-- Toolbar: Chọn tất cả + Quét phiếu -->
-                                    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;">
+                                    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap;">
                                         <button id="return-select-all-btn" class="btn btn-outline btn-sm" style="white-space:nowrap;">
                                             <i class="fa fa-check-double"></i> Chọn tất cả
                                         </button>
-                                        <div style="flex:1;display:flex;gap:4px;">
-                                            <input type="text" id="return-scan-input" class="form-control" placeholder="Quét mã phiếu để chọn..." autocomplete="off" style="font-size:0.85rem;"/>
-                                            <button id="return-scan-btn" class="btn btn-secondary btn-sm" style="flex-shrink:0;">
+                                        <div style="flex:1;display:flex;gap:4px;min-width:0;align-items:center;">
+                                            <input type="text" id="return-scan-input" class="form-control" placeholder="Quét mã phiếu để chọn..." autocomplete="off" style="font-size:0.85rem;min-width:0;"/>
+                                            <button id="return-scan-btn" class="btn btn-secondary btn-sm" style="flex-shrink:0;padding:8px 10px;">
                                                 <i class="fa fa-search"></i>
                                             </button>
-                                            <button id="btn-open-camera-return-scan" class="btn btn-primary btn-sm" title="Mở camera" style="flex-shrink:0;">
+                                            <button id="btn-open-camera-return-scan" class="btn btn-primary btn-sm" title="Mở camera" style="flex-shrink:0;padding:8px 10px;">
                                                 <i class="fa fa-camera"></i>
                                             </button>
                                         </div>
