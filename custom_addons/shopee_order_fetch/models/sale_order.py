@@ -7,7 +7,7 @@ Toàn bộ logic gọi API và xử lý escrow được ủy thác cho services/
 """
 import logging
 
-from odoo import models, fields, _
+from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 
 from ..services import shopee_api, shopee_escrow
@@ -66,6 +66,7 @@ class SaleOrder(models.Model):
         sanitize=False
     )
 
+    @api.depends('shopee_escrow_data')
     def _compute_shopee_escrow_html(self):
         for order in self:
             if not order.shopee_escrow_data:

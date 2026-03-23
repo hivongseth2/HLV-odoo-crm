@@ -268,8 +268,19 @@ class ShopeeOrderFetchWizard(models.TransientModel):
                 [('shopee_order_ref', '=', order_sn)], limit=1
             )
             if existing:
-                skipped_orders.append(f"{order_sn} (đã tồn tại: {existing.name})")
+                try:
+                    with self.env.cr.savepoint():
+                        if escrow_data:
+                            if escrow_data.get('order_income', {}).get('items'):
+                                shopee_escrow.update_order_lines_from_escrow(existing, escrow_data)
+                            shopee_escrow.apply_escrow_voucher(existing, escrow_data)
+                            existing.shopee_escrow_data = escrow_data
+                        created_orders.append(f"{order_sn} (đã tồn tại, cập nhật thành công: {existing.name})")
+                except Exception as e:
+                    _logger.error("Shopee Mock: Lỗi cập nhật đơn %s: %s", order_sn, str(e), exc_info=True)
+                    skipped_orders.append(f"{order_sn} (LỖI CẬP NHẬT: {str(e)})")
                 continue
+                
             try:
                 with self.env.cr.savepoint():
                     so = shopee_order_builder.create_order_from_data(
