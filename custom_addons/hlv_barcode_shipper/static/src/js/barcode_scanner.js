@@ -167,6 +167,11 @@ class BarcodeShipper {
 
         // === RETURN TAB ===
         document.getElementById('confirm-return-btn')?.addEventListener('click', () => this.confirmReturn());
+        document.getElementById('return-select-all-btn')?.addEventListener('click', () => this.toggleReturnSelectAll());
+        document.getElementById('return-scan-btn')?.addEventListener('click', () => this.scanReturnPicking());
+        document.getElementById('return-scan-input')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); this.scanReturnPicking(); }
+        });
         document.getElementById('return-detail-scan-btn')?.addEventListener('click', () => this.scanReturnDetail());
         document.getElementById('confirm-return-detail-btn')?.addEventListener('click', () => this.confirmReturnDetail());
         document.getElementById('return-detail-back-btn')?.addEventListener('click', () => {
@@ -1613,6 +1618,7 @@ class BarcodeShipper {
         this.returnItemCache = {};
         const actions = document.getElementById('return-actions');
         if (actions) actions.style.display = 'none';
+        this._updateReturnSelectAllBtn();
 
         pickings.forEach(p => {
             const card = document.createElement('div');
@@ -1649,6 +1655,7 @@ class BarcodeShipper {
                     card.classList.add('selected');
                 }
                 if (actions) actions.style.display = this.returnSelectedIds.size > 0 ? 'block' : 'none';
+                this._updateReturnSelectAllBtn();
             });
 
             // Expand button → show items (stopPropagation prevents selection)
@@ -1659,6 +1666,62 @@ class BarcodeShipper {
 
             container.appendChild(card);
         });
+    }
+
+    toggleReturnSelectAll() {
+        if (!this.returnPickings || this.returnPickings.length === 0) return;
+        const actions = document.getElementById('return-actions');
+        const allSelected = this.returnSelectedIds.size === this.returnPickings.length;
+
+        if (allSelected) {
+            // Deselect all
+            this.returnSelectedIds = new Set();
+            document.querySelectorAll('.return-picking-card').forEach(c => c.classList.remove('selected'));
+        } else {
+            // Select all
+            this.returnPickings.forEach(p => this.returnSelectedIds.add(p.id));
+            document.querySelectorAll('.return-picking-card').forEach(c => c.classList.add('selected'));
+        }
+        if (actions) actions.style.display = this.returnSelectedIds.size > 0 ? 'block' : 'none';
+        this._updateReturnSelectAllBtn();
+    }
+
+    scanReturnPicking() {
+        const input = document.getElementById('return-scan-input');
+        const barcode = (input?.value || '').trim();
+        if (!barcode || !this.returnPickings) return;
+        if (input) input.value = '';
+
+        const match = this.returnPickings.find(p =>
+            p.name === barcode || (p.origin && p.origin === barcode)
+        );
+        if (match) {
+            const card = document.getElementById(`return-pc-${match.id}`);
+            if (card && !this.returnSelectedIds.has(match.id)) {
+                this.returnSelectedIds.add(match.id);
+                card.classList.add('selected');
+                const actions = document.getElementById('return-actions');
+                if (actions) actions.style.display = 'block';
+                this._updateReturnSelectAllBtn();
+            }
+            // Scroll to card
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            this.showMessage('return-result', `Đã chọn ${match.name}`, 'success');
+            this.playSound('success');
+        } else {
+            this.showMessage('return-result', `Không tìm thấy phiếu "${barcode}"`, 'danger');
+            this.playSound('error');
+        }
+    }
+
+    _updateReturnSelectAllBtn() {
+        const btn = document.getElementById('return-select-all-btn');
+        if (!btn) return;
+        const allSelected = this.returnPickings && this.returnPickings.length > 0
+            && this.returnSelectedIds.size === this.returnPickings.length;
+        btn.innerHTML = allSelected
+            ? '<i class="fa fa-times"></i> Bỏ chọn tất cả'
+            : '<i class="fa fa-check-double"></i> Chọn tất cả';
     }
 
     async toggleReturnPickingExpand(pickingId) {
