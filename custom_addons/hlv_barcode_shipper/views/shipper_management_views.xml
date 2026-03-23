@@ -100,7 +100,13 @@
             <field name="view_mode">list,form</field>
             <field name="view_id" ref="stock_picking_shipper_mgmt_list"/>
             <field name="search_view_id" ref="stock_picking_shipper_mgmt_search"/>
-            <field name="domain">[('picking_type_id.code', '=', 'outgoing')]</field>
+            <field name="domain">[
+                ('picking_type_id.code', '=', 'outgoing'),
+                ('name', 'not ilike', '/POS/'),
+                ('origin', 'not ilike', 'HOÀN TIỀN'),
+                ('origin', 'not ilike', 'Hoàn tiền'),
+                ('origin', 'not ilike', 'Shopee'),
+            ]</field>
             <field name="context">{}</field>
             <field name="help" type="html">
                 <p class="o_view_nocontent_smiling_face">
