@@ -8,16 +8,18 @@
         <field name="arch" type="xml">
             <xpath expr="//header" position="inside">
                 <field name="shopee_order_ref" invisible="1"/>
-                <button name="action_view_shopee_escrow_details"
-                        string="Chi tiết phí &amp; chiết khấu Shopee"
-                        type="object"
-                        class="btn-info"
-                        invisible="not shopee_order_ref or not shopee_escrow_data"/>
                 <button name="action_update_price_from_escrow"
                         string="Cập nhật giá Shopee"
                         type="object"
                         class="btn-secondary"
                         invisible="not shopee_order_ref"/>
+            </xpath>
+            <xpath expr="//group[@name='note_group']" position="after">
+                <div class="row w-100 mt-3" invisible="not shopee_order_ref or not shopee_escrow_html">
+                    <div class="col-12 px-0">
+                        <field name="shopee_escrow_html" nolabel="1" readonly="1" options="{'sanitize': False}"/>
+                    </div>
+                </div>
             </xpath>
             <xpath expr="//notebook" position="inside">
                 <page name="shopee_info" string="Thông tin Shopee" invisible="not shopee_order_ref">
