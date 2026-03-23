@@ -12,5 +12,15 @@
             <!-- active=False để module load được, enable thủ công qua UI (Odoo 18 rule) -->
             <field name="active" eval="False"/>
         </record>
+        <record id="ir_cron_google_ads_adsroid_sync" model="ir.cron">
+            <field name="name">Google Ads: Tự động xin Insight Adsroid</field>
+            <field name="model_id" search="[('model', '=', 'google.ads.account')]"/>
+            <field name="state">code</field>
+            <field name="code">model.cron_fetch_adsroid_insights()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active" eval="False"/>
+        </record>
     </data>
 </odoo>
