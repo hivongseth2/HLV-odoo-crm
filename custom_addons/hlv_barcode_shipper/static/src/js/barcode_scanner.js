@@ -1871,8 +1871,8 @@ class BarcodeShipper {
         }
         const selectedArray = Array.from(this.returnSelectedIds);
 
-        if (this.settings.return_require_detail_scan && selectedArray.length === 1) {
-            this.returnPickingId = selectedArray[0];
+        if (this.settings.return_require_detail_scan) {
+            this.returnPickingId = selectedArray.length === 1 ? selectedArray[0] : selectedArray;
             this.returnReason = reason;
             try {
                 const res = await this.apiCall('/api/barcode/get_multiple_outs', { picking_ids: selectedArray });
@@ -1959,7 +1959,8 @@ class BarcodeShipper {
     }
 
     async confirmReturnDetail() {
-        await this.doConfirmReturn([this.returnPickingId], this.returnReason);
+        const ids = Array.isArray(this.returnPickingId) ? this.returnPickingId : [this.returnPickingId];
+        await this.doConfirmReturn(ids, this.returnReason);
     }
 
     async doConfirmReturn(pickingIds, reason) {
