@@ -443,6 +443,15 @@
                                         <div class="step-subtitle">Danh sách phiếu đã giao thành công.</div>
                                     </div>
                                 </div>
+                                <div class="input-group-row" style="margin-top:10px;margin-bottom:0;">
+                                    <input type="date" id="delivered-date-filter" class="form-control" style="flex:unset;width:auto;"/>
+                                    <button id="delivered-filter-btn" class="btn btn-secondary" title="Lọc">
+                                        <i class="fa fa-filter"></i> Lọc
+                                    </button>
+                                    <button id="delivered-clear-btn" class="btn btn-outline" title="Xóa lọc">
+                                        <i class="fa fa-times"></i>
+                                    </button>
+                                </div>
                                 <div id="delivered-list" style="margin-top:10px;">
                                     <div class="empty-state" style="padding:20px;">
                                         <i class="fa fa-clipboard-check" style="font-size:2rem;color:#ddd;display:block;margin-bottom:8px;"></i>

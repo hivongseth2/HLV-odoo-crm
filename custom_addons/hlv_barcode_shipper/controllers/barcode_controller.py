@@ -533,14 +533,34 @@ class BarcodeShipperController(http.Controller):
             if not access["success"]:
                 return access
 
+            data = json.loads(request.httprequest.data.decode("utf-8"))
+            date_filter = data.get("params", {}).get("date_filter") or data.get("date_filter")
+
             uid = request.env.user.id
-            pickings = request.env["stock.picking"].sudo().search([
+            domain = [
                 ("picking_type_id.code", "=", "outgoing"),
                 ("state", "=", "done"),
                 "|",
                 ("shipper_received_by", "=", uid),
                 ("shipper_user_id", "=", uid),
-            ], order="date_done desc", limit=50)
+            ]
+
+            if date_filter:
+                from datetime import datetime
+                try:
+                    day = datetime.strptime(date_filter, "%Y-%m-%d")
+                    day_start = day.replace(hour=0, minute=0, second=0) - VN_OFFSET
+                    day_end = day.replace(hour=23, minute=59, second=59) - VN_OFFSET
+                    domain += [
+                        ("date_done", ">=", day_start),
+                        ("date_done", "<=", day_end),
+                    ]
+                except ValueError:
+                    pass
+
+            pickings = request.env["stock.picking"].sudo().search(
+                domain, order="date_done desc", limit=100
+            )
 
             result = []
             for p in pickings:
