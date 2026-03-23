@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Nhóm: Xem nút Tồn kho trong Barcode -->
+        <record id="group_barcode_inventory_button" model="res.groups">
+            <field name="name">Barcode - Xem nút Tồn Kho</field>
+            <field name="comment">Cho phép nhìn thấy nút "Số lượng tồn kho" trong giao diện Barcode</field>
+            <field name="category_id" ref="base.module_category_inventory"/>
+        </record>
+
+        <!-- Nhóm: Duyệt / Hoàn thành Inventory Adjustment -->
+        <record id="group_inventory_validator" model="res.groups">
+            <field name="name">Inventory Validator - Duyệt kiểm kê</field>
+            <field name="comment">Cho phép xác nhận hoàn thành (Apply) inventory adjustment. Nhân viên không có quyền này chỉ có thể tạo move line chờ duyệt.</field>
+            <field name="category_id" ref="base.module_category_inventory"/>
+            <field name="implied_ids" eval="[(4, ref('group_barcode_inventory_button'))]"/>
+        </record>
+
+        <!-- Stock Manager tự động có quyền Inventory Validator -->
+        <record id="stock.group_stock_manager" model="res.groups">
+            <field name="implied_ids" eval="[(4, ref('group_inventory_validator'))]"/>
+        </record>
+    </data>
+</odoo>

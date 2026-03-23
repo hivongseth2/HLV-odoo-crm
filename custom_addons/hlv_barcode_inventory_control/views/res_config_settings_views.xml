@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_inventory_control" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.hlv.inventory.control</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="stock.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//app[@string='Inventory']" position="inside">
+                <block title="Phân quyền Kiểm Kê Barcode" name="hlv_inventory_control_settings">
+                    <setting string="Nút Tồn Kho trong Barcode"
+                             help="Chỉ nhân viên thuộc nhóm 'Barcode - Xem nút Tồn Kho' mới thấy nút này trong giao diện quét barcode."
+                             documentation="/applications/inventory_and_mrp/barcode.html">
+                        <div class="text-muted">
+                            Vào Cài đặt &gt; Người dùng để gán nhóm <b>"Barcode - Xem nút Tồn Kho"</b> và <b>"Inventory Validator"</b>.
+                        </div>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>
