@@ -111,7 +111,8 @@ class BarcodeShipper {
             this.showReturnStep('return-step-list');
             this.loadReturnList();
         } else if (tabName === 'delivered') {
-            this.loadDeliveredList();
+            const dateInput = document.getElementById('delivered-date-filter');
+            this.loadDeliveredList(dateInput?.value || '');
         }
     }
 
@@ -188,6 +189,20 @@ class BarcodeShipper {
         // Common
         document.getElementById('show-history-btn')?.addEventListener('click', () => this.showHistory());
         document.getElementById('help-btn')?.addEventListener('click', () => this.showHelp());
+
+        // === DELIVERED TAB ===
+        document.getElementById('delivered-filter-btn')?.addEventListener('click', () => {
+            const dateInput = document.getElementById('delivered-date-filter');
+            this.loadDeliveredList(dateInput?.value || '');
+        });
+        document.getElementById('delivered-clear-btn')?.addEventListener('click', () => {
+            const dateInput = document.getElementById('delivered-date-filter');
+            if (dateInput) dateInput.value = '';
+            this.loadDeliveredList();
+        });
+        // Set today as default
+        const dateInput = document.getElementById('delivered-date-filter');
+        if (dateInput) dateInput.value = new Date().toISOString().slice(0, 10);
 
         document.querySelectorAll('.modal-close').forEach(btn => {
             btn.addEventListener('click', e => this.closeModal(e.target.closest('.modal-overlay')));
@@ -1856,8 +1871,8 @@ class BarcodeShipper {
         }
         const selectedArray = Array.from(this.returnSelectedIds);
 
-        if (this.settings.return_require_detail_scan && selectedArray.length === 1) {
-            this.returnPickingId = selectedArray[0];
+        if (this.settings.return_require_detail_scan) {
+            this.returnPickingId = selectedArray.length === 1 ? selectedArray[0] : selectedArray;
             this.returnReason = reason;
             try {
                 const res = await this.apiCall('/api/barcode/get_multiple_outs', { picking_ids: selectedArray });
@@ -1944,7 +1959,8 @@ class BarcodeShipper {
     }
 
     async confirmReturnDetail() {
-        await this.doConfirmReturn([this.returnPickingId], this.returnReason);
+        const ids = Array.isArray(this.returnPickingId) ? this.returnPickingId : [this.returnPickingId];
+        await this.doConfirmReturn(ids, this.returnReason);
     }
 
     async doConfirmReturn(pickingIds, reason) {
@@ -1978,12 +1994,14 @@ class BarcodeShipper {
 
     // ========================= DELIVERED TAB =========================
 
-    async loadDeliveredList() {
+    async loadDeliveredList(dateFilter) {
         const container = document.getElementById('delivered-list');
         if (!container) return;
         container.innerHTML = '<div style="text-align:center;padding:20px;color:#888;"><i class="fa fa-spinner fa-spin"></i> Đang tải...</div>';
         try {
-            const res = await this.apiCall('/api/barcode/get_delivered', {});
+            const params = {};
+            if (dateFilter) params.date_filter = dateFilter;
+            const res = await this.apiCall('/api/barcode/get_delivered', params);
             if (res.success && res.pickings && res.pickings.length > 0) {
                 this.renderDeliveredList(res.pickings);
             } else {

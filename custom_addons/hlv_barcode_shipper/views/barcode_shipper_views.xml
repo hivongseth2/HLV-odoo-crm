@@ -338,16 +338,20 @@
                                     <div id="return-result" class="alert"></div>
 
                                     <!-- Toolbar: Chọn tất cả + Quét phiếu -->
-                                    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;">
-                                        <button id="return-select-all-btn" class="btn btn-outline btn-sm" style="white-space:nowrap;">
-                                            <i class="fa fa-check-double"></i> Chọn tất cả
-                                        </button>
-                                        <div style="flex:1;display:flex;gap:4px;">
-                                            <input type="text" id="return-scan-input" class="form-control" placeholder="Quét mã phiếu để chọn..." autocomplete="off" style="font-size:0.85rem;"/>
-                                            <button id="return-scan-btn" class="btn btn-secondary btn-sm" style="flex-shrink:0;">
+                                    <div style="margin-bottom:10px;">
+                                        <div style="margin-bottom:8px;">
+                                            <button id="return-select-all-btn" class="btn btn-outline btn-sm">
+                                                <i class="fa fa-check-double"></i> Chọn tất cả
+                                            </button>
+                                        </div>
+                                        <div class="input-group-row" style="margin-bottom:0;">
+                                            <input type="text" id="return-scan-input" class="form-control"
+                                                placeholder="Quét mã phiếu để chọn..."
+                                                autocomplete="off"/>
+                                            <button id="return-scan-btn" class="btn btn-secondary" title="Tìm kiếm">
                                                 <i class="fa fa-search"></i>
                                             </button>
-                                            <button id="btn-open-camera-return-scan" class="btn btn-primary btn-sm" title="Mở camera" style="flex-shrink:0;">
+                                            <button id="btn-open-camera-return-scan" class="btn btn-primary" title="Mở camera">
                                                 <i class="fa fa-camera"></i>
                                             </button>
                                         </div>
@@ -438,6 +442,15 @@
                                         <div class="step-title">Đơn hàng đã giao</div>
                                         <div class="step-subtitle">Danh sách phiếu đã giao thành công.</div>
                                     </div>
+                                </div>
+                                <div class="input-group-row" style="margin-top:10px;margin-bottom:0;">
+                                    <input type="date" id="delivered-date-filter" class="form-control" style="flex:unset;width:auto;"/>
+                                    <button id="delivered-filter-btn" class="btn btn-secondary" title="Lọc">
+                                        <i class="fa fa-filter"></i> Lọc
+                                    </button>
+                                    <button id="delivered-clear-btn" class="btn btn-outline" title="Xóa lọc">
+                                        <i class="fa fa-times"></i>
+                                    </button>
                                 </div>
                                 <div id="delivered-list" style="margin-top:10px;">
                                     <div class="empty-state" style="padding:20px;">
