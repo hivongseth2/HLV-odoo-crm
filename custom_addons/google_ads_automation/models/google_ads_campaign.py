@@ -252,7 +252,13 @@ class GoogleAdsCampaign(models.Model):
                 "stock_status": line.stock_status,
             })
             
-        success, result = AdsroidApiService.analyze_campaign(self.account_id.adsroid_api_key, campaign_data, product_data)
+        success, result = AdsroidApiService.analyze_campaign(
+            self.account_id.adsroid_api_key, 
+            campaign_data, 
+            product_data,
+            is_demo=self.account_id.is_demo
+        )
+
         
         if success:
             action = result.get('suggested_action', 'MAINTAIN')

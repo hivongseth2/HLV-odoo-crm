@@ -19,15 +19,20 @@ class AdsroidApiService:
     ADSROID_ENDPOINT_ANALYZE = "https://api.adsroid.com/v1/analyze"
 
     @staticmethod
-    def analyze_campaign(api_key, campaign_data, product_data):
+    def analyze_campaign(api_key, campaign_data, product_data, is_demo=False):
         """
         Gửi dữ liệu chiến dịch và sản phẩm lên Adsroid để nhận AI Insights.
         
         :param api_key: str - API Key lấy từ cấu hình
         :param campaign_data: dict - Thông tin chiến dịch và metrics hiện tại
         :param product_data: list of dict - Dữ liệu tồn kho, biên lợi nhuận của sản phẩm
+        :param is_demo: bool - Trạng thái Demo Mode
         :return: (bool, str/dict) - (True, kết_quả_json) hoặc (False, lỗi_message)
         """
+        if is_demo:
+            _logger.info("[DEMO MODE] Trả về dữ liệu mô phỏng AI (Mock) cho chiến dịch: %s", campaign_data.get('name'))
+            return True, AdsroidApiService._mock_ai_response(campaign_data, product_data)
+
         if not api_key:
             return False, _("Thiếu cấu hình Adsroid API Key.")
 
@@ -54,12 +59,10 @@ class AdsroidApiService:
                 timeout=15
             )
 
-            # NOTE: Đoạn code này tạm mô phỏng kết quả trả về của Adsroid
-            # nếu gọi API thực tế thất bại hoặc trả về 404/401 do endpoint đang là giả định.
+            # Trả về lỗi nếu gọi API thực tế thất bại
             if response.status_code != 200:
                 _logger.warning("Adsroid API trả về lỗi: %s - %s", response.status_code, response.text)
-                # Fallback: Trả về kết quả AI giả lập để Test nghiệm thu tính hợp lệ của luồng data
-                return True, AdsroidApiService._mock_ai_response(campaign_data, product_data)
+                return False, _("Lỗi phản hồi từ server Adsroid (Code: %s): %s") % (response.status_code, response.text)
 
             # Xử lý thành công
             return True, response.json()
@@ -67,9 +70,8 @@ class AdsroidApiService:
         except requests.exceptions.Timeout:
             return False, _("Kết nối tới Adsroid bị quá hạn (Timeout).")
         except requests.exceptions.RequestException as e:
-            _logger.error("Lỗi khi gọi Adsroid API: %s", str(e))
-            # Fallback mô phỏng cho Development
-            return True, AdsroidApiService._mock_ai_response(campaign_data, product_data)
+            _logger.error("Lỗi khi kết nối mạng tới Adsroid API: %s", str(e))
+            return False, _("Không thể kết nối với mạng API Adsroid: %s") % str(e)
         except Exception as e:
             return False, str(e)
 
