@@ -172,6 +172,7 @@ class BarcodeShipper {
         document.getElementById('return-scan-input')?.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); this.scanReturnPicking(); }
         });
+        document.getElementById('btn-open-camera-return-scan')?.addEventListener('click', () => this.startCamera('camera-return-scan', 'reader-return-scan', 'return-scan'));
         document.getElementById('return-detail-scan-btn')?.addEventListener('click', () => this.scanReturnDetail());
         document.getElementById('confirm-return-detail-btn')?.addEventListener('click', () => this.confirmReturnDetail());
         document.getElementById('return-detail-back-btn')?.addEventListener('click', () => {
@@ -314,6 +315,7 @@ class BarcodeShipper {
             'receive': 'btn-open-camera-receive',
             'receive-detail': 'btn-open-camera-receive-detail',
             'return-detail': 'btn-open-camera-return-detail',
+            'return-scan': 'btn-open-camera-return-scan',
         };
         const btnId = btnMap[mode];
         if (btnId) {
@@ -357,7 +359,7 @@ class BarcodeShipper {
 
         document.querySelectorAll('.camera-section').forEach(el => el.classList.remove('active'));
         ['btn-open-camera-pick', 'btn-open-camera-item', 'btn-open-camera-receive',
-            'btn-open-camera-receive-detail', 'btn-open-camera-return-detail'].forEach(id => {
+            'btn-open-camera-receive-detail', 'btn-open-camera-return-detail', 'btn-open-camera-return-scan'].forEach(id => {
             const btn = document.getElementById(id);
             if (btn) btn.style.display = 'block';
         });
@@ -396,6 +398,12 @@ class BarcodeShipper {
                 this.html5QrCode?.pause();
                 setTimeout(() => this.html5QrCode?.resume(), 500);
             }
+        } else if (mode === 'return-scan') {
+            const input = document.getElementById('return-scan-input');
+            if (input) input.value = decodedText;
+            this.scanReturnPicking();
+            this.html5QrCode?.pause();
+            setTimeout(() => this.html5QrCode?.resume(), 800);
         }
     }
 

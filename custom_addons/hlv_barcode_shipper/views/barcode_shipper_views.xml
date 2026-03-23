@@ -347,7 +347,14 @@
                                             <button id="return-scan-btn" class="btn btn-secondary btn-sm" style="flex-shrink:0;">
                                                 <i class="fa fa-search"></i>
                                             </button>
+                                            <button id="btn-open-camera-return-scan" class="btn btn-primary btn-sm" title="Mở camera" style="flex-shrink:0;">
+                                                <i class="fa fa-camera"></i>
+                                            </button>
                                         </div>
+                                    </div>
+                                    <!-- Embedded camera for return scan -->
+                                    <div id="camera-return-scan" class="camera-section" style="margin-bottom:10px;">
+                                        <div id="reader-return-scan" style="width:100%;"></div>
                                     </div>
 
                                     <div id="return-picking-list" style="margin-bottom: 15px;">
