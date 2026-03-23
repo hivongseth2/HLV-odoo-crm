@@ -89,8 +89,9 @@ def update_order_lines_from_escrow(so, escrow_data):
             _logger.debug("Shopee Escrow: Không tìm thấy dòng SP có SKU '%s' trong đơn %s", sku, so.name)
             continue
 
-        original_price = item_data.get('original_price', 0)
-        discounted_price = item_data.get('discounted_price', 0)
+        qty = item_data.get('quantity_purchased', 1) or 1
+        original_price = item_data.get('original_price', 0) / qty
+        discounted_price = item_data.get('discounted_price', 0) / qty
 
         discount = 0.0
         if original_price > 0 and discounted_price is not None:
