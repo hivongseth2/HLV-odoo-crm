@@ -303,8 +303,40 @@ body {
 
 .camera-reader {
   width: 100%;
-  min-height: 250px;
+  min-height: 200px;
   background: #000;
+  position: relative;
+}
+
+.camera-reader video {
+  width: 100%;
+  display: block;
+}
+
+.scan-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.scan-laser {
+  position: absolute;
+  top: 50%;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #ff3b30 20%, #ff3b30 80%, transparent);
+  box-shadow: 0 0 8px rgba(255, 59, 48, 0.6);
+  animation: scan-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes scan-pulse {
+  0%, 100% { opacity: 0.4; transform: translateY(-8px); }
+  50% { opacity: 1; transform: translateY(8px); }
 }
 
 .camera-controls {

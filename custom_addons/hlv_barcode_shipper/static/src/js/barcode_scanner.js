@@ -2,7 +2,7 @@
 /**
  * HLV Barcode Shipper JavaScript
  * Supports 3 tabs: Nhận hàng / Giao hàng / Trả hàng
- * Supports hardware barcode scanner (keyboard Enter) + camera (html5-qrcode)
+ * Supports hardware barcode scanner (keyboard Enter) + camera (BarcodeDetector API + ZXing WASM fallback)
  */
 
 class BarcodeShipper {
@@ -35,10 +35,14 @@ class BarcodeShipper {
         this.returnItemCache = {};
 
         // ---- Camera state ----
-        this.html5QrCode = null;
+        this._cameraStream = null;
+        this._scanInterval = null;
+        this._barcodeDetector = null;
         this.isCameraRunning = false;
         this.currentCameraSection = null;
         this.currentCameraMode = null;
+        this._lastScanResult = '';
+        this._lastScanTime = 0;
 
         // ---- Settings ----
         this.settings = {
@@ -300,9 +304,34 @@ class BarcodeShipper {
 
     // ========================= CAMERA =========================
 
+    async _initBarcodeDetector() {
+        if (this._barcodeDetector) return;
+        // BarcodeDetector is always available:
+        // - Native on Chrome 83+ (Android), Safari 17.2+ (iOS)
+        // - Polyfilled by barcode-detector@3 (ZXing C++ WASM) on older browsers
+        if (typeof BarcodeDetector === 'undefined') {
+            console.error('[Scanner] BarcodeDetector not available. Polyfill may have failed to load.');
+            return;
+        }
+        try {
+            this._barcodeDetector = new BarcodeDetector({
+                formats: [
+                    'code_128', 'code_39', 'ean_13', 'ean_8',
+                    'upc_a', 'upc_e', 'itf', 'qr_code',
+                    'data_matrix', 'codabar'
+                ]
+            });
+            console.log('[Scanner] BarcodeDetector ready');
+        } catch (e) {
+            console.error('[Scanner] BarcodeDetector init failed:', e);
+        }
+    }
+
     async startCamera(sectionId, readerId, mode) {
         if (this.isCameraRunning && this.currentCameraSection === sectionId) return;
         if (this.isCameraRunning) await this.stopCamera();
+
+        await this._initBarcodeDetector();
 
         const section = document.getElementById(sectionId);
         if (section) section.classList.add('active');
@@ -323,19 +352,78 @@ class BarcodeShipper {
             if (btn) btn.style.display = 'none';
         }
 
-        this.html5QrCode = new Html5Qrcode(readerId);
-        const config = { fps: 20, qrbox: { width: 280, height: 150 } };
+        const readerEl = document.getElementById(readerId);
+        if (!readerEl) return;
+        readerEl.innerHTML = '';
+
+        // Create video element
+        const video = document.createElement('video');
+        video.setAttribute('autoplay', '');
+        video.setAttribute('playsinline', '');
+        video.setAttribute('muted', '');
+        video.style.cssText = 'width:100%;display:block;border-radius:8px;';
+        readerEl.appendChild(video);
+
+        // Add scan overlay with laser line
+        const overlay = document.createElement('div');
+        overlay.className = 'scan-overlay';
+        overlay.innerHTML = '<div class="scan-laser"></div>';
+        readerEl.style.position = 'relative';
+        readerEl.appendChild(overlay);
 
         try {
-            await this.html5QrCode.start(
-                { facingMode: "environment" },
-                config,
-                (decodedText) => this.onScanSuccess(decodedText, mode),
-                () => {}
-            );
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: { ideal: 'environment' },
+                    width: { ideal: 1920, min: 1280 },
+                    height: { ideal: 1080, min: 720 },
+                    focusMode: { ideal: 'continuous' },
+                    frameRate: { ideal: 30 },
+                },
+                audio: false
+            });
+            this._cameraStream = stream;
+            video.srcObject = stream;
+            await video.play();
             this.isCameraRunning = true;
+            this._lastScanResult = '';
+            this._lastScanTime = 0;
+
+            // Start scanning loop
+            const scanFrame = async () => {
+                if (!this.isCameraRunning || !this._cameraStream) return;
+                if (video.readyState < video.HAVE_ENOUGH_DATA) {
+                    this._scanInterval = requestAnimationFrame(scanFrame);
+                    return;
+                }
+
+                try {
+                    let result = null;
+                    if (this._barcodeDetector) {
+                        const barcodes = await this._barcodeDetector.detect(video);
+                        if (barcodes.length > 0) result = barcodes[0].rawValue;
+                    }
+
+                    if (result) {
+                        const now = Date.now();
+                        // Deduplicate: same barcode within 2s
+                        if (result !== this._lastScanResult || (now - this._lastScanTime) > 2000) {
+                            this._lastScanResult = result;
+                            this._lastScanTime = now;
+                            this.onScanSuccess(result, mode);
+                        }
+                    }
+                } catch (e) { /* scan error, continue */ }
+
+                // Next frame (~15fps scan rate to save CPU)
+                setTimeout(() => {
+                    this._scanInterval = requestAnimationFrame(scanFrame);
+                }, 66);
+            };
+            this._scanInterval = requestAnimationFrame(scanFrame);
+
         } catch (err) {
-            console.error("Error starting camera:", err);
+            console.error('[Scanner] Camera error:', err);
             if (btnId) {
                 const btn = document.getElementById(btnId);
                 if (btn) btn.style.display = 'block';
@@ -345,19 +433,24 @@ class BarcodeShipper {
     }
 
     async stopCamera() {
-        if (this.html5QrCode && this.isCameraRunning) {
-            try {
-                await this.html5QrCode.stop();
-                this.html5QrCode.clear();
-            } catch (e) {
-                console.error("Failed to stop camera", e);
-            }
-        }
         this.isCameraRunning = false;
+        if (this._scanInterval) {
+            cancelAnimationFrame(this._scanInterval);
+            this._scanInterval = null;
+        }
+        if (this._cameraStream) {
+            this._cameraStream.getTracks().forEach(t => t.stop());
+            this._cameraStream = null;
+        }
         this.currentCameraSection = null;
         this.currentCameraMode = null;
 
-        document.querySelectorAll('.camera-section').forEach(el => el.classList.remove('active'));
+        // Clean up video elements
+        document.querySelectorAll('.camera-section').forEach(el => {
+            el.classList.remove('active');
+            const reader = el.querySelector('.camera-reader, [id^="reader-"]');
+            if (reader) reader.innerHTML = '';
+        });
         ['btn-open-camera-pick', 'btn-open-camera-item', 'btn-open-camera-receive',
             'btn-open-camera-receive-detail', 'btn-open-camera-return-detail', 'btn-open-camera-return-scan'].forEach(id => {
             const btn = document.getElementById(id);
@@ -371,12 +464,7 @@ class BarcodeShipper {
             if (input) { input.value = decodedText; this.scanPickOrder(); this.stopCamera(); }
         } else if (mode === 'item') {
             const input = document.getElementById('item-barcode-input');
-            if (input) {
-                input.value = decodedText;
-                this.scanItem();
-                this.html5QrCode?.pause();
-                setTimeout(() => this.html5QrCode?.resume(), 500);
-            }
+            if (input) { input.value = decodedText; this.scanItem(); }
         } else if (mode === 'receive') {
             const input = document.getElementById('receive-barcode-input');
             if (input) input.value = decodedText;
@@ -384,26 +472,14 @@ class BarcodeShipper {
             this.searchReceivePickings(decodedText);
         } else if (mode === 'receive-detail') {
             const input = document.getElementById('receive-detail-barcode-input');
-            if (input) {
-                input.value = decodedText;
-                this.scanReceiveDetail();
-                this.html5QrCode?.pause();
-                setTimeout(() => this.html5QrCode?.resume(), 500);
-            }
+            if (input) { input.value = decodedText; this.scanReceiveDetail(); }
         } else if (mode === 'return-detail') {
             const input = document.getElementById('return-detail-barcode-input');
-            if (input) {
-                input.value = decodedText;
-                this.scanReturnDetail();
-                this.html5QrCode?.pause();
-                setTimeout(() => this.html5QrCode?.resume(), 500);
-            }
+            if (input) { input.value = decodedText; this.scanReturnDetail(); }
         } else if (mode === 'return-scan') {
             const input = document.getElementById('return-scan-input');
             if (input) input.value = decodedText;
             this.scanReturnPicking();
-            this.html5QrCode?.pause();
-            setTimeout(() => this.html5QrCode?.resume(), 800);
         }
     }
 
