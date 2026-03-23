@@ -4,6 +4,7 @@ from markupsafe import Markup
 
 class GoogleAdsCampaign(models.Model):
     _name = 'google.ads.campaign'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Chiến dịch Google Ads'
 
     name = fields.Char(string='Tên Chiến Dịch', required=True)

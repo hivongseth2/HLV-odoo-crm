@@ -7,6 +7,7 @@ _logger = logging.getLogger(__name__)
 
 class GoogleAdsConversion(models.Model):
     _name = 'google.ads.conversion'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Lượt Chuyển Đổi — Đơn Hàng Liên Kết Google Ads'
     _order = 'order_date desc'
     _rec_name = 'order_ref'
