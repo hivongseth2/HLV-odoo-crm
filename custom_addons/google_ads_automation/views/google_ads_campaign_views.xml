@@ -93,14 +93,30 @@
                         </div>
                     </div>
 
-                    <div class="row mt-4" invisible="not adsroid_last_insight">
-                        <div class="col-12">
-                            <div class="o_premium_card border-0 bg-light">
-                                <h4 class="mb-3 text-info fw-bold"><i class="fa fa-magic me-2"></i>Nhận định từ Adsroid AI</h4>
-                                <field name="adsroid_last_insight" widget="html" nolabel="1"/>
+                    <notebook>
+                        <page name="adsroid_history" string="🪄 Lịch sử AI Adsroid">
+                            <div class="row mt-2 mb-4" invisible="not adsroid_last_insight">
+                                <div class="col-12">
+                                    <div class="o_premium_card border-0 bg-light">
+                                        <h4 class="mb-3 text-info fw-bold"><i class="fa fa-magic me-2"></i>Nhận định gần nhất</h4>
+                                        <field name="adsroid_last_insight" widget="html" nolabel="1"/>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    </div>
+                            <field name="adsroid_log_ids">
+                                <list default_order="create_date desc">
+                                    <field name="create_date" string="Thời gian"/>
+                                    <field name="score" string="Score"/>
+                                    <field name="suggested_action" widget="badge" 
+                                           decoration-danger="suggested_action == 'PAUSE'"
+                                           decoration-warning="suggested_action == 'DECREASE_BUDGET'"
+                                           decoration-success="suggested_action == 'MAINTAIN'"/>
+                                    <field name="insight"/>
+                                    <field name="is_applied" widget="boolean_invisible" string="Tự Xử Lý"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
                 </sheet>
             </form>
         </field>

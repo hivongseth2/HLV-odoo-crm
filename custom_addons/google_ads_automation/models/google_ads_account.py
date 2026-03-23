@@ -35,6 +35,12 @@ class GoogleAdsAccount(models.Model):
         string='Adsroid API Key',
         help='API Key lấy từ tài khoản Adsroid của bạn.'
     )
+    auto_apply_adsroid_action = fields.Boolean(
+        string='Tự động áp dụng đề xuất',
+        default=False,
+        tracking=True,
+        help='Nếu bật, hệ thống sẽ tự động thực thi các đề xuất của AI (như Tạm dừng chiến dịch) ngay khi nhận được Insight.'
+    )
 
     # ── Demo Mode ────────────────────────────────
     is_demo = fields.Boolean(
@@ -788,3 +794,16 @@ class GoogleAdsAccount(models.Model):
             
         except GoogleAdsException as ex:
             raise UserError(_("Không thể lấy dữ liệu mẫu quảng cáo. Lỗi API: %s") % str(ex))
+
+    @api.model
+    def cron_fetch_adsroid_insights(self):
+        """Cron job: Lấy insight cho các chiến dịch tự động mỗi ngày"""
+        accounts = self.search([('use_adsroid', '=', True), ('state', '=', 'connected')])
+        for account in accounts:
+            # Lấy các chiến dịch active trong account này
+            active_campaigns = account.campaign_ids.filtered(lambda c: c.status == 'enabled')
+            for camp in active_campaigns:
+                try:
+                    camp.action_ask_adsroid(is_cron=True)
+                except Exception as e:
+                    _logger.error("Lỗi khi fetch adsroid insight cho chiến dịch %s: %s", camp.id, str(e))

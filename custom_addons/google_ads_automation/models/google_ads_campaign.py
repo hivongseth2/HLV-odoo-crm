@@ -26,6 +26,10 @@ class GoogleAdsCampaign(models.Model):
 
     # ── Adsroid Integration ──────────────────────
     adsroid_last_insight = fields.Html(string='Nhận định AI (Adsroid)', readonly=True)
+    adsroid_log_ids = fields.One2many(
+        'google.ads.adsroid.log', 'campaign_id', 
+        string='Lịch sử Adsroid', readonly=True
+    )
 
     @api.depends('feed_line_ids.product_id')
     def _compute_product_ids(self):
@@ -210,12 +214,14 @@ class GoogleAdsCampaign(models.Model):
         else:
             raise UserError(_("Đồng bộ thất bại: %s") % result)
 
-    def action_ask_adsroid(self):
+    def action_ask_adsroid(self, is_cron=False):
         """Gửi dữ liệu chiến dịch lên Adsroid API để xin nhận định"""
         self.ensure_one()
         if self.state == 'draft':
+            if is_cron: return False
             raise UserError(_("Chiến dịch chưa được đồng bộ với Google. Chạy Adsroid cần chiến dịch đã đồng bộ (có ID)."))
         if not self.account_id.use_adsroid:
+            if is_cron: return False
             raise UserError(_("Tài khoản chưa bật tính năng tích hợp Adsroid AI!"))
         
         from ..services.adsroid_api import AdsroidApiService
@@ -248,28 +254,61 @@ class GoogleAdsCampaign(models.Model):
         success, result = AdsroidApiService.analyze_campaign(self.account_id.adsroid_api_key, campaign_data, product_data)
         
         if success:
+            action = result.get('suggested_action', 'MAINTAIN')
+            log_vals = {
+                'campaign_id': self.id,
+                'score': result.get('score', 0),
+                'suggested_action': action,
+                'insight': result.get('insight', 'Không có nội dung.'),
+                'is_applied': False,
+            }
+            
+            # --- Auto-Apply Logic ---
+            if self.account_id.auto_apply_adsroid_action:
+                if action == 'PAUSE':
+                    if self.account_id.is_demo:
+                        self.status = 'paused'
+                        log_vals['is_applied'] = True
+                        log_vals['insight'] += "\n\n[DEMO] Hệ thống đã tự động PAUSE chiến dịch."
+                    else:
+                        client = self.account_id._get_google_ads_client()
+                        from ..services.google_ads_mutate import GoogleAdsMutateService
+                        ok, res = GoogleAdsMutateService.pause_campaign(client, self.account_id.operating_customer_id, self.google_campaign_id)
+                        if ok:
+                            self.status = 'paused'
+                            log_vals['is_applied'] = True
+                            log_vals['insight'] += "\n\n[Thành Công] Hệ thống đã tự động PAUSE chiến dịch trên Google Ads."
+                        else:
+                            log_vals['insight'] += f"\n\n[Lỗi Auto-Apply]: {res}"
+            
+            # Tạo log lịch sử
+            self.env['google.ads.adsroid.log'].create(log_vals)
+
             insight_html = f"""
                 <div class="alert alert-success">
-                    <strong>Điểm đánh giá (Score):</strong> {{result.get('score', 0)}}/100<br/>
-                    <strong>Hành động đề xuất:</strong> <span class="badge text-bg-warning">{{result.get('suggested_action', 'MAINTAIN')}}</span><br/>
+                    <strong>Điểm đánh giá (Score):</strong> {result.get('score', 0)}/100<br/>
+                    <strong>Hành động đề xuất:</strong> <span class="badge text-bg-warning">{action}</span><br/>
                     <strong>Nhận định từ AI:</strong><br/>
-                    {{result.get('insight', 'Không có nội dung.')}}
+                    {result.get('insight', 'Không có nội dung.')}
                 </div>
             """
             self.adsroid_last_insight = Markup(insight_html)
             self.message_post(body=Markup(_("<b>Adsroid AI Insight:</b><br/>%s")) % Markup(insight_html))
             
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': _('Adsroid Đã Phân Tích'),
-                    'message': _('Đã nhận được phản hồi từ AI Agent.'),
-                    'type': 'success',
-                    'sticky': False,
+            if not is_cron:
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': _('Adsroid Đã Phân Tích'),
+                        'message': _('Đã nhận được phản hồi từ AI Agent và lưu vào lịch sử.'),
+                        'type': 'success',
+                        'sticky': False,
+                    }
                 }
-            }
+            return True
         else:
+            if is_cron: return False
             raise UserError(_("Không thể lấy nhận định từ Adsroid: %s") % result)
 
     _sql_constraints = [
