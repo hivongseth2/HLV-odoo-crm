@@ -379,7 +379,7 @@
         <!-- ==================== MENU ITEMS - TRONG KHO HÀNG ==================== -->
         <menuitem id="menu_shipper_mgmt_root"
                   name="Quản lý Shipper"
-                  parent="stock.menu_stock_root"
+                  parent="stock.menu_stock_warehouse_mgmt"
                   sequence="85"
                   groups="hlv_barcode_shipper.group_shipper_manager"/>
 
