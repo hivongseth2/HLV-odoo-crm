@@ -67,7 +67,7 @@
             <t t-call="web.layout">
                 <t t-set="head">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-                    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+                    <script src="https://fastly.jsdelivr.net/npm/barcode-detector@3/dist/iife/polyfill.min.js"></script>
                     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"/>
                     <link rel="stylesheet" href="/hlv_barcode_shipper/static/src/css/barcode_shipper.css"/>
                 </t>
@@ -347,7 +347,14 @@
                                             <button id="return-scan-btn" class="btn btn-secondary btn-sm" style="flex-shrink:0;">
                                                 <i class="fa fa-search"></i>
                                             </button>
+                                            <button id="btn-open-camera-return-scan" class="btn btn-primary btn-sm" title="Mở camera" style="flex-shrink:0;">
+                                                <i class="fa fa-camera"></i>
+                                            </button>
                                         </div>
+                                    </div>
+                                    <!-- Embedded camera for return scan -->
+                                    <div id="camera-return-scan" class="camera-section" style="margin-bottom:10px;">
+                                        <div id="reader-return-scan" style="width:100%;"></div>
                                     </div>
 
                                     <div id="return-picking-list" style="margin-bottom: 15px;">

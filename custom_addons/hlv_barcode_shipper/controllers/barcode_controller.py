@@ -3,10 +3,13 @@
 
 import json
 import logging
+from datetime import timedelta
 
 from odoo import http, fields
 from odoo.http import request
 from odoo.exceptions import UserError
+
+VN_OFFSET = timedelta(hours=7)
 
 _logger = logging.getLogger(__name__)
 
@@ -546,7 +549,7 @@ class BarcodeShipperController(http.Controller):
                     "name": p.name,
                     "origin": p.origin or "",
                     "partner_name": p.partner_id.name or "",
-                    "date_done": p.date_done.strftime("%H:%M %d/%m/%Y") if p.date_done else "",
+                    "date_done": (p.date_done + VN_OFFSET).strftime("%H:%M %d/%m/%Y") if p.date_done else "",
                 })
 
             return {"success": True, "pickings": result}
@@ -586,7 +589,7 @@ class BarcodeShipperController(http.Controller):
                     {
                         "barcode": log.barcode,
                         "scan_type": log.scan_type,
-                        "scan_time": log.scan_time.strftime(
+                        "scan_time": (log.scan_time + VN_OFFSET).strftime(
                             "%Y-%m-%d %H:%M:%S"
                         )
                         if log.scan_time
@@ -740,7 +743,7 @@ class BarcodeShipperController(http.Controller):
                     "origin": p.origin or "",
                     "partner_name": p.partner_id.name or "",
                     "item_count": item_count,
-                    "receive_time": p.shipper_receive_time.strftime("%H:%M %d/%m") if p.shipper_receive_time else "",
+                    "receive_time": (p.shipper_receive_time + VN_OFFSET).strftime("%H:%M %d/%m") if p.shipper_receive_time else "",
                 })
 
             return {"success": True, "pickings": result}
