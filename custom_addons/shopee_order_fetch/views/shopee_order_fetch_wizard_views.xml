@@ -12,7 +12,7 @@
                         <field name="shop_id" options="{'no_create': True, 'no_open': True}"/>
                     </group>
                     <group string="Đơn hàng">
-                        <field name="order_sn_list" placeholder="Nhập mã đơn hàng, mỗi dòng 1 mã hoặc cách bởi dấu phẩy&#10;Ví dụ:&#10;240101ABCDEF&#10;240101GHIJKL"/>
+                        <field name="order_sn_list" required="not mock_json" placeholder="Nhập mã đơn hàng, mỗi dòng 1 mã hoặc cách bởi dấu phẩy&#10;Ví dụ:&#10;240101ABCDEF&#10;240101GHIJKL"/>
                         <field name="sale_order_ids" widget="many2many_tags" placeholder="Chọn các đơn Odoo tương ứng..."/>
                     </group>
                 </group>

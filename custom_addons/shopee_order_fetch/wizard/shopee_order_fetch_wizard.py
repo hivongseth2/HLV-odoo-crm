@@ -33,7 +33,7 @@ class ShopeeOrderFetchWizard(models.TransientModel):
     )
     order_sn_list = fields.Text(
         string='Mã đơn hàng Shopee',
-        required=True,
+        required=False,
         help="Nhập mã đơn hàng Shopee, mỗi dòng 1 mã hoặc cách nhau bởi dấu phẩy. Tối đa 50 đơn.",
     )
     response_optional_fields = fields.Char(
