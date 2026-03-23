@@ -18,14 +18,14 @@ class BarcodeScanLog(models.Model):
 
     scan_type = fields.Selection(
         [
-            ("pick", "PICK Order"),
-            ("package", "Package"),
-            ("product", "Product"),
-            ("complete", "Complete Order"),
-            ("receive", "Receive"),
-            ("return", "Return"),
+            ("pick", "Quét phiếu PICK"),
+            ("package", "Quét kiện hàng"),
+            ("product", "Quét sản phẩm"),
+            ("complete", "Hoàn thành đơn"),
+            ("receive", "Nhận hàng"),
+            ("return", "Trả hàng"),
         ],
-        string="Scan Type",
+        string="Loại quét",
         required=True,
     )
 
