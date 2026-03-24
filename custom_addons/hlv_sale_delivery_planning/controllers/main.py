@@ -139,7 +139,11 @@ class DeliveryPlannerController(http.Controller):
             if not pickings_to_reserve:
                 return {'success': True, 'reserved_count': 0, 'message': 'Tất cả phiếu đã được giữ hàng rồi'}
 
-            pickings_to_reserve.action_assign()
+            for picking in pickings_to_reserve:
+                try:
+                    picking.action_assign()
+                except Exception as e_pick:
+                    _logger.warning("Could not reserve picking %s: %s", picking.name, e_pick)
 
             return {
                 'success': True,
