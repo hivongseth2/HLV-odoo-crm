@@ -112,8 +112,11 @@ class GoogleAdsMutateService:
                 campaign.network_settings.target_content_network = False
                 campaign.network_settings.target_partner_search_network = False
 
-            # Required fields for political advertising
-            campaign.contains_eu_political_advertising = False
+            # Required fields for EU political advertising (mandatory since Sept 2025)
+            # Must use the enum value, NOT a boolean
+            campaign.contains_eu_political_advertising = (
+                client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
+            )
             
             # Shopping campaign requirements
             if vals.get('channel_type') == 'SHOPPING':
