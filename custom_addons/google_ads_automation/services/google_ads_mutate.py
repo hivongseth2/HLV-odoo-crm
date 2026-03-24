@@ -77,10 +77,11 @@ class GoogleAdsMutateService:
             # 1. Create a default budget FIRST if not provided
             budget_resource = vals.get('budget_resource_name')
             if not budget_resource:
+                import time
                 budget_service = client.get_service("CampaignBudgetService")
                 budget_operation = client.get_type("CampaignBudgetOperation")
                 budget = budget_operation.create
-                budget.name = f"Budget for {vals.get('name')}"
+                budget.name = f"Budget for {vals.get('name')} - {int(time.time())}"
                 budget.amount_micros = 50000000 # 50,000 default (micros base)
                 budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
                 budget_response = budget_service.mutate_campaign_budgets(
