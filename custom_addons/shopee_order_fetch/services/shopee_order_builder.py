@@ -225,6 +225,9 @@ def create_order_from_data(env, order_data, shop, escrow_data=None):
         so_vals['shopee_shop_id'] = shop.id
     if warehouse:
         so_vals['warehouse_id'] = warehouse.id
+        
+    if escrow_data:
+        so_vals['shopee_escrow_data'] = escrow_data
 
     so = env['sale.order'].sudo().create(so_vals)
 
