@@ -234,6 +234,11 @@ class PickingExportWizard(models.TransientModel):
     def _partner_code(self, partner):
         if not partner:
             return ""
+        # Ưu tiên ref từ commercial_partner > parent > partner
+        if partner.commercial_partner_id and partner.commercial_partner_id.ref:
+            return partner.commercial_partner_id.ref
+        if partner.parent_id and partner.parent_id.ref:
+            return partner.parent_id.ref
         return partner.ref or (partner.company_registry if hasattr(partner, "company_registry") else None) or partner.vat or str(partner.id) or ""
 
     def _get_warehouse_code(self, picking):
@@ -289,7 +294,8 @@ class PickingExportWizard(models.TransientModel):
         scheduled_date_str = _to_date_str(picking.scheduled_date)
         picking_name = picking.name or ""
         partner = picking.partner_id
-        partner_code = self._partner_code(partner)
+        ref_partner = so.partner_id if so else partner
+        partner_code = self._partner_code(ref_partner)
         partner_name = (partner and partner.name) or ""
         partner_address = ""
         import unicodedata
