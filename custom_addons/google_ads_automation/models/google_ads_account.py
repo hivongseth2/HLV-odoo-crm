@@ -64,12 +64,16 @@ class GoogleAdsAccount(models.Model):
         string='Operating Customer ID',
         help='ID của tài khoản Ads bạn muốn quản lý trực tiếp. Định dạng: 1234567890 (không có dấu -)'
     )
+    merchant_center_id = fields.Char(
+        string='Merchant Center ID',
+        help='ID Tài khoản Google Merchant Center (bắt buộc cho chiến dịch Mua Sắm / Performance Max)'
+    )
     
-    @api.onchange('login_customer_id', 'operating_customer_id', 'client_id', 'client_secret', 'developer_token')
+    @api.onchange('login_customer_id', 'operating_customer_id', 'merchant_center_id', 'client_id', 'client_secret', 'developer_token')
     def _onchange_sanitize_credentials(self):
         """Tự động loại bỏ dấu gạch ngang và khoảng trắng từ các thông tin dán vào."""
         fields_to_sanitize = [
-            'login_customer_id', 'operating_customer_id', 
+            'login_customer_id', 'operating_customer_id', 'merchant_center_id', 
             'client_id', 'client_secret', 'developer_token'
         ]
         for field in fields_to_sanitize:

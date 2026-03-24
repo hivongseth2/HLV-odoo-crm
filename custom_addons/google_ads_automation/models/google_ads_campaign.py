@@ -196,9 +196,13 @@ class GoogleAdsCampaign(models.Model):
         client = self.account_id._get_google_ads_client()
         customer_id = self.account_id.operating_customer_id
         
+        if self.channel_type == 'SHOPPING' and not self.account_id.merchant_center_id:
+            raise UserError(_("Vui lòng cấu hình Merchant Center ID trong mục Cài đặt Tài khoản Google Ads để tạo chiến dịch Mua Sắm!"))
+        
         vals = {
             'name': self.name,
             'channel_type': self.channel_type,
+            'merchant_center_id': self.account_id.merchant_center_id,
         }
         
         from ..services.google_ads_mutate import GoogleAdsMutateService

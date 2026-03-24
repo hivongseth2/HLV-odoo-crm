@@ -111,6 +111,15 @@ class GoogleAdsMutateService:
                 campaign.network_settings.target_content_network = False
                 campaign.network_settings.target_partner_search_network = False
 
+            # Required fields for political advertising
+            campaign.network_settings.target_google_search = True # generally required setting if we pass it
+            campaign.contains_eu_political_advertising = False
+            
+            # Shopping campaign requirements
+            if vals.get('channel_type') == 'SHOPPING':
+                campaign.shopping_setting.merchant_id = int(vals.get('merchant_center_id'))
+                # For some regions, a sales country might be needed, but merchant_id is the critical one.
+
             response = campaign_service.mutate_campaigns(
                 customer_id=customer_id,
                 operations=[campaign_operation],

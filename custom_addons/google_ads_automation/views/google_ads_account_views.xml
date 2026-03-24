@@ -97,6 +97,7 @@
                                     <field name="active" widget="boolean_toggle"/>
                                     <field name="login_customer_id" placeholder="MCC ID" invisible="is_demo" readonly="state == 'connected'"/>
                                     <field name="operating_customer_id" placeholder="1234567890" invisible="is_demo" readonly="state == 'connected'"/>
+                                    <field name="merchant_center_id" placeholder="ID (vd: 1234567)" invisible="is_demo"/>
                                 </group>
                                 <div invisible="not is_demo" class="alert alert-warning mt-4 border-0 shadow-sm rounded-3">
                                     <i class="fa fa-info-circle me-1"></i> <b>Chế độ Demo đang bật.</b> Tài khoản này sẽ sử dụng dữ liệu giả lập để thử nghiệm.
