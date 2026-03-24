@@ -69,7 +69,7 @@
                                 <field name="line_ids" mode="list">
                                     <list editable="bottom" limit="50" class="table-hover">
                                         <field name="product_default_code" optional="show" class="fw-bold" readonly="1"/>
-                                        <field name="product_id" readonly="1"/>
+                                        <field name="product_id"/>
                                         <field name="qty_available" string="Tồn Thực" 
                                                readonly="1"
                                                decoration-danger="qty_available &lt;= 0"

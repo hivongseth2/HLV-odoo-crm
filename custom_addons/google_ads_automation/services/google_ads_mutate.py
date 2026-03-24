@@ -74,6 +74,21 @@ class GoogleAdsMutateService:
     def create_campaign(client, customer_id, vals):
         """Tạo campaign mới trên Google Ads"""
         try:
+            # 1. Create a default budget FIRST if not provided
+            budget_resource = vals.get('budget_resource_name')
+            if not budget_resource:
+                budget_service = client.get_service("CampaignBudgetService")
+                budget_operation = client.get_type("CampaignBudgetOperation")
+                budget = budget_operation.create
+                budget.name = f"Budget for {vals.get('name')}"
+                budget.amount_micros = 50000000 # 50,000 default (micros base)
+                budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
+                budget_response = budget_service.mutate_campaign_budgets(
+                    customer_id=customer_id, operations=[budget_operation]
+                )
+                budget_resource = budget_response.results[0].resource_name
+
+            # 2. Create the campaign
             campaign_service = client.get_service("CampaignService")
             campaign_operation = client.get_type("CampaignOperation")
             campaign = campaign_operation.create
@@ -82,11 +97,19 @@ class GoogleAdsMutateService:
             campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum[vals.get('channel_type', 'SEARCH')]
             campaign.status = client.enums.CampaignStatusEnum.PAUSED # Always start paused for safety
             
-            # Budget handling (simplified for now)
-            # Note: Real implementation needs to create a CampaignBudget first
-            # but for this module we assume a default or existing budget if provided.
-            if vals.get('budget_resource_name'):
-                campaign.campaign_budget = vals.get('budget_resource_name')
+            # Budget handling
+            campaign.campaign_budget = budget_resource
+
+            # Bidding Strategy handling
+            # Fix error: "The required field was not present: campaign_bidding_strategy"
+            campaign.manual_cpc.enhanced_cpc_enabled = False
+
+            # Network settings are required for Search campaigns
+            if vals.get('channel_type', 'SEARCH') == 'SEARCH':
+                campaign.network_settings.target_google_search = True
+                campaign.network_settings.target_search_network = True
+                campaign.network_settings.target_content_network = False
+                campaign.network_settings.target_partner_search_network = False
 
             response = campaign_service.mutate_campaigns(
                 customer_id=customer_id,
