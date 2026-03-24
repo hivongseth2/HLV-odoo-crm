@@ -108,7 +108,7 @@ def find_or_create_shopee_item(env, item_data, shop):
     item_id = item_data.get('item_id', 0)
     model_id = item_data.get('model_id', 0)
     item_name = item_data.get('item_name', '')
-    model_sku = item_data.get('model_sku', '')
+    sku = item_data.get('model_sku', '') or item_data.get('item_sku', '')
 
     # 1. Tìm theo shopee.item identifier
     domain = [('shopee_item_identifier', '=', item_id)]
@@ -120,9 +120,9 @@ def find_or_create_shopee_item(env, item_data, shop):
 
     # 2. Tìm theo SKU (default_code)
     product = False
-    if model_sku:
+    if sku:
         product = env['product.product'].sudo().search(
-            [('default_code', '=', model_sku)], limit=1
+            [('default_code', '=', sku)], limit=1
         )
 
     # 3. Tìm theo tên
@@ -135,11 +135,11 @@ def find_or_create_shopee_item(env, item_data, shop):
     if not product:
         product = env['product.product'].sudo().create({
             'name': item_name or f"Shopee Item {item_id}",
-            'default_code': model_sku or '',
+            'default_code': sku or '',
             'type': 'consu',
             'sale_ok': True,
         })
-        _logger.info("Shopee: Đã tạo sản phẩm '%s' (SKU: %s)", product.name, model_sku)
+        _logger.info("Shopee: Đã tạo sản phẩm '%s' (SKU: %s)", product.name, sku)
 
     # 5. Tạo shopee.item record nếu chưa tồn tại
     if not existing_item and shop:
