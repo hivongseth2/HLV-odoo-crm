@@ -100,6 +100,7 @@ def update_order_lines_from_escrow(so, escrow_data):
         line_vals = {
             'price_unit': original_price,
             'discount': discount,
+            'x_studio_thanh_tien_shopee': item_data.get('discounted_price', 0),
         }
 
         # Truy xuất Thuế include chính xác theo từng sản phẩm
