@@ -41,6 +41,14 @@ class GoogleAdsAccount(models.Model):
         tracking=True,
         help='Nếu bật, hệ thống sẽ tự động thực thi các đề xuất của AI (như Tạm dừng chiến dịch) ngay khi nhận được Insight.'
     )
+    adsroid_organisation_id = fields.Char(
+        string='Adsroid Organisation ID',
+        help='ID tổ chức lấy từ cài đặt Adsroid.'
+    )
+    adsroid_project_id = fields.Char(
+        string='Adsroid Project ID',
+        help='ID dự án lấy từ cài đặt Adsroid.'
+    )
 
     # ── Demo Mode ────────────────────────────────
     is_demo = fields.Boolean(
@@ -74,7 +82,8 @@ class GoogleAdsAccount(models.Model):
         """Tự động loại bỏ dấu gạch ngang và khoảng trắng từ các thông tin dán vào."""
         fields_to_sanitize = [
             'login_customer_id', 'operating_customer_id', 'merchant_center_id', 
-            'client_id', 'client_secret', 'developer_token'
+            'client_id', 'client_secret', 'developer_token',
+            'adsroid_organisation_id', 'adsroid_project_id'
         ]
         for field in fields_to_sanitize:
             val = getattr(self, field)

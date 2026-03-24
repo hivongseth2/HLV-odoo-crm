@@ -85,6 +85,8 @@
                                         <field name="use_adsroid" widget="boolean_toggle"/>
                                         <field name="auto_apply_adsroid_action" widget="boolean_toggle" invisible="not use_adsroid"/>
                                         <field name="adsroid_api_key" password="True" invisible="not use_adsroid" required="use_adsroid"/>
+                                        <field name="adsroid_organisation_id" invisible="not use_adsroid" required="use_adsroid"/>
+                                        <field name="adsroid_project_id" invisible="not use_adsroid" required="use_adsroid"/>
                                     </group>
                                 </group>
                             </div>

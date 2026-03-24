@@ -258,6 +258,8 @@ class GoogleAdsCampaign(models.Model):
             
         success, result = AdsroidApiService.analyze_campaign(
             self.account_id.adsroid_api_key, 
+            self.account_id.adsroid_organisation_id,
+            self.account_id.adsroid_project_id,
             campaign_data, 
             product_data,
             is_demo=self.account_id.is_demo

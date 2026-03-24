@@ -16,33 +16,54 @@ class AdsroidApiService:
     """Service gọi API Adsroid để phân tích chiến dịch"""
     
     # TODO: Thay đổi Endpoint khi có tài liệu API chính thức từ Adsroid
-    ADSROID_ENDPOINT_ANALYZE = "https://api.adsroid.com/v1/analyze"
+    ADSROID_ENDPOINT_ANALYZE = "https://rckoycauuwzdryvkjpac.supabase.co/functions/v1/adsroid"
 
     @staticmethod
-    def analyze_campaign(api_key, campaign_data, product_data, is_demo=False):
+    def analyze_campaign(api_key, organisation_id, project_id, campaign_data, product_data, is_demo=False):
         """
         Gửi dữ liệu chiến dịch và sản phẩm lên Adsroid để nhận AI Insights.
         
-        :param api_key: str - API Key lấy từ cấu hình
-        :param campaign_data: dict - Thông tin chiến dịch và metrics hiện tại
-        :param product_data: list of dict - Dữ liệu tồn kho, biên lợi nhuận của sản phẩm
-        :param is_demo: bool - Trạng thái Demo Mode
-        :return: (bool, str/dict) - (True, kết_quả_json) hoặc (False, lỗi_message)
+        :param api_key: str - API Key
+        :param organisation_id: str - Organization ID
+        :param project_id: str - Project ID
+        :param campaign_data: dict - Thông tin chiến dịch
+        :param product_data: list - Dữ liệu sản phẩm
+        :param is_demo: bool - Trạng thái Demo
+        :return: (bool, str/dict)
         """
         if is_demo:
             _logger.info("[DEMO MODE] Trả về dữ liệu mô phỏng AI (Mock) cho chiến dịch: %s", campaign_data.get('name'))
             return True, AdsroidApiService._mock_ai_response(campaign_data, product_data)
 
-        if not api_key:
-            return False, _("Thiếu cấu hình Adsroid API Key.")
+        if not api_key or not organisation_id or not project_id:
+            return False, _("Thiếu cấu hình Adsroid (API Key, Org ID hoặc Project ID).")
 
-        payload = {
+        # Chuẩn bị nội dung 'message' cho AI phân tích
+        data_str = json.dumps({
             "campaign": campaign_data,
             "products": product_data
+        }, indent=2, ensure_ascii=False)
+        
+        message = (
+            "Hãy đóng vai là một chuyên gia tối ưu hóa quảng cáo Google Ads. "
+            "Dựa trên dữ liệu chiến dịch và tồn kho sau đây, hãy phân tích và đưa ra quyết định. "
+            "YÊU CẦU QUAN TRỌNG: Bạn chỉ được phản hồi bằng định dạng JSON theo đúng cấu trúc sau:\n"
+            "{\n"
+            "  \"score\": 85, // Điểm hiệu suất 0-100\n"
+            "  \"suggested_action\": \"PAUSE\" | \"MAINTAIN\" | \"INCREASE_BUDGET\" | \"DECREASE_BUDGET\",\n"
+            "  \"insight\": \"Nội dung nhận định chi tiết bằng tiếng Việt...\"\n"
+            "}\n\n"
+            f"Dữ liệu: {data_str}"
+        )
+
+        payload = {
+            "organisation_id": organisation_id,
+            "project_id": project_id,
+            "message": message
         }
 
         headers = {
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": f"bearer {api_key}",
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
@@ -65,7 +86,27 @@ class AdsroidApiService:
                 return False, _("Lỗi phản hồi từ server Adsroid (Code: %s): %s") % (response.status_code, response.text)
 
             # Xử lý thành công
-            return True, response.json()
+            res_data = response.json()
+            
+            # API Supabase này thường trả về string hoặc object chứa field 'response' hoặc 'message'
+            # Nếu Adsroid trả về raw text, ta cần extract nó hoặc parse nếu AI trả về JSON string
+            content = ""
+            if isinstance(res_data, dict):
+                content = res_data.get('response') or res_data.get('message') or str(res_data)
+            else:
+                content = str(res_data)
+
+            # Thử parse JSON từ content (vì ta đã yêu cầu AI trả về JSON)
+            try:
+                # Tìm JSON block nếu AI nhỡ tay viết thêm text
+                import re
+                json_match = re.search(r'\{.*\}', content, re.DOTALL)
+                if json_match:
+                    parsed = json.loads(json_match.group())
+                    return True, parsed
+                return True, {"insight": content, "suggested_action": "MAINTAIN", "score": 0}
+            except:
+                return True, {"insight": content, "suggested_action": "MAINTAIN", "score": 0}
 
         except requests.exceptions.Timeout:
             return False, _("Kết nối tới Adsroid bị quá hạn (Timeout).")
