@@ -113,7 +113,6 @@ class GoogleAdsMutateService:
                 campaign.network_settings.target_partner_search_network = False
 
             # Required fields for political advertising
-            campaign.network_settings.target_google_search = True # generally required setting if we pass it
             campaign.contains_eu_political_advertising = False
             
             # Shopping campaign requirements
