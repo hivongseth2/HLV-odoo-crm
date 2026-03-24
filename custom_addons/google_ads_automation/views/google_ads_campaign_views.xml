@@ -39,9 +39,23 @@
                     <field name="state" widget="statusbar" statusbar_visible="draft,synced"/>
                 </header>
                 <sheet>
-                    <field name="hero_header_html" widget="html" readonly="1"/>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" placeholder="Tên chiến dịch... VD: Campaign Mùa Hè" readonly="state == 'synced'"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="account_id" readonly="state == 'synced'"/>
+                            <field name="channel_type" readonly="state == 'synced'"/>
+                        </group>
+                        <group>
+                            <field name="google_campaign_id" readonly="1" invisible="state == 'draft'"/>
+                        </group>
+                    </group>
                     
-                    <div class="o_kpi_dashboard mt-n4">
+                    <field name="hero_header_html" widget="html" readonly="1" invisible="not id"/>
+                    
+                    <div class="o_kpi_dashboard mt-3" invisible="not id">
                         <div class="o_kpi_tile shadow-sm border-0">
                             <span class="o_kpi_label">LƯỢT NHẤP</span>
                             <span class="o_kpi_value text-primary"><field name="clicks" readonly="1"/></span>
@@ -71,12 +85,10 @@
                                     <field name="product_ids" widget="many2many_tags" readonly="1"/>
                                     <field name="impressions" readonly="1"/>
                                     <field name="conversion_rate" widget="progressbar" readonly="1"/>
-                                    <field name="channel_type" readonly="state == 'synced'"/>
-                                    <field name="google_campaign_id" readonly="1" invisible="state == 'draft'"/>
                                 </group>
                             </div>
                         </div>
-                        <div class="col-lg-5">
+                        <div class="col-lg-5" invisible="not id">
                             <div class="o_premium_card h-100 bg-light border-0">
                                 <h4 class="mb-4 text-secondary fw-bold"><i class="fa fa-info-circle me-2"></i>Trạng Thái Đồng Bộ</h4>
                                 <div class="alert alert-info border-0 shadow-sm rounded-3">
