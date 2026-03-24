@@ -43,11 +43,12 @@ class StockPicking(models.Model):
             if not sale_order.procurement_group_id:
                 continue
 
-            # Tìm phiếu giao hàng (outgoing) của SO cần giữ hàng
+            # Tìm phiếu lấy hàng (Pick) của SO cần giữ hàng
+            # sequence_code = 'PICK' cho loại hoạt động "Lấy hàng"
             delivery_pickings = self.env['stock.picking'].search([
                 ('group_id', '=', sale_order.procurement_group_id.id),
                 ('state', 'in', ['confirmed', 'waiting', 'partially_available']),
-                ('picking_type_code', '=', 'outgoing'),
+                ('picking_type_id.sequence_code', '=', 'PICK'),
             ])
 
             if delivery_pickings:
