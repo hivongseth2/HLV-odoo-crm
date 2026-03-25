@@ -122,7 +122,6 @@ class GoogleAdsMutateService:
             if vals.get('channel_type') == 'SHOPPING':
                 campaign.shopping_setting.merchant_id = int(vals.get('merchant_center_id'))
                 campaign.shopping_setting.campaign_priority = 0 # Low priority default
-                campaign.shopping_setting.sales_country = "VN" # Mandatory for many regions
 
             response = campaign_service.mutate_campaigns(
                 customer_id=customer_id,
