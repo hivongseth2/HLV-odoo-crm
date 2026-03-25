@@ -120,8 +120,10 @@ class GoogleAdsMutateService:
             
             # Shopping campaign requirements
             if vals.get('channel_type') == 'SHOPPING':
+                campaign.advertising_channel_sub_type = client.enums.AdvertisingChannelSubTypeEnum.SHOPPING_PRODUCT_ADS
                 campaign.shopping_setting.merchant_id = int(vals.get('merchant_center_id'))
-                # For some regions, a sales country might be needed, but merchant_id is the critical one.
+                campaign.shopping_setting.campaign_priority = 0 # Low priority default
+                campaign.shopping_setting.sales_country = "VN" # Mandatory for many regions
 
             response = campaign_service.mutate_campaigns(
                 customer_id=customer_id,

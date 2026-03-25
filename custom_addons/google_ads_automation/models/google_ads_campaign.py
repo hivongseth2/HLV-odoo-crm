@@ -217,7 +217,14 @@ class GoogleAdsCampaign(models.Model):
             })
             self.message_post(body=_("Chiến dịch đã được tạo trên Google Ads. ID: %s") % google_id)
         else:
-            raise UserError(_("Đồng bộ thất bại: %s") % result)
+            hint = ""
+            if "RESOURCE_NOT_FOUND" in result and "merchant_id" in result:
+                hint = _("\n\n💡 GỢI Ý: Lỗi 'Resource was not found' ở merchant_id thường do:\n"
+                         "1. Merchant Center ID (%s) chưa được LIÊN KẾT với tài khoản Google Ads này.\n"
+                         "2. ID Merchant Center bị nhập sai.\n"
+                         "Vui lòng kiểm tra lại cấu hình trong cài đặt Tài khoản Google Ads.") % self.account_id.merchant_center_id
+            
+            raise UserError(_("Đồng bộ thất bại: %s%s") % (result, hint))
 
     def action_ask_adsroid(self, is_cron=False):
         """Gửi dữ liệu chiến dịch lên Adsroid API để xin nhận định"""
