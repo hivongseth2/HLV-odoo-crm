@@ -235,6 +235,8 @@ def create_order_from_data(env, order_data, shop, escrow_data=None):
         create_order_line(env, so, item_data, shop)
 
     if escrow_data:
+        if escrow_data.get('order_income', {}).get('items'):
+            shopee_escrow.update_order_lines_from_escrow(so, escrow_data)
         shopee_escrow.apply_escrow_voucher(so, escrow_data)
 
     try:
