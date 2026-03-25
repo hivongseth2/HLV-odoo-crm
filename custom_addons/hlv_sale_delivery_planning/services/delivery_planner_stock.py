@@ -38,10 +38,13 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                         product_qty_cache[w_id].add(line.product_id.id)
 
         product_availabilities = {}
+        wh_obj = self.env['stock.warehouse']
         for w_id, prod_ids in product_qty_cache.items():
             if prod_ids:
-                prods = self.env['product.product'].browse(list(prod_ids)).with_context(warehouse=w_id)
-                # Odoo 18: free_qty = qty_available - reserved_quantity
+                wh = wh_obj.browse(w_id)
+                loc_id = wh.lot_stock_id.id
+                prods = self.env['product.product'].browse(list(prod_ids)).with_context(location=loc_id)
+                # Odoo 18: free_qty = qty_available - reserved_quantity, scoped by location
                 for p in prods:
                     product_availabilities[(p.id, w_id)] = p.free_qty
 
