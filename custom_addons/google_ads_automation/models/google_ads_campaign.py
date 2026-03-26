@@ -253,13 +253,21 @@ class GoogleAdsCampaign(models.Model):
             self.message_post(body=_("Chiến dịch đã được tạo trên Google Ads. ID: %s") % google_id)
         else:
             hint = ""
-            if "RESOURCE_NOT_FOUND" in result and "merchant_id" in result:
-                hint = _("\n\n💡 GỢI Ý: Lỗi 'Resource was not found' ở merchant_id thường do:\n"
+            error_msg = result
+            if 'ADVERTISING_CHANNEL_TYPE_NOT_AVAILABLE_FOR_ACCOUNT_TYPE' in result:
+                error_msg = _("Tài khoản Google Ads của anh hiện chưa được phép tạo loại chiến dịch này trực tiếp (thường gặp ở tài khoản mới hoặc tài khoản ở chế độ Thông minh - Smart Mode).")
+            elif 'MUTATE_NOT_ALLOWED' in result:
+                error_msg = _("Google Ads hiện tại không cho phép tạo loại chiến dịch này qua API cho tài khoản của anh. Anh vui lòng kiểm tra lại quyền truy cập hoặc tạo trước trên Google Ads.")
+            elif 'REQUIRED_BUSINESS_NAME_ASSET_NOT_LINKED' in result or 'REQUIRED_LOGO_ASSET_NOT_LINKED' in result:
+                error_msg = _("Chiến dịch PMax yêu cầu Tên thương hiệu và Logo. Vui lòng điền đủ 'Tên thương hiệu' và tải 'Logo hình vuông' trong phần Cấu hình Google Ads.")
+            elif "RESOURCE_NOT_FOUND" in result and "merchant_id" in result:
+                error_msg = _("%s\n\n💡 GỢI Ý: Lỗi 'Resource was not found' ở merchant_id thường do:\n"
                          "1. Merchant Center ID (%s) chưa được LIÊN KẾT với tài khoản Google Ads này.\n"
                          "2. ID Merchant Center bị nhập sai.\n"
-                         "Vui lòng kiểm tra lại cấu hình trong cài đặt Tài khoản Google Ads.") % self.account_id.merchant_center_id
+                         "Vui lòng kiểm tra lại cấu hình trong cài đặt Tài khoản Google Ads.") % (result, self.account_id.merchant_center_id)
             
-            raise UserError(_("Đồng bộ thất bại: %s%s") % (result, hint))
+            _logger.error("Sync to Google failed for %s: %s", self.name, result)
+            raise UserError(_("Đồng bộ thất bại: %s") % error_msg)
 
     def action_ask_adsroid(self, is_cron=False):
         """Gửi dữ liệu chiến dịch lên Adsroid API để xin nhận định"""
