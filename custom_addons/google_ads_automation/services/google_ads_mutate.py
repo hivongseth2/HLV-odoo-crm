@@ -82,7 +82,9 @@ class GoogleAdsMutateService:
                 budget_operation = client.get_type("CampaignBudgetOperation")
                 budget = budget_operation.create
                 budget.name = f"Budget for {vals.get('name')} - {int(time.time())}"
-                budget.amount_micros = 50000000 # 50,000 default (micros base)
+                # Lấy ngân sách từ Odoo (mặc định 50k) và đổi sang micros (x1.000.000)
+                amount = vals.get('budget_amount', 50000.0)
+                budget.amount_micros = int(amount * 1000000)
                 budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
                 budget.explicitly_shared = False # Cần thiết cho PMax/Discovery
                 budget_response = budget_service.mutate_campaign_budgets(
@@ -116,6 +118,10 @@ class GoogleAdsMutateService:
 
             campaign.status = client.enums.CampaignStatusEnum.PAUSED # Always start paused for safety
             
+            # Final URL (Lading Page)
+            if vals.get('final_url'):
+                campaign.final_urls.append(vals.get('final_url'))
+
             # Budget handling
             campaign.campaign_budget = budget_resource
 
@@ -147,6 +153,10 @@ class GoogleAdsMutateService:
                 campaign.shopping_setting.merchant_id = int(vals.get('merchant_center_id'))
                 campaign.shopping_setting.campaign_priority = 0 # Low priority default
 
+            # -- Performance Max (PMax) atomic creation (Campaign + Assets) --
+            if vals.get('channel_type') == 'PERFORMANCE_MAX' and vals.get('business_name'):
+                return GoogleAdsMutateService._create_pmax_campaign_atomic(client, customer_id, budget_resource, vals)
+
             response = campaign_service.mutate_campaigns(
                 customer_id=customer_id,
                 operations=[campaign_operation],
@@ -155,6 +165,92 @@ class GoogleAdsMutateService:
         except Exception as e:
             _logger.error("Create campaign failed: %s", str(e))
             return False, str(e)
+
+    @staticmethod
+    def _create_pmax_campaign_atomic(client, customer_id, budget_resource, vals):
+        """Tạo PMax cùng lúc với Asset (Business Name) để thỏa mãn Brand Guidelines"""
+        try:
+            mutate_operations = []
+            
+            # 1. Tạo Asset Business Name
+            asset_resource = GoogleAdsMutateService._create_business_name_asset(client, customer_id, vals.get('business_name'))
+            
+            # 2. Tạo Asset Logo nếu có
+            logo_resource = None
+            if vals.get('logo_image'):
+                logo_resource = GoogleAdsMutateService._create_image_asset(client, customer_id, vals.get('logo_image'), "Logo")
+
+            # -- Operation 1: Create Campaign (ID giả định -1) --
+            op1 = client.get_type("MutateOperation")
+            c = op1.campaign_operation.create
+            temp_resource_name = f"customers/{customer_id}/campaigns/-1"
+            c.resource_name = temp_resource_name
+            c.name = vals.get('name')
+            c.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.PERFORMANCE_MAX
+            c.status = client.enums.CampaignStatusEnum.PAUSED
+            c.campaign_budget = budget_resource
+            c.maximize_conversions = {} 
+            c.contains_eu_political_advertising = client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
+            
+            # PMax Final URLs
+            if vals.get('final_url'):
+                c.final_urls.append(vals.get('final_url'))
+
+            mutate_operations.append(op1)
+
+            # -- Operation 2: Link Business Name --
+            op2 = client.get_type("MutateOperation")
+            ca2 = op2.campaign_asset_operation.create
+            ca2.campaign = temp_resource_name
+            ca2.asset = asset_resource
+            ca2.field_type = client.enums.AssetFieldTypeEnum.BUSINESS_NAME
+            mutate_operations.append(op2)
+
+            # -- Operation 3: Link Logo (nếu có) --
+            if logo_resource:
+                op3 = client.get_type("MutateOperation")
+                ca3 = op3.campaign_asset_operation.create
+                ca3.campaign = temp_resource_name
+                ca3.asset = logo_resource
+                ca3.field_type = client.enums.AssetFieldTypeEnum.LOGO
+                mutate_operations.append(op3)
+
+            google_ads_service = client.get_service("GoogleAdsService")
+            response = google_ads_service.mutate(
+                customer_id=customer_id,
+                mutate_operations=mutate_operations
+            )
+            return True, response.mutate_operation_responses[0].campaign_result.resource_name
+
+        except Exception as e:
+            _logger.error("Atomic PMax creation failed: %s", str(e))
+            return False, str(e)
+
+    @staticmethod
+    def _create_business_name_asset(client, customer_id, business_name):
+        """Tạo asset loại BUSINESS_NAME"""
+        asset_service = client.get_service("AssetService")
+        operation = client.get_type("AssetOperation")
+        asset = operation.create
+        asset.business_name_asset.text = business_name
+        response = asset_service.mutate_assets(customer_id=customer_id, operations=[operation])
+        return response.results[0].resource_name
+
+    @staticmethod
+    def _create_image_asset(client, customer_id, image_base64, name):
+        """Tạo Image Asset từ base64 Odoo"""
+        import base64
+        image_data = base64.b64decode(image_base64)
+        
+        asset_service = client.get_service("AssetService")
+        operation = client.get_type("AssetOperation")
+        asset = operation.create
+        asset.name = f"{name} - {int(time.time())}"
+        asset.type_ = client.enums.AssetTypeEnum.IMAGE
+        asset.image_asset.data = image_data
+        
+        response = asset_service.mutate_assets(customer_id=customer_id, operations=[operation])
+        return response.results[0].resource_name
 
     @staticmethod
     def find_campaign_by_name(client, customer_id, name):

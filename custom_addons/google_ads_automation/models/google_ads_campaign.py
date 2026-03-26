@@ -63,6 +63,12 @@ class GoogleAdsCampaign(models.Model):
         ('UNKNOWN',         'Không rõ'),
     ], string='Loại Kênh', help='Loại kênh quảng cáo từ Google Ads', readonly=True)
 
+    # Cấu hình Chiến dịch (Dùng để tạo mới/cập nhật)
+    budget_amount = fields.Float(string='Ngân sách hàng ngày', default=50000.0, tracking=True)
+    business_name = fields.Char(string='Tên thương hiệu', help='Yêu cầu cho PMax nếu bật Brand Guidelines', tracking=True)
+    logo_image = fields.Binary(string='Logo hình vuông', help='Yêu cầu cho PMax (tỷ lệ 1:1)', tracking=True)
+    final_url = fields.Char(string='URL trang đích', help='Link web của anh', tracking=True)
+
     # Metrics (Chỉ số hiệu suất cơ bản)
     clicks = fields.Integer(string='Lượt Nhấp', default=0, readonly=True)
     impressions = fields.Integer(string='Lượt Hiển Thị', default=0, readonly=True)
@@ -199,16 +205,6 @@ class GoogleAdsCampaign(models.Model):
         client = self.account_id._get_google_ads_client()
         customer_id = self.account_id.operating_customer_id
         
-        # Kiểm tra giới hạn: Các loại chiến dịch phức tạp không hỗ trợ tạo mới qua API Mutate chuẩn
-        unsupported_create_types = ['VIDEO', 'MULTI_CHANNEL', 'LOCAL', 'HOTEL', 'SMART']
-        if not self.google_campaign_id and self.channel_type in unsupported_create_types:
-            type_label = dict(self._fields['channel_type'].selection).get(self.channel_type, self.channel_type)
-            raise UserError(_("Chiến dịch loại '%s' hiện tại chưa hỗ trợ tạo mới trực tiếp từ Odoo do giới hạn cấu hình của Google Ads API.\n\n"
-                              "💡 HƯỚNG DẪN:\n"
-                              "1. Anh vui lòng tạo chiến dịch '%s' trực tiếp trên trang Google Ads.\n"
-                              "2. Quay lại Odoo, vào cấu hình Tài khoản Ads và nhấn 'Đồng bộ tất cả dữ liệu'.\n"
-                              "3. Odoo sẽ tự động kéo chiến dịch đó về để anh theo dõi.") % (type_label, type_label))
-
         if self.channel_type == 'SHOPPING' and not self.account_id.merchant_center_id:
             raise UserError(_("Vui lòng cấu hình Merchant Center ID trong mục Cài đặt Tài khoản Google Ads để tạo chiến dịch Mua Sắm!"))
         
@@ -216,7 +212,13 @@ class GoogleAdsCampaign(models.Model):
             'name': self.name,
             'channel_type': self.channel_type,
             'merchant_center_id': self.account_id.merchant_center_id,
+            'budget_amount': self.budget_amount,
+            'business_name': self.business_name,
+            'logo_image': self.logo_image,
+            'final_url': self.final_url,
         }
+        
+        _logger.info("Syncing campaign %s (type: %s) to Google Ads for Customer %s", self.name, self.channel_type, customer_id)
         
         from ..services.google_ads_mutate import GoogleAdsMutateService
         # Nếu đã có ID Google, thực hiện UPDATE

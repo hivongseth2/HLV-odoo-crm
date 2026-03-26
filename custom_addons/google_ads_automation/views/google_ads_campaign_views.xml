@@ -47,9 +47,13 @@
                         <group>
                             <field name="account_id" readonly="state != 'draft'"/>
                             <field name="channel_type" readonly="state != 'draft'"/>
-                        </group>
-                        <group>
                             <field name="google_campaign_id" readonly="1" invisible="state == 'draft'"/>
+                        </group>
+                        <group string="Cấu hình Google Ads">
+                            <field name="budget_amount" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                            <field name="final_url" placeholder="https://example.com" required="channel_type in ['VIDEO', 'PERFORMANCE_MAX']"/>
+                            <field name="business_name" invisible="channel_type != 'PERFORMANCE_MAX'" required="channel_type == 'PERFORMANCE_MAX'"/>
+                            <field name="logo_image" widget="image" invisible="channel_type != 'PERFORMANCE_MAX'" class="oe_avatar"/>
                         </group>
                     </group>
                     
