@@ -159,19 +159,21 @@ class GoogleAdsMutateService:
             campaign = campaign_operation.update
             campaign.resource_name = campaign_resource_name
 
-            # Cập nhật tên nếu có thay đổi
+            # Cập nhật Shopping settings nếu là loại SHOPPING
+            mask_paths = []
             if 'name' in vals:
                 campaign.name = vals['name']
+                mask_paths.append('name')
             
-            # Cập nhật Shopping settings nếu là loại SHOPPING
             if vals.get('channel_type') == 'SHOPPING':
                 if vals.get('merchant_center_id'):
                     campaign.shopping_setting.merchant_id = int(vals.get('merchant_center_id'))
-                # Priority và Country thường ít khi thay đổi sau khi tạo, nhưng có thể bổ sung nếu cần
+                    mask_paths.append('shopping_setting.merchant_id')
 
-            # Tạo field mask tự động từ các trường đã gán
-            from google.api_core.protobuf_helpers import field_mask
-            campaign_operation.update_mask = field_mask(None, campaign)
+            # Build field mask manually to avoid "Clear" and other method names being picked up
+            # field_mask(None, campaign) can be problematic with proto-plus objects
+            from google.protobuf.field_mask_pb2 import FieldMask
+            campaign_operation.update_mask.CopyFrom(FieldMask(paths=mask_paths))
 
             response = campaign_service.mutate_campaigns(
                 customer_id=customer_id,
