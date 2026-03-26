@@ -617,8 +617,7 @@ class GoogleAdsAccount(models.Model):
         client = self._get_google_ads_client()
         ga_service = client.get_service("GoogleAdsService")
         
-        # Lấy chiến dịch kèm chỉ số cơ bản (metrics) của ngày hôm nay
-        # hoặc có thể tuỳ chọn lấy metrics 30 ngày (sẽ xử lý nâng cao sau)
+        # Lấy toàn bộ chiến dịch (trừ những cái đã xóa hoàn toàn)
         query = """
             SELECT
               campaign.id,
@@ -630,7 +629,7 @@ class GoogleAdsAccount(models.Model):
               metrics.cost_micros,
               metrics.conversions
             FROM campaign
-            WHERE segments.date DURING YESTERDAY
+            WHERE campaign.status != 'REMOVED'
             ORDER BY campaign.id
         """
         
@@ -688,7 +687,7 @@ class GoogleAdsAccount(models.Model):
               metrics.cost_micros,
               metrics.conversions
             FROM ad_group
-            WHERE segments.date DURING YESTERDAY
+            WHERE ad_group.status != 'REMOVED'
             ORDER BY ad_group.id
         """
         
@@ -755,7 +754,7 @@ class GoogleAdsAccount(models.Model):
               metrics.cost_micros,
               metrics.conversions
             FROM ad_group_ad
-            WHERE segments.date DURING YESTERDAY
+            WHERE ad_group_ad.status != 'REMOVED'
             ORDER BY ad_group_ad.ad.id
         """
         
