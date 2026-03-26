@@ -61,7 +61,7 @@ class GoogleAdsCampaign(models.Model):
         ('DISCOVERY',       'Khám Phá (Discovery)'),
         ('HOTEL',           'Khách Sạn (Hotel)'),
         ('UNKNOWN',         'Không rõ'),
-    ], string='Loại Kênh', help='Loại kênh quảng cáo từ Google Ads', readonly=True)
+    ], string='Loại Kênh', help='Loại kênh quảng cáo từ Google Ads', readonly=True, default='SEARCH')
 
     # Cấu hình Chiến dịch (Dùng để tạo mới/cập nhật)
     budget_amount = fields.Float(string='Ngân sách hàng ngày', default=50000.0, tracking=True)
@@ -191,8 +191,12 @@ class GoogleAdsCampaign(models.Model):
         return super().write(vals)
 
     def action_sync_to_google(self):
-        """Đẩy chiến dịch lên Google Ads API"""
+        """Đồng bộ chiến dịch sang Google Ads (CREATE hoặc UPDATE)"""
         self.ensure_one()
+        
+        if not self.channel_type or self.channel_type == 'UNKNOWN':
+            raise UserError(_("Vui lòng chọn 'Loại Kênh' hợp lệ (ví dụ: Tìm kiếm, Hiển thị, PMax...) trước khi đồng bộ lên Google Ads."))
+
         if self.state == 'synced' and not self.env.context.get('force_sync'):
             return True
 
