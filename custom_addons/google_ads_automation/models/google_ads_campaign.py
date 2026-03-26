@@ -1,6 +1,9 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 from markupsafe import Markup
+import logging
+
+_logger = logging.getLogger(__name__)
 
 class GoogleAdsCampaign(models.Model):
     _name = 'google.ads.campaign'
