@@ -84,6 +84,7 @@ class GoogleAdsMutateService:
                 budget.name = f"Budget for {vals.get('name')} - {int(time.time())}"
                 budget.amount_micros = 50000000 # 50,000 default (micros base)
                 budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
+                budget.explicitly_shared = False # Cần thiết cho PMax/Discovery
                 budget_response = budget_service.mutate_campaign_budgets(
                     customer_id=customer_id, operations=[budget_operation]
                 )
