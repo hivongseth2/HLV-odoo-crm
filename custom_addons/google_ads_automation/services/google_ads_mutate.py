@@ -95,7 +95,24 @@ class GoogleAdsMutateService:
             campaign = campaign_operation.create
 
             campaign.name = vals.get('name')
-            campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum[vals.get('channel_type', 'SEARCH')]
+            
+            # Channel Type handling (Safe mapping)
+            channel_type_raw = vals.get('channel_type', 'SEARCH')
+            try:
+                # Discovery (Khám phá) đã được đổi tên thành Demand Gen (Tạo nhu cầu) trong các phiên bản API mới
+                if channel_type_raw == 'DISCOVERY':
+                    if hasattr(client.enums.AdvertisingChannelTypeEnum, 'DEMAND_GEN'):
+                        campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.DEMAND_GEN
+                    elif hasattr(client.enums.AdvertisingChannelTypeEnum, 'DISCOVERY'):
+                        campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.DISCOVERY
+                    else:
+                        campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.SEARCH
+                else:
+                    campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum[channel_type_raw]
+            except (KeyError, AttributeError):
+                _logger.warning("Loại kênh không hỗ trợ: %s. Tự động chuyển về SEARCH.", channel_type_raw)
+                campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.SEARCH
+
             campaign.status = client.enums.CampaignStatusEnum.PAUSED # Always start paused for safety
             
             # Budget handling
