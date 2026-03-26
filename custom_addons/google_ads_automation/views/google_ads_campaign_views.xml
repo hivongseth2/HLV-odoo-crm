@@ -82,6 +82,7 @@
                                     <i class="fa fa-info-circle me-1"></i> Sản phẩm được tự động liệt kê dựa trên các dòng trong <b>Product Feed</b> có chọn chiến dịch này.
                                 </div>
                                 <group>
+                                    <field name="feed_line_ids" widget="many2many_tags" placeholder="Chọn sản phẩm từ Feed..."/>
                                     <field name="product_ids" widget="many2many_tags" readonly="1"/>
                                     <field name="impressions" readonly="1"/>
                                     <field name="conversion_rate" widget="progressbar" readonly="1"/>

@@ -17,7 +17,7 @@ class GoogleAdsCampaign(models.Model):
     feed_line_ids = fields.Many2many(
         'google.ads.product.feed.line', 'google_ads_feed_line_campaign_rel',
         'campaign_id', 'feed_line_id',
-        string='Dòng Feed Liên Kết', readonly=True,
+        string='Dòng Feed Liên Kết',
     )
     product_ids = fields.Many2many(
         'product.template', string='Sản Phẩm', 
