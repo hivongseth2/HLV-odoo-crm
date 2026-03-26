@@ -133,6 +133,57 @@ class GoogleAdsMutateService:
             return False, str(e)
 
     @staticmethod
+    def find_campaign_by_name(client, customer_id, name):
+        """Tìm Campaign ID theo tên trên Google Ads. Trả về resource_name hoặc None."""
+        try:
+            ga_service = client.get_service("GoogleAdsService")
+            # Query tìm theo tên chính xác (phải dùng single quote cho chuỗi)
+            # Chú ý: thoát dấu nháy đơn nếu tên có chứa nháy đơn
+            safe_name = name.replace("'", "\\'")
+            query = f"SELECT campaign.id, campaign.resource_name FROM campaign WHERE campaign.name = '{safe_name}' AND campaign.status != 'REMOVED' LIMIT 1"
+            
+            response = ga_service.search(customer_id=customer_id, query=query)
+            for row in response:
+                return row.campaign.resource_name
+            return None
+        except Exception as e:
+            _logger.error("Find campaign by name '%s' failed: %s", name, str(e))
+            return None
+
+    @staticmethod
+    def update_campaign(client, customer_id, campaign_resource_name, vals):
+        """Cập nhật thông tin Campaign hiện có qua Google Ads Mutate API"""
+        try:
+            campaign_service = client.get_service("CampaignService")
+            campaign_operation = client.get_type("CampaignOperation")
+            campaign = campaign_operation.update
+            campaign.resource_name = campaign_resource_name
+
+            # Cập nhật tên nếu có thay đổi
+            if 'name' in vals:
+                campaign.name = vals['name']
+            
+            # Cập nhật Shopping settings nếu là loại SHOPPING
+            if vals.get('channel_type') == 'SHOPPING':
+                if vals.get('merchant_center_id'):
+                    campaign.shopping_setting.merchant_id = int(vals.get('merchant_center_id'))
+                # Priority và Country thường ít khi thay đổi sau khi tạo, nhưng có thể bổ sung nếu cần
+
+            # Tạo field mask tự động từ các trường đã gán
+            from google.api_core.protobuf_helpers import field_mask
+            campaign_operation.update_mask = field_mask(None, campaign)
+
+            response = campaign_service.mutate_campaigns(
+                customer_id=customer_id,
+                operations=[campaign_operation],
+            )
+            _logger.info("Campaign %s updated successfully.", campaign_resource_name)
+            return True, response.results[0].resource_name
+        except Exception as e:
+            _logger.error("Update campaign %s failed: %s", campaign_resource_name, str(e))
+            return False, str(e)
+
+    @staticmethod
     def create_ad_group(client, customer_id, campaign_id, vals):
         """Tạo Ad Group trong một Campaign"""
         try:

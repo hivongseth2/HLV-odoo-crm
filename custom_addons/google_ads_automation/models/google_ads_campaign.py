@@ -206,7 +206,27 @@ class GoogleAdsCampaign(models.Model):
         }
         
         from ..services.google_ads_mutate import GoogleAdsMutateService
-        ok, result = GoogleAdsMutateService.create_campaign(client, customer_id, vals)
+        # Nếu đã có ID Google, thực hiện UPDATE
+        if self.google_campaign_id:
+            google_resource_name = f"customers/{customer_id}/campaigns/{self.google_campaign_id}"
+            ok, result = GoogleAdsMutateService.update_campaign(client, customer_id, google_resource_name, vals)
+        else:
+            # Nếu chưa có ID, thử tìm theo tên trên Google ADS trước khi tạo mới
+            _logger.info("Searching for existing campaign by name: %s", self.name)
+            existing_resource_name = GoogleAdsMutateService.find_campaign_by_name(client, customer_id, self.name)
+            
+            if existing_resource_name:
+                # Nếu tìm thấy, liên kết ID và thực hiện UPDATE
+                google_id = existing_resource_name.split('/')[-1]
+                self.write({
+                    'google_campaign_id': google_id,
+                    'state': 'synced',
+                })
+                _logger.info("Found existing campaign %s. Auto-linked.", google_id)
+                ok, result = GoogleAdsMutateService.update_campaign(client, customer_id, existing_resource_name, vals)
+            else:
+                # Nếu thực sự không có, mới thực hiện CREATE
+                ok, result = GoogleAdsMutateService.create_campaign(client, customer_id, vals)
         
         if ok:
             # result is the resource name like "customers/123/campaigns/456"
