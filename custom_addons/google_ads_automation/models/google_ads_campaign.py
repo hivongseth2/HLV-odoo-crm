@@ -199,13 +199,15 @@ class GoogleAdsCampaign(models.Model):
         client = self.account_id._get_google_ads_client()
         customer_id = self.account_id.operating_customer_id
         
-        # Kiểm tra giới hạn: VIDEO không cho phép tạo mới qua API Mutate chuẩn trong một số context
-        if not self.google_campaign_id and self.channel_type == 'VIDEO':
-            raise UserError(_("Chiến dịch VIDEO hiện tại chưa hỗ trợ tạo mới trực tiếp từ Odoo do giới hạn của Google Ads API.\n\n"
+        # Kiểm tra giới hạn: Các loại chiến dịch phức tạp không hỗ trợ tạo mới qua API Mutate chuẩn
+        unsupported_create_types = ['VIDEO', 'MULTI_CHANNEL', 'LOCAL', 'HOTEL', 'SMART']
+        if not self.google_campaign_id and self.channel_type in unsupported_create_types:
+            type_label = dict(self._fields['channel_type'].selection).get(self.channel_type, self.channel_type)
+            raise UserError(_("Chiến dịch loại '%s' hiện tại chưa hỗ trợ tạo mới trực tiếp từ Odoo do giới hạn cấu hình của Google Ads API.\n\n"
                               "💡 HƯỚNG DẪN:\n"
-                              "1. Anh vui lòng tạo chiến dịch VIDEO trực tiếp trên trang Google Ads.\n"
+                              "1. Anh vui lòng tạo chiến dịch '%s' trực tiếp trên trang Google Ads.\n"
                               "2. Quay lại Odoo, vào cấu hình Tài khoản Ads và nhấn 'Đồng bộ tất cả dữ liệu'.\n"
-                              "3. Odoo sẽ tự động kéo chiến dịch Video đó về để anh theo dõi."))
+                              "3. Odoo sẽ tự động kéo chiến dịch đó về để anh theo dõi.") % (type_label, type_label))
 
         if self.channel_type == 'SHOPPING' and not self.account_id.merchant_center_id:
             raise UserError(_("Vui lòng cấu hình Merchant Center ID trong mục Cài đặt Tài khoản Google Ads để tạo chiến dịch Mua Sắm!"))
