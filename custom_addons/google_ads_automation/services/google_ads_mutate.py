@@ -102,13 +102,9 @@ class GoogleAdsMutateService:
             campaign.campaign_budget = budget_resource
 
             # Bidding Strategy handling
-            # Fix error: "The required field was not present: campaign_bidding_strategy"
-            # AND fix: "OPERATION_NOT_PERMITTED_FOR_CONTEXT" for VIDEO
+            # Note: For some campaign types like VIDEO, creation via standard mutate is restricted.
             channel = vals.get('channel_type', 'SEARCH')
-            if channel == 'VIDEO':
-                # Video campaigns use Cost Per View (CPV)
-                campaign.manual_cpv = {}
-            elif channel in ['PERFORMANCE_MAX', 'MULTI_CHANNEL', 'DISCOVERY']:
+            if channel in ['PERFORMANCE_MAX', 'MULTI_CHANNEL', 'DISCOVERY']:
                 # Modern types often require objective-based strategies
                 campaign.maximize_conversions = {}
             else:
