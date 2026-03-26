@@ -103,7 +103,17 @@ class GoogleAdsMutateService:
 
             # Bidding Strategy handling
             # Fix error: "The required field was not present: campaign_bidding_strategy"
-            campaign.manual_cpc.enhanced_cpc_enabled = False
+            # AND fix: "OPERATION_NOT_PERMITTED_FOR_CONTEXT" for VIDEO
+            channel = vals.get('channel_type', 'SEARCH')
+            if channel == 'VIDEO':
+                # Video campaigns use Cost Per View (CPV)
+                campaign.manual_cpv = {}
+            elif channel in ['PERFORMANCE_MAX', 'MULTI_CHANNEL', 'DISCOVERY']:
+                # Modern types often require objective-based strategies
+                campaign.maximize_conversions = {}
+            else:
+                # Default for Search/Display/Shopping
+                campaign.manual_cpc.enhanced_cpc_enabled = False
 
             # Network settings are required for Search campaigns
             if vals.get('channel_type', 'SEARCH') == 'SEARCH':
