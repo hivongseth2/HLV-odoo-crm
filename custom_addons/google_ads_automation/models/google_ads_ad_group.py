@@ -137,13 +137,13 @@ class GoogleAdsAdGroup(models.Model):
         if self.campaign_id.state == 'draft':
             raise UserError(_("Vui lòng đồng bộ Chiến dịch cha trước."))
 
-        if self.account_id.is_demo:
+        if self.campaign_id.account_id.is_demo:
             self.google_ad_group_id = f"DEMO_AG_SYNC_{self.id}"
             self.state = 'synced'
             return True
 
-        client = self.account_id._get_google_ads_client()
-        customer_id = self.account_id.operating_customer_id
+        client = self.campaign_id.account_id._get_google_ads_client()
+        customer_id = self.campaign_id.account_id.operating_customer_id
         
         vals = {
             'name': self.name,
