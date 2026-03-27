@@ -68,7 +68,86 @@ class GoogleAdsAd(models.Model):
             rec.hero_header_html = Markup(html)
 
     name = fields.Char(string='Tên/Tiêu Đề Quảng Cáo')
-    ad_group_id = fields.Many2one('google.ads.ad.group', string='Nhóm Quảng Cáo', required=True, ondelete='cascade', readonly=True)
+    performance_dashboard_html = fields.Html(compute='_compute_performance_dashboard_html')
+
+    def _compute_performance_dashboard_html(self):
+        for rec in self:
+            clicks = rec.clicks
+            impressions = rec.impressions
+            cost = rec.cost
+            conversions = rec.conversions
+            cost_str = f"{cost:,.0f}" if cost > 0 else "0"
+            
+            html = f"""
+                <div class="o_performance_dashboard py-2">
+                    <div class="row g-4 mb-2">
+                        <!-- Card 1: Clicks -->
+                        <div class="col-md-3 col-sm-6">
+                            <div class="o_dashboard_card shadow-sm border-0 rounded-4 h-100 bg-white">
+                                <div class="card-body p-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <div class="p-2 rounded-3 bg-primary-subtle d-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                                            <i class="fa fa-mouse-pointer text-primary fs-5"></i>
+                                        </div>
+                                        <span class="badge text-bg-light border-0 small text-muted">CLICKS</span>
+                                    </div>
+                                    <div class="fs-2 fw-bold text-dark">{clicks:,}</div>
+                                    <div class="text-muted small">Lượt Nhấp Chuột</div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Card 2: Impressions -->
+                        <div class="col-md-3 col-sm-6">
+                            <div class="o_dashboard_card shadow-sm border-0 rounded-4 h-100 bg-white">
+                                <div class="card-body p-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <div class="p-2 rounded-3 bg-info-subtle d-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                                            <i class="fa fa-eye text-info fs-5"></i>
+                                        </div>
+                                        <span class="badge text-bg-light border-0 small text-muted">VIEWS</span>
+                                    </div>
+                                    <div class="fs-2 fw-bold text-dark">{impressions:,}</div>
+                                    <div class="text-muted small">Lượt Hiển Thị</div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Card 3: Cost -->
+                        <div class="col-md-3 col-sm-6">
+                            <div class="o_dashboard_card shadow-sm border-0 rounded-4 h-100 bg-white">
+                                <div class="card-body p-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <div class="p-2 rounded-3 bg-danger-subtle d-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                                            <i class="fa fa-money text-danger fs-5"></i>
+                                        </div>
+                                        <span class="badge text-bg-light border-0 small text-muted">SPEND</span>
+                                    </div>
+                                    <div class="fs-2 fw-bold text-dark text-truncate">{cost_str} đ</div>
+                                    <div class="text-muted small">Tổng Chi Phí</div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Card 4: Conversions -->
+                        <div class="col-md-3 col-sm-6">
+                            <div class="o_dashboard_card shadow-sm border-0 rounded-4 h-100 bg-white">
+                                <div class="card-body p-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <div class="p-2 rounded-3 bg-success-subtle d-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                                            <i class="fa fa-shopping-cart text-success fs-5"></i>
+                                        </div>
+                                        <span class="badge text-bg-light border-0 small text-muted">ORDERS</span>
+                                    </div>
+                                    <div class="fs-2 fw-bold text-dark">{conversions:,}</div>
+                                    <div class="text-muted small">Lượt Chuyển Đổi</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            """
+            rec.performance_dashboard_html = Markup(html)
+
+    name = fields.Char(string='Tên/Tiêu Đề Quảng Cáo')
+    ad_group_id = fields.Many2one('google.ads.ad.group', string='Nhóm Quảng Cáo', required=True, ondelete='cascade')
     google_ad_id = fields.Char(string='Google Ad ID', index=True, readonly=True)
     state = fields.Selection([
         ('draft', 'Nháp (Local)'),
@@ -83,7 +162,7 @@ class GoogleAdsAd(models.Model):
         ('enabled', 'Đang hoạt động'),
         ('paused', 'Tạm dừng'),
         ('removed', 'Đã xóa'),
-    ], string='Trạng Thái', default='unknown', readonly=True)
+    ], string='Trạng Thái', default='paused')
 
     type = fields.Selection([
         ('RESPONSIVE_SEARCH_AD',    'Tìm Kiếm Thích Ứng (RSA)'),
@@ -98,7 +177,7 @@ class GoogleAdsAd(models.Model):
         ('DISCOVERY_CAROUSEL_AD',   'Khám Phá Dạng Băng Chuyền'),
         ('PERFORMANCE_MAX',         'Tối Đa Hiệu Suất (PMax)'),
         ('UNKNOWN',                 'Không rõ'),
-    ], string='Loại Quảng Cáo', readonly=True)
+    ], string='Loại Quảng Cáo', default='RESPONSIVE_SEARCH_AD')
 
     final_urls = fields.Char(string='URL Đích (Final URL)')
     
