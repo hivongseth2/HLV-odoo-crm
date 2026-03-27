@@ -68,7 +68,7 @@ class GoogleAdsAdGroup(models.Model):
             rec.hero_header_html = Markup(html)
 
     name = fields.Char(string='Tên Nhóm Quảng Cáo', required=True)
-    campaign_id = fields.Many2one('google.ads.campaign', string='Chiến Dịch', required=True, ondelete='cascade', readonly=True)
+    campaign_id = fields.Many2one('google.ads.campaign', string='Chiến Dịch', required=True, ondelete='cascade')
     google_ad_group_id = fields.Char(string='Google Ad Group ID', index=True, readonly=True)
     state = fields.Selection([
         ('draft', 'Nháp (Local)'),
@@ -83,7 +83,7 @@ class GoogleAdsAdGroup(models.Model):
         ('enabled', 'Đang hoạt động'),
         ('paused', 'Tạm dừng'),
         ('removed', 'Đã xóa'),
-    ], string='Trạng Thái', default='unknown', readonly=True)
+    ], string='Trạng Thái', default='paused')
 
     type = fields.Selection([
         ('SEARCH_STANDARD',         'Tìm Kiếm Chuẩn'),
@@ -97,7 +97,7 @@ class GoogleAdsAdGroup(models.Model):
         ('HOTEL_ADS',               'Khách Sạn'),
         ('DISCOVERY',               'Khám Phá'),
         ('UNKNOWN',                 'Không rõ'),
-    ], string='Loại Nhóm Quảng Cáo', readonly=True)
+    ], string='Loại Nhóm Quảng Cáo', default='SEARCH_STANDARD')
 
     # Metrics
     clicks = fields.Integer(string='Lượt Nhấp', default=0, readonly=True)
@@ -144,7 +144,11 @@ class GoogleAdsAdGroup(models.Model):
         client = self.account_id._get_google_ads_client()
         customer_id = self.account_id.operating_customer_id
         
-        vals = {'name': self.name}
+        vals = {
+            'name': self.name,
+            'status': self.status,
+            'type': self.type,
+        }
         from ..services.google_ads_mutate import GoogleAdsMutateService
         ok, result = GoogleAdsMutateService.create_ad_group(
             client, customer_id, self.campaign_id.google_campaign_id, vals

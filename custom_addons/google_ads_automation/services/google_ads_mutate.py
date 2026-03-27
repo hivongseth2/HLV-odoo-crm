@@ -314,9 +314,21 @@ class GoogleAdsMutateService:
             ad_group = ad_group_operation.create
 
             ad_group.name = vals.get('name')
-            ad_group.status = client.enums.AdGroupStatusEnum.ENABLED
             ad_group.campaign = client.get_service("CampaignService").campaign_path(customer_id, campaign_id)
-            ad_group.type_ = client.enums.AdGroupTypeEnum.SEARCH_STANDARD
+
+            # Map Status
+            status_raw = vals.get('status', 'ENABLED').upper()
+            try:
+                ad_group.status = getattr(client.enums.AdGroupStatusEnum, status_raw)
+            except AttributeError:
+                ad_group.status = client.enums.AdGroupStatusEnum.ENABLED
+
+            # Map Type
+            type_raw = vals.get('type', 'SEARCH_STANDARD').upper()
+            try:
+                ad_group.type_ = getattr(client.enums.AdGroupTypeEnum, type_raw)
+            except AttributeError:
+                ad_group.type_ = client.enums.AdGroupTypeEnum.SEARCH_STANDARD
 
             response = ad_group_service.mutate_ad_groups(
                 customer_id=customer_id,

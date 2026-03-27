@@ -42,7 +42,9 @@
                     <div class="o_premium_card border-0 bg-light-subtle mb-4" >
                         <group string="Thông Tin Kỹ Thuật">
                             <field name="name" class="oe_inline fw-bold" placeholder="Tên Nhóm..." readonly="state == 'synced'"/>
-                            <field name="campaign_id" options="{'no_create': True}"/>
+                            <field name="campaign_id" options="{'no_create': True}" readonly="state == 'synced'"/>
+                            <field name="type" readonly="state == 'synced'"/>
+                            <field name="status" readonly="state == 'synced'"/>
                             <field name="product_ids" widget="many2many_tags" options="{'no_create': True}"/>
                             <field name="google_ad_group_id" readonly="1" invisible="state == 'draft'"/>
                         </group>
