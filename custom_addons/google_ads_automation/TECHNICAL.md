@@ -74,6 +74,27 @@ Module được thiết kế theo cấu trúc Domino, Data từ Frontend (Web) c
 - Nhận lệnh từ Rule Engine (ví dụ: `action = 'pause_campaign'`).
 - Bắn lệnh PUT qua Google Ads API để thực thi thật. Nằm trong cấu trúc an toàn: chỉ thực thi nếu `Strategy.is_live = True` (Luồng thật).
 
+### 2.6. Campaign & Ad Group Creation Logic (Tạo mới)
+Hệ thống cho phép tạo mới chiến dịch và nhóm quảng cáo trực tiếp từ Odoo lên Google Ads API.
+
+#### Ma trận tương thích (Compatibility Matrix)
+Khi tạo Nhóm quảng cáo, `AdGroupType` phải tương thích với `AdvertisingChannelType` của Chiến dịch cha:
+
+| Campaign Type | Supported Ad Group Types | Ghi chú |
+|---|---|---|
+| **SEARCH** | `SEARCH_STANDARD`, `SEARCH_DYNAMIC_ADS` | DSA yêu cầu cấu hình Campaign DSA |
+| **DISPLAY** | `DISPLAY_STANDARD` | |
+| **SHOPPING** | `SHOPPING_PRODUCT_ADS` | Yêu cầu Merchant Center ID |
+| **VIDEO** | `VIDEO_TRUE_VIEW_IN_STREAM`, `VIDEO_BUMPER`, `VIDEO_OUTSTREAM` | |
+| **PERFORMANCE_MAX** | **N/A (Asset Group)** | PMax không dùng Ad Group |
+
+#### Atomic Mutate for PMax
+Để thỏa mãn **Brand Guidelines** của Google (bắt buộc có Logo & Business Name khi tạo PMax qua API), module sử dụng `GoogleAdsService.mutate` để thực hiện giao dịch nguyên tử:
+1. Tạo `Asset` (Business Name).
+2. Tạo `Asset` (Logo Image).
+3. Tạo `Campaign` (Tạm giữ ID `-1`).
+4. Liên kết Asset vào Campaign ID `-1`.
+
 ---
 
 ## 3. Chế Độ Demo (Safe Mode)

@@ -80,23 +80,29 @@ Mỗi tài khoản Google Ads tương ứng 1 record ở đây.
 
 **Vị trí:** Google Ads > Chiến Dịch / Nhóm Quảng Cáo / Quảng Cáo
 
-Đây là dữ liệu được **sync tự động từ Google Ads** về Odoo, không cần nhập tay.
+Hệ thống cho phép **Tạo mới** và **Cập nhật** dữ liệu trực tiếp từ Odoo lên Google Ads.
 
-### Dữ liệu được sync
+### 3.1. Tạo mới Chiến dịch
+Khi nhấn **Mới** ở form Chiến dịch, anh cần lưu ý các trường trong tab **Cấu hình Google Ads**:
+- **Ngân sách hàng ngày**: Số tiền anh muốn chi tiêu mỗi ngày.
+- **URL Trang đích (Final URL)**: Link web của quảng cáo.
+- **Tên thương hiệu & Logo (Chỉ cho PMax)**: Bắt buộc điền nếu anh tạo chiến dịch Tối đa hiệu suất (PMax) để vượt qua Brand Guidelines của Google.
 
-| Field | Nguồn |
-|---|---|
-| Tên, ID | Google Ads |
-| Trạng thái (Enabled / Paused) | Google Ads |
-| Loại kênh (Search, Display, PMax) | Google Ads |
-| Clicks, Impressions, Cost | Metrics ngày hôm qua |
-| Conversions | Metrics ngày hôm qua (cần Conversion Tracking) |
+### 3.2. Tạo mới Nhóm Quảng Cáo & Quy tắc Tương thích
+Khi tạo Nhóm quảng cáo, anh **BẮT BUỘC** phải chọn loại nhóm tương thích với Chiến dịch cha. Nếu chọn sai, Google sẽ báo lỗi `OPERATION_NOT_PERMITTED_FOR_CONTEXT`.
 
-> **Lưu ý:** Dữ liệu này chỉ phản ánh **ngày hôm qua** (`YESTERDAY` trong GAQL). Mỗi lần nhấn "Đồng Bộ" hoặc cron chạy sẽ ghi đè metrics mới nhất.
+| Loại Chiến dịch | Loại Nhóm hỗ trợ | Lưu ý |
+|---|---|---|
+| **Tìm kiếm (Search)** | Tìm kiếm chuẩn, Tìm kiếm động | |
+| **Hiển thị (Display)** | Hiển thị chuẩn | |
+| **Mua sắm (Shopping)** | Mua sắm sản phẩm | Cần có Merchant ID |
+| **Video** | Video In-stream, Video Bumper... | |
+| **Tối đa hiệu suất (PMax)** | **KHÔNG DÙNG NHÓM QUẢNG CÁO** | PMax dùng "Nhóm thành phần" (quản lý ở form Chiến dịch) |
 
-### Thay đổi trạng thái
+### 3.3. Đồng bộ trạng thái (Pause / Enable)
+Khi anh thay đổi trạng thái trong Odoo và nhấn **Đồng bộ**, Odoo sẽ gửi lệnh bật/tắt tương ứng lên Google Ads.
 
-Khi Rule Engine xử lý (ở chế độ Live), trường `Trạng Thái` sẽ thay đổi trực tiếp trong Odoo và đồng thời gửi lệnh lên Google Ads.
+> **Lưu ý:** Dữ liệu metrics (Clicks, Cost...) vẫn được sync tự động từ Google về Odoo hàng ngày để hỗ trợ tính toán ROAS.
 
 ---
 
