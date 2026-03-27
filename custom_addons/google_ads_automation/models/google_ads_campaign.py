@@ -60,7 +60,6 @@ class GoogleAdsCampaign(models.Model):
         ('PERFORMANCE_MAX', 'Tối Đa Hiệu Suất (PMax)'),
         ('DISCOVERY',       'Khám Phá (Discovery)'),
         ('HOTEL',           'Khách Sạn (Hotel)'),
-        ('UNKNOWN',         'Không rõ'),
     ], string='Loại Kênh', help='Loại kênh quảng cáo từ Google Ads', readonly=True, default='SEARCH')
 
     # Cấu hình Chiến dịch (Dùng để tạo mới/cập nhật)
