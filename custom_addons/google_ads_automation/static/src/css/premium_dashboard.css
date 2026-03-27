@@ -296,3 +296,25 @@
     padding-top: 12px;
     border-top: 1px dashed var(--border-color);
 }
+
+/* Dashboard Specifics - Data Analyst Style */
+.o_performance_dashboard .o_dashboard_card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: var(--white) !important;
+}
+
+.o_performance_dashboard .o_dashboard_card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 20px -8px rgba(0,0,0,0.15) !important;
+    border-color: var(--info-color) !important;
+}
+
+.bg-primary-subtle { background-color: #eef2ff !important; }
+.bg-info-subtle { background-color: #ecfeff !important; }
+.bg-danger-subtle { background-color: #fef2f2 !important; }
+.bg-success-subtle { background-color: #f0fdf4 !important; }
+
+.fs-2 { font-size: 1.5rem !important; }
+@media (min-width: 992px) {
+    .fs-2 { font-size: 2rem !important; }
+}

@@ -50,19 +50,7 @@
                         </group>
                     </div>
 
-                    <group>
-                        <group string="Hiệu Suất Quảng Cáo">
-                            <field name="clicks" readonly="1"/>
-                            <field name="impressions" readonly="1"/>
-                            <field name="cost" readonly="1"/>
-                            <field name="conversions" readonly="1"/>
-                            <field name="conversion_rate" widget="progressbar" readonly="1"/>
-                            <field name="roas" readonly="1" widget="badge"
-                                   decoration-success="roas &gt;= 3" 
-                                   decoration-danger="roas &lt; 1" 
-                                   decoration-warning="roas &gt;= 1 and roas &lt; 3"/>
-                        </group>
-                    </group>
+                    <field name="performance_dashboard_html" widget="html" readonly="1" invisible="not id"/>
                 </sheet>
             </form>
         </field>

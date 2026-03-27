@@ -59,24 +59,7 @@
                     
                     <field name="hero_header_html" widget="html" readonly="1" invisible="not id"/>
                     
-                    <div class="o_kpi_dashboard mt-3" invisible="not id">
-                        <div class="o_kpi_tile shadow-sm border-0">
-                            <span class="o_kpi_label">LƯỢT NHẤP</span>
-                            <span class="o_kpi_value text-primary"><field name="clicks" readonly="1"/></span>
-                        </div>
-                        <div class="o_kpi_tile shadow-sm border-0">
-                            <span class="o_kpi_label">CHI PHÍ</span>
-                            <span class="o_kpi_value text-danger"><field name="cost" widget="monetary" readonly="1"/></span>
-                        </div>
-                        <div class="o_kpi_tile shadow-sm border-0">
-                            <span class="o_kpi_label">CHUYỂN ĐỔI</span>
-                            <span class="o_kpi_value text-success"><field name="conversions" readonly="1"/></span>
-                        </div>
-                        <div class="o_kpi_tile shadow-sm border-0">
-                            <span class="o_kpi_label">ROAS</span>
-                            <span class="o_kpi_value text-info"><field name="roas" widget="badge" decoration-success="roas &gt;= 3"/></span>
-                        </div>
-                    </div>
+                    <field name="performance_dashboard_html" widget="html" readonly="1" invisible="not id"/>
 
                     <div class="row">
                         <div class="col-lg-7">
