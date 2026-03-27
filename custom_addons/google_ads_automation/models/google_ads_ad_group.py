@@ -158,7 +158,13 @@ class GoogleAdsAdGroup(models.Model):
         if ok:
             self.write({'google_ad_group_id': result.split('/')[-1], 'state': 'synced'})
         else:
-            raise UserError(_("Đồng bộ Ad Group thất bại: %s") % result)
+            error_msg = result
+            if 'CANNOT_ADD_ADGROUP_OF_TYPE_DSA_TO_CAMPAIGN_WITHOUT_DSA_SETTING' in result:
+                error_msg = _("Loại nhóm 'Tìm kiếm động (DSA)' chỉ dùng được với các Chiến dịch đã bật cấu hình DSA. Anh hãy chọn loại 'Tìm kiếm chuẩn' hoặc đổi Chiến dịch.")
+            elif 'DUPLICATE_ADGROUP_NAME' in result:
+                error_msg = _("Tên nhóm quảng cáo này bị trùng trong chiến dịch. Anh hãy đổi tên khác.")
+
+            raise UserError(_("Đồng bộ Ad Group thất bại: %s") % error_msg)
 
     _sql_constraints = [
         ('google_ad_group_id_uniq', 'unique(google_ad_group_id)', 'Google Ad Group ID phải là duy nhất!'),
