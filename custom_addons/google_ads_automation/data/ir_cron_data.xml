@@ -22,5 +22,17 @@
             <field name="interval_type">days</field>
             <field name="active" eval="False"/>
         </record>
+
+        <record id="ir_cron_google_ads_sync_data" model="ir.cron">
+            <field name="name">Google Ads: Tự Động Kéo Dữ Liệu</field>
+            <field name="model_id" search="[('model', '=', 'google.ads.account')]"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_auto_sync_all()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+            <!-- Tắt active theo Odoo 18 rule, bật lại qua giao diện -->
+            <field name="active" eval="False"/>
+        </record>
     </data>
 </odoo>

@@ -424,6 +424,18 @@ class GoogleAdsAccount(models.Model):
         except Exception as e:
             raise UserError(_("Không thể liệt kê tài khoản: %s") % str(e))
 
+    @api.model
+    def _cron_auto_sync_all(self):
+        """Cron tự động đồng bộ số liệu cho toàn bộ Account đã kết nối (thay thế bấm nút tay)"""
+        accounts = self.search([('state', '=', 'connected'), ('active', '=', True)])
+        _logger.info("Cron: Started Google Ads Auto Sync for %s accounts", len(accounts))
+        for acc in accounts:
+            try:
+                acc.action_sync_all_data()
+            except Exception as e:
+                _logger.error("Auto Sync API Failed for account %s: %s", acc.name, str(e))
+        _logger.info("Cron: Completed Google Ads Auto Sync.")
+
     def action_sync_all_data(self):
         """Đồng bộ toàn bộ Dữ liệu Chiến dịch & Chỉ số hiệu suất"""
         self.ensure_one()
