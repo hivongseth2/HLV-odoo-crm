@@ -377,16 +377,44 @@ class GoogleAdsMutateService:
 
     @staticmethod
     def update_campaign_budget(client, customer_id, campaign_resource_name, new_budget_micros):
-        """Cập nhật budget cho campaign
-        
-        Note: Google Ads quản lý budget qua CampaignBudget resource riêng,
-        không trực tiếp trên Campaign. Logic đầy đủ cần GAQL query lấy
-        budget resource name trước rồi mutate.
-        Đây là placeholder — sẽ implement đầy đủ khi có tài khoản thật để test.
-        """
-        _logger.warning(
-            "update_campaign_budget chưa implement đầy đủ. "
-            "campaign=%s, new_budget=%s micros",
-            campaign_resource_name, new_budget_micros,
-        )
-        return False, "Chưa implement — cần test với tài khoản thật"
+        """Cập nhật budget cho campaign"""
+        try:
+            ga_service = client.get_service("GoogleAdsService")
+            
+            # 1. Get the budget resource name from the campaign
+            campaign_id = campaign_resource_name.split("/")[-1]
+            query = f"SELECT campaign.campaign_budget FROM campaign WHERE campaign.id = {campaign_id}"
+            
+            response = ga_service.search(customer_id=customer_id, query=query)
+            budget_resource_name = None
+            for row in response:
+                budget_resource_name = row.campaign.campaign_budget
+                break
+                
+            if not budget_resource_name:
+                return False, "Không tìm thấy ngân sách liên kết với chiến dịch này"
+                
+            # 2. Update the budget amount
+            budget_service = client.get_service("CampaignBudgetService")
+            budget_operation = client.get_type("CampaignBudgetOperation")
+            
+            budget = budget_operation.update
+            budget.resource_name = budget_resource_name
+            budget.amount_micros = int(new_budget_micros)
+            
+            # Field mask
+            from google.protobuf.field_mask_pb2 import FieldMask
+            mask_paths = ['amount_micros']
+            budget_operation.update_mask.CopyFrom(FieldMask(paths=mask_paths))
+            
+            # Send mutate request
+            budget_response = budget_service.mutate_campaign_budgets(
+                customer_id=customer_id, operations=[budget_operation]
+            )
+            
+            _logger.info("Campaign budget %s updated to %s micros.", budget_resource_name, new_budget_micros)
+            return True, budget_response.results[0].resource_name
+            
+        except Exception as e:
+            _logger.error("Update campaign budget failed: %s", str(e))
+            return False, str(e)

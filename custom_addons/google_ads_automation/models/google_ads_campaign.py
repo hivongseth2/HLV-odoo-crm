@@ -264,18 +264,6 @@ class GoogleAdsCampaign(models.Model):
         if not self.channel_type or self.channel_type == 'UNKNOWN':
             raise UserError(_("Vui lòng chọn 'Loại Kênh' hợp lệ (ví dụ: Tìm kiếm, Hiển thị, PMax...) trước khi đồng bộ lên Google Ads."))
 
-        if self.state == 'synced' and not self.env.context.get('force_sync'):
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': _('Thông Báo'),
-                    'message': _('Chiến dịch này đã được liên kết và đồng bộ trước đó.'),
-                    'type': 'info',
-                    'sticky': False,
-                }
-            }
-
         if self.account_id.is_demo:
             self.google_campaign_id = f"DEMO_SYNC_{self.id}"
             self.state = 'synced'
@@ -314,6 +302,8 @@ class GoogleAdsCampaign(models.Model):
         if self.google_campaign_id:
             google_resource_name = f"customers/{customer_id}/campaigns/{self.google_campaign_id}"
             ok, result = GoogleAdsMutateService.update_campaign(client, customer_id, google_resource_name, vals)
+            if ok and vals.get('budget_amount'):
+                GoogleAdsMutateService.update_campaign_budget(client, customer_id, google_resource_name, int(vals['budget_amount'] * 1000000))
         else:
             # Nếu chưa có ID, thử tìm theo tên trên Google ADS trước khi tạo mới
             _logger.info("Searching for existing campaign by name: %s", self.name)
@@ -328,6 +318,8 @@ class GoogleAdsCampaign(models.Model):
                 })
                 _logger.info("Found existing campaign %s. Auto-linked.", google_id)
                 ok, result = GoogleAdsMutateService.update_campaign(client, customer_id, existing_resource_name, vals)
+                if ok and vals.get('budget_amount'):
+                    GoogleAdsMutateService.update_campaign_budget(client, customer_id, existing_resource_name, int(vals['budget_amount'] * 1000000))
             else:
                 # Nếu thực sự không có, mới thực hiện CREATE
                 ok, result = GoogleAdsMutateService.create_campaign(client, customer_id, vals)
