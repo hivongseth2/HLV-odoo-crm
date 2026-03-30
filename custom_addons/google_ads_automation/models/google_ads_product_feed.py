@@ -221,7 +221,11 @@ class GoogleAdsProductFeedLine(models.Model):
     @api.depends('product_id', 'product_id.name', 'product_default_code')
     def _compute_display_name(self):
         for line in self:
-            line.display_name = f"[{line.product_default_code}] {line.product_id.name}" if line.product_default_code else line.product_id.name
+            name = line.product_id.name or _("Chưa có tên")
+            if line.product_default_code:
+                line.display_name = f"[{line.product_default_code}] {name}"
+            else:
+                line.display_name = name
 
     feed_id = fields.Many2one(
         'google.ads.product.feed', string='Feed',
