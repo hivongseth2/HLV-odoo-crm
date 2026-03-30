@@ -205,9 +205,9 @@ class GoogleAdsProductFeedLine(models.Model):
     _description = 'Dòng sản phẩm trong Product Feed'
     _order = 'product_id'
 
-    display_name = fields.Char(compute='_compute_display_name')
+    display_name = fields.Char(compute='_compute_display_name', store=True)
 
-    @api.depends('product_id', 'product_default_code')
+    @api.depends('product_id', 'product_id.name', 'product_default_code')
     def _compute_display_name(self):
         for line in self:
             line.display_name = f"[{line.product_default_code}] {line.product_id.name}" if line.product_default_code else line.product_id.name
