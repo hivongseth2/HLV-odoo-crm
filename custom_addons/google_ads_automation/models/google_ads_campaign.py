@@ -265,13 +265,31 @@ class GoogleAdsCampaign(models.Model):
             raise UserError(_("Vui lòng chọn 'Loại Kênh' hợp lệ (ví dụ: Tìm kiếm, Hiển thị, PMax...) trước khi đồng bộ lên Google Ads."))
 
         if self.state == 'synced' and not self.env.context.get('force_sync'):
-            return True
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('Thông Báo'),
+                    'message': _('Chiến dịch này đã được liên kết và đồng bộ trước đó.'),
+                    'type': 'info',
+                    'sticky': False,
+                }
+            }
 
         if self.account_id.is_demo:
             self.google_campaign_id = f"DEMO_SYNC_{self.id}"
             self.state = 'synced'
             self.message_post(body=_("[DEMO] Chiến dịch đã được giả lập đồng bộ thành công."))
-            return True
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('Đồng Bộ DEMO'),
+                    'message': _('Đã giả lập tạo chiến dịch thành công (Không ảnh hưởng tới Google Ads thật).'),
+                    'type': 'success',
+                    'sticky': False,
+                }
+            }
 
         client = self.account_id._get_google_ads_client()
         customer_id = self.account_id.operating_customer_id
@@ -321,7 +339,18 @@ class GoogleAdsCampaign(models.Model):
                 'google_campaign_id': google_id,
                 'state': 'synced',
             })
-            self.message_post(body=_("Chiến dịch đã được tạo trên Google Ads. ID: %s") % google_id)
+            self.message_post(body=_("Chiến dịch đã được tạo/cập nhật trên Google Ads. ID: %s") % google_id)
+            
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('Đồng Bộ Thành Công'),
+                    'message': _('Chiến dịch đã được đẩy lên hệ thống Google Ads thành công. (ID: %s)') % google_id,
+                    'type': 'success',
+                    'sticky': False,
+                }
+            }
         else:
             hint = ""
             error_msg = result
