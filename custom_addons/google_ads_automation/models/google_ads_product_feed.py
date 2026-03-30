@@ -109,6 +109,13 @@ class GoogleAdsProductFeed(models.Model):
     # -----------------------------------------------------------------
     # Actions
     # -----------------------------------------------------------------
+    def action_refresh_stock(self):
+        """Cập nhật lại tồn kho & giá từ Odoo cho tất cả dòng trong feed"""
+        self.ensure_one()
+        for line in self.line_ids:
+            line._compute_stock_fields()
+            line._compute_margin_percent()
+            line._compute_avg_daily_sales()
         self.message_post(body=_("Đã cập nhật tồn kho & giá cho %s sản phẩm.") % len(self.line_ids))
         
         return {
