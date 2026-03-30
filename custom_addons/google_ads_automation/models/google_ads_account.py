@@ -435,24 +435,37 @@ class GoogleAdsAccount(models.Model):
                 'tag': 'display_notification',
                 'params': {
                     'title': _('DEMO — Đồng bộ Hoàn tất'),
-                    'message': _('Đã tạo dữ liệu mẫu: 4 Campaigns, Nhóm QC và Ads tương ứng.'),
+                    'message': _('Đã tạo dữ liệu mẫu thành công.'),
                     'type': 'success',
                     'sticky': False,
                 }
             }
 
-        self.action_sync_campaigns()
-        self.action_sync_ad_groups()
-        self.action_sync_ads()
+        _logger.info("Bắt đầu đồng bộ toàn bộ dữ liệu cho tài khoản: %s", self.name)
+        
+        c_count = self.action_sync_campaigns()
+        g_count = self.action_sync_ad_groups()
+        a_count = self.action_sync_ads()
+
+        summary_msg = _(
+            "Đồng bộ Google Ads hoàn tất:\n"
+            "- Chiến dịch: %s\n"
+            "- Nhóm quảng cáo: %s\n"
+            "- Mẫu quảng cáo: %s"
+        ) % (c_count if isinstance(c_count, int) else 'OK', 
+             g_count if isinstance(g_count, int) else 'OK', 
+             a_count if isinstance(a_count, int) else 'OK')
+
+        self.message_post(body=Markup("<b><i class='fa fa-check-circle text-success'></i> %s</b>") % summary_msg.replace('\n', '<br/>'))
 
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': _('Đồng bộ Hoàn tất'),
-                'message': _('Đã đồng bộ toàn bộ dữ liệu (Chiến dịch, Nhóm QC, Quảng Cáo, Chỉ số).'),
+                'title': _('Đồng bộ Thành Công'),
+                'message': summary_msg,
                 'type': 'success',
-                'sticky': False,
+                'sticky': True, # Bắt buộc người dùng nhìn thấy
             }
         }
 
@@ -664,8 +677,8 @@ class GoogleAdsAccount(models.Model):
                         campaign_obj.create(vals)
                     synced_count += 1
             
-            self.message_post(body=_("Đã đồng bộ %s chiến dịch.") % synced_count)
-            return True
+            _logger.info("Đã đồng bộ %s chiến dịch.", synced_count)
+            return synced_count
             
         except GoogleAdsException as ex:
             raise UserError(_("Không thể lấy dữ liệu chiến dịch. Lỗi API Google Ads: %s") % str(ex))
@@ -730,8 +743,8 @@ class GoogleAdsAccount(models.Model):
                         ad_group_obj.create(vals)
                     synced_count += 1
             
-            self.message_post(body=_("Đã đồng bộ %s nhóm quảng cáo.") % synced_count)
-            return True
+            _logger.info("Đã đồng bộ %s nhóm quảng cáo.", synced_count)
+            return synced_count
             
         except GoogleAdsException as ex:
             raise UserError(_("Không thể lấy dữ liệu nhóm quảng cáo. Lỗi API: %s") % str(ex))
@@ -801,8 +814,8 @@ class GoogleAdsAccount(models.Model):
                         ad_obj.create(vals)
                     synced_count += 1
             
-            self.message_post(body=_("Đã đồng bộ %s mẫu quảng cáo.") % synced_count)
-            return True
+            _logger.info("Đã đồng bộ %s mẫu quảng cáo.", synced_count)
+            return synced_count
             
         except GoogleAdsException as ex:
             raise UserError(_("Không thể lấy dữ liệu mẫu quảng cáo. Lỗi API: %s") % str(ex))
