@@ -97,10 +97,10 @@ class GoogleAdsMutateService:
             campaign_operation = client.get_type("CampaignOperation")
             campaign = campaign_operation.create
 
-            campaign.name = vals.get('name')
+            campaign.name = str(vals.get('name') or "Unnamed Campaign")
             
             # Channel Type handling (Safe mapping)
-            channel_type_raw = vals.get('channel_type', 'SEARCH')
+            channel_type_raw = str(vals.get('channel_type', 'SEARCH')).upper()
             try:
                 # Discovery (Khám phá) đã được đổi tên thành Demand Gen (Tạo nhu cầu) trong các phiên bản API mới
                 if channel_type_raw == 'DISCOVERY':
@@ -119,11 +119,12 @@ class GoogleAdsMutateService:
             campaign.status = client.enums.CampaignStatusEnum.PAUSED # Always start paused for safety
             
             # Final URL (Lading Page)
-            if vals.get('final_url'):
-                campaign.final_urls.append(vals.get('final_url'))
+            final_url = vals.get('final_url')
+            if final_url:
+                campaign.final_urls.append(str(final_url))
 
             # Budget handling
-            campaign.campaign_budget = budget_resource
+            campaign.campaign_budget = str(budget_resource)
 
             # Bidding Strategy handling
             # Note: For some campaign types like VIDEO, creation via standard mutate is restricted.
@@ -347,27 +348,33 @@ class GoogleAdsMutateService:
             ad_group_ad_operation = client.get_type("AdGroupAdOperation")
             ad_group_ad = ad_group_ad_operation.create
 
-            ad_group_ad.ad_group = client.get_service("AdGroupService").ad_group_path(customer_id, ad_group_id)
+            ad_group_ad.ad_group = client.get_service("AdGroupService").ad_group_path(str(customer_id), str(ad_group_id))
             ad_group_ad.status = client.enums.AdGroupAdStatusEnum.ENABLED
             
             ad = ad_group_ad.ad
-            ad.final_urls.append(vals.get('final_url'))
+            final_url = vals.get('final_url')
+            if final_url:
+                ad.final_urls.append(str(final_url))
             
             # Responsive Search Ad content
             rsa = ad.responsive_search_ad
             
             # Headline
-            headline = client.get_type("AdTextAsset")
-            headline.text = vals.get('headline')[:30] # Max 30 chars
-            rsa.headlines.append(headline)
+            headline_text = str(vals.get('headline') or "")[:30]
+            if headline_text:
+                headline = client.get_type("AdTextAsset")
+                headline.text = headline_text
+                rsa.headlines.append(headline)
             
             # Description
-            description = client.get_type("AdTextAsset")
-            description.text = vals.get('description')[:90] # Max 90 chars
-            rsa.descriptions.append(description)
+            desc_text = str(vals.get('description') or "")[:90]
+            if desc_text:
+                description = client.get_type("AdTextAsset")
+                description.text = desc_text
+                rsa.descriptions.append(description)
 
             response = ad_group_ad_service.mutate_ad_group_ads(
-                customer_id=customer_id,
+                customer_id=str(customer_id),
                 operations=[ad_group_ad_operation],
             )
             return True, response.results[0].resource_name

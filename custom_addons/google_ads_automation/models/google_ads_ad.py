@@ -233,9 +233,9 @@ class GoogleAdsAd(models.Model):
         customer_id = account.operating_customer_id
         
         vals = {
-            'headline': self.headline or self.name,
-            'description': self.description or self.name,
-            'final_url': self.final_urls,
+            'headline': str(self.headline or self.name or ""),
+            'description': str(self.description or self.name or ""),
+            'final_url': str(self.final_urls or ""),
         }
         from ..services.google_ads_mutate import GoogleAdsMutateService
         ok, result = GoogleAdsMutateService.create_ad(
