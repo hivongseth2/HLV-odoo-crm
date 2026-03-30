@@ -359,18 +359,16 @@ class GoogleAdsMutateService:
             # Responsive Search Ad content
             rsa = ad.responsive_search_ad
             
-            # Headline
-            headline_text = str(vals.get('headline') or "")[:30]
-            if headline_text:
+            # Headlines
+            for text in vals.get('headlines', []):
                 headline = client.get_type("AdTextAsset")
-                headline.text = headline_text
+                headline.text = text[:30] # Max 30 chars
                 rsa.headlines.append(headline)
             
-            # Description
-            desc_text = str(vals.get('description') or "")[:90]
-            if desc_text:
+            # Descriptions
+            for text in vals.get('descriptions', []):
                 description = client.get_type("AdTextAsset")
-                description.text = desc_text
+                description.text = text[:90] # Max 90 chars
                 rsa.descriptions.append(description)
 
             response = ad_group_ad_service.mutate_ad_group_ads(

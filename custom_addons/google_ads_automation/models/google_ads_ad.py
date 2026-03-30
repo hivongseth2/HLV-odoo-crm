@@ -183,8 +183,8 @@ class GoogleAdsAd(models.Model):
     final_urls = fields.Char(string='URL Đích (Final URL)')
     
     # Creation fields
-    headline = fields.Char(string='Tiêu đề chính')
-    description = fields.Text(string='Mô tả quảng cảo')
+    headline = fields.Text(string='Danh sách Tiêu đề (RSA)', help='Nhập ít nhất 3 tiêu đề, mỗi tiêu đề 1 dòng.')
+    description = fields.Text(string='Danh sách Mô tả (RSA)', help='Nhập ít nhất 2 mô tả, mỗi mô tả 1 dòng.')
 
     # Metrics
     clicks = fields.Integer(string='Lượt Nhấp', default=0, readonly=True)
@@ -232,10 +232,21 @@ class GoogleAdsAd(models.Model):
         client = account._get_google_ads_client()
         customer_id = account.operating_customer_id
         
+        # RSA requirements: 3 headlines, 2 descriptions, 1 final URL
+        headlines = [h.strip() for h in (self.headline or "").split('\n') if h.strip()]
+        descriptions = [d.strip() for d in (self.description or "").split('\n') if d.strip()]
+        
+        if len(headlines) < 3:
+            raise UserError(_("Quảng cáo RSA yêu cầu ít nhất 3 tiêu đề. Hiện tại chỉ có %s. Vui lòng nhập mỗi tiêu đề 1 dòng.") % len(headlines))
+        if len(descriptions) < 2:
+            raise UserError(_("Quảng cáo RSA yêu cầu ít nhất 2 mô tả. Hiện tại chỉ có %s. Vui lòng nhập mỗi mô tả 1 dòng.") % len(descriptions))
+        if not self.final_urls:
+            raise UserError(_("Vui lòng nhập URL Đích (Final URL) trước khi đồng bộ."))
+
         vals = {
-            'headline': str(self.headline or self.name or ""),
-            'description': str(self.description or self.name or ""),
-            'final_url': str(self.final_urls or ""),
+            'headlines': headlines,
+            'descriptions': descriptions,
+            'final_url': str(self.final_urls),
         }
         from ..services.google_ads_mutate import GoogleAdsMutateService
         ok, result = GoogleAdsMutateService.create_ad(
