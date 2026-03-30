@@ -66,7 +66,7 @@ class GoogleAdsCampaign(models.Model):
     budget_amount = fields.Float(string='Ngân sách hàng ngày', default=50000.0, tracking=True)
     business_name = fields.Char(string='Tên thương hiệu', help='Yêu cầu cho PMax nếu bật Brand Guidelines', tracking=True)
     logo_image = fields.Binary(string='Logo hình vuông', help='Yêu cầu cho PMax (tỷ lệ 1:1)', tracking=True)
-    final_url = fields.Char(string='URL trang đích', help='Link web của anh', tracking=True)
+    final_url = fields.Char(string='URL trang đích', help='Đường dẫn (URL) trang đích của chiến dịch', tracking=True)
 
     # Metrics (Chỉ số hiệu suất cơ bản)
     clicks = fields.Integer(string='Lượt Nhấp', default=0, readonly=True)
@@ -347,9 +347,9 @@ class GoogleAdsCampaign(models.Model):
             hint = ""
             error_msg = result
             if 'ADVERTISING_CHANNEL_TYPE_NOT_AVAILABLE_FOR_ACCOUNT_TYPE' in result:
-                error_msg = _("Tài khoản Google Ads của anh hiện chưa được phép tạo loại chiến dịch này trực tiếp (thường gặp ở tài khoản mới hoặc tài khoản ở chế độ Thông minh - Smart Mode).")
+                error_msg = _("Tài khoản Google Ads hiện chưa được phép tạo loại chiến dịch này trực tiếp (thường gặp ở tài khoản mới hoặc tài khoản ở chế độ Thông minh - Smart Mode).")
             elif 'MUTATE_NOT_ALLOWED' in result:
-                error_msg = _("Google Ads hiện tại không cho phép tạo loại chiến dịch này qua API cho tài khoản của anh. Anh vui lòng kiểm tra lại quyền truy cập hoặc tạo trước trên Google Ads.")
+                error_msg = _("Google Ads hiện tại không cho phép tạo loại chiến dịch này qua API cho tài khoản. Vui lòng kiểm tra lại quyền truy cập hoặc tạo trước trên Google Ads.")
             elif 'REQUIRED_BUSINESS_NAME_ASSET_NOT_LINKED' in result or 'REQUIRED_LOGO_ASSET_NOT_LINKED' in result:
                 error_msg = _("Chiến dịch PMax yêu cầu Tên thương hiệu và Logo. Vui lòng điền đủ 'Tên thương hiệu' và tải 'Logo hình vuông' trong phần Cấu hình Google Ads.")
             elif "RESOURCE_NOT_FOUND" in result and "merchant_id" in result:

@@ -164,7 +164,7 @@ class GoogleAdsProductFeed(models.Model):
         
         if not campaigns:
             raise UserError(_("Không tìm thấy Chiến dịch nào khớp trong tài khoản '%s'. "
-                              "Anh vui lòng nhấn 'Đồng bộ dữ liệu' ở Tài khoản Google Ads trước.") % self.account_id.name)
+                              "Vui lòng nhấn 'Đồng bộ dữ liệu' ở Tài khoản Google Ads trước.") % self.account_id.name)
 
         for line in self.line_ids:
             sku = (line.product_default_code or '').strip()
@@ -196,7 +196,7 @@ class GoogleAdsProductFeed(models.Model):
         if count == 0:
             title = _('Thông báo')
             message = _('Không tìm thấy Chiến dịch nào khớp với SKU hoặc Tên sản phẩm trong Feed này. '
-                        'Anh vui lòng kiểm tra lại tên Chiến dịch hoặc gán thủ công ở cột "Chiến Dịch Liên Kết".')
+                        'Vui lòng kiểm tra lại tên Chiến dịch hoặc gán thủ công ở cột "Chiến Dịch Liên Kết".')
             type = 'warning'
 
         return {

@@ -235,7 +235,7 @@ class GoogleAdsStrategy(models.Model):
             linked_lines = lines.filtered(lambda l: l.campaign_ids)
             if not linked_lines:
                 raise UserError(_("Không có sản phẩm nào trong Feed '%s' được liên kết với Chiến dịch Google Ads. "
-                                  "Anh vui lòng chọn 'Chiến Dịch Liên Kết' cho các sản phẩm trong Product Feed trước khi sinh Rule.") 
+                                  "Vui lòng chọn 'Chiến Dịch Liên Kết' cho các sản phẩm trong Product Feed trước khi sinh Rule.") 
                                 % strategy.feed_id.name)
 
             _logger.info("Generating rules for strategy: %s (Type: %s, Feed: %s)", strategy.name, strategy.strategy_type, strategy.feed_id.name)
@@ -262,7 +262,7 @@ class GoogleAdsStrategy(models.Model):
             ])
             
             if not generated_rules:
-                msg = _("Không có Rule nào được sinh ra. Anh vui lòng kiểm tra xem các sản phẩm trong Feed '%s' đã được gán 'Chiến Dịch Liên Kết' chưa.") % strategy.feed_id.name
+                msg = _("Không có Rule nào được sinh ra. Vui lòng kiểm tra xem các sản phẩm trong Feed '%s' đã được gán 'Chiến Dịch Liên Kết' chưa.") % strategy.feed_id.name
                 log_lines.append(f"<span class='text-danger'>{msg}</span>")
                 strategy.message_post(body=Markup("<br/>".join(log_lines)))
                 # Chỉ raise error khi thực sự không tạo được gì (để tránh rollback oan)

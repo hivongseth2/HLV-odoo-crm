@@ -209,7 +209,7 @@ class GoogleAdsAdGroup(models.Model):
         if self.campaign_id.channel_type == 'PERFORMANCE_MAX':
             raise UserError(_("Chiến dịch Tối đa hiệu suất (PMax) không sử dụng 'Nhóm quảng cáo'. "
                               "Thay vào đó, PMax sử dụng 'Nhóm thành phần' (Asset Group). "
-                              "Anh vui lòng chọn Chiến dịch Tìm kiếm hoặc Hiển thị để tạo Nhóm quảng cáo."))
+                              "Vui lòng chọn Chiến dịch Tìm kiếm hoặc Hiển thị để tạo Nhóm quảng cáo."))
 
         if self.campaign_id.account_id.is_demo:
             self.google_ad_group_id = f"DEMO_AG_SYNC_{self.id}"
@@ -234,9 +234,9 @@ class GoogleAdsAdGroup(models.Model):
         else:
             error_msg = result
             if 'CANNOT_ADD_ADGROUP_OF_TYPE_DSA_TO_CAMPAIGN_WITHOUT_DSA_SETTING' in result:
-                error_msg = _("Loại nhóm 'Tìm kiếm động (DSA)' chỉ dùng được với các Chiến dịch đã bật cấu hình DSA. Anh hãy chọn loại 'Tìm kiếm chuẩn' hoặc đổi Chiến dịch.")
+                error_msg = _("Loại nhóm 'Tìm kiếm động (DSA)' chỉ dùng được với các Chiến dịch đã bật cấu hình DSA. Vui lòng chọn loại 'Tìm kiếm chuẩn' hoặc đổi Chiến dịch.")
             elif 'DUPLICATE_ADGROUP_NAME' in result:
-                error_msg = _("Tên nhóm quảng cáo này bị trùng trong chiến dịch. Anh hãy đổi tên khác.")
+                error_msg = _("Tên nhóm quảng cáo này bị trùng trong chiến dịch. Vui lòng đổi tên khác.")
             elif 'OPERATION_NOT_PERMITTED_FOR_CONTEXT' in result:
                 error_msg = _("Loại nhóm quảng cáo này không được hỗ trợ cho Chiến dịch hiện tại (ví dụ: Chiến dịch PMax/Video không dùng Nhóm Tìm kiếm chuẩn).")
 
