@@ -185,11 +185,33 @@ class GoogleAdsStrategy(models.Model):
                 # Kích hoạt tất cả rules hiện có
                 rules.write({'active': True})
             rec.state = 'active'
+        
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Chiến Lược Đã Kích Hoạt'),
+                'message': _('Chiến lược và các Rules liên quan đã sẵn sàng chạy.'),
+                'type': 'success',
+                'sticky': False,
+            }
+        }
 
     def action_pause(self):
         for rec in self:
             rec.state = 'paused'
             rec.rule_ids.write({'active': False})
+            
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Đã Tạm Dừng'),
+                'message': _('Chiến lược và tất cả Rules liên quan đã được tạm dừng.'),
+                'type': 'warning',
+                'sticky': False,
+            }
+        }
 
     def action_draft(self):
         for rec in self:
@@ -259,6 +281,17 @@ class GoogleAdsStrategy(models.Model):
                 log_lines.append(_("   + [Rule ID: %s] %s") % (rule.id, rule.name))
 
             strategy.message_post(body=Markup("<br/>".join(log_lines)))
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Sinh Rule Hoàn Tất'),
+                'message': _('Đã quét Product Feed và sinh các Rules tự động thành công.'),
+                'type': 'success',
+                'sticky': False,
+            }
+        }
 
     # ── protect_low ──────────────────────────────
     def _generate_rules_protect_low(self, lines):
