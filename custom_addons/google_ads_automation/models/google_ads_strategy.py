@@ -31,6 +31,7 @@ class GoogleAdsStrategy(models.Model):
         ('optimize_profit', 'Tối Ưu Lợi Nhuận'),
         ('push_new',      'Đẩy Hàng Mới Nhập'),
         ('auto_balance',  'Cân Bằng Tự Động'),
+        ('custom',        'Tùy Chỉnh (Custom)'),
     ], string='Loại Chiến Lược', required=True, default='auto_balance',
         tracking=True,
     )
@@ -79,6 +80,45 @@ class GoogleAdsStrategy(models.Model):
     new_product_days = fields.Integer(
         string='SP Mới Trong (ngày)',
         default=30, help='Sản phẩm tạo trong vòng N ngày gần nhất = hàng mới',
+    )
+
+    # ────────────────────────────────────────────
+    # Custom Strategy Settings
+    # ────────────────────────────────────────────
+    custom_condition_field = fields.Selection([
+        ('cost', 'Chi Phí'),
+        ('clicks', 'Lượt Nhấp'),
+        ('impressions', 'Lượt Hiển Thị'),
+        ('conversions', 'Lượt Chuyển Đổi'),
+        ('cpa', 'CPA (Chi Phí / Chuyển Đổi)'),
+        ('stock_qty', 'Tồn Kho Thực Tế'),
+        ('margin_percent', 'Biên Lợi Nhuận (%)'),
+        ('days_of_stock', 'Số Ngày Tồn'),
+        ('avg_daily_sales', 'TB Bán/Ngày'),
+        ('is_new_product', 'Là Sản Phẩm Mới'),
+    ], string='Trường Điều Kiện', default='cost')
+
+    custom_condition_operator = fields.Selection([
+        ('>', 'Lớn hơn'),
+        ('<', 'Nhỏ hơn'),
+        ('=', 'Bằng'),
+        ('>=', 'Lớn hơn hoặc bằng'),
+        ('<=', 'Nhỏ hơn hoặc bằng'),
+    ], string='Toán Tử', default='>')
+
+    custom_condition_value = fields.Float(string='Giá Trị Điều Kiện', default=0.0)
+
+    custom_action_type = fields.Selection([
+        ('pause', 'Tạm Dừng (Pause)'),
+        ('enable', 'Bật Lại (Enable)'),
+        ('increase_budget', 'Tăng Budget (%)'),
+        ('decrease_budget', 'Giảm Budget (%)'),
+        ('notify', 'Chỉ Thông Báo'),
+    ], string='Hành Động', default='notify')
+
+    custom_action_value = fields.Float(
+        string='Giá Trị Hành Động',
+        help='VD: 30 = tăng/giảm 30% budget',
     )
 
     # ────────────────────────────────────────────
@@ -419,6 +459,34 @@ class GoogleAdsStrategy(models.Model):
         self._generate_rules_protect_low(lines)
         self._generate_rules_push_stock(lines)
         self._generate_rules_optimize_profit(lines)
+
+    # ── custom ───────────────────────────────────
+    def _generate_rules_custom(self, lines):
+        """Tự định nghĩa theo người dùng"""
+        self.ensure_one()
+        Rule = self.env['google.ads.rule']
+
+        # Validate mandatory field for custom
+        if not self.custom_condition_field or not self.custom_action_type:
+            raise UserError(_("Vui lòng cấu hình đầy đủ Trường Điều kiện và Hành động cho chiến lược Tùy Chỉnh!"))
+
+        for line in lines.filtered(lambda l: l.campaign_ids):
+            _logger.info("— Creating 'Custom' rules for product: %s", line.product_id.name)
+            
+            Rule.create({
+                'name': _("[Auto Tùy chỉnh] %s — %s") % (self.custom_action_type.upper(), line.product_id.name),
+                'auto_generated': True,
+                'strategy_id': self.id,
+                'account_id': self.account_id.id,
+                'target_type': 'campaign',
+                'condition_field': self.custom_condition_field,
+                'condition_operator': self.custom_condition_operator,
+                'condition_value': self.custom_condition_value,
+                'action_type': self.custom_action_type,
+                'action_value': self.custom_action_value,
+                'product_feed_line_id': line.id,
+                'active': self.state == 'active',
+            })
 
     # ─────────────────────────────────────────────
     # View helpers

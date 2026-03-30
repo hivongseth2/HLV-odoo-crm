@@ -85,7 +85,7 @@
                     </div>
 
                     <notebook>
-                        <page string="Cấu Hình Thông Minh" icon="fa-sliders">
+                        <page string="Cấu Hình Thông Minh" icon="fa-sliders" invisible="strategy_type == 'custom'">
                             <div class="row mt-3">
                                 <div class="col-md-6">
                                     <div class="o_premium_card h-100">
@@ -124,6 +124,28 @@
                                         <group>
                                             <field name="new_product_days"/>
                                             <field name="is_live" widget="boolean_toggle"/>
+                                        </group>
+                                    </div>
+                                </div>
+                            </div>
+                        </page>
+                        <page string="Cấu Hình Tùy Chỉnh" icon="fa-wrench" invisible="strategy_type != 'custom'">
+                            <div class="row mt-3">
+                                <div class="col-md-12">
+                                    <div class="o_premium_card h-100 bg-light border-0">
+                                        <h5 class="text-indigo fw-bold mb-4 border-bottom pb-2"><i class="fa fa-wrench me-2"></i>Rule Tùy Chỉnh Chung</h5>
+                                        <p class="text-muted mb-3"><i class="fa fa-info-circle me-1"></i>Hệ thống sẽ đồng loạt quét tất cả sản phẩm trong Product Feed và tạo ra các Rules tương ứng dựa trên mẫu cấu hình dưới đây.</p>
+                                        <group>
+                                            <group>
+                                                <field name="custom_condition_field" required="strategy_type == 'custom'"/>
+                                                <field name="custom_condition_operator" required="strategy_type == 'custom'"/>
+                                                <field name="custom_condition_value" required="strategy_type == 'custom'"/>
+                                            </group>
+                                            <group>
+                                                <field name="custom_action_type" required="strategy_type == 'custom'"/>
+                                                <field name="custom_action_value" invisible="custom_action_type not in ('increase_budget', 'decrease_budget')" required="strategy_type == 'custom' and custom_action_type in ('increase_budget', 'decrease_budget')"/>
+                                                <field name="is_live" widget="boolean_toggle"/>
+                                            </group>
                                         </group>
                                     </div>
                                 </div>
