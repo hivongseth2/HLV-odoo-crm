@@ -36,7 +36,7 @@ class GoogleAdsAd(models.Model):
                                     <i class="fa fa-folder-open me-1"></i> Ad Group: <span class="text-dark">{rec.ad_group_id.name or '—'}</span>
                                 </div>
                                 <div class="ms-4">
-                                    <i class="fa fa-info-circle me-1"></i> Type: <span class="text-dark">{dict(self._fields['type'].selection).get(rec.type, rec.type)}</span>
+                                    <i class="fa fa-info-circle me-1"></i> Type: <span class="text-dark">{rec.type_id.name or rec.type}</span>
                                 </div>
                             </div>
                         </div>
@@ -166,20 +166,7 @@ class GoogleAdsAd(models.Model):
     ], string='Trạng Thái', default='paused')
 
     type_id = fields.Many2one('google.ads.ad.type', string='Loại Quảng Cáo', required=True)
-    type = fields.Selection([
-        ('RESPONSIVE_SEARCH_AD',    'Tìm Kiếm Thích Ứng (RSA)'),
-        ('EXPANDED_TEXT_AD',        'Tìm Kiếm Văn Bản Mở Rộng'),
-        ('RESPONSIVE_DISPLAY_AD',   'Hiển Thị Thích Ứng'),
-        ('IMAGE_AD',                'Quảng Cáo Hình Ảnh'),
-        ('VIDEO_AD',                'Quảng Cáo Video'),
-        ('SHOPPING_PRODUCT_AD',     'Mua Sắm — Sản Phẩm'),
-        ('SHOPPING_SMART_AD',       'Mua Sắm Thông Minh'),
-        ('CALL_AD',                 'Quảng Cáo Cuộc Gọi'),
-        ('DISCOVERY_AD',            'Khám Phá'),
-        ('DISCOVERY_CAROUSEL_AD',   'Khám Phá Dạng Băng Chuyền'),
-        ('PERFORMANCE_MAX',         'Tối Đa Hiệu Suất (PMax)'),
-        ('UNKNOWN',                 'Không rõ'),
-    ], string='Mã Loại', related='type_id.code', store=True, readonly=True)
+    type = fields.Char(string='Mã Loại (Tech)', related='type_id.code', store=True, readonly=True)
 
     final_urls = fields.Char(string='URL Đích (Final URL)')
     
