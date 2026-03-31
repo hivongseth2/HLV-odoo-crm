@@ -1,222 +1,94 @@
-# Bộ Test Case Chi Tiết - Google Ads Automation
-
-Tài liệu này cung cấp các kịch bản kiểm thử (Test Cases) chi tiết cho từng luồng tính năng của module `google_ads_automation`.
-
----
-
-## MỤC LỤC
-1. [Quản lý Tài Khoản & Chế Độ Demo](#1-quản-lý-tài-khoản--chế-độ-demo)
-2. [Quản Lý Chiến Dịch, Nhóm QC, Mẫu QC](#2-quản-lý-chiến-dịch-nhóm-qc-mẫu-qc)
-3. [Quản Lý GTM & Tag (Tag Management)](#3-quản-lý-gtm--tag)
-4. [Product Feed (Nguồn cấp sản phẩm)](#4-product-feed)
-5. [Smart Rule Engine (Chiến Lược Tự Động)](#5-smart-rule-engine-chiến-lược-tự-động)
-6. [Thực Thi Rules & Lịch Sử (Mutate & Logs)](#6-thực-thi-rules--lịch-sử)
+# Kịch Bản Kiểm Thử (Test Cases) Chuyên Sâu - Product Feed & Chiến Lược
+Tài liệu này tập trung **toàn bộ** vào 2 phân hệ cốt lõi: Nguồn Cấp Sản Phẩm (Product Feed) và Cỗ Máy Sinh Luật Tự Động (Strategy Engine). Bảng đã được thiết kế sẵn cột để kiểm thử viên (Tester) điền kết quả thực tế.
 
 ---
 
-## 1. Quản lý Tài Khoản & Chế Độ Demo
+## 1. PHÂN HỆ PRODUCT FEED (NGUỒN CẤP SẢN PHẨM)
 
-### TC_ACCT_01: Kiểm tra kết nối API thật thành công
-- **Mục đích:** Đảm bảo hệ thống xác thực đúng thông tin OAuth2 với Google Ads.
-- **Tiền điều kiện:** Có thông tin API Tokens hợp lệ (Client ID, Secret, Developer Token, Refresh Token, Customer ID). Không bật "Demo Mode".
-- **Các bước:**
-  1. Vào menu `Google Ads > Cấu hình > Tài Khoản`.
-  2. Tạo mới Tài khoản, điền đầy đủ các Credentials.
-  3. Bấm lưu và bấm nút `Kiểm tra kết nối`.
-- **Kết quả mong muốn:**
-  - Hệ thống hiển thị thông báo "Kết nối thành công".
-  - Trạng thái tài khoản chuyển sang `Đã kết nối`.
-
-### TC_ACCT_02: Cấu hình Tài khoản với Demo Mode
-- **Mục đích:** Xác nhận chức năng Test hoạt động độc lập không cần API Google.
-- **Tiền điều kiện:** Đang ở form tạo/sửa Tài khoản.
-- **Các bước:**
-  1. Check vào tuỳ chọn `Chế độ Demo`.
-  2. Bấm lưu và bấm nút `Kiểm tra kết nối`.
-- **Kết quả mong muốn:**
-  - Hệ thống ẩn các trường thông tin Credentials đi.
-  - Gắn badge/ribbon "DEMO MODE" để người dùng nhận biết.
-  - Thông báo kết nối thành công ngay lập tức và trạng thái đổi thành `Đã kết nối`.
-
-### TC_ACCT_03: Đồng bộ dữ liệu giả lập trong Demo Mode
-- **Mục đích:** Chắc chắn rằng hàm Demo Seeder sinh dữ liệu đầy đủ.
-- **Tiền điều kiện:** Tài khoản đang bật Demo Mode, trạng thái Đã kết nối.
-- **Các bước:**
-  1. Trên form Tài khoản, bấm nút `Đồng bộ Dữ liệu` (hoặc `Tải Demo Data` nếu nút riêng).
-  2. Vào list view các menu: Chiến Dịch, Nhóm Quảng Cáo, Quảng Cáo, Conversion, GTM Tag.
-- **Kết quả mong muốn:**
-  - Sinh thành công 4+ Chiến dịch demo (Search, Display, PMax...).
-  - Sinh tương ứng Nhóm QC và Mẫu QC.
-  - Dữ liệu có chứa các Metrics (Clicks, Cost, Conversions) để hỗ trợ test.
+| ID | Tên Kịch Bản | Tiền Điều Kiện | Các Bước Thực Hiện | Kết Quả Mong Đợi | Kết Quả Thực Tế | Ghi Chú / Bug URL |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **PF_01** | Feed: Tạo mới & View thẻ Dashboard | User có quyền Quản lý. | 1. Tạo Feed mới, chọn một Tài khoản Ads.<br>2. Lưu lại. Trở ra Kanban xem trạng thái. | Feed tạo thành công. Màu sắc thanh tiến độ trên Header Widget ban đầu là 100% xanh lá (Healthy). | | |
+| **PF_02** | Line: Thêm 1 dòng SP thủ công | Đang ở form Feed. Có sẵn 1 Sản phẩm `SP_01` trong kho có default_code (SKU) là SKU1. | 1. Bấm thêm dòng, chọn SP_01, lưu. | Cột Tên hiển thị định dạng `[SKU1] Tên SP_01`. | | |
+| **PF_03** | Auto Mappings: Tự động móc nối thành công | Trong Account C01 có Campaign tên `Khuyến Mãi Quần Áo SKU1`. | 1. Chọn nút `Auto Link Campaigns`. | Hệ thống tìm thấy text "SKU1" trong tên Campaign và tự động thêm Campaign đó vào cột `Chiến Dịch Liên Kết` của SP_01. Có popup xanh lá. | | |
+| **PF_04** | Auto Mappings: Thất bại do không khớp | Dòng `SP_02` mang SKU `SKU_UNMATCH`. Không có Campaign nào chứa text này. | 1. Bấm `Auto Link Campaigns`. | Dòng `SP_02` không được map. Nếu trong toàn bộ Feed không có SP nào được map, hiển thị popup màu vàng (Warning). | | |
+| **PF_05** | Math Computation: Cập nhật Tồn Kho (Sale > Cost) | `SP_01` có Giá vốn=100k, Giá Bán=150k. Tồn=10. Chưa bán được đơn nào. | 1. Bấm nút `Làm Mới Tồn Kho`. | - Tồn kho thực tế = 10.<br>- Biên LN (%) = (150-100)/150*100 = 33.33%.<br>- TB Bán/Ngày = 0.<br>- Số Ngày Tồn = vô hạn (cố định số lớn, vd 9999). | | |
+| **PF_06** | Math Computation: Tồn kho âm (Cost > Sale) | Cấu hình lộn Giá vốn=200k, Giá Bán=150k. | 1. Cập nhật tồn kho. | Biên LN (%) = -33.33% (Số âm). Hệ thống không lỗi 0 Division. | | |
+| **PF_07** | Stock Status: Tự động nhảy Critical | Giảm tồn kho `SP_01` xuống 0 bằng Inventory Adjustment. | 1. Cập nhật tồn kho. | Label cột đánh giá thành: `Sắp Hết Hàng` (Đỏ). | | |
+| **PF_08** | Math Computation: TB Bán/Ngày (30D) | Tạo 1 Sale Order đã giao (Done/Delivered) cho `SP_01` với số lượng 60 vào ngày hôm qua. | 1. Cập nhật tồn. | - TB Bán/ngày = 60/30 = 2 cái/ngày.<br>- Số hiệu tồn ngày (Day of Stock) tính lại chính xác. Dựa vào đó nhảy Trạng thái tồn (Low, High, v.v.). | | |
 
 ---
 
-## 2. Quản Lý Chiến Dịch, Nhóm QC, Mẫu QC
+## 2. PHÂN HỆ CHIẾN LƯỢC TỰ ĐỘNG (STRATEGY ENGINE)
 
-### TC_CAMP_01: Tạo mới Chiến dịch (Search/Display/Shopping)
-- **Mục đích:** Verify form tạo chiến dịch lấy đúng các cấu hình hợp lệ.
-- **Tiền điều kiện:** Tài khoản đã nối API/Demo.
-- **Các bước:**
-  1. Vào `Google Ads > Chiến dịch` -> Bấm `Mới`.
-  2. Điền tên chiến dịch, chọn loại (S_ARCH/DISPLAY), Ngân sách hàng ngày, URL đích.
-  3. Bấm Lưu và bấm `Đồng bộ lên Google Ads` (nếu có action thủ công).
-- **Kết quả mong muốn:**
-- **Kết quả mong muốn:**
-  - Validations: Báo lỗi nếu thiếu Loại Kênh, Ngân sách hoặc Strategy.
-  - Odoo tự handle ẩn field `contains_eu_political_advertising` để bypass rule năm 2025.
-  - Lệnh gửi đi thành công (hoặc lưu log giả lập ở Demo). ID Campaign được ghi nhận từ API trả về.
+| ID | Tên Kịch Bản | Tiền Điều Kiện | Các Bước Thực Hiện | Kết Quả Mong Đợi | Kết Quả Thực Tế | Ghi Chú / Bug URL |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **ST_01** | Template 1: Bảo vệ hàng sắp hết (Protect Low) | Feed có `SP_A` đang nợ tồn kho hoặc Tồn=5. SP_A đã map Chiến dịch `CA`. Ngưỡng Tồn Thấp = 20. | 1. Trạng thái Strategy: Nháp.<br>2. Chọn template `Bảo vệ hàng sắp hết`. Bấm `Sinh Rules`. | 1 Rule `[Auto] Pause khi hết hàng — SP_A` sinh ra, Kích hoạt = FALSE (do Strategy đang Nháp). Toán tử `< 20`. Action = Pause. | | |
+| **ST_02** | Generate Validation: SP không có campaign liên kết | Feed có SP nhưng KHÔNG map vào Campaign nào. | 1. Bấm `Sinh Rules`. | Odoo báo UserError (Cấm tạo): "Yêu cầu map Sản phẩm vào Campaign trước khi sinh Rule". Màn hình chat log báo màu đỏ lỗi. Không sinh Rule rác. | | |
+| **ST_03** | Delete & Re-Generate (Xóa cũ sinh mới) | Strategy đang có sẵn 3 Rules auto. | 1. Bấm lại nút `Sinh Rules`. | Tổng số rule trong tab không đổi (3 rules cũ bị xóa sạch, 3 rules mới thế vào). Các rules tự tay người dùng tạo nếu có flag (Auto=False) phải giữ nguyên. | | |
+| **ST_04** | Change State: Kích Hoạt Chiến Lược | Strategy đang có 3 rules trạng thái Nháp. | 1. Bấm nút `Kích hoạt`. | - Strategy chuyển về "Đang Chạy".<br>- TOÀN BỘ 3 Rules bên dưới chuyển `Kích hoạt` (Active=True) hàng loạt. | | |
+| **ST_05** | Template 2: Đẩy Hàng Tồn Cao | Chọn Strategy = `Đẩy Tồn Cao`. Ngưỡng Tồn=200, % Budget Tăng=30%. Bấm Sinh Rule. | 1. Xem qua tab Rules. | Sinh ra 2 RUles CHO MỖI SP Map:<br>Rule 1: If Tồn > 200 => Enable Chiến dịch.<br>Rule 2: If Tồn > 200 => Tăng Budget 30%. | | |
+| **ST_06** | Template 3: Tối Ưu Lợi Nhuận | Chọn = `Tối ưu lợi nhuận`. Biên LN Min = 15%. Max CPA = 100k. | 1. Sinh Rule. | Sinh ra 2 Rues/SP:<br>1: If CPA > 100k => Pause<br>2: If Margin < 15% => Pause. | | |
+| **ST_07** | Template 4: Cân bằng tự động (Auto balance) | Chọn = `Cân Bằng Tự Động`. Khai full thông số (Low=10, High=200, Margin=15%). | 1. Sinh Rule. | Engine gộp toàn bộ rules của 3 kịch bản: Protect_low + Push_stock + Optimize_profit (Tổng 5 rules/SP) để đánh chặn toàn diện rủi ro. | | |
+| **ST_08** | Template 5: Custom Custom (Tùy chỉnh cá nhân) | Chọn = `Tùy Chỉnh`. Action: Giảm Budget. Values = Bỏ trống. | 1. Sinh rule. | (1) Ném validation Lỗi nếu user quên điền value/field custom.<br>(2) Nếu điền chuẩn: "If (Field tự chọn) (Toán tử tự chọn) => Giảm budget x%". | | |
 
-### TC_CAMP_02: Tạo Chiến dịch Tối đa hiệu suất (PMax)
-- **Mục đích:** PMax có logic phức tạp đặc thù đòi hỏi upload Logo và Thương hiệu.
-- **Tiền điều kiện:** Như TC_CAMP_01.
-- **Các bước:**
-  1. Tạo chiến dịch mới, chọn loại `PERFORMANCE_MAX`.
-  2. Để trống Thương hiệu và Logo PMax -> Lưu và thực thi.
-  3. Sửa lại, điền đầy đủ Tên thương hiệu và up file Logo -> Lưu và thực thi.
-- **Kết quả mong muốn:**
-  - Bước 2: Hiển thị lỗi Validation bắt buộc phải có Logo / Tên thương hiệu.
-  - Bước 3: (API thật) Odoo thực hiện transaction nguyên tử: Tạo Asset Logo -> Tạo Asset Text -> Tạo Campaign -> Map Asset. Thành công!
+## 3. PHÂN HỆ QUY TẮC TỰ ĐỘNG & LỊCH SỬ (RULES & LOGS)
 
-### TC_ADG_01: Ràng buộc Loại Nhóm Quảng Cáo hợp lệ
-- **Mục đích:** Tránh lỗi API Google về AdGroupType không khớp Campaign.
-- **Tiền điều kiện:** Có sẵn Chiến dịch Tìm kiếm (Search) và Hiển thị (Display).
-- **Các bước:**
-  1. Tạo `Nhóm Quảng Cáo` mới.
-  2. Gắn vào Chiến dịch Search, sau đó ở trường Tùy chọn Loại Nhóm QC chọn `DISPLAY_STANDARD`.
-  3. Lưu.
-- **Kết quả mong muốn:**
-  - Form (onchange) ẩn bớt lựa chọn sai hoặc cảnh báo lỗi/ValidationError nếu cố lưu AdGroupType không cho phép với cấu hình Campaign gốc.
+| ID | Tên Kịch Bản | Tiền Điều Kiện | Các Bước Thực Hiện | Kết Quả Mong Đợi | Kết Quả Thực Tế | Ghi Chú / Bug URL |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **RL_01** | Test Toán Tử Kỹ Thuật | Tạo Rule thủ công. Toán tử `=`, Trường `is_new_product`, Value `1`. | 1. Thêm 1 SP mới tạo hôm nay vào Campaign test.<br>2. Bấm `Evaluate (Chạy Thử)`. | Rule quét trúng, ghi log "Đối tượng thoả mãn... Thực tế: 1.0". | | |
+| **RL_02** | Dry-run Mode (Tính năng An toàn) | Account / Strategy có `is_live = False` (Tắt Live Mode). Rule đạt điều kiện Pause. | 1. Bấm `Evaluate`.<br>2. Kiểm tra Campaign. | Campaign *KHÔNG BỊ PAUSE* trên Odoo lẫn Google. Log ghi chú an toàn: `[DRY-RUN] Hành động Pause`. | | |
+| **RL_03** | Live Mode (Thực thi thật chặn API) | Bật `is_live = True`. Rule đạt điều kiện Pause. | 1. Bấm `Evaluate`. | Campaign lập tức bị chuyển thành `paused` trên hệ thống. Dòng Log lưu Trạng thái `Action_Taken` (Màu xanh). | | |
+| **RL_04** | Target Scope: Campaign vs Ad Group | Tạo Rule mục tiêu là "Nhóm Quảng Cáo", set logic Pause nếu COST > 1tr. | 1. Bấm `Evaluate`. | Mutate từ chối (Skip): Log ghi "Mutate chỉ hỗ trợ Campaign, bỏ qua Nhóm QC" do Google API chưa support cấp độ Nhóm trong module này. | | |
+| **RL_05** | Fallback Scope (Global Rule) | Tạo Rule KHÔNG điền SP liên kết (Product Feed Line = Empty). | 1. Bấm `Evaluate`. | Rule quét *toàn bộ* các Campaign thuộc Account đó thay vì chỉ 1 Campaign chỉ định. | | |
+| **RL_06** | Scheduled Action (Cron Job) | Setup Cron Job On. | 1. Kích hoạt Cron qua Settings. | Cron tự động thực hiện 3 bước: Sync Data -> Refresh Stock -> Run All Rules. Log không phát sinh lỗi traceback. | | |
 
 ---
 
-## 3. Quản Lý GTM & Tag
+## 4. PHÂN HỆ CHIẾN DỊCH (CAMPAIGNS)
 
-### TC_GTM_01: Tự động kéo cấu hình (Sync GTM) qua Readonly API
-- **Mục đích:** Kéo cấu hình Workspace, Tags, Triggers từ GTM.
-- **Tiền điều kiện:** Tài khoản GTM đã điền Container ID và API Access cho GTM.
-- **Các bước:**
-  1. Mở menu `Google Ads > Theo dõi chuyển đổi > GTM Tags`.
-  2. Bấm nút `Fetch / Đồng bộ Data từ GTM`.
-- **Kết quả mong muốn:**
-  - Lấy thành công danh sách Tags/Variables hiện có ở Workspace.
-  - Các records lưu trong `google.ads.gtm.item` phải là dạng Read-only, user không thể sửa tự do.
-  - Nếu là tài khoản Demo, nó tự sinh Data Demo.
+| ID | Tên Kịch Bản | Tiền Điều Kiện | Các Bước Thực Hiện | Kết Quả Mong Đợi | Kết Quả Thực Tế | Ghi Chú / Bug URL |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **CP_01** | Create: Lỗi bắt buộc Validation | Bỏ trống "Ngân sách hàng ngày". | 1. Bấm `Đồng bộ lên Google`. | UI chặn lại báo lỗi bắt buộc điền ngân sách (Odoo default form validation). | | |
+| **CP_02** | Create: PMax Validation | Chọn kênh Tối đa Hiệu suất (PMax). Logo để trống. | 1. Bấm `Đồng bộ`. | Hệ thống catch lỗi Google và dịch ra tiếng Việt: "Chiến dịch PMax yêu cầu Tên thương hiệu và Logo. Vui lòng điền đủ...". | | |
+| **CP_03** | Create: Shopping / PMax Merchant Center | Chọn kênh Mua Sắm (Shopping). Merchant ID trong Tài khoản bỏ trống. | 1. Bấm `Đồng bộ`. | Odoo quăng UserError: "Vui lòng cấu hình Merchant Center ID trong mục Cài đặt Tài khoản" *TRƯỚC KHI* gọi API. Cứu được 1 API call thừa. | | |
+| **CP_04** | Đồng bộ Demo (Demo Account) | Tài khoản bật "Chế độ Demo". | 1. Tạo Campaign. Bấm `Đồng bộ`. | ID Campaign nhảy thành `DEMO_SYNC_[ID]`. Trạng thái chuyển thành "Đã đồng bộ Google". Notification xanh lá. | | |
+| **CP_05** | Cơ chế Tìm Thay Vì Lặp (Auto Match Name) | Đổi sang Account LIVE. Campaign tên `TEST_CP_01` đã tồn tại trên GG nhưng ở Odoo chưa có ID. | 1. Tạo campaign mới trên Odoo tên y hệt `TEST_CP_01`. Bấm `Đồng bộ`. | Thay vì tạo mới (ra 2 campaign), Odoo báo Log: "Found existing campaign... Auto-linked". Tự động lấy ID cũ về và chuyển trạng thái Update. | | |
+| **CP_06** | Dashboard UX: Xử lý chia 0 (Zero Division) | Campaign mới tạo, Clicks = 0, Cost = 0. | 1. F5 trình duyệt xem thẻ Dashboard HTML. | % Chuyển đổi (CR) = 0%, ROAS = 0x. Không văng lỗi màn hình trắng 500 do chia cho 0. | | |
+| **CP_07** | Adsroid AI: Hỏi thủ công | Tính năng AI = Bật. Campaign đã Sync. | 1. Vào form Campaign, ấn `Hỏi Nhận Định Adsroid (AI)`. | Trình duyệt xoay 3-5 giây chờ. Render khối HTML màu xanh chứa Score và lời khuyên Insight. Lưu 1 dòng History vào tab Lịch Sử Adsroid. | | |
+| **CP_08** | Adsroid AI: Auto Apply (Cực quan trọng) | Auto-Apply = ON. Đẩy fake data Cost cực cao, tỷ lệ đơn = 0. | 1. Bấm Hỏi AI thủ công (hoặc chờ Cron). | AI khuyên PAUSE. Object chặn được chuỗi "PAUSE" trong suggested_action và lập tức gọi Mutate_Pause. Đẩy Campaign về lại trạng thái Tạm Dừng tự động. | | |
 
-### TC_GTM_02: Sinh file script/hook WooCommerce (Code snippet)
-- **Mục đích:** Module cung cấp code để gắn vào website vệ tinh.
-- **Tiền điều kiện:** Đã tạo bản ghi Cấu hình Tag cơ bản gồm GTM ID / AW-ID.
-- **Các bước:**
-  1. Kiểm tra tab `Installation Code / Web Snippet` trên form.
-- **Kết quả mong muốn:**
-  - Cung cấp đủ 3 ô chứa Text Snippet: Head script, Body iframe, và PHP Hook cho WordPress/WooCommerce có chứa GTM ID / AW ID đã điền.
+## 5. PHÂN HỆ NHÓM QUẢNG CÁO (AD GROUPS)
 
----
-
-## 4. Product Feed
-
-### TC_FEED_01: Cập nhật Tồn kho và Tính toán tự động
-- **Mục đích:** Đảm bảo hệ thống gom chính xác thông số cho Sản phẩm.
-- **Tiền điều kiện:** Có sẵn một vài `product.template` trong kho, có giá bán (`list_price`), giá vốn (`standard_price`).
-- **Các bước:**
-  1. Tạo `Product Feed`, chọn Tài khoản và gắn vài sản phẩm vào.
-  2. Bấm nút `Cập nhật Tồn kho` hoặc đợi Cron chạy.
-  3. Kiểm tra các dòng (lines) của Product Feed.
-- **Kết quả mong muốn:**
-  - Cột `Tồn Kho Thực Tế` lấy đúng số tồn khả dụng.
-  - Cột `Biên lợi nhuận` tình ra đúng `(Giá - Vốn)/Giá * 100`.
-  - Cột `Trạng Thái Tồn` đánh giá màu (Sắp hết/Đỏ, Tồn thấp/Vàng, Tồn cao/Xanh dương) khớp với điều kiện cấu hình ngưỡng.
-
-### TC_FEED_02: Map Sản phẩm với Campaign
-- **Mục đích:** Gắn sản phẩm tham chiếu để Mutate logic biết pause/enable Campaign nào.
-- **Các bước:**
-  1. Mở Feed, ấn Edit từng lines, chọn/chỉ định Tên Campaign liên kết.
-  2. Chọn thử một campaign không thuộc Tài khoản đang link với Feed.
-- **Kết quả mong muốn:**
-  - Chỉ cho phép map các Campaign thuộc đúng Account liên kết ở form Feed.
-  - Cho phép 1 dòng Sản phẩm map tới > 1 Campaign (VD: Search & PMax).
+| ID | Tên Kịch Bản | Tiền Điều Kiện | Các Bước Thực Hiện | Kết Quả Mong Đợi | Kết Quả Thực Tế | Ghi Chú / Bug URL |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **AG_01** | Tạo Nhóm Search cơ bản | Đã có Chiến dịch Search. | 1. Tạo Nhóm QC Chọn Loại Nhóm = 'Tìm kiếm Chuẩn'. Bấm Đồng bộ. | Trạng thái chuyển thành "Đã đồng bộ". Dashboard vẽ widget thành công. | | |
+| **AG_02** | DSA Validation (Tìm kiếm động) | Chọn Chiến dịch Search nhưng *chưa kích hoạt DSA* (Trạng thái tắt DSA ở phía Campaign). | 1. Mục Tùy Chọn Loại Nhóm QC -> Chọn 'SEARCH_DYNAMIC_ADS'. Bấm Đồng Bộ. | Hệ thống quăng lỗi Error (Dịch từ Google): "Nhóm QC Dạng DSA chỉ được tạo khi Chiến dịch chứa cài đặt Search Dynamic Ads". | | |
+| **AG_03** | Ràng buộc PMax Ad Group | Đã tạo Campaign loại PMax. | 1. Bấm tạo Nhóm QC. Chọn Campaign PMax đó. | Form UI ngăn chặn thao tác. Hiện Alert "PMax sử dụng Tài sản (Asset Groups) nội bộ, không hỗ trợ tạo Nhóm quảng cáo truyền thống". | | |
 
 ---
 
-## 5. Smart Rule Engine (Chiến Lược Tự Động)
+## 6. PHÂN HỆ MẪU QUẢNG CÁO (ADS)
 
-### TC_RULE_01: Chạy tự sinh Rule cho Chiến Lược "Bảo vệ hàng sắp hết"
-- **Mục đích:** Đảm bảo Strategy Engine tạo đủ rules theo template.
-- **Tiền điều kiện:** Có Product Feed với Sản phẩm A (Tồn 0 - Sắp hết) đã map Campaign X.
-- **Các bước:**
-  1. Vào menu `Chiến Lược Tự Động`. Tạo mới, cấu hình loại `Bảo vệ hàng sắp hết`.
-  2. Gắn với Tài khoản và Feed vừa tạo.
-  3. Bấm nút `Sinh Rules Tự Động`.
-  4. Sang tab `Rules Tự Sinh` xem kết quả.
-- **Kết quả mong muốn:**
-  - Hệ thống sinh ra 1 Rule cho Campaign X với điều kiện: `NẾU tồn kho <= [ngưỡng sắp hết] THÌ Pause Campaign`.
-
-### TC_RULE_02: Đánh giá điều kiện đúng sai trong Rule (Evaluate)
-- **Mục đích:** Rule Engine quét dữ liệu và đưa ra True/False chính xác.
-- **Tiền điều kiện:** Đã có 1 Rule "NẾU tồn kho < 5 THÌ Pause". SP đang ở mức tồn 10.
-- **Các bước:**
-  1. Mở form Rule đó, bấm `Chạy Thử Ngay` (Run Once).
-  2. Chỉnh tồn kho Product thành 0 (tạo phiếu xuất kho).
-  3. Trở lại Odoo, bấm nút `Cập nhật tồn` ở Feed rồi quay lại form Rule bấm `Chạy Thử Ngay`.
-- **Kết quả mong muốn:**
-  - Lần 1: Log tạo ra với ghi chú `Bình thường (Điều kiện không đạt: 10 >= 5)`. Không Action.
-  - Lần 2: Log tạo ra `Đã Xử Lý (0 < 5)`. Hệ thống bắn Action `Pause` cho Campaign.
+| ID | Tên Kịch Bản | Tiền Điều Kiện | Các Bước Thực Hiện | Kết Quả Mong Đợi | Kết Quả Thực Tế | Ghi Chú / Bug URL |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **AD_01** | Filter 1: Chọn Group trước -> Lọc ra Ad Type | Form Mẫu QC. | 1. Bấm trường `Nhóm Quảng Cáo` chọn Nhóm thuộc loại Tìm Kiếm.<br>2. Bấm trường `Loại Quảng Cáo`. | Danh sách xổ xuống co lại chỉ hiển thị RSA, Text Ad, Call, Discovery (chứ không hiện Video). | | |
+| **AD_02** | Filter 2: Chọn Ad Type trước -> Lọc ra Group | Form Mẫu QC. | 1. Bấm trường `Loại Quảng Cáo` chọn Mua Sắm Sản Phẩm.<br>2. Bấm trường `Nhóm Quảng Cáo`. | Danh sách chỉ hiện những Nhóm thuộc chiến dịch Shopping Product. | | |
+| **AD_03** | Tự sửa lỗi Type (Bi-directional filter) | | 1. Chọn Nhóm A (Tìm Kiếm), Chọn Loại B (Image).<br>2. Chọn ngược Nhóm C (Shopping). | Alert màu cam hiện ra: "Lựa chọn không tương thích, tự động đổi về...". Trường Loại tự nhảy về 'Mua Sắm'. | | |
+| **AD_04** | Fix URL (HTTPs prefix) | | 1. Gõ `google.com` vào Final URL. 2. Bấm `Lưu` / `Đồng bộ`. | Odoo tự động chèn tiền tố thành `https://google.com`. | | |
+| **AD_05** | Validate số Dòng cho RSA (Tiêu đề/Mô tả) | Loại: Tìm kiếm thích ứng (RSA). | 1. Nhập 2 dòng tiêu đề, 1 dòng mô tả. Bấm Đồng Bộ. | Ném rào UserError: "Quảng cáo RSA yếu cầu ít nhất 3 tiêu đề KHÁC NHAU... Bạn gõ trùng". (Kèm logic Deduplication - xóa dòng trùng). | | |
+| **AD_06** | Replace Policy (Lách luật Google Immutable) | Mẫu RSA đã có ID, trạng thái Đã Đồng Bộ. Cost/Click = 50. | 1. Đổi nội dung Title. Ấn `Update lên GG`. | - Google xóa QC cũ.<br>- Tạo QC mới có ID mới.<br>- Lịch sử Dashboard Odoo: ID cũ tráo thành MỚI. Số Click = 50 (Vẫn giữ số cũ - Cộng dồn di sản!). | | |
 
 ---
 
-## 6. Thực Thi Rules & Lịch Sử
+## 7. CẤU HÌNH & TÀI KHOẢN (ACCOUNT & GTM)
 
-### TC_EXEC_01: Chế độ Dry-Run (Không Live)
-- **Mục đích:** Chế độ Dry-Run phải đảm bảo an toàn, không được Pause/Enable nhầm khi User đang thử nghiệm cấu hình.
-- **Tiền điều kiện:** Chiến lược đang TẮT cờ Live. Đã sinh 1 Rule điều kiện đạt mức thực thi.
-- **Các bước:**
-  1. Bấm `Chạy Thử Ngay` trên Rule (hoặc Cron chạy tổng).
-  2. Xem Log hiển thị. Kiểm tra lịch sử tài khoản Google Ads API/Demo.
-- **Kết quả mong muốn:**
-  - Rule phát hiện cần xử lý (ví dụ: cần Bật Campaign).
-  - Log ghi `Đề xuất hành động: Bật Campaign... (Dry-Run: Bỏ qua gọi API thực tế)`.
-  - Trạng thái Campaign không bị thay đổi.
-
-### TC_EXEC_02: Chế độ Chạy Thật (Live Mode / Demo Mode)
-- **Mục đích:** Các record bắt buộc được ghi và gọi tới Services tương ứng.
-- **Tiền điều kiện:** BẬT Live Mode. Tài khoản là Demo Mode (để ko sửa thật trên API). Rule thoả mãn điều kiện Pause.
-- **Các bước:**
-  1. Run Rule.
-  2. Sang mục Chiến dịch xem trạng thái Campaign.
-- **Kết quả mong muốn:**
-  - Log ghi chú thực thi thành công: `Gọi Mutate API Pause`.
-  - Field trạng thái của Campaign trong Odoo tự động chuyển sang `PAUSED`.
-
-### TC_EXEC_03: Báo Cáo Dashboards Metrics
-- **Mục đích:** Dữ liệu Clicks/Cost phản ánh mượt mà cho user xem.
-- **Tiền điều kiện:** Tài khoản đã có dữ liệu thông qua Đồng bộ.
-- **Các bước:**
-  1. Mở Cây Danh sách (List/Kanban) Chiến dịch. Xem Dashboard header hoặc Chart (nếu có).
-  2. Truy cập form Chiến dịch và Form Nhóm QC xem field Thống kê.
-- **Kết quả mong muốn:**
-  - Giao diện Dashboard (hoặc fields Kanban/Form) hiển thị đúng tổng chi phí, số click, conversion theo các KPIs.
-  - ROI/ROAS được tính tự động mà không bị 0 chia 0 (ZeroDivisionError).
+| ID | Tên Kịch Bản | Tiền Điều Kiện | Các Bước Thực Hiện | Kết Quả Mong Đợi | Kết Quả Thực Tế | Ghi Chú / Bug URL |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **AC_01** | Bật / Tắt Demo Mode | | 1. Tắt cờ Demo chế độ API.<br>2. Bấm `Kiểm tra kết nối`. | Lên báo lỗi nếu nhập bừa Client ID. Đòi điền đúng chuẩn OAuth2 token Google. | | |
+| **AC_02** | GTM Readonly UI | Có dữ liệu Tag Manager. | 1. Click Sửa 1 thẻ / Tag ID. | Không sửa được. Nút Lưu vô giá trị vì model cấp `Read-only` để tránh ghi sai data GTM. | | |
+| **AC_03** | Render Snippet WooCommerce | Đã cấu hình AW-XXXXXX ở Tag Menu. | 1. Bấm tab `Cài đặt Code Snippet`. | Hiển thị code iframe/html PHP functions đúng chuẩn WordPress, copy là bỏ vào dán dùng được ngay. | | |
 
 ---
-
-## 7. Adsroid AI Integration (Trợ Lý AI)
-
-### TC_AI_01: Xin nhận định từ Adsroid AI (Manual)
-- **Mục đích:** Gửi thông số Campaign (Click, Cost, Impression) kết hợp với số liệu Kho hàng (Tồn ròng, Khả dụng, Margin) lên Agent để lấy nhận định.
-- **Tiền điều kiện:** Tài khoản đã check cờ `Sử dụng Adsroid AI`, điền đúng API Key và Project ID. Campaign có trạng thái `synced` hoặc đang ở `Demo mode`.
-- **Các bước:**
-  1. Vào Chiến dịch cụ thể.
-  2. Bấm nút `Hỏi Nhận Định Adsroid (AI)`.
-- **Kết quả mong muốn:**
-  - Hệ thống mất ~3-5s để liên lạc với Supabase Agent.
-  - Khối HTML `Adsroid AI Insight` được render hiển thị Điểm đánh giá (Score), Đề xuất (Suggest) và text Insight chi tiết.
-  - Một dòng Log lịch sử AI được tạo trong tab `Lịch sử Adsroid`.
-
-### TC_AI_02: Chức năng Auto-Apply của Adsroid
-- **Mục đích:** Khi bật tính năng Auto Apply, hệ thống tự động chạy lệnh API (như Pause) nếu AI Insight khuyên làm vậy.
-- **Tiền điều kiện:** Trong form Account, Cờ `Tự động áp dụng đề xuất` = Bật.
-- **Các bước:**
-  1. Giả lập / Sửa Data sao cho Campaign có cost cao nhưng 0 Clicks, Tồn kho SP thì = 0.
-  2. Bấm gọi lệnh phân tích Adsroid (Hoặc để Cron Job tự động bắt API).
-- **Kết quả mong muốn:**
-  - AI trả về Action: `PAUSE`.
-  - Hệ thống bắt tín hiệu và **tự động gọi lệnh Mutate Pause Campaign** thay vì đợi con người. Trạng thái Campaign lập tức chuyển sang PAUSED.
+**Hướng dẫn cho Tester:**
+- Cột `Kết Quả Thực Tế` điền: Pass, Fail, Blocked.
+- Cột `Ghi Chú` điền URL Ticket Jira nếu có bug hoặc giải thích chi tiết nếu kết quả không như mong đợi.
