@@ -58,10 +58,10 @@
                                     <field name="product_ids" widget="many2many_tags" options="{'no_create': True}"/>
                                     <field name="google_ad_id" readonly="1" invisible="state == 'draft'"/>
 
-                                    <field name="headline" placeholder="Mỗi tiêu đề 1 dòng (Tối đa 30 ký tự)..." 
+                                    <field name="headline" placeholder="Mỗi tiêu đề 1 dòng (Tối đa 30 ký tự)... Cần ít nhất 3 tiêu đề" 
                                            readonly="state == 'synced'"
                                            invisible="type != 'RESPONSIVE_SEARCH_AD'"/>
-                                    <field name="description" placeholder="Mỗi mô tả 1 dòng (Tối đa 90 ký tự)..." 
+                                    <field name="description" placeholder="Mỗi mô tả 1 dòng (Tối đa 90 ký tự)... Cần ít nhất 2 mô tả" 
                                            readonly="state == 'synced'"
                                            invisible="type != 'RESPONSIVE_SEARCH_AD'"/>
 
