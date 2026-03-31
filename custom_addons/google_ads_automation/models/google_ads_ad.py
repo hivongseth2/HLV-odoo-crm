@@ -249,10 +249,59 @@ class GoogleAdsAd(models.Model):
                 rec.conversion_rate = 0.0
                 
             if rec.cost > 0:
-                # Giả định doanh thu 500k cho demo
                 rec.roas = (rec.conversions * 500000) / rec.cost
             else:
                 rec.roas = 0.0
+
+    @api.onchange('type')
+    def _onchange_type_filter_groups(self):
+        """Khi chọn loại quảng cáo, lọc các nhóm quảng cáo tương thích"""
+        if not self.type:
+            return {'domain': {'ad_group_id': []}}
+        
+        # Mapping từ Ad Type sang các loại Ad Group hỗ trợ
+        mapping = {
+            'RESPONSIVE_SEARCH_AD': ['SEARCH_STANDARD', 'SEARCH_DYNAMIC_ADS', 'DISCOVERY'], 
+            'EXPANDED_TEXT_AD': ['SEARCH_STANDARD'],
+            'CALL_AD': ['SEARCH_STANDARD'],
+            'RESPONSIVE_DISPLAY_AD': ['DISPLAY_STANDARD'],
+            'IMAGE_AD': ['DISPLAY_STANDARD'],
+            'SHOPPING_PRODUCT_AD': ['SHOPPING_PRODUCT_ADS'],
+            'DISCOVERY_AD': ['DISCOVERY'],
+            'DISCOVERY_CAROUSEL_AD': ['DISCOVERY'],
+            'VIDEO_AD': ['VIDEO_TRUE_VIEW_IN_STREAM', 'VIDEO_BUMPER', 'VIDEO_OUTSTREAM'],
+        }
+        res_types = mapping.get(self.type, [])
+        return {'domain': {'ad_group_id': [('type', 'in', res_types)]}}
+
+    @api.onchange('ad_group_id')
+    def _onchange_ad_group_id_filter_types(self):
+        """Khi chọn nhóm quảng cáo, kiểm tra độ tương thích của loại quảng cáo hiện tại"""
+        if not self.ad_group_id:
+            return
+        
+        ad_group_type = self.ad_group_id.type
+        # Mapping từ Ad Group sang các loại Ad hỗ trợ
+        mapping = {
+            'SEARCH_STANDARD': ['RESPONSIVE_SEARCH_AD', 'EXPANDED_TEXT_AD', 'CALL_AD'],
+            'SEARCH_DYNAMIC_ADS': ['RESPONSIVE_SEARCH_AD'],
+            'DISPLAY_STANDARD': ['RESPONSIVE_DISPLAY_AD', 'IMAGE_AD'],
+            'SHOPPING_PRODUCT_ADS': ['SHOPPING_PRODUCT_AD'],
+            'DISCOVERY': ['DISCOVERY_AD', 'DISCOVERY_CAROUSEL_AD', 'RESPONSIVE_SEARCH_AD'], # RSA dùng được trong Discovery campaign mới
+            'VIDEO_TRUE_VIEW_IN_STREAM': ['VIDEO_AD'],
+            'VIDEO_BUMPER': ['VIDEO_AD'],
+            'VIDEO_OUTSTREAM': ['VIDEO_AD'],
+        }
+        allowed_ad_types = mapping.get(ad_group_type, [])
+        
+        if self.type and self.type not in allowed_ad_types:
+            # Chọn mẫu phù hợp nhất làm mặc định nếu mẫu cũ không tương thích
+            title = _("Loại quảng cáo không tương thích")
+            msg = _("Nhóm quảng cáo '%s' (loại: %s) không hỗ trợ loại quảng cáo bạn vừa chọn. "
+                    "Hệ thống đã tự động chuyển về loại phù hợp nhất.") % (self.ad_group_id.name, ad_group_type)
+            
+            self.type = allowed_ad_types[0] if allowed_ad_types else False
+            return {'warning': {'title': title, 'message': msg}}
 
     def action_sync_to_google(self):
         self.ensure_one()
