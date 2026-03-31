@@ -162,6 +162,26 @@
         <field name="view_mode">kanban,list,form</field>
     </record>
 
+    <record id="view_google_ads_rule_log_list" model="ir.ui.view">
+        <field name="name">google.ads.rule.log.list</field>
+        <field name="model">google.ads.rule.log</field>
+        <field name="arch" type="xml">
+            <list string="Lịch Sử Chạy Quy Tắc" 
+                  decoration-danger="status == 'error'" 
+                  decoration-warning="status == 'action_taken'" 
+                  decoration-success="status == 'success'">
+                <field name="create_date" string="Thời Gian"/>
+                <field name="rule_id"/>
+                <field name="target_name"/>
+                <field name="status" widget="badge" 
+                       decoration-danger="status == 'error'" 
+                       decoration-warning="status == 'action_taken'" 
+                       decoration-success="status == 'success'"/>
+                <field name="message"/>
+            </list>
+        </field>
+    </record>
+
     <record id="action_google_ads_rule_log" model="ir.actions.act_window">
         <field name="name">Lịch Sử Chạy Quy Tắc</field>
         <field name="res_model">google.ads.rule.log</field>

@@ -130,18 +130,36 @@ class GoogleAdsRule(models.Model):
             target_records = rule._get_target_records()
 
             applicable_records = []
+            checked_details = []
             for rec in target_records:
                 val = rule._evaluate_condition_value(rec)
                 if rule._check_condition(val):
                     applicable_records.append((rec, val))
+                else:
+                    checked_details.append(f"- {rec.name}: Thực tế {round(val, 2)} (Yêu cầu: {rule.condition_operator} {rule.condition_value})")
 
             # 2. Ghi log & thực thi
             if not applicable_records:
+                detail_msg = "\n".join(checked_details) if checked_details else "Không có chiến dịch/nhóm QC nào cờ Trạng Thái = 'Đang hoạt động' để đánh giá."
+                msg_body = _('Chạy thành công — Không có đối tượng nào thoả mãn điều kiện lúc này.\nBáo cáo:\n%s') % detail_msg
                 self.env['google.ads.rule.log'].create({
                     'rule_id': rule.id,
                     'status': 'success',
-                    'message': _('Chạy thành công — không có đối tượng nào thoả mãn.'),
+                    'message': msg_body,
                 })
+                
+                # NẾU USER BẤM BẰNG TAY (UI) THÌ SHOW POPUP
+                if len(self) == 1:
+                    return {
+                        'type': 'ir.actions.client',
+                        'tag': 'display_notification',
+                        'params': {
+                            'title': _('Quy Tắc Đã Chạy'),
+                            'message': msg_body,
+                            'type': 'warning',
+                            'sticky': False,
+                        }
+                    }
                 continue
 
             for rec, val in applicable_records:
@@ -162,8 +180,20 @@ class GoogleAdsRule(models.Model):
                     'message': log_message,
                 })
 
-                # Thực thi hành động
                 rule._execute_action(rec)
+
+        # NẾU CÓ BẤT KỲ RECORD NÀO SATISFIED VÀ BẤM UI THÌ SHOW POPUP
+        if len(self) == 1:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('Thành Công'),
+                    'message': _('Đã phát hiện và thực thi thao tác cho các chiến dịch thỏa điều kiện!'),
+                    'type': 'success',
+                    'sticky': False,
+                }
+            }
 
     def _get_target_records(self):
         """Lấy tập đối tượng Google Ads cần đánh giá"""
