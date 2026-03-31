@@ -256,7 +256,6 @@ class GoogleAdsAd(models.Model):
 
     def action_sync_to_google(self):
         self.ensure_one()
-        if self.state == 'synced': return True
         if self.ad_group_id.state == 'draft':
             raise UserError(_("Vui lòng đồng bộ Nhóm quảng cáo cha trước."))
 
@@ -302,12 +301,23 @@ class GoogleAdsAd(models.Model):
         }
         
         from ..services.google_ads_mutate import GoogleAdsMutateService
-        ok, result = GoogleAdsMutateService.create_ad(
-            client, customer_id, self.ad_group_id.google_ad_group_id, vals
-        )
+        
+        if self.google_ad_id:
+            # Update existing ad
+            ok, result = GoogleAdsMutateService.update_ad(
+                client, customer_id, self.ad_group_id.google_ad_group_id, self.google_ad_id, vals
+            )
+        else:
+            # Create new ad
+            ok, result = GoogleAdsMutateService.create_ad(
+                client, customer_id, self.ad_group_id.google_ad_group_id, vals
+            )
         
         if ok:
-            self.write({'google_ad_id': result.split('/')[-1], 'state': 'synced'})
+            if not self.google_ad_id:
+                self.write({'google_ad_id': result.split('/')[-1], 'state': 'synced'})
+            # Notify user of success
+            self.message_post(body=_("Đồng bộ thành công lên Google Ads: %s") % result)
         else:
             raise UserError(_("Đồng bộ Ad thất bại (Lưu ý: Headlines/Descriptions có thể trùng lặp hoặc quá dài): \n %s") % result)
 

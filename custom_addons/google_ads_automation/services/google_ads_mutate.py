@@ -383,6 +383,60 @@ class GoogleAdsMutateService:
             return False, str(e)
 
     @staticmethod
+    def update_ad(client, customer_id, ad_group_id, ad_id, vals):
+        """Cập nhật Responsive Search Ad (RSA)"""
+        try:
+            ad_group_ad_service = client.get_service("AdGroupAdService")
+            ad_group_ad_operation = client.get_type("AdGroupAdOperation")
+            
+            ad_group_ad = ad_group_ad_operation.update
+            # Resource name của AdGroupAd là "customers/{customer_id}/adGroupAds/{ad_group_id}~{ad_id}"
+            ad_group_ad.resource_name = f"customers/{customer_id}/adGroupAds/{ad_group_id}~{ad_id}"
+            
+            ad = ad_group_ad.ad
+            mask_paths = []
+            
+            # Final URL
+            final_url = vals.get('final_url')
+            if final_url:
+                ad.final_urls.append(str(final_url))
+                mask_paths.append("ad.final_urls")
+            
+            # RSA content
+            rsa = ad.responsive_search_ad
+            
+            # Headlines
+            if 'headlines' in vals:
+                unique_headlines = list(dict.fromkeys(vals.get('headlines', [])))
+                for text in unique_headlines:
+                    headline = client.get_type("AdTextAsset")
+                    headline.text = text[:30]
+                    rsa.headlines.append(headline)
+                mask_paths.append("ad.responsive_search_ad.headlines")
+            
+            # Descriptions
+            if 'descriptions' in vals:
+                unique_descriptions = list(dict.fromkeys(vals.get('descriptions', [])))
+                for text in unique_descriptions:
+                    description = client.get_type("AdTextAsset")
+                    description.text = text[:90]
+                    rsa.descriptions.append(description)
+                mask_paths.append("ad.responsive_search_ad.descriptions")
+
+            # Field mask manually
+            from google.protobuf.field_mask_pb2 import FieldMask
+            ad_group_ad_operation.update_mask.CopyFrom(FieldMask(paths=mask_paths))
+
+            response = ad_group_ad_service.mutate_ad_group_ads(
+                customer_id=str(customer_id),
+                operations=[ad_group_ad_operation],
+            )
+            return True, response.results[0].resource_name
+        except Exception as e:
+            _logger.error("Update ad failed: %s", str(e))
+            return False, str(e)
+
+    @staticmethod
     def update_campaign_budget(client, customer_id, campaign_resource_name, new_budget_micros):
         """Cập nhật budget cho campaign"""
         try:
