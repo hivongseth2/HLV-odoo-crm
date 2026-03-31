@@ -186,6 +186,41 @@ class GoogleAdsAd(models.Model):
     headline = fields.Text(string='Danh sách Tiêu đề (RSA)', help='Nhập ít nhất 3 tiêu đề, mỗi tiêu đề 1 dòng.')
     description = fields.Text(string='Danh sách Mô tả (RSA)', help='Nhập ít nhất 2 mô tả, mỗi mô tả 1 dòng.')
 
+    # Validation Computed Fields for UI
+    headline_count = fields.Integer(compute='_compute_validation_stats', string='Số lượng Tiêu đề')
+    description_count = fields.Integer(compute='_compute_validation_stats', string='Số lượng Mô tả')
+    is_final_url_invalid = fields.Boolean(compute='_compute_validation_stats', string='URL không hợp lệ')
+    is_rsa_invalid = fields.Boolean(compute='_compute_validation_stats', string='Quảng cáo không hợp lệ')
+
+    @api.depends('headline', 'description', 'final_urls', 'type')
+    def _compute_validation_stats(self):
+        for rec in self:
+            # RSA specific validation
+            headlines = [h.strip() for h in (rec.headline or "").split('\n') if h.strip()]
+            descriptions = [d.strip() for d in (rec.description or "").split('\n') if d.strip()]
+            
+            # Unique counts (deduplication)
+            h_unique = list(dict.fromkeys(headlines))
+            d_unique = list(dict.fromkeys(descriptions))
+            
+            rec.headline_count = len(h_unique)
+            rec.description_count = len(d_unique)
+            
+            # URL Validation (Missing Protocol check)
+            url = (rec.final_urls or "").strip()
+            rec.is_final_url_invalid = bool(url and not (url.startswith('http://') or url.startswith('https://')))
+            
+            # Overall RSA validity
+            if rec.type == 'RESPONSIVE_SEARCH_AD':
+                rec.is_rsa_invalid = (
+                    rec.headline_count < 3 or 
+                    rec.description_count < 2 or 
+                    not rec.final_urls or 
+                    rec.is_final_url_invalid
+                )
+            else:
+                rec.is_rsa_invalid = False
+
     # Metrics
     clicks = fields.Integer(string='Lượt Nhấp', default=0, readonly=True)
     impressions = fields.Integer(string='Lượt Hiển Thị', default=0, readonly=True)
@@ -229,25 +264,41 @@ class GoogleAdsAd(models.Model):
             self.state = 'synced'
             return True
 
-        client = account._get_google_ads_client()
-        customer_id = account.operating_customer_id
-        
-        # RSA requirements: 3 headlines, 2 descriptions, 1 final URL
+        # 1. Clean & Deduplicate Data
         headlines = [h.strip() for h in (self.headline or "").split('\n') if h.strip()]
         descriptions = [d.strip() for d in (self.description or "").split('\n') if d.strip()]
         
-        if len(headlines) < 3:
-            raise UserError(_("Quảng cáo RSA yêu cầu ít nhất 3 tiêu đề. Hiện tại chỉ có %s. Vui lòng nhập mỗi tiêu đề 1 dòng.") % len(headlines))
-        if len(descriptions) < 2:
-            raise UserError(_("Quảng cáo RSA yêu cầu ít nhất 2 mô tả. Hiện tại chỉ có %s. Vui lòng nhập mỗi mô tả 1 dòng.") % len(descriptions))
-        if not self.final_urls:
+        # Deduplication preserving order
+        unique_headlines = list(dict.fromkeys(headlines))
+        unique_descriptions = list(dict.fromkeys(descriptions))
+        
+        # 2. Fix Final URL (Auto-protocol)
+        final_url = (self.final_urls or "").strip()
+        if final_url and not (final_url.startswith('http://') or final_url.startswith('https://')):
+            final_url = 'https://' + final_url
+            self.final_urls = final_url # Save fix to DB
+
+        # 3. Final Validation with specific errors
+        if len(unique_headlines) < 3:
+            raise UserError(_("Quảng cáo RSA yêu cầu ít nhất 3 tiêu đề KHÁC NHAU. Mỗi tiêu đề 1 dòng.\n"
+                              "Hiện tại bạn mới có %s tiêu đề hợp lệ.") % len(unique_headlines))
+            
+        if len(unique_descriptions) < 2:
+            raise UserError(_("Quảng cáo RSA yêu cầu ít nhất 2 mô tả KHÁC NHAU. Mỗi mô tả 1 dòng.\n"
+                              "Hiện tại bạn mới có %s mô tả hợp lệ.") % len(unique_descriptions))
+            
+        if not final_url:
             raise UserError(_("Vui lòng nhập URL Đích (Final URL) trước khi đồng bộ."))
 
+        client = account._get_google_ads_client()
+        customer_id = account.operating_customer_id
+        
         vals = {
-            'headlines': headlines,
-            'descriptions': descriptions,
-            'final_url': str(self.final_urls),
+            'headlines': unique_headlines,
+            'descriptions': unique_descriptions,
+            'final_url': final_url,
         }
+        
         from ..services.google_ads_mutate import GoogleAdsMutateService
         ok, result = GoogleAdsMutateService.create_ad(
             client, customer_id, self.ad_group_id.google_ad_group_id, vals
@@ -256,7 +307,7 @@ class GoogleAdsAd(models.Model):
         if ok:
             self.write({'google_ad_id': result.split('/')[-1], 'state': 'synced'})
         else:
-            raise UserError(_("Đồng bộ Ad thất bại: %s") % result)
+            raise UserError(_("Đồng bộ Ad thất bại (Lưu ý: Headlines/Descriptions có thể trùng lặp hoặc quá dài): \n %s") % result)
 
     _sql_constraints = [
         ('google_ad_id_uniq', 'unique(google_ad_id)', 'Google Ad ID phải là duy nhất!'),
