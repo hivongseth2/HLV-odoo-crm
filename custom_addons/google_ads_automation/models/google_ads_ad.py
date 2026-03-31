@@ -165,6 +165,7 @@ class GoogleAdsAd(models.Model):
         ('removed', 'Đã xóa'),
     ], string='Trạng Thái', default='paused')
 
+    type_id = fields.Many2one('google.ads.ad.type', string='Loại Quảng Cáo', required=True)
     type = fields.Selection([
         ('RESPONSIVE_SEARCH_AD',    'Tìm Kiếm Thích Ứng (RSA)'),
         ('EXPANDED_TEXT_AD',        'Tìm Kiếm Văn Bản Mở Rộng'),
@@ -178,7 +179,7 @@ class GoogleAdsAd(models.Model):
         ('DISCOVERY_CAROUSEL_AD',   'Khám Phá Dạng Băng Chuyền'),
         ('PERFORMANCE_MAX',         'Tối Đa Hiệu Suất (PMax)'),
         ('UNKNOWN',                 'Không rõ'),
-    ], string='Loại Quảng Cáo', default='RESPONSIVE_SEARCH_AD')
+    ], string='Mã Loại', related='type_id.code', store=True, readonly=True)
 
     final_urls = fields.Char(string='URL Đích (Final URL)')
     
@@ -194,7 +195,7 @@ class GoogleAdsAd(models.Model):
     is_final_url_invalid = fields.Boolean(compute='_compute_validation_stats', string='URL không hợp lệ')
     is_rsa_invalid = fields.Boolean(compute='_compute_validation_stats', string='Quảng cáo không hợp lệ')
 
-    @api.depends('headline', 'description', 'final_urls', 'type')
+    @api.depends('headline', 'description', 'final_urls', 'type_id')
     def _compute_validation_stats(self):
         for rec in self:
             # RSA specific validation
@@ -253,55 +254,43 @@ class GoogleAdsAd(models.Model):
             else:
                 rec.roas = 0.0
 
-    @api.onchange('type')
-    def _onchange_type_filter_groups(self):
+    @api.onchange('type_id')
+    def _onchange_type_id_filter_groups(self):
         """Khi chọn loại quảng cáo, lọc các nhóm quảng cáo tương thích"""
-        if not self.type:
+        if not self.type_id:
             return {'domain': {'ad_group_id': []}}
         
-        # Mapping từ Ad Type sang các loại Ad Group hỗ trợ
-        mapping = {
-            'RESPONSIVE_SEARCH_AD': ['SEARCH_STANDARD', 'SEARCH_DYNAMIC_ADS', 'DISCOVERY'], 
-            'EXPANDED_TEXT_AD': ['SEARCH_STANDARD'],
-            'CALL_AD': ['SEARCH_STANDARD'],
-            'RESPONSIVE_DISPLAY_AD': ['DISPLAY_STANDARD'],
-            'IMAGE_AD': ['DISPLAY_STANDARD'],
-            'SHOPPING_PRODUCT_AD': ['SHOPPING_PRODUCT_ADS'],
-            'DISCOVERY_AD': ['DISCOVERY'],
-            'DISCOVERY_CAROUSEL_AD': ['DISCOVERY'],
-            'VIDEO_AD': ['VIDEO_TRUE_VIEW_IN_STREAM', 'VIDEO_BUMPER', 'VIDEO_OUTSTREAM'],
-        }
-        res_types = mapping.get(self.type, [])
-        return {'domain': {'ad_group_id': [('type', 'in', res_types)]}}
+        # Lấy danh sách các loại nhóm tương thích từ bản ghi type_id
+        if self.type_id.compatible_ad_group_types:
+            res_types = self.type_id.compatible_ad_group_types.split(',')
+            return {'domain': {'ad_group_id': [('type', 'in', res_types)]}}
+        return {'domain': {'ad_group_id': []}}
 
     @api.onchange('ad_group_id')
     def _onchange_ad_group_id_filter_types(self):
-        """Khi chọn nhóm quảng cáo, kiểm tra độ tương thích của loại quảng cáo hiện tại"""
+        """Khi chọn nhóm quảng cáo, lọc lại domain cho type_id và kiểm tra tương thích"""
         if not self.ad_group_id:
-            return
+            return {'domain': {'type_id': []}}
         
         ad_group_type = self.ad_group_id.type
-        # Mapping từ Ad Group sang các loại Ad hỗ trợ
-        mapping = {
-            'SEARCH_STANDARD': ['RESPONSIVE_SEARCH_AD', 'EXPANDED_TEXT_AD', 'CALL_AD'],
-            'SEARCH_DYNAMIC_ADS': ['RESPONSIVE_SEARCH_AD'],
-            'DISPLAY_STANDARD': ['RESPONSIVE_DISPLAY_AD', 'IMAGE_AD'],
-            'SHOPPING_PRODUCT_ADS': ['SHOPPING_PRODUCT_AD'],
-            'DISCOVERY': ['DISCOVERY_AD', 'DISCOVERY_CAROUSEL_AD', 'RESPONSIVE_SEARCH_AD'], # RSA dùng được trong Discovery campaign mới
-            'VIDEO_TRUE_VIEW_IN_STREAM': ['VIDEO_AD'],
-            'VIDEO_BUMPER': ['VIDEO_AD'],
-            'VIDEO_OUTSTREAM': ['VIDEO_AD'],
-        }
-        allowed_ad_types = mapping.get(ad_group_type, [])
+        # Trả về domain để lọc danh sách Loại quảng cáo ngay lập tức
+        domain = [('compatible_ad_group_types', 'ilike', ad_group_type)]
         
-        if self.type and self.type not in allowed_ad_types:
-            # Chọn mẫu phù hợp nhất làm mặc định nếu mẫu cũ không tương thích
-            title = _("Loại quảng cáo không tương thích")
-            msg = _("Nhóm quảng cáo '%s' (loại: %s) không hỗ trợ loại quảng cáo bạn vừa chọn. "
-                    "Hệ thống đã tự động chuyển về loại phù hợp nhất.") % (self.ad_group_id.name, ad_group_type)
+        # Nếu loại hiện tại không nằm trong danh sách tương thích của nhóm mới chọn
+        if self.type_id and ad_group_type not in (self.type_id.compatible_ad_group_types or ''):
+            # Tìm loại mặc định phù hợp với nhóm này
+            default_type = self.env['google.ads.ad.type'].search(domain, limit=1)
+            self.type_id = default_type
             
-            self.type = allowed_ad_types[0] if allowed_ad_types else False
-            return {'warning': {'title': title, 'message': msg}}
+            return {
+                'domain': {'type_id': domain},
+                'warning': {
+                    'title': _("Loại quảng cáo không tương thích"),
+                    'message': _("Nhóm quảng cáo '%s' (loại: %s) không hỗ trợ loại quảng cáo cũ. Hệ thống đã tự động chuyển về '%s'.") % (self.ad_group_id.name, ad_group_type, default_type.name)
+                }
+            }
+        
+        return {'domain': {'type_id': domain}}
 
     def action_sync_to_google(self):
         self.ensure_one()

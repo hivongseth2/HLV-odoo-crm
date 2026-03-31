@@ -11,3 +11,4 @@ from . import google_ads_conversion_action
 from . import google_ads_tag
 from . import google_ads_gtm_item
 from . import google_ads_adsroid_log
+from . import google_ads_ad_type

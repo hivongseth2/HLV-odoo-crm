@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="ad_type_rsa" model="google.ads.ad.type">
+            <field name="name">Tìm Kiếm Thích Ứng (RSA)</field>
+            <field name="code">RESPONSIVE_SEARCH_AD</field>
+            <field name="sequence">10</field>
+            <field name="compatible_ad_group_types">SEARCH_STANDARD,SEARCH_DYNAMIC_ADS,DISCOVERY</field>
+        </record>
+        <record id="ad_type_eta" model="google.ads.ad.type">
+            <field name="name">Tìm Kiếm Văn Bản Mở Rộng</field>
+            <field name="code">EXPANDED_TEXT_AD</field>
+            <field name="sequence">20</field>
+            <field name="compatible_ad_group_types">SEARCH_STANDARD</field>
+        </record>
+        <record id="ad_type_rda" model="google.ads.ad.type">
+            <field name="name">Hiển Thị Thích Ứng</field>
+            <field name="code">RESPONSIVE_DISPLAY_AD</field>
+            <field name="sequence">30</field>
+            <field name="compatible_ad_group_types">DISPLAY_STANDARD</field>
+        </record>
+        <record id="ad_type_image" model="google.ads.ad.type">
+            <field name="name">Quảng Cáo Hình Ảnh</field>
+            <field name="code">IMAGE_AD</field>
+            <field name="sequence">40</field>
+            <field name="compatible_ad_group_types">DISPLAY_STANDARD</field>
+        </record>
+        <record id="ad_type_video" model="google.ads.ad.type">
+            <field name="name">Quảng Cáo Video</field>
+            <field name="code">VIDEO_AD</field>
+            <field name="sequence">50</field>
+            <field name="compatible_ad_group_types">VIDEO_TRUE_VIEW_IN_STREAM,VIDEO_BUMPER,VIDEO_OUTSTREAM</field>
+        </record>
+        <record id="ad_type_shopping" model="google.ads.ad.type">
+            <field name="name">Mua Sắm — Sản Phẩm</field>
+            <field name="code">SHOPPING_PRODUCT_AD</field>
+            <field name="sequence">60</field>
+            <field name="compatible_ad_group_types">SHOPPING_PRODUCT_ADS</field>
+        </record>
+        <record id="ad_type_shopping_smart" model="google.ads.ad.type">
+            <field name="name">Mua Sắm Thông Minh</field>
+            <field name="code">SHOPPING_SMART_AD</field>
+            <field name="sequence">70</field>
+            <field name="compatible_ad_group_types">SHOPPING_SMART_ADS</field>
+        </record>
+        <record id="ad_type_call" model="google.ads.ad.type">
+            <field name="name">Quảng Cáo Cuộc Gọi</field>
+            <field name="code">CALL_AD</field>
+            <field name="sequence">80</field>
+            <field name="compatible_ad_group_types">SEARCH_STANDARD</field>
+        </record>
+        <record id="ad_type_discovery" model="google.ads.ad.type">
+            <field name="name">Khám Phá</field>
+            <field name="code">DISCOVERY_AD</field>
+            <field name="sequence">90</field>
+            <field name="compatible_ad_group_types">DISCOVERY</field>
+        </record>
+        <record id="ad_type_discovery_carousel" model="google.ads.ad.type">
+            <field name="name">Khám Phá Dạng Băng Chuyền</field>
+            <field name="code">DISCOVERY_CAROUSEL_AD</field>
+            <field name="sequence">100</field>
+            <field name="compatible_ad_group_types">DISCOVERY</field>
+        </record>
+        <record id="ad_type_pmax" model="google.ads.ad.type">
+            <field name="name">Tối Đa Hiệu Suất (PMax)</field>
+            <field name="code">PERFORMANCE_MAX</field>
+            <field name="sequence">110</field>
+            <field name="compatible_ad_group_types">SEARCH_STANDARD,DISPLAY_STANDARD</field>
+        </record>
+    </data>
+</odoo>

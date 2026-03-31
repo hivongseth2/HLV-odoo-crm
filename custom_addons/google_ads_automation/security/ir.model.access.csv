@@ -28,3 +28,5 @@ access_google_ads_gtm_item_user,google.ads.gtm.item.user,model_google_ads_gtm_it
 access_google_ads_gtm_item_manager,google.ads.gtm.item.manager,model_google_ads_gtm_item,group_google_ads_manager,1,1,1,1
 access_google_ads_adsroid_log_user,google.ads.adsroid.log.user,model_google_ads_adsroid_log,group_google_ads_user,1,0,0,0
 access_google_ads_adsroid_log_manager,google.ads.adsroid.log.manager,model_google_ads_adsroid_log,group_google_ads_manager,1,1,1,1
+access_google_ads_ad_type_user,google.ads.ad.type.user,model_google_ads_ad_type,group_google_ads_user,1,0,0,0
+access_google_ads_ad_type_manager,google.ads.ad.type.manager,model_google_ads_ad_type,group_google_ads_manager,1,1,1,1

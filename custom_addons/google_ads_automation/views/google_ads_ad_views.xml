@@ -7,7 +7,7 @@
             <list string="Mẫu Quảng Cáo Google Ads">
                 <field name="name"/>
                 <field name="ad_group_id"/>
-                <field name="type"/>
+                <field name="type_id"/>
                 <field name="clicks" sum="Tổng Click" optional="show"/>
                 <field name="cost" sum="Tổng Chi Phí" optional="show"/>
                 <field name="conversions" sum="Tổng Đơn" optional="show"/>
@@ -56,7 +56,7 @@
                                 <group string="Thông Tin Kỹ Thuật">
                                     <field name="name" class="oe_inline fw-bold" placeholder="Tên Quảng Cáo..."/>
                                     <field name="ad_group_id" options="{'no_create': True}" readonly="state == 'synced'"/>
-                                    <field name="type" readonly="state == 'synced'"/>
+                                    <field name="type_id" options="{'no_create': True}" readonly="state == 'synced'"/>
                                     <field name="status"/>
                                     <field name="product_ids" widget="many2many_tags" options="{'no_create': True}"/>
                                     <field name="google_ad_id" readonly="1" invisible="state == 'draft'"/>

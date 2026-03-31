@@ -16,6 +16,7 @@
     "data": [
         "security/google_ads_security.xml",
         "security/ir.model.access.csv",
+        "data/google_ads_ad_type_data.xml",
         "data/ir_cron_data.xml",
         "wizard/google_ads_product_feed_wizard_views.xml",
         "views/google_ads_account_views.xml",
