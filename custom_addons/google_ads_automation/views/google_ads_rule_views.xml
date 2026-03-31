@@ -187,5 +187,6 @@
         <field name="name">Lịch Sử Chạy Quy Tắc</field>
         <field name="res_model">google.ads.rule.log</field>
         <field name="view_mode">list,form</field>
+        <field name="context">{'create': False, 'delete': False}</field>
     </record>
 </odoo>

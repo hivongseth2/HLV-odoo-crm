@@ -5,6 +5,10 @@ class GoogleAdsRuleLog(models.Model):
     _description = 'Lịch Sử Chạy Quy Tắc'
     _order = 'create_date desc'
 
+    def _compute_display_name(self):
+        for rec in self:
+            rec.display_name = f"Log {rec.id} - {rec.create_date.strftime('%Y-%m-%d %H:%M')}"
+
     rule_id = fields.Many2one('google.ads.rule', string='Quy Tắc', required=True, ondelete='cascade')
     run_date = fields.Datetime(string='Thời Gian Chạy', default=fields.Datetime.now)
     target_name = fields.Char(string='Đối Tượng Bị Tác Động')
