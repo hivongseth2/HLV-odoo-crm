@@ -39,6 +39,14 @@
                 <sheet>
                     <field name="hero_header_html" widget="html" readonly="1"/>
                     
+                    <div class="alert alert-warning mb-3" role="alert" 
+                         invisible="not is_rsa_invalid or type != 'RESPONSIVE_SEARCH_AD' or state == 'synced'">
+                        <i class="fa fa-exclamation-triangle me-2"></i>
+                        <strong>Yêu cầu bộ máy Google RSA:</strong> 
+                        Cần ít nhất 3 tiêu đề và 2 mô tả duy nhất để đồng bộ. 
+                        Giao thức <code>https://</code> sẽ được tự động thêm vào URL nếu thiếu.
+                    </div>
+
                     <div class="o_premium_card border-0 bg-light-subtle mb-4" >
                         <div class="row">
                             <div class="col-md-6">
@@ -50,35 +58,12 @@
                                     <field name="product_ids" widget="many2many_tags" options="{'no_create': True}"/>
                                     <field name="google_ad_id" readonly="1" invisible="state == 'draft'"/>
 
-                                    <div class="alert alert-warning mb-3" role="alert" 
-                                         invisible="not is_rsa_invalid or type != 'RESPONSIVE_SEARCH_AD' or state == 'synced'">
-                                        <i class="fa fa-exclamation-triangle me-2"></i>
-                                        <strong>Yêu cầu RSA:</strong> 
-                                        Cần ít nhất 3 tiêu đề và 2 mô tả duy nhất. 
-                                        Giao thức URL (https://) sẽ được tự động thêm nếu thiếu.
-                                    </div>
-
-                                    <label for="headline" invisible="type != 'RESPONSIVE_SEARCH_AD'"/>
-                                    <div class="d-flex align-items-center mb-2" invisible="type != 'RESPONSIVE_SEARCH_AD'">
-                                        <field name="headline" placeholder="Mỗi tiêu đề 1 dòng (Tối đa 30 ký tự)..." readonly="state == 'synced'"/>
-                                        <div class="ms-2">
-                                            <field name="headline_count" widget="badge" 
-                                                   decoration-success="headline_count >= 3" 
-                                                   decoration-danger="headline_count &lt; 3"/>
-                                            <span class="text-muted small">/3</span>
-                                        </div>
-                                    </div>
-
-                                    <label for="description" invisible="type != 'RESPONSIVE_SEARCH_AD'"/>
-                                    <div class="d-flex align-items-center mb-2" invisible="type != 'RESPONSIVE_SEARCH_AD'">
-                                        <field name="description" placeholder="Mỗi mô tả 1 dòng (Tối đa 90 ký tự)..." readonly="state == 'synced'"/>
-                                        <div class="ms-2">
-                                            <field name="description_count" widget="badge" 
-                                                   decoration-success="description_count >= 2" 
-                                                   decoration-danger="description_count &lt; 2"/>
-                                            <span class="text-muted small">/2</span>
-                                        </div>
-                                    </div>
+                                    <field name="headline" placeholder="Mỗi tiêu đề 1 dòng (Tối đa 30 ký tự)..." 
+                                           readonly="state == 'synced'"
+                                           invisible="type != 'RESPONSIVE_SEARCH_AD'"/>
+                                    <field name="description" placeholder="Mỗi mô tả 1 dòng (Tối đa 90 ký tự)..." 
+                                           readonly="state == 'synced'"
+                                           invisible="type != 'RESPONSIVE_SEARCH_AD'"/>
 
                                     <field name="is_rsa_invalid" invisible="1"/>
                                     <field name="is_final_url_invalid" invisible="1"/>
