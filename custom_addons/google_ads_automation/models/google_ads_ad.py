@@ -183,8 +183,10 @@ class GoogleAdsAd(models.Model):
     final_urls = fields.Char(string='URL Đích (Final URL)')
     
     # Creation fields
-    headline = fields.Text(string='Danh sách Tiêu đề (RSA)', help='Nhập ít nhất 3 tiêu đề, mỗi tiêu đề 1 dòng.')
-    description = fields.Text(string='Danh sách Mô tả (RSA)', help='Nhập ít nhất 2 mô tả, mỗi mô tả 1 dòng.')
+    headline = fields.Text(string='Tiêu đề (Mỗi dòng 1 tiêu đề)', 
+                           help='Yêu cầu ít nhất 3 tiêu đề duy nhất cho quảng cáo RSA. Hệ thống sẽ tự động loại bỏ các dòng trống hoặc trùng lặp. Mỗi tiêu đề không quá 30 ký tự.')
+    description = fields.Text(string='Mô tả (Mỗi dòng 1 mô tả)', 
+                              help='Yêu cầu ít nhất 2 mô tả duy nhất cho quảng cáo RSA. Hệ thống sẽ tự động loại bỏ các dòng trống hoặc trùng lặp. Mỗi mô tả không quá 90 ký tự.')
 
     # Validation Computed Fields for UI
     headline_count = fields.Integer(compute='_compute_validation_stats', string='Số lượng Tiêu đề')
