@@ -73,7 +73,7 @@
                         <div class="bg-light p-3 border-bottom d-flex justify-content-between align-items-center">
                             <h5 class="m-0 fw-bold"><i class="fa fa-history me-2"></i>Lịch Sử Thực Thi</h5>
                         </div>
-                        <field name="log_ids" readonly="1">
+                        <field name="log_ids" readonly="1" create="0" edit="0" delete="0">
                             <list class="table-hover">
                                 <field name="run_date"/>
                                 <field name="target_name"/>
@@ -167,6 +167,7 @@
         <field name="model">google.ads.rule.log</field>
         <field name="arch" type="xml">
             <list string="Lịch Sử Chạy Quy Tắc" 
+                  create="0" edit="0" delete="0"
                   decoration-danger="status == 'error'" 
                   decoration-warning="status == 'action_taken'" 
                   decoration-success="status == 'success'">
