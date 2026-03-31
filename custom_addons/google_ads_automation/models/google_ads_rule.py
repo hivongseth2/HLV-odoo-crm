@@ -303,6 +303,15 @@ class GoogleAdsRule(models.Model):
         if not google_id:
             return
 
+        if self.account_id.is_demo:
+            self.env['google.ads.rule.log'].create({
+                'rule_id': self.id,
+                'target_name': rec.name,
+                'status': 'action_taken',
+                'message': _("[DEMO] Chế độ Live: Gửi lệnh thay đổi trạng thái Google Ads (giả lập) thành: %s" % new_status),
+            })
+            return
+
         client = self.account_id._get_google_ads_client()
         customer_id = self.account_id.operating_customer_id
 

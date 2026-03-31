@@ -257,7 +257,19 @@ class GoogleAdsAccount(models.Model):
                 
             return client
         except Exception as e:
-            raise UserError(_("Không thể khởi tạo Google Ads Client. Chi tiết lỗi: %s") % str(e))
+            error_msg = str(e)
+            if 'invalid_grant' in error_msg:
+                # Dịch lỗi cực kỳ phổ biến này sang Tiếng Việt với hướng khắc phục cụ thể
+                raise UserError(_(
+                    "Không thể xác thực với Google Ads (Lỗi: invalid_grant - Bad Request).\n\n"
+                    "NGUYÊN NHÂN:\n"
+                    "Refresh Token của bạn đã hết hạn, bị thu hồi từ phía dòng tài khoản Google, hoặc Client ID/Secret cung cấp không hợp lệ.\n\n"
+                    "👉 CÁCH KHẮC PHỤC:\n"
+                    "1. Vào menu 'Danh sách Tài Khoản Google Ads', mở tài khoản này.\n"
+                    "2. Kiểm tra lại Client ID và Client Secret.\n"
+                    "3. Bấm nút 'Lấy mã Xác Thực Hiện Tại' (Generate Auth URL) để đăng nhập lại và xin cấp quyền Token mới."
+                ))
+            raise UserError(_("Không thể khởi tạo Google Ads Client. Chi tiết lỗi: %s") % error_msg)
 
     def action_generate_auth_url(self):
         """Tạo URL Đăng nhập Google để lấy Refresh Token tự động."""
