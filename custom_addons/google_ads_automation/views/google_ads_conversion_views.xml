@@ -31,11 +31,6 @@
         <field name="model">google.ads.conversion</field>
         <field name="arch" type="xml">
             <form string="Lượt Chuyển Đổi" class="o_google_ads_premium_form" create="0" edit="0" delete="0">
-                <header>
-                    <button name="action_upload_to_google" string="Upload lên Google (Offline)" 
-                            type="object" class="btn-info" 
-                            invisible="not gclid"/>
-                </header>
                 <sheet>
                     <field name="hero_header_html" widget="html" readonly="1"/>
 
