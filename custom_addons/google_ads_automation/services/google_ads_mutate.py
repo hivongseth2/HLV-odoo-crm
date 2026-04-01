@@ -118,10 +118,8 @@ class GoogleAdsMutateService:
 
             campaign.status = client.enums.CampaignStatusEnum.PAUSED # Always start paused for safety
             
-            # Final URL (Lading Page)
-            final_url = vals.get('final_url')
-            if final_url:
-                campaign.final_urls.append(str(final_url))
+            # Note: Final URL is typically set at Ad level or Asset group level, not Campaign level.
+            # Removing redundant assignment that causes API error.
 
             # Budget handling
             campaign.campaign_budget = str(budget_resource)
