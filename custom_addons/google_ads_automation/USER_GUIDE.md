@@ -1,190 +1,109 @@
-# Hướng Dẫn Sử Dụng Chi Tiết — Google Ads Automation
+# Cẩm Nang Vận Hành: Tự Động Hóa Google Ads (Odoo 18)
+
+Chào mừng bạn đến với hệ thống điều khiển Google Ads thông minh. Tài liệu này tập trung vào các thao tác nghiệp vụ hàng ngày để giúp bạn tối ưu hóa doanh thu và bảo vệ ngân sách một cách tự động.
 
 ---
 
-## Mục lục
+## 1. Quản Lý Danh Mục Sản Phẩm Quảng Cáo (Product Feed)
 
-1. [Tổng quan module](#1-tổng-quan-module)
-2. [Tài Khoản Google Ads & Adsroid AI](#2-tài-khoản-google-ads--adsroid-ai)
-3. [Chiến Dịch, Nhóm QC, Mẫu QC (Dashboard KPI)](#3-chiến-dịch-nhóm-qc-mẫu-qc)
-4. [Product Feed](#4-product-feed)
-5. [Chiến Lược Tự Động](#5-chiến-lược-tự-động)
-6. [Quy Tắc Tự Động (Rules)](#6-quy-tắc-tự-động-rules)
-7. [Lịch Sử Quy Tắc (Log)](#7-lịch-sử-quy-tắc-log)
-8. [Cron Job & Tự động hàng ngày](#8-cron-job--tự-động-hàng-ngày)
-9. [Test bằng Demo Mode](#9-test-bằng-demo-mode)
-10. [Checklist trước khi Go-Live](#10-checklist-trước-khi-go-live)
+Đây là "Trái tim" của hệ thống, nơi kết nối lượng tồn kho thực tế trong Odoo với các chiến dịch trên Google Ads.
 
----
+### Thêm sản phẩm vào hệ thống
+1. Vào menu **Google Ads > Product Feed (Danh mục sản phẩm)**.
+2. Chọn bản ghi sẵn có hoặc nhấn **Mới**.
+3. Nhấn nút **Thêm tất cả từ danh mục** để lọc và đưa các dòng sản phẩm bạn muốn chạy quảng cáo vào danh sách.
 
-## 1. Tổng quan module
+### Đọc hiểu các cột số liệu (Nghiệp vụ kho)
+Hệ thống tự động tính toán các chỉ số quan trọng sau:
+- **Tồn kho thực tế**: Số lượng khả dụng trong kho Odoo hiện tại.
+- **TB Bán/Ngày**: Tốc độ bán hàng trung bình trong 30 ngày gần nhất.
+- **Số ngày tồn**: Dự báo bao nhiêu ngày nữa bạn sẽ cháy hàng (`Tồn kho / TB bán`).
+- **Trạng thái (Màu sắc)**: 
+    - 🔴 **Kịch khung (Critical)**: Cần dừng quảng cáo ngay lập tức để tránh khách đặt hàng mà không có giao.
+    - 🟡 **Sắp hết (Low)**: Cần cân nhắc giảm ngân sách hoặc nhập thêm hàng.
+    - 🟢 **An toàn (Healthy)**: Có thể tăng ngân sách quảng cáo để đẩy mạnh doanh số.
 
-Module giúp **tự động hóa việc bật/tắt và tối ưu ngân sách Google Ads** dựa trên dữ liệu thực tế từ Odoo. Điểm khác biệt so với các module trước đây là hệ thống này mang lại giao diện Dashboard báo cáo thời gian thực, đồng thời tích hợp trợ lý AI **Adsroid** để phân tích chiến dịch tự động.
-
-```
-Odoo (Tồn kho + Giá + Doanh thu)
-            ↓
-    Smart Rule Engine / Adsroid AI
-            ↓
-Google Ads API (Pause / Enable / Adjust Budget)
-```
-
-**Luồng chính:**
-
-| Bước | Việc làm | Ai làm |
-|---|---|---|
-| 1 | Kết nối tài khoản Google Ads và cấu hình Adsroid AI | Người dùng (1 lần) |
-| 2 | Kéo / Đẩy campaigns từ Google (bao gồm ngân sách) | Tự động / thủ công |
-| 3 | Tạo Product Feed — liên kết Sản phẩm Odoo ↔ Chiến dịch | Người dùng |
-| 4 | Tạo Chiến Lược → Sinh Rules tự động hoặc dùng Insights AI | Người dùng |
-| 5 | Cron chạy hàng ngày: đánh giá rules, thực thi Mutate | Tự động |
+> [!TIP]
+> **Giao diện trực quan**: Hãy chụp ảnh danh sách sản phẩm với các cột màu sắc sinh động để làm hướng dẫn.
+> ![Giao diện Product Feed](img/huong_dan_feed.png)
 
 ---
 
-## 2. Tài Khoản Google Ads & Adsroid AI
+## 2. Thiết Lập Chiến Lược Tự Động (Bộ Máy Điều Khiển)
 
-**Vị trí:** Google Ads > Cấu Hình > Tài Khoản API
+Thay vì phải bật/tắt thủ công cho hàng trăm sản phẩm, bạn chỉ cần chọn một "Chiến lược" và Odoo sẽ tự động thực hiện cho bạn.
 
-Mỗi tài khoản Google Ads tương ứng 1 bản ghi ở đây, nay được hiển thị dưới dạng Hero Header chuyên nghiệp.
+### Các loại chiến lược cốt lõi:
+1.  **Bảo vệ hàng sắp hết**: Hệ thống sẽ tự động "Pause" quảng cáo khi kho chạm mốc tối thiểu bạn đặt ra.
+2.  **Đẩy hàng tồn cao**: Ưu tiên ngân sách cho các mặt hàng đang "ôm kho" quá nhiều để giải phóng vốn.
+3.  **Tối ưu lợi nhuận**: Tự động tắt các mẫu quảng cáo có chi phí quá cao mà không mang lại đơn hàng (dựa trên chỉ số CPA/ROAS).
+4.  **Đẩy hàng mới**: Thích hợp cho các bộ sưu tập vừa nhập kho, cần tăng độ phủ ngay lập tức.
 
-### Các field quan trọng
+### Chiến lược Tùy Chỉnh (Custom) - Mới:
+Bạn có thể tự định nghĩa luật chơi riêng bằng cách điền vào tab **Cấu Hình Tùy Chỉnh**:
+- **Điều kiện**: Chọn (Chi phí, Lượt nhấp, Lượt hiển thị, Tồn kho...).
+- **Hành động**: Chọn (Bật, Tạm dừng, Tăng/Giảm ngân sách).
+- **Ví dụ**: "Nếu Lượt nhấp > 200 mà chưa có đơn hàng -> Tạm dừng".
 
-| Nhóm | Field | Ý nghĩa |
-|---|---|---|
-| **Google Ads** | Chế Độ Demo | Bật để test hệ thống không cần liên kết API thật (xem [Mục 9](#9-test-bằng-demo-mode)) |
-| | Developer Token / Client ID / Secret / Refresh Token | Lấy từ Google Cloud Console |
-| | Operating Customer ID | ID tài khoản Ads cụ thể cần quản lý (không có dấu -) |
-| | Login Customer ID (MCC) | (Optional) ID tài khoản Mcc nếu sử dụng MCC |
-| | Merchant Center ID | Bắt buộc nếu tạo Chiến dịch Mua Sắm / PMax |
-| **Adsroid AI** | Sử dụng Adsroid AI | Bật tích hợp Trợ lý AI Adsroid.com |
-| | Adsroid API Key, Org ID, Project ID | Credentials lấy từ cổng thông tin Adsroid |
-| | Auto Apply Adsroid Action | Tự động áp dụng các hành động Đề xuất của AI (ví dụ tự động Tạm dừng) ngay khi có kết quả phân tích |
+**Cách kích hoạt:** Sau khi cấu hình xong, nhấn nút **⚡ Sinh Rules Tự Động**. Odoo sẽ quét toàn bộ danh mục sản phẩm và tạo ra các câu lệnh (Rules) chi tiết cho từng cái.
 
-### Hướng dẫn kiểm tra
-
-1. **Xác Thực OAuth**: Để Odoo tự động lấy Refresh Token, chọn **Xác thực Google (OAuth)**.
-2. **Kiểm tra kết nối**: Nhấn **Kiểm Tra Kết Nối**, hệ thống sẽ ping đến Google Ads API. Trạng thái sẽ update thành thẻ `Đã Kết Nối`.
-3. **Đồng Bộ Dữ Liệu**: Kéo dữ liệu (Campaigns, Ad Groups, Ads) từ Google Ads về Odoo. Form Tài khoản sẽ cập nhật ngay lập tức các chỉ số `Tổng Chi Phí`, `Tổng Chuyển Đổi`, v.v.
-
-> ⚠️ **Lưu ý bảo mật**: Toàn bộ Token và Secret được ẩn theo chuẩn Password.
+> [!IMPORTANT]
+> **Chế độ LIVE**: Khi mới thiết lập, hãy để ở chế độ **Dry-Run** để xem hệ thống dự định làm gì. Khi đã tin tưởng, hãy gạt sang **LIVE (Màu đỏ)** để lệnh thực thi thật lên Google.
 
 ---
 
-## 3. Chiến Dịch, Nhóm QC, Mẫu QC
+## 3. Dashboard Hiệu Quả & Trợ Lý AI Adsroid
 
-**Vị trí:** Google Ads > Các Chiến Dịch
+Giao diện Dashboard giúp bạn xem nhanh "sức khỏe" của các chiến dịch mà không cần mở tài khoản Google Ads phức tạp.
 
-Thay vì các trường hiển thị nhàm chán, nay danh sách và Form Chiến dịch được thiết kế thành **Performance Dashboard Dashboard** mang lại cái nhìn bao quát về Metrics.
+### Đọc dải thẻ Dashboard 4 màu:
+- **Xanh Dương (Lượt nhấp)**: Khách hàng có quan tâm đến mẫu quảng cáo của bạn không?
+- **Đỏ (Chi phí)**: Bạn đã tiêu hết bao nhiêu tiền?
+- **Xanh Lá (Đơn hàng)**: Quảng cáo có thực sự mang về doanh thu không?
+- **Vàng (Tỷ lệ chốt)**: Hiệu suất của trang bán hàng/nội dung quảng cáo.
 
-### Hình ảnh giao diện
-- **Hero Header**: Hiển thị Trạng thái (Xanh/Vàng/Đỏ), Campaign ID, và Mức độ phủ sóng (Reach Power).
-- **KPI Metrics Ribbon**: Hiển thị rõ Clicks, Lượt Hiển Thị, Tổng Chi Phí, Lượt Chuyển Đổi với màu sắc đặc trưng của Google.
-
-### Tạo mới & Mutate (Đẩy chiến dịch lên Google Ads)
-1. Thêm mới Chiến dịch trực tiếp từ Odoo.
-2. Các cấu hình chú ý trong tab **Cấu hình Google Ads**:
-   - **Loại Kênh (Channel Type)**: Hỗ trợ PMax, Search, Display, Shopping...
-   - **Ngân sách hàng ngày**: Cấu hình Ngân sách qua API. Trị số này sẽ tự convert ra micros (trên Google) và ngược lại khi lưu.
-   - **Tên Thương hiệu & Logo (Cho PMax)**: Để vượt rào quy định Asset (Thương hiệu/Logo) của PMax, hệ thống sẽ thực thi transaction "Đồng thời" qua Mutate API. Bạn **bắt buộc** điền các trường này.
-   - Quy định Quảng cáo Chính trị (EU Political Advertising): Odoo tự handle ẩn gán `DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING` để bypass validate của API Google (Bắt buộc từ tháng 09/2025).
-3. Nhấn nút **Đồng bộ lên Google Ads** để thực thi Push Data ra ngoài.
-
-### Trợ lý Adsroid AI (Hỏi AI)
-Phía trên Form Chiến Dịch có nút **Hỏi Nhận Định Adsroid (AI)**. Khi nhấn:
-- Hệ thống đóng gói: Data Campaign (Clicks/Chi phí) + Tình trạng tồn kho (từ Product Feed liên kết).
-- Gửi sang AI Agent của Supabase.
-- Hiển thị Insight và Điểm số vào trường HTML: *Adsroid AI Insight*.
-- Nếu Tài Khoản bật `Auto Apply`, Odoo sẽ ngay lập tức tự ra lệnh `Pause` dựa trên kết quả AI.
+### Ra quyết định cùng AI Adsroid:
+Tại mỗi Chiến dịch hoặc Sản phẩm, bạn có nút **Hỏi Nhận Định AI**.
+1. AI sẽ phân tích dữ liệu 3 chiều: **Quảng cáo (Ads) + Tồn kho (Odoo) + Thị trường**.
+2. AI đưa ra chấm điểm hiệu quả và lời khuyên: "Chi phí đang quá cao so với tỷ lệ tồn kho, khuyên bạn nên giảm 20% ngân sách".
+3. **Bật Tự Động Áp Dụng**: Nếu bạn quá bận, hãy bật tính năng này để Odoo tự động thực hiện lệnh mà AI đề xuất ngay lập tức.
 
 ---
 
-## 4. Product Feed
+## 4. Tạo Mẫu Quảng Cáo Chuyên Nghiệp (RSA)
 
-**Vị trí:** Google Ads > Product Feed
+Để quảng cáo của bạn được Google ưu tiên hiển thị và có điểm chất lượng cao, hệ thống yêu cầu bạn nhập liệu theo chuẩn **Tìm kiếm thích ứng (RSA)**.
 
-Đây là khu vực tập hợp các dòng Danh mục Sản phẩm có tham gia vào luồng Quảng cáo.
+**Quy trình nhập liệu:**
+1. Tại mỗi mẫu quảng cáo, tìm trường **Danh sách Tiêu đề**.
+2. **Bắt buộc**: Nhập ít nhất **3 dòng** tiêu đề khác nhau (Mỗi tiêu đề 1 dòng).
+3. Tại trường **Danh sách Mô tả**: Nhập ít nhất **2 dòng**.
+4. Hệ thống sẽ tự động ghép dẻo các dòng này để tạo ra hàng chục biến thể quảng cáo khác nhau cho khách hàng.
 
-### Tạo Feed
-1. Nhấn **Mới**, đặt tên và gắn với 1 Tài khoản.
-2. Form cung cấp cái nhìn tổng quát: Phần trăm `Critical` (Sắp hết/Nguy hiểm), `Low` (Thấp), `Healthy` (An toàn).
-3. Sử dụng Wizard **Thêm Tất Cả Từ Danh Mục** để lọc nhanh.
-4. Nút **Tự động Map Campaign**: Module sẽ tự động quét Mã SKU hoặc Tên SP để gán tự động với Chiến dịch tương ứng nếu bạn gõ tên Campaign đúng.
-
-### Metrics Computed:
-| Cột | Ý nghĩa |
-|---|---|
-| Tồn Kho Thực Tế | Odoo `qty_available` |
-| Giá Bán / Vốn | Lấy từ Odoo `list_price` / `standard_price`. |
-| Biên LN (%) | `(Giá bán - Giá vốn) / Giá bán × 100` |
-| TB Bán/Ngày | Quét lịch sử SO Line (đã giao) trong 30 ngày. Đảm bảo chuẩn theo Multi-steps Delivery. |
-| Số Ngày Tồn | `Tồn kho / TB bán/ngày` |
-| Trạng Thái Tồn | Màu chỉ dẫn (Đỏ: Hàng nguy cấp, Vàng: Sắp hết, Xanh: Tốt). |
+> [!TIP]
+> **Ví dụ**: 
+> - Tiêu đề 1: Giày Sneaker Chính Hãng
+> - Tiêu đề 2: Giảm Giá 30% Hôm Nay
+> - Tiêu đề 3: Ship Cod Toàn Quốc
+> ![Mẫu quảng cáo chuyên nghiệp](img/huong_dan_rsa.png)
 
 ---
 
-## 5. Chiến Lược Tự Động
+## 5. Kiểm Soát Nhật Ký Tự Động
 
-**Vị trí:** Google Ads > Chiến Lược Tự Động
+Bạn luôn có thể trả lời câu hỏi: *"Tại sao hôm nay quảng cáo này lại bị tắt?"* bằng cách vào **Google Ads > Lịch Sử Quy Tắc**.
 
-Tương tự phiên bản trước, hệ thống có nhiều "Vị tướng" xử lý.
-- 🔴 Bảo vệ hàng sắp hết.
-- 🟢 Đẩy hàng tồn cao.
-- 💰 Tối ưu lợi nhuận (CPA/ROAS margin cutoff).
-- 📈 Đẩy hàng mới.
-- 🔄 Cân bằng tự động.
-
-Nhấn **⚡ Sinh Rules Tự Động** để module duyệt từng Sản Phẩm trong Product Feed, phân tích Ngưỡng Cấu Hình để tạo ra bảng `Rules`. Phải chọn chế độ **LIVE** nếu muốn Rule thực thi thật lệnh Mutate lên Google.
+- **Thời gian**: Hệ thống vừa quét lúc mấy giờ?
+- **Hành động**: Đã Tạm dừng (Paused) hay Đã Bật (Enabled)?
+- **Lý do chi tiết**: Giải thích rành mạch dựa trên con số thực tế (VD: Do tồn kho thực tế = 2, thấp hơn mức tối thiểu = 5).
 
 ---
 
-## 6. Quy Tắc Tự Động (Rules)
+## 6. Quy Trình Vận Hành Gợi Ý
 
-**Vị trí:** Google Ads > Quy Tắc Tự Động
-
-Các câu lệnh máy quét. VD: `NẾU tồn kho < 20 THÌ Pause campaign`. Có Nút `Chạy Thử Ngay` ngay trên UI Form của Rule để test ngay lập tức hành vi đánh giá logic Điều kiện với số thực Odoo Odoo so với Số ngưỡng mà không đợi Cron chạy.
-
----
-
-## 7. Lịch Sử Quy Tắc (Log)
-
-**Vị trí:** Google Ads > Lịch Sử Quy Tắc
-
-Log ghi lại rành mạch hành động: Dry-Run (thử nghiệm) hay Gọi Mutate thật. Hiển thị ID và Error API nếu rớt.
+1. **Buổi sáng**: Kiểm tra nhanh **Bảng Dashboard** xem có biến động bất thường nào về chi phí không.
+2. **Buổi trưa**: Kiểm tra **Lịch Sử Quy Tắc** để xem có bao nhiêu sản phẩm đã bị hệ thống tạm dừng do hết hàng.
+3. **Cuối tuần**: Sử dụng **Hỏi Nhận Định AI** cho các chiến dịch lớn để lấy lời khuyên tối ưu ngân sách cho tuần tiếp theo.
 
 ---
-
-## 8. Cron Job & Tự động hàng ngày
-
-Có một Cron Program "Google Ads: Đánh Giá Quy Tắc", chạy hàng ngày để:
-1. Load Metrics mới nhất.
-2. Chạy check Rules.
-3. Chạy lệnh Adsroid tự phân tích (nếu Auto Apply bật).
-
-Vào **Settings > Technical > Scheduled Actions** để bật Cron Job này.
-
----
-
-## 9. Test bằng Demo Mode
-
-Thiết kế nhằm hỗ trợ bạn test Odoo mà không tốn tiền API Google thật.
-- Bật `Chế Độ Demo` tại form **Tài khoản API**.
-- Nhấn **Đồng bộ Dữ liệu**: Module tự sinh 4 Campaigns (có đủ Search, Display, PMax), 8 Ad Groups, và các đơn hàng ảo lưu tại `google.ads.conversion`.
-- Nút **Đồng bộ lên Google Ads** hoạt động ở chế độ giả lập, chỉ cập nhật trạng thái Local về `PAUSED/ENABLED`.
-- Trợ giúp quá trình Demo với khách hàng mượt mà, metrics nhảy số theo thiết kế HTML UI đẹp mắt.
-
----
-
-## 10. Checklist trước khi Go-Live
-
-| Hạng mục | Kiểm tra |
-|---|---|
-| ✅ Tài khoản Google Ads kết nối hoặc Bật Demo | Trạng thái = "Đã Kết Nối" |
-| ✅ Cấu hình Adsroid | Đã nhập API Key và Project ID |
-| ✅ Đồng bộ Campaign từ Goolge | Vào list Campaign thấy Metrics có Grid UI |
-| ✅ Kiểm tra Product Feed | Các cột Tồn Kho / Biên Lợi Nhuận hiển thị màu đúng |
-| ✅ Check Campaign Config | Ngân sách hàng ngày, Merchant Center (nếu Shopping) khai báo đủ |
-| ✅ Chiến Lược Kích Hoạt | Bật chế độ "LIVE" màu đỏ |
-| ✅ Hoàn tất | Bật Cron Job trên Odoo |
-
----
-*Tài liệu được cập nhật tự động trong phiên bản Odoo 18.0 Workspace. Tích hợp UI Performance Dashboard & Adsroid AI.*
+*Tài liệu dành cho Người vận hành - Hệ thống Google Ads Automation Odoo 18.*

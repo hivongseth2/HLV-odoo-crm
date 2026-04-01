@@ -28,8 +28,8 @@ google_ads_automation/
 │   ├── google_ads_gtm_item.py       # ★ Lưu Tag/Trigger/Variable đồng bộ từ GTM (Read-Only)
 │   ├── google_ads_conversion.py     # ★ Lượt chuyển đổi (Demo WooCommerce mua hàng), tính ROAS
 │   ├── google_ads_product_feed.py   # Product Feed liên kết SP Odoo & Campaign
-│   ├── google_ads_strategy.py       # Sinh Rules tự động theo bộ 5 chiến lược cốt lõi
-│   ├── google_ads_rule.py           # Engine đánh giá độ thỏa mãn của Rule & thực thi
+│   ├── google_ads_strategy.py       # Sinh Rules tự động theo các bộ chiến lược (mẫu sẵn hoặc Tùy chỉnh)
+│   ├── google_ads_rule.py           # Engine đánh giá độ thỏa mãn của Rule & thực thi (RSA Support)
 │   └── google_ads_rule_log.py       # Ghi log kết quả thực thi Rules
 ├── services/
 │   └── google_ads_mutate.py         # Mutate API (Pause/Enable)
@@ -66,8 +66,10 @@ Module được thiết kế theo cấu trúc Domino, Data từ Frontend (Web) c
 
 ### 2.4. Smart Strategy & Rules (`google.ads.strategy` & `google.ads.rule`)
 - AI Brain của hệ thống. Thay vì người dùng phải tự if/else, họ chỉ cần chọn Strategy (Chiến lược).
-- Ví dụ: Chiến lược **"Bảo Vệ Hàng Sắp Hết"** (Tồn thấp → Pause), **"Cân bằng tự động"** (ROAS cao + Tồn nhiều → Push ngấn sách).
+- **Các chiến lược mẫu:** Chiến lược **"Bảo Vệ Hàng Sắp Hết"** (Tồn thấp → Pause), **"Cân bằng tự động"** (ROAS cao + Tồn nhiều → Push ngân sách).
+- **Chiến lược Tùy Chỉnh (Custom):** Người dùng tự định nghĩa khuôn mẫu (Template) gồm 5 tham số (Trường, Toán tử, Giá trị, Hành động, Giá trị hành động). Hệ thống sẽ nhân bản khuôn mẫu này cho toàn bộ sản phẩm trong Feed.
 - `action_generate_rules()` sẽ đọc data từ Product Feed và Conversion, tự động đẻ ra các bản ghi Rule.
+- **RSA Support (Responsive Search Ads):** Rule Engine hỗ trợ tạo RSA với yêu cầu tối thiểu 3 headlines và 2 descriptions. Logic tự động tách dòng từ trường Text để tạo Assets.
 - Khi Rule chạy, nó đánh giá lại điều kiện (Condition) một lần nữa và Trigger hành động (Action).
 
 ### 2.5. Executor / Mutate API (`services/google_ads_mutate.py`)

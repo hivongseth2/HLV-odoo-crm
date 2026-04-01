@@ -54,6 +54,10 @@
                             <field name="final_url" placeholder="https://example.com" required="channel_type in ['VIDEO', 'PERFORMANCE_MAX']"/>
                             <field name="business_name" invisible="channel_type != 'PERFORMANCE_MAX'" required="channel_type == 'PERFORMANCE_MAX'"/>
                             <field name="logo_image" widget="image" invisible="channel_type != 'PERFORMANCE_MAX'" class="oe_avatar"/>
+                            <field name="status" widget="badge" readonly="1" invisible="state == 'draft'"
+                                   decoration-success="status == 'enabled'"
+                                   decoration-warning="status == 'paused'"
+                                   decoration-danger="status == 'removed'"/>
                         </group>
                     </group>
                     
@@ -62,32 +66,29 @@
                     <field name="performance_dashboard_html" widget="html" readonly="1" invisible="not id"/>
 
                     <div class="row">
-                        <div class="col-lg-7">
-                            <div class="o_premium_card h-100">
-                                <h4 class="mb-4 text-success fw-bold"><i class="fa fa-line-chart me-2"></i>Chi Tiết Hiệu Suất</h4>
+                        <div class="col-12">
+                            <div class="o_premium_card">
+                                <h4 class="mb-4 text-success fw-bold"><i class="fa fa-line-chart me-2"></i>Danh Sách Sản Phẩm Trong Chiến Dịch</h4>
                                 <div class="alert alert-info border-0 shadow-sm rounded-3 mb-4">
                                     <i class="fa fa-info-circle me-1"></i> Sản phẩm được tự động liệt kê dựa trên các dòng trong <b>Product Feed</b> có chọn chiến dịch này.
                                 </div>
-                                <group>
-                                    <field name="feed_line_ids" widget="many2many_tags" placeholder="Chọn sản phẩm từ Feed..."/>
-                                    <field name="product_ids" widget="many2many_tags" readonly="1"/>
-                                    <field name="impressions" readonly="1"/>
-                                    <field name="conversion_rate" widget="progressbar" readonly="1"/>
-                                </group>
-                            </div>
-                        </div>
-                        <div class="col-lg-5" invisible="not id">
-                            <div class="o_premium_card h-100 bg-light border-0">
-                                <h4 class="mb-4 text-secondary fw-bold"><i class="fa fa-info-circle me-2"></i>Trạng Thái Đồng Bộ</h4>
-                                <div class="alert alert-info border-0 shadow-sm rounded-3">
-                                    <i class="fa fa-refresh me-1"></i> Dữ liệu này được đồng bộ tự động từ Google Ads.
-                                </div>
-                                <group>
-                                    <field name="status" widget="badge"
-                                           readonly="1"
-                                           decoration-success="status == 'enabled'"
-                                           decoration-warning="status == 'paused'"
-                                           decoration-danger="status == 'removed'"/>
+                                <field name="feed_line_ids" nolabel="1">
+                                    <list create="0" delete="0">
+                                        <field name="product_id"/>
+                                        <field name="product_default_code" string="SKU"/>
+                                        <field name="qty_available" string="Tồn Thực"/>
+                                        <field name="avg_daily_sales" string="Bán/Ngày"/>
+                                        <field name="stock_status" widget="badge"
+                                               decoration-danger="stock_status == 'critical'"
+                                               decoration-warning="stock_status == 'low'"
+                                               decoration-success="stock_status == 'normal'"/>
+                                    </list>
+                                </field>
+                                <group class="mt-3">
+                                    <group>
+                                        <field name="impressions" readonly="1" string="Tổng Lượt Hiển Thị"/>
+                                        <field name="conversion_rate" widget="progressbar" readonly="1"/>
+                                    </group>
                                 </group>
                             </div>
                         </div>
