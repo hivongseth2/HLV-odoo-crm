@@ -71,7 +71,6 @@ class GoogleAdsCampaign(models.Model):
         ('SHOPPING',        'Mua Sắm (Shopping)'),
         ('VIDEO',           'Video (YouTube)'),
         ('MULTI_CHANNEL',   'Đa Kênh (UAC/App)'),
-        ('LOCAL',           'Địa Phương (Local)'),
         ('SMART',           'Thông Minh (Smart)'),
         ('PERFORMANCE_MAX', 'Tối Đa Hiệu Suất (PMax)'),
         ('DISCOVERY',       'Khám Phá (Discovery)'),
@@ -333,8 +332,6 @@ class GoogleAdsCampaign(models.Model):
             sub_type = self.video_sub_type
         elif self.channel_type == 'MULTI_CHANNEL':
             sub_type = self.app_sub_type
-        elif self.channel_type == 'LOCAL':
-            sub_type = 'LOCAL_CAMPAIGN' # Local campaigns require this specific sub-type
 
         vals = {
             'name': self.name,
