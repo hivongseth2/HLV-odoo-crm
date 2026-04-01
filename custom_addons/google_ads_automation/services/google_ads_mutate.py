@@ -7,6 +7,7 @@ Utility layer gọi Google Ads API để thực hiện hành động thực tế
 from odoo.exceptions import UserError
 from odoo import _
 import logging
+import time
 
 _logger = logging.getLogger(__name__)
 
@@ -77,7 +78,6 @@ class GoogleAdsMutateService:
             # 1. Create a default budget FIRST if not provided
             budget_resource = vals.get('budget_resource_name')
             if not budget_resource:
-                import time
                 budget_service = client.get_service("CampaignBudgetService")
                 budget_operation = client.get_type("CampaignBudgetOperation")
                 budget = budget_operation.create
