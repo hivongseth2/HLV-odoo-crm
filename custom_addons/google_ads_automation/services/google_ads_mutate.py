@@ -217,7 +217,7 @@ class GoogleAdsMutateService:
             c.contains_eu_political_advertising = client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
             
             # Activate Brand Guidelines to allow Campaign-level Business Name and Logo
-            c.performance_max_settings.brand_guidelines_enabled = True
+            c.performance_max_setting.brand_guidelines_enabled = True
             
             # Note: PMax final URLs are handled at Asset Group level, not Campaign level.
             mutate_operations.append(op1)
