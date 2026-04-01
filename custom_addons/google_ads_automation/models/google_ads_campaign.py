@@ -90,6 +90,19 @@ class GoogleAdsCampaign(models.Model):
         ('VIDEO_SEQUENCE', 'Luồng video nối tiếp (Sequence)'),
     ], string='Loại Hình Phụ', help='Loại hình phụ chuyên sâu cho kênh đã chọn')
 
+    # Cấu hình Ứng dụng (Cho loại MULTI_CHANNEL)
+    app_id = fields.Char(string='ID Ứng dụng', help='Ví dụ: com.myapp.android cho Play Store hoặc số ID cho App Store', tracking=True)
+    app_store = fields.Selection([
+        ('GOOGLE_APP_STORE', 'Google Play Store'),
+        ('APPLE_APP_STORE', 'Apple App Store'),
+    ], string='Cửa hàng', default='GOOGLE_APP_STORE', tracking=True)
+    app_bidding_goal = fields.Selection([
+        ('OPTIMIZE_INSTALLS_TARGET_INSTALL_COST', 'Tối ưu lượt cài đặt (Target CPA)'),
+        ('OPTIMIZE_IN_APP_CONVERSIONS_TARGET_INSTALL_COST', 'Tối ưu hành động trong ứng dụng'),
+        ('OPTIMIZE_IN_APP_CONVERSIONS_TARGET_CONVERSION_COST', 'Tối ưu chuyển đổi trong ứng dụng'),
+        ('OPTIMIZE_RETURN_ON_AD_SPEND', 'Tối ưu ROAS'),
+    ], string='Mục tiêu thầu App', default='OPTIMIZE_INSTALLS_TARGET_INSTALL_COST', tracking=True)
+
     # Cấu hình Chiến dịch (Dùng để tạo mới/cập nhật)
     budget_amount = fields.Float(string='Ngân sách hàng ngày', default=50000.0, tracking=True)
     business_name = fields.Char(string='Tên thương hiệu', help='Yêu cầu cho PMax nếu bật Brand Guidelines', tracking=True)
@@ -322,6 +335,9 @@ class GoogleAdsCampaign(models.Model):
             'business_name': self.business_name,
             'logo_image': self.logo_image,
             'final_url': self.final_url,
+            'app_id': self.app_id,
+            'app_store': self.app_store,
+            'app_bidding_goal': self.app_bidding_goal,
         }
         
         _logger.info("Syncing campaign %s (type: %s) to Google Ads for Customer %s", self.name, self.channel_type, customer_id)

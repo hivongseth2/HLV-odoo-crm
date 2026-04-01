@@ -133,11 +133,19 @@ class GoogleAdsMutateService:
             campaign.campaign_budget = str(budget_resource)
 
             # Bidding Strategy handling
-            # Note: For some campaign types like VIDEO, creation via standard mutate is restricted.
             channel = vals.get('channel_type', 'SEARCH')
             if channel in ['PERFORMANCE_MAX', 'MULTI_CHANNEL', 'DISCOVERY']:
                 # Modern types often require objective-based strategies
                 campaign.maximize_conversions = {}
+                
+                # Special handling for App Campaign (MULTI_CHANNEL)
+                if channel == 'MULTI_CHANNEL':
+                    # 1. App Campaign Setting is REQUIRED
+                    app_setting = client.get_type("AppCampaignSetting")
+                    app_setting.app_id = str(vals.get('app_id') or "")
+                    app_setting.app_store = client.enums.AppCampaignAppStoreEnum[vals.get('app_store', 'GOOGLE_APP_STORE')]
+                    app_setting.bidding_strategy_goal_type = client.enums.AppCampaignBiddingStrategyGoalTypeEnum[vals.get('app_bidding_goal', 'OPTIMIZE_INSTALLS_TARGET_INSTALL_COST')]
+                    campaign.app_campaign_setting = app_setting
             else:
                 # Default for Search/Display/Shopping
                 campaign.manual_cpc.enhanced_cpc_enabled = False

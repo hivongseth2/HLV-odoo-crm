@@ -107,6 +107,23 @@
                     </div>
 
                     <notebook>
+                        <page name="app_settings" string="📱 Cấu hình Ứng dụng" invisible="channel_type != 'MULTI_CHANNEL'">
+                            <div class="o_premium_card border-0 bg-light">
+                                <h4 class="mb-4 text-primary fw-bold"><i class="fa fa-mobile me-2"></i>Thông Tin Ứng dụng</h4>
+                                <div class="alert alert-warning border-0 shadow-sm rounded-3 mb-4">
+                                    <i class="fa fa-info-circle me-1"></i> Đối với chiến dịch <b>Đa kênh (App)</b>, ID ứng dụng là trường thông tin bắt buộc.
+                                </div>
+                                <group>
+                                    <group>
+                                        <field name="app_id" placeholder="VD: com.myapp.android" required="channel_type == 'MULTI_CHANNEL'"/>
+                                        <field name="app_store" required="channel_type == 'MULTI_CHANNEL'"/>
+                                    </group>
+                                    <group>
+                                        <field name="app_bidding_goal" required="channel_type == 'MULTI_CHANNEL'"/>
+                                    </group>
+                                </group>
+                            </div>
+                        </page>
                         <page name="adsroid_history" string="🪄 Lịch sử AI Adsroid">
                             <div class="row mt-2 mb-4" invisible="not adsroid_last_insight">
                                 <div class="col-12">
