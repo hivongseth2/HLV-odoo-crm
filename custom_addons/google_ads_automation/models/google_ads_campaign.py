@@ -333,6 +333,8 @@ class GoogleAdsCampaign(models.Model):
             sub_type = self.video_sub_type
         elif self.channel_type == 'MULTI_CHANNEL':
             sub_type = self.app_sub_type
+        elif self.channel_type == 'LOCAL':
+            sub_type = 'LOCAL_CAMPAIGN' # Local campaigns require this specific sub-type
 
         vals = {
             'name': self.name,
