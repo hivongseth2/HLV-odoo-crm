@@ -78,17 +78,18 @@ class GoogleAdsCampaign(models.Model):
         ('HOTEL',           'Khách Sạn (Hotel)'),
     ], string='Loại Kênh', help='Loại kênh quảng cáo từ Google Ads', readonly=True, default='SEARCH')
 
-    channel_sub_type = fields.Selection([
-        # App Sub types
-        ('APP_CAMPAIGN', 'Cài đặt ứng dụng (App Install)'),
-        ('APP_CAMPAIGN_FOR_ENGAGEMENT', 'Tương tác ứng dụng (App Engagement)'),
-        ('APP_CAMPAIGN_FOR_PRE_REGISTRATION', 'Đăng ký trước (App Pre-reg)'),
-        # Video Sub types
+    video_sub_type = fields.Selection([
         ('VIDEO_ACTION', 'Video hành động (Video Action)'),
         ('VIDEO_NON_SKIPPABLE', 'Video không thể bỏ qua (Non-skippable)'),
         ('VIDEO_OUTSTREAM', 'Video ngoài luồng (Outstream)'),
         ('VIDEO_SEQUENCE', 'Luồng video nối tiếp (Sequence)'),
-    ], string='Loại Hình Phụ', help='Loại hình phụ chuyên sâu cho kênh đã chọn')
+    ], string='Cấu Hình Video', help='Loại hình phụ chuyên sâu cho kênh Video')
+
+    app_sub_type = fields.Selection([
+        ('APP_CAMPAIGN', 'Cài đặt ứng dụng (App Install)'),
+        ('APP_CAMPAIGN_FOR_ENGAGEMENT', 'Tương tác ứng dụng (App Engagement)'),
+        ('APP_CAMPAIGN_FOR_PRE_REGISTRATION', 'Đăng ký trước (App Pre-reg)'),
+    ], string='Cấu Hình Ứng Dụng', help='Loại hình phụ chuyên sâu cho kênh Đa Kênh (App)')
 
     # Cấu hình Ứng dụng (Cho loại MULTI_CHANNEL)
     app_id = fields.Char(string='ID Ứng dụng', help='Ví dụ: com.myapp.android cho Play Store hoặc số ID cho App Store', tracking=True)
@@ -326,10 +327,17 @@ class GoogleAdsCampaign(models.Model):
         if self.channel_type == 'SHOPPING' and not self.account_id.merchant_center_id:
             raise UserError(_("Vui lòng cấu hình Merchant Center ID trong mục Cài đặt Tài khoản Google Ads để tạo chiến dịch Mua Sắm!"))
         
+        # Determine the effective sub-type to send
+        sub_type = False
+        if self.channel_type == 'VIDEO':
+            sub_type = self.video_sub_type
+        elif self.channel_type == 'MULTI_CHANNEL':
+            sub_type = self.app_sub_type
+
         vals = {
             'name': self.name,
             'channel_type': self.channel_type,
-            'channel_sub_type': self.channel_sub_type,
+            'channel_sub_type': sub_type,
             'merchant_center_id': self.account_id.merchant_center_id,
             'budget_amount': self.budget_amount,
             'business_name': self.business_name,

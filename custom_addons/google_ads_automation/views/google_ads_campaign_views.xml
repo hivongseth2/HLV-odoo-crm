@@ -55,9 +55,13 @@
                         <group>
                             <field name="account_id" readonly="state != 'draft'"/>
                             <field name="channel_type" readonly="state != 'draft'"/>
-                            <field name="channel_sub_type" 
-                                   invisible="channel_type not in ['VIDEO', 'MULTI_CHANNEL']"
-                                   required="channel_type in ['VIDEO', 'MULTI_CHANNEL']"
+                            <field name="video_sub_type" 
+                                   invisible="channel_type != 'VIDEO'"
+                                   required="channel_type == 'VIDEO'"
+                                   readonly="state != 'draft'"/>
+                            <field name="app_sub_type" 
+                                   invisible="channel_type != 'MULTI_CHANNEL'"
+                                   required="channel_type == 'MULTI_CHANNEL'"
                                    readonly="state != 'draft'"/>
                             <field name="google_campaign_id" readonly="1" invisible="state == 'draft'"/>
                         </group>
