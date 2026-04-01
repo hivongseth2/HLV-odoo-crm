@@ -106,8 +106,8 @@ class GoogleAdsCampaign(models.Model):
     # Cấu hình Chiến dịch (Dùng để tạo mới/cập nhật)
     budget_amount = fields.Float(string='Ngân sách hàng ngày', default=50000.0, tracking=True)
     business_name = fields.Char(string='Tên thương hiệu', help='Yêu cầu cho PMax nếu bật Brand Guidelines', tracking=True)
-    logo_image = fields.Binary(string='Logo hình vuông', help='Yêu cầu cho PMax (tỷ lệ 1:1)', tracking=True)
-    final_url = fields.Char(string='URL trang đích', help='Đường dẫn (URL) trang đích của chiến dịch', tracking=True)
+    logo_image = fields.Binary(string='Logo hình vuông', help='Yêu cầu cho PMax (tỷ lệ 1:1)')
+    final_url = fields.Char(string='URL trang đích (Landing Page)', help='URL trang web mà quảng cáo sẽ dẫn người dùng đến', tracking=True)
 
     # Metrics (Chỉ số hiệu suất cơ bản)
     clicks = fields.Integer(string='Lượt Nhấp', default=0, readonly=True)
