@@ -133,8 +133,9 @@ class GoogleAdsMutateService:
             campaign.campaign_budget = str(budget_resource)
 
             # Bidding Strategy handling
+            # Note: For some campaign types like VIDEO/LOCAL, creation via standard mutate is restricted or has specific rules.
             channel = vals.get('channel_type', 'SEARCH')
-            if channel in ['PERFORMANCE_MAX', 'MULTI_CHANNEL', 'DISCOVERY']:
+            if channel in ['PERFORMANCE_MAX', 'MULTI_CHANNEL', 'DISCOVERY', 'LOCAL']:
                 # Modern types often require objective-based strategies
                 campaign.maximize_conversions = {}
                 
@@ -146,6 +147,21 @@ class GoogleAdsMutateService:
                     app_setting.app_store = client.enums.AppCampaignAppStoreEnum[vals.get('app_store', 'GOOGLE_APP_STORE')]
                     app_setting.bidding_strategy_goal_type = client.enums.AppCampaignBiddingStrategyGoalTypeEnum[vals.get('app_bidding_goal', 'OPTIMIZE_INSTALLS_TARGET_INSTALL_COST')]
                     campaign.app_campaign_setting = app_setting
+                
+                # Special handling for Local Campaign
+                elif channel == 'LOCAL':
+                    # 1. Local Campaign Setting is REQUIRED
+                    local_setting = client.get_type("LocalCampaignSetting")
+                    # GMB is the most common source
+                    local_setting.location_source_type = client.enums.LocationSourceTypeEnum.GOOGLE_MY_BUSINESS_LOCATION_GROUP
+                    campaign.local_campaign_setting = local_setting
+                    
+                    # 2. Optimization Goal Setting is REQUIRED
+                    goal_setting = client.get_type("OptimizationGoalSetting")
+                    # Default local goals
+                    goal_setting.optimization_goal_types.append(client.enums.OptimizationGoalTypeEnum.CALL_CONVERSIONS)
+                    goal_setting.optimization_goal_types.append(client.enums.OptimizationGoalTypeEnum.DRIVING_DIRECTIONS)
+                    campaign.optimization_goal_setting = goal_setting
             else:
                 # Default for Search/Display/Shopping
                 campaign.manual_cpc.enhanced_cpc_enabled = False
