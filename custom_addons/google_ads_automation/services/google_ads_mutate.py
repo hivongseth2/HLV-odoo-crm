@@ -256,7 +256,8 @@ class GoogleAdsMutateService:
         asset_service = client.get_service("AssetService")
         operation = client.get_type("AssetOperation")
         asset = operation.create
-        asset.business_name_asset.text = business_name
+        asset.type_ = client.enums.AssetTypeEnum.TEXT
+        asset.text_asset.text = business_name
         response = asset_service.mutate_assets(customer_id=customer_id, operations=[operation])
         return response.results[0].resource_name
 
