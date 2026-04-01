@@ -116,6 +116,14 @@ class GoogleAdsMutateService:
                 _logger.warning("Loại kênh không hỗ trợ: %s. Tự động chuyển về SEARCH.", channel_type_raw)
                 campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.SEARCH
 
+            # Channel Sub Type handling (Required for some types like MULTI_CHANNEL or VIDEO)
+            channel_sub_type_raw = vals.get('channel_sub_type')
+            if channel_sub_type_raw:
+                try:
+                    campaign.advertising_channel_sub_type = client.enums.AdvertisingChannelSubTypeEnum[channel_sub_type_raw]
+                except (KeyError, AttributeError):
+                    _logger.warning("Loại hình phụ không hỗ trợ: %s", channel_sub_type_raw)
+
             campaign.status = client.enums.CampaignStatusEnum.PAUSED # Always start paused for safety
             
             # Note: Final URL is typically set at Ad level or Asset group level, not Campaign level.

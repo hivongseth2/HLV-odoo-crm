@@ -55,6 +55,10 @@
                         <group>
                             <field name="account_id" readonly="state != 'draft'"/>
                             <field name="channel_type" readonly="state != 'draft'"/>
+                            <field name="channel_sub_type" 
+                                   invisible="channel_type not in ['VIDEO', 'MULTI_CHANNEL']"
+                                   required="channel_type in ['VIDEO', 'MULTI_CHANNEL']"
+                                   readonly="state != 'draft'"/>
                             <field name="google_campaign_id" readonly="1" invisible="state == 'draft'"/>
                         </group>
                         <group string="Cấu hình Google Ads">

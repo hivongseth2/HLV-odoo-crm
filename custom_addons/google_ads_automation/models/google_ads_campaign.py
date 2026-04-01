@@ -70,13 +70,25 @@ class GoogleAdsCampaign(models.Model):
         ('DISPLAY',         'Hiển Thị (Display)'),
         ('SHOPPING',        'Mua Sắm (Shopping)'),
         ('VIDEO',           'Video (YouTube)'),
-        ('MULTI_CHANNEL',   'Đa Kênh (UAC)'),
+        ('MULTI_CHANNEL',   'Đa Kênh (UAC/App)'),
         ('LOCAL',           'Địa Phương (Local)'),
         ('SMART',           'Thông Minh (Smart)'),
         ('PERFORMANCE_MAX', 'Tối Đa Hiệu Suất (PMax)'),
         ('DISCOVERY',       'Khám Phá (Discovery)'),
         ('HOTEL',           'Khách Sạn (Hotel)'),
     ], string='Loại Kênh', help='Loại kênh quảng cáo từ Google Ads', readonly=True, default='SEARCH')
+
+    channel_sub_type = fields.Selection([
+        # App Sub types
+        ('APP_CAMPAIGN', 'Cài đặt ứng dụng (App Install)'),
+        ('APP_CAMPAIGN_FOR_ENGAGEMENT', 'Tương tác ứng dụng (App Engagement)'),
+        ('APP_CAMPAIGN_FOR_PRE_REGISTRATION', 'Đăng ký trước (App Pre-reg)'),
+        # Video Sub types
+        ('VIDEO_ACTION', 'Video hành động (Video Action)'),
+        ('VIDEO_NON_SKIPPABLE', 'Video không thể bỏ qua (Non-skippable)'),
+        ('VIDEO_OUTSTREAM', 'Video ngoài luồng (Outstream)'),
+        ('VIDEO_SEQUENCE', 'Luồng video nối tiếp (Sequence)'),
+    ], string='Loại Hình Phụ', help='Loại hình phụ chuyên sâu cho kênh đã chọn')
 
     # Cấu hình Chiến dịch (Dùng để tạo mới/cập nhật)
     budget_amount = fields.Float(string='Ngân sách hàng ngày', default=50000.0, tracking=True)
@@ -304,6 +316,7 @@ class GoogleAdsCampaign(models.Model):
         vals = {
             'name': self.name,
             'channel_type': self.channel_type,
+            'channel_sub_type': self.channel_sub_type,
             'merchant_center_id': self.account_id.merchant_center_id,
             'budget_amount': self.budget_amount,
             'business_name': self.business_name,
