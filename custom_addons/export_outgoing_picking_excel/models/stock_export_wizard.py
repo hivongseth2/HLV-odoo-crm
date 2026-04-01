@@ -335,7 +335,7 @@ class StockExportWizard(models.TransientModel):
             
             row = {
                 'loai_xuat_kho': loai_xuat,
-                'ngay_hach_toan': date_str,
+                'ngay_hach_toan': date_str + " 18:30:00",
                 'ngay_chung_tu': date_str,
                 'so_chung_tu': picking.name,
                 'don_hang_goc': don_hang_goc,
