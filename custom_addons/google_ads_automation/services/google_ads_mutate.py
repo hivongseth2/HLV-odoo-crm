@@ -216,10 +216,7 @@ class GoogleAdsMutateService:
             c.maximize_conversions = {} 
             c.contains_eu_political_advertising = client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
             
-            # PMax Final URLs
-            if vals.get('final_url'):
-                c.final_urls.append(vals.get('final_url'))
-
+            # Note: PMax final URLs are handled at Asset Group level, not Campaign level.
             mutate_operations.append(op1)
 
             # -- Operation 2: Link Business Name --
