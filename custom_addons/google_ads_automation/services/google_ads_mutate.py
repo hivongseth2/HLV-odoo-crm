@@ -86,7 +86,15 @@ class GoogleAdsMutateService:
                 amount = vals.get('budget_amount', 50000.0)
                 budget.amount_micros = int(amount * 1000000)
                 budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
-                budget.explicitly_shared = False # Cần thiết cho PMax/Discovery
+                budget.explicitly_shared = False # Cần thiết cho PMax/Discovery/Smart
+                
+                # Special handling for Smart Campaigns (Express context)
+                if vals.get('channel_type') == 'SMART':
+                    if hasattr(client.enums.BudgetTypeEnum, 'SMART_CAMPAIGN'):
+                        budget.type_ = client.enums.BudgetTypeEnum.SMART_CAMPAIGN
+                    else:
+                        _logger.warning("BudgetTypeEnum.SMART_CAMPAIGN not found, skipping specific budget type.")
+
                 budget_response = budget_service.mutate_campaign_budgets(
                     customer_id=customer_id, operations=[budget_operation]
                 )
