@@ -43,6 +43,14 @@
                         <label for="name"/>
                         <h1><field name="name" placeholder="Tên chiến dịch... VD: Campaign Mùa Hè"/></h1>
                     </div>
+                    <div class="o_premium_card mb-4 mt-3">
+                        <h5 class="text-primary fw-bold mb-3 border-bottom pb-2">
+                            <i class="fa fa-cubes me-2"></i>Nguồn Cấp Dữ Liệu
+                        </h5>
+                        <group>
+                            <field name="product_feed_id" options="{'no_create': True}" placeholder="Chọn Feed để nạp sản phẩm nhanh..."/>
+                        </group>
+                    </div>
                     <group>
                         <group>
                             <field name="account_id" readonly="state != 'draft'"/>
@@ -73,12 +81,12 @@
                                     <i class="fa fa-info-circle me-1"></i> Sản phẩm được tự động liệt kê dựa trên các dòng trong <b>Product Feed</b> có chọn chiến dịch này.
                                 </div>
                                 <field name="feed_line_ids" nolabel="1">
-                                    <list create="0" delete="0">
+                                    <list>
                                         <field name="product_id"/>
-                                        <field name="product_default_code" string="SKU"/>
+                                        <field name="product_default_code" string="SKU" optional="show"/>
                                         <field name="qty_available" string="Tồn Thực"/>
-                                        <field name="avg_daily_sales" string="Bán/Ngày"/>
-                                        <field name="stock_status" widget="badge"
+                                        <field name="avg_daily_sales" string="Bán/Ngày" optional="show"/>
+                                        <field name="stock_status" string="Tình Trạng" widget="badge"
                                                decoration-danger="stock_status == 'critical'"
                                                decoration-warning="stock_status == 'low'"
                                                decoration-success="stock_status == 'normal'"/>

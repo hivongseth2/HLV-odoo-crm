@@ -17,6 +17,10 @@ class GoogleAdsCampaign(models.Model):
         ('draft', 'Nháp (Local)'),
         ('synced', 'Đã đồng bộ Google'),
     ], string='Trạng thái bộ máy', default='draft', required=True, tracking=True)
+    product_feed_id = fields.Many2one(
+        'google.ads.product.feed', string='Nguồn Cấp SP (Feed)',
+        ondelete='set null', help='Chọn một Feed để tự động lấy tất cả sản phẩm'
+    )
     feed_line_ids = fields.Many2many(
         'google.ads.product.feed.line', 'google_ads_feed_line_campaign_rel',
         'campaign_id', 'feed_line_id',
@@ -34,6 +38,18 @@ class GoogleAdsCampaign(models.Model):
         'google.ads.adsroid.log', 'campaign_id', 
         string='Lịch sử Adsroid', readonly=True
     )
+
+    @api.onchange('product_feed_id')
+    def _onchange_product_feed_id(self):
+        """Tự động điền các sản phẩm từ Feed đã chọn"""
+        if self.product_feed_id:
+            # Lấy tất cả dòng từ Feed mới chọn
+            lines = self.product_feed_id.line_ids
+            if lines:
+                # Command.set (6, 0, [ids]) trong Odoo 18
+                self.feed_line_ids = [fields.Command.set(lines.ids)]
+            else:
+                self.feed_line_ids = [fields.Command.clear()]
 
     @api.depends('feed_line_ids.product_id')
     def _compute_product_ids(self):

@@ -115,6 +115,25 @@
     </record>
 
     <!-- ═══════════════════════════════════════════════ -->
+    <!-- Product Feed Line – List View (DEFAULT)         -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <record id="view_google_ads_product_feed_line_list" model="ir.ui.view">
+        <field name="name">google.ads.product.feed.line.list</field>
+        <field name="model">google.ads.product.feed.line</field>
+        <field name="arch" type="xml">
+            <list string="Dòng Feed Sản Phẩm">
+                <field name="product_default_code" string="SKU"/>
+                <field name="product_id"/>
+                <field name="qty_available" string="Tồn Kho"/>
+                <field name="stock_status" string="Tình Trạng" widget="badge"
+                       decoration-danger="stock_status == 'critical'"
+                       decoration-warning="stock_status == 'low'"
+                       decoration-success="stock_status == 'normal'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ═══════════════════════════════════════════════ -->
     <!-- Product Feed – Action                           -->
     <!-- ═══════════════════════════════════════════════ -->
     <record id="action_google_ads_product_feed" model="ir.actions.act_window">
