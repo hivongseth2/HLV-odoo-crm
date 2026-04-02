@@ -121,6 +121,9 @@ class GoogleAdsAdGroup(models.Model):
     campaign_channel_type = fields.Selection(related='campaign_id.channel_type', string='Loại Chiến Dịch', readonly=True)
     is_campaign_dsa = fields.Boolean(related='campaign_id.is_dsa', string='Chiến dịch DSA', readonly=True)
 
+    product_ids = fields.Many2many('product.template', 'google_ads_ad_group_product_rel', 
+                                    'ad_group_id', 'product_id', string='Sản Phẩm')
+
     status = fields.Selection([
         ('unspecified', 'Chưa xác định'),
         ('unknown', 'Không rõ'),
