@@ -36,7 +36,7 @@ class GoogleAdsAdGroup(models.Model):
                                     <i class="fa fa-bullhorn me-1"></i> Campaign: <span class="text-dark">{rec.campaign_id.name or '—'}</span>
                                 </div>
                                 <div class="ms-4">
-                                    <i class="fa fa-tags me-1"></i> Type: <span class="text-dark">{dict(self._fields['type'].selection).get(rec.type, rec.type)}</span>
+                                    <i class="fa fa-tags me-1"></i> Type: <span class="text-dark">{rec.type_id.name or rec.type or '—'}</span>
                                 </div>
                             </div>
                         </div>
