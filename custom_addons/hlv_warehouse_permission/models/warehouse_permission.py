@@ -40,11 +40,13 @@ class WarehouseUserPermission(models.Model):
         """Check if user has a specific permission for a warehouse.
 
         Returns True if:
-        - User is superuser or stock manager
+        - User is superuser (OdooBot)
         - User has no permission records at all (chưa cấu hình → cho phép tất cả)
         - User has the specific permission for the warehouse
+
+        Manager cũng bị hạn chế bởi phân quyền này.
         """
-        if user._is_superuser() or user.has_group('stock.group_stock_manager'):
+        if user._is_superuser():
             return True
         has_any = self.sudo().search_count([('user_id', '=', user.id)], limit=1)
         if not has_any:
