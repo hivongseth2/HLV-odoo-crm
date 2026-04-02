@@ -11,18 +11,27 @@ class WarehouseUserPermission(models.Model):
         domain=[('share', '=', False)])
     warehouse_id = fields.Many2one(
         'stock.warehouse', string='Kho', required=True, ondelete='cascade')
+    can_receipt = fields.Boolean(
+        'Phiếu nhập kho', default=False,
+        help='Cho phép tạo/thao tác/xác nhận phiếu nhập kho (Receipts) tại kho này')
+    can_delivery = fields.Boolean(
+        'Phiếu xuất kho', default=False,
+        help='Cho phép tạo/thao tác/xác nhận phiếu xuất kho (Delivery) tại kho này')
+    can_internal = fields.Boolean(
+        'Phiếu chuyển nội bộ', default=False,
+        help='Cho phép tạo/thao tác/xác nhận phiếu chuyển hàng nội bộ (Internal) tại kho này')
+    can_pick = fields.Boolean(
+        'Phiếu lấy hàng', default=False,
+        help='Cho phép tạo/thao tác/xác nhận phiếu lấy hàng (Pick) tại kho này')
+    can_pack = fields.Boolean(
+        'Phiếu đóng gói', default=False,
+        help='Cho phép tạo/thao tác/xác nhận phiếu đóng gói (Pack) tại kho này')
+    can_storage = fields.Boolean(
+        'Phiếu lưu kho', default=False,
+        help='Cho phép tạo/thao tác/xác nhận phiếu lưu kho (Storage) tại kho này')
     can_update_inventory = fields.Boolean(
         'Cập nhật tồn kho', default=False,
         help='Cho phép cập nhật/áp dụng kiểm kê tồn kho tại kho này')
-    can_create_transfer = fields.Boolean(
-        'Tạo phiếu chuyển kho', default=False,
-        help='Cho phép tạo phiếu nhập/xuất/chuyển kho tại kho này')
-    can_confirm_picking = fields.Boolean(
-        'Xác nhận phiếu', default=False,
-        help='Cho phép xác nhận (validate) phiếu tại kho này')
-    can_operate_picking = fields.Boolean(
-        'Thao tác phiếu', default=False,
-        help='Cho phép thao tác (xử lý, đặt hàng, hủy...) phiếu tại kho này')
 
     _sql_constraints = [
         ('user_warehouse_uniq', 'unique(user_id, warehouse_id)',
@@ -75,10 +84,13 @@ class WarehouseUserPermission(models.Model):
                     vals_list.append({
                         'user_id': user.id,
                         'warehouse_id': wh.id,
+                        'can_receipt': True,
+                        'can_delivery': True,
+                        'can_internal': True,
+                        'can_pick': True,
+                        'can_pack': True,
+                        'can_storage': True,
                         'can_update_inventory': True,
-                        'can_create_transfer': True,
-                        'can_confirm_picking': True,
-                        'can_operate_picking': True,
                     })
 
         if vals_list:

@@ -23,9 +23,12 @@
                 </header>
                 <field name="user_id"/>
                 <field name="warehouse_id"/>
-                <field name="can_operate_picking" widget="boolean_toggle"/>
-                <field name="can_create_transfer" widget="boolean_toggle"/>
-                <field name="can_confirm_picking" widget="boolean_toggle"/>
+                <field name="can_receipt" widget="boolean_toggle"/>
+                <field name="can_delivery" widget="boolean_toggle"/>
+                <field name="can_internal" widget="boolean_toggle"/>
+                <field name="can_pick" widget="boolean_toggle"/>
+                <field name="can_pack" widget="boolean_toggle"/>
+                <field name="can_storage" widget="boolean_toggle"/>
                 <field name="can_update_inventory" widget="boolean_toggle"/>
             </list>
         </field>
@@ -43,10 +46,15 @@
                             <field name="user_id"/>
                             <field name="warehouse_id"/>
                         </group>
-                        <group string="Phân quyền">
-                            <field name="can_operate_picking" widget="boolean_toggle"/>
-                            <field name="can_create_transfer" widget="boolean_toggle"/>
-                            <field name="can_confirm_picking" widget="boolean_toggle"/>
+                        <group string="Phân quyền phiếu">
+                            <field name="can_receipt" widget="boolean_toggle"/>
+                            <field name="can_delivery" widget="boolean_toggle"/>
+                            <field name="can_internal" widget="boolean_toggle"/>
+                            <field name="can_pick" widget="boolean_toggle"/>
+                            <field name="can_pack" widget="boolean_toggle"/>
+                            <field name="can_storage" widget="boolean_toggle"/>
+                        </group>
+                        <group string="Tồn kho">
                             <field name="can_update_inventory" widget="boolean_toggle"/>
                         </group>
                     </group>
@@ -64,23 +72,20 @@
                 <field name="user_id"/>
                 <field name="warehouse_id"/>
                 <separator/>
-                <filter name="can_operate" string="Được thao tác"
-                        domain="[('can_operate_picking', '=', True)]"/>
-                <filter name="can_create" string="Được tạo phiếu"
-                        domain="[('can_create_transfer', '=', True)]"/>
-                <filter name="can_confirm" string="Được xác nhận"
-                        domain="[('can_confirm_picking', '=', True)]"/>
+                <filter name="can_receipt" string="Được nhập kho"
+                        domain="[('can_receipt', '=', True)]"/>
+                <filter name="can_delivery" string="Được xuất kho"
+                        domain="[('can_delivery', '=', True)]"/>
+                <filter name="can_internal" string="Được chuyển nội bộ"
+                        domain="[('can_internal', '=', True)]"/>
+                <filter name="can_pick" string="Được lấy hàng"
+                        domain="[('can_pick', '=', True)]"/>
+                <filter name="can_pack" string="Được đóng gói"
+                        domain="[('can_pack', '=', True)]"/>
+                <filter name="can_storage" string="Được lưu kho"
+                        domain="[('can_storage', '=', True)]"/>
                 <filter name="can_inventory" string="Được cập nhật tồn"
                         domain="[('can_update_inventory', '=', True)]"/>
-                <separator/>
-                <filter name="no_operate" string="KHÔNG được thao tác"
-                        domain="[('can_operate_picking', '=', False)]"/>
-                <filter name="no_create" string="KHÔNG được tạo phiếu"
-                        domain="[('can_create_transfer', '=', False)]"/>
-                <filter name="no_confirm" string="KHÔNG được xác nhận"
-                        domain="[('can_confirm_picking', '=', False)]"/>
-                <filter name="no_inventory" string="KHÔNG được cập nhật tồn"
-                        domain="[('can_update_inventory', '=', False)]"/>
                 <separator/>
                 <group expand="0" string="Nhóm theo">
                     <filter name="group_user" string="Người dùng"
