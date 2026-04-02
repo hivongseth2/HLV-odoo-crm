@@ -477,11 +477,12 @@ class GoogleAdsMutateService:
                 ad_group.status = client.enums.AdGroupStatusEnum.ENABLED
 
             # Map Type
-            type_raw = vals.get('type', 'SEARCH_STANDARD').upper()
-            try:
-                ad_group.type_ = getattr(client.enums.AdGroupTypeEnum, type_raw)
-            except AttributeError:
-                ad_group.type_ = client.enums.AdGroupTypeEnum.SEARCH_STANDARD
+            type_raw = vals.get('type')
+            if type_raw:
+                try:
+                    ad_group.type_ = getattr(client.enums.AdGroupTypeEnum, type_raw.upper())
+                except AttributeError:
+                    _logger.warning("Loại nhóm '%s' không tồn tại trong Client Enums.", type_raw)
 
             response = ad_group_service.mutate_ad_groups(
                 customer_id=customer_id,

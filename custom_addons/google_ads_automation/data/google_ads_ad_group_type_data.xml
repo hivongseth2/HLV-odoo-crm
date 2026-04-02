@@ -58,7 +58,7 @@
         </record>
         <record id="ad_group_type_video_non_skippable" model="google.ads.ad.group.type">
             <field name="name">Video Không Thế Bỏ Qua (Non-skippable)</field>
-            <field name="code">NON_SKIPPABLE_INSTREAM</field>
+            <field name="code">VIDEO_NON_SKIPPABLE_INSTREAM</field>
             <field name="sequence">43</field>
             <field name="compatible_channel_types">VIDEO</field>
         </record>

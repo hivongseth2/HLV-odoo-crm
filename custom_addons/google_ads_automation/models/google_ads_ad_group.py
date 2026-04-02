@@ -190,6 +190,15 @@ class GoogleAdsAdGroup(models.Model):
             else:
                 rec.roas = 0.0
 
+    @api.onchange('campaign_id')
+    def _onchange_campaign_id_clear_type(self):
+        """Khi đổi chiến dịch, nếu loại nhóm hiện tại không còn phù hợp thì xóa trắng để chọn lại"""
+        if self.campaign_id and self.type_id:
+            channel_type = self.campaign_id.channel_type
+            if channel_type not in (self.type_id.compatible_channel_types or ''):
+                self.type_id = False
+                # Không đưa thông báo Warning tự động sửa để tôn trọng ý người dùng, chỉ xóa trắng để họ chọn lại
+                
     def action_sync_to_google(self):
         self.ensure_one()
         if self.state == 'synced': return True
@@ -209,6 +218,9 @@ class GoogleAdsAdGroup(models.Model):
         client = self.campaign_id.account_id._get_google_ads_client()
         customer_id = self.campaign_id.account_id.operating_customer_id
         
+        if not self.type_id:
+            raise UserError(_("Vui lòng chọn 'Loại Nhóm Quảng Cáo' phù hợp với Chiến dịch trước khi đồng bộ."))
+
         vals = {
             'name': self.name,
             'status': self.status,
