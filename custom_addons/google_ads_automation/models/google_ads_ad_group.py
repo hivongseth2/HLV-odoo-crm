@@ -139,6 +139,7 @@ class GoogleAdsAdGroup(models.Model):
 
     name = fields.Char(string='Tên Nhóm Quảng Cáo', required=True)
     campaign_id = fields.Many2one('google.ads.campaign', string='Chiến Dịch', required=True, ondelete='cascade')
+    campaign_channel_type = fields.Selection(related='campaign_id.channel_type', string='Loại Kênh Chiến Dịch', store=False)
     google_ad_group_id = fields.Char(string='Google Ad Group ID', index=True, readonly=True)
     state = fields.Selection([
         ('draft', 'Nháp (Local)'),
@@ -155,19 +156,8 @@ class GoogleAdsAdGroup(models.Model):
         ('removed', 'Đã xóa'),
     ], string='Trạng Thái', default='paused')
 
-    type = fields.Selection([
-        ('SEARCH_STANDARD',         'Tìm Kiếm Chuẩn'),
-        ('SEARCH_DYNAMIC_ADS',      'Tìm Kiếm Động (DSA)'),
-        ('DISPLAY_STANDARD',        'Hiển Thị Chuẩn'),
-        ('SHOPPING_PRODUCT_ADS',    'Mua Sắm — Sản Phẩm'),
-        ('SHOPPING_SMART_ADS',      'Mua Sắm Thông Minh'),
-        ('VIDEO_TRUE_VIEW_IN_STREAM', 'Video In-Stream'),
-        ('VIDEO_BUMPER',            'Video Bumper (6 giây)'),
-        ('VIDEO_OUTSTREAM',         'Video Outstream'),
-        ('HOTEL_ADS',               'Khách Sạn'),
-        ('DISCOVERY',               'Khám Phá'),
-        ('UNKNOWN',                 'Không rõ'),
-    ], string='Loại Nhóm Quảng Cáo', default='SEARCH_STANDARD')
+    type_id = fields.Many2one('google.ads.ad.group.type', string='Loại Nhóm Quảng Cáo', required=True)
+    type = fields.Char(string='Mã Loại (Tech)', related='type_id.code', store=True, readonly=True)
 
     # Metrics
     clicks = fields.Integer(string='Lượt Nhấp', default=0, readonly=True)

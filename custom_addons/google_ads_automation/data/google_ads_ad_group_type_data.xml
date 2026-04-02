@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- SEARCH -->
+        <record id="ad_group_type_search_standard" model="google.ads.ad.group.type">
+            <field name="name">Tìm Kiếm Chuẩn (Standard)</field>
+            <field name="code">SEARCH_STANDARD</field>
+            <field name="sequence">10</field>
+            <field name="compatible_channel_types">SEARCH,SMART</field>
+        </record>
+        <record id="ad_group_type_search_dynamic" model="google.ads.ad.group.type">
+            <field name="name">Tìm Kiếm Động (DSA)</field>
+            <field name="code">SEARCH_DYNAMIC_ADS</field>
+            <field name="sequence">11</field>
+            <field name="compatible_channel_types">SEARCH</field>
+        </record>
+
+        <!-- DISPLAY -->
+        <record id="ad_group_type_display_standard" model="google.ads.ad.group.type">
+            <field name="name">Hiển Thị Chuẩn (Display)</field>
+            <field name="code">DISPLAY_STANDARD</field>
+            <field name="sequence">20</field>
+            <field name="compatible_channel_types">DISPLAY</field>
+        </record>
+
+        <!-- SHOPPING -->
+        <record id="ad_group_type_shopping_product" model="google.ads.ad.group.type">
+            <field name="name">Mua Sắm Sản Phẩm (Product Ads)</field>
+            <field name="code">SHOPPING_PRODUCT_ADS</field>
+            <field name="sequence">30</field>
+            <field name="compatible_channel_types">SHOPPING</field>
+        </record>
+        <record id="ad_group_type_shopping_smart" model="google.ads.ad.group.type">
+            <field name="name">Mua Sắm Thông Minh (Smart Ads)</field>
+            <field name="code">SHOPPING_SMART_ADS</field>
+            <field name="sequence">31</field>
+            <field name="compatible_channel_types">SHOPPING</field>
+        </record>
+
+        <!-- VIDEO -->
+        <record id="ad_group_type_video_instream" model="google.ads.ad.group.type">
+            <field name="name">Video In-stream (TrueView)</field>
+            <field name="code">VIDEO_TRUE_VIEW_IN_STREAM</field>
+            <field name="sequence">40</field>
+            <field name="compatible_channel_types">VIDEO</field>
+        </record>
+        <record id="ad_group_type_video_bumper" model="google.ads.ad.group.type">
+            <field name="name">Video Bumper (6 giây)</field>
+            <field name="code">VIDEO_BUMPER</field>
+            <field name="sequence">41</field>
+            <field name="compatible_channel_types">VIDEO</field>
+        </record>
+        <record id="ad_group_type_video_outstream" model="google.ads.ad.group.type">
+            <field name="name">Video Outstream</field>
+            <field name="code">VIDEO_OUTSTREAM</field>
+            <field name="sequence">42</field>
+            <field name="compatible_channel_types">VIDEO</field>
+        </record>
+        <record id="ad_group_type_video_non_skippable" model="google.ads.ad.group.type">
+            <field name="name">Video Không Thế Bỏ Qua (Non-skippable)</field>
+            <field name="code">NON_SKIPPABLE_INSTREAM</field>
+            <field name="sequence">43</field>
+            <field name="compatible_channel_types">VIDEO</field>
+        </record>
+
+        <!-- HOTEL -->
+        <record id="ad_group_type_hotel" model="google.ads.ad.group.type">
+            <field name="name">Khách Sạn (Hotel Ads)</field>
+            <field name="code">HOTEL_ADS</field>
+            <field name="sequence">50</field>
+            <field name="compatible_channel_types">HOTEL</field>
+        </record>
+
+        <!-- DISCOVERY -->
+        <record id="ad_group_type_discovery" model="google.ads.ad.group.type">
+            <field name="name">Khám Phá (Discovery)</field>
+            <field name="code">DISCOVERY</field>
+            <field name="sequence">60</field>
+            <field name="compatible_channel_types">DISCOVERY</field>
+        </record>
+    </data>
+</odoo>
