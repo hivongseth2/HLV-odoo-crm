@@ -589,8 +589,10 @@ class GoogleAdsMutateService:
             ad_group_ad_service = client.get_service("AdGroupAdService")
             ad_group_ad_operation = client.get_type("AdGroupAdOperation")
             
-            # --- Explicit Initialization: Tránh lỗi IMMUTABLE_FIELD ---
-            ad_group_ad = client.get_type("AdGroupAd")
+            # --- FIX IMMUTABLE_FIELD: Dùng operation.create trực tiếp ---
+            # KHÔNG tạo standalone AdGroupAd rồi gán lại (gây proto-plus merge
+            # conflict trên field 'ad' vốn là IMMUTABLE trong proto schema).
+            ad_group_ad = ad_group_ad_operation.create
             ad_group_ad.ad_group = client.get_service("AdGroupService").ad_group_path(str(customer_id), str(ad_group_id))
             ad_group_ad.status = client.enums.AdGroupAdStatusEnum.ENABLED
             
@@ -606,8 +608,10 @@ class GoogleAdsMutateService:
                 
                 if use_demand_gen_field:
                     info = ad.demand_gen_responsive_ad
+                    _logger.info("Sử dụng field demand_gen_responsive_ad cho chiến dịch %s", channel_type)
                 else:
                     info = ad.discovery_responsive_ad
+                    _logger.info("Fallback sang field discovery_responsive_ad cho chiến dịch %s", channel_type)
 
                 # Set Final URL here (AFTER type is inferred by accessing 'info')
                 if final_url:
@@ -667,8 +671,7 @@ class GoogleAdsMutateService:
                     description.text = text[:90] 
                     rsa.descriptions.append(description)
 
-            # Gán đối tượng đã khởi tạo vào Operation
-            ad_group_ad_operation.create = ad_group_ad
+            # Không cần gán lại — ad_group_ad đã trỏ trực tiếp vào operation.create
 
             response = ad_group_ad_service.mutate_ad_group_ads(
                 customer_id=str(customer_id),
@@ -686,8 +689,8 @@ class GoogleAdsMutateService:
             ad_group_ad_service = client.get_service("AdGroupAdService")
             ad_group_ad_operation = client.get_type("AdGroupAdOperation")
             
-            # --- Explicit Initialization for Update ---
-            ad_group_ad = client.get_type("AdGroupAd")
+            # --- FIX: Dùng operation.update trực tiếp (tránh proto-plus merge) ---
+            ad_group_ad = ad_group_ad_operation.update
             ad_group_ad.resource_name = f"customers/{customer_id}/adGroupAds/{ad_group_id}~{ad_id}"
             
             ad = ad_group_ad.ad
@@ -767,8 +770,7 @@ class GoogleAdsMutateService:
             from google.protobuf.field_mask_pb2 import FieldMask
             ad_group_ad_operation.update_mask.CopyFrom(FieldMask(paths=mask_paths))
 
-            # Gán đối tượng đã chuẩn bị vào Operation
-            ad_group_ad_operation.update = ad_group_ad
+            # Không cần gán lại — ad_group_ad đã trỏ trực tiếp vào operation.update
 
             response = ad_group_ad_service.mutate_ad_group_ads(
                 customer_id=str(customer_id),

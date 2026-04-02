@@ -300,7 +300,8 @@ class GoogleAdsAd(models.Model):
                                "💡 Cách khắc phục: Hãy đảm bảo bạn đã chọn đúng 'Loại quảng cáo' là 'Mẫu quảng cáo Tạo nhu cầu' và đã điền đủ Tiêu đề/Mô tả/Hình ảnh.")
             elif 'IMMUTABLE_FIELD' in result:
                 error_hint = _("Lỗi đồng bộ: Trường dữ liệu không thể thay đổi (Immutable). \n\n"
-                               "💡 Nguyên nhân: Có thể bạn đang dùng thuộc tính quảng cáo 'Khám phá' cũ cho chiến dịch 'Tạo nhu cầu' mới. Hệ thống sẽ tự động điều chỉnh trong bản cập nhật này.")
+                               "💡 Nguyên nhân: Quảng cáo đã tồn tại trên Google Ads nhưng không đồng bộ ID. "
+                               "Vui lòng xóa bản ghi này, tạo lại và đồng bộ.")
             raise UserError(_("Đồng bộ Ad thất bại: %s") % error_hint)
 
     def action_pause_on_google(self):

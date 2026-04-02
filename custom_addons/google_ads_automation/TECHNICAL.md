@@ -122,3 +122,33 @@ Tính năng cốt lõi cho việc testing/UAT. Khi `google.ads.account.is_demo =
   Bổ sung hàm định dạng Resource trong file `services/google_ads_mutate.py` (Ví dụ: `create_campaign`).
 - **Nâng cấp Offline Conversion:**
   Chỉnh sửa `GoogleAdsConversionService` để hỗ trợ thêm các field metadata (`user_identifier`, hay `custom_variable`).
+
+---
+
+## 5. Proto-Plus & IMMUTABLE_FIELD — Quy Tắc Vàng
+
+Khi xây dựng Google Ads API operations, **LUÔN** sử dụng `operation.create` / `operation.update` trực tiếp.
+
+### ❌ SAI (gây lỗi IMMUTABLE_FIELD):
+```python
+operation = client.get_type("AdGroupAdOperation")
+ad_group_ad = client.get_type("AdGroupAd")  # Standalone object
+ad_group_ad.ad_group = ...
+ad = ad_group_ad.ad
+ad.responsive_search_ad.headlines.append(...)
+operation.create = ad_group_ad  # ← Proto-plus MERGE → IMMUTABLE_FIELD trên 'ad'
+```
+
+### ✅ ĐÚNG:
+```python
+operation = client.get_type("AdGroupAdOperation")
+ad_group_ad = operation.create  # Trỏ trực tiếp, KHÔNG tạo standalone
+ad_group_ad.ad_group = ...
+ad = ad_group_ad.ad
+ad.responsive_search_ad.headlines.append(...)
+# KHÔNG cần gán lại — đã trỏ trực tiếp vào operation.create
+```
+
+**Lý do:** Field `ad` trong `AdGroupAd` có annotation `IMMUTABLE` trong proto schema. Khi gán `operation.create = standalone_obj`, proto-plus thực hiện **merge** (không phải replace), dẫn đến conflict trên field đã được khởi tạo.
+
+**Áp dụng cho:** Tất cả các loại operation (`CampaignOperation`, `AdGroupOperation`, `AdGroupAdOperation`, v.v.)
