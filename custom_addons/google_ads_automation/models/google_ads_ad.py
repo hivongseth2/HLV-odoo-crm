@@ -207,6 +207,12 @@ class GoogleAdsAd(models.Model):
 
     def action_sync_to_google(self):
         self.ensure_one()
+        cam = self.ad_group_id.campaign_id
+        
+        # Chặn đồng bộ cho các loại chiến dịch mà Google tự quản lý Ad
+        if cam.channel_type in ['SHOPPING', 'PERFORMANCE_MAX', 'SMART']:
+            raise UserError(_("Chiến dịch loại '%s' tự động quản lý mẫu quảng cáo. Bạn không cần (và không thể) đồng bộ thủ công mẫu quảng cáo cho loại này.") % cam.channel_type)
+
         if self.ad_group_id.state == 'draft':
             raise UserError(_("Vui lòng đồng bộ Nhóm quảng cáo cha trước."))
 
@@ -273,6 +279,9 @@ class GoogleAdsAd(models.Model):
             if 'OPERATION_NOT_PERMITTED_FOR_CONTEXT' in result and 'OWNED_AND_OPERATED' in result:
                 error_hint = _("Lỗi ngữ cảnh: Bạn đang cố gắng tạo mẫu quảng cáo không phù hợp với chiến dịch Khám phá (Discovery). \n\n"
                                "💡 Cách khắc phục: Hãy đảm bảo bạn đã chọn đúng 'Loại quảng cáo' là 'Mẫu quảng cáo Khám phá' và đã điền đủ Tiêu đề/Mô tả/Hình ảnh.")
+            elif 'IMMUTABLE_FIELD' in result:
+                error_hint = _("Lỗi đồng bộ: Trường dữ liệu không thể thay đổi (Immutable). \n\n"
+                               "💡 Nguyên nhân: Loại mẫu quảng cáo này không cho phép tạo thủ công trong nhóm quảng cáo hiện tại (thường gặp ở chiến dịch Shopping hoặc Smart).")
             raise UserError(_("Đồng bộ Ad thất bại: %s") % error_hint)
 
     def action_pause_on_google(self):
