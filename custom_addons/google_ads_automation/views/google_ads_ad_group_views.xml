@@ -43,7 +43,7 @@
                         <group string="Thông Tin Kỹ Thuật">
                             <field name="name" class="oe_inline fw-bold" placeholder="Tên Nhóm..." readonly="state == 'synced'"/>
                             <field name="campaign_id" options="{'no_create': True}" 
-                                   domain="[('channel_type', 'not in', ['PERFORMANCE_MAX', 'MULTI_CHANNEL'])]"
+                                   domain="[('channel_type', 'not in', ['PERFORMANCE_MAX', 'MULTI_CHANNEL', 'SMART'])]"
                                    readonly="state == 'synced'"/>
                             <field name="campaign_channel_type" invisible="1"/>
                             <field name="type_id" 

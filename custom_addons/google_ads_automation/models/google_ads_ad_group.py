@@ -205,10 +205,10 @@ class GoogleAdsAdGroup(models.Model):
         if self.campaign_id.state == 'draft':
             raise UserError(_("Vui lòng đồng bộ Chiến dịch cha trước."))
 
-        if self.campaign_id.channel_type == 'PERFORMANCE_MAX':
-            raise UserError(_("Chiến dịch Tối đa hiệu suất (PMax) không sử dụng 'Nhóm quảng cáo'. "
-                              "Thay vào đó, PMax sử dụng 'Nhóm thành phần' (Asset Group). "
-                              "Vui lòng chọn Chiến dịch Tìm kiếm hoặc Hiển thị để tạo Nhóm quảng cáo."))
+        if self.campaign_id.channel_type in ['PERFORMANCE_MAX', 'SMART', 'MULTI_CHANNEL']:
+            raise UserError(_("Chiến dịch '%s' (loại: %s) không sử dụng 'Nhóm quảng cáo' truyền thống. "
+                              "Loại chiến dịch này quản lý quảng cáo và mục tiêu tự động hoặc qua Nhóm thành phần (Asset Group). "
+                              "Vui lòng chọn Chiến dịch Tìm kiếm, Hiển thị hoặc Video chuẩn.") % (self.campaign_id.name, self.campaign_id.channel_type))
 
         if self.campaign_id.account_id.is_demo:
             self.google_ad_group_id = f"DEMO_AG_SYNC_{self.id}"
