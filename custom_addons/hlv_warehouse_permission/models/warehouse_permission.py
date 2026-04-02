@@ -1,5 +1,14 @@
 from odoo import models, fields, api, _
 
+PICKING_TYPE_CODES = [
+    ('IN', 'Phiếu nhập kho'),
+    ('OUT', 'Phiếu xuất kho'),
+    ('INT', 'Phiếu chuyển nội bộ'),
+    ('PICK', 'Phiếu lấy hàng'),
+    ('PACK', 'Phiếu đóng gói'),
+    ('STO', 'Phiếu lưu kho'),
+]
+
 
 class WarehouseUserPermission(models.Model):
     _name = 'warehouse.user.permission'
@@ -11,27 +20,12 @@ class WarehouseUserPermission(models.Model):
         domain=[('share', '=', False)])
     warehouse_id = fields.Many2one(
         'stock.warehouse', string='Kho', required=True, ondelete='cascade')
-    can_receipt = fields.Boolean(
-        'Phiếu nhập kho', default=False,
-        help='Cho phép tạo/thao tác/xác nhận phiếu nhập kho (Receipts) tại kho này')
-    can_delivery = fields.Boolean(
-        'Phiếu xuất kho', default=False,
-        help='Cho phép tạo/thao tác/xác nhận phiếu xuất kho (Delivery) tại kho này')
-    can_internal = fields.Boolean(
-        'Phiếu chuyển nội bộ', default=False,
-        help='Cho phép tạo/thao tác/xác nhận phiếu chuyển hàng nội bộ (Internal) tại kho này')
-    can_pick = fields.Boolean(
-        'Phiếu lấy hàng', default=False,
-        help='Cho phép tạo/thao tác/xác nhận phiếu lấy hàng (Pick) tại kho này')
-    can_pack = fields.Boolean(
-        'Phiếu đóng gói', default=False,
-        help='Cho phép tạo/thao tác/xác nhận phiếu đóng gói (Pack) tại kho này')
-    can_storage = fields.Boolean(
-        'Phiếu lưu kho', default=False,
-        help='Cho phép tạo/thao tác/xác nhận phiếu lưu kho (Storage) tại kho này')
     can_update_inventory = fields.Boolean(
         'Cập nhật tồn kho', default=False,
         help='Cho phép cập nhật/áp dụng kiểm kê tồn kho tại kho này')
+    picking_permission_ids = fields.One2many(
+        'warehouse.picking.permission', 'permission_id',
+        string='Phân quyền phiếu')
 
     _sql_constraints = [
         ('user_warehouse_uniq', 'unique(user_id, warehouse_id)',
@@ -46,15 +40,7 @@ class WarehouseUserPermission(models.Model):
 
     @api.model
     def check_permission(self, user, warehouse, permission_field):
-        """Check if user has a specific permission for a warehouse.
-
-        Returns True if:
-        - User is superuser (OdooBot)
-        - User has no permission records at all (chưa cấu hình → cho phép tất cả)
-        - User has the specific permission for the warehouse
-
-        Manager cũng bị hạn chế bởi phân quyền này.
-        """
+        """Check inventory permission (can_update_inventory)."""
         if user._is_superuser():
             return True
         has_any = self.sudo().search_count([('user_id', '=', user.id)], limit=1)
@@ -65,6 +51,30 @@ class WarehouseUserPermission(models.Model):
             ('warehouse_id', '=', warehouse.id),
         ], limit=1)
         return bool(perm and perm[permission_field])
+
+    @api.model
+    def check_picking_operation(self, user, warehouse, picking_type_code, operation_field):
+        """Check if user can perform operation on a specific picking type at warehouse.
+
+        operation_field: 'can_view', 'can_create', 'can_edit', 'can_delete', 'can_confirm', 'can_cancel'
+        """
+        if user._is_superuser():
+            return True
+        has_any = self.sudo().search_count([('user_id', '=', user.id)], limit=1)
+        if not has_any:
+            return True
+        perm = self.sudo().search([
+            ('user_id', '=', user.id),
+            ('warehouse_id', '=', warehouse.id),
+        ], limit=1)
+        if not perm:
+            return False
+        line = perm.picking_permission_ids.filtered(
+            lambda l: l.picking_type_code == picking_type_code
+        )
+        if not line:
+            return False
+        return bool(line[0][operation_field])
 
     @api.model
     def action_generate_all(self):
@@ -84,13 +94,18 @@ class WarehouseUserPermission(models.Model):
                     vals_list.append({
                         'user_id': user.id,
                         'warehouse_id': wh.id,
-                        'can_receipt': True,
-                        'can_delivery': True,
-                        'can_internal': True,
-                        'can_pick': True,
-                        'can_pack': True,
-                        'can_storage': True,
                         'can_update_inventory': True,
+                        'picking_permission_ids': [
+                            (0, 0, {
+                                'picking_type_code': code,
+                                'can_view': True,
+                                'can_create': True,
+                                'can_edit': True,
+                                'can_delete': True,
+                                'can_confirm': True,
+                                'can_cancel': True,
+                            }) for code, _label in PICKING_TYPE_CODES
+                        ],
                     })
 
         if vals_list:
@@ -106,3 +121,26 @@ class WarehouseUserPermission(models.Model):
                 'sticky': False,
             }
         }
+
+
+class WarehousePickingPermission(models.Model):
+    _name = 'warehouse.picking.permission'
+    _description = 'Phân quyền loại phiếu chi tiết'
+    _order = 'picking_type_code'
+
+    permission_id = fields.Many2one(
+        'warehouse.user.permission', string='Phân quyền kho',
+        required=True, ondelete='cascade')
+    picking_type_code = fields.Selection(
+        PICKING_TYPE_CODES, string='Loại phiếu', required=True)
+    can_view = fields.Boolean('Xem', default=True)
+    can_create = fields.Boolean('Tạo', default=True)
+    can_edit = fields.Boolean('Sửa', default=True)
+    can_delete = fields.Boolean('Xóa', default=True)
+    can_confirm = fields.Boolean('Xác nhận', default=True)
+    can_cancel = fields.Boolean('Hủy', default=True)
+
+    _sql_constraints = [
+        ('permission_type_uniq', 'unique(permission_id, picking_type_code)',
+         'Mỗi loại phiếu chỉ được cấu hình một lần cho mỗi phân quyền!')
+    ]

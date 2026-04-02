@@ -9,12 +9,12 @@
         <field name="code">action = model.action_generate_all()</field>
     </record>
 
-    <!-- Tree View: Dạng bảng dễ thao tác -->
+    <!-- Tree View: Danh sách phân quyền -->
     <record id="view_warehouse_permission_list" model="ir.ui.view">
         <field name="name">warehouse.user.permission.list</field>
         <field name="model">warehouse.user.permission</field>
         <field name="arch" type="xml">
-            <list editable="bottom" multi_edit="1">
+            <list>
                 <header>
                     <button name="%(action_generate_all_permissions)d" type="action"
                             string="⚡ Tạo phân quyền cho tất cả"
@@ -23,18 +23,12 @@
                 </header>
                 <field name="user_id"/>
                 <field name="warehouse_id"/>
-                <field name="can_receipt" widget="boolean_toggle"/>
-                <field name="can_delivery" widget="boolean_toggle"/>
-                <field name="can_internal" widget="boolean_toggle"/>
-                <field name="can_pick" widget="boolean_toggle"/>
-                <field name="can_pack" widget="boolean_toggle"/>
-                <field name="can_storage" widget="boolean_toggle"/>
                 <field name="can_update_inventory" widget="boolean_toggle"/>
             </list>
         </field>
     </record>
 
-    <!-- Form View -->
+    <!-- Form View: Chi tiết phân quyền phiếu -->
     <record id="view_warehouse_permission_form" model="ir.ui.view">
         <field name="name">warehouse.user.permission.form</field>
         <field name="model">warehouse.user.permission</field>
@@ -46,24 +40,31 @@
                             <field name="user_id"/>
                             <field name="warehouse_id"/>
                         </group>
-                        <group string="Phân quyền phiếu">
-                            <field name="can_receipt" widget="boolean_toggle"/>
-                            <field name="can_delivery" widget="boolean_toggle"/>
-                            <field name="can_internal" widget="boolean_toggle"/>
-                            <field name="can_pick" widget="boolean_toggle"/>
-                            <field name="can_pack" widget="boolean_toggle"/>
-                            <field name="can_storage" widget="boolean_toggle"/>
-                        </group>
                         <group string="Tồn kho">
                             <field name="can_update_inventory" widget="boolean_toggle"/>
                         </group>
                     </group>
+                    <notebook>
+                        <page string="Phân quyền phiếu" name="picking_permissions">
+                            <field name="picking_permission_ids">
+                                <list editable="bottom">
+                                    <field name="picking_type_code"/>
+                                    <field name="can_view" widget="boolean_toggle"/>
+                                    <field name="can_create" widget="boolean_toggle"/>
+                                    <field name="can_edit" widget="boolean_toggle"/>
+                                    <field name="can_delete" widget="boolean_toggle"/>
+                                    <field name="can_confirm" widget="boolean_toggle"/>
+                                    <field name="can_cancel" widget="boolean_toggle"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
                 </sheet>
             </form>
         </field>
     </record>
 
-    <!-- Search View: Lọc và nhóm theo user / kho -->
+    <!-- Search View -->
     <record id="view_warehouse_permission_search" model="ir.ui.view">
         <field name="name">warehouse.user.permission.search</field>
         <field name="model">warehouse.user.permission</field>
@@ -72,19 +73,7 @@
                 <field name="user_id"/>
                 <field name="warehouse_id"/>
                 <separator/>
-                <filter name="can_receipt" string="Được nhập kho"
-                        domain="[('can_receipt', '=', True)]"/>
-                <filter name="can_delivery" string="Được xuất kho"
-                        domain="[('can_delivery', '=', True)]"/>
-                <filter name="can_internal" string="Được chuyển nội bộ"
-                        domain="[('can_internal', '=', True)]"/>
-                <filter name="can_pick" string="Được lấy hàng"
-                        domain="[('can_pick', '=', True)]"/>
-                <filter name="can_pack" string="Được đóng gói"
-                        domain="[('can_pack', '=', True)]"/>
-                <filter name="can_storage" string="Được lưu kho"
-                        domain="[('can_storage', '=', True)]"/>
-                <filter name="can_inventory" string="Được cập nhật tồn"
+                <filter name="can_inventory" string="Được cập nhật tồn kho"
                         domain="[('can_update_inventory', '=', True)]"/>
                 <separator/>
                 <group expand="0" string="Nhóm theo">
@@ -111,7 +100,7 @@
             <p>
                 Bấm nút <b>"Tạo phân quyền cho tất cả"</b> ở thanh công cụ
                 để tự động tạo phân quyền cho tất cả người dùng nội bộ.
-                <br/>Sau đó tắt/bật từng quyền phù hợp.
+                <br/>Sau đó bấm vào từng dòng để cấu hình chi tiết quyền từng loại phiếu.
             </p>
         </field>
     </record>
