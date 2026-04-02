@@ -26,10 +26,23 @@ class StockQuant(models.Model):
         return super().action_apply_inventory()
 
     def write(self, vals):
-        """Chặn sửa inventory quantity nếu không có quyền."""
+        """Bỏ qua inventory fields nếu không có quyền (tránh popup lỗi lặp)."""
         inventory_fields = {'inventory_quantity', 'inventory_quantity_auto_apply', 'inventory_quantity_set'}
-        if inventory_fields & set(vals) and not self.env.su:
-            self._check_inventory_permission()
+        matched = inventory_fields & set(vals)
+        if matched and not self.env.su:
+            Permission = self.env['warehouse.user.permission']
+            blocked = False
+            for quant in self:
+                warehouse = quant.location_id.warehouse_id
+                if warehouse and not Permission.check_permission(
+                        self.env.user, warehouse, 'can_update_inventory'):
+                    blocked = True
+                    break
+            if blocked:
+                # Loại bỏ inventory fields, không raise lỗi để tránh popup lặp
+                vals = {k: v for k, v in vals.items() if k not in inventory_fields}
+                if not vals:
+                    return True
         return super().write(vals)
 
     @api.model_create_multi
