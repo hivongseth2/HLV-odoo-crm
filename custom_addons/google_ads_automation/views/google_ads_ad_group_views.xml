@@ -46,7 +46,7 @@
                     <button name="action_remove_from_google_only" string="🗑️ Xóa khỏi Google Ads"
                             type="object" class="btn-danger"
                             invisible="state != 'synced'"
-                            confirm="⚠️ Bạn có chắc chắn muốn XÓA nhóm quảng cáo này trên Google Ads?\n\n- Nhóm sẽ bị gỡ bỏ vĩnh viễn trên nền tảng Google.\n- Bản ghi Odoo sẽ được GIỮ LẠI và chuyển về trạng thái 'Nháp' để bạn có thể đồng bộ lại sau này."/>
+                            confirm="⚠️ Bạn có chắc chắn muốn XÓA nhóm quảng cáo này trên Google Ads?&#10;&#10;- Nhóm sẽ bị gỡ bỏ vĩnh viễn trên nền tảng Google.&#10;- Bản ghi Odoo sẽ được GIỮ LẠI và chuyển về trạng thái 'Nháp' để bạn có thể đồng bộ lại sau này."/>
 
                     <field name="state" widget="statusbar" statusbar_visible="draft,synced"/>
                 </header>

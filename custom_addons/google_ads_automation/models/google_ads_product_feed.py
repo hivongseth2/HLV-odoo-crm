@@ -88,7 +88,7 @@ class GoogleAdsProductFeed(models.Model):
                         </div>
                         <div class="col-md-5">
                             <div class="o_visual_box">
-                                <span class="o_visual_label">Inventory Distribution</span>
+                                <span class="o_visual_label">Phân bổ tồn kho</span>
                                 <div class="progress mb-2 mt-2" style="height: 12px;">
                                     <div class="progress-bar bg-danger" style="width: {crit_p}%" title="Critical: {critical}"></div>
                                     <div class="progress-bar bg-warning" style="width: {low_p}%" title="Low: {low}"></div>
