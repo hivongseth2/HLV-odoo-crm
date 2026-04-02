@@ -52,6 +52,13 @@
                             <t t-esc="state.selectedOrder.x_studio_htgh"/>
                         </div>
                     </div>
+                    <div class="col-md-6 mb-2" t-if="state.selectedOrder.x_studio_misa_saler_code">
+                        <h6 class="text-muted text-uppercase small mb-2">Mã NV MISA</h6>
+                        <div class="text-muted small">
+                            <i class="fa fa-id-badge me-1"></i>
+                            <t t-esc="state.selectedOrder.x_studio_misa_saler_code"/>
+                        </div>
+                    </div>
                     <div class="col-md-12 mb-2" t-if="state.selectedOrder.misa_shipping_address">
                         <h6 class="text-muted text-uppercase small mb-2">Địa Chỉ Giao</h6>
                         <div class="text-muted small">
