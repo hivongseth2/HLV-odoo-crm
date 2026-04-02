@@ -215,67 +215,40 @@ class GoogleAdsMutateService:
             c.campaign_budget = budget_resource
             c.maximize_conversions = {} 
             c.contains_eu_political_advertising = client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
-            
-            # Khắc phục lỗi "Unknown field": Thử các tên biến khác nhau tùy phiên bản thư viện
-            try:
-                # Thử số ít (chuẩn v16+)
-                c.performance_max_setting.brand_guidelines_enabled = True
-            except:
-                try:
-                    # Thử số nhiều
-                    c.performance_max_settings.brand_guidelines_enabled = True
-                except:
-                    _logger.warning("Không thể kích hoạt brand_guidelines_enabled qua các tên trường chuẩn. Bỏ qua cấu hình này.")
-
             mutate_operations.append(op1)
 
             # -- Operation 2: Create Asset Group (Nhóm thành phần) --
+            # PMax BẮT BUỘC phải có ít nhất 1 Asset Group chứa nội dung quảng cáo
             op2 = client.get_type("MutateOperation")
             ag = op2.asset_group_operation.create
             temp_asset_group_resource = f"customers/{customer_id}/assetGroups/-1"
             ag.resource_name = temp_asset_group_resource
             ag.name = f"Nhóm thành phần 1 - {vals.get('name')}"
             ag.campaign = temp_campaign_resource
-            ag.status = client.enums.AssetGroupStatusEnum.ENABLED
+            ag.status = client.enums.AssetGroupStatusEnum.PAUSED
             if vals.get('final_url'):
                 ag.final_urls.append(vals.get('final_url'))
+            else:
+                ag.final_urls.append("https://example.com")  # Placeholder - bắt buộc phải có
             mutate_operations.append(op2)
 
-            # -- LINK ASSETS TO CAMPAIGN (Dành cho Brand Guidelines cấp độ tài khoản) --
-            # Business Name
-            op_c_bn = client.get_type("MutateOperation")
-            ca_bn = op_c_bn.campaign_asset_operation.create
-            ca_bn.campaign = temp_campaign_resource
-            ca_bn.asset = asset_resource
-            ca_bn.field_type = client.enums.AssetFieldTypeEnum.BUSINESS_NAME
-            mutate_operations.append(op_c_bn)
-            
-            # Logo
-            if logo_resource:
-                op_c_logo = client.get_type("MutateOperation")
-                ca_logo = op_c_logo.campaign_asset_operation.create
-                ca_logo.campaign = temp_campaign_resource
-                ca_logo.asset = logo_resource
-                ca_logo.field_type = client.enums.AssetFieldTypeEnum.LOGO
-                mutate_operations.append(op_c_logo)
+            # -- LINK ASSETS TO ASSET GROUP (chuẩn PMax - không cần brand_guidelines) --
+            # Business Name → Asset Group
+            op3 = client.get_type("MutateOperation")
+            aga3 = op3.asset_group_asset_operation.create
+            aga3.asset_group = temp_asset_group_resource
+            aga3.asset = asset_resource
+            aga3.field_type = client.enums.AssetFieldTypeEnum.BUSINESS_NAME
+            mutate_operations.append(op3)
 
-            # -- LINK ASSETS TO ASSET GROUP (Dành cho nội dung quảng cáo PMax) --
-            # Business Name to AG
-            op_ag_bn = client.get_type("MutateOperation")
-            aga_bn = op_ag_bn.asset_group_asset_operation.create
-            aga_bn.asset_group = temp_asset_group_resource
-            aga_bn.asset = asset_resource
-            aga_bn.field_type = client.enums.AssetFieldTypeEnum.BUSINESS_NAME
-            mutate_operations.append(op_ag_bn)
-
-            # Logo to AG
+            # Logo → Asset Group (nếu có)
             if logo_resource:
-                op_ag_logo = client.get_type("MutateOperation")
-                aga_logo = op_ag_logo.asset_group_asset_operation.create
-                aga_logo.asset_group = temp_asset_group_resource
-                aga_logo.asset = logo_resource
-                aga_logo.field_type = client.enums.AssetFieldTypeEnum.LOGO
-                mutate_operations.append(op_ag_logo)
+                op4 = client.get_type("MutateOperation")
+                aga4 = op4.asset_group_asset_operation.create
+                aga4.asset_group = temp_asset_group_resource
+                aga4.asset = logo_resource
+                aga4.field_type = client.enums.AssetFieldTypeEnum.LOGO
+                mutate_operations.append(op4)
 
             google_ads_service = client.get_service("GoogleAdsService")
             response = google_ads_service.mutate(
