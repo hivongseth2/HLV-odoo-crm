@@ -231,14 +231,17 @@
                     </span>
                 </div>
 
-                <!-- Row 5: Delivery type + HTGH -->
-                <div t-if="so.x_studio_delivery_type or so.x_studio_htgh"
+                <!-- Row 5: Delivery type + HTGH + Saler code -->
+                <div t-if="so.x_studio_delivery_type or so.x_studio_htgh or so.x_studio_misa_saler_code"
                      class="mt-1 pt-1 border-top" style="font-size: 0.68rem;">
                     <span t-if="so.x_studio_delivery_type" class="badge bg-info bg-opacity-25 text-dark me-1" style="font-size:0.62rem;">
                         <i class="fa fa-truck me-1"></i><t t-esc="so.x_studio_delivery_type"/>
                     </span>
-                    <span t-if="so.x_studio_htgh" class="text-muted">
+                    <span t-if="so.x_studio_htgh" class="text-muted me-1">
                         <i class="fa fa-info-circle me-1"></i><t t-esc="so.x_studio_htgh"/>
+                    </span>
+                    <span t-if="so.x_studio_misa_saler_code" class="text-muted">
+                        <i class="fa fa-id-badge me-1"></i><t t-esc="so.x_studio_misa_saler_code"/>
                     </span>
                 </div>
 
