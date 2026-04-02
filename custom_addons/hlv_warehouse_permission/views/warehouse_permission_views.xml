@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Server Action: Tạo tất cả phân quyền -->
+    <record id="action_generate_all_permissions" model="ir.actions.server">
+        <field name="name">Tạo tất cả phân quyền</field>
+        <field name="model_id" ref="model_warehouse_user_permission"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_generate_all()</field>
+    </record>
+
+    <!-- Tree View: Dạng bảng dễ thao tác -->
+    <record id="view_warehouse_permission_tree" model="ir.ui.view">
+        <field name="name">warehouse.user.permission.tree</field>
+        <field name="model">warehouse.user.permission</field>
+        <field name="arch" type="xml">
+            <tree editable="bottom" multi_edit="1">
+                <header>
+                    <button name="%(action_generate_all_permissions)d" type="action"
+                            string="⚡ Tạo phân quyền cho tất cả"
+                            class="btn-primary"
+                            groups="hlv_warehouse_permission.group_warehouse_permission_manager"/>
+                </header>
+                <field name="user_id"/>
+                <field name="warehouse_id"/>
+                <field name="can_operate_picking" widget="boolean_toggle"/>
+                <field name="can_create_transfer" widget="boolean_toggle"/>
+                <field name="can_confirm_picking" widget="boolean_toggle"/>
+                <field name="can_update_inventory" widget="boolean_toggle"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_warehouse_permission_form" model="ir.ui.view">
+        <field name="name">warehouse.user.permission.form</field>
+        <field name="model">warehouse.user.permission</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <group string="Thông tin">
+                            <field name="user_id"/>
+                            <field name="warehouse_id"/>
+                        </group>
+                        <group string="Phân quyền">
+                            <field name="can_operate_picking" widget="boolean_toggle"/>
+                            <field name="can_create_transfer" widget="boolean_toggle"/>
+                            <field name="can_confirm_picking" widget="boolean_toggle"/>
+                            <field name="can_update_inventory" widget="boolean_toggle"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View: Lọc và nhóm theo user / kho -->
+    <record id="view_warehouse_permission_search" model="ir.ui.view">
+        <field name="name">warehouse.user.permission.search</field>
+        <field name="model">warehouse.user.permission</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="user_id"/>
+                <field name="warehouse_id"/>
+                <separator/>
+                <filter name="can_operate" string="Được thao tác"
+                        domain="[('can_operate_picking', '=', True)]"/>
+                <filter name="can_create" string="Được tạo phiếu"
+                        domain="[('can_create_transfer', '=', True)]"/>
+                <filter name="can_confirm" string="Được xác nhận"
+                        domain="[('can_confirm_picking', '=', True)]"/>
+                <filter name="can_inventory" string="Được cập nhật tồn"
+                        domain="[('can_update_inventory', '=', True)]"/>
+                <separator/>
+                <filter name="no_operate" string="KHÔNG được thao tác"
+                        domain="[('can_operate_picking', '=', False)]"/>
+                <filter name="no_create" string="KHÔNG được tạo phiếu"
+                        domain="[('can_create_transfer', '=', False)]"/>
+                <filter name="no_confirm" string="KHÔNG được xác nhận"
+                        domain="[('can_confirm_picking', '=', False)]"/>
+                <filter name="no_inventory" string="KHÔNG được cập nhật tồn"
+                        domain="[('can_update_inventory', '=', False)]"/>
+                <separator/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_user" string="Người dùng"
+                            context="{'group_by': 'user_id'}"/>
+                    <filter name="group_warehouse" string="Kho"
+                            context="{'group_by': 'warehouse_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action Window -->
+    <record id="action_warehouse_permission" model="ir.actions.act_window">
+        <field name="name">Phân quyền kho</field>
+        <field name="res_model">warehouse.user.permission</field>
+        <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="view_warehouse_permission_search"/>
+        <field name="context">{'search_default_group_user': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Chưa có phân quyền kho nào
+            </p>
+            <p>
+                Bấm nút <b>"Tạo phân quyền cho tất cả"</b> ở thanh công cụ
+                để tự động tạo phân quyền cho tất cả người dùng nội bộ.
+                <br/>Sau đó tắt/bật từng quyền phù hợp.
+            </p>
+        </field>
+    </record>
+
+    <!-- Menu: Kho > Cấu hình > Phân quyền kho -->
+    <menuitem id="menu_warehouse_permission"
+              name="Phân quyền kho"
+              parent="stock.menu_stock_config"
+              action="action_warehouse_permission"
+              sequence="100"
+              groups="hlv_warehouse_permission.group_warehouse_permission_manager"/>
+
+</odoo>
