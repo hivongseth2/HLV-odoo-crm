@@ -147,6 +147,10 @@ class PickingExportSalesReportWizard(models.TransientModel):
             {'key': 'don_gia_von', 'name': 'Đơn giá vốn', 'width': 15},
             {'key': 'tien_von', 'name': 'Tiền vốn', 'width': 15},
             {'key': 'misa_sync', 'name': 'Misa Sync', 'width': 15},
+            {'key': 'so_phieu_tra_lai', 'name': 'Số phiếu trả lại', 'width': 25},
+            {'key': 'ngay_tra_lai', 'name': 'Ngày trả lại', 'width': 25},
+            {'key': 'sl_tra_lai', 'name': 'SL trả lại', 'width': 12},
+            {'key': 'sl_thuc_ban', 'name': 'SL thực bán', 'width': 12},
         ]
 
     def _domain(self):
@@ -310,6 +314,58 @@ class PickingExportSalesReportWizard(models.TransientModel):
 
         return rows
 
+    def _compute_return_fields(self, picking, prod, move, qty):
+        """Tính toán các trường trả lại cho một dòng sản phẩm."""
+        # Ưu tiên tìm qua move.returned_move_ids trước
+        return_info = self._get_return_info_for_move(move)
+        # Nếu không tìm được qua move, tìm qua picking.return_ids
+        if not return_info['sl_tra_lai'] and picking:
+            return_info = self._get_return_info_for_product(picking, prod)
+        return_info['sl_thuc_ban'] = qty - return_info['sl_tra_lai']
+        return return_info
+
+    def _get_return_info_for_move(self, move):
+        """Tìm thông tin trả lại cho một stock.move dựa trên returned_move_ids."""
+        if not move:
+            return {'so_phieu_tra_lai': '', 'ngay_tra_lai': '', 'sl_tra_lai': 0.0}
+        returned_moves = move.returned_move_ids.filtered(lambda m: m.state == 'done')
+        if not returned_moves:
+            return {'so_phieu_tra_lai': '', 'ngay_tra_lai': '', 'sl_tra_lai': 0.0}
+        total_returned_qty = sum(m.quantity for m in returned_moves)
+        picking_names = list(set(m.picking_id.name for m in returned_moves if m.picking_id))
+        dates = [m.picking_id.date_done for m in returned_moves if m.picking_id and m.picking_id.date_done]
+        latest_date = max(dates) if dates else False
+        return {
+            'so_phieu_tra_lai': ', '.join(picking_names),
+            'ngay_tra_lai': _to_date_str(latest_date) if latest_date else '',
+            'sl_tra_lai': total_returned_qty,
+        }
+
+    def _get_return_info_for_product(self, picking, prod):
+        """Tìm thông tin trả lại cho sản phẩm từ return pickings của phiếu xuất."""
+        return_pickings = picking.return_ids.filtered(lambda p: p.state == 'done')
+        if not return_pickings:
+            return {'so_phieu_tra_lai': '', 'ngay_tra_lai': '', 'sl_tra_lai': 0.0}
+        total_returned_qty = 0.0
+        picking_names = []
+        dates = []
+        for rp in return_pickings:
+            for rm in rp.move_ids_without_package:
+                if rm.product_id == prod and rm.state == 'done':
+                    total_returned_qty += rm.quantity
+            if rp.name not in picking_names:
+                picking_names.append(rp.name)
+            if rp.date_done:
+                dates.append(rp.date_done)
+        if total_returned_qty == 0.0:
+            return {'so_phieu_tra_lai': '', 'ngay_tra_lai': '', 'sl_tra_lai': 0.0}
+        latest_date = max(dates) if dates else False
+        return {
+            'so_phieu_tra_lai': ', '.join(picking_names),
+            'ngay_tra_lai': _to_date_str(latest_date) if latest_date else '',
+            'sl_tra_lai': total_returned_qty,
+        }
+
     def _build_row_data(self, picking, so, prod, ml, move,
                         scheduled_date_str, picking_name, partner_code, partner_name,
                         partner_address, partner_vat, sale_name, sale_user_code,
@@ -441,6 +497,7 @@ class PickingExportSalesReportWizard(models.TransientModel):
             'don_gia_von': don_gia_von,
             'tien_von': tien_von,
             'misa_sync': getattr(picking, 'x_studio_misa_sav', False),
+            **self._compute_return_fields(picking, prod, move, qty),
         }
 
     def _create_excel_workbook(self, data_rows):
