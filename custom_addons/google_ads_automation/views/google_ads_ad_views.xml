@@ -58,10 +58,11 @@
                     <field name="hero_header_html" widget="html" readonly="1"/>
                     
                     <div class="alert alert-warning mb-3" role="alert" 
-                         invisible="not is_rsa_invalid or type != 'RESPONSIVE_SEARCH_AD'">
+                         invisible="not is_ad_content_invalid">
                         <i class="fa fa-exclamation-triangle me-2"></i>
-                        <strong>Yêu cầu bộ máy Google RSA:</strong> 
-                        Cần ít nhất 3 tiêu đề và 2 mô tả duy nhất để đồng bộ. 
+                        <strong>Kiểm tra nội dung:</strong> 
+                        <span invisible="type != 'RESPONSIVE_SEARCH_AD'">Cần ít nhất 3 tiêu đề (max 30kt) và 2 mô tả (max 90kt).</span>
+                        <span invisible="type != 'DISCOVERY_RESPONSIVE_AD'">Cần ít nhất 1 tiêu đề (max 40kt) và 1 mô tả (max 160kt) + Hình ảnh trong Chiến dịch.</span>
                         Giao thức <code>https://</code> sẽ được tự động thêm vào URL nếu thiếu.
                     </div>
 
@@ -76,12 +77,12 @@
                                     <field name="product_ids" widget="many2many_tags" options="{'no_create': True}"/>
                                     <field name="google_ad_id" readonly="1" invisible="state == 'draft'"/>
 
-                                    <field name="headline" placeholder="Mỗi tiêu đề 1 dòng (Tối đa 30 ký tự)... Cần ít nhất 3 tiêu đề" 
-                                           invisible="type != 'RESPONSIVE_SEARCH_AD'"/>
-                                    <field name="description" placeholder="Mỗi mô tả 1 dòng (Tối đa 90 ký tự)... Cần ít nhất 2 mô tả" 
-                                           invisible="type != 'RESPONSIVE_SEARCH_AD'"/>
+                                    <field name="headline" placeholder="Mỗi tiêu đề 1 dòng. RSA: max 30kt. Khám phá: max 40kt." 
+                                           invisible="type not in ['RESPONSIVE_SEARCH_AD', 'DISCOVERY_RESPONSIVE_AD']"/>
+                                    <field name="description" placeholder="Mỗi mô tả 1 dòng. RSA: max 90kt. Khám phá: max 160kt." 
+                                           invisible="type not in ['RESPONSIVE_SEARCH_AD', 'DISCOVERY_RESPONSIVE_AD']"/>
 
-                                    <field name="is_rsa_invalid" invisible="1"/>
+                                    <field name="is_ad_content_invalid" invisible="1"/>
                                     <field name="is_final_url_invalid" invisible="1"/>
                                     
                                     <field name="final_urls" widget="url" placeholder="https://example.com"

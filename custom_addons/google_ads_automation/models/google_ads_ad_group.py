@@ -18,7 +18,7 @@ class GoogleAdsAdGroup(models.Model):
     ], string='Trạng thái bộ máy', default='draft', required=True, tracking=True)
 
     type_id = fields.Many2one('google.ads.ad.group.type', string='Loại Nhóm Quảng Cáo', required=True, help='Loại nhóm quảng cáo phù hợp với chiến dịch (Tìm kiếm, Hiển thị, Video...)')
-    type = fields.Selection(related='type_id.code', string='Mã Loại Nhóm', readonly=True)
+    type = fields.Char(related='type_id.code', string='Mã Loại Nhóm', readonly=True, store=True)
 
     is_campaign_dsa = fields.Boolean(related='campaign_id.is_dsa', string='Chiến dịch DSA', readonly=True)
 

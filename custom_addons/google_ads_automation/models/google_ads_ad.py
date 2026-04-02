@@ -215,6 +215,10 @@ class GoogleAdsAd(models.Model):
 
             if not vals.get('marketing_image_asset'):
                 raise UserError(_("Quảng cáo Khám phá yêu cầu 'Ảnh quảng cáo (Ngang)' trong cấu hình Chiến dịch."))
+            if not vals.get('logo_image_asset'):
+                raise UserError(_("Quảng cáo Khám phá yêu cầu 'Logo hình vuông' trong cấu hình Chiến dịch."))
+            if not cam.business_name:
+                raise UserError(_("Quảng cáo Khám phá yêu cầu 'Tên thương hiệu' trong cấu hình Chiến dịch."))
 
         # Sync Action
         if self.google_ad_id:
@@ -228,7 +232,11 @@ class GoogleAdsAd(models.Model):
             self.message_post(body=_("Đồng bộ thành công lên Google Ads: %s") % result)
             return True
         else:
-            raise UserError(_("Đồng bộ Ad thất bại: %s") % result)
+            error_hint = result
+            if 'OPERATION_NOT_PERMITTED_FOR_CONTEXT' in result and 'OWNED_AND_OPERATED' in result:
+                error_hint = _("Lỗi ngữ cảnh: Bạn đang cố gắng tạo mẫu quảng cáo không phù hợp với chiến dịch Khám phá (Discovery). \n\n"
+                               "💡 Cách khắc phục: Hãy đảm bảo bạn đã chọn đúng 'Loại quảng cáo' là 'Mẫu quảng cáo Khám phá' và đã điền đủ Tiêu đề/Mô tả/Hình ảnh.")
+            raise UserError(_("Đồng bộ Ad thất bại: %s") % error_hint)
 
     def action_pause_on_google(self):
         self.ensure_one()
