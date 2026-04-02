@@ -26,21 +26,36 @@ class StockQuant(models.Model):
         return super().action_apply_inventory()
 
     def write(self, vals):
-        """Bỏ qua inventory fields nếu không có quyền (tránh popup lỗi lặp)."""
+        """Strip inventory fields nếu không có quyền + gửi notification cảnh báo."""
         inventory_fields = {'inventory_quantity', 'inventory_quantity_auto_apply', 'inventory_quantity_set'}
         matched = inventory_fields & set(vals)
         if matched and not self.env.su:
             Permission = self.env['warehouse.user.permission']
-            blocked = False
+            blocked_warehouse = False
             for quant in self:
                 warehouse = quant.location_id.warehouse_id
                 if warehouse and not Permission.check_permission(
                         self.env.user, warehouse, 'can_update_inventory'):
-                    blocked = True
+                    blocked_warehouse = warehouse
                     break
-            if blocked:
-                # Loại bỏ inventory fields, không raise lỗi để tránh popup lặp
+            if blocked_warehouse:
+                # Strip inventory fields để write thành công (tránh popup lặp)
                 vals = {k: v for k, v in vals.items() if k not in inventory_fields}
+                # Gửi notification toast để user biết
+                self.env['bus.bus']._sendone(
+                    self.env.user.partner_id,
+                    'simple_notification',
+                    {
+                        'title': _('Thao tác không hợp lệ'),
+                        'message': _(
+                            'Bạn không có quyền cập nhật tồn kho tại kho "%(warehouse)s".\n'
+                            'Vui lòng liên hệ quản trị viên.',
+                            warehouse=blocked_warehouse.name,
+                        ),
+                        'type': 'warning',
+                        'sticky': True,
+                    },
+                )
                 if not vals:
                     return True
         return super().write(vals)
