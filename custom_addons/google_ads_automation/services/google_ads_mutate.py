@@ -203,16 +203,22 @@ class GoogleAdsMutateService:
             c.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.PERFORMANCE_MAX
             c.status = client.enums.CampaignStatusEnum.PAUSED
             c.campaign_budget = budget_resource
+            
+            # Cấu hình Bidding
             c.maximize_conversions = {} 
             c.contains_eu_political_advertising = client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
             
-            # Kích hoạt brand_guidelines_enabled
+            # Khởi tạo PerformanceMaxSetting để kích hoạt Brand Guidelines
             try:
-                c.performance_max_setting.brand_guidelines_enabled = True
-            except:
-                try: c.performance_max_settings.brand_guidelines_enabled = True
-                except: pass
+                pmax_setting = client.get_type("PerformanceMaxSetting")
+                pmax_setting.brand_guidelines_enabled = True
+                c.performance_max_setting = pmax_setting
+                _logger.info("Đã cấu hình PerformanceMaxSetting.brand_guidelines_enabled = True")
+            except Exception as e:
+                _logger.warning("Không thể khởi tạo PerformanceMaxSetting: %s. Có thể phiên bản API quá cũ.", str(e))
 
+            google_ads_service = client.get_service("GoogleAdsService")
+            # Gửi mutate pha 1: Chỉ tạo Campaign
             cp_response = google_ads_service.mutate(customer_id=customer_id, mutate_operations=[campaign_op])
             real_campaign_resource = cp_response.mutate_operation_responses[0].campaign_result.resource_name
             _logger.info("Bước 1/3: Đã tạo chiến dịch PMax: %s", real_campaign_resource)
@@ -263,6 +269,8 @@ class GoogleAdsMutateService:
                 _logger.info("Bước 2/3: Đã liên kết Brand Assets vào Campaign %s", real_campaign_resource)
 
             # -- BƯỚC 3: TẠO ASSET GROUP VÀ LIÊN KẾT ASSETS --
+            # Theo tài liệu Google: Khi bật Brand Guidelines, Business Name và Logo 
+            # CHỈ được liên kết ở cấp Campaign (Pha 2) và KHÔNG được liên kết trong Asset Group.
             asset_group_ops = []
 
             # Tạo Asset Group (ID tạm -1)
@@ -292,10 +300,11 @@ class GoogleAdsMutateService:
                 aga.field_type = field_type
                 asset_group_ops.append(op)
 
-            add_ag_link(asset_resource, client.enums.AssetFieldTypeEnum.BUSINESS_NAME)
-            add_ag_link(logo_resource, client.enums.AssetFieldTypeEnum.LOGO)
+            # Link Images (Bỏ BN và Logo ở đây)
             add_ag_link(marketing_resource, client.enums.AssetFieldTypeEnum.MARKETING_IMAGE)
             add_ag_link(square_mkt_resource, client.enums.AssetFieldTypeEnum.SQUARE_MARKETING_IMAGE)
+            
+            # Link Text Assets
             add_ag_link(h1, client.enums.AssetFieldTypeEnum.HEADLINE)
             add_ag_link(h2, client.enums.AssetFieldTypeEnum.HEADLINE)
             add_ag_link(h3, client.enums.AssetFieldTypeEnum.HEADLINE)
