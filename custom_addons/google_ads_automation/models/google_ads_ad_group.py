@@ -164,6 +164,7 @@ class GoogleAdsAdGroup(models.Model):
         ('VIDEO_TRUE_VIEW_IN_STREAM', 'Video In-Stream'),
         ('VIDEO_BUMPER',            'Video Bumper (6 giây)'),
         ('VIDEO_OUTSTREAM',         'Video Outstream'),
+        ('NON_SKIPPABLE_INSTREAM',  'Video không thể bỏ qua'),
         ('HOTEL_ADS',               'Khách Sạn'),
         ('DISCOVERY',               'Khám Phá'),
         ('UNKNOWN',                 'Không rõ'),
@@ -199,6 +200,40 @@ class GoogleAdsAdGroup(models.Model):
                 rec.roas = (rec.conversions * 500000) / rec.cost
             else:
                 rec.roas = 0.0
+
+    @api.onchange('campaign_id')
+    def _onchange_campaign_id_filter_types(self):
+        """Khi chọn chiến dịch, lọc lại danh sách loại nhóm tương thích và kiểm tra tính hợp lệ"""
+        if not self.campaign_id:
+            return {'domain': {'type': []}}
+        
+        channel_type = self.campaign_id.channel_type
+        
+        # Ánh xạ tương thích giữa Channel Type (Chiến dịch) và Ad Group Type (Nhóm)
+        mapping = {
+            'SEARCH': ['SEARCH_STANDARD', 'SEARCH_DYNAMIC_ADS'],
+            'DISPLAY': ['DISPLAY_STANDARD'],
+            'SHOPPING': ['SHOPPING_PRODUCT_ADS', 'SHOPPING_SMART_ADS'],
+            'VIDEO': ['VIDEO_TRUE_VIEW_IN_STREAM', 'VIDEO_BUMPER', 'VIDEO_OUTSTREAM', 'NON_SKIPPABLE_INSTREAM'],
+            'HOTEL': ['HOTEL_ADS'],
+            'SMART': ['SEARCH_STANDARD'], # Smart campaigns often map to standard types in API
+        }
+        
+        valid_types = mapping.get(channel_type, [])
+        domain = [('type', 'in', valid_types)] if valid_types else []
+        
+        # Nếu loại hiện tại không còn hợp lệ sau khi đổi chiến dịch
+        if self.type not in valid_types and valid_types:
+            self.type = valid_types[0] # Chọn cái đầu tiên làm mặc định
+            return {
+                'domain': {'type': domain},
+                'warning': {
+                    'title': _("Thay đổi Loại Nhóm"),
+                    'message': _("Chiến dịch '%s' (loại: %s) yêu cầu loại nhóm quảng cáo khác. Hệ thống đã tự động chuyển về '%s'.") % (self.campaign_id.name, channel_type, self.type)
+                }
+            }
+        
+        return {'domain': {'type': domain}}
 
     def action_sync_to_google(self):
         self.ensure_one()
