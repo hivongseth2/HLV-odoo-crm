@@ -486,6 +486,7 @@ function renderSOCard(o){
   if(o.commitment_date) h+='<small class="text-muted"><i class="fa fa-calendar"></i> '+fd(o.commitment_date)+'</small><br>';
   if(o.x_studio_delivery_type) h+='<small class="text-muted"><i class="fa fa-truck me-1"></i>'+esc(o.x_studio_delivery_type)+'</small><br>';
   if(o.x_studio_htgh) h+='<small class="text-muted"><i class="fa fa-info-circle me-1"></i>'+esc(o.x_studio_htgh)+'</small><br>';
+  if(o.x_studio_misa_saler_code) h+='<small class="text-muted"><i class="fa fa-id-badge me-1"></i>NV: '+esc(o.x_studio_misa_saler_code)+'</small><br>';
   if(o.misa_shipping_address) h+='<small class="text-muted" style="font-size:.7rem"><i class="fa fa-map-marker me-1 text-danger"></i>'+esc(o.misa_shipping_address)+'</small><br>';
   if(o.tag_ids&&o.tag_ids.length) h+='<div class="mt-1">'+o.tag_ids.map(tagBadge).join('')+'</div>';
   h+='<div class="d-flex justify-content-between align-items-center">'
@@ -545,6 +546,7 @@ function openDrawer(id){
     +(o.commitment_date?'<div><i class="fa fa-calendar text-muted me-2"></i><span class="text-muted">Hẹn giao: '+fd(o.commitment_date)+'</span></div>':'')
     +(o.x_studio_delivery_type?'<div><i class="fa fa-truck text-muted me-2"></i><span class="text-muted">'+esc(o.x_studio_delivery_type)+'</span></div>':'')
     +(o.x_studio_htgh?'<div><i class="fa fa-info-circle text-muted me-2"></i><span class="text-muted">HTGH: '+esc(o.x_studio_htgh)+'</span></div>':'')
+    +(o.x_studio_misa_saler_code?'<div><i class="fa fa-id-badge text-muted me-2"></i><span class="text-muted">NV MISA: '+esc(o.x_studio_misa_saler_code)+'</span></div>':'')
     +(o.misa_shipping_address?'<div><i class="fa fa-map-marker text-muted me-2"></i><span class="text-muted">'+esc(o.misa_shipping_address)+'</span></div>':'')
     +(o.tag_ids&&o.tag_ids.length?'<div><i class="fa fa-tags text-muted me-2"></i>'+o.tag_ids.map(tagBadge).join('')+'</div>':'')
     +'</div>'
