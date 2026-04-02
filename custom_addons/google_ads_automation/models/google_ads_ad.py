@@ -134,9 +134,9 @@ class GoogleAdsAd(models.Model):
     
     # Creation fields
     headline = fields.Text(string='Tiêu đề (Mỗi dòng 1 tiêu đề)', 
-                           help='RSA: >3 tiêu đề (max 30 ký tự). Discovery: Tiêu đề (max 40 ký tự).')
+                           help='RSA: >3 tiêu đề (max 30 ký tự). Tạo nhu cầu (Demand Gen): Tiêu đề (max 40 ký tự).')
     description = fields.Text(string='Mô tả (Mỗi dòng 1 mô tả)', 
-                              help='RSA: >2 mô tả (max 90 ký tự). Discovery: Mô tả (max 160 ký tự).')
+                              help='RSA: >2 mô tả (max 90 ký tự). Tạo nhu cầu (Demand Gen): Mô tả (max 160 ký tự).')
 
     # Validation Computed Fields for UI
     headline_count = fields.Integer(compute='_compute_validation_stats', string='Số lượng Tiêu đề')
@@ -159,7 +159,7 @@ class GoogleAdsAd(models.Model):
             
             if rec.type == 'RESPONSIVE_SEARCH_AD':
                 rec.is_ad_content_invalid = (rec.headline_count < 3 or rec.description_count < 2 or not rec.final_urls or rec.is_final_url_invalid)
-            elif rec.type == 'DISCOVERY_RESPONSIVE_AD':
+            elif rec.type in ['DISCOVERY_RESPONSIVE_AD', 'DEMAND_GEN_RESPONSIVE_AD']:
                 rec.is_ad_content_invalid = (rec.headline_count < 1 or rec.description_count < 1 or not rec.final_urls or rec.is_final_url_invalid)
             else:
                 rec.is_ad_content_invalid = False
@@ -242,26 +242,27 @@ class GoogleAdsAd(models.Model):
             'headlines': headlines,
             'descriptions': descriptions,
             'final_url': final_url,
+            'channel_type': self.ad_group_id.campaign_id.channel_type, # Quan trọng để định hướng đúng field API
         }
 
         # Discovery (Demand Gen) Specific Assets
-        if self.type == 'DISCOVERY_RESPONSIVE_AD':
+        if self.type in ['DISCOVERY_RESPONSIVE_AD', 'DEMAND_GEN_RESPONSIVE_AD']:
             cam = self.ad_group_id.campaign_id
             vals['business_name'] = cam.business_name or account.name[:25]
             
             # Upload images from Campaign if available
             if cam.marketing_image:
-                vals['marketing_image_asset'] = GoogleAdsMutateService._create_image_asset(client, customer_id, cam.marketing_image, "Discovery Marketing", target_ratio=1.91)
+                vals['marketing_image_asset'] = GoogleAdsMutateService._create_image_asset(client, customer_id, cam.marketing_image, "Demand Gen Marketing", target_ratio=1.91)
             if cam.logo_image:
-                vals['logo_image_asset'] = GoogleAdsMutateService._create_image_asset(client, customer_id, cam.logo_image, "Discovery Logo", target_ratio=1.0)
-                vals['square_marketing_image_asset'] = vals['logo_image_asset'] # Square is often same as logo for simple sync
+                vals['logo_image_asset'] = GoogleAdsMutateService._create_image_asset(client, customer_id, cam.logo_image, "Demand Gen Logo", target_ratio=1.0)
+                vals['square_marketing_image_asset'] = vals['logo_image_asset'] 
 
             if not vals.get('marketing_image_asset'):
-                raise UserError(_("Quảng cáo Khám phá yêu cầu 'Ảnh quảng cáo (Ngang)' trong cấu hình Chiến dịch."))
+                raise UserError(_("Quảng cáo Tạo nhu cầu (Demand Gen) yêu cầu 'Ảnh quảng cáo (Ngang)' trong cấu hình Chiến dịch."))
             if not vals.get('logo_image_asset'):
-                raise UserError(_("Quảng cáo Khám phá yêu cầu 'Logo hình vuông' trong cấu hình Chiến dịch."))
+                raise UserError(_("Quảng cáo Tạo nhu cầu (Demand Gen) yêu cầu 'Logo hình vuông' trong cấu hình Chiến dịch."))
             if not cam.business_name:
-                raise UserError(_("Quảng cáo Khám phá yêu cầu 'Tên thương hiệu' trong cấu hình Chiến dịch."))
+                raise UserError(_("Quảng cáo Tạo nhu cầu (Demand Gen) yêu cầu 'Tên thương hiệu' trong cấu hình Chiến dịch."))
 
         # Sync Action
         if self.google_ad_id:
@@ -275,13 +276,12 @@ class GoogleAdsAd(models.Model):
             self.message_post(body=_("Đồng bộ thành công lên Google Ads: %s") % result)
             return True
         else:
-            error_hint = result
             if 'OPERATION_NOT_PERMITTED_FOR_CONTEXT' in result and 'OWNED_AND_OPERATED' in result:
-                error_hint = _("Lỗi ngữ cảnh: Bạn đang cố gắng tạo mẫu quảng cáo không phù hợp với chiến dịch Khám phá (Discovery). \n\n"
-                               "💡 Cách khắc phục: Hãy đảm bảo bạn đã chọn đúng 'Loại quảng cáo' là 'Mẫu quảng cáo Khám phá' và đã điền đủ Tiêu đề/Mô tả/Hình ảnh.")
+                error_hint = _("Lỗi ngữ cảnh: Bạn đang cố gắng tạo mẫu quảng cáo không phù hợp với chiến dịch Tạo nhu cầu (Demand Gen). \n\n"
+                               "💡 Cách khắc phục: Hãy đảm bảo bạn đã chọn đúng 'Loại quảng cáo' là 'Mẫu quảng cáo Tạo nhu cầu' và đã điền đủ Tiêu đề/Mô tả/Hình ảnh.")
             elif 'IMMUTABLE_FIELD' in result:
                 error_hint = _("Lỗi đồng bộ: Trường dữ liệu không thể thay đổi (Immutable). \n\n"
-                               "💡 Nguyên nhân: Loại mẫu quảng cáo này không cho phép tạo thủ công trong nhóm quảng cáo hiện tại (thường gặp ở chiến dịch Shopping hoặc Smart).")
+                               "💡 Nguyên nhân: Có thể bạn đang dùng thuộc tính quảng cáo 'Khám phá' cũ cho chiến dịch 'Tạo nhu cầu' mới. Hệ thống sẽ tự động điều chỉnh trong bản cập nhật này.")
             raise UserError(_("Đồng bộ Ad thất bại: %s") % error_hint)
 
     def action_pause_on_google(self):

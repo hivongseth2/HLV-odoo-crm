@@ -74,7 +74,7 @@
 
         <!-- DISCOVERY -->
         <record id="ad_group_type_discovery" model="google.ads.ad.group.type">
-            <field name="name">Khám Phá (Discovery)</field>
+            <field name="name">Tạo nhu cầu (Demand Gen)</field>
             <field name="code">DISCOVERY</field>
             <field name="sequence">60</field>
             <field name="compatible_channel_types">DISCOVERY</field>

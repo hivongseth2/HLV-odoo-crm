@@ -50,8 +50,8 @@
             <field name="compatible_ad_group_types">SEARCH_STANDARD</field>
         </record>
         <record id="ad_type_discovery" model="google.ads.ad.type">
-            <field name="name">Mẫu quảng cáo Khám phá</field>
-            <field name="code">DISCOVERY_RESPONSIVE_AD</field>
+            <field name="name">Tạo nhu cầu (Demand Gen)</field>
+            <field name="code">DEMAND_GEN_RESPONSIVE_AD</field>
             <field name="sequence">90</field>
             <field name="compatible_ad_group_types">DISCOVERY</field>
         </record>

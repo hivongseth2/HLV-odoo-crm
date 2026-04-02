@@ -601,40 +601,50 @@ class GoogleAdsMutateService:
             
             ad_type = vals.get('type', 'RESPONSIVE_SEARCH_AD').upper()
 
-            if ad_type == 'DISCOVERY_RESPONSIVE_AD':
-                # --- Discovery (Demand Gen) Ad content ---
-                # Lưu ý: Demand Gen yêu cầu Headlines (max 40), Descriptions (max 160)
-                discovery = ad.discovery_responsive_ad
-                discovery.business_name = str(vals.get('business_name') or "Brand")
+            if ad_type in ['DISCOVERY_RESPONSIVE_AD', 'DEMAND_GEN_RESPONSIVE_AD']:
+                # --- Discovery / Demand Gen Ad content ---
+                channel_type = vals.get('channel_type')
+                
+                # Xác định xem dùng field discovery hay demand_gen
+                # Google Ads đang chuyển đổi Discovery -> Demand Gen. 
+                # Nếu Campaign là DEMAND_GEN, bắt buộc dùng demand_gen_responsive_ad.
+                is_demand_gen = (channel_type == 'DEMAND_GEN')
+                
+                if is_demand_gen:
+                    info = ad.demand_gen_responsive_ad
+                else:
+                    info = ad.discovery_responsive_ad
+
+                info.business_name = str(vals.get('business_name') or "Brand")
                 
                 # Assets
                 headlines = list(dict.fromkeys(vals.get('headlines', [])))
                 for text in headlines[:5]:
                     h = client.get_type("AdTextAsset")
                     h.text = text[:40]
-                    discovery.headlines.append(h)
+                    info.headlines.append(h)
                 
                 descriptions = list(dict.fromkeys(vals.get('descriptions', [])))
                 for text in descriptions[:5]:
                     d = client.get_type("AdTextAsset")
                     d.text = text[:160]
-                    discovery.descriptions.append(d)
+                    info.descriptions.append(d)
 
-                # Images (Mandatory)
+                # Images
                 if vals.get('marketing_image_asset'):
                     img = client.get_type("AdImageAsset")
                     img.asset = vals.get('marketing_image_asset')
-                    discovery.marketing_images.append(img)
+                    info.marketing_images.append(img)
                 
                 if vals.get('square_marketing_image_asset'):
                     img = client.get_type("AdImageAsset")
                     img.asset = vals.get('square_marketing_image_asset')
-                    discovery.square_marketing_images.append(img)
+                    info.square_marketing_images.append(img)
                 
                 if vals.get('logo_image_asset'):
                     img = client.get_type("AdImageAsset")
                     img.asset = vals.get('logo_image_asset')
-                    discovery.logo_images.append(img)
+                    info.logo_images.append(img)
             else:
                 # --- Default: Responsive Search Ad content ---
                 rsa = ad.responsive_search_ad
@@ -682,26 +692,69 @@ class GoogleAdsMutateService:
                 ad.final_urls.append(str(final_url))
                 mask_paths.append("ad.final_urls")
             
-            # RSA content
-            rsa = ad.responsive_search_ad
-            
-            # Headlines
-            if 'headlines' in vals:
-                unique_headlines = list(dict.fromkeys(vals.get('headlines', [])))
-                for text in unique_headlines:
-                    headline = client.get_type("AdTextAsset")
-                    headline.text = text[:30]
-                    rsa.headlines.append(headline)
-                mask_paths.append("ad.responsive_search_ad.headlines")
-            
-            # Descriptions
-            if 'descriptions' in vals:
-                unique_descriptions = list(dict.fromkeys(vals.get('descriptions', [])))
-                for text in unique_descriptions:
-                    description = client.get_type("AdTextAsset")
-                    description.text = text[:90]
-                    rsa.descriptions.append(description)
-                mask_paths.append("ad.responsive_search_ad.descriptions")
+            # Determine ad content type
+            ad_type = vals.get('type', 'RESPONSIVE_SEARCH_AD').upper()
+
+            if ad_type in ['DISCOVERY_RESPONSIVE_AD', 'DEMAND_GEN_RESPONSIVE_AD']:
+                channel_type = vals.get('channel_type')
+                is_demand_gen = (channel_type == 'DEMAND_GEN')
+                
+                if is_demand_gen:
+                    info = ad.demand_gen_responsive_ad
+                    base_mask = "ad.demand_gen_responsive_ad"
+                else:
+                    info = ad.discovery_responsive_ad
+                    base_mask = "ad.discovery_responsive_ad"
+
+                if 'business_name' in vals:
+                    info.business_name = str(vals.get('business_name'))
+                    mask_paths.append(f"{base_mask}.business_name")
+
+                if 'headlines' in vals:
+                    unique_headlines = list(dict.fromkeys(vals.get('headlines', [])))
+                    for text in unique_headlines[:5]:
+                        h = client.get_type("AdTextAsset")
+                        h.text = text[:40]
+                        info.headlines.append(h)
+                    mask_paths.append(f"{base_mask}.headlines")
+
+                if 'descriptions' in vals:
+                    unique_descriptions = list(dict.fromkeys(vals.get('descriptions', [])))
+                    for text in unique_descriptions[:5]:
+                        d = client.get_type("AdTextAsset")
+                        d.text = text[:160]
+                        info.descriptions.append(d)
+                    mask_paths.append(f"{base_mask}.descriptions")
+
+                # Note: Updating images via update_ad might be complex depending on active assets, 
+                # but for simplicity we add them to mask if present in vals
+                if 'marketing_image_asset' in vals:
+                    img = client.get_type("AdImageAsset")
+                    img.asset = vals.get('marketing_image_asset')
+                    info.marketing_images.append(img)
+                    mask_paths.append(f"{base_mask}.marketing_images")
+
+            else:
+                # RSA content
+                rsa = ad.responsive_search_ad
+                
+                # Headlines
+                if 'headlines' in vals:
+                    unique_headlines = list(dict.fromkeys(vals.get('headlines', [])))
+                    for text in unique_headlines:
+                        headline = client.get_type("AdTextAsset")
+                        headline.text = text[:30]
+                        rsa.headlines.append(headline)
+                    mask_paths.append("ad.responsive_search_ad.headlines")
+                
+                # Descriptions
+                if 'descriptions' in vals:
+                    unique_descriptions = list(dict.fromkeys(vals.get('descriptions', [])))
+                    for text in unique_descriptions:
+                        description = client.get_type("AdTextAsset")
+                        description.text = text[:90]
+                        rsa.descriptions.append(description)
+                    mask_paths.append("ad.responsive_search_ad.descriptions")
 
             # Field mask manually
             from google.protobuf.field_mask_pb2 import FieldMask

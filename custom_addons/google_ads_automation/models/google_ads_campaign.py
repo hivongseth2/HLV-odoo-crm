@@ -168,7 +168,7 @@ class GoogleAdsCampaign(models.Model):
         ('MULTI_CHANNEL',   'Đa Kênh (UAC/App)'),
         ('SMART',           'Thông Minh (Smart)'),
         ('PERFORMANCE_MAX', 'Tối Đa Hiệu Suất (PMax)'),
-        ('DISCOVERY',       'Khám Phá (Discovery)'),
+        ('DISCOVERY',       'Tạo nhu cầu (Demand Gen)'),
         ('HOTEL',           'Khách Sạn (Hotel)'),
     ], string='Loại Kênh', help='Loại kênh quảng cáo từ Google Ads', readonly=True, default='SEARCH')
 
