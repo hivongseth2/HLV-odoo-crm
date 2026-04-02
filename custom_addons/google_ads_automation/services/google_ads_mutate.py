@@ -52,23 +52,72 @@ class GoogleAdsMutateService:
             status_enum = client.enums.CampaignStatusEnum
             campaign.status = getattr(status_enum, new_status)
 
-            # Field mask
-            from google.api_core.protobuf_helpers import field_mask
-            campaign_operation.update_mask = field_mask(None, campaign)
+            # Field mask manually
+            from google.protobuf.field_mask_pb2 import FieldMask
+            mask_paths = ['status']
+            campaign_operation.update_mask.CopyFrom(FieldMask(paths=mask_paths))
 
             response = campaign_service.mutate_campaigns(
                 customer_id=customer_id,
                 operations=[campaign_operation],
             )
-            _logger.info(
-                "Campaign %s status updated to %s. Resource: %s",
-                campaign_id, new_status,
-                response.results[0].resource_name,
-            )
             return True, response.results[0].resource_name
-
         except Exception as e:
             _logger.error("Mutate campaign %s failed: %s", campaign_id, str(e))
+            return False, str(e)
+
+    @staticmethod
+    def pause_ad_group(client, customer_id, ad_group_id):
+        return GoogleAdsMutateService._update_ad_group_status(client, customer_id, ad_group_id, 'PAUSED')
+
+    @staticmethod
+    def enable_ad_group(client, customer_id, ad_group_id):
+        return GoogleAdsMutateService._update_ad_group_status(client, customer_id, ad_group_id, 'ENABLED')
+
+    @staticmethod
+    def _update_ad_group_status(client, customer_id, ad_group_id, new_status):
+        try:
+            service = client.get_service("AdGroupService")
+            operation = client.get_type("AdGroupOperation")
+            ag = operation.update
+            ag.resource_name = service.ad_group_path(customer_id, ad_group_id)
+            ag.status = client.enums.AdGroupStatusEnum[new_status]
+
+            from google.protobuf.field_mask_pb2 import FieldMask
+            mask_paths = ['status']
+            operation.update_mask.CopyFrom(FieldMask(paths=mask_paths))
+
+            response = service.mutate_ad_groups(customer_id=customer_id, operations=[operation])
+            return True, response.results[0].resource_name
+        except Exception as e:
+            _logger.error("Mutate ad group %s to %s failed: %s", ad_group_id, new_status, str(e))
+            return False, str(e)
+
+    @staticmethod
+    def pause_ad(client, customer_id, ad_group_id, ad_id):
+        return GoogleAdsMutateService._update_ad_status(client, customer_id, ad_group_id, ad_id, 'PAUSED')
+
+    @staticmethod
+    def enable_ad(client, customer_id, ad_group_id, ad_id):
+        return GoogleAdsMutateService._update_ad_status(client, customer_id, ad_group_id, ad_id, 'ENABLED')
+
+    @staticmethod
+    def _update_ad_status(client, customer_id, ad_group_id, ad_id, new_status):
+        try:
+            service = client.get_service("AdGroupAdService")
+            operation = client.get_type("AdGroupAdOperation")
+            ad_group_ad = operation.update
+            ad_group_ad.resource_name = f"customers/{customer_id}/adGroupAds/{ad_group_id}~{ad_id}"
+            ad_group_ad.status = client.enums.AdGroupAdStatusEnum[new_status]
+
+            from google.protobuf.field_mask_pb2 import FieldMask
+            mask_paths = ['status']
+            operation.update_mask.CopyFrom(FieldMask(paths=mask_paths))
+
+            response = service.mutate_ad_group_ads(customer_id=customer_id, operations=[operation])
+            return True, response.results[0].resource_name
+        except Exception as e:
+            _logger.error("Mutate ad %s to %s failed: %s", ad_id, new_status, str(e))
             return False, str(e)
 
     @staticmethod
@@ -459,6 +508,46 @@ class GoogleAdsMutateService:
             return False, str(e)
 
     @staticmethod
+    def remove_campaign(client, customer_id, campaign_id):
+        """Xóa vĩnh viễn campaign trên Google Ads (REMOVED)"""
+        try:
+            campaign_service = client.get_service("CampaignService")
+            campaign_operation = client.get_type("CampaignOperation")
+            campaign_operation.remove = campaign_service.campaign_path(customer_id, str(campaign_id))
+            response = campaign_service.mutate_campaigns(customer_id=str(customer_id), operations=[campaign_operation])
+            return True, response.results[0].resource_name
+        except Exception as e:
+            _logger.error("Remove campaign %s failed: %s", campaign_id, str(e))
+            return False, str(e)
+
+    @staticmethod
+    def remove_ad_group(client, customer_id, ad_group_id):
+        """Xóa vĩnh viễn ad group trên Google Ads"""
+        try:
+            ad_group_service = client.get_service("AdGroupService")
+            ad_group_operation = client.get_type("AdGroupOperation")
+            ad_group_operation.remove = ad_group_service.ad_group_path(str(customer_id), str(ad_group_id))
+            response = ad_group_service.mutate_ad_groups(customer_id=str(customer_id), operations=[ad_group_operation])
+            return True, response.results[0].resource_name
+        except Exception as e:
+            _logger.error("Remove ad group %s failed: %s", ad_group_id, str(e))
+            return False, str(e)
+
+    @staticmethod
+    def remove_ad(client, customer_id, ad_group_id, ad_id):
+        """Xóa vĩnh viễn mẫu quảng cáo trên Google Ads"""
+        try:
+            ad_group_ad_service = client.get_service("AdGroupAdService")
+            ad_group_ad_operation = client.get_type("AdGroupAdOperation")
+            # Resource name cho remove: "customers/{customer_id}/adGroupAds/{ad_group_id}~{ad_id}"
+            ad_group_ad_operation.remove = f"customers/{customer_id}/adGroupAds/{ad_group_id}~{ad_id}"
+            response = ad_group_ad_service.mutate_ad_group_ads(customer_id=str(customer_id), operations=[ad_group_ad_operation])
+            return True, response.results[0].resource_name
+        except Exception as e:
+            _logger.error("Remove ad %s failed: %s", ad_id, str(e))
+            return False, str(e)
+
+    @staticmethod
     def create_ad_group(client, customer_id, campaign_id, vals):
         """Tạo Ad Group trong một Campaign"""
         try:
@@ -507,24 +596,62 @@ class GoogleAdsMutateService:
             ad = ad_group_ad.ad
             final_url = vals.get('final_url')
             if final_url:
+                if not final_url.startswith('http'): final_url = 'https://' + final_url
                 ad.final_urls.append(str(final_url))
             
-            # Responsive Search Ad content
-            rsa = ad.responsive_search_ad
-            
-            # Headlines (Unique & Max 30 chars)
-            unique_headlines = list(dict.fromkeys(vals.get('headlines', [])))
-            for text in unique_headlines:
-                headline = client.get_type("AdTextAsset")
-                headline.text = text[:30] 
-                rsa.headlines.append(headline)
-            
-            # Descriptions (Unique & Max 90 chars)
-            unique_descriptions = list(dict.fromkeys(vals.get('descriptions', [])))
-            for text in unique_descriptions:
-                description = client.get_type("AdTextAsset")
-                description.text = text[:90] 
-                rsa.descriptions.append(description)
+            ad_type = vals.get('type', 'RESPONSIVE_SEARCH_AD').upper()
+
+            if ad_type == 'DISCOVERY_RESPONSIVE_AD':
+                # --- Discovery (Demand Gen) Ad content ---
+                # Lưu ý: Demand Gen yêu cầu Headlines (max 40), Descriptions (max 160)
+                discovery = ad.discovery_responsive_ad
+                discovery.business_name = str(vals.get('business_name') or "Brand")
+                
+                # Assets
+                headlines = list(dict.fromkeys(vals.get('headlines', [])))
+                for text in headlines[:5]:
+                    h = client.get_type("AdTextAsset")
+                    h.text = text[:40]
+                    discovery.headlines.append(h)
+                
+                descriptions = list(dict.fromkeys(vals.get('descriptions', [])))
+                for text in descriptions[:5]:
+                    d = client.get_type("AdTextAsset")
+                    d.text = text[:160]
+                    discovery.descriptions.append(d)
+
+                # Images (Mandatory)
+                if vals.get('marketing_image_asset'):
+                    img = client.get_type("AdImageAsset")
+                    img.asset = vals.get('marketing_image_asset')
+                    discovery.marketing_images.append(img)
+                
+                if vals.get('square_marketing_image_asset'):
+                    img = client.get_type("AdImageAsset")
+                    img.asset = vals.get('square_marketing_image_asset')
+                    discovery.square_marketing_images.append(img)
+                
+                if vals.get('logo_image_asset'):
+                    img = client.get_type("AdImageAsset")
+                    img.asset = vals.get('logo_image_asset')
+                    discovery.logo_images.append(img)
+            else:
+                # --- Default: Responsive Search Ad content ---
+                rsa = ad.responsive_search_ad
+                
+                # Headlines (Unique & Max 30 chars)
+                unique_headlines = list(dict.fromkeys(vals.get('headlines', [])))
+                for text in unique_headlines:
+                    headline = client.get_type("AdTextAsset")
+                    headline.text = text[:30] 
+                    rsa.headlines.append(headline)
+                
+                # Descriptions (Unique & Max 90 chars)
+                unique_descriptions = list(dict.fromkeys(vals.get('descriptions', [])))
+                for text in unique_descriptions:
+                    description = client.get_type("AdTextAsset")
+                    description.text = text[:90] 
+                    rsa.descriptions.append(description)
 
             response = ad_group_ad_service.mutate_ad_group_ads(
                 customer_id=str(customer_id),

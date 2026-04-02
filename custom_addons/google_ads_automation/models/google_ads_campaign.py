@@ -256,7 +256,7 @@ class GoogleAdsCampaign(models.Model):
                                     </div>
                                     <div class="fs-2 fw-bold text-dark">{clicks:,}</div>
                                     <div class="text-muted small">Lượt Nhấp Chuột</div>
-                                </div>
+                                  </div>
                             </div>
                         </div>
                         <!-- Card 2: Impressions -->
@@ -546,6 +546,65 @@ class GoogleAdsCampaign(models.Model):
         else:
             if is_cron: return False
             raise UserError(_("Không thể lấy nhận định từ Adsroid: %s") % result)
+
+    def action_pause_on_google(self):
+        self.ensure_one()
+        if not self.google_campaign_id: return
+        client = self.account_id._get_google_ads_client()
+        customer_id = self.account_id.operating_customer_id
+        from ..services.google_ads_mutate import GoogleAdsMutateService
+        ok, res = GoogleAdsMutateService.pause_campaign(client, customer_id, self.google_campaign_id)
+        if ok:
+            self.status = 'paused'
+            return True
+        raise UserError(_("Không thể tạm dừng trên Google Ads: %s") % res)
+
+    def action_enable_on_google(self):
+        self.ensure_one()
+        if not self.google_campaign_id: return
+        client = self.account_id._get_google_ads_client()
+        customer_id = self.account_id.operating_customer_id
+        from ..services.google_ads_mutate import GoogleAdsMutateService
+        ok, res = GoogleAdsMutateService.enable_campaign(client, customer_id, self.google_campaign_id)
+        if ok:
+            self.status = 'enabled'
+            return True
+        raise UserError(_("Không thể kích hoạt trên Google Ads: %s") % res)
+
+    def action_remove_from_google_only(self):
+        """Xóa trên Google Ads nhưng giữ lại bản ghi Odoo dưới dạng Nháp"""
+        self.ensure_one()
+        if not self.google_campaign_id: return
+        client = self.account_id._get_google_ads_client()
+        customer_id = self.account_id.operating_customer_id
+        from ..services.google_ads_mutate import GoogleAdsMutateService
+        ok, res = GoogleAdsMutateService.remove_campaign(client, customer_id, self.google_campaign_id)
+        if ok:
+            self.write({
+                'google_campaign_id': False,
+                'state': 'draft',
+                'status': 'removed'
+            })
+            self.message_post(body=_("Đã xóa chiến dịch trên Google Ads. Bản ghi Odoo đã chuyển về trạng thái Nháp."))
+            return True
+        raise UserError(_("Không thể xóa trên Google Ads: %s") % res)
+
+    def unlink(self):
+        """Khi xóa trên Odoo, thực hiện xóa vĩnh viễn trên Google Ads nếu đã đồng bộ"""
+        for rec in self:
+            if rec.google_campaign_id and rec.account_id.state == 'authenticated':
+                try:
+                    client = rec.account_id.get_google_ads_client()
+                    customer_id = rec.account_id.google_customer_id
+                    from ..services.google_ads_mutate import GoogleAdsMutateService
+                    ok, result = GoogleAdsMutateService.remove_campaign(client, customer_id, rec.google_campaign_id)
+                    if ok:
+                        _logger.info("Deleted campaign %s from Google Ads via Odoo unlink.", rec.google_campaign_id)
+                    else:
+                        _logger.warning("Could not delete campaign %s from Google Ads: %s", rec.google_campaign_id, result)
+                except Exception as e:
+                    _logger.error("Error during unlink sync for campaign %s: %s", rec.id, str(e))
+        return super().unlink()
 
     _sql_constraints = [
         ('google_campaign_id_uniq', 'unique(google_campaign_id)', 'Google Campaign ID phải là duy nhất!'),

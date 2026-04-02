@@ -34,6 +34,20 @@
                     <button name="action_sync_to_google" string="Đồng bộ lên Google" 
                             type="object" class="btn-primary" 
                             invisible="state == 'synced'"/>
+                    
+                    <button name="action_pause_on_google" string="⏸️ Tạm dừng trên Google"
+                            type="object" class="btn-secondary"
+                            invisible="state != 'synced' or status == 'paused'"/>
+                            
+                    <button name="action_enable_on_google" string="▶️ Kích hoạt trên Google"
+                            type="object" class="btn-success"
+                            invisible="state != 'synced' or status == 'enabled'"/>
+
+                    <button name="action_remove_from_google_only" string="🗑️ Xóa khỏi Google Ads"
+                            type="object" class="btn-danger"
+                            invisible="state != 'synced'"
+                            confirm="⚠️ Bạn có chắc chắn muốn XÓA nhóm quảng cáo này trên Google Ads?\n\n- Nhóm sẽ bị gỡ bỏ vĩnh viễn trên nền tảng Google.\n- Bản ghi Odoo sẽ được GIỮ LẠI và chuyển về trạng thái 'Nháp' để bạn có thể đồng bộ lại sau này."/>
+
                     <field name="state" widget="statusbar" statusbar_visible="draft,synced"/>
                 </header>
                 <sheet>
