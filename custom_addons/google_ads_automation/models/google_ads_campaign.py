@@ -89,11 +89,10 @@ class GoogleAdsCampaign(models.Model):
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="o_visual_box">
-                                <span class="o_visual_label mb-3">Campaign Success Probability</span>
+                                <span class="o_visual_label mb-3">Hiệu suất chiến dịch</span>
                                 <div class="mb-3">
                                     <div class="o_metric_row">
-                                        <span class="o_metric_title">Conversion Ratio</span>
+                                        <span class="o_metric_title">Tỷ lệ ra đơn</span>
                                         <span class="o_metric_value text-warning">{rec.conversion_rate:.2f}%</span>
                                     </div>
                                     <div class="progress mt-1" style="height: 6px;">
@@ -102,7 +101,7 @@ class GoogleAdsCampaign(models.Model):
                                 </div>
                                 <div class="mb-0">
                                     <div class="o_metric_row">
-                                        <span class="o_metric_title">Portfolio ROAS</span>
+                                        <span class="o_metric_title">ROAS danh mục</span>
                                         <span class="o_metric_value text-info">{rec.roas:.1f}x</span>
                                     </div>
                                     <div class="progress mt-1" style="height: 6px;">

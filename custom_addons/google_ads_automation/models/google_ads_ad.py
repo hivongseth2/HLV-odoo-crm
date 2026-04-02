@@ -47,10 +47,10 @@ class GoogleAdsAd(models.Model):
                         </div>
                         <div class="col-md-4">
                             <div class="o_visual_box">
-                                <span class="o_visual_label mb-3">Ad Interaction Insight</span>
+                                <span class="o_visual_label mb-3">Phân tích tương tác</span>
                                 <div class="mb-3">
                                     <div class="o_metric_row">
-                                        <span class="o_metric_title">Conversion Rate</span>
+                                        <span class="o_metric_title">Tỷ lệ ra đơn</span>
                                         <span class="o_metric_value text-warning">{rec.conversion_rate:.2f}%</span>
                                     </div>
                                     <div class="progress mt-1" style="height: 6px;">
@@ -59,7 +59,7 @@ class GoogleAdsAd(models.Model):
                                 </div>
                                 <div class="mb-0">
                                     <div class="o_metric_row">
-                                        <span class="o_metric_title">Estimated ROAS</span>
+                                        <span class="o_metric_title">ROAS dự tính</span>
                                         <span class="o_metric_value text-info">{rec.roas:.1f}x</span>
                                     </div>
                                     <div class="progress mt-1" style="height: 6px;">
