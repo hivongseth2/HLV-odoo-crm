@@ -26,15 +26,17 @@ class StockQuant(models.Model):
         return super().action_apply_inventory()
 
     def write(self, vals):
-        """Chặn sửa inventory_quantity nếu không có quyền."""
-        if 'inventory_quantity' in vals and not self.env.su:
+        """Chặn sửa inventory quantity nếu không có quyền."""
+        inventory_fields = {'inventory_quantity', 'inventory_quantity_auto_apply', 'inventory_quantity_set'}
+        if inventory_fields & set(vals) and not self.env.su:
             self._check_inventory_permission()
         return super().write(vals)
 
     @api.model_create_multi
     def create(self, vals_list):
-        """Chặn tạo quant với inventory_quantity nếu không có quyền."""
+        """Chặn tạo quant với inventory quantity nếu không có quyền."""
+        inventory_fields = {'inventory_quantity', 'inventory_quantity_auto_apply', 'inventory_quantity_set'}
         records = super().create(vals_list)
-        if any('inventory_quantity' in v for v in vals_list) and not self.env.su:
+        if any(inventory_fields & set(v) for v in vals_list) and not self.env.su:
             records._check_inventory_permission()
         return records
