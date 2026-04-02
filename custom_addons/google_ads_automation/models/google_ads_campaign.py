@@ -12,6 +12,9 @@ class GoogleAdsCampaign(models.Model):
 
     name = fields.Char(string='Tên Chiến Dịch', required=True)
     account_id = fields.Many2one('google.ads.account', string='Tài Khoản Google Ads', required=True, ondelete='cascade')
+    
+    hero_header_html = fields.Html(compute='_compute_hero_header_html')
+    performance_dashboard_html = fields.Html(compute='_compute_performance_dashboard_html')
     google_campaign_id = fields.Char(string='Google Campaign ID', index=True, readonly=True)
     state = fields.Selection([
         ('draft', 'Nháp (Local)'),
@@ -55,6 +58,99 @@ class GoogleAdsCampaign(models.Model):
     def _compute_product_ids(self):
         for rec in self:
             rec.product_ids = rec.feed_line_ids.mapped('product_id')
+
+    def _compute_hero_header_html(self):
+        for rec in self:
+            status_color = 'bg-success' if rec.status == 'enabled' else 'bg-warning' if rec.status == 'paused' else 'bg-danger'
+            cr_width = min(rec.conversion_rate * 5, 100) if rec.conversion_rate > 0 else 0
+            roas_width = min(rec.roas * 20, 100) if rec.roas > 0 else 0
+            
+            html = f"""
+                <div class="o_hero_header">
+                    <div class="status_badge">
+                        <span class="o_status_ping {status_color}"></span>
+                        <span class="badge text-bg-light fw-bold shadow-sm border">{dict(self._fields['status'].selection).get(rec.status, rec.status)}</span>
+                    </div>
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <div class="bg-light p-3 rounded-4 border text-primary">
+                                <i class="fa fa-bullhorn fa-4x"></i>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <span class="o_logic_tag mb-2 d-inline-block bg-primary">GOOGLE CAMPAIGN ENGINE</span>
+                            <div class="d-flex align-items-center text-muted mt-2 mb-0 fw-medium">
+                                <div>
+                                    <i class="fa fa-university me-1"></i> Account: <span class="text-dark">{rec.account_id.name or '—'}</span>
+                                </div>
+                                <div class="ms-4">
+                                    <i class="fa fa-info-circle me-1"></i> Channel: <span class="text-dark">{rec.channel_type}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="o_visual_box">
+                                <span class="o_visual_label mb-3">Campaign Success Probability</span>
+                                <div class="mb-3">
+                                    <div class="o_metric_row">
+                                        <span class="o_metric_title">Conversion Ratio</span>
+                                        <span class="o_metric_value text-warning">{rec.conversion_rate:.2f}%</span>
+                                    </div>
+                                    <div class="progress mt-1" style="height: 6px;">
+                                        <div class="progress-bar bg-warning" style="width: {cr_width}%"></div>
+                                    </div>
+                                </div>
+                                <div class="mb-0">
+                                    <div class="o_metric_row">
+                                        <span class="o_metric_title">Portfolio ROAS</span>
+                                        <span class="o_metric_value text-info">{rec.roas:.1f}x</span>
+                                    </div>
+                                    <div class="progress mt-1" style="height: 6px;">
+                                        <div class="progress-bar bg-info" style="width: {roas_width}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            """
+            rec.hero_header_html = Markup(html)
+
+    def _compute_performance_dashboard_html(self):
+        for rec in self:
+            html = f"""
+                <div class="row g-4 mt-2">
+                    <div class="col-md-3">
+                        <div class="o_premium_metric_card">
+                            <div class="o_metric_label">Clicks</div>
+                            <div class="o_metric_value">{rec.clicks:,}</div>
+                            <div class="o_metric_sub_label text-primary"><i class="fa fa-mouse-pointer me-1"></i>Total Interaction</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="o_premium_metric_card">
+                            <div class="o_metric_label">Impressions</div>
+                            <div class="o_metric_value">{rec.impressions:,}</div>
+                            <div class="o_metric_sub_label text-info"><i class="fa fa-eye me-1"></i>Total Visibility</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="o_premium_metric_card">
+                            <div class="o_metric_label">Conversions</div>
+                            <div class="o_metric_value">{rec.conversions:.1f}</div>
+                            <div class="o_metric_sub_label text-success"><i class="fa fa-shopping-cart me-1"></i>Total Orders</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="o_premium_metric_card">
+                            <div class="o_metric_label">Cost</div>
+                            <div class="o_metric_value" style="font-size: 1.3rem;">{rec.cost:,.0f} VNĐ</div>
+                            <div class="o_metric_sub_label text-danger"><i class="fa fa-bank me-1"></i>Total Investment</div>
+                        </div>
+                    </div>
+                </div>
+            """
+            rec.performance_dashboard_html = Markup(html)
 
 
     status = fields.Selection([

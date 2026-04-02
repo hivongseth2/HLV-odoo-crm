@@ -11,6 +11,7 @@ class GoogleAdsAd(models.Model):
     _description = 'Mẫu Quảng Cáo'
 
     hero_header_html = fields.Html(compute='_compute_hero_header_html')
+    performance_dashboard_html = fields.Html(compute='_compute_performance_dashboard_html')
 
     def _compute_hero_header_html(self):
         for rec in self:
@@ -71,6 +72,42 @@ class GoogleAdsAd(models.Model):
                 </div>
             """
             rec.hero_header_html = Markup(html)
+
+    def _compute_performance_dashboard_html(self):
+        for rec in self:
+            html = f"""
+                <div class="row g-4 mt-2">
+                    <div class="col-md-3">
+                        <div class="o_premium_metric_card">
+                            <div class="o_metric_label">Clicks</div>
+                            <div class="o_metric_value">{rec.clicks:,}</div>
+                            <div class="o_metric_sub_label text-primary"><i class="fa fa-mouse-pointer me-1"></i>Interaction</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="o_premium_metric_card">
+                            <div class="o_metric_label">Impressions</div>
+                            <div class="o_metric_value">{rec.impressions:,}</div>
+                            <div class="o_metric_sub_label text-info"><i class="fa fa-eye me-1"></i>Visibility</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="o_premium_metric_card">
+                            <div class="o_metric_label">Conversions</div>
+                            <div class="o_metric_value">{rec.conversions:.1f}</div>
+                            <div class="o_metric_sub_label text-success"><i class="fa fa-shopping-cart me-1"></i>Total Orders</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="o_premium_metric_card">
+                            <div class="o_metric_label">Cost</div>
+                            <div class="o_metric_value" style="font-size: 1.3rem;">{rec.cost:,.0f} VNĐ</div>
+                            <div class="o_metric_sub_label text-danger"><i class="fa fa-bank me-1"></i>Total Spent</div>
+                        </div>
+                    </div>
+                </div>
+            """
+            rec.performance_dashboard_html = Markup(html)
 
     name = fields.Char(string='Tên/Tiêu Đề Quảng Cáo')
     ad_group_id = fields.Many2one('google.ads.ad.group', string='Nhóm Quảng Cáo', required=True, ondelete='cascade')
