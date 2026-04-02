@@ -218,5 +218,6 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             'misa_shipping_address': so.misa_shipping_address or '',
             'x_studio_htgh': so.x_studio_htgh or '',
             'x_studio_delivery_type': so.x_studio_delivery_type or '',
+            'x_studio_misa_saler_code': so.x_studio_misa_saler_code or '',
             'tag_ids': [[t.id, t.name, t.color] for t in so.tag_ids] if so.tag_ids else [],
         }
