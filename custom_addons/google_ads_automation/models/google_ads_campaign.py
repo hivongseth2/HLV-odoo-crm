@@ -77,6 +77,8 @@ class GoogleAdsCampaign(models.Model):
         ('HOTEL',           'Khách Sạn (Hotel)'),
     ], string='Loại Kênh', help='Loại kênh quảng cáo từ Google Ads', readonly=True, default='SEARCH')
 
+    is_dsa = fields.Boolean(string='Chiến dịch Tìm kiếm Động (DSA)', help='Bật nếu chiến dịch này đã được cấu hình DSA trên Google Ads.')
+
     video_sub_type = fields.Selection([
         ('VIDEO_ACTION', 'Video hành động (Video Action)'),
         ('VIDEO_NON_SKIPPABLE', 'Video không thể bỏ qua (Non-skippable)'),

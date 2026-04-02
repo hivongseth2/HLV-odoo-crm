@@ -46,9 +46,10 @@
                                    domain="[('channel_type', 'not in', ['PERFORMANCE_MAX', 'MULTI_CHANNEL', 'SMART'])]"
                                    readonly="state == 'synced'"/>
                             <field name="campaign_channel_type" invisible="1"/>
+                            <field name="is_campaign_dsa" invisible="1"/>
                             <field name="type_id" 
                                    options="{'no_create': True, 'no_open': True}"
-                                   domain="[('compatible_channel_types', 'ilike', campaign_channel_type)]"
+                                   domain="[('compatible_channel_types', 'ilike', campaign_channel_type), ('is_dsa_only', '=', is_campaign_dsa)]"
                                    readonly="state == 'synced'"/>
                             <field name="type" invisible="1"/>
                             <field name="status" readonly="state == 'synced'"/>

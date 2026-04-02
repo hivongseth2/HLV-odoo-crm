@@ -140,6 +140,7 @@ class GoogleAdsAdGroup(models.Model):
     name = fields.Char(string='Tên Nhóm Quảng Cáo', required=True)
     campaign_id = fields.Many2one('google.ads.campaign', string='Chiến Dịch', required=True, ondelete='cascade')
     campaign_channel_type = fields.Selection(related='campaign_id.channel_type', string='Loại Kênh Chiến Dịch', store=False)
+    is_campaign_dsa = fields.Boolean(related='campaign_id.is_dsa', string='Chiến dịch DSA', store=False)
     google_ad_group_id = fields.Char(string='Google Ad Group ID', index=True, readonly=True)
     state = fields.Selection([
         ('draft', 'Nháp (Local)'),

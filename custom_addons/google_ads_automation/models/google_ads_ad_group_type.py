@@ -15,3 +15,4 @@ class GoogleAdsAdGroupType(models.Model):
         string='Mênh Tương Thích',
         help='Danh sách mã loại kênh chiến dịch hỗ trợ (cách nhau bởi dấu phẩy).'
     )
+    is_dsa_only = fields.Boolean(string='Chỉ dùng cho DSA', default=False)
