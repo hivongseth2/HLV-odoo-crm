@@ -107,7 +107,21 @@ class GoogleAdsCampaign(models.Model):
     budget_amount = fields.Float(string='Ngân sách hàng ngày', default=50000.0, tracking=True)
     business_name = fields.Char(string='Tên thương hiệu', help='Yêu cầu cho PMax nếu bật Brand Guidelines', tracking=True)
     logo_image = fields.Binary(string='Logo hình vuông', help='Yêu cầu cho PMax (tỷ lệ 1:1)')
+    marketing_image = fields.Binary(string='Ảnh quảng cáo (Ngang)', help='Yêu cầu cho PMax (tỷ lệ 1.91:1 - Landscape)')
     final_url = fields.Char(string='URL trang đích (Landing Page)', help='URL trang web mà quảng cáo sẽ dẫn người dùng đến', tracking=True)
+
+    # Thành phần quảng cáo PMax (Asset Group)
+    # Tiêu đề (Headlines) - Max 30 chars
+    pmax_headline_1 = fields.Char(string='Tiêu đề 1', help='Tối đa 30 ký tự', size=30)
+    pmax_headline_2 = fields.Char(string='Tiêu đề 2', help='Tối đa 30 ký tự', size=30)
+    pmax_headline_3 = fields.Char(string='Tiêu đề 3', help='Tối đa 30 ký tự', size=30)
+    
+    # Tiêu đề dài (Long Headline) - Max 90 chars
+    pmax_long_headline = fields.Char(string='Tiêu đề dài', help='Tối đa 90 ký tự', size=90)
+    
+    # Mô tả (Descriptions) - Max 90 chars
+    pmax_description_1 = fields.Char(string='Mô tả 1', help='Tối đa 90 ký tự', size=90)
+    pmax_description_2 = fields.Char(string='Mô tả 2', help='Tối đa 90 ký tự', size=90)
 
     # Metrics (Chỉ số hiệu suất cơ bản)
     clicks = fields.Integer(string='Lượt Nhấp', default=0, readonly=True)
@@ -347,6 +361,13 @@ class GoogleAdsCampaign(models.Model):
             'app_id': self.app_id,
             'app_store': self.app_store,
             'app_bidding_goal': self.app_bidding_goal,
+            'marketing_image': self.marketing_image,
+            'pmax_headline_1': self.pmax_headline_1,
+            'pmax_headline_2': self.pmax_headline_2,
+            'pmax_headline_3': self.pmax_headline_3,
+            'pmax_long_headline': self.pmax_long_headline,
+            'pmax_description_1': self.pmax_description_1,
+            'pmax_description_2': self.pmax_description_2,
         }
         
         _logger.info("Syncing campaign %s (type: %s) to Google Ads for Customer %s", self.name, self.channel_type, customer_id)

@@ -69,13 +69,37 @@
                             <field name="budget_amount" widget="monetary" options="{'currency_field': 'currency_id'}"/>
                             <field name="final_url" placeholder="https://example.com" required="channel_type in ['VIDEO', 'PERFORMANCE_MAX']"/>
                             <field name="business_name" invisible="channel_type != 'PERFORMANCE_MAX'" required="channel_type == 'PERFORMANCE_MAX'"/>
-                            <field name="logo_image" widget="image" invisible="channel_type != 'PERFORMANCE_MAX'" class="oe_avatar"/>
+                            <field name="logo_image" widget="image" invisible="channel_type != 'PERFORMANCE_MAX'" 
+                                   required="channel_type == 'PERFORMANCE_MAX'"
+                                   class="oe_avatar" options="{'size': [96, 96]}"/>
+                            <field name="marketing_image" widget="image" invisible="channel_type != 'PERFORMANCE_MAX'"
+                                   required="channel_type == 'PERFORMANCE_MAX'"
+                                   class="o_google_ads_landscape_img"/>
                             <field name="status" widget="badge" readonly="1" invisible="state == 'draft'"
                                    decoration-success="status == 'enabled'"
                                    decoration-warning="status == 'paused'"
                                    decoration-danger="status == 'removed'"/>
                         </group>
                     </group>
+                    
+                    <!-- PMax Assets Configuration -->
+                    <notebook invisible="channel_type != 'PERFORMANCE_MAX'">
+                        <page name="pmax_assets" string="Thành phần PMax (Tùy chọn/Mặc định)">
+                            <div class="alert alert-warning border-0 shadow-sm" invisible="state == 'synced'">
+                                <i class="fa fa-magic me-2"></i><b>Gợi ý:</b> Nếu để trống, hệ thống sẽ tự động dùng "Tên chiến dịch" để tạo các tiêu đề và mô tả cơ bản.
+                            </div>
+                            <group>
+                                <group string="Tiêu đề &amp; Mô tả">
+                                    <field name="pmax_headline_1" placeholder="VD: Khuyến mãi cuối năm"/>
+                                    <field name="pmax_headline_2" placeholder="VD: Giảm giá 50% toàn tập"/>
+                                    <field name="pmax_headline_3" placeholder="VD: Giao hàng hỏa tốc"/>
+                                    <field name="pmax_long_headline" placeholder="VD: Mua sắm thả ga không lo về giá - Độc quyền tại hệ thống"/>
+                                    <field name="pmax_description_1" placeholder="VD: Cam kết chất lượng dịch vụ hàng đầu thị trường."/>
+                                    <field name="pmax_description_2" placeholder="VD: Miễn phí đổi trả trong vòng 7 ngày nếu không hài lòng."/>
+                                </group>
+                            </group>
+                        </page>
+                    </notebook>
                     
                     <field name="hero_header_html" widget="html" readonly="1" invisible="not id"/>
                     
