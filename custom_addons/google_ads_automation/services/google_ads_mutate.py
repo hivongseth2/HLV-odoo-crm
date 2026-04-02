@@ -603,14 +603,16 @@ class GoogleAdsMutateService:
 
             if ad_type in ['DISCOVERY_RESPONSIVE_AD', 'DEMAND_GEN_RESPONSIVE_AD']:
                 # --- Discovery / Demand Gen Ad content ---
-                channel_type = vals.get('channel_type')
+                channel_type = vals.get('channel_type', '').upper()
                 
-                # Xác định xem dùng field discovery hay demand_gen
-                # Google Ads đang chuyển đổi Discovery -> Demand Gen. 
-                # Nếu Campaign là DEMAND_GEN, bắt buộc dùng demand_gen_responsive_ad.
-                is_demand_gen = (channel_type == 'DEMAND_GEN')
+                # Google Ads đã chuyển đổi Discovery -> Demand Gen. 
+                # Chấp nhận cả DISCOVERY (Odoo) và DEMAND_GEN (API) cho cấu trúc mới này.
+                is_demand_gen = (channel_type in ['DEMAND_GEN', 'DISCOVERY'])
                 
-                if is_demand_gen:
+                # Check for field existence on the 'ad' object to be extra safe
+                use_demand_gen_field = is_demand_gen and hasattr(ad, 'demand_gen_responsive_ad')
+                
+                if use_demand_gen_field:
                     info = ad.demand_gen_responsive_ad
                 else:
                     info = ad.discovery_responsive_ad
@@ -696,10 +698,12 @@ class GoogleAdsMutateService:
             ad_type = vals.get('type', 'RESPONSIVE_SEARCH_AD').upper()
 
             if ad_type in ['DISCOVERY_RESPONSIVE_AD', 'DEMAND_GEN_RESPONSIVE_AD']:
-                channel_type = vals.get('channel_type')
-                is_demand_gen = (channel_type == 'DEMAND_GEN')
+                channel_type = vals.get('channel_type', '').upper()
+                is_demand_gen = (channel_type in ['DEMAND_GEN', 'DISCOVERY'])
                 
-                if is_demand_gen:
+                use_demand_gen_field = is_demand_gen and hasattr(ad, 'demand_gen_responsive_ad')
+                
+                if use_demand_gen_field:
                     info = ad.demand_gen_responsive_ad
                     base_mask = "ad.demand_gen_responsive_ad"
                 else:
