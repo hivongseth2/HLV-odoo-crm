@@ -111,12 +111,4 @@
         </field>
     </record>
 
-    <!-- Menu: Kho > Cấu hình > Phân quyền kho -->
-    <menuitem id="menu_warehouse_permission"
-              name="Phan quyen kho"
-              parent="stock.menu_stock_config_settings"
-              action="action_warehouse_permission"
-              sequence="100"
-              groups="stock.group_stock_manager"/>
-
 </odoo>

@@ -1,0 +1,4 @@
+/* Ẩn nút "Số lượng tồn kho" trong app Barcode */
+.o_button_inventory {
+    display: none !important;
+}
