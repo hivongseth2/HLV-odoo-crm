@@ -595,9 +595,7 @@ class GoogleAdsMutateService:
             
             ad = ad_group_ad.ad
             final_url = vals.get('final_url')
-            if final_url:
-                if not final_url.startswith('http'): final_url = 'https://' + final_url
-                ad.final_urls.append(str(final_url))
+            # final_urls will be set inside specialized blocks to ensure type mapping first
             
             ad_type = vals.get('type', 'RESPONSIVE_SEARCH_AD').upper()
 
@@ -617,7 +615,13 @@ class GoogleAdsMutateService:
                 else:
                     info = ad.discovery_responsive_ad
 
+                # Set Final URL here
+                if final_url:
+                    if not final_url.startswith('http'): final_url = 'https://' + final_url
+                    ad.final_urls.append(str(final_url))
+
                 info.business_name = str(vals.get('business_name') or "Brand")
+                
                 
                 # Assets
                 headlines = list(dict.fromkeys(vals.get('headlines', [])))
@@ -650,6 +654,11 @@ class GoogleAdsMutateService:
             else:
                 # --- Default: Responsive Search Ad content ---
                 rsa = ad.responsive_search_ad
+
+                # Set Final URL here
+                if final_url:
+                    if not final_url.startswith('http'): final_url = 'https://' + final_url
+                    ad.final_urls.append(str(final_url))
                 
                 # Headlines (Unique & Max 30 chars)
                 unique_headlines = list(dict.fromkeys(vals.get('headlines', [])))

@@ -216,6 +216,25 @@ class GoogleAdsAd(models.Model):
         if self.ad_group_id.state == 'draft':
             raise UserError(_("Vui lòng đồng bộ Nhóm quảng cáo cha trước."))
 
+        # --- AUTO-FIX Logic: Ensure Ad Type matches Campaign Type ---
+        channel_type = cam.channel_type
+        current_type_code = self.type
+        
+        # Mapping rules
+        if channel_type == 'DISCOVERY':
+            if current_type_code not in ['DEMAND_GEN_RESPONSIVE_AD', 'DISCOVERY_RESPONSIVE_AD']:
+                new_type = self.env['google.ads.ad.type'].search([('code', '=', 'DEMAND_GEN_RESPONSIVE_AD')], limit=1)
+                if new_type:
+                    self.type_id = new_type
+                    self.message_post(body=_("💡 Hệ thống tự chuyển đổi mẫu quảng cáo sang loại 'Tạo nhu cầu (Demand Gen)' để tương thích với chiến dịch."))
+        elif channel_type == 'SEARCH':
+            if current_type_code not in ['RESPONSIVE_SEARCH_AD', 'EXPANDED_TEXT_AD', 'CALL_AD']:
+                new_type = self.env['google.ads.ad.type'].search([('code', '=', 'RESPONSIVE_SEARCH_AD')], limit=1)
+                if new_type:
+                    self.type_id = new_type
+                    self.message_post(body=_("💡 Hệ thống tự chuyển đổi mẫu quảng cáo sang loại 'Tìm kiếm thích ứng (RSA)' để tương thích với chiến dịch."))
+        # --- End Auto-Fix ---
+
         account = self.ad_group_id.campaign_id.account_id
         if account.is_demo:
             self.google_ad_id = f"DEMO_AD_SYNC_{self.id}"
