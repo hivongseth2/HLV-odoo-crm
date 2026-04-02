@@ -199,12 +199,29 @@ class GoogleAdsMutateService:
             # 1. Tạo Asset Business Name
             asset_resource = GoogleAdsMutateService._create_business_name_asset(client, customer_id, vals.get('business_name'))
             
-            # 2. Tạo Asset Logo nếu có
-            logo_resource = None
-            if vals.get('logo_image'):
-                logo_resource = GoogleAdsMutateService._create_image_asset(client, customer_id, vals.get('logo_image'), "Logo")
+            # 3. Tạo Marketing Image (Landscape 1.91:1)
+            marketing_resource = None
+            if vals.get('marketing_image'):
+                marketing_resource = GoogleAdsMutateService._create_image_asset(client, customer_id, vals.get('marketing_image'), "Marketing Landscape", target_ratio=1.91)
+            elif vals.get('logo_image'):
+                # Fallback: Dùng logo đệm thành landscape nếu không có ảnh marketing
+                marketing_resource = GoogleAdsMutateService._create_image_asset(client, customer_id, vals.get('logo_image'), "Marketing Landscape (Auto)", target_ratio=1.91)
 
-            # -- Operation 1: Create Campaign (ID giả định -1) --
+            # 4. Tạo Square Marketing Image (1:1)
+            square_mkt_resource = logo_resource # Thường dùng chung logo làm ảnh vuông
+
+            # 5. Tạo Text Assets (Headlines & Descriptions)
+            # Google yêu cầu tối thiểu 3 Headline, 1 Long Headline, 2 Description
+            h1 = GoogleAdsMutateService._create_text_asset(client, customer_id, vals.get('pmax_headline_1') or vals.get('name')[:30])
+            h2 = GoogleAdsMutateService._create_text_asset(client, customer_id, vals.get('pmax_headline_2') or f"Khám phá {vals.get('name')}"[:30])
+            h3 = GoogleAdsMutateService._create_text_asset(client, customer_id, vals.get('pmax_headline_3') or "Mua ngay hôm nay"[:30])
+            
+            lh1 = GoogleAdsMutateService._create_text_asset(client, customer_id, vals.get('pmax_long_headline') or f"{vals.get('name')} - Giải pháp hàng đầu cho mọi nhu cầu của bạn."[:90])
+            
+            d1 = GoogleAdsMutateService._create_text_asset(client, customer_id, vals.get('pmax_description_1') or f"Trải nghiệm dịch vụ tuyệt vời với {vals.get('name')}. Cam kết chất lượng và uy tín."[:90])
+            d2 = GoogleAdsMutateService._create_text_asset(client, customer_id, vals.get('pmax_description_2') or "Liên hệ ngay để nhận ưu đãi đặc biệt. Chúng tôi luôn sẵn sàng hỗ trợ bạn."[:90])
+
+            # -- Operation 1: Create Campaign (temp ID = -1) --
             op1 = client.get_type("MutateOperation")
             c = op1.campaign_operation.create
             temp_campaign_resource = f"customers/{customer_id}/campaigns/-1"
@@ -217,38 +234,65 @@ class GoogleAdsMutateService:
             c.contains_eu_political_advertising = client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
             mutate_operations.append(op1)
 
-            # -- Operation 2: Create Asset Group (Nhóm thành phần) --
-            # PMax BẮT BUỘC phải có ít nhất 1 Asset Group chứa nội dung quảng cáo
-            op2 = client.get_type("MutateOperation")
-            ag = op2.asset_group_operation.create
-            temp_asset_group_resource = f"customers/{customer_id}/assetGroups/-1"
+            # -- Operation 2: Link Brand Assets to Campaign (Brand Guidelines) --
+            # Business Name
+            op_c_bn = client.get_type("MutateOperation")
+            ca_bn = op_c_bn.campaign_asset_operation.create
+            ca_bn.campaign = temp_campaign_resource
+            ca_bn.asset = asset_resource
+            ca_bn.field_type = client.enums.AssetFieldTypeEnum.BUSINESS_NAME
+            mutate_operations.append(op_c_bn)
+
+            # Logo
+            if logo_resource:
+                op_c_logo = client.get_type("MutateOperation")
+                ca_logo = op_c_logo.campaign_asset_operation.create
+                ca_logo.campaign = temp_campaign_resource
+                ca_logo.asset = logo_resource
+                ca_logo.field_type = client.enums.AssetFieldTypeEnum.LOGO
+                mutate_operations.append(op_c_logo)
+
+            # -- Operation 3: Create Asset Group (temp ID = -2) --
+            op_ag = client.get_type("MutateOperation")
+            ag = op_ag.asset_group_operation.create
+            temp_asset_group_resource = f"customers/{customer_id}/assetGroups/-2"
             ag.resource_name = temp_asset_group_resource
             ag.name = f"Nhóm thành phần 1 - {vals.get('name')}"
             ag.campaign = temp_campaign_resource
             ag.status = client.enums.AssetGroupStatusEnum.PAUSED
-            if vals.get('final_url'):
-                ag.final_urls.append(vals.get('final_url'))
+            
+            final_url = vals.get('final_url')
+            if final_url:
+                if not final_url.startswith('http://') and not final_url.startswith('https://'):
+                    final_url = 'https://' + final_url
+                ag.final_urls.append(final_url)
             else:
-                ag.final_urls.append("https://example.com")  # Placeholder - bắt buộc phải có
-            mutate_operations.append(op2)
+                ag.final_urls.append("https://example.com")
+            mutate_operations.append(op_ag)
 
-            # -- LINK ASSETS TO ASSET GROUP (chuẩn PMax - không cần brand_guidelines) --
-            # Business Name → Asset Group
-            op3 = client.get_type("MutateOperation")
-            aga3 = op3.asset_group_asset_operation.create
-            aga3.asset_group = temp_asset_group_resource
-            aga3.asset = asset_resource
-            aga3.field_type = client.enums.AssetFieldTypeEnum.BUSINESS_NAME
-            mutate_operations.append(op3)
+            # -- Operation 4: Link ALL Assets to Asset Group (Mandatory for PMax) --
+            def add_ag_asset(asset_res, field_type):
+                if not asset_res: return
+                op = client.get_type("MutateOperation")
+                aga = op.asset_group_asset_operation.create
+                aga.asset_group = temp_asset_group_resource
+                aga.asset = asset_res
+                aga.field_type = field_type
+                mutate_operations.append(op)
 
-            # Logo → Asset Group (nếu có)
-            if logo_resource:
-                op4 = client.get_type("MutateOperation")
-                aga4 = op4.asset_group_asset_operation.create
-                aga4.asset_group = temp_asset_group_resource
-                aga4.asset = logo_resource
-                aga4.field_type = client.enums.AssetFieldTypeEnum.LOGO
-                mutate_operations.append(op4)
+            # Link Images
+            add_ag_asset(asset_resource, client.enums.AssetFieldTypeEnum.BUSINESS_NAME)
+            add_ag_asset(logo_resource, client.enums.AssetFieldTypeEnum.LOGO)
+            add_ag_asset(marketing_resource, client.enums.AssetFieldTypeEnum.MARKETING_IMAGE)
+            add_ag_asset(square_mkt_resource, client.enums.AssetFieldTypeEnum.SQUARE_MARKETING_IMAGE)
+            
+            # Link Text Assets
+            add_ag_asset(h1, client.enums.AssetFieldTypeEnum.HEADLINE)
+            add_ag_asset(h2, client.enums.AssetFieldTypeEnum.HEADLINE)
+            add_ag_asset(h3, client.enums.AssetFieldTypeEnum.HEADLINE)
+            add_ag_asset(lh1, client.enums.AssetFieldTypeEnum.LONG_HEADLINE)
+            add_ag_asset(d1, client.enums.AssetFieldTypeEnum.DESCRIPTION)
+            add_ag_asset(d2, client.enums.AssetFieldTypeEnum.DESCRIPTION)
 
             google_ads_service = client.get_service("GoogleAdsService")
             response = google_ads_service.mutate(
@@ -263,21 +307,84 @@ class GoogleAdsMutateService:
             return False, str(e)
 
     @staticmethod
-    def _create_business_name_asset(client, customer_id, business_name):
-        """Tạo asset loại BUSINESS_NAME"""
+    def _create_text_asset(client, customer_id, text):
+        """Tạo asset loại TEXT (cho Headline/Description)"""
+        if not text: return None
         asset_service = client.get_service("AssetService")
         operation = client.get_type("AssetOperation")
         asset = operation.create
         asset.type_ = client.enums.AssetTypeEnum.TEXT
-        asset.text_asset.text = business_name
+        asset.text_asset.text = text
         response = asset_service.mutate_assets(customer_id=customer_id, operations=[operation])
         return response.results[0].resource_name
 
     @staticmethod
-    def _create_image_asset(client, customer_id, image_base64, name):
-        """Tạo Image Asset từ base64 Odoo"""
+    def _create_business_name_asset(client, customer_id, business_name):
+        """Tạo asset loại BUSINESS_NAME"""
+        if not business_name: return None
+        asset_service = client.get_service("AssetService")
+        operation = client.get_type("AssetOperation")
+        asset = operation.create
+        asset.type_ = client.enums.AssetTypeEnum.BUSINESS_NAME
+        asset.business_name_asset.business_name = business_name
+        response = asset_service.mutate_assets(customer_id=customer_id, operations=[operation])
+        return response.results[0].resource_name
+
+    @staticmethod
+    def _create_image_asset(client, customer_id, image_base64, name, target_ratio=1.0):
+        """
+        Tạo Image Asset từ base64 Odoo 
+        Tự động đệm (Padding) để đạt tỷ lệ mong muốn:
+        - target_ratio = 1.0 -> Ảnh vuông (1:1)
+        - target_ratio = 1.91 -> Ảnh ngang (1.91:1)
+        """
         import base64
-        image_data = base64.b64decode(image_base64)
+        image_data_raw = base64.b64decode(image_base64)
+        
+        # --- Tự động bù tỷ lệ (Padding) ---
+        try:
+            from PIL import Image
+            from io import BytesIO
+            img = Image.open(BytesIO(image_data_raw))
+            width, height = img.size
+            current_ratio = width / height
+            
+            # Nếu tỷ lệ sai lệch đáng kể (> 5%)
+            if abs(current_ratio - target_ratio) > 0.05:
+                # Tính toán kích thước mới
+                if current_ratio < target_ratio:
+                    # Ảnh quá cao -> Bù chiều rộng
+                    new_width = int(height * target_ratio)
+                    new_height = height
+                else:
+                    # Ảnh quá rộng -> Bù chiều cao
+                    new_width = width
+                    new_height = int(width / target_ratio)
+                
+                # Tạo nền
+                if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                    new_img = Image.new('RGBA', (new_width, new_height), (255, 255, 255, 0))
+                else:
+                    new_img = Image.new('RGB', (new_width, new_height), (255, 255, 255))
+                
+                # Dán ảnh vào giữa
+                paste_x = (new_width - width) // 2
+                paste_y = (new_height - height) // 2
+                new_img.paste(img, (paste_x, paste_y))
+                
+                buffer = BytesIO()
+                img_format = img.format if img.format else 'PNG'
+                if new_img.mode == 'RGBA' and img_format == 'JPEG':
+                    img_format = 'PNG'
+                new_img.save(buffer, format=img_format)
+                image_data = buffer.getvalue()
+                _logger.info("Đã tự động đệm ảnh '%s' về tỷ lệ %.2f (%dx%d)", name, target_ratio, new_width, new_height)
+            else:
+                image_data = image_data_raw
+        except Exception as e:
+            _logger.warning("Không thể tự động chỉnh sửa ảnh '%s': %s", name, str(e))
+            image_data = image_data_raw
+        # ----------------------------------------
         
         asset_service = client.get_service("AssetService")
         operation = client.get_type("AssetOperation")
