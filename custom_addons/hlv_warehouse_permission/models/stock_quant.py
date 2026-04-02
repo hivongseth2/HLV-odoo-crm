@@ -35,8 +35,21 @@ class StockQuant(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         """Chặn tạo quant với inventory quantity nếu không có quyền."""
-        inventory_fields = {'inventory_quantity', 'inventory_quantity_auto_apply', 'inventory_quantity_set'}
-        records = super().create(vals_list)
-        if any(inventory_fields & set(v) for v in vals_list) and not self.env.su:
-            records._check_inventory_permission()
-        return records
+        if not self.env.su:
+            inventory_fields = {'inventory_quantity', 'inventory_quantity_auto_apply', 'inventory_quantity_set'}
+            Permission = self.env['warehouse.user.permission']
+            Location = self.env['stock.location']
+            for vals in vals_list:
+                if inventory_fields & set(vals):
+                    location_id = vals.get('location_id')
+                    if location_id:
+                        location = Location.browse(location_id)
+                        warehouse = location.warehouse_id
+                        if warehouse and not Permission.check_permission(
+                                self.env.user, warehouse, 'can_update_inventory'):
+                            raise UserError(_(
+                                'Bạn không có quyền cập nhật tồn kho tại kho "%(warehouse)s".\n'
+                                'Vui lòng liên hệ quản trị viên.',
+                                warehouse=warehouse.name,
+                            ))
+        return super().create(vals_list)
