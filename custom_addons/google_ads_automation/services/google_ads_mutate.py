@@ -199,6 +199,11 @@ class GoogleAdsMutateService:
             # 1. Tạo Asset Business Name
             asset_resource = GoogleAdsMutateService._create_business_name_asset(client, customer_id, vals.get('business_name'))
             
+            # 2. Tạo Asset Logo (Square 1:1)
+            logo_resource = None
+            if vals.get('logo_image'):
+                logo_resource = GoogleAdsMutateService._create_image_asset(client, customer_id, vals.get('logo_image'), "Logo", target_ratio=1.0)
+
             # 3. Tạo Marketing Image (Landscape 1.91:1)
             marketing_resource = None
             if vals.get('marketing_image'):
