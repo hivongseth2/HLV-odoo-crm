@@ -127,7 +127,8 @@ class PickingExportSalesReportWizard(models.TransientModel):
             {'key': 'tk_tien_no', 'name': 'TK Tiền/Chi phí/Nợ (*)', 'width': 22},
             {'key': 'tk_doanh_thu_co', 'name': 'TK Doanh thu/Có (*)', 'width': 20},
             {'key': 'dvt', 'name': 'ĐVT', 'width': 12},
-            {'key': 'so_luong', 'name': 'Số lượng', 'width': 12},
+            {'key': 'sl_yeu_cau', 'name': 'SL yêu cầu', 'width': 12},
+            {'key': 'sl_xuat', 'name': 'SL xuất', 'width': 12},
             {'key': 'don_gia', 'name': 'Đơn giá', 'width': 15},
             {'key': 'thanh_tien', 'name': 'Thành tiền', 'width': 15},
             {'key': 'bao_gom_thue', 'name': 'Bao gồm thuế', 'width': 15},
@@ -150,6 +151,7 @@ class PickingExportSalesReportWizard(models.TransientModel):
             {'key': 'so_phieu_tra_lai', 'name': 'Số phiếu trả lại', 'width': 25},
             {'key': 'ngay_tra_lai', 'name': 'Ngày trả lại', 'width': 25},
             {'key': 'sl_tra_lai', 'name': 'SL trả lại', 'width': 12},
+            {'key': 'chi_tiet_tra_lai', 'name': 'Chi tiết trả lại (Combo)', 'width': 45},
             {'key': 'sl_thuc_ban', 'name': 'SL thực bán', 'width': 12},
         ]
 
@@ -282,7 +284,10 @@ class PickingExportSalesReportWizard(models.TransientModel):
                             'sol': sol,
                             'move': mv,
                             'prod': sol.product_id,
+                            'all_moves': [mv],
                         }
+                    else:
+                        aggregated_sols[sol.id]['all_moves'].append(mv)
                 else:
                     processed_moves_without_sol.append(mv)
                     
@@ -290,13 +295,14 @@ class PickingExportSalesReportWizard(models.TransientModel):
                 sol = data['sol']
                 mv = data['move']
                 prod = data['prod']
+                all_moves = data.get('all_moves', [mv])
                 
                 row = self._build_row_data(
                     picking, so, prod, None, mv,
                     scheduled_date_str, picking_name, partner_code, partner_name,
                     partner_address, partner_vat, sale_name, sale_user_code,
                     dien_giai, ly_do_xuat, warehouse_code,
-                    sale_line=sol
+                    sale_line=sol, all_sol_moves=all_moves
                 )
                 rows.append(row)
                 
@@ -314,62 +320,138 @@ class PickingExportSalesReportWizard(models.TransientModel):
 
         return rows
 
-    def _compute_return_fields(self, picking, prod, move, qty):
-        """Tính toán các trường trả lại cho một dòng sản phẩm."""
-        # Ưu tiên tìm qua move.returned_move_ids trước
-        return_info = self._get_return_info_for_move(move)
-        # Nếu không tìm được qua move, tìm qua picking.return_ids
-        if not return_info['sl_tra_lai'] and picking:
-            return_info = self._get_return_info_for_product(picking, prod)
-        return_info['sl_thuc_ban'] = qty - return_info['sl_tra_lai']
-        return return_info
+    def _get_return_info(self, picking, prod, move, qty, all_sol_moves=None):
+        """Tính thông tin trả lại. Hỗ trợ BOM kit (combo) khi có nhiều component moves."""
+        is_kit = False
+        component_moves = []
+        
+        # Xác định có phải BOM kit hay không
+        if all_sol_moves and len(all_sol_moves) > 1:
+            # Nhiều moves cho 1 SOL = kit/combo
+            is_kit = True
+            component_moves = all_sol_moves
+        elif all_sol_moves and len(all_sol_moves) == 1:
+            mv = all_sol_moves[0]
+            sol = getattr(mv, 'sale_line_id', False)
+            if sol and sol.product_id and sol.product_id.id != mv.product_id.id:
+                is_kit = True
+                component_moves = all_sol_moves
+        
+        if is_kit and component_moves:
+            return self._get_return_info_kit(picking, component_moves, qty)
+        else:
+            return self._get_return_info_single(picking, prod, move, qty)
 
-    def _get_return_info_for_move(self, move):
-        """Tìm thông tin trả lại cho một stock.move dựa trên returned_move_ids."""
-        if not move:
-            return {'so_phieu_tra_lai': '', 'ngay_tra_lai': '', 'sl_tra_lai': 0.0}
-        returned_moves = move.returned_move_ids.filtered(lambda m: m.state == 'done')
-        if not returned_moves:
-            return {'so_phieu_tra_lai': '', 'ngay_tra_lai': '', 'sl_tra_lai': 0.0}
-        total_returned_qty = sum(m.quantity for m in returned_moves)
-        picking_names = list(set(m.picking_id.name for m in returned_moves if m.picking_id))
-        dates = [m.picking_id.date_done for m in returned_moves if m.picking_id and m.picking_id.date_done]
-        latest_date = max(dates) if dates else False
-        return {
-            'so_phieu_tra_lai': ', '.join(picking_names),
-            'ngay_tra_lai': _to_date_str(latest_date) if latest_date else '',
-            'sl_tra_lai': total_returned_qty,
-        }
+    def _get_return_info_single(self, picking, prod, move, qty):
+        """Thông tin trả lại cho sản phẩm đơn (không phải kit)."""
+        result = {'so_phieu_tra_lai': '', 'ngay_tra_lai': '', 'sl_tra_lai': 0.0, 'chi_tiet_tra_lai': '', 'sl_thuc_ban': qty}
+        
+        # Cách 1: Qua move.returned_move_ids
+        if move:
+            returned_moves = move.returned_move_ids.filtered(lambda m: m.state == 'done')
+            if returned_moves:
+                total_ret = sum(m.quantity for m in returned_moves)
+                picking_names = list(set(m.picking_id.name for m in returned_moves if m.picking_id))
+                dates = [m.picking_id.date_done for m in returned_moves if m.picking_id and m.picking_id.date_done]
+                result['so_phieu_tra_lai'] = ', '.join(picking_names)
+                result['ngay_tra_lai'] = _to_date_str(max(dates)) if dates else ''
+                result['sl_tra_lai'] = total_ret
+                result['sl_thuc_ban'] = qty - total_ret
+                return result
+        
+        # Cách 2: Qua picking.return_ids
+        if picking and hasattr(picking, 'return_ids'):
+            return_pickings = picking.return_ids.filtered(lambda p: p.state == 'done')
+            if return_pickings:
+                total_ret = 0.0
+                picking_names = []
+                dates = []
+                for rp in return_pickings:
+                    for rm in rp.move_ids_without_package:
+                        if rm.product_id == prod and rm.state == 'done':
+                            total_ret += rm.quantity
+                    if rp.name not in picking_names:
+                        picking_names.append(rp.name)
+                    if rp.date_done:
+                        dates.append(rp.date_done)
+                if total_ret > 0:
+                    result['so_phieu_tra_lai'] = ', '.join(picking_names)
+                    result['ngay_tra_lai'] = _to_date_str(max(dates)) if dates else ''
+                    result['sl_tra_lai'] = total_ret
+                    result['sl_thuc_ban'] = qty - total_ret
+        
+        return result
 
-    def _get_return_info_for_product(self, picking, prod):
-        """Tìm thông tin trả lại cho sản phẩm từ return pickings của phiếu xuất."""
-        return_pickings = picking.return_ids.filtered(lambda p: p.state == 'done')
-        if not return_pickings:
-            return {'so_phieu_tra_lai': '', 'ngay_tra_lai': '', 'sl_tra_lai': 0.0}
-        total_returned_qty = 0.0
-        picking_names = []
-        dates = []
-        for rp in return_pickings:
-            for rm in rp.move_ids_without_package:
-                if rm.product_id == prod and rm.state == 'done':
-                    total_returned_qty += rm.quantity
-            if rp.name not in picking_names:
-                picking_names.append(rp.name)
-            if rp.date_done:
-                dates.append(rp.date_done)
-        if total_returned_qty == 0.0:
-            return {'so_phieu_tra_lai': '', 'ngay_tra_lai': '', 'sl_tra_lai': 0.0}
-        latest_date = max(dates) if dates else False
-        return {
-            'so_phieu_tra_lai': ', '.join(picking_names),
-            'ngay_tra_lai': _to_date_str(latest_date) if latest_date else '',
-            'sl_tra_lai': total_returned_qty,
-        }
+    def _get_return_info_kit(self, picking, component_moves, kit_qty):
+        """Thông tin trả lại cho BOM kit/combo - kiểm tra từng component."""
+        result = {'so_phieu_tra_lai': '', 'ngay_tra_lai': '', 'sl_tra_lai': 0.0, 'chi_tiet_tra_lai': '', 'sl_thuc_ban': kit_qty}
+        
+        all_picking_names = set()
+        all_dates = []
+        component_details = []  # [(tên SP, SL trả lại)]
+        has_any_return = False
+        
+        for mv in component_moves:
+            returned_moves = mv.returned_move_ids.filtered(lambda m: m.state == 'done')
+            if returned_moves:
+                has_any_return = True
+                comp_ret_qty = sum(m.quantity for m in returned_moves)
+                comp_name = mv.product_id.default_code or mv.product_id.name or ''
+                component_details.append(f"{comp_name}: {comp_ret_qty:g}")
+                for rm in returned_moves:
+                    if rm.picking_id:
+                        all_picking_names.add(rm.picking_id.name)
+                        if rm.picking_id.date_done:
+                            all_dates.append(rm.picking_id.date_done)
+        
+        # Fallback: kiểm tra qua picking.return_ids nếu không tìm được qua move
+        if not has_any_return and picking and hasattr(picking, 'return_ids'):
+            return_pickings = picking.return_ids.filtered(lambda p: p.state == 'done')
+            if return_pickings:
+                component_product_ids = {mv.product_id.id for mv in component_moves}
+                for rp in return_pickings:
+                    for rm in rp.move_ids_without_package:
+                        if rm.product_id.id in component_product_ids and rm.state == 'done':
+                            has_any_return = True
+                            comp_ret_qty = rm.quantity
+                            comp_name = rm.product_id.default_code or rm.product_id.name or ''
+                            component_details.append(f"{comp_name}: {comp_ret_qty:g}")
+                    if rp.name:
+                        all_picking_names.add(rp.name)
+                    if rp.date_done:
+                        all_dates.append(rp.date_done)
+        
+        if has_any_return:
+            result['so_phieu_tra_lai'] = ', '.join(sorted(all_picking_names))
+            result['ngay_tra_lai'] = _to_date_str(max(all_dates)) if all_dates else ''
+            result['chi_tiet_tra_lai'] = ' | '.join(component_details)
+            
+            # Tính SL kit trả lại: kiểm tra tỷ lệ trả lại của từng component
+            # Nếu tất cả component đều trả đủ → kit bị trả
+            # Nếu chỉ trả 1 phần → ghi nhận "trả 1 phần" qua chi tiết
+            kit_return_ratios = []
+            for mv in component_moves:
+                comp_qty_out = mv.quantity if mv.state == 'done' else mv.product_uom_qty
+                returned_moves = mv.returned_move_ids.filtered(lambda m: m.state == 'done')
+                comp_qty_ret = sum(m.quantity for m in returned_moves) if returned_moves else 0.0
+                if comp_qty_out > 0:
+                    kit_return_ratios.append(comp_qty_ret / comp_qty_out)
+                else:
+                    kit_return_ratios.append(0.0)
+            
+            # SL kit trả = min ratio * kit_qty (số kit hoàn chỉnh bị trả)
+            if kit_return_ratios:
+                min_ratio = min(kit_return_ratios)
+                full_kits_returned = min_ratio * kit_qty
+                result['sl_tra_lai'] = round(full_kits_returned, 2)
+                result['sl_thuc_ban'] = round(kit_qty - full_kits_returned, 2)
+        
+        return result
 
     def _build_row_data(self, picking, so, prod, ml, move,
                         scheduled_date_str, picking_name, partner_code, partner_name,
                         partner_address, partner_vat, sale_name, sale_user_code,
-                        dien_giai, ly_do_xuat, warehouse_code, pos_line=None, sale_line=None, forced_qty=None):
+                        dien_giai, ly_do_xuat, warehouse_code, pos_line=None, sale_line=None, forced_qty=None, all_sol_moves=None):
         
         product_code = prod.default_code or (prod.barcode if hasattr(prod, 'barcode') else "") or ""
         product_name = prod.display_name or prod.name or ""
@@ -388,6 +470,7 @@ class PickingExportSalesReportWizard(models.TransientModel):
         
         if pos_line:
             uom = prod.uom_id
+            sl_yeu_cau = pos_line.qty or 0.0
             qty = pos_line.qty or 0.0
             thanh_tien = pos_line.price_subtotal or 0.0
             ty_le_ck = pos_line.discount or 0.0
@@ -406,7 +489,11 @@ class PickingExportSalesReportWizard(models.TransientModel):
             
         elif sol:
             uom = sol.product_uom or prod.uom_id
-            qty = sol.qty_delivered or sol.product_uom_qty or 0.0
+            sl_yeu_cau = sol.product_uom_qty or 0.0
+            if move:
+                qty = move.quantity if hasattr(move, 'quantity') else (move.product_uom_qty or 0.0)
+            else:
+                qty = sol.qty_delivered or sol.product_uom_qty or 0.0
             don_gia = sol.price_unit or 0.0
             ty_le_ck = sol.discount or 0.0
             tien_chiet_khau = (don_gia * qty * ty_le_ck) / 100
@@ -422,6 +509,7 @@ class PickingExportSalesReportWizard(models.TransientModel):
             price_total = thanh_tien + tien_thue_gtgt
             
         else:
+            sl_yeu_cau = 0.0
             if forced_qty is not None:
                 uom = ml.product_uom_id if ml else (move.product_uom if move else prod.uom_id)
                 qty = forced_qty
@@ -446,6 +534,8 @@ class PickingExportSalesReportWizard(models.TransientModel):
         uom_name = (uom and uom.name) or ""
         don_gia_von = prod.standard_price or 0.0
         tien_von = don_gia_von * qty
+        if not sl_yeu_cau:
+            sl_yeu_cau = qty
 
         return {
             'hinh_thuc_ban_hang': 'Bán hàng hóa trong nước',
@@ -477,7 +567,8 @@ class PickingExportSalesReportWizard(models.TransientModel):
             'tk_tien_no': '131',
             'tk_doanh_thu_co': '5111',
             'dvt': uom_name,
-            'so_luong': qty,
+            'sl_yeu_cau': sl_yeu_cau,
+            'sl_xuat': qty,
             'don_gia': don_gia,
             'thanh_tien': thanh_tien,
             'bao_gom_thue': f"{price_total:,.2f}",
@@ -497,7 +588,7 @@ class PickingExportSalesReportWizard(models.TransientModel):
             'don_gia_von': don_gia_von,
             'tien_von': tien_von,
             'misa_sync': getattr(picking, 'x_studio_misa_sav', False),
-            **self._compute_return_fields(picking, prod, move, qty),
+            **self._get_return_info(picking, prod, move, qty, all_sol_moves=all_sol_moves),
         }
 
     def _create_excel_workbook(self, data_rows):
@@ -547,7 +638,7 @@ class PickingExportSalesReportWizard(models.TransientModel):
                         cell.number_format = '#,##0'
                     elif col_def['key'] in ['ty_le_ck', 'ty_le_thue_gtgt', 'ty_le_thue_xk']:
                         cell.number_format = '0.00'
-                    elif col_def['key'] == 'so_luong':
+                    elif col_def['key'] in ['sl_yeu_cau', 'sl_xuat', 'sl_tra_lai', 'sl_thuc_ban']:
                         cell.number_format = '#,##0.00'
                 else:
                     cell.alignment = cell_alignment
