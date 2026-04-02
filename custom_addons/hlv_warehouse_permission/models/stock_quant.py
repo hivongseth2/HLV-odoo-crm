@@ -39,9 +39,11 @@ class StockQuant(models.Model):
                     blocked_warehouse = warehouse
                     break
             if blocked_warehouse:
-                # Strip inventory fields để write thành công (tránh popup lặp)
+                # Strip inventory fields — không ghi giá trị mới vào DB
                 vals = {k: v for k, v in vals.items() if k not in inventory_fields}
-                # Gửi notification toast để user biết
+                # Xóa cache ORM để web_read() sau đó lấy giá trị gốc từ DB
+                self.invalidate_recordset(fnames=list(matched))
+                # Gửi toast notification (không phải modal popup)
                 self.env['bus.bus']._sendone(
                     self.env.user.partner_id,
                     'simple_notification',
