@@ -404,6 +404,10 @@ class GoogleAdsCampaign(models.Model):
                 error_msg = _("Tài khoản Google Ads hiện chưa được phép tạo loại chiến dịch này trực tiếp (thường gặp ở tài khoản mới hoặc tài khoản ở chế độ Thông minh - Smart Mode).")
             elif 'MUTATE_NOT_ALLOWED' in result:
                 error_msg = _("Google Ads hiện tại không cho phép tạo loại chiến dịch này qua API cho tài khoản. Vui lòng kiểm tra lại quyền truy cập hoặc tạo trước trên Google Ads.")
+            elif 'ASPECT_RATIO_NOT_ALLOWED' in result:
+                error_msg = _("Hình ảnh bạn tải lên làm Logo không đúng tỷ lệ. Google Ads yêu cầu Logo phải có tỷ lệ vuông (1:1). Vui lòng cắt lại ảnh thành hình vuông trước khi tải lên.")
+            elif 'MISSING_PROTOCOL' in result:
+                error_msg = _("URL trang đích bị thiếu giao thức. Vui lòng thêm 'https://' hoặc 'http://' vào trước URL (ví dụ: https://aaaa.com).")
             elif 'REQUIRED_BUSINESS_NAME_ASSET_NOT_LINKED' in result or 'REQUIRED_LOGO_ASSET_NOT_LINKED' in result:
                 error_msg = _("Chiến dịch PMax yêu cầu Tên thương hiệu và Logo. Vui lòng điền đủ 'Tên thương hiệu' và tải 'Logo hình vuông' trong phần Cấu hình Google Ads.")
             elif "RESOURCE_NOT_FOUND" in result and "merchant_id" in result:

@@ -242,8 +242,11 @@ class GoogleAdsMutateService:
             ag.name = f"Nhóm thành phần 1 - {vals.get('name')}"
             ag.campaign = temp_campaign_resource
             ag.status = client.enums.AssetGroupStatusEnum.PAUSED
-            if vals.get('final_url'):
-                ag.final_urls.append(vals.get('final_url'))
+            final_url = vals.get('final_url')
+            if final_url:
+                if not final_url.startswith('http://') and not final_url.startswith('https://'):
+                    final_url = 'https://' + final_url
+                ag.final_urls.append(final_url)
             else:
                 ag.final_urls.append("https://example.com")
             mutate_operations.append(op4)
@@ -290,9 +293,41 @@ class GoogleAdsMutateService:
 
     @staticmethod
     def _create_image_asset(client, customer_id, image_base64, name):
-        """Tạo Image Asset từ base64 Odoo"""
+        """Tạo Image Asset từ base64 Odoo (tự động đệm thành ảnh vuông 1:1)"""
         import base64
-        image_data = base64.b64decode(image_base64)
+        image_data_raw = base64.b64decode(image_base64)
+        
+        # --- Tự động bù tỷ lệ vuông (Padding) ---
+        try:
+            from PIL import Image
+            from io import BytesIO
+            img = Image.open(BytesIO(image_data_raw))
+            width, height = img.size
+            if width != height:
+                max_dim = max(width, height)
+                # Dùng nền trong suốt nếu là ảnh RGBA, ngược lại nền trắng
+                if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                    new_img = Image.new('RGBA', (max_dim, max_dim), (255, 255, 255, 0))
+                else:
+                    new_img = Image.new('RGB', (max_dim, max_dim), (255, 255, 255))
+                
+                paste_x = (max_dim - width) // 2
+                paste_y = (max_dim - height) // 2
+                new_img.paste(img, (paste_x, paste_y))
+                
+                buffer = BytesIO()
+                img_format = img.format if img.format else 'PNG'
+                if new_img.mode == 'RGBA' and img_format == 'JPEG':
+                    img_format = 'PNG'
+                new_img.save(buffer, format=img_format)
+                image_data = buffer.getvalue()
+                _logger.info("Đã tự động đệm ảnh '%s' về chuẩn vuông (%dx%d)", name, max_dim, max_dim)
+            else:
+                image_data = image_data_raw
+        except Exception as e:
+            _logger.warning("Không thể tự động chỉnh sửa ảnh '%s': %s", name, str(e))
+            image_data = image_data_raw
+        # ----------------------------------------
         
         asset_service = client.get_service("AssetService")
         operation = client.get_type("AssetOperation")
