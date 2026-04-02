@@ -127,7 +127,8 @@ class PickingExportSalesReportWizard(models.TransientModel):
             {'key': 'tk_tien_no', 'name': 'TK Tiền/Chi phí/Nợ (*)', 'width': 22},
             {'key': 'tk_doanh_thu_co', 'name': 'TK Doanh thu/Có (*)', 'width': 20},
             {'key': 'dvt', 'name': 'ĐVT', 'width': 12},
-            {'key': 'so_luong', 'name': 'Số lượng', 'width': 12},
+            {'key': 'sl_yeu_cau', 'name': 'SL yêu cầu', 'width': 12},
+            {'key': 'sl_xuat', 'name': 'SL xuất', 'width': 12},
             {'key': 'don_gia', 'name': 'Đơn giá', 'width': 15},
             {'key': 'thanh_tien', 'name': 'Thành tiền', 'width': 15},
             {'key': 'bao_gom_thue', 'name': 'Bao gồm thuế', 'width': 15},
@@ -469,6 +470,7 @@ class PickingExportSalesReportWizard(models.TransientModel):
         
         if pos_line:
             uom = prod.uom_id
+            sl_yeu_cau = pos_line.qty or 0.0
             qty = pos_line.qty or 0.0
             thanh_tien = pos_line.price_subtotal or 0.0
             ty_le_ck = pos_line.discount or 0.0
@@ -487,7 +489,11 @@ class PickingExportSalesReportWizard(models.TransientModel):
             
         elif sol:
             uom = sol.product_uom or prod.uom_id
-            qty = sol.qty_delivered or sol.product_uom_qty or 0.0
+            sl_yeu_cau = sol.product_uom_qty or 0.0
+            if move:
+                qty = move.quantity if hasattr(move, 'quantity') else (move.product_uom_qty or 0.0)
+            else:
+                qty = sol.qty_delivered or sol.product_uom_qty or 0.0
             don_gia = sol.price_unit or 0.0
             ty_le_ck = sol.discount or 0.0
             tien_chiet_khau = (don_gia * qty * ty_le_ck) / 100
@@ -503,6 +509,7 @@ class PickingExportSalesReportWizard(models.TransientModel):
             price_total = thanh_tien + tien_thue_gtgt
             
         else:
+            sl_yeu_cau = 0.0
             if forced_qty is not None:
                 uom = ml.product_uom_id if ml else (move.product_uom if move else prod.uom_id)
                 qty = forced_qty
@@ -527,6 +534,8 @@ class PickingExportSalesReportWizard(models.TransientModel):
         uom_name = (uom and uom.name) or ""
         don_gia_von = prod.standard_price or 0.0
         tien_von = don_gia_von * qty
+        if not sl_yeu_cau:
+            sl_yeu_cau = qty
 
         return {
             'hinh_thuc_ban_hang': 'Bán hàng hóa trong nước',
@@ -558,7 +567,8 @@ class PickingExportSalesReportWizard(models.TransientModel):
             'tk_tien_no': '131',
             'tk_doanh_thu_co': '5111',
             'dvt': uom_name,
-            'so_luong': qty,
+            'sl_yeu_cau': sl_yeu_cau,
+            'sl_xuat': qty,
             'don_gia': don_gia,
             'thanh_tien': thanh_tien,
             'bao_gom_thue': f"{price_total:,.2f}",
@@ -628,7 +638,7 @@ class PickingExportSalesReportWizard(models.TransientModel):
                         cell.number_format = '#,##0'
                     elif col_def['key'] in ['ty_le_ck', 'ty_le_thue_gtgt', 'ty_le_thue_xk']:
                         cell.number_format = '0.00'
-                    elif col_def['key'] in ['so_luong', 'sl_tra_lai', 'sl_thuc_ban']:
+                    elif col_def['key'] in ['sl_yeu_cau', 'sl_xuat', 'sl_tra_lai', 'sl_thuc_ban']:
                         cell.number_format = '#,##0.00'
                 else:
                     cell.alignment = cell_alignment
