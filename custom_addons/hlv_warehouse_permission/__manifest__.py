@@ -17,10 +17,12 @@
         'security/security.xml',
         'security/ir.model.access.csv',
         'views/warehouse_permission_views.xml',
+        'views/res_config_settings_views.xml',
     ],
     'assets': {
         'web.assets_backend': [
             'hlv_warehouse_permission/static/src/js/hide_inventory_button.js',
+            'hlv_warehouse_permission/static/src/css/hide_inventory.css',
         ],
     },
     'installable': True,
