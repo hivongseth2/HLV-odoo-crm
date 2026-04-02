@@ -1,5 +1,4 @@
 from odoo import models, api, _
-from odoo.exceptions import UserError
 
 
 class StockQuant(models.Model):
@@ -58,7 +57,7 @@ class StockQuant(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
-        """Chặn tạo quant với inventory quantity nếu không có quyền."""
+        """Strip inventory fields nếu không có quyền khi tạo quant."""
         if not self.env.su:
             inventory_fields = {'inventory_quantity', 'inventory_quantity_auto_apply', 'inventory_quantity_set'}
             Permission = self.env['warehouse.user.permission']
@@ -71,9 +70,7 @@ class StockQuant(models.Model):
                         warehouse = location.warehouse_id
                         if warehouse and not Permission.check_permission(
                                 self.env.user, warehouse, 'can_update_inventory'):
-                            raise UserError(_(
-                                'Bạn không có quyền cập nhật tồn kho tại kho "%(warehouse)s".\n'
-                                'Vui lòng liên hệ quản trị viên.',
-                                warehouse=warehouse.name,
-                            ))
+                            for f in inventory_fields:
+                                vals.pop(f, None)
+                            self._send_permission_warning(warehouse)
         return super().create(vals_list)
