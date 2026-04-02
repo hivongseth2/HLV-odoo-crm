@@ -218,19 +218,22 @@ class GoogleAdsMutateService:
             mutate_operations.append(op1)
 
             # -- Operation 2: Create Asset Group (Nhóm thành phần) --
-            # PMax BẮT BUỘC phải có ít nhất 1 Asset Group
+            # PMax BẮT BUỘC phải có ít nhất 1 Asset Group chứa nội dung quảng cáo
             op2 = client.get_type("MutateOperation")
             ag = op2.asset_group_operation.create
             temp_asset_group_resource = f"customers/{customer_id}/assetGroups/-1"
             ag.resource_name = temp_asset_group_resource
             ag.name = f"Nhóm thành phần 1 - {vals.get('name')}"
             ag.campaign = temp_campaign_resource
-            ag.status = client.enums.AssetGroupStatusEnum.ENABLED
+            ag.status = client.enums.AssetGroupStatusEnum.PAUSED
             if vals.get('final_url'):
                 ag.final_urls.append(vals.get('final_url'))
+            else:
+                ag.final_urls.append("https://example.com")  # Placeholder - bắt buộc phải có
             mutate_operations.append(op2)
 
-            # -- Operation 3: Link Business Name to Asset Group --
+            # -- LINK ASSETS TO ASSET GROUP (chuẩn PMax - không cần brand_guidelines) --
+            # Business Name → Asset Group
             op3 = client.get_type("MutateOperation")
             aga3 = op3.asset_group_asset_operation.create
             aga3.asset_group = temp_asset_group_resource
@@ -238,7 +241,7 @@ class GoogleAdsMutateService:
             aga3.field_type = client.enums.AssetFieldTypeEnum.BUSINESS_NAME
             mutate_operations.append(op3)
 
-            # -- Operation 4: Link Logo to Asset Group (nếu có) --
+            # Logo → Asset Group (nếu có)
             if logo_resource:
                 op4 = client.get_type("MutateOperation")
                 aga4 = op4.asset_group_asset_operation.create
@@ -253,7 +256,6 @@ class GoogleAdsMutateService:
                 mutate_operations=mutate_operations
             )
             
-            # Trả về resource name của Campaign (kết quả đầu tiên)
             return True, response.mutate_operation_responses[0].campaign_result.resource_name
 
         except Exception as e:
