@@ -192,45 +192,11 @@ class GoogleAdsMutateService:
 
     @staticmethod
     def _create_pmax_campaign_atomic(client, customer_id, budget_resource, vals):
-        """Tạo PMax cùng lúc với Asset Group để thỏa mãn các ràng buộc REQUIRED"""
+        """Tạo PMax 2 bước để thỏa mãn Brand Guidelines: 1. Tạo campaign thực -> 2. Link assets vào nhãn ID thực"""
         try:
-            mutate_operations = []
-            
-            # 1. Tạo Asset Business Name
-            asset_resource = GoogleAdsMutateService._create_business_name_asset(client, customer_id, vals.get('business_name'))
-            
-            # 2. Tạo Asset Logo (Square 1:1)
-            logo_resource = None
-            if vals.get('logo_image'):
-                logo_resource = GoogleAdsMutateService._create_image_asset(client, customer_id, vals.get('logo_image'), "Logo", target_ratio=1.0)
-
-            # 3. Tạo Marketing Image (Landscape 1.91:1)
-            marketing_resource = None
-            if vals.get('marketing_image'):
-                marketing_resource = GoogleAdsMutateService._create_image_asset(client, customer_id, vals.get('marketing_image'), "Marketing Landscape", target_ratio=1.91)
-            elif vals.get('logo_image'):
-                # Fallback: Dùng logo đệm thành landscape nếu không có ảnh marketing
-                marketing_resource = GoogleAdsMutateService._create_image_asset(client, customer_id, vals.get('logo_image'), "Marketing Landscape (Auto)", target_ratio=1.91)
-
-            # 4. Tạo Square Marketing Image (1:1)
-            square_mkt_resource = logo_resource # Thường dùng chung logo làm ảnh vuông
-
-            # 5. Tạo Text Assets (Headlines & Descriptions)
-            # Google yêu cầu tối thiểu 3 Headline, 1 Long Headline, 2 Description
-            h1 = GoogleAdsMutateService._create_text_asset(client, customer_id, vals.get('pmax_headline_1') or vals.get('name')[:30])
-            h2 = GoogleAdsMutateService._create_text_asset(client, customer_id, vals.get('pmax_headline_2') or f"Khám phá {vals.get('name')}"[:30])
-            h3 = GoogleAdsMutateService._create_text_asset(client, customer_id, vals.get('pmax_headline_3') or "Mua ngay hôm nay"[:30])
-            
-            lh1 = GoogleAdsMutateService._create_text_asset(client, customer_id, vals.get('pmax_long_headline') or f"{vals.get('name')} - Giải pháp hàng đầu cho mọi nhu cầu của bạn."[:90])
-            
-            d1 = GoogleAdsMutateService._create_text_asset(client, customer_id, vals.get('pmax_description_1') or f"Trải nghiệm dịch vụ tuyệt vời với {vals.get('name')}. Cam kết chất lượng và uy tín."[:90])
-            d2 = GoogleAdsMutateService._create_text_asset(client, customer_id, vals.get('pmax_description_2') or "Liên hệ ngay để nhận ưu đãi đặc biệt. Chúng tôi luôn sẵn sàng hỗ trợ bạn."[:90])
-
-            # -- Operation 1: Create Campaign (temp ID = -1) --
-            op1 = client.get_type("MutateOperation")
-            c = op1.campaign_operation.create
-            temp_campaign_resource = f"customers/{customer_id}/campaigns/-1"
-            c.resource_name = temp_campaign_resource
+            # -- BƯỚC 1: TẠO CHIẾN DỊCH TRƯỚC (Lấy Resource Name thực để fix Brand Guidelines) --
+            campaign_op = client.get_type("MutateOperation")
+            c = campaign_op.campaign_operation.create
             c.name = vals.get('name')
             c.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.PERFORMANCE_MAX
             c.status = client.enums.CampaignStatusEnum.PAUSED
@@ -238,45 +204,72 @@ class GoogleAdsMutateService:
             c.maximize_conversions = {} 
             c.contains_eu_political_advertising = client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
             
-            # BẮT BUỘC: Nếu tài khoản bật Brand Guidelines, phải set cờ này để link được Business Name/Logo
+            # Cố gắng kích hoạt brand_guidelines_enabled nếu có thể
             try:
-                # Thử số ít (chuẩn v16+)
                 c.performance_max_setting.brand_guidelines_enabled = True
             except:
                 try:
-                    # Thử số nhiều
                     c.performance_max_settings.brand_guidelines_enabled = True
                 except:
-                    _logger.warning("Không thể kích hoạt brand_guidelines_enabled trên Campaign. Google có thể từ chối link Assets.")
+                    pass
 
-            mutate_operations.append(op1)
+            google_ads_service = client.get_service("GoogleAdsService")
+            # Gửi mutate pha 1: Chỉ tạo Campaign
+            cp_response = google_ads_service.mutate(customer_id=customer_id, mutate_operations=[campaign_op])
+            real_campaign_resource = cp_response.mutate_operation_responses[0].campaign_result.resource_name
+            _logger.info("Bước 1: Đã tạo chiến dịch PMax: %s", real_campaign_resource)
 
-            # -- Operation 2: Link Brand Assets to Campaign (Brand Guidelines) --
-            # Business Name
+            # -- BƯỚC 2: TẠO ASSETS VÀ NHÓM THÀNH PHẦN (Dùng Resource Name thật) --
+            mutate_operations = []
+
+            # 1. Tạo các Asset (Headline, Images...)
+            asset_resource = GoogleAdsMutateService._create_business_name_asset(client, customer_id, vals.get('business_name'))
+            
+            logo_resource = None
+            if vals.get('logo_image'):
+                logo_resource = GoogleAdsMutateService._create_image_asset(client, customer_id, vals.get('logo_image'), "Logo", target_ratio=1.0)
+
+            marketing_resource = None
+            if vals.get('marketing_image'):
+                marketing_resource = GoogleAdsMutateService._create_image_asset(client, customer_id, vals.get('marketing_image'), "Marketing Landscape", target_ratio=1.91)
+            elif vals.get('logo_image'):
+                marketing_resource = GoogleAdsMutateService._create_image_asset(client, customer_id, vals.get('logo_image'), "Marketing Landscape (Auto)", target_ratio=1.91)
+
+            square_mkt_resource = logo_resource
+            
+            h1 = GoogleAdsMutateService._create_text_asset(client, customer_id, vals.get('pmax_headline_1') or vals.get('name')[:30])
+            h2 = GoogleAdsMutateService._create_text_asset(client, customer_id, vals.get('pmax_headline_2') or f"Khám phá {vals.get('name')}"[:30])
+            h3 = GoogleAdsMutateService._create_text_asset(client, customer_id, vals.get('pmax_headline_3') or "Mua ngay hôm nay"[:30])
+            lh1 = GoogleAdsMutateService._create_text_asset(client, customer_id, vals.get('pmax_long_headline') or f"{vals.get('name')} - Giải pháp tốt nhất."[:90])
+            d1 = GoogleAdsMutateService._create_text_asset(client, customer_id, vals.get('pmax_description_1') or f"Trải nghiệm dịch vụ tuyệt vời với {vals.get('name')}."[:90])
+            d2 = GoogleAdsMutateService._create_text_asset(client, customer_id, vals.get('pmax_description_2') or "Liên hệ để biết thêm chi tiết."[:90])
+
+            # 2. Link Brand Assets vào Campaign thật (CampaignAsset)
+            # Link Business Name
             op_c_bn = client.get_type("MutateOperation")
             ca_bn = op_c_bn.campaign_asset_operation.create
-            ca_bn.campaign = temp_campaign_resource
+            ca_bn.campaign = real_campaign_resource
             ca_bn.asset = asset_resource
             ca_bn.field_type = client.enums.AssetFieldTypeEnum.BUSINESS_NAME
             mutate_operations.append(op_c_bn)
 
-            # Logo
+            # Link Logo
             if logo_resource:
                 op_c_logo = client.get_type("MutateOperation")
                 ca_logo = op_c_logo.campaign_asset_operation.create
-                ca_logo.campaign = temp_campaign_resource
+                ca_logo.campaign = real_campaign_resource
                 ca_logo.asset = logo_resource
                 ca_logo.field_type = client.enums.AssetFieldTypeEnum.LOGO
                 mutate_operations.append(op_c_logo)
 
-            # -- Operation 3: Create Asset Group (temp ID = -2) --
+            # 3. Tạo Asset Group linked to real Campaign (ID tạm -1 cho AssetGroup)
             op_ag = client.get_type("MutateOperation")
             ag = op_ag.asset_group_operation.create
-            temp_asset_group_resource = f"customers/{customer_id}/assetGroups/-2"
+            temp_asset_group_resource = f"customers/{customer_id}/assetGroups/-1"
             ag.resource_name = temp_asset_group_resource
             ag.name = f"Nhóm thành phần 1 - {vals.get('name')}"
-            ag.campaign = temp_campaign_resource
-            ag.status = client.enums.AssetGroupStatusEnum.PAUSED
+            ag.campaign = real_campaign_resource
+            ag.status = client.enums.AssetGroupStatusEnum.ENABLED
             
             final_url = vals.get('final_url')
             if final_url:
@@ -287,7 +280,7 @@ class GoogleAdsMutateService:
                 ag.final_urls.append("https://example.com")
             mutate_operations.append(op_ag)
 
-            # -- Operation 4: Link ALL Assets to Asset Group (Mandatory for PMax) --
+            # 4. Link Assets vào Asset Group
             def add_ag_asset(asset_res, field_type):
                 if not asset_res: return
                 op = client.get_type("MutateOperation")
@@ -297,13 +290,10 @@ class GoogleAdsMutateService:
                 aga.field_type = field_type
                 mutate_operations.append(op)
 
-            # Link Images
             add_ag_asset(asset_resource, client.enums.AssetFieldTypeEnum.BUSINESS_NAME)
             add_ag_asset(logo_resource, client.enums.AssetFieldTypeEnum.LOGO)
             add_ag_asset(marketing_resource, client.enums.AssetFieldTypeEnum.MARKETING_IMAGE)
             add_ag_asset(square_mkt_resource, client.enums.AssetFieldTypeEnum.SQUARE_MARKETING_IMAGE)
-            
-            # Link Text Assets
             add_ag_asset(h1, client.enums.AssetFieldTypeEnum.HEADLINE)
             add_ag_asset(h2, client.enums.AssetFieldTypeEnum.HEADLINE)
             add_ag_asset(h3, client.enums.AssetFieldTypeEnum.HEADLINE)
@@ -311,13 +301,11 @@ class GoogleAdsMutateService:
             add_ag_asset(d1, client.enums.AssetFieldTypeEnum.DESCRIPTION)
             add_ag_asset(d2, client.enums.AssetFieldTypeEnum.DESCRIPTION)
 
-            google_ads_service = client.get_service("GoogleAdsService")
-            response = google_ads_service.mutate(
-                customer_id=customer_id,
-                mutate_operations=mutate_operations
-            )
+            # Gửi mutate pha 2: Liên kết assets và tạo Asset Group
+            google_ads_service.mutate(customer_id=customer_id, mutate_operations=mutate_operations)
+            _logger.info("Bước 2: Hoàn tất liên kết assets cho %s", real_campaign_resource)
             
-            return True, response.mutate_operation_responses[0].campaign_result.resource_name
+            return True, real_campaign_resource
 
         except Exception as e:
             _logger.error("Atomic PMax creation failed: %s", str(e))
