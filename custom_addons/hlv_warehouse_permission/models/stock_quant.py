@@ -5,59 +5,53 @@ from odoo.exceptions import UserError
 class StockQuant(models.Model):
     _inherit = 'stock.quant'
 
-    def _check_inventory_permission(self):
-        """Kiểm tra quyền cập nhật tồn kho."""
+    def _get_blocked_warehouse(self):
+        """Trả về warehouse bị chặn (nếu có), hoặc False."""
         if self.env.su:
-            return
+            return False
         Permission = self.env['warehouse.user.permission']
         for quant in self:
             warehouse = quant.location_id.warehouse_id
             if warehouse and not Permission.check_permission(
                     self.env.user, warehouse, 'can_update_inventory'):
-                raise UserError(_(
+                return warehouse
+        return False
+
+    def _send_permission_warning(self, warehouse):
+        """Gửi toast notification cảnh báo không có quyền."""
+        self.env['bus.bus']._sendone(
+            self.env.user.partner_id,
+            'simple_notification',
+            {
+                'title': _('Thao tác không hợp lệ'),
+                'message': _(
                     'Bạn không có quyền cập nhật tồn kho tại kho "%(warehouse)s".\n'
                     'Vui lòng liên hệ quản trị viên.',
                     warehouse=warehouse.name,
-                ))
+                ),
+                'type': 'warning',
+                'sticky': True,
+            },
+        )
 
     def action_apply_inventory(self):
-        """Kiểm tra quyền trước khi áp dụng kiểm kê."""
-        self._check_inventory_permission()
+        """Chặn áp dụng kiểm kê nếu không có quyền (toast, không raise)."""
+        blocked = self._get_blocked_warehouse()
+        if blocked:
+            self._send_permission_warning(blocked)
+            return True
         return super().action_apply_inventory()
 
     def write(self, vals):
-        """Strip inventory fields nếu không có quyền + gửi notification cảnh báo."""
+        """Strip inventory fields nếu không có quyền + gửi toast cảnh báo."""
         inventory_fields = {'inventory_quantity', 'inventory_quantity_auto_apply', 'inventory_quantity_set'}
         matched = inventory_fields & set(vals)
         if matched and not self.env.su:
-            Permission = self.env['warehouse.user.permission']
-            blocked_warehouse = False
-            for quant in self:
-                warehouse = quant.location_id.warehouse_id
-                if warehouse and not Permission.check_permission(
-                        self.env.user, warehouse, 'can_update_inventory'):
-                    blocked_warehouse = warehouse
-                    break
-            if blocked_warehouse:
-                # Strip inventory fields — không ghi giá trị mới vào DB
+            blocked = self._get_blocked_warehouse()
+            if blocked:
                 vals = {k: v for k, v in vals.items() if k not in inventory_fields}
-                # Xóa cache ORM để web_read() sau đó lấy giá trị gốc từ DB
                 self.invalidate_recordset(fnames=list(matched))
-                # Gửi toast notification (không phải modal popup)
-                self.env['bus.bus']._sendone(
-                    self.env.user.partner_id,
-                    'simple_notification',
-                    {
-                        'title': _('Thao tác không hợp lệ'),
-                        'message': _(
-                            'Bạn không có quyền cập nhật tồn kho tại kho "%(warehouse)s".\n'
-                            'Vui lòng liên hệ quản trị viên.',
-                            warehouse=blocked_warehouse.name,
-                        ),
-                        'type': 'warning',
-                        'sticky': True,
-                    },
-                )
+                self._send_permission_warning(blocked)
                 if not vals:
                     return True
         return super().write(vals)
