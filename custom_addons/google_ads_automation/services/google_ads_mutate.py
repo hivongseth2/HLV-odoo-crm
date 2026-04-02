@@ -192,7 +192,7 @@ class GoogleAdsMutateService:
 
     @staticmethod
     def _create_pmax_campaign_atomic(client, customer_id, budget_resource, vals):
-        """Tạo PMax cùng lúc với Asset (Business Name) để thỏa mãn Brand Guidelines"""
+        """Tạo PMax cùng lúc với Asset Group để thỏa mãn các ràng buộc REQUIRED"""
         try:
             mutate_operations = []
             
@@ -207,43 +207,53 @@ class GoogleAdsMutateService:
             # -- Operation 1: Create Campaign (ID giả định -1) --
             op1 = client.get_type("MutateOperation")
             c = op1.campaign_operation.create
-            temp_resource_name = f"customers/{customer_id}/campaigns/-1"
-            c.resource_name = temp_resource_name
+            temp_campaign_resource = f"customers/{customer_id}/campaigns/-1"
+            c.resource_name = temp_campaign_resource
             c.name = vals.get('name')
             c.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.PERFORMANCE_MAX
             c.status = client.enums.CampaignStatusEnum.PAUSED
             c.campaign_budget = budget_resource
             c.maximize_conversions = {} 
             c.contains_eu_political_advertising = client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
-            
-            # Activate Brand Guidelines to allow Campaign-level Business Name and Logo
-            c.performance_max_setting.brand_guidelines_enabled = True
-            
-            # Note: PMax final URLs are handled at Asset Group level, not Campaign level.
             mutate_operations.append(op1)
 
-            # -- Operation 2: Link Business Name --
+            # -- Operation 2: Create Asset Group (Nhóm thành phần) --
+            # PMax BẮT BUỘC phải có ít nhất 1 Asset Group
             op2 = client.get_type("MutateOperation")
-            ca2 = op2.campaign_asset_operation.create
-            ca2.campaign = temp_resource_name
-            ca2.asset = asset_resource
-            ca2.field_type = client.enums.AssetFieldTypeEnum.BUSINESS_NAME
+            ag = op2.asset_group_operation.create
+            temp_asset_group_resource = f"customers/{customer_id}/assetGroups/-1"
+            ag.resource_name = temp_asset_group_resource
+            ag.name = f"Nhóm thành phần 1 - {vals.get('name')}"
+            ag.campaign = temp_campaign_resource
+            ag.status = client.enums.AssetGroupStatusEnum.ENABLED
+            if vals.get('final_url'):
+                ag.final_urls.append(vals.get('final_url'))
             mutate_operations.append(op2)
 
-            # -- Operation 3: Link Logo (nếu có) --
+            # -- Operation 3: Link Business Name to Asset Group --
+            op3 = client.get_type("MutateOperation")
+            aga3 = op3.asset_group_asset_operation.create
+            aga3.asset_group = temp_asset_group_resource
+            aga3.asset = asset_resource
+            aga3.field_type = client.enums.AssetFieldTypeEnum.BUSINESS_NAME
+            mutate_operations.append(op3)
+
+            # -- Operation 4: Link Logo to Asset Group (nếu có) --
             if logo_resource:
-                op3 = client.get_type("MutateOperation")
-                ca3 = op3.campaign_asset_operation.create
-                ca3.campaign = temp_resource_name
-                ca3.asset = logo_resource
-                ca3.field_type = client.enums.AssetFieldTypeEnum.LOGO
-                mutate_operations.append(op3)
+                op4 = client.get_type("MutateOperation")
+                aga4 = op4.asset_group_asset_operation.create
+                aga4.asset_group = temp_asset_group_resource
+                aga4.asset = logo_resource
+                aga4.field_type = client.enums.AssetFieldTypeEnum.LOGO
+                mutate_operations.append(op4)
 
             google_ads_service = client.get_service("GoogleAdsService")
             response = google_ads_service.mutate(
                 customer_id=customer_id,
                 mutate_operations=mutate_operations
             )
+            
+            # Trả về resource name của Campaign (kết quả đầu tiên)
             return True, response.mutate_operation_responses[0].campaign_result.resource_name
 
         except Exception as e:
