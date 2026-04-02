@@ -584,30 +584,24 @@ class GoogleAdsMutateService:
 
     @staticmethod
     def create_ad(client, customer_id, ad_group_id, vals):
-        """Tạo Responsive Search Ad (RSA) trong một Ad Group"""
+        """Tạo mẫu quảng cáo (RSA hoặc Demand Gen) trong một Ad Group"""
         try:
             ad_group_ad_service = client.get_service("AdGroupAdService")
             ad_group_ad_operation = client.get_type("AdGroupAdOperation")
-            ad_group_ad = ad_group_ad_operation.create
-
+            
+            # --- Explicit Initialization: Tránh lỗi IMMUTABLE_FIELD ---
+            ad_group_ad = client.get_type("AdGroupAd")
             ad_group_ad.ad_group = client.get_service("AdGroupService").ad_group_path(str(customer_id), str(ad_group_id))
             ad_group_ad.status = client.enums.AdGroupAdStatusEnum.ENABLED
             
             ad = ad_group_ad.ad
             final_url = vals.get('final_url')
-            # final_urls will be set inside specialized blocks to ensure type mapping first
-            
             ad_type = vals.get('type', 'RESPONSIVE_SEARCH_AD').upper()
 
             if ad_type in ['DISCOVERY_RESPONSIVE_AD', 'DEMAND_GEN_RESPONSIVE_AD']:
                 # --- Discovery / Demand Gen Ad content ---
                 channel_type = vals.get('channel_type', '').upper()
-                
-                # Google Ads đã chuyển đổi Discovery -> Demand Gen. 
-                # Chấp nhận cả DISCOVERY (Odoo) và DEMAND_GEN (API) cho cấu trúc mới này.
                 is_demand_gen = (channel_type in ['DEMAND_GEN', 'DISCOVERY'])
-                
-                # Check for field existence on the 'ad' object to be extra safe
                 use_demand_gen_field = is_demand_gen and hasattr(ad, 'demand_gen_responsive_ad')
                 
                 if use_demand_gen_field:
@@ -615,13 +609,12 @@ class GoogleAdsMutateService:
                 else:
                     info = ad.discovery_responsive_ad
 
-                # Set Final URL here
+                # Set Final URL here (AFTER type is inferred by accessing 'info')
                 if final_url:
                     if not final_url.startswith('http'): final_url = 'https://' + final_url
                     ad.final_urls.append(str(final_url))
 
                 info.business_name = str(vals.get('business_name') or "Brand")
-                
                 
                 # Assets
                 headlines = list(dict.fromkeys(vals.get('headlines', [])))
@@ -652,7 +645,7 @@ class GoogleAdsMutateService:
                     img.asset = vals.get('logo_image_asset')
                     info.logo_images.append(img)
             else:
-                # --- Default: Responsive Search Ad content ---
+                # --- Default: Responsive Search Ad content (RSA) ---
                 rsa = ad.responsive_search_ad
 
                 # Set Final URL here
@@ -660,19 +653,22 @@ class GoogleAdsMutateService:
                     if not final_url.startswith('http'): final_url = 'https://' + final_url
                     ad.final_urls.append(str(final_url))
                 
-                # Headlines (Unique & Max 30 chars)
+                # Headlines (Max 30 chars)
                 unique_headlines = list(dict.fromkeys(vals.get('headlines', [])))
                 for text in unique_headlines:
                     headline = client.get_type("AdTextAsset")
                     headline.text = text[:30] 
                     rsa.headlines.append(headline)
                 
-                # Descriptions (Unique & Max 90 chars)
+                # Descriptions (Max 90 chars)
                 unique_descriptions = list(dict.fromkeys(vals.get('descriptions', [])))
                 for text in unique_descriptions:
                     description = client.get_type("AdTextAsset")
                     description.text = text[:90] 
                     rsa.descriptions.append(description)
+
+            # Gán đối tượng đã khởi tạo vào Operation
+            ad_group_ad_operation.create = ad_group_ad
 
             response = ad_group_ad_service.mutate_ad_group_ads(
                 customer_id=str(customer_id),
@@ -690,14 +686,12 @@ class GoogleAdsMutateService:
             ad_group_ad_service = client.get_service("AdGroupAdService")
             ad_group_ad_operation = client.get_type("AdGroupAdOperation")
             
-            ad_group_ad = ad_group_ad_operation.update
-            # Resource name của AdGroupAd là "customers/{customer_id}/adGroupAds/{ad_group_id}~{ad_id}"
+            # --- Explicit Initialization for Update ---
+            ad_group_ad = client.get_type("AdGroupAd")
             ad_group_ad.resource_name = f"customers/{customer_id}/adGroupAds/{ad_group_id}~{ad_id}"
             
             ad = ad_group_ad.ad
             mask_paths = []
-            
-            # Final URL
             final_url = vals.get('final_url')
             if final_url:
                 ad.final_urls.append(str(final_url))
@@ -772,6 +766,9 @@ class GoogleAdsMutateService:
             # Field mask manually
             from google.protobuf.field_mask_pb2 import FieldMask
             ad_group_ad_operation.update_mask.CopyFrom(FieldMask(paths=mask_paths))
+
+            # Gán đối tượng đã chuẩn bị vào Operation
+            ad_group_ad_operation.update = ad_group_ad
 
             response = ad_group_ad_service.mutate_ad_group_ads(
                 customer_id=str(customer_id),
