@@ -237,6 +237,18 @@ class GoogleAdsMutateService:
             c.campaign_budget = budget_resource
             c.maximize_conversions = {} 
             c.contains_eu_political_advertising = client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
+            
+            # BẮT BUỘC: Nếu tài khoản bật Brand Guidelines, phải set cờ này để link được Business Name/Logo
+            try:
+                # Thử số ít (chuẩn v16+)
+                c.performance_max_setting.brand_guidelines_enabled = True
+            except:
+                try:
+                    # Thử số nhiều
+                    c.performance_max_settings.brand_guidelines_enabled = True
+                except:
+                    _logger.warning("Không thể kích hoạt brand_guidelines_enabled trên Campaign. Google có thể từ chối link Assets.")
+
             mutate_operations.append(op1)
 
             # -- Operation 2: Link Brand Assets to Campaign (Brand Guidelines) --
@@ -325,13 +337,25 @@ class GoogleAdsMutateService:
 
     @staticmethod
     def _create_business_name_asset(client, customer_id, business_name):
-        """Tạo asset loại BUSINESS_NAME"""
+        """Tạo asset loại BUSINESS_NAME (Tự động nhận diện Enum theo phiên bản API)"""
         if not business_name: return None
         asset_service = client.get_service("AssetService")
         operation = client.get_type("AssetOperation")
         asset = operation.create
-        asset.type_ = client.enums.AssetTypeEnum.TEXT
-        asset.text_asset.text = business_name
+        
+        # Thử sử dụng loại BUSINESS_NAME (v15+), nếu không có tự lùi về TEXT
+        try:
+            asset.type_ = client.enums.AssetTypeEnum.BUSINESS_NAME
+            asset.business_name_asset.business_name = business_name
+        except:
+            try:
+                asset.type_ = client.enums.AssetTypeEnum.BUSINESS_NAME_ASSET
+                asset.business_name_asset.business_name = business_name
+            except:
+                # Fallback cuối cùng cho các phiên bản cũ
+                asset.type_ = client.enums.AssetTypeEnum.TEXT
+                asset.text_asset.text = business_name
+
         response = asset_service.mutate_assets(customer_id=customer_id, operations=[operation])
         return response.results[0].resource_name
 
