@@ -656,6 +656,15 @@ class PickingExportSalesReportWizard(models.TransientModel):
         if not pickings:
             raise UserError(_("Không tìm thấy phiếu xuất kho nào trong khoảng ngày đã chọn."))
 
+        # Loại bỏ phiếu trả hàng nhập kho (origin dạng "Return of .../IN/..." hoặc "đơn trả hàng")
+        pickings = pickings.filtered(lambda p: not p.origin or (
+            'return of' not in (p.origin or '').lower()
+            and 'trả hàng' not in (p.origin or '').lower()
+            and 'tra hang' not in (p.origin or '').lower()
+        ))
+        if not pickings:
+            raise UserError(_("Không tìm thấy phiếu xuất kho nào (sau khi loại bỏ phiếu trả hàng)."))
+
         all_rows = []
         for picking in pickings:
             rows = self._get_move_line_rows(picking)
