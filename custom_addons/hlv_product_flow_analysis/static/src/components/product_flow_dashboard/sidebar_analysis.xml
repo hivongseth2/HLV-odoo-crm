@@ -95,6 +95,16 @@
                     </div>
                 </div>
 
+                <!-- Chart filter toggle -->
+                <div class="pf-chart-freq-toggle">
+                    <button t-att-class="'pf-freq-toggle-btn' + (state.chartFreqOnly ? ' active' : '')"
+                            t-on-click="toggleChartFreqOnly">
+                        <i t-att-class="'fa me-1 ' + (state.chartFreqOnly ? 'fa-filter' : 'fa-list')"/>
+                        <t t-if="state.chartFreqOnly">Hàng thường xuyên (≥3 lần)</t>
+                        <t t-else="">Tất cả sản phẩm</t>
+                    </button>
+                </div>
+
                 <!-- 3. Treemap: Cơ cấu hàng hóa -->
                 <div class="pf-sc-card">
                     <h4 class="pf-sc-title">
@@ -194,6 +204,11 @@
                             <span><span class="pf-tm-dot" style="background:#2b8a3e;"/>Cân bằng</span>
                             <span><span class="pf-tm-dot" style="background:#339af0;"/>Mua &gt; Bán</span>
                         </div>
+                        <t t-if="scatterPlotData.useLog">
+                            <div class="pf-chart-log-hint">
+                                <i class="fa fa-info-circle me-1"/>Đang dùng log scale (dữ liệu chênh lệch lớn)
+                            </div>
+                        </t>
                     </t>
                     <t t-else="">
                         <div class="pf-chart-empty">Chưa có dữ liệu</div>

@@ -5,11 +5,19 @@
  */
 export const analysisChartMixins = {
 
+    /** Filter products based on chartFreqOnly: only items with ≥3 transactions */
+    _chartFilteredProducts(minQty = 0) {
+        let products = this.state.products.filter(p => (p.incoming_qty + p.outgoing_qty) > minQty);
+        if (this.state.chartFreqOnly) {
+            products = products.filter(p => (p.incoming_count + p.outgoing_count) >= 3);
+        }
+        return products;
+    },
+
     // ========== Treemap: Product proportion by total quantity ==========
     get treemapData() {
         const n = Math.min(this.state.topN || 10, 20);
-        const products = [...this.state.products]
-            .filter(p => (p.incoming_qty + p.outgoing_qty) > 0)
+        const products = [...this._chartFilteredProducts()]
             .sort((a, b) => (b.incoming_qty + b.outgoing_qty) - (a.incoming_qty + a.outgoing_qty))
             .slice(0, n);
 
@@ -77,8 +85,14 @@ export const analysisChartMixins = {
     },
 
     // ========== Scatter Plot: Buy qty (X) vs Sell qty (Y) ==========
+    _logScale(val, maxVal) {
+        // Log scale: spreads out clustered data near zero
+        if (val <= 0 || maxVal <= 0) return 0;
+        return Math.log(val + 1) / Math.log(maxVal + 1);
+    },
+
     get scatterPlotData() {
-        const products = this.state.products.filter(p => p.incoming_qty > 0 || p.outgoing_qty > 0);
+        const products = this._chartFilteredProducts();
         if (!products.length) return { points: [], show: false };
 
         const W = 280, H = 210;
@@ -89,9 +103,19 @@ export const analysisChartMixins = {
         const maxBuy = Math.max(...products.map(p => p.incoming_qty)) || 1;
         const maxSell = Math.max(...products.map(p => p.outgoing_qty)) || 1;
 
+        // Detect if outliers are skewing the chart (top value > 5x median)
+        const buyVals = products.map(p => p.incoming_qty).filter(v => v > 0).sort((a, b) => a - b);
+        const sellVals = products.map(p => p.outgoing_qty).filter(v => v > 0).sort((a, b) => a - b);
+        const medianBuy = buyVals.length ? buyVals[Math.floor(buyVals.length / 2)] : 1;
+        const medianSell = sellVals.length ? sellVals[Math.floor(sellVals.length / 2)] : 1;
+        const useLog = (maxBuy > medianBuy * 5) || (maxSell > medianSell * 5);
+
+        const scaleX = (v) => useLog ? this._logScale(v, maxBuy) : v / maxBuy;
+        const scaleY = (v) => useLog ? this._logScale(v, maxSell) : v / maxSell;
+
         const points = products.slice(0, 60).map(p => {
-            const x = pad.l + (p.incoming_qty / maxBuy) * plotW;
-            const y = pad.t + plotH - (p.outgoing_qty / maxSell) * plotH;
+            const x = pad.l + scaleX(p.incoming_qty) * plotW;
+            const y = pad.t + plotH - scaleY(p.outgoing_qty) * plotH;
             const totalQty = p.incoming_qty + p.outgoing_qty;
             const r = Math.min(Math.max(Math.sqrt(totalQty) * 0.4 + 2, 3), 14);
 
@@ -111,25 +135,32 @@ export const analysisChartMixins = {
             };
         });
 
-        // Axis ticks (5 ticks each)
-        const xTicks = [0, 0.25, 0.5, 0.75, 1].map(p => ({
-            x: Math.round(pad.l + p * plotW),
-            label: this.formatNumber(Math.round(maxBuy * p)),
-        }));
-        const yTicks = [0, 0.25, 0.5, 0.75, 1].map(p => ({
-            y: Math.round(pad.t + plotH - p * plotH),
-            label: this.formatNumber(Math.round(maxSell * p)),
-        }));
+        // Axis ticks (5 ticks each) — map back from scale to real values
+        const tickPositions = [0, 0.25, 0.5, 0.75, 1];
+        const xTicks = tickPositions.map(p => {
+            const realVal = useLog ? Math.round(Math.pow(maxBuy + 1, p) - 1) : Math.round(maxBuy * p);
+            return {
+                x: Math.round(pad.l + p * plotW),
+                label: this.formatNumber(realVal),
+            };
+        });
+        const yTicks = tickPositions.map(p => {
+            const realVal = useLog ? Math.round(Math.pow(maxSell + 1, p) - 1) : Math.round(maxSell * p);
+            return {
+                y: Math.round(pad.t + plotH - p * plotH),
+                label: this.formatNumber(realVal),
+            };
+        });
 
         // Diagonal reference line (1:1 ratio)
         const scale = Math.min(maxBuy, maxSell);
-        const diagEndX = pad.l + (scale / maxBuy) * plotW;
-        const diagEndY = pad.t + plotH - (scale / maxSell) * plotH;
+        const diagEndX = pad.l + scaleX(scale) * plotW;
+        const diagEndY = pad.t + plotH - scaleY(scale) * plotH;
 
         return {
             points, show: true,
             W, H, pad, plotW, plotH,
-            xTicks, yTicks,
+            xTicks, yTicks, useLog,
             axisBottom: pad.t + plotH,
             diagX1: pad.l, diagY1: pad.t + plotH,
             diagX2: diagEndX, diagY2: diagEndY,
@@ -139,8 +170,7 @@ export const analysisChartMixins = {
     // ========== SVG Heatmap: Product × Metrics with color intensity ==========
     get svgHeatmapData() {
         const n = Math.min(this.state.topN || 10, 12);
-        const products = [...this.state.products]
-            .filter(p => (p.incoming_qty + p.outgoing_qty) > 0)
+        const products = [...this._chartFilteredProducts()]
             .sort((a, b) => (b.incoming_qty + b.outgoing_qty) - (a.incoming_qty + a.outgoing_qty))
             .slice(0, n);
 
