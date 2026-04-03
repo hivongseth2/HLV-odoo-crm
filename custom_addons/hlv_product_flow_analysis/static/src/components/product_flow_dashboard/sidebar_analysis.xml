@@ -203,12 +203,12 @@
                         <i class="fa fa-shopping-cart me-1" style="color:#2b8a3e;"/>Tối ưu mua hàng
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>SP cần mua thêm (bán &gt; mua) hoặc nên giảm mua (mua &gt; bán). ×N = hệ số chênh lệch. M: lần mua, B: lần bán.
+                        <i class="fa fa-question-circle me-1"/>Đề xuất dựa trên: SL bán − SL mua − Tồn kho. Chỉ hiện SP bán thường xuyên mà tồn thấp (cần mua) hoặc mua nhiều mà tồn dư (giảm mua).
                     </div>
                     <t t-if="purchaseOptimization.underBuy.length > 0">
                         <div class="pf-opt-section">
                             <div class="pf-opt-label pf-opt-under">
-                                <i class="fa fa-arrow-up me-1"/>Cần mua thêm (bán &gt; mua)
+                                <i class="fa fa-arrow-up me-1"/>Cần mua thêm (tồn không đủ)
                             </div>
                             <t t-foreach="purchaseOptimization.underBuy" t-as="p" t-key="p.product_id">
                                 <div class="pf-opt-row">
@@ -216,10 +216,10 @@
                                         <span class="pf-code me-1" t-esc="p.default_code || '?'"/>
                                     </span>
                                     <span class="pf-opt-stats">
-                                        <span class="pf-opt-buy">M: <t t-esc="formatNumber(p.buyQty)"/> (<t t-esc="p.buyFreq"/>x)</span>
                                         <span class="pf-opt-sell">B: <t t-esc="formatNumber(p.sellQty)"/> (<t t-esc="p.sellFreq"/>x)</span>
+                                        <span class="pf-opt-stock">Tồn: <t t-esc="formatNumber(p.stock)"/></span>
                                     </span>
-                                    <span class="pf-opt-ratio text-danger">×<t t-esc="p.qtyRatio"/></span>
+                                    <span class="pf-opt-ratio text-danger">Thiếu <t t-esc="formatNumber(p.netNeed)"/></span>
                                 </div>
                             </t>
                         </div>
@@ -227,7 +227,7 @@
                     <t t-if="purchaseOptimization.overBuy.length > 0">
                         <div class="pf-opt-section">
                             <div class="pf-opt-label pf-opt-over">
-                                <i class="fa fa-arrow-down me-1"/>Nên giảm mua (mua &gt; bán)
+                                <i class="fa fa-arrow-down me-1"/>Nên giảm mua (tồn dư nhiều)
                             </div>
                             <t t-foreach="purchaseOptimization.overBuy" t-as="p" t-key="p.product_id">
                                 <div class="pf-opt-row">
@@ -236,9 +236,9 @@
                                     </span>
                                     <span class="pf-opt-stats">
                                         <span class="pf-opt-buy">M: <t t-esc="formatNumber(p.buyQty)"/> (<t t-esc="p.buyFreq"/>x)</span>
-                                        <span class="pf-opt-sell">B: <t t-esc="formatNumber(p.sellQty)"/> (<t t-esc="p.sellFreq"/>x)</span>
+                                        <span class="pf-opt-stock">Tồn: <t t-esc="formatNumber(p.stock)"/></span>
                                     </span>
-                                    <span class="pf-opt-ratio text-warning">×<t t-esc="p.qtyRatio"/></span>
+                                    <span class="pf-opt-ratio text-warning">×<t t-esc="p.stockCover"/></span>
                                 </div>
                             </t>
                         </div>

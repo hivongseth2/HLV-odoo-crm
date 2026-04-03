@@ -332,3 +332,56 @@
     height: 10px;
     border-radius: 3px;
 }
+
+// ========== Purchase Optimization ==========
+.pf-opt-section { margin-bottom: 10px; }
+
+.pf-opt-label {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-bottom: 6px;
+
+    &.pf-opt-under { background: #ffe3e3; color: #c92a2a; }
+    &.pf-opt-over { background: #fff3bf; color: #e67700; }
+}
+
+.pf-opt-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: white;
+    border-radius: 4px;
+    margin-bottom: 3px;
+    font-size: 11px;
+}
+
+.pf-opt-name {
+    min-width: 70px;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.pf-opt-stats {
+    flex: 1;
+    display: flex;
+    gap: 8px;
+    color: #495057;
+}
+
+.pf-opt-buy { color: #1971c2; }
+.pf-opt-sell { color: #e03131; }
+.pf-opt-stock { color: #5f3dc4; font-weight: 600; }
+
+.pf-opt-ratio {
+    font-weight: 800;
+    font-size: 11px;
+    min-width: 50px;
+    text-align: right;
+    white-space: nowrap;
+}

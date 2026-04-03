@@ -7,7 +7,7 @@
                         <i class="fa fa-arrow-down me-1 text-success"/>Top mua nhiều
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Top 8 SP có tần suất nhập kho cao nhất (số lần mua). Thanh dài hơn = mua thường xuyên hơn.
+                        <i class="fa fa-question-circle me-1"/>Top SP có tần suất nhập kho cao nhất (số lần mua). Thay đổi số lượng Top ở thanh tab.
                     </div>
                     <div class="pf-hbar-chart pf-hbar-compact">
                         <t t-foreach="topPurchasedProducts" t-as="item" t-key="item.product_id">
@@ -35,7 +35,7 @@
                         <i class="fa fa-arrow-up me-1 text-danger"/>Top bán chạy
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Top 8 SP có tần suất bán (xuất kho) cao nhất (số lần bán). Thanh dài hơn = bán thường xuyên hơn.
+                        <i class="fa fa-question-circle me-1"/>Top SP có tần suất bán (xuất kho) cao nhất (số lần bán). Thay đổi số lượng Top ở thanh tab.
                     </div>
                     <div class="pf-hbar-chart pf-hbar-compact">
                         <t t-foreach="topSoldProducts" t-as="item" t-key="item.product_id">

@@ -131,6 +131,17 @@
                                         t-on-click="() => this.setChartsSection('correlation')">
                                     <i class="fa fa-dot-circle-o me-1"/>Tương quan
                                 </button>
+                                <div class="pf-topn-select">
+                                    <label>Top</label>
+                                    <select t-on-change="(ev) => this.onTopNChange(ev)">
+                                        <option value="5" t-att-selected="state.topN === 5">5</option>
+                                        <option value="10" t-att-selected="state.topN === 10">10</option>
+                                        <option value="15" t-att-selected="state.topN === 15">15</option>
+                                        <option value="20" t-att-selected="state.topN === 20">20</option>
+                                        <option value="30" t-att-selected="state.topN === 30">30</option>
+                                        <option value="50" t-att-selected="state.topN === 50">50</option>
+                                    </select>
+                                </div>
                             </div>
                             <div class="pf-sidebar-body">
                                 <t t-if="state.chartsActiveSection === 'products'">

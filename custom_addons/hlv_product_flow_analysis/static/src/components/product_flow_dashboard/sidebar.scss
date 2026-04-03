@@ -105,9 +105,11 @@
 /* Sidebar tabs */
 .pf-sidebar-tabs {
     display: flex;
+    flex-wrap: wrap;
     border-bottom: 2px solid #e9ecef;
     flex-shrink: 0;
     background: #f8f9fa;
+    align-items: center;
 }
 
 .pf-stab {
@@ -126,6 +128,34 @@
 
     &:hover { color: #017e84; }
     &.active { color: #017e84; border-bottom-color: #017e84; background: white; }
+}
+
+.pf-topn-select {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    margin-left: auto;
+    flex-shrink: 0;
+
+    label {
+        font-size: 11px;
+        font-weight: 600;
+        color: #6c757d;
+    }
+
+    select {
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        padding: 2px 4px;
+        font-size: 11px;
+        background: #fff;
+        color: #495057;
+        cursor: pointer;
+        min-width: 44px;
+
+        &:focus { outline: none; border-color: #017e84; }
+    }
 }
 
 .pf-sidebar-body {
