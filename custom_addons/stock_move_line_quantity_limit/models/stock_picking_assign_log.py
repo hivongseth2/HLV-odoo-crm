@@ -176,102 +176,25 @@ class StockPickingAssignLog(models.Model):
                     ml.sudo().unlink()
 
     def button_validate(self):
-        """
-        Lớp bảo vệ thứ 2: Trước khi validate picking, kiểm tra lần cuối
-        rằng tổng done qty không vượt quá tồn kho vật lý.
-        Công thức: available = on_hand - other_pickings_done
-        KHÔNG dùng quant.reserved_quantity (dễ bị ghost reservation).
-        """
-        from markupsafe import Markup
-
+        """Log kiểm tra tồn kho trước khi validate (chỉ cảnh báo, KHÔNG tự sửa qty)."""
         for picking in self:
-            adjusted_moves = []
-
-            # Nhóm moves theo (product, parent_location)
-            product_location_map = {}
             for move in picking.move_ids.filtered(
                 lambda m: m.state not in ['done', 'cancel'] and m.quantity > 0
+                and m.product_id and m.location_id and m.location_id.usage == 'internal'
             ):
-                if not move.product_id or not move.location_id:
-                    continue
-                if move.location_id.usage != 'internal':
-                    continue
-                key = (move.product_id.id, move.location_id.id)
-                product_location_map.setdefault(key, []).append(move)
-
-            for (prod_id, loc_id), moves in product_location_map.items():
-                product = moves[0].product_id
-                location = moves[0].location_id
-
-                # Tổng done qty trong picking hiện tại cho product này
-                total_done_this_picking = sum(m.quantity for m in moves)
-
-                # Tồn kho vật lý (on-hand)
                 quants = self.env['stock.quant'].search([
-                    ('product_id', '=', prod_id),
-                    ('location_id', 'child_of', loc_id),
+                    ('product_id', '=', move.product_id.id),
+                    ('location_id', 'child_of', move.location_id.id),
                 ])
                 total_on_hand = sum(q.quantity for q in quants)
 
-                # Tổng done từ PICKING KHÁC
-                other_move_lines = self.env['stock.move.line'].search([
-                    ('product_id', '=', prod_id),
-                    ('location_id', 'child_of', loc_id),
-                    ('state', 'not in', ['done', 'cancel']),
-                    ('quantity', '>', 0),
-                    ('picking_id', '!=', picking.id),
-                ])
-                other_done = sum(ml.quantity for ml in other_move_lines)
-
-                # Available = on_hand - other_pickings_done
-                real_available = total_on_hand - other_done
-
-                if total_done_this_picking > real_available and real_available >= 0:
+                if move.quantity > total_on_hand:
                     _logger.warning(
-                        '[VALIDATE_CHECK] OVER-ALLOCATION | picking=%s | product=%s | '
-                        'done=%s > real_available=%s | on_hand=%s | other_done=%s',
-                        picking.name, product.display_name,
-                        total_done_this_picking, real_available,
-                        total_on_hand, other_done,
+                        '[VALIDATE_CHECK] picking=%s | product=%s | '
+                        'done=%s > on_hand=%s (chỉ cảnh báo, KHÔNG sửa qty)',
+                        picking.name, move.product_id.display_name,
+                        move.quantity, total_on_hand,
                     )
-
-                    # Phân bổ lại qty cho các moves
-                    remaining = max(0.0, real_available)
-                    for m in moves:
-                        if remaining <= 0:
-                            old_qty = m.quantity
-                            m.quantity = 0.0
-                            adjusted_moves.append(
-                                (m, product, old_qty, 0.0)
-                            )
-                        elif m.quantity > remaining:
-                            old_qty = m.quantity
-                            m.quantity = remaining
-                            adjusted_moves.append(
-                                (m, product, old_qty, remaining)
-                            )
-                            remaining = 0.0
-                        else:
-                            remaining -= m.quantity
-
-            # Post thông báo nếu có điều chỉnh
-            if adjusted_moves:
-                msg_lines = []
-                for move, product, old_qty, new_qty in adjusted_moves:
-                    msg_lines.append(
-                        '<li><b>%s</b>: %s → %s (kho không đủ)</li>'
-                        % (product.display_name, old_qty, new_qty)
-                    )
-                msg = Markup(
-                    '<div style="color: #856404; background-color: #fff3cd; '
-                    'border: 1px solid #ffc107; padding: 10px; border-radius: 4px;">'
-                    '<b>⚠️ Hệ thống đã tự động điều chỉnh số lượng thực tế:</b>'
-                    '<ul>%s</ul>'
-                    '<small>Lý do: Tổng SL nhập tay vượt quá tồn kho khả dụng '
-                    '(đã tính cả các đơn khác đang xử lý).</small>'
-                    '</div>'
-                ) % Markup(''.join(msg_lines))
-                picking.message_post(body=msg)
 
         return super().button_validate()
 
