@@ -104,6 +104,23 @@ class ProductFlowAnalysis(models.AbstractModel):
                         diff = (out_dt - best_in).days
                         storage_days.append(max(diff, 0))
                 data['avg_storage_days'] = round(sum(storage_days) / len(storage_days), 1) if storage_days else 0
+            elif out_dates and not in_dates:
+                # Có xuất nhưng không có nhập trong kỳ → tìm lần nhập gần nhất trước kỳ
+                pre_incoming = self.env['stock.move'].search([
+                    ('product_id', '=', pid),
+                    ('state', '=', 'done'),
+                    ('picking_type_id.code', '=', 'incoming'),
+                    ('date', '<', fields.Datetime.to_string(date_from)),
+                ], order='date desc', limit=1)
+                if pre_incoming:
+                    last_in = pre_incoming.date
+                    storage_days = []
+                    for out_dt in out_dates:
+                        diff = (out_dt - last_in).days
+                        storage_days.append(max(diff, 0))
+                    data['avg_storage_days'] = round(sum(storage_days) / len(storage_days), 1)
+                else:
+                    data['avg_storage_days'] = 0
             elif data['qty_available'] > 0 and in_dates:
                 # Có nhập nhưng chưa xuất → tính từ ngày nhập gần nhất đến hôm nay
                 from datetime import datetime
@@ -147,10 +164,13 @@ class ProductFlowAnalysis(models.AbstractModel):
             if not partner:
                 continue
 
-            if partner.id not in supplier_data:
-                supplier_data[partner.id] = {
-                    'partner_id': partner.id,
-                    'partner_name': partner.display_name,
+            # Dùng commercial_partner_id để gộp tất cả liên hệ cùng 1 công ty
+            company = partner.commercial_partner_id or partner
+
+            if company.id not in supplier_data:
+                supplier_data[company.id] = {
+                    'partner_id': company.id,
+                    'partner_name': company.display_name,
                     'total_qty': 0.0,
                     'total_amount': 0.0,
                     'move_count': 0,
@@ -159,7 +179,7 @@ class ProductFlowAnalysis(models.AbstractModel):
                     '_po_ids': set(),
                 }
 
-            supplier_data[partner.id]['_po_ids'].add(order.id)
+            supplier_data[company.id]['_po_ids'].add(order.id)
 
             for line in order.order_line:
                 if line.display_type:
@@ -171,11 +191,11 @@ class ProductFlowAnalysis(models.AbstractModel):
                 qty = line.product_qty
                 price = line.price_unit or 0.0
 
-                supplier_data[partner.id]['total_qty'] += qty
-                supplier_data[partner.id]['total_amount'] += qty * price
+                supplier_data[company.id]['total_qty'] += qty
+                supplier_data[company.id]['total_amount'] += qty * price
 
-                if prod.id not in supplier_data[partner.id]['products']:
-                    supplier_data[partner.id]['products'][prod.id] = {
+                if prod.id not in supplier_data[company.id]['products']:
+                    supplier_data[company.id]['products'][prod.id] = {
                         'product_id': prod.id,
                         'product_name': prod.display_name,
                         'default_code': prod.default_code or '',
@@ -186,7 +206,7 @@ class ProductFlowAnalysis(models.AbstractModel):
                         '_pickings': set(),
                     }
 
-                p = supplier_data[partner.id]['products'][prod.id]
+                p = supplier_data[company.id]['products'][prod.id]
                 p['qty'] += qty
                 p['amount'] += qty * price
                 p['_all_pos'].add(order.name)
