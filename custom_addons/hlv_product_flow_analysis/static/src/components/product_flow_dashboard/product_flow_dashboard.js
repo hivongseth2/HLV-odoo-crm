@@ -64,6 +64,13 @@ export class ProductFlowDashboard extends Component {
             productDetailName: "",
             productDetailLoading: false,
             productDetailData: { purchase_records: [], sale_records: [] },
+            // AI Analysis
+            aiLoading: false,
+            aiAnalysis: "",
+            aiError: "",
+            aiStats: null,
+            aiModel: "",
+            aiTokens: {},
         });
 
         onWillStart(async () => {

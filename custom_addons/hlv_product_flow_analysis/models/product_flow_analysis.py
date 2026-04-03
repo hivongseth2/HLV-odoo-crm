@@ -1,6 +1,7 @@
 import io
 import json
 import logging
+import requests
 from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
 
@@ -707,3 +708,159 @@ class ProductFlowAnalysis(models.AbstractModel):
         wb.close()
         output.seek(0)
         return base64.b64encode(output.read()).decode('utf-8')
+
+    # ── AI Procurement Analysis ──────────────────────────────────────────
+
+    @api.model
+    def get_ai_procurement_analysis(self, period='month', date_from=False, date_to=False, warehouse_id=False):
+        """Gửi dữ liệu phân tích tới OpenAI GPT để nhận chiến lược mua hàng & tồn kho tối thiểu."""
+        api_key = self.env['ir.config_parameter'].sudo().get_param('openai.api_key', '')
+        if not api_key:
+            return {'error': 'Chưa cấu hình OpenAI API Key. Vào Cài đặt → Thông số hệ thống → thêm key "openai.api_key".'}
+
+        # Thu thập dữ liệu
+        product_data = self.get_product_flow_data(
+            period=period, date_from=date_from, date_to=date_to, warehouse_id=warehouse_id
+        )
+        supplier_data = self.get_supplier_flow_data(
+            period=period, date_from=date_from, date_to=date_to, warehouse_id=warehouse_id
+        )
+        planning_data = self.get_inventory_planning_data(
+            period=period, date_from=date_from, date_to=date_to, warehouse_id=warehouse_id, min_frequency=2
+        )
+        trend_data = self.get_aggregate_trend_data(warehouse_id=warehouse_id, months=6)
+
+        # Phân loại sản phẩm
+        products = product_data.get('products', [])
+        high_freq = [p for p in products if p['outgoing_count'] >= 5]
+        medium_freq = [p for p in products if 2 <= p['outgoing_count'] < 5]
+        low_freq = [p for p in products if p['outgoing_count'] == 1]
+        no_sell = [p for p in products if p['outgoing_count'] == 0 and p['incoming_count'] > 0]
+
+        # Tóm tắt sản phẩm (giới hạn để không vượt token)
+        def summarize_products(items, limit=30):
+            result = []
+            for p in items[:limit]:
+                result.append({
+                    'name': p['product_name'][:60],
+                    'sku': p['default_code'],
+                    'buy': p['incoming_count'],
+                    'sell': p['outgoing_count'],
+                    'buy_qty': round(p['incoming_qty'], 1),
+                    'sell_qty': round(p['outgoing_qty'], 1),
+                    'stock': round(p['qty_available'], 1),
+                    'storage_days': round(p.get('avg_storage_days', 0), 1),
+                })
+            return result
+
+        # Tóm tắt nhà cung cấp
+        suppliers = supplier_data.get('suppliers', [])
+        supplier_summary = []
+        for s in suppliers[:20]:
+            supplier_summary.append({
+                'name': s['partner_name'][:40],
+                'products': s['product_count'],
+                'orders': s['move_count'],
+                'amount': round(s['total_amount']),
+                'delivery_days': s.get('avg_delivery_days', 0),
+            })
+
+        # Tóm tắt planning
+        planning = planning_data.get('planning', [])
+        planning_summary = []
+        for p in planning[:30]:
+            planning_summary.append({
+                'name': p['product_name'][:60],
+                'freq': p['total_frequency'],
+                'daily_avg': p['avg_daily'],
+                'min_stock': p['min_stock'],
+                'stock': round(p['qty_available'], 1),
+                'days_left': p['days_remaining'] if p['days_remaining'] < 9999 else 'N/A',
+                'priority': p['priority_level'],
+            })
+
+        data_payload = json.dumps({
+            'period': product_data.get('period', period),
+            'date_from': product_data.get('date_from', ''),
+            'date_to': product_data.get('date_to', ''),
+            'total_products': len(products),
+            'high_frequency_products': summarize_products(high_freq),
+            'medium_frequency_products': summarize_products(medium_freq),
+            'low_frequency_count': len(low_freq),
+            'low_frequency_sample': summarize_products(low_freq, 10),
+            'no_sell_count': len(no_sell),
+            'suppliers': supplier_summary,
+            'inventory_planning': planning_summary,
+            'trend_6months': trend_data.get('trends', []),
+        }, ensure_ascii=False)
+
+        system_prompt = (
+            "Bạn là chuyên gia phân tích chuỗi cung ứng và quản lý tồn kho cho công ty thương mại (trading company).\n\n"
+            "Đặc điểm nghiệp vụ:\n"
+            "- Công ty MUA hàng từ nhà cung cấp rồi BÁN lại cho khách hàng\n"
+            "- Có kho riêng có thể lưu trữ hàng hóa\n"
+            "- KHÔNG phải tất cả sản phẩm đều nên lưu kho sẵn\n"
+            "- Nhiều sản phẩm chỉ mua-bán 1-2 lần rồi không bán nữa (mua theo yêu cầu)\n"
+            "- Một số sản phẩm bán thường xuyên (pin, sạc, linh kiện...) → nên lưu kho\n\n"
+            "Nhiệm vụ phân tích:\n"
+            "1. **Phân loại sản phẩm**: Xác định sản phẩm nào nên lưu kho, sản phẩm nào mua theo đơn\n"
+            "2. **Chiến lược mua hàng**: Đề xuất thời điểm, số lượng mua cho các sản phẩm bán thường xuyên\n"
+            "3. **Tồn kho tối thiểu**: Đề xuất mức tồn kho tối thiểu cho từng sản phẩm cần lưu kho\n"
+            "4. **Đánh giá nhà cung cấp**: Nhà cung cấp nào ổn định, giao nhanh, nên ưu tiên\n"
+            "5. **Cảnh báo rủi ro**: Sản phẩm sắp hết, xu hướng bất thường, hàng tồn lâu\n"
+            "6. **Xu hướng**: Phân tích trend 6 tháng, dự báo ngắn hạn\n\n"
+            "Trả lời bằng tiếng Việt, ngắn gọn, có cấu trúc rõ ràng với các mục đánh số.\n"
+            "Sử dụng markdown formatting (## cho heading, **bold** cho emphasis, - cho bullet points).\n"
+            "Đưa ra con số cụ thể khi đề xuất tồn kho tối thiểu."
+        )
+
+        user_prompt = f"Phân tích dữ liệu lưu thông hàng hóa và đề xuất chiến lược mua hàng, tồn kho tối thiểu:\n\n{data_payload}"
+
+        try:
+            response = requests.post(
+                'https://api.openai.com/v1/chat/completions',
+                headers={
+                    'Authorization': f'Bearer {api_key}',
+                    'Content-Type': 'application/json',
+                },
+                json={
+                    'model': 'gpt-4o-mini',
+                    'messages': [
+                        {'role': 'system', 'content': system_prompt},
+                        {'role': 'user', 'content': user_prompt},
+                    ],
+                    'temperature': 0.3,
+                    'max_tokens': 4000,
+                },
+                timeout=60,
+            )
+            response.raise_for_status()
+            result = response.json()
+            ai_text = result['choices'][0]['message']['content']
+
+            return {
+                'analysis': ai_text,
+                'model': result.get('model', 'gpt-4o-mini'),
+                'tokens': result.get('usage', {}),
+                'product_stats': {
+                    'total': len(products),
+                    'high_freq': len(high_freq),
+                    'medium_freq': len(medium_freq),
+                    'low_freq': len(low_freq),
+                    'no_sell': len(no_sell),
+                },
+            }
+        except requests.exceptions.Timeout:
+            return {'error': 'OpenAI API timeout. Vui lòng thử lại.'}
+        except requests.exceptions.HTTPError as e:
+            status = e.response.status_code if e.response else 'unknown'
+            detail = ''
+            if e.response is not None:
+                try:
+                    detail = e.response.json().get('error', {}).get('message', '')
+                except Exception:
+                    pass
+            return {'error': f'OpenAI API lỗi ({status}): {detail}'}
+        except Exception as e:
+            _logger.exception("AI analysis error")
+            return {'error': f'Lỗi khi gọi AI: {str(e)}'}

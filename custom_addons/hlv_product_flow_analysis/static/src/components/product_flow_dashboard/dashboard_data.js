@@ -383,4 +383,73 @@ export const dashboardDataMixins = {
         if (!max) return "0%";
         return Math.round((value / max) * 100) + "%";
     },
+
+    // ========== AI Analysis ==========
+    async runAiAnalysis() {
+        this.state.aiLoading = true;
+        this.state.aiError = "";
+        this.state.aiAnalysis = "";
+        this.state.aiStats = null;
+        try {
+            const result = await this.orm.call(
+                "product.flow.analysis",
+                "get_ai_procurement_analysis",
+                [],
+                {
+                    period: this.state.period,
+                    date_from: this.state.dateFrom || false,
+                    date_to: this.state.dateTo || false,
+                    warehouse_id: this.state.warehouseId || false,
+                }
+            );
+            if (result.error) {
+                this.state.aiError = result.error;
+            } else {
+                this.state.aiAnalysis = result.analysis || "";
+                this.state.aiStats = result.product_stats || null;
+                this.state.aiModel = result.model || "";
+                this.state.aiTokens = result.tokens || {};
+            }
+        } catch (e) {
+            this.state.aiError = "Lỗi kết nối: " + (e.message || e);
+        }
+        this.state.aiLoading = false;
+    },
+
+    clearAiAnalysis() {
+        this.state.aiAnalysis = "";
+        this.state.aiError = "";
+        this.state.aiStats = null;
+    },
+
+    /** Convert markdown-like text to safe HTML for display */
+    renderMarkdown(text) {
+        if (!text) return "";
+        let html = text;
+        // Escape HTML entities first
+        html = html.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        // Headings: ## heading → <h4>
+        html = html.replace(/^### (.+)$/gm, '<h5 class="pf-ai-h5">$1</h5>');
+        html = html.replace(/^## (.+)$/gm, '<h4 class="pf-ai-h4">$1</h4>');
+        // Bold: **text** → <strong>
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        // Italic: *text* → <em>
+        html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+        // Bullet lists: - item → <li>
+        html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\/li>\n?)+/gs, '<ul class="pf-ai-list">$&</ul>');
+        // Numbered lists: 1. item
+        html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+        // Line breaks
+        html = html.replace(/\n\n/g, '</p><p>');
+        html = html.replace(/\n/g, '<br/>');
+        html = '<p>' + html + '</p>';
+        // Clean up empty paragraphs
+        html = html.replace(/<p>\s*<\/p>/g, '');
+        html = html.replace(/<p>\s*(<h[45])/g, '$1');
+        html = html.replace(/(<\/h[45]>)\s*<\/p>/g, '$1');
+        html = html.replace(/<p>\s*(<ul)/g, '$1');
+        html = html.replace(/(<\/ul>)\s*<\/p>/g, '$1');
+        return html;
+    },
 };

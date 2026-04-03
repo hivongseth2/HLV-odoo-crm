@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_product_flow_analysis.SidebarAI">
+        <div class="pf-sidebar-ai">
+            <!-- Header & Button -->
+            <div class="pf-ai-header">
+                <div class="pf-ai-icon">
+                    <i class="fa fa-magic"/>
+                </div>
+                <h4>AI Phân tích mua hàng</h4>
+                <p class="pf-ai-desc">
+                    Sử dụng GPT phân tích dữ liệu lưu thông, đề xuất chiến lược mua hàng
+                    và mức tồn kho tối thiểu cho từng sản phẩm.
+                </p>
+                <button class="pf-ai-btn"
+                        t-att-disabled="state.aiLoading"
+                        t-on-click="() => this.runAiAnalysis()">
+                    <t t-if="state.aiLoading">
+                        <div class="pf-spinner-sm"/>
+                        Đang phân tích...
+                    </t>
+                    <t t-else="">
+                        <i class="fa fa-bolt me-1"/>
+                        Phân tích với AI
+                    </t>
+                </button>
+                <t t-if="state.aiAnalysis">
+                    <button class="pf-ai-btn-clear" t-on-click="() => this.clearAiAnalysis()">
+                        <i class="fa fa-refresh me-1"/>Phân tích lại
+                    </button>
+                </t>
+            </div>
+
+            <!-- Error -->
+            <t t-if="state.aiError">
+                <div class="pf-ai-error">
+                    <i class="fa fa-exclamation-triangle me-1"/>
+                    <t t-esc="state.aiError"/>
+                </div>
+            </t>
+
+            <!-- Loading -->
+            <t t-if="state.aiLoading">
+                <div class="pf-ai-loading">
+                    <div class="pf-ai-loading-dots">
+                        <span/><span/><span/>
+                    </div>
+                    <p>AI đang phân tích dữ liệu của bạn...</p>
+                    <p class="pf-ai-loading-sub">Quá trình này có thể mất 15-30 giây</p>
+                </div>
+            </t>
+
+            <!-- Stats Summary -->
+            <t t-if="state.aiStats and !state.aiLoading">
+                <div class="pf-ai-stats">
+                    <div class="pf-ai-stat">
+                        <span class="pf-ai-stat-num" t-esc="state.aiStats.total"/>
+                        <span class="pf-ai-stat-label">Tổng SP</span>
+                    </div>
+                    <div class="pf-ai-stat pf-ai-stat-high">
+                        <span class="pf-ai-stat-num" t-esc="state.aiStats.high_freq"/>
+                        <span class="pf-ai-stat-label">Bán nhiều (≥5)</span>
+                    </div>
+                    <div class="pf-ai-stat pf-ai-stat-med">
+                        <span class="pf-ai-stat-num" t-esc="state.aiStats.medium_freq"/>
+                        <span class="pf-ai-stat-label">Trung bình (2-4)</span>
+                    </div>
+                    <div class="pf-ai-stat pf-ai-stat-low">
+                        <span class="pf-ai-stat-num" t-esc="state.aiStats.low_freq"/>
+                        <span class="pf-ai-stat-label">Bán 1 lần</span>
+                    </div>
+                </div>
+            </t>
+
+            <!-- AI Analysis Result -->
+            <t t-if="state.aiAnalysis and !state.aiLoading">
+                <div class="pf-ai-result">
+                    <div class="pf-ai-result-header">
+                        <i class="fa fa-lightbulb-o me-1"/>
+                        Kết quả phân tích AI
+                        <span class="pf-ai-model" t-if="state.aiModel">
+                            (<t t-esc="state.aiModel"/>)
+                        </span>
+                    </div>
+                    <div class="pf-ai-content" t-out="renderMarkdown(state.aiAnalysis)"/>
+                    <t t-if="state.aiTokens and state.aiTokens.total_tokens">
+                        <div class="pf-ai-footer">
+                            <small>
+                                Tokens: <t t-esc="state.aiTokens.total_tokens"/>
+                            </small>
+                        </div>
+                    </t>
+                </div>
+            </t>
+
+            <!-- Empty state -->
+            <t t-if="!state.aiAnalysis and !state.aiLoading and !state.aiError">
+                <div class="pf-ai-empty">
+                    <div class="pf-ai-empty-icon">
+                        <i class="fa fa-lightbulb-o"/>
+                    </div>
+                    <p>Nhấn <strong>"Phân tích với AI"</strong> để nhận:</p>
+                    <ul>
+                        <li><i class="fa fa-check-circle me-1"/>Phân loại sản phẩm nên lưu kho</li>
+                        <li><i class="fa fa-check-circle me-1"/>Chiến lược mua hàng tối ưu</li>
+                        <li><i class="fa fa-check-circle me-1"/>Đề xuất tồn kho tối thiểu</li>
+                        <li><i class="fa fa-check-circle me-1"/>Đánh giá nhà cung cấp</li>
+                        <li><i class="fa fa-check-circle me-1"/>Cảnh báo rủi ro</li>
+                    </ul>
+                </div>
+            </t>
+        </div>
+    </t>
+</templates>
