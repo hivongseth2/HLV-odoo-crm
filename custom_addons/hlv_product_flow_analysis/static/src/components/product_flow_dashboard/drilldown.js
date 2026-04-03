@@ -20,6 +20,12 @@ export const drilldownMixins = {
         this.state.drilldownProducts = [];
     },
 
+    onDrilldownOverlayClick(ev) {
+        if (ev.target === ev.currentTarget) {
+            this.closeDrilldown();
+        }
+    },
+
     _showDrilldown(title, products) {
         this.state.drilldownTitle = title;
         this.state.drilldownProducts = products.map(p => ({

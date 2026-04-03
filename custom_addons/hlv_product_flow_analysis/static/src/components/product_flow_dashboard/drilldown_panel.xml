@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="hlv_product_flow_analysis.DrilldownPanel">
-        <div t-if="state.showDrilldown" class="pf-drilldown-overlay" t-on-click="(ev) => { if(ev.target === ev.currentTarget) this.closeDrilldown(); }">
+        <div t-if="state.showDrilldown" class="pf-drilldown-overlay" t-on-click="(ev) => this.onDrilldownOverlayClick(ev)">
             <div class="pf-drilldown-panel">
                 <div class="pf-drilldown-header">
                     <h3 class="pf-drilldown-title">
