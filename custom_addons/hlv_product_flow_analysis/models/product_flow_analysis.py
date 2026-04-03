@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import re
+import time
 import requests
 from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
@@ -869,21 +870,15 @@ class ProductFlowAnalysis(models.AbstractModel):
 
         try:
             for iteration in range(8):
-                response = requests.post(
-                    'https://api.openai.com/v1/chat/completions',
-                    headers=headers,
-                    json={
-                        'model': 'gpt-4o-mini',
-                        'messages': messages,
-                        'tools': tools,
-                        'tool_choice': 'auto',
-                        'temperature': 0.3,
-                        'max_tokens': 4000,
-                    },
-                    timeout=30,
-                )
-                response.raise_for_status()
-                result = response.json()
+                payload = {
+                    'model': 'gpt-4o-mini',
+                    'messages': messages,
+                    'tools': tools,
+                    'tool_choice': 'auto',
+                    'temperature': 0.3,
+                    'max_tokens': 4000,
+                }
+                result = self._call_openai_with_retry(headers, payload)
                 model_used = result.get('model', model_used)
                 usage = result.get('usage', {})
                 for k in total_tokens:
@@ -906,10 +901,14 @@ class ProductFlowAnalysis(models.AbstractModel):
                             sql = args.get('sql', '')
                             _logger.info("AI query [%s]: %s", args.get('purpose', ''), sql[:200])
                             query_result = self._execute_readonly_query(sql)
+                            tool_content = json.dumps(query_result, ensure_ascii=False, default=str)
+                            # Truncate large results to reduce token usage and prevent slow responses
+                            if len(tool_content) > 6000:
+                                tool_content = tool_content[:6000] + '...(truncated)'
                             messages.append({
                                 'role': 'tool',
                                 'tool_call_id': tc['id'],
-                                'content': json.dumps(query_result, ensure_ascii=False, default=str)[:8000],
+                                'content': tool_content,
                             })
                         else:
                             messages.append({
@@ -939,8 +938,8 @@ class ProductFlowAnalysis(models.AbstractModel):
                 'product_stats': product_stats,
             }
 
-        except requests.exceptions.Timeout:
-            return {'error': 'OpenAI API timeout. Vui lòng thử lại.'}
+        except requests.exceptions.Timeout as e:
+            return {'error': f'OpenAI API timeout sau nhiều lần thử. Vui lòng thử câu hỏi ngắn hơn hoặc thử lại sau. ({e})'}
         except requests.exceptions.HTTPError as e:
             status = e.response.status_code if e.response else 'unknown'
             detail = ''
@@ -977,7 +976,7 @@ class ProductFlowAnalysis(models.AbstractModel):
         cr = self.env.cr
         try:
             cr.execute("SAVEPOINT ai_query_sp")
-            cr.execute("SET LOCAL statement_timeout = '10s'")
+            cr.execute("SET LOCAL statement_timeout = '30s'")
             cr.execute(sql)
             columns = [desc[0] for desc in cr.description]
             rows = cr.fetchmany(max_rows)
@@ -991,6 +990,51 @@ class ProductFlowAnalysis(models.AbstractModel):
             except Exception:
                 pass
             return {'error': f'Lỗi truy vấn: {str(e)}'}
+
+    @api.model
+    def _call_openai_with_retry(self, headers, payload, max_retries=3, base_timeout=60):
+        """Call OpenAI API with retry logic and progressive timeout.
+
+        - Retry on timeout/5xx errors with exponential backoff.
+        - Timeout increases: 60s → 90s → 120s per attempt.
+        """
+        last_error = None
+        for attempt in range(max_retries):
+            timeout = base_timeout + attempt * 30  # 60, 90, 120
+            try:
+                _logger.info("OpenAI API call attempt %d/%d (timeout=%ds)", attempt + 1, max_retries, timeout)
+                response = requests.post(
+                    'https://api.openai.com/v1/chat/completions',
+                    headers=headers,
+                    json=payload,
+                    timeout=timeout,
+                )
+                response.raise_for_status()
+                return response.json()
+            except requests.exceptions.Timeout:
+                last_error = f'OpenAI API timeout (lần {attempt + 1}/{max_retries}, {timeout}s)'
+                _logger.warning(last_error)
+                if attempt < max_retries - 1:
+                    wait = 2 ** attempt  # 1s, 2s
+                    time.sleep(wait)
+            except requests.exceptions.HTTPError as e:
+                status = e.response.status_code if e.response else 0
+                detail = ''
+                if e.response is not None:
+                    try:
+                        detail = e.response.json().get('error', {}).get('message', '')
+                    except Exception:
+                        detail = e.response.text[:200]
+                # Retry on 429 (rate limit) and 5xx (server errors)
+                if status in (429, 500, 502, 503, 504) and attempt < max_retries - 1:
+                    wait = 2 ** attempt + 1
+                    _logger.warning("OpenAI %d error, retrying in %ds: %s", status, wait, detail)
+                    time.sleep(wait)
+                    last_error = f'OpenAI API lỗi ({status}): {detail}'
+                else:
+                    raise  # Non-retryable HTTP error
+        # All retries exhausted
+        raise requests.exceptions.Timeout(last_error or 'OpenAI API timeout sau nhiều lần thử')
 
     @api.model
     def _get_db_schema_description(self):
@@ -1141,21 +1185,15 @@ class ProductFlowAnalysis(models.AbstractModel):
 
         try:
             for iteration in range(8):
-                response = requests.post(
-                    'https://api.openai.com/v1/chat/completions',
-                    headers=headers_req,
-                    json={
-                        'model': 'gpt-4o-mini',
-                        'messages': messages,
-                        'tools': tools,
-                        'tool_choice': 'auto',
-                        'temperature': 0.3,
-                        'max_tokens': 4000,
-                    },
-                    timeout=30,
-                )
-                response.raise_for_status()
-                result = response.json()
+                payload = {
+                    'model': 'gpt-4o-mini',
+                    'messages': messages,
+                    'tools': tools,
+                    'tool_choice': 'auto',
+                    'temperature': 0.3,
+                    'max_tokens': 4000,
+                }
+                result = self._call_openai_with_retry(headers_req, payload)
                 model_used = result.get('model', model_used)
                 usage = result.get('usage', {})
                 for k in total_tokens:
@@ -1178,10 +1216,13 @@ class ProductFlowAnalysis(models.AbstractModel):
                             sql = args.get('sql', '')
                             _logger.info("AI Chat query [%s]: %s", args.get('purpose', ''), sql[:200])
                             query_result = self._execute_readonly_query(sql)
+                            tool_content = json.dumps(query_result, ensure_ascii=False, default=str)
+                            if len(tool_content) > 6000:
+                                tool_content = tool_content[:6000] + '...(truncated)'
                             messages.append({
                                 'role': 'tool',
                                 'tool_call_id': tc['id'],
-                                'content': json.dumps(query_result, ensure_ascii=False, default=str)[:8000],
+                                'content': tool_content,
                             })
                         elif fn_name == 'generate_excel':
                             title = args.get('title', 'Báo cáo')
@@ -1239,8 +1280,8 @@ class ProductFlowAnalysis(models.AbstractModel):
                 resp['excel'] = excel_file
             return resp
 
-        except requests.exceptions.Timeout:
-            return {'error': 'OpenAI API timeout. Vui lòng thử lại.'}
+        except requests.exceptions.Timeout as e:
+            return {'error': f'OpenAI API timeout sau nhiều lần thử. Vui lòng thử câu hỏi ngắn hơn hoặc thử lại sau. ({e})'}
         except requests.exceptions.HTTPError as e:
             status = e.response.status_code if e.response else 'unknown'
             detail = ''
