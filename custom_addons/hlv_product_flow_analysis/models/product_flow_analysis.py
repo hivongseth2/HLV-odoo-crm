@@ -55,10 +55,14 @@ class ProductFlowAnalysis(models.AbstractModel):
 
             if picking_type == 'incoming':
                 product_data[prod.id]['incoming_qty'] += qty
-                product_data[prod.id]['incoming_count'] += 1
+                # Chỉ đếm lần mua nếu move gắn với đơn mua hàng (PO)
+                if move.purchase_line_id:
+                    product_data[prod.id]['incoming_count'] += 1
             elif picking_type == 'outgoing':
                 product_data[prod.id]['outgoing_qty'] += qty
-                product_data[prod.id]['outgoing_count'] += 1
+                # Chỉ đếm lần bán nếu move gắn với đơn bán hàng (SO)
+                if move.sale_line_id:
+                    product_data[prod.id]['outgoing_count'] += 1
             elif picking_type == 'internal':
                 product_data[prod.id]['internal_qty'] += qty
 
