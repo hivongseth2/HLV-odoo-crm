@@ -667,7 +667,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 'receiver_prov_id': r_p,
                 'receiver_city_id': r_d,
                 'receiver_area_id': r_w,
-                'receiver_address': receiver_partner.street or '',
+                'receiver_address': picking.x_studio_dia_chi_giao_hang or receiver_partner.street or '',
             })
             # Try to get weight from picking/move lines if possible
             total_weight = sum(move.product_id.weight * move.product_uom_qty for move in picking.move_ids)
