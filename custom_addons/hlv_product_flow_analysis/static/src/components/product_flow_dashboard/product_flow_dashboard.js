@@ -711,7 +711,6 @@ export class ProductFlowDashboard extends Component {
                 quadrant,
             };
         });
-        // Sort by total activity for display, limit to top 40
         points.sort((a, b) => (b.buyQty + b.sellQty) - (a.buyQty + a.sellQty));
         return {
             points: points.slice(0, 40),
@@ -727,6 +726,100 @@ export class ProductFlowDashboard extends Component {
 
     getCorrelationPointClass(point) {
         return 'pf-scatter-dot pf-q-' + point.quadrant;
+    }
+
+    // ========== Donut: Tỷ lệ Mua vs Bán (SL) ==========
+    get buySellRatioPie() {
+        const products = this.state.products;
+        const totalBuy = products.reduce((s, p) => s + (p.incoming_qty || 0), 0);
+        const totalSell = products.reduce((s, p) => s + (p.outgoing_qty || 0), 0);
+        const total = totalBuy + totalSell || 1;
+        return {
+            buyQty: totalBuy,
+            sellQty: totalSell,
+            buyPct: Math.round(totalBuy / total * 100),
+            sellPct: Math.round(totalSell / total * 100),
+            buyDeg: Math.round(totalBuy / total * 360),
+        };
+    }
+
+    // ========== Donut: Phân bổ tần suất giao dịch ==========
+    get frequencyPie() {
+        const products = this.state.products;
+        let rare = 0, low = 0, medium = 0, high = 0;
+        for (const p of products) {
+            const freq = (p.incoming_count || 0) + (p.outgoing_count || 0);
+            if (freq <= 2) rare++;
+            else if (freq <= 5) low++;
+            else if (freq <= 10) medium++;
+            else high++;
+        }
+        const total = products.length || 1;
+        return {
+            rare: { count: rare, pct: Math.round(rare / total * 100) },
+            low: { count: low, pct: Math.round(low / total * 100) },
+            medium: { count: medium, pct: Math.round(medium / total * 100) },
+            high: { count: high, pct: Math.round(high / total * 100) },
+            total: products.length,
+        };
+    }
+
+    // ========== Top SP So sánh Mua vs Bán (dual bars) ==========
+    get topBuySellComparison() {
+        const items = [...this.state.products]
+            .filter(p => p.incoming_qty > 0 || p.outgoing_qty > 0)
+            .sort((a, b) => (b.incoming_qty + b.outgoing_qty) - (a.incoming_qty + a.outgoing_qty))
+            .slice(0, 10);
+        const maxVal = items.length ? Math.max(...items.map(p => Math.max(p.incoming_qty, p.outgoing_qty))) : 1;
+        return { items, maxVal };
+    }
+
+    // ========== Product Buy/Sell Heatmap (intensity per product rows) ==========
+    get productBuySellHeat() {
+        const items = [...this.state.products]
+            .filter(p => p.incoming_qty > 0 || p.outgoing_qty > 0)
+            .sort((a, b) => (b.incoming_count + b.outgoing_count) - (a.incoming_count + a.outgoing_count))
+            .slice(0, 12);
+        const maxBuyQty = Math.max(...items.map(p => p.incoming_qty), 1);
+        const maxSellQty = Math.max(...items.map(p => p.outgoing_qty), 1);
+        const maxBuyFreq = Math.max(...items.map(p => p.incoming_count), 1);
+        const maxSellFreq = Math.max(...items.map(p => p.outgoing_count), 1);
+        return { items, maxBuyQty, maxSellQty, maxBuyFreq, maxSellFreq };
+    }
+
+    getHeatLevel(value, max) {
+        if (!value || value <= 0) return 0;
+        const ratio = value / max;
+        if (ratio >= 0.75) return 4;
+        if (ratio >= 0.5) return 3;
+        if (ratio >= 0.25) return 2;
+        return 1;
+    }
+
+    // ========== Purchase optimization: frequency + quantity analysis ==========
+    get purchaseOptimization() {
+        const items = [...this.state.products]
+            .filter(p => p.incoming_qty > 0 || p.outgoing_qty > 0)
+            .map(p => {
+                const buyFreq = p.incoming_count || 0;
+                const sellFreq = p.outgoing_count || 0;
+                const buyQty = p.incoming_qty || 0;
+                const sellQty = p.outgoing_qty || 0;
+                // Tỷ lệ bán/mua - >1 = bán nhiều hơn mua
+                const qtyRatio = buyQty > 0 ? Math.round(sellQty / buyQty * 100) / 100 : (sellQty > 0 ? 999 : 0);
+                const freqRatio = buyFreq > 0 ? Math.round(sellFreq / buyFreq * 100) / 100 : (sellFreq > 0 ? 999 : 0);
+                // Phân loại tối ưu mua
+                let optType;
+                if (sellFreq >= 3 && qtyRatio > 1.5) optType = 'underBuy';      // Bán nhiều hơn mua → cần mua thêm
+                else if (buyFreq >= 3 && qtyRatio < 0.5) optType = 'overBuy';    // Mua nhiều hơn bán → giảm mua
+                else if (sellFreq >= 3 && buyFreq >= 3) optType = 'balanced';     // Cân đối
+                else optType = 'rare';                                              // Ít giao dịch
+                return { ...p, buyFreq, sellFreq, buyQty, sellQty, qtyRatio, freqRatio, optType };
+            });
+
+        const underBuy = items.filter(i => i.optType === 'underBuy').sort((a, b) => b.qtyRatio - a.qtyRatio).slice(0, 5);
+        const overBuy = items.filter(i => i.optType === 'overBuy').sort((a, b) => a.qtyRatio - b.qtyRatio).slice(0, 5);
+        return { underBuy, overBuy };
     }
 
     // Priority level helpers for planning

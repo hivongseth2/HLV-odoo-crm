@@ -127,7 +127,7 @@
                                 </button>
                                 <button t-att-class="'pf-stab ' + (state.chartsActiveSection === 'heatmap' ? 'active' : '')"
                                         t-on-click="() => this.setChartsSection('heatmap')">
-                                    <i class="fa fa-th me-1"/>Nhiệt
+                                    <i class="fa fa-th me-1"/>Phân tích
                                 </button>
                                 <button t-att-class="'pf-stab ' + (state.chartsActiveSection === 'correlation' ? 'active' : '')"
                                         t-on-click="() => this.setChartsSection('correlation')">
@@ -393,8 +393,239 @@
                                     </div>
                                 </t>
 
-                                <!-- ===== HEATMAP ===== -->
+                                <!-- ===== PHÂN TÍCH (Analysis) ===== -->
                                 <t t-if="state.chartsActiveSection === 'heatmap'">
+
+                                    <!-- 1. Donut: Tỷ lệ Mua vs Bán -->
+                                    <div class="pf-sc-card">
+                                        <h4 class="pf-sc-title">
+                                            <i class="fa fa-pie-chart me-1" style="color:#7048e8;"/>Tỷ lệ Mua vs Bán
+                                        </h4>
+                                        <div class="pf-pie-container">
+                                            <div class="pf-pie-ring"
+                                                 t-att-style="'--buy-deg:' + buySellRatioPie.buyDeg + 'deg'">
+                                                <div class="pf-pie-center">
+                                                    <span class="pf-pie-total" t-esc="formatNumber(buySellRatioPie.buyQty + buySellRatioPie.sellQty)"/>
+                                                    <span class="pf-pie-sublabel">Tổng SL</span>
+                                                </div>
+                                            </div>
+                                            <div class="pf-pie-legend">
+                                                <div class="pf-pie-leg-item">
+                                                    <span class="pf-pie-leg-dot pf-leg-buy"/>
+                                                    <span>Mua</span>
+                                                    <strong><t t-esc="buySellRatioPie.buyPct"/>%</strong>
+                                                    <span class="pf-pie-leg-val">(<t t-esc="formatNumber(buySellRatioPie.buyQty)"/>)</span>
+                                                </div>
+                                                <div class="pf-pie-leg-item">
+                                                    <span class="pf-pie-leg-dot pf-leg-sell"/>
+                                                    <span>Bán</span>
+                                                    <strong><t t-esc="buySellRatioPie.sellPct"/>%</strong>
+                                                    <span class="pf-pie-leg-val">(<t t-esc="formatNumber(buySellRatioPie.sellQty)"/>)</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 2. Donut: Phân bổ tần suất giao dịch -->
+                                    <div class="pf-sc-card">
+                                        <h4 class="pf-sc-title">
+                                            <i class="fa fa-signal me-1" style="color:#e8590c;"/>Phân bổ tần suất
+                                        </h4>
+                                        <div class="pf-freq-dist">
+                                            <div class="pf-freq-bar-stack">
+                                                <div class="pf-freq-seg pf-freq-rare" t-att-style="'width:' + frequencyPie.rare.pct + '%'"
+                                                     t-att-title="'1-2 lần: ' + frequencyPie.rare.count + ' SP'"/>
+                                                <div class="pf-freq-seg pf-freq-low" t-att-style="'width:' + frequencyPie.low.pct + '%'"
+                                                     t-att-title="'3-5 lần: ' + frequencyPie.low.count + ' SP'"/>
+                                                <div class="pf-freq-seg pf-freq-med" t-att-style="'width:' + frequencyPie.medium.pct + '%'"
+                                                     t-att-title="'6-10 lần: ' + frequencyPie.medium.count + ' SP'"/>
+                                                <div class="pf-freq-seg pf-freq-high" t-att-style="'width:' + frequencyPie.high.pct + '%'"
+                                                     t-att-title="'>10 lần: ' + frequencyPie.high.count + ' SP'"/>
+                                            </div>
+                                            <div class="pf-freq-legend">
+                                                <div class="pf-freq-leg-item">
+                                                    <span class="pf-freq-dot pf-freq-rare"/>
+                                                    <span>1-2 lần</span>
+                                                    <strong t-esc="frequencyPie.rare.count"/>
+                                                </div>
+                                                <div class="pf-freq-leg-item">
+                                                    <span class="pf-freq-dot pf-freq-low"/>
+                                                    <span>3-5 lần</span>
+                                                    <strong t-esc="frequencyPie.low.count"/>
+                                                </div>
+                                                <div class="pf-freq-leg-item">
+                                                    <span class="pf-freq-dot pf-freq-med"/>
+                                                    <span>6-10 lần</span>
+                                                    <strong t-esc="frequencyPie.medium.count"/>
+                                                </div>
+                                                <div class="pf-freq-leg-item">
+                                                    <span class="pf-freq-dot pf-freq-high"/>
+                                                    <span>&gt;10 lần</span>
+                                                    <strong t-esc="frequencyPie.high.count"/>
+                                                </div>
+                                            </div>
+                                            <div class="pf-freq-hint">
+                                                <i class="fa fa-info-circle me-1"/>
+                                                <t t-if="frequencyPie.rare.pct > 50">
+                                                    <span class="text-warning"><t t-esc="frequencyPie.rare.pct"/>% SP chỉ giao dịch 1-2 lần → không nên ưu tiên kho</span>
+                                                </t>
+                                                <t t-elif="frequencyPie.high.pct > 30">
+                                                    <span class="text-success"><t t-esc="frequencyPie.high.pct"/>% SP giao dịch &gt;10 lần → hàng chủ lực</span>
+                                                </t>
+                                                <t t-else="">
+                                                    <span>Tổng <t t-esc="frequencyPie.total"/> SP giao dịch trong kỳ</span>
+                                                </t>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 3. Dual Bars: So sánh SL Mua vs Bán per product -->
+                                    <div class="pf-sc-card">
+                                        <h4 class="pf-sc-title">
+                                            <i class="fa fa-exchange me-1" style="color:#1971c2;"/>Top SP: Mua vs Bán
+                                        </h4>
+                                        <div class="pf-dual-bars">
+                                            <t t-foreach="topBuySellComparison.items" t-as="item" t-key="item.product_id">
+                                                <div class="pf-dual-row">
+                                                    <div class="pf-dual-label" t-att-title="item.product_name">
+                                                        <span t-esc="item.default_code || '?'"/>
+                                                    </div>
+                                                    <div class="pf-dual-tracks">
+                                                        <div class="pf-dual-track">
+                                                            <div class="pf-dual-fill pf-dual-buy"
+                                                                 t-att-style="'width:' + getBarWidth(item.incoming_qty, topBuySellComparison.maxVal)">
+                                                                <span class="pf-dual-val" t-esc="formatNumber(item.incoming_qty)"/>
+                                                            </div>
+                                                        </div>
+                                                        <div class="pf-dual-track">
+                                                            <div class="pf-dual-fill pf-dual-sell"
+                                                                 t-att-style="'width:' + getBarWidth(item.outgoing_qty, topBuySellComparison.maxVal)">
+                                                                <span class="pf-dual-val" t-esc="formatNumber(item.outgoing_qty)"/>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </t>
+                                            <div class="pf-dual-legend">
+                                                <span><span class="pf-dual-leg-dot pf-dual-buy"/> Mua</span>
+                                                <span><span class="pf-dual-leg-dot pf-dual-sell"/> Bán</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 4. Product Buy/Sell Heatmap (4 dimensions) -->
+                                    <div class="pf-sc-card">
+                                        <h4 class="pf-sc-title">
+                                            <i class="fa fa-th me-1" style="color:#e64980;"/>Nhiệt: SL × Tần suất
+                                        </h4>
+                                        <t t-if="productBuySellHeat.items.length > 0">
+                                            <div class="pf-heatmap-wrap">
+                                                <table class="pf-heatmap pf-hm-product">
+                                                    <thead>
+                                                        <tr>
+                                                            <th class="pf-hm-corner">SP</th>
+                                                            <th class="pf-hm-col-head"><span>SL Mua</span></th>
+                                                            <th class="pf-hm-col-head"><span>Lần Mua</span></th>
+                                                            <th class="pf-hm-col-head"><span>SL Bán</span></th>
+                                                            <th class="pf-hm-col-head"><span>Lần Bán</span></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <t t-foreach="productBuySellHeat.items" t-as="p" t-key="p.product_id">
+                                                            <tr>
+                                                                <td class="pf-hm-row-head" t-att-title="p.product_name">
+                                                                    <span t-esc="p.default_code || p.product_name.substring(0, 10)"/>
+                                                                </td>
+                                                                <td t-att-class="'pf-hm-cell pf-hm-buy-' + getHeatLevel(p.incoming_qty, productBuySellHeat.maxBuyQty)"
+                                                                    t-att-title="'SL Mua: ' + formatNumber(p.incoming_qty)">
+                                                                    <span t-esc="formatNumber(p.incoming_qty)"/>
+                                                                </td>
+                                                                <td t-att-class="'pf-hm-cell pf-hm-buyf-' + getHeatLevel(p.incoming_count, productBuySellHeat.maxBuyFreq)"
+                                                                    t-att-title="'Lần mua: ' + p.incoming_count">
+                                                                    <span t-esc="p.incoming_count"/>
+                                                                </td>
+                                                                <td t-att-class="'pf-hm-cell pf-hm-sell-' + getHeatLevel(p.outgoing_qty, productBuySellHeat.maxSellQty)"
+                                                                    t-att-title="'SL Bán: ' + formatNumber(p.outgoing_qty)">
+                                                                    <span t-esc="formatNumber(p.outgoing_qty)"/>
+                                                                </td>
+                                                                <td t-att-class="'pf-hm-cell pf-hm-sellf-' + getHeatLevel(p.outgoing_count, productBuySellHeat.maxSellFreq)"
+                                                                    t-att-title="'Lần bán: ' + p.outgoing_count">
+                                                                    <span t-esc="p.outgoing_count"/>
+                                                                </td>
+                                                            </tr>
+                                                        </t>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <div class="pf-hm-legend pf-hm-legend-multi">
+                                                <div>
+                                                    <span class="pf-hm-legend-label">Mua:</span>
+                                                    <span class="pf-hm-swatch pf-hm-buy-1"/>
+                                                    <span class="pf-hm-swatch pf-hm-buy-4"/>
+                                                </div>
+                                                <div>
+                                                    <span class="pf-hm-legend-label">Bán:</span>
+                                                    <span class="pf-hm-swatch pf-hm-sell-1"/>
+                                                    <span class="pf-hm-swatch pf-hm-sell-4"/>
+                                                </div>
+                                            </div>
+                                        </t>
+                                        <t t-else="">
+                                            <div class="pf-chart-empty">Chưa có dữ liệu</div>
+                                        </t>
+                                    </div>
+
+                                    <!-- 5. Tối ưu mua hàng -->
+                                    <div class="pf-sc-card">
+                                        <h4 class="pf-sc-title">
+                                            <i class="fa fa-shopping-cart me-1" style="color:#2b8a3e;"/>Tối ưu mua hàng
+                                        </h4>
+                                        <t t-if="purchaseOptimization.underBuy.length > 0">
+                                            <div class="pf-opt-section">
+                                                <div class="pf-opt-label pf-opt-under">
+                                                    <i class="fa fa-arrow-up me-1"/>Cần mua thêm (bán &gt; mua)
+                                                </div>
+                                                <t t-foreach="purchaseOptimization.underBuy" t-as="p" t-key="p.product_id">
+                                                    <div class="pf-opt-row">
+                                                        <span class="pf-opt-name" t-att-title="p.product_name">
+                                                            <span class="pf-code me-1" t-esc="p.default_code || '?'"/>
+                                                        </span>
+                                                        <span class="pf-opt-stats">
+                                                            <span class="pf-opt-buy">M: <t t-esc="formatNumber(p.buyQty)"/> (<t t-esc="p.buyFreq"/>x)</span>
+                                                            <span class="pf-opt-sell">B: <t t-esc="formatNumber(p.sellQty)"/> (<t t-esc="p.sellFreq"/>x)</span>
+                                                        </span>
+                                                        <span class="pf-opt-ratio text-danger">×<t t-esc="p.qtyRatio"/></span>
+                                                    </div>
+                                                </t>
+                                            </div>
+                                        </t>
+                                        <t t-if="purchaseOptimization.overBuy.length > 0">
+                                            <div class="pf-opt-section">
+                                                <div class="pf-opt-label pf-opt-over">
+                                                    <i class="fa fa-arrow-down me-1"/>Nên giảm mua (mua &gt; bán)
+                                                </div>
+                                                <t t-foreach="purchaseOptimization.overBuy" t-as="p" t-key="p.product_id">
+                                                    <div class="pf-opt-row">
+                                                        <span class="pf-opt-name" t-att-title="p.product_name">
+                                                            <span class="pf-code me-1" t-esc="p.default_code || '?'"/>
+                                                        </span>
+                                                        <span class="pf-opt-stats">
+                                                            <span class="pf-opt-buy">M: <t t-esc="formatNumber(p.buyQty)"/> (<t t-esc="p.buyFreq"/>x)</span>
+                                                            <span class="pf-opt-sell">B: <t t-esc="formatNumber(p.sellQty)"/> (<t t-esc="p.sellFreq"/>x)</span>
+                                                        </span>
+                                                        <span class="pf-opt-ratio text-warning">×<t t-esc="p.qtyRatio"/></span>
+                                                    </div>
+                                                </t>
+                                            </div>
+                                        </t>
+                                        <t t-if="purchaseOptimization.underBuy.length === 0 &amp;&amp; purchaseOptimization.overBuy.length === 0">
+                                            <div class="pf-chart-empty">
+                                                <i class="fa fa-check-circle me-1 text-success"/>Mua bán cân đối
+                                            </div>
+                                        </t>
+                                    </div>
+
+                                    <!-- 6. Original NCC × SP heatmap -->
                                     <div class="pf-sc-card">
                                         <h4 class="pf-sc-title">
                                             <i class="fa fa-th me-1" style="color:#e64980;"/>NCC × Sản phẩm (SL mua)

@@ -1590,3 +1590,334 @@
         color: #1971c2;
     }
 }
+
+// ========== Pie/Donut Chart: Buy vs Sell ==========
+.pf-pie-container {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 0;
+}
+
+.pf-pie-ring {
+    width: 100px;
+    height: 100px;
+    min-width: 100px;
+    border-radius: 50%;
+    background: conic-gradient(#339af0 0deg, #339af0 var(--buy-deg), #f06595 var(--buy-deg), #f06595 360deg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.pf-pie-center {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.pf-pie-total {
+    font-size: 11px;
+    font-weight: 700;
+    color: #212529;
+    line-height: 1.1;
+}
+
+.pf-pie-sublabel {
+    font-size: 9px;
+    color: #868e96;
+}
+
+.pf-pie-legend {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.pf-pie-leg-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #495057;
+
+    strong {
+        font-size: 14px;
+        color: #212529;
+    }
+}
+
+.pf-pie-leg-val {
+    font-size: 11px;
+    color: #868e96;
+}
+
+.pf-pie-leg-dot {
+    width: 12px;
+    height: 12px;
+    min-width: 12px;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+.pf-leg-buy { background: #339af0; }
+.pf-leg-sell { background: #f06595; }
+
+// ========== Frequency Distribution Bar ==========
+.pf-freq-dist {
+    padding: 6px 0;
+}
+
+.pf-freq-bar-stack {
+    display: flex;
+    height: 24px;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.pf-freq-seg {
+    min-width: 2px;
+    transition: width 0.4s ease;
+    cursor: pointer;
+
+    &:hover { opacity: 0.85; }
+}
+
+.pf-freq-rare { background: #dee2e6; }
+.pf-freq-low { background: #ffd43b; }
+.pf-freq-med { background: #ff922b; }
+.pf-freq-high { background: #e03131; }
+
+.pf-freq-legend {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.pf-freq-leg-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: #495057;
+
+    strong { color: #212529; }
+}
+
+.pf-freq-dot {
+    width: 10px;
+    height: 10px;
+    min-width: 10px;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+.pf-freq-hint {
+    font-size: 12px;
+    color: #6c757d;
+    padding: 6px 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 3px solid #dee2e6;
+}
+
+// ========== Dual Bars: Buy vs Sell Comparison ==========
+.pf-dual-bars {
+    padding: 4px 0;
+}
+
+.pf-dual-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.pf-dual-label {
+    width: 52px;
+    min-width: 52px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #495057;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pf-dual-tracks {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.pf-dual-track {
+    height: 11px;
+    background: #f1f3f5;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.pf-dual-fill {
+    height: 100%;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 4px;
+    transition: width 0.4s ease;
+    min-width: 2px;
+}
+
+.pf-dual-buy {
+    background: linear-gradient(90deg, #74c0fc, #339af0);
+}
+
+.pf-dual-sell {
+    background: linear-gradient(90deg, #f783ac, #f06595);
+}
+
+.pf-dual-val {
+    font-size: 9px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.2);
+}
+
+.pf-dual-legend {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-top: 8px;
+    font-size: 12px;
+    color: #495057;
+}
+
+.pf-dual-leg-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    margin-right: 4px;
+    vertical-align: middle;
+}
+
+// ========== Product Buy/Sell Heatmap Colors ==========
+.pf-hm-product {
+    th.pf-hm-col-head span {
+        writing-mode: horizontal-tb !important;
+        transform: none !important;
+        font-size: 10px;
+    }
+}
+
+// Buy heatmap colors (blue)
+.pf-hm-buy-0 { background: #f8f9fa; }
+.pf-hm-buy-1 { background: #d0ebff; color: #1864ab; }
+.pf-hm-buy-2 { background: #74c0fc; color: #fff; }
+.pf-hm-buy-3 { background: #339af0; color: #fff; }
+.pf-hm-buy-4 { background: #1864ab; color: #fff; font-weight: 700; }
+
+// Buy frequency heatmap (indigo)
+.pf-hm-buyf-0 { background: #f8f9fa; }
+.pf-hm-buyf-1 { background: #dbe4ff; color: #364fc7; }
+.pf-hm-buyf-2 { background: #91a7ff; color: #fff; }
+.pf-hm-buyf-3 { background: #5c7cfa; color: #fff; }
+.pf-hm-buyf-4 { background: #364fc7; color: #fff; font-weight: 700; }
+
+// Sell heatmap colors (pink/red)
+.pf-hm-sell-0 { background: #f8f9fa; }
+.pf-hm-sell-1 { background: #fcc2d7; color: #a61e4d; }
+.pf-hm-sell-2 { background: #f783ac; color: #fff; }
+.pf-hm-sell-3 { background: #f06595; color: #fff; }
+.pf-hm-sell-4 { background: #a61e4d; color: #fff; font-weight: 700; }
+
+// Sell frequency heatmap (orange)
+.pf-hm-sellf-0 { background: #f8f9fa; }
+.pf-hm-sellf-1 { background: #ffe8cc; color: #d9480f; }
+.pf-hm-sellf-2 { background: #ffc078; color: #fff; }
+.pf-hm-sellf-3 { background: #ff922b; color: #fff; }
+.pf-hm-sellf-4 { background: #d9480f; color: #fff; font-weight: 700; }
+
+.pf-hm-legend-multi {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+
+    > div {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+    }
+}
+
+// ========== Purchase Optimization ==========
+.pf-opt-section {
+    margin-bottom: 10px;
+}
+
+.pf-opt-label {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-bottom: 6px;
+}
+
+.pf-opt-under {
+    background: #fff5f5;
+    color: #c92a2a;
+    border-left: 3px solid #e03131;
+}
+
+.pf-opt-over {
+    background: #fff9db;
+    color: #e67700;
+    border-left: 3px solid #fcc419;
+}
+
+.pf-opt-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-bottom: 1px solid #f1f3f5;
+    font-size: 11px;
+
+    &:last-child { border-bottom: none; }
+}
+
+.pf-opt-name {
+    min-width: 50px;
+    font-weight: 600;
+    color: #495057;
+}
+
+.pf-opt-stats {
+    flex: 1;
+    display: flex;
+    gap: 8px;
+    font-size: 11px;
+    color: #6c757d;
+}
+
+.pf-opt-buy { color: #1971c2; }
+.pf-opt-sell { color: #e8590c; }
+
+.pf-opt-ratio {
+    font-weight: 800;
+    font-size: 13px;
+    min-width: 32px;
+    text-align: right;
+}
