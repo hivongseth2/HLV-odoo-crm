@@ -631,7 +631,8 @@ class SaleOrder(models.Model):
             'misa_shipping_address': shipping_address_raw or False,
             'partner_shipping_id': shipping_id,
             'partner_invoice_id': shipping_id,
-            'x_studio_zns': zns
+            'x_studio_zns': zns,
+            'x_studio_sdt_giao_hang': data.get('Phone') or False
         }
         
         from dateutil.parser import parse as dtparse
@@ -1244,6 +1245,7 @@ class SaleOrder(models.Model):
             vals_header_upd['x_studio_htgh'] = owner_date['htgh']
         shipping_address_raw = (data.get('ShippingAddress') or '').strip()
         vals_header_upd['misa_shipping_address'] = shipping_address_raw or False
+        vals_header_upd['x_studio_sdt_giao_hang'] = data.get('Phone') or False
         if vals_header_upd:
             self.write(vals_header_upd)
             _logger.info("✅ Đã cập nhật misa_saler_code/order_date/httt/htgh/misa_delivery cho SO %s", self.name)

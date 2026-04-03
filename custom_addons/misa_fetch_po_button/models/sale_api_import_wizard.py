@@ -1116,7 +1116,8 @@ class SaleApiImportWizard(models.TransientModel):
                         'origin':origin,
                         'warehouse_id': warehouse.id,
                         'misa_id': misa_id_str, 
-                        'x_studio_zns': zns           
+                        'x_studio_zns': zns,
+                        'x_studio_sdt_giao_hang': phone_text or False
                     }
                     # If we have owner code/date, set the Studio fields
                     if owner_date.get('owner_code'):
