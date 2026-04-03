@@ -89,6 +89,8 @@ export const supplierChartMixins = {
             total: totalAmount,
             count: suppliers.length,
             top1Name: suppliers.length >= 1 ? suppliers[0].partner_name : '',
+            top3Names: suppliers.slice(0, 3).map(s => s.partner_name),
+            top5Names: suppliers.slice(0, 5).map(s => s.partner_name),
         };
     },
 };

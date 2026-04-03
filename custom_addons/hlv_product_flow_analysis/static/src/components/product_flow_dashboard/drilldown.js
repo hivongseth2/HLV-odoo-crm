@@ -26,6 +26,39 @@ export const drilldownMixins = {
         }
     },
 
+    exportDrilldownExcel() {
+        const products = this.state.drilldownProducts;
+        if (!products.length) return;
+        const headers = ["STT", "Mã SP", "Tên sản phẩm", "SL Mua", "Lần Mua", "SL Bán", "Lần Bán", "Tồn kho"];
+        const rows = products.map((p, i) => [
+            i + 1,
+            p.default_code,
+            p.product_name,
+            p.incoming_qty,
+            p.incoming_count,
+            p.outgoing_qty,
+            p.outgoing_count,
+            p.qty_available,
+        ]);
+        const escCell = (v) => {
+            const s = String(v == null ? "" : v);
+            return s.includes(",") || s.includes('"') || s.includes("\n")
+                ? '"' + s.replace(/"/g, '""') + '"' : s;
+        };
+        const bom = "\uFEFF";
+        const csv = bom + [headers, ...rows].map(r => r.map(escCell).join(",")).join("\r\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const safeName = this.state.drilldownTitle.replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, "_").substring(0, 50);
+        a.download = `${safeName}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    },
+
     _showDrilldown(title, products) {
         this.state.drilldownTitle = title;
         this.state.drilldownProducts = products.map(p => ({

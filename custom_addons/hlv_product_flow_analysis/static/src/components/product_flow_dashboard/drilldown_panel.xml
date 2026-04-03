@@ -8,9 +8,15 @@
                         <i class="fa fa-list-alt me-2"/>
                         <t t-esc="state.drilldownTitle"/>
                     </h3>
-                    <button class="pf-drilldown-close" t-on-click="() => this.closeDrilldown()">
-                        <i class="fa fa-times"/>
-                    </button>
+                    <div class="pf-drilldown-actions">
+                        <button class="pf-drilldown-export" t-on-click="() => this.exportDrilldownExcel()"
+                                t-if="state.drilldownProducts.length > 0" title="Xuất Excel/CSV">
+                            <i class="fa fa-download me-1"/>Xuất Excel
+                        </button>
+                        <button class="pf-drilldown-close" t-on-click="() => this.closeDrilldown()">
+                            <i class="fa fa-times"/>
+                        </button>
+                    </div>
                 </div>
                 <div class="pf-drilldown-body">
                     <t t-if="state.drilldownProducts.length > 0">
