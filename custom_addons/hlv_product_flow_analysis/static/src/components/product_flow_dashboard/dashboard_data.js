@@ -187,6 +187,119 @@ export const dashboardDataMixins = {
         this.state.showTrend = false;
     },
 
+    // ========== Product Detail (PO/SO list) ==========
+    async showProductDetail(productId, productName) {
+        this.state.productDetailId = productId;
+        this.state.productDetailName = productName;
+        this.state.productDetailLoading = true;
+        this.state.showProductDetail = true;
+        this.state.productDetailData = { purchase_orders: [], sale_orders: [] };
+        try {
+            const params = this._getParams();
+            params.product_id = productId;
+            const data = await this.orm.call("product.flow.analysis", "get_product_orders", [], params);
+            this.state.productDetailData = data;
+        } catch (e) {
+            this.notification.add("Lỗi tải chi tiết: " + (e.message || e), { type: "danger" });
+        }
+        this.state.productDetailLoading = false;
+    },
+
+    closeProductDetail() {
+        this.state.showProductDetail = false;
+        this.state.productDetailData = { purchase_orders: [], sale_orders: [] };
+    },
+
+    openPurchaseOrder(poId) {
+        this.actionService.doAction({
+            type: "ir.actions.act_window",
+            res_model: "purchase.order",
+            res_id: poId,
+            views: [[false, "form"]],
+            target: "current",
+        });
+    },
+
+    openSaleOrder(soId) {
+        this.actionService.doAction({
+            type: "ir.actions.act_window",
+            res_model: "sale.order",
+            res_id: soId,
+            views: [[false, "form"]],
+            target: "current",
+        });
+    },
+
+    // ========== Recommendation ==========
+    getRecommendation(p) {
+        const buyQty = p.incoming_qty || 0;
+        const sellQty = p.outgoing_qty || 0;
+        const buyCount = p.incoming_count || 0;
+        const sellCount = p.outgoing_count || 0;
+        const stock = p.qty_available || 0;
+        const storageDays = p.avg_storage_days || 0;
+
+        // Không có giao dịch
+        if (buyCount === 0 && sellCount === 0) {
+            return { text: 'Không hoạt động', cls: 'pf-rec-gray', icon: 'fa-minus-circle' };
+        }
+
+        // Chỉ mua, không bán
+        if (sellCount === 0 && buyCount > 0) {
+            if (stock > buyQty * 0.5) {
+                return { text: 'Tồn nhiều, chưa bán', cls: 'pf-rec-red', icon: 'fa-exclamation-triangle' };
+            }
+            return { text: 'Chỉ mua, chưa bán', cls: 'pf-rec-orange', icon: 'fa-question-circle' };
+        }
+
+        // Chỉ bán, không mua (trong kỳ)
+        if (buyCount === 0 && sellCount > 0) {
+            if (stock <= 0) {
+                return { text: 'Cần nhập hàng gấp', cls: 'pf-rec-red', icon: 'fa-exclamation-triangle' };
+            }
+            return { text: 'Bán tốt, cần nhập thêm', cls: 'pf-rec-blue', icon: 'fa-arrow-down' };
+        }
+
+        // Tỷ lệ bán/mua
+        const sellBuyRatio = sellQty / (buyQty || 1);
+
+        // Bán > mua nhiều → hot product
+        if (sellBuyRatio > 1.2) {
+            if (stock <= 0) {
+                return { text: 'Bán chạy, hết hàng!', cls: 'pf-rec-red', icon: 'fa-fire' };
+            }
+            if (stock < sellQty * 0.3) {
+                return { text: 'Bán chạy, sắp hết', cls: 'pf-rec-orange', icon: 'fa-fire' };
+            }
+            return { text: 'Bán chạy, nên nhập thêm', cls: 'pf-rec-blue', icon: 'fa-thumbs-up' };
+        }
+
+        // Mua > bán nhiều → overstocking
+        if (sellBuyRatio < 0.5) {
+            if (storageDays > 30) {
+                return { text: 'Tồn lâu, giảm mua', cls: 'pf-rec-red', icon: 'fa-arrow-down' };
+            }
+            return { text: 'Mua nhiều hơn bán', cls: 'pf-rec-orange', icon: 'fa-balance-scale' };
+        }
+
+        // Lưu kho lâu
+        if (storageDays > 30) {
+            return { text: 'Lưu kho lâu, xem lại', cls: 'pf-rec-orange', icon: 'fa-clock-o' };
+        }
+
+        // Tồn kho = 0 nhưng có bán
+        if (stock <= 0 && sellCount > 0) {
+            return { text: 'Hết hàng, cần nhập', cls: 'pf-rec-orange', icon: 'fa-shopping-cart' };
+        }
+
+        // Cân đối
+        if (storageDays > 0 && storageDays <= 7 && sellBuyRatio >= 0.8) {
+            return { text: 'Luân chuyển tốt', cls: 'pf-rec-green', icon: 'fa-check-circle' };
+        }
+
+        return { text: 'Ổn định', cls: 'pf-rec-green', icon: 'fa-check' };
+    },
+
     // ========== Navigation ==========
     openProduct(productId) {
         this.actionService.doAction({

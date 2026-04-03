@@ -426,3 +426,124 @@
         border-color: #017e84;
     }
 }
+
+/* Clickable product rows */
+.pf-row-clickable {
+    cursor: pointer;
+    transition: background 0.15s;
+
+    &:hover {
+        background: #e7f5ff !important;
+    }
+}
+
+.pf-product-name {
+    color: #017e84;
+    font-weight: 500;
+}
+
+/* Recommendation badge */
+.pf-td-rec {
+    white-space: nowrap;
+}
+
+.pf-rec-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+
+    i { font-size: 10px; }
+}
+
+.pf-rec-green {
+    background: #ebfbee;
+    color: #2b8a3e;
+    border: 1px solid #b2f2bb;
+}
+
+.pf-rec-blue {
+    background: #e7f5ff;
+    color: #1971c2;
+    border: 1px solid #a5d8ff;
+}
+
+.pf-rec-orange {
+    background: #fff4e6;
+    color: #e67700;
+    border: 1px solid #ffd8a8;
+}
+
+.pf-rec-red {
+    background: #fff5f5;
+    color: #c92a2a;
+    border: 1px solid #ffc9c9;
+}
+
+.pf-rec-gray {
+    background: #f8f9fa;
+    color: #868e96;
+    border: 1px solid #dee2e6;
+}
+
+.pf-rec-orange-text { color: #e67700; font-weight: 600; }
+
+/* Product Detail modal */
+.pf-modal-lg {
+    width: 90%;
+    max-width: 1100px;
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+.pf-detail-loading {
+    text-align: center;
+    padding: 40px;
+    color: #adb5bd;
+}
+
+.pf-detail-section {
+    margin-bottom: 24px;
+}
+
+.pf-detail-section-title {
+    font-size: 14px;
+    font-weight: 700;
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+}
+
+.pf-detail-po-title {
+    background: #e7f5ff;
+    color: #1971c2;
+}
+
+.pf-detail-so-title {
+    background: #fff5f5;
+    color: #c92a2a;
+}
+
+.pf-detail-count {
+    font-weight: 400;
+    font-size: 12px;
+    margin-left: 4px;
+}
+
+.pf-detail-table {
+    font-size: 12px;
+
+    th { font-size: 11px; }
+
+    td { padding: 6px 10px !important; }
+}
+
+.pf-detail-empty {
+    color: #adb5bd;
+    font-style: italic;
+    padding: 16px;
+    text-align: center;
+}
