@@ -32,3 +32,4 @@ access_google_ads_ad_type_user,google.ads.ad.type.user,model_google_ads_ad_type,
 access_google_ads_ad_type_manager,google.ads.ad.type.manager,model_google_ads_ad_type,group_google_ads_manager,1,1,1,1
 access_google_ads_ad_group_type_user,google.ads.ad.group.type.user,model_google_ads_ad_group_type,group_google_ads_user,1,0,0,0
 access_google_ads_ad_group_type_manager,google.ads.ad.group.type.manager,model_google_ads_ad_group_type,group_google_ads_manager,1,1,1,1
+access_google_ads_adsroid_chat,google.ads.adsroid.chat,model_google_ads_adsroid_chat,base.group_user,1,1,1,1

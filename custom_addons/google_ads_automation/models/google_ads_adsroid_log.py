@@ -11,6 +11,7 @@ class GoogleAdsAdsroidLog(models.Model):
         ('MAINTAIN', 'GIỮ NGUYÊN'),
         ('INCREASE_BUDGET', 'TĂNG NGÂN SÁCH'),
         ('DECREASE_BUDGET', 'GIẢM NGÂN SÁCH'),
+        ('ADJUST_BUDGET', 'ĐIỀU CHỈNH NGÂN SÁCH'),
         ('PAUSE', 'TẠM DỪNG'),
         ('ENABLE', 'BẬT LẠI')
     ], string='Hành động đề xuất', required=True)
