@@ -591,97 +591,108 @@ class GoogleAdsMutateService:
         """Tạo mẫu quảng cáo (RSA hoặc Demand Gen) trong một Ad Group"""
         try:
             ad_group_ad_service = client.get_service("AdGroupAdService")
+            ad_group_service = client.get_service("AdGroupService")
+            
+            # ═══════════════════════════════════════════════════════════
+            # STRATEGY: Dùng native protobuf (_pb) để tránh hoàn toàn
+            # các quirks của proto-plus gây ra IMMUTABLE_FIELD.
+            # Proto-plus wrapper tự động khởi tạo sub-messages khi truy
+            # cập attribute, gây "dirty state" trên field 'ad' immutable.
+            # ═══════════════════════════════════════════════════════════
             ad_group_ad_operation = client.get_type("AdGroupAdOperation")
             
-            # --- FIX IMMUTABLE_FIELD: Explicit Construction ---
-            # 1. Tạo AdGroupAd 'xác' (vỏ bọc)
-            ad_group_ad = ad_group_ad_operation.create
-            ad_group_ad.ad_group = client.get_service("AdGroupService").ad_group_path(str(customer_id), str(ad_group_id))
-            ad_group_ad.status = client.enums.AdGroupAdStatusEnum.ENABLED
+            # Truy cập trực tiếp native protobuf messages
+            pb_op = ad_group_ad_operation._pb
+            pb_ad_group_ad = pb_op.create
             
-            # 2. Tạo nội dung Ad riêng biệt (Tránh dirty state)
-            ad = client.get_type("Ad")
+            # Set ad_group + status
+            pb_ad_group_ad.ad_group = ad_group_service.ad_group_path(
+                str(customer_id), str(ad_group_id)
+            )
+            pb_ad_group_ad.status = client.enums.AdGroupAdStatusEnum.ENABLED.value
+            
+            # Set Final URL trên pb_ad_group_ad.ad
             final_url = vals.get('final_url')
             if final_url:
-                if not final_url.startswith('http'): final_url = 'https://' + final_url
-                ad.final_urls.append(str(final_url))
+                if not final_url.startswith('http'):
+                    final_url = 'https://' + final_url
+                pb_ad_group_ad.ad.final_urls.append(str(final_url))
             
             ad_type = vals.get('type', 'RESPONSIVE_SEARCH_AD').upper()
 
             if ad_type in ['DISCOVERY_RESPONSIVE_AD', 'DEMAND_GEN_RESPONSIVE_AD']:
                 # --- Discovery / Demand Gen Ad content ---
                 channel_type = vals.get('channel_type', '').upper()
-                # Quyết định field nào được dùng dựa trên channel_type thực tế
-                if channel_type in ['DEMAND_GEN', 'DISCOVERY'] and hasattr(ad, 'demand_gen_responsive_ad'):
-                    info = ad.demand_gen_responsive_ad
-                    _logger.info("Sử dụng field demand_gen_responsive_ad")
+                
+                # Chọn đúng field dựa trên channel_type
+                if channel_type in ['DEMAND_GEN', 'DISCOVERY']:
+                    # Thử dùng demand_gen_responsive_ad nếu có
+                    try:
+                        info = pb_ad_group_ad.ad.demand_gen_responsive_ad
+                        _logger.info("Sử dụng field demand_gen_responsive_ad (native pb)")
+                    except AttributeError:
+                        info = pb_ad_group_ad.ad.discovery_responsive_ad
+                        _logger.info("Fallback discovery_responsive_ad (native pb)")
                 else:
-                    info = ad.discovery_responsive_ad
-                    _logger.info("Fallback discovery_responsive_ad")
+                    info = pb_ad_group_ad.ad.discovery_responsive_ad
+                    _logger.info("Dùng discovery_responsive_ad mặc định (native pb)")
 
                 info.business_name = str(vals.get('business_name') or "Brand")
                 
-                # Assets
                 headlines = list(dict.fromkeys(vals.get('headlines', [])))
                 for text in headlines[:5]:
-                    h = client.get_type("AdTextAsset")
+                    h = info.headlines.add()
                     h.text = text[:40]
-                    info.headlines.append(h)
                 
                 descriptions = list(dict.fromkeys(vals.get('descriptions', [])))
                 for text in descriptions[:5]:
-                    d = client.get_type("AdTextAsset")
+                    d = info.descriptions.add()
                     d.text = text[:160]
-                    info.descriptions.append(d)
 
-                # Images
                 if vals.get('marketing_image_asset'):
-                    img = client.get_type("AdImageAsset")
+                    img = info.marketing_images.add()
                     img.asset = vals.get('marketing_image_asset')
-                    info.marketing_images.append(img)
                 
                 if vals.get('square_marketing_image_asset'):
-                    img = client.get_type("AdImageAsset")
+                    img = info.square_marketing_images.add()
                     img.asset = vals.get('square_marketing_image_asset')
-                    info.square_marketing_images.append(img)
                 
                 if vals.get('logo_image_asset'):
-                    img = client.get_type("AdImageAsset")
+                    img = info.logo_images.add()
                     img.asset = vals.get('logo_image_asset')
-                    info.logo_images.append(img)
             else:
-                # --- Default: Responsive Search Ad content (RSA) ---
-                rsa = ad.responsive_search_ad
+                # --- Default: Responsive Search Ad (RSA) ---
+                rsa = pb_ad_group_ad.ad.responsive_search_ad
                 
-                # Headlines (Max 30 chars)
                 unique_headlines = list(dict.fromkeys(vals.get('headlines', [])))
                 for text in unique_headlines:
-                    headline = client.get_type("AdTextAsset")
-                    headline.text = text[:30] 
-                    rsa.headlines.append(headline)
+                    h = rsa.headlines.add()
+                    h.text = text[:30]
                 
-                # Descriptions (Max 90 chars)
                 unique_descriptions = list(dict.fromkeys(vals.get('descriptions', [])))
                 for text in unique_descriptions:
-                    description = client.get_type("AdTextAsset")
-                    description.text = text[:90] 
-                    rsa.descriptions.append(description)
+                    d = rsa.descriptions.add()
+                    d.text = text[:90]
 
-            # 3. Gán ad content vào AdGroupAd
-            # client.copy_from(ad_group_ad.ad, ad) # proto-plus helper if available, otherwise just assign
-            # Trong proto-plus, gán object mới là an toàn nhất khi dùng operation.create
-            ad_group_ad.ad = ad
+            # Debug: Log payload JSON trước khi gửi
+            from google.protobuf.json_format import MessageToJson
+            payload_json = MessageToJson(pb_op, preserving_proto_field_name=True)
+            _logger.info(
+                "create_ad payload (customer=%s, ad_group=%s, type=%s):\n%s",
+                customer_id, ad_group_id, ad_type, payload_json
+            )
 
             response = ad_group_ad_service.mutate_ad_group_ads(
                 customer_id=str(customer_id),
                 operations=[ad_group_ad_operation],
             )
-            # Trả về partial ID (chỉ phần ad_id) cho Odoo lưu trữ thống nhất
             full_resource_name = response.results[0].resource_name
+            # Trả về chỉ ad_id (phần sau dấu ~)
             return True, full_resource_name.split('~')[-1]
         except Exception as e:
             _logger.error("Create ad failed: %s", str(e))
             return False, str(e)
+
 
     @staticmethod
     def update_ad(client, customer_id, ad_group_id, ad_id, vals):
