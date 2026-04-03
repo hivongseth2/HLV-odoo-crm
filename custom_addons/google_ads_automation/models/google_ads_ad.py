@@ -285,24 +285,29 @@ class GoogleAdsAd(models.Model):
 
         # Sync Action
         if self.google_ad_id:
-            ok, result = GoogleAdsMutateService.update_ad(client, customer_id, self.ad_group_id.google_ad_group_id, self.google_ad_id, vals)
+            # Normalize google_ad_id in Odoo record just in case it had the old composite format
+            pure_ad_id = str(self.google_ad_id).split('~')[-1]
+            ok, result = GoogleAdsMutateService.update_ad(client, customer_id, self.ad_group_id.google_ad_group_id, pure_ad_id, vals)
         else:
             ok, result = GoogleAdsMutateService.create_ad(client, customer_id, self.ad_group_id.google_ad_group_id, vals)
         
         if ok:
             if not self.google_ad_id:
-                self.write({'google_ad_id': result.split('/')[-1], 'state': 'synced'})
+                # result is now normalized in the service to just the ad_id
+                self.write({'google_ad_id': result, 'state': 'synced'})
             self.message_post(body=_("Đồng bộ thành công lên Google Ads: %s") % result)
             return True
         else:
+            error_hint = ""
             if 'OPERATION_NOT_PERMITTED_FOR_CONTEXT' in result and 'OWNED_AND_OPERATED' in result:
                 error_hint = _("Lỗi ngữ cảnh: Bạn đang cố gắng tạo mẫu quảng cáo không phù hợp với chiến dịch Tạo nhu cầu (Demand Gen). \n\n"
                                "💡 Cách khắc phục: Hãy đảm bảo bạn đã chọn đúng 'Loại quảng cáo' là 'Mẫu quảng cáo Tạo nhu cầu' và đã điền đủ Tiêu đề/Mô tả/Hình ảnh.")
             elif 'IMMUTABLE_FIELD' in result:
                 error_hint = _("Lỗi đồng bộ: Trường dữ liệu không thể thay đổi (Immutable). \n\n"
-                               "💡 Nguyên nhân: Quảng cáo đã tồn tại trên Google Ads nhưng không đồng bộ ID. "
-                               "Vui lòng xóa bản ghi này, tạo lại và đồng bộ.")
-            raise UserError(_("Đồng bộ Ad thất bại: %s") % error_hint)
+                               "💡 Gợi ý: Hệ thống đã được tối ưu để tránh lỗi này. Nếu vẫn gặp, có thể quảng cáo này "
+                               "đã tồn tại trên Google Ads hoặc thuộc loại đặc biệt không cho phép cập nhật nội dung.\n"
+                               "Vui lòng thử xóa bản ghi này trên Odoo, hoặc đổi tên/nội dung nhẹ và thử lại.")
+            raise UserError(_("Đồng bộ Ad thất bại: %s") % (error_hint or result))
 
     def action_pause_on_google(self):
         self.ensure_one()

@@ -104,10 +104,12 @@ class GoogleAdsMutateService:
     @staticmethod
     def _update_ad_status(client, customer_id, ad_group_id, ad_id, new_status):
         try:
+            # Normalize ad_id (handle composite G~A case)
+            pure_ad_id = str(ad_id).split('~')[-1]
             service = client.get_service("AdGroupAdService")
             operation = client.get_type("AdGroupAdOperation")
             ad_group_ad = operation.update
-            ad_group_ad.resource_name = f"customers/{customer_id}/adGroupAds/{ad_group_id}~{ad_id}"
+            ad_group_ad.resource_name = f"customers/{customer_id}/adGroupAds/{ad_group_id}~{pure_ad_id}"
             ad_group_ad.status = client.enums.AdGroupAdStatusEnum[new_status]
 
             from google.protobuf.field_mask_pb2 import FieldMask
@@ -537,10 +539,12 @@ class GoogleAdsMutateService:
     def remove_ad(client, customer_id, ad_group_id, ad_id):
         """Xóa vĩnh viễn mẫu quảng cáo trên Google Ads"""
         try:
+            # Normalize ad_id
+            pure_ad_id = str(ad_id).split('~')[-1]
             ad_group_ad_service = client.get_service("AdGroupAdService")
             ad_group_ad_operation = client.get_type("AdGroupAdOperation")
             # Resource name cho remove: "customers/{customer_id}/adGroupAds/{ad_group_id}~{ad_id}"
-            ad_group_ad_operation.remove = f"customers/{customer_id}/adGroupAds/{ad_group_id}~{ad_id}"
+            ad_group_ad_operation.remove = f"customers/{customer_id}/adGroupAds/{ad_group_id}~{pure_ad_id}"
             response = ad_group_ad_service.mutate_ad_group_ads(customer_id=str(customer_id), operations=[ad_group_ad_operation])
             return True, response.results[0].resource_name
         except Exception as e:
@@ -589,34 +593,31 @@ class GoogleAdsMutateService:
             ad_group_ad_service = client.get_service("AdGroupAdService")
             ad_group_ad_operation = client.get_type("AdGroupAdOperation")
             
-            # --- FIX IMMUTABLE_FIELD: Dùng operation.create trực tiếp ---
-            # KHÔNG tạo standalone AdGroupAd rồi gán lại (gây proto-plus merge
-            # conflict trên field 'ad' vốn là IMMUTABLE trong proto schema).
+            # --- FIX IMMUTABLE_FIELD: Explicit Construction ---
+            # 1. Tạo AdGroupAd 'xác' (vỏ bọc)
             ad_group_ad = ad_group_ad_operation.create
             ad_group_ad.ad_group = client.get_service("AdGroupService").ad_group_path(str(customer_id), str(ad_group_id))
             ad_group_ad.status = client.enums.AdGroupAdStatusEnum.ENABLED
             
-            ad = ad_group_ad.ad
+            # 2. Tạo nội dung Ad riêng biệt (Tránh dirty state)
+            ad = client.get_type("Ad")
             final_url = vals.get('final_url')
+            if final_url:
+                if not final_url.startswith('http'): final_url = 'https://' + final_url
+                ad.final_urls.append(str(final_url))
+            
             ad_type = vals.get('type', 'RESPONSIVE_SEARCH_AD').upper()
 
             if ad_type in ['DISCOVERY_RESPONSIVE_AD', 'DEMAND_GEN_RESPONSIVE_AD']:
                 # --- Discovery / Demand Gen Ad content ---
                 channel_type = vals.get('channel_type', '').upper()
-                is_demand_gen = (channel_type in ['DEMAND_GEN', 'DISCOVERY'])
-                use_demand_gen_field = is_demand_gen and hasattr(ad, 'demand_gen_responsive_ad')
-                
-                if use_demand_gen_field:
+                # Quyết định field nào được dùng dựa trên channel_type thực tế
+                if channel_type in ['DEMAND_GEN', 'DISCOVERY'] and hasattr(ad, 'demand_gen_responsive_ad'):
                     info = ad.demand_gen_responsive_ad
-                    _logger.info("Sử dụng field demand_gen_responsive_ad cho chiến dịch %s", channel_type)
+                    _logger.info("Sử dụng field demand_gen_responsive_ad")
                 else:
                     info = ad.discovery_responsive_ad
-                    _logger.info("Fallback sang field discovery_responsive_ad cho chiến dịch %s", channel_type)
-
-                # Set Final URL here (AFTER type is inferred by accessing 'info')
-                if final_url:
-                    if not final_url.startswith('http'): final_url = 'https://' + final_url
-                    ad.final_urls.append(str(final_url))
+                    _logger.info("Fallback discovery_responsive_ad")
 
                 info.business_name = str(vals.get('business_name') or "Brand")
                 
@@ -651,11 +652,6 @@ class GoogleAdsMutateService:
             else:
                 # --- Default: Responsive Search Ad content (RSA) ---
                 rsa = ad.responsive_search_ad
-
-                # Set Final URL here
-                if final_url:
-                    if not final_url.startswith('http'): final_url = 'https://' + final_url
-                    ad.final_urls.append(str(final_url))
                 
                 # Headlines (Max 30 chars)
                 unique_headlines = list(dict.fromkeys(vals.get('headlines', [])))
@@ -671,50 +667,55 @@ class GoogleAdsMutateService:
                     description.text = text[:90] 
                     rsa.descriptions.append(description)
 
-            # Không cần gán lại — ad_group_ad đã trỏ trực tiếp vào operation.create
+            # 3. Gán ad content vào AdGroupAd
+            # client.copy_from(ad_group_ad.ad, ad) # proto-plus helper if available, otherwise just assign
+            # Trong proto-plus, gán object mới là an toàn nhất khi dùng operation.create
+            ad_group_ad.ad = ad
 
             response = ad_group_ad_service.mutate_ad_group_ads(
                 customer_id=str(customer_id),
                 operations=[ad_group_ad_operation],
             )
-            return True, response.results[0].resource_name
+            # Trả về partial ID (chỉ phần ad_id) cho Odoo lưu trữ thống nhất
+            full_resource_name = response.results[0].resource_name
+            return True, full_resource_name.split('~')[-1]
         except Exception as e:
             _logger.error("Create ad failed: %s", str(e))
             return False, str(e)
 
     @staticmethod
     def update_ad(client, customer_id, ad_group_id, ad_id, vals):
-        """Cập nhật Responsive Search Ad (RSA)"""
+        """Cập nhật nội dung Ad (Headlines, Descriptions, URLs)"""
         try:
-            ad_group_ad_service = client.get_service("AdGroupAdService")
-            ad_group_ad_operation = client.get_type("AdGroupAdOperation")
+            # Normalize ad_id
+            pure_ad_id = str(ad_id).split('~')[-1]
             
-            # --- FIX: Dùng operation.update trực tiếp (tránh proto-plus merge) ---
-            ad_group_ad = ad_group_ad_operation.update
-            ad_group_ad.resource_name = f"customers/{customer_id}/adGroupAds/{ad_group_id}~{ad_id}"
+            # --- LƯU Ý: AdGroupAd.ad là immutable trong update của AdGroupAdService. ---
+            # Ta phải sử dụng AdService để cập nhật tài nguyên Ad trực tiếp.
+            ad_service = client.get_service("AdService")
+            ad_operation = client.get_type("AdOperation")
             
-            ad = ad_group_ad.ad
+            ad = ad_operation.update
+            ad.resource_name = f"customers/{customer_id}/ads/{pure_ad_id}"
+            
             mask_paths = []
             final_url = vals.get('final_url')
             if final_url:
+                if not final_url.startswith('http'): final_url = 'https://' + final_url
                 ad.final_urls.append(str(final_url))
-                mask_paths.append("ad.final_urls")
+                mask_paths.append("final_urls")
             
             # Determine ad content type
             ad_type = vals.get('type', 'RESPONSIVE_SEARCH_AD').upper()
 
             if ad_type in ['DISCOVERY_RESPONSIVE_AD', 'DEMAND_GEN_RESPONSIVE_AD']:
                 channel_type = vals.get('channel_type', '').upper()
-                is_demand_gen = (channel_type in ['DEMAND_GEN', 'DISCOVERY'])
-                
-                use_demand_gen_field = is_demand_gen and hasattr(ad, 'demand_gen_responsive_ad')
-                
-                if use_demand_gen_field:
+                if channel_type in ['DEMAND_GEN', 'DISCOVERY'] and hasattr(ad, 'demand_gen_responsive_ad'):
                     info = ad.demand_gen_responsive_ad
-                    base_mask = "ad.demand_gen_responsive_ad"
+                    base_mask = "demand_gen_responsive_ad"
                 else:
                     info = ad.discovery_responsive_ad
-                    base_mask = "ad.discovery_responsive_ad"
+                    base_mask = "discovery_responsive_ad"
 
                 if 'business_name' in vals:
                     info.business_name = str(vals.get('business_name'))
@@ -736,8 +737,6 @@ class GoogleAdsMutateService:
                         info.descriptions.append(d)
                     mask_paths.append(f"{base_mask}.descriptions")
 
-                # Note: Updating images via update_ad might be complex depending on active assets, 
-                # but for simplicity we add them to mask if present in vals
                 if 'marketing_image_asset' in vals:
                     img = client.get_type("AdImageAsset")
                     img.asset = vals.get('marketing_image_asset')
@@ -755,7 +754,7 @@ class GoogleAdsMutateService:
                         headline = client.get_type("AdTextAsset")
                         headline.text = text[:30]
                         rsa.headlines.append(headline)
-                    mask_paths.append("ad.responsive_search_ad.headlines")
+                    mask_paths.append("responsive_search_ad.headlines")
                 
                 # Descriptions
                 if 'descriptions' in vals:
@@ -764,21 +763,19 @@ class GoogleAdsMutateService:
                         description = client.get_type("AdTextAsset")
                         description.text = text[:90]
                         rsa.descriptions.append(description)
-                    mask_paths.append("ad.responsive_search_ad.descriptions")
+                    mask_paths.append("responsive_search_ad.descriptions")
 
             # Field mask manually
             from google.protobuf.field_mask_pb2 import FieldMask
-            ad_group_ad_operation.update_mask.CopyFrom(FieldMask(paths=mask_paths))
+            ad_operation.update_mask.CopyFrom(FieldMask(paths=mask_paths))
 
-            # Không cần gán lại — ad_group_ad đã trỏ trực tiếp vào operation.update
-
-            response = ad_group_ad_service.mutate_ad_group_ads(
+            response = ad_service.mutate_ads(
                 customer_id=str(customer_id),
-                operations=[ad_group_ad_operation],
+                operations=[ad_operation],
             )
             return True, response.results[0].resource_name
         except Exception as e:
-            _logger.error("Update ad failed: %s", str(e))
+            _logger.error("Update ad content failed: %s", str(e))
             return False, str(e)
 
     @staticmethod
