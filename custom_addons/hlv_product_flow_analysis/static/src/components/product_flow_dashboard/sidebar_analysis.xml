@@ -35,13 +35,13 @@
                     </div>
                 </div>
 
-                <!-- 2. Donut: Phân bổ tần suất giao dịch -->
+                <!-- 2. Phân bổ tần suất giao dịch (Tổng Mua+Bán) -->
                 <div class="pf-sc-card">
                     <h4 class="pf-sc-title">
-                        <i class="fa fa-signal me-1" style="color:#e8590c;"/>Phân bổ tần suất
+                        <i class="fa fa-signal me-1" style="color:#e8590c;"/>Tần suất: Tổng (Mua + Bán)
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Nhóm SP theo số lần giao dịch (mua+bán): 1-2 lần / 3-5 / 6-10 / &gt;10 lần. Click để xem DS sản phẩm.
+                        <i class="fa fa-question-circle me-1"/>Nhóm SP theo tổng số lần giao dịch (mua+bán): 1-2 / 3-5 / 6-10 / &gt;10 lần. Click để xem DS.
                     </div>
                     <div class="pf-freq-dist">
                         <div class="pf-freq-bar-stack">
@@ -91,6 +91,102 @@
                             <t t-else="">
                                 <span>Tổng <t t-esc="frequencyPie.total"/> SP giao dịch trong kỳ</span>
                             </t>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2b. Phân bổ tần suất MUA -->
+                <div class="pf-sc-card">
+                    <h4 class="pf-sc-title">
+                        <i class="fa fa-arrow-down me-1" style="color:#339af0;"/>Tần suất: Lần Mua
+                    </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Nhóm SP theo số lần mua (nhập): 1-2 / 3-5 / 6-10 / &gt;10 lần. Click để xem DS.
+                    </div>
+                    <div class="pf-freq-dist">
+                        <div class="pf-freq-bar-stack">
+                            <div class="pf-freq-seg pf-freq-rare pf-clickable" t-att-style="'width:' + frequencyBuyPie.rare.pct + '%'"
+                                 t-att-title="'1-2 lần mua: ' + frequencyBuyPie.rare.count + ' SP'"
+                                 t-on-click="() => this.drilldownBuyFrequency('rare')"/>
+                            <div class="pf-freq-seg pf-freq-low pf-clickable" t-att-style="'width:' + frequencyBuyPie.low.pct + '%'"
+                                 t-att-title="'3-5 lần mua: ' + frequencyBuyPie.low.count + ' SP'"
+                                 t-on-click="() => this.drilldownBuyFrequency('low')"/>
+                            <div class="pf-freq-seg pf-freq-med pf-clickable" t-att-style="'width:' + frequencyBuyPie.medium.pct + '%'"
+                                 t-att-title="'6-10 lần mua: ' + frequencyBuyPie.medium.count + ' SP'"
+                                 t-on-click="() => this.drilldownBuyFrequency('medium')"/>
+                            <div class="pf-freq-seg pf-freq-high pf-clickable" t-att-style="'width:' + frequencyBuyPie.high.pct + '%'"
+                                 t-att-title="'>10 lần mua: ' + frequencyBuyPie.high.count + ' SP'"
+                                 t-on-click="() => this.drilldownBuyFrequency('high')"/>
+                        </div>
+                        <div class="pf-freq-legend">
+                            <div class="pf-freq-leg-item pf-clickable" t-on-click="() => this.drilldownBuyFrequency('rare')">
+                                <span class="pf-freq-dot pf-freq-rare"/>
+                                <span>1-2 lần</span>
+                                <strong t-esc="frequencyBuyPie.rare.count"/>
+                            </div>
+                            <div class="pf-freq-leg-item pf-clickable" t-on-click="() => this.drilldownBuyFrequency('low')">
+                                <span class="pf-freq-dot pf-freq-low"/>
+                                <span>3-5 lần</span>
+                                <strong t-esc="frequencyBuyPie.low.count"/>
+                            </div>
+                            <div class="pf-freq-leg-item pf-clickable" t-on-click="() => this.drilldownBuyFrequency('medium')">
+                                <span class="pf-freq-dot pf-freq-med"/>
+                                <span>6-10 lần</span>
+                                <strong t-esc="frequencyBuyPie.medium.count"/>
+                            </div>
+                            <div class="pf-freq-leg-item pf-clickable" t-on-click="() => this.drilldownBuyFrequency('high')">
+                                <span class="pf-freq-dot pf-freq-high"/>
+                                <span>&gt;10 lần</span>
+                                <strong t-esc="frequencyBuyPie.high.count"/>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2c. Phân bổ tần suất BÁN -->
+                <div class="pf-sc-card">
+                    <h4 class="pf-sc-title">
+                        <i class="fa fa-arrow-up me-1" style="color:#e03131;"/>Tần suất: Lần Bán
+                    </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Nhóm SP theo số lần bán (xuất): 1-2 / 3-5 / 6-10 / &gt;10 lần. Click để xem DS.
+                    </div>
+                    <div class="pf-freq-dist">
+                        <div class="pf-freq-bar-stack">
+                            <div class="pf-freq-seg pf-freq-rare pf-clickable" t-att-style="'width:' + frequencySellPie.rare.pct + '%'"
+                                 t-att-title="'1-2 lần bán: ' + frequencySellPie.rare.count + ' SP'"
+                                 t-on-click="() => this.drilldownSellFrequency('rare')"/>
+                            <div class="pf-freq-seg pf-freq-low pf-clickable" t-att-style="'width:' + frequencySellPie.low.pct + '%'"
+                                 t-att-title="'3-5 lần bán: ' + frequencySellPie.low.count + ' SP'"
+                                 t-on-click="() => this.drilldownSellFrequency('low')"/>
+                            <div class="pf-freq-seg pf-freq-med pf-clickable" t-att-style="'width:' + frequencySellPie.medium.pct + '%'"
+                                 t-att-title="'6-10 lần bán: ' + frequencySellPie.medium.count + ' SP'"
+                                 t-on-click="() => this.drilldownSellFrequency('medium')"/>
+                            <div class="pf-freq-seg pf-freq-high pf-clickable" t-att-style="'width:' + frequencySellPie.high.pct + '%'"
+                                 t-att-title="'>10 lần bán: ' + frequencySellPie.high.count + ' SP'"
+                                 t-on-click="() => this.drilldownSellFrequency('high')"/>
+                        </div>
+                        <div class="pf-freq-legend">
+                            <div class="pf-freq-leg-item pf-clickable" t-on-click="() => this.drilldownSellFrequency('rare')">
+                                <span class="pf-freq-dot pf-freq-rare"/>
+                                <span>1-2 lần</span>
+                                <strong t-esc="frequencySellPie.rare.count"/>
+                            </div>
+                            <div class="pf-freq-leg-item pf-clickable" t-on-click="() => this.drilldownSellFrequency('low')">
+                                <span class="pf-freq-dot pf-freq-low"/>
+                                <span>3-5 lần</span>
+                                <strong t-esc="frequencySellPie.low.count"/>
+                            </div>
+                            <div class="pf-freq-leg-item pf-clickable" t-on-click="() => this.drilldownSellFrequency('medium')">
+                                <span class="pf-freq-dot pf-freq-med"/>
+                                <span>6-10 lần</span>
+                                <strong t-esc="frequencySellPie.medium.count"/>
+                            </div>
+                            <div class="pf-freq-leg-item pf-clickable" t-on-click="() => this.drilldownSellFrequency('high')">
+                                <span class="pf-freq-dot pf-freq-high"/>
+                                <span>&gt;10 lần</span>
+                                <strong t-esc="frequencySellPie.high.count"/>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -193,8 +289,9 @@
                                 <t t-foreach="scatterPlotData.points" t-as="pt" t-key="pt.id">
                                     <circle t-att-cx="pt.x" t-att-cy="pt.y" t-att-r="pt.r"
                                             t-att-fill="pt.color" opacity="0.7" stroke="#fff" stroke-width="0.5"
-                                            class="pf-scatter-dot">
-                                        <title t-esc="pt.name + ' | Lượng mua: ' + formatNumber(pt.buyQty) + ' | Lượng bán: ' + formatNumber(pt.sellQty)"/>
+                                            class="pf-scatter-dot pf-clickable"
+                                            t-on-click="() => this.showProductDetail(pt.id, pt.name)">
+                                        <title t-esc="pt.name + ' | Lượng mua: ' + formatNumber(pt.buyQty) + ' | Lượng bán: ' + formatNumber(pt.sellQty) + ' (click xem chi tiết)'"/>
                                     </circle>
                                 </t>
                             </svg>

@@ -195,7 +195,39 @@ export const drilldownMixins = {
             const freq = (p.incoming_count || 0) + (p.outgoing_count || 0);
             return freq >= r.min && freq <= r.max;
         });
-        this._showDrilldown(`Tần suất ${r.label} — ${filtered.length} SP`, filtered);
+        this._showDrilldown(`Tần suất tổng ${r.label} — ${filtered.length} SP`, filtered);
+    },
+
+    drilldownBuyFrequency(level) {
+        const ranges = {
+            rare: { min: 0, max: 2, label: "1-2 lần" },
+            low: { min: 3, max: 5, label: "3-5 lần" },
+            medium: { min: 6, max: 10, label: "6-10 lần" },
+            high: { min: 11, max: Infinity, label: ">10 lần" },
+        };
+        const r = ranges[level];
+        if (!r) return;
+        const filtered = this.state.products.filter(p => {
+            const freq = p.incoming_count || 0;
+            return freq >= r.min && freq <= r.max;
+        });
+        this._showDrilldown(`Tần suất MUA ${r.label} — ${filtered.length} SP`, filtered);
+    },
+
+    drilldownSellFrequency(level) {
+        const ranges = {
+            rare: { min: 0, max: 2, label: "1-2 lần" },
+            low: { min: 3, max: 5, label: "3-5 lần" },
+            medium: { min: 6, max: 10, label: "6-10 lần" },
+            high: { min: 11, max: Infinity, label: ">10 lần" },
+        };
+        const r = ranges[level];
+        if (!r) return;
+        const filtered = this.state.products.filter(p => {
+            const freq = p.outgoing_count || 0;
+            return freq >= r.min && freq <= r.max;
+        });
+        this._showDrilldown(`Tần suất BÁN ${r.label} — ${filtered.length} SP`, filtered);
     },
 
     // ========== Stock Distribution ==========

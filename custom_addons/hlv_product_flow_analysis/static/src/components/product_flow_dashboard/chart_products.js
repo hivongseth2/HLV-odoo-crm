@@ -118,6 +118,48 @@ export const productChartMixins = {
         };
     },
 
+    // ========== Phân bổ tần suất MUA ==========
+    get frequencyBuyPie() {
+        const products = this.state.products;
+        let rare = 0, low = 0, medium = 0, high = 0;
+        for (const p of products) {
+            const freq = p.incoming_count || 0;
+            if (freq <= 2) rare++;
+            else if (freq <= 5) low++;
+            else if (freq <= 10) medium++;
+            else high++;
+        }
+        const total = products.length || 1;
+        return {
+            rare: { count: rare, pct: Math.round(rare / total * 100) },
+            low: { count: low, pct: Math.round(low / total * 100) },
+            medium: { count: medium, pct: Math.round(medium / total * 100) },
+            high: { count: high, pct: Math.round(high / total * 100) },
+            total: products.length,
+        };
+    },
+
+    // ========== Phân bổ tần suất BÁN ==========
+    get frequencySellPie() {
+        const products = this.state.products;
+        let rare = 0, low = 0, medium = 0, high = 0;
+        for (const p of products) {
+            const freq = p.outgoing_count || 0;
+            if (freq <= 2) rare++;
+            else if (freq <= 5) low++;
+            else if (freq <= 10) medium++;
+            else high++;
+        }
+        const total = products.length || 1;
+        return {
+            rare: { count: rare, pct: Math.round(rare / total * 100) },
+            low: { count: low, pct: Math.round(low / total * 100) },
+            medium: { count: medium, pct: Math.round(medium / total * 100) },
+            high: { count: high, pct: Math.round(high / total * 100) },
+            total: products.length,
+        };
+    },
+
     // ========== Top SP So sánh Mua vs Bán ==========
     get topBuySellComparison() {
         const items = [...this.state.products]
