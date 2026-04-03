@@ -1,109 +1,229 @@
-# Cẩm Nang Vận Hành: Tự Động Hóa Google Ads (Odoo 18)
+# Cẩm Nang Vận Hành Chi Tiết: Google Ads Automation (Odoo 18)
 
-Chào mừng bạn đến với hệ thống điều khiển Google Ads thông minh. Tài liệu này tập trung vào các thao tác nghiệp vụ hàng ngày để giúp bạn tối ưu hóa doanh thu và bảo vệ ngân sách một cách tự động.
+Tài liệu này hướng dẫn bạn cách sử dụng từng tính năng trong hệ thống để quản lý quảng cáo dựa trên dữ liệu tồn kho và doanh thu thực tế.
 
----
-
-## 1. Quản Lý Danh Mục Sản Phẩm Quảng Cáo (Product Feed)
-
-Đây là "Trái tim" của hệ thống, nơi kết nối lượng tồn kho thực tế trong Odoo với các chiến dịch trên Google Ads.
-
-### Thêm sản phẩm vào hệ thống
-1. Vào menu **Google Ads > Product Feed (Danh mục sản phẩm)**.
-2. Chọn bản ghi sẵn có hoặc nhấn **Mới**.
-3. Nhấn nút **Thêm tất cả từ danh mục** để lọc và đưa các dòng sản phẩm bạn muốn chạy quảng cáo vào danh sách.
-
-### Đọc hiểu các cột số liệu (Nghiệp vụ kho)
-Hệ thống tự động tính toán các chỉ số quan trọng sau:
-- **Tồn kho thực tế**: Số lượng khả dụng trong kho Odoo hiện tại.
-- **TB Bán/Ngày**: Tốc độ bán hàng trung bình trong 30 ngày gần nhất.
-- **Số ngày tồn**: Dự báo bao nhiêu ngày nữa bạn sẽ cháy hàng (`Tồn kho / TB bán`).
-- **Trạng thái (Màu sắc)**: 
-    - 🔴 **Kịch khung (Critical)**: Cần dừng quảng cáo ngay lập tức để tránh khách đặt hàng mà không có giao.
-    - 🟡 **Sắp hết (Low)**: Cần cân nhắc giảm ngân sách hoặc nhập thêm hàng.
-    - 🟢 **An toàn (Healthy)**: Có thể tăng ngân sách quảng cáo để đẩy mạnh doanh số.
-
-> [!TIP]
-> **Giao diện trực quan**: Hãy chụp ảnh danh sách sản phẩm với các cột màu sắc sinh động để làm hướng dẫn.
-> ![Giao diện Product Feed](img/huong_dan_feed.png)
+![Thanh Menu Hệ Thống](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775200150112.png)
 
 ---
 
-## 2. Thiết Lập Chiến Lược Tự Động (Bộ Máy Điều Khiển)
+## 1. Menu: Danh Mục Sản Phẩm (Product Feed)
+Đây là nơi bạn chọn những sản phẩm nào trong Odoo sẽ được tham gia vào guồng quay quảng cáo.
 
-Thay vì phải bật/tắt thủ công cho hàng trăm sản phẩm, bạn chỉ cần chọn một "Chiến lược" và Odoo sẽ tự động thực hiện cho bạn.
+![Giao Diện Danh Sách Product Feed](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775200200231.png)
 
-### Các loại chiến lược cốt lõi:
-1.  **Bảo vệ hàng sắp hết**: Hệ thống sẽ tự động "Pause" quảng cáo khi kho chạm mốc tối thiểu bạn đặt ra.
-2.  **Đẩy hàng tồn cao**: Ưu tiên ngân sách cho các mặt hàng đang "ôm kho" quá nhiều để giải phóng vốn.
-3.  **Tối ưu lợi nhuận**: Tự động tắt các mẫu quảng cáo có chi phí quá cao mà không mang lại đơn hàng (dựa trên chỉ số CPA/ROAS).
-4.  **Đẩy hàng mới**: Thích hợp cho các bộ sưu tập vừa nhập kho, cần tăng độ phủ ngay lập tức.
+### Bước 1: Thêm sản phẩm
+1.  Nhấn **Mới** (New).
+2.  Chọn **Tài Khoản Google Ads** bạn muốn liên kết cho nhóm sản phẩm này.
+3.  Nhấn nút **"Thêm Sản Phẩm"**: Odoo sẽ tự động liệt kê các sản phẩm thuộc danh mục bạn chọn vào danh sách bên dưới.
 
-### Chiến lược Tùy Chỉnh (Custom) - Mới:
-Bạn có thể tự định nghĩa luật chơi riêng bằng cách điền vào tab **Cấu Hình Tùy Chỉnh**:
-- **Điều kiện**: Chọn (Chi phí, Lượt nhấp, Lượt hiển thị, Tồn kho...).
-- **Hành động**: Chọn (Bật, Tạm dừng, Tăng/Giảm ngân sách).
-- **Ví dụ**: "Nếu Lượt nhấp > 200 mà chưa có đơn hàng -> Tạm dừng".
+![Giao Diện Tạo Mới Product Feed](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775201803222.png)
 
-**Cách kích hoạt:** Sau khi cấu hình xong, nhấn nút **⚡ Sinh Rules Tự Động**. Odoo sẽ quét toàn bộ danh mục sản phẩm và tạo ra các câu lệnh (Rules) chi tiết cho từng cái.
+### Bước 2: Theo dõi chỉ số tồn kho thực tế
+Sau khi đã có dữ liệu, bạn sẽ thấy biểu đồ phân bổ tồn kho trực quan.
 
-> [!IMPORTANT]
-> **Chế độ LIVE**: Khi mới thiết lập, hãy để ở chế độ **Dry-Run** để xem hệ thống dự định làm gì. Khi đã tin tưởng, hãy gạt sang **LIVE (Màu đỏ)** để lệnh thực thi thật lên Google.
+![Biểu Đồ Trạng Thái Tồn Kho](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775202180216.png)
 
----
+*   **Tồn kho**: Số lượng khả dụng trong kho Odoo.
+*   **TB Bán/Ngày**: Tốc độ bán hàng trung bình (Odoo tự tính dựa trên đơn hàng 30 ngày qua).
+*   **Số ngày tồn**: Dự báo thời gian còn hàng.
+*   **Trạng thái (Màu sắc)**:
+    *   🔴 **Critical**: Sắp cháy hàng -> Hệ thống sẽ ưu tiên tắt QC.
+    *   🟡 **Low**: Hàng sắp hết -> Cân nhắc giảm thầu.
+    *   🟢 **Healthy**: Hàng dồi dào -> Sẵn sàng tăng ngân sách.
 
-## 3. Dashboard Hiệu Quả & Trợ Lý AI Adsroid
-
-Giao diện Dashboard giúp bạn xem nhanh "sức khỏe" của các chiến dịch mà không cần mở tài khoản Google Ads phức tạp.
-
-### Đọc dải thẻ Dashboard 4 màu:
-- **Xanh Dương (Lượt nhấp)**: Khách hàng có quan tâm đến mẫu quảng cáo của bạn không?
-- **Đỏ (Chi phí)**: Bạn đã tiêu hết bao nhiêu tiền?
-- **Xanh Lá (Đơn hàng)**: Quảng cáo có thực sự mang về doanh thu không?
-- **Vàng (Tỷ lệ chốt)**: Hiệu suất của trang bán hàng/nội dung quảng cáo.
-
-### Ra quyết định cùng AI Adsroid:
-Tại mỗi Chiến dịch hoặc Sản phẩm, bạn có nút **Hỏi Nhận Định AI**.
-1. AI sẽ phân tích dữ liệu 3 chiều: **Quảng cáo (Ads) + Tồn kho (Odoo) + Thị trường**.
-2. AI đưa ra chấm điểm hiệu quả và lời khuyên: "Chi phí đang quá cao so với tỷ lệ tồn kho, khuyên bạn nên giảm 20% ngân sách".
-3. **Bật Tự Động Áp Dụng**: Nếu bạn quá bận, hãy bật tính năng này để Odoo tự động thực hiện lệnh mà AI đề xuất ngay lập tức.
+![Danh Sách Chi Tiết Sản Phẩm Kèm Chỉ Số](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775202181999.png)
 
 ---
 
-## 4. Tạo Mẫu Quảng Cáo Chuyên Nghiệp (RSA)
+## 2. Menu: Chiến Lược Tự Động (Automation Strategies)
+Nơi bạn thiết lập "Luật chơi" cho hệ thống tự động hóa.
 
-Để quảng cáo của bạn được Google ưu tiên hiển thị và có điểm chất lượng cao, hệ thống yêu cầu bạn nhập liệu theo chuẩn **Tìm kiếm thích ứng (RSA)**.
+![Giao Diện Các Chiến Lược Đang Chạy](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775202326014.png)
 
-**Quy trình nhập liệu:**
-1. Tại mỗi mẫu quảng cáo, tìm trường **Danh sách Tiêu đề**.
-2. **Bắt buộc**: Nhập ít nhất **3 dòng** tiêu đề khác nhau (Mỗi tiêu đề 1 dòng).
-3. Tại trường **Danh sách Mô tả**: Nhập ít nhất **2 dòng**.
-4. Hệ thống sẽ tự động ghép dẻo các dòng này để tạo ra hàng chục biến thể quảng cáo khác nhau cho khách hàng.
+### Các loại chiến lược có sẵn:
+1.  **Bảo vệ hàng sắp hết (Inventory Protection)**: Ưu tiên bảo vệ kho. Nếu hàng dưới mức X, tự động Pause quảng cáo.
+2.  **Tùy chỉnh (Custom Strategy)**: Bạn tự định nghĩa luật dựa trên các mẫu cấu hình chung.
 
-> [!TIP]
-> **Ví dụ**: 
-> - Tiêu đề 1: Giày Sneaker Chính Hãng
-> - Tiêu đề 2: Giảm Giá 30% Hôm Nay
-> - Tiêu đề 3: Ship Cod Toàn Quốc
-> ![Mẫu quảng cáo chuyên nghiệp](img/huong_dan_rsa.png)
+![Chọn Loại Chiến Lược](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775202500627.png)
 
----
+### Cấu hình chi tiết:
+Người dùng có thể tự định nghĩa điều kiện lọc (Ví dụ: "Chi phí > 0") và hành động tương ứng (Ví dụ: "Chỉ thông báo").
 
-## 5. Kiểm Soát Nhật Ký Tự Động
-
-Bạn luôn có thể trả lời câu hỏi: *"Tại sao hôm nay quảng cáo này lại bị tắt?"* bằng cách vào **Google Ads > Lịch Sử Quy Tắc**.
-
-- **Thời gian**: Hệ thống vừa quét lúc mấy giờ?
-- **Hành động**: Đã Tạm dừng (Paused) hay Đã Bật (Enabled)?
-- **Lý do chi tiết**: Giải thích rành mạch dựa trên con số thực tế (VD: Do tồn kho thực tế = 2, thấp hơn mức tối thiểu = 5).
+![Cấu Hình Quy Tắc Tùy Chỉnh](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775204235222.png)
 
 ---
 
-## 6. Quy Trình Vận Hành Gợi Ý
+### Cấu hình thông minh:
+Với các chiến lược mẫu (Template), bạn có thể thiết lập các ngưỡng (Thresholds) để hệ thống tự ra quyết định:
+*   **Ngưỡng tồn thấp/cao**: Để kích hoạt hành động Bật/Tắt.
+*   **Thay đổi Budget**: Tỷ lệ % tăng/giảm ngân sách tự động.
 
-1. **Buổi sáng**: Kiểm tra nhanh **Bảng Dashboard** xem có biến động bất thường nào về chi phí không.
-2. **Buổi trưa**: Kiểm tra **Lịch Sử Quy Tắc** để xem có bao nhiêu sản phẩm đã bị hệ thống tạm dừng do hết hàng.
-3. **Cuối tuần**: Sử dụng **Hỏi Nhận Định AI** cho các chiến dịch lớn để lấy lời khuyên tối ưu ngân sách cho tuần tiếp theo.
+![Cấu Hình Ngưỡng Và Hiệu Suất](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775202395160.png)
+
+### Cách kích hoạt:
+1.  Sau khi chọn chiến lược, nhấn nút **⚡ SINH RULES TỰ ĐỘNG**. 
+2.  Odoo sẽ quét danh sách sản phẩm và tạo ra hàng loạt các "Quy tắc" cụ thể trong tab **Danh Sách Rules**.
+3.  Nhấn **Kích Hoạt Chiến Lược** để bắt đầu vận hành thực tế.
+
+![Giao Diện Vận Hành Chiến Lược](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775202431738.png)
+
+![Danh Sách Các Quy Tắc Được Sinh Ra](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775202457283.png)
 
 ---
-*Tài liệu dành cho Người vận hành - Hệ thống Google Ads Automation Odoo 18.*
+
+## 3. Menu: Chiến Dịch (Campaigns)
+Giám sát hiệu quả thực tế của từng chiến dịch quảng cáo.
+
+![Danh Sách Chiến Dịch Kèm Hiệu Suất Google Ads](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775203709896.png)
+
+### Các tính năng chính:
+*   **Đồng bộ số liệu (Sync)**: Nhấn nút **"Đồng bộ Google"** để lấy dữ liệu mới nhất về Lượt nhấp, Chi phí, Impressions.
+*   **Quản lý trạng thái**: Bật/Tắt chiến dịch ngay từ Odoo. Trạng thái sẽ được cập nhật lên tài khoản Google Ads sau vài giây.
+
+![Tạo Mới Và Đồng Bộ Chiến Dịch](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775203803997.png)
+
+### Dashboard hiệu quả (ROAS/CPA):
+Trong mỗi chiến dịch, bạn sẽ thấy Dashboard thống kê 4 chỉ số vàng:
+1.  **CLICKS**: Tổng lượt khách truy cập vào web.
+2.  **VIEWS**: Số lần quảng cáo hiển thị.
+3.  **SPEND**: Số tiền thực tế đã tiêu (VNĐ).
+4.  **ORDERS**: Số đơn hàng thực tế chuyển đổi thành công trong Odoo.
+
+![Dashboard Thống Kê Hiệu Quả Chiến Dịch](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775203854822.png)
+
+*   **Danh Sách Sản Phẩm Trong Chiến Dịch**: Odoo tự động liệt kê các sản phẩm thuộc chiến dịch này kèm trạng thái tồn kho hiện thời (Tồn Cao/Tồn Thấp) để bạn điều chỉnh ngân sách cho phù hợp.
+
+---
+
+## 4. Menu: Nhóm Quảng Cáo (Ad Groups)
+Quản lý chi tiết từng nhóm mục tiêu trong chiến dịch một cách có hệ thống.
+
+![Danh Sách Nhóm Quảng Cáo Theo Từng Chiến Dịch](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775204259446.png)
+
+### Quy trình tạo và cấu hình:
+1.  **Tạo mới**: Nhấn nút **Mới**, nhập tên nhóm và chọn **Chiến dịch** cha.
+2.  **Phân loại (Ad Group Type)**: 
+    *   `Standard`: Quảng cáo tìm kiếm thông thường.
+    *   `Display`: Quảng cáo hiển thị hình ảnh.
+    *   `Discovery`: Quảng cáo khám phá.
+    *   `Shopping`: Quảng cáo mua sắm sản phẩm.
+3.  **Đồng bộ**: Nhấn **Đồng bộ lên Google** để tạo nhóm thực tế trên tài khoản Ads.
+
+![Thiết Lập Thông Tin Kỹ Thuật Cho Nhóm](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775204314831.png)
+
+### Phân tích hiệu suất nhóm:
+Odoo cung cấp hệ thống phân tích sâu giúp bạn biết nhóm sản phẩm nào đang hoạt động tốt nhất:
+*   **Phân tích Hiệu suất Nhóm**: Tự động tính toán **Tỷ lệ ra đơn** và **ROAS nhóm**.
+*   **Thống kê chi tiết**: Clicks, Impressions, Conversions, Cost được trình bày trực quan bằng Icon ở chân trang.
+*   **Liên kết Sản phẩm**: Bạn có thể gắn tag các sản phẩm cụ thể thuộc về nhóm quảng cáo này để Odoo theo dõi sát sao tồn kho của chúng.
+
+![Báo Cáo Hiệu Suất Và Dashboard Nhóm](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775204338046.png)
+
+### Quản lý vận hành:
+*   **Trạng thái Live**: Theo dõi xem nhóm đang "Đang hoạt động" hay "Tạm dừng".
+*   **Thao tác nhanh**: Bạn có thể **Tạm dừng trên Google** hoặc **Xóa khỏi Google Ads** ngay lập tức nếu nhóm không đạt hiệu quả mong muốn.
+
+![Quản Lý Trạng Thái Và Sản Phẩm Trong Nhóm](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775204361035.png)
+
+---
+
+## 5. Menu: Mẫu Quảng Cáo (Ads)
+Nơi quan trọng nhất để tạo nội dung hiển thị tới khách hàng.
+
+![Danh Sách Mẫu Quảng Cáo Kèm Trạng Thái](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775204703780.png)
+
+### Soạn thảo nội dung (RSA/RDA):
+*   **Tiêu đề (Headlines)**: Nhập ít nhất 3 dòng. Mỗi dòng 1 ý tưởng khác nhau.
+*   **Mô tả (Descriptions)**: Nhập ít nhất 2 dòng mô tả chi tiết sản phẩm.
+*   **Đường dẫn (Final URL)**: Trang web mà khách sẽ đến khi bấm vào quảng cáo.
+
+### Tính năng Tự Sửa Lỗi (Auto-Fix):
+*   Nếu bạn soạn mẫu quảng cáo không đúng chuẩn (ví dụ: Soạn mô tả cho quảng cáo Tìm kiếm nhưng chiến dịch lại là YouTube), Odoo sẽ **tự động chuyển đổi định dạng** sang loại tương thích nhất. Bạn chỉ cần nhấn **"Cập nhật nội dung"**, hệ thống sẽ lo phần còn lại.
+
+### Theo dõi tương tác thực tế:
+Odoo hiển thị phân tích tương tác ngay trên Form mẫu quảng cáo:
+*   **Tỷ lệ ra đơn/ROAS dự tính**: Dự báo hiệu quả của riêng nội dung quảng cáo này.
+*   **Auto-sync Active**: Dữ liệu được đồng bộ liên tục 2 chiều với Google Ads.
+*   **Preview nội dung**: Bạn có thể xem lại chính xác các Headlines/Descriptions nào đang được chạy.
+
+![Chi Tiết Nội Dung Và Phân Tích Tương Tác Mẫu Quảng Cáo](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775204706175.png)
+
+---
+
+## 6. Menu: Quy Tắc Tự Động (Automatic Rules)
+Đây là "bộ não" thực thi của hệ thống, nơi tập hợp tất cả các lệnh điều khiển quảng cáo dựa trên dữ liệu thời gian thực.
+
+![Quản Lý Quy Tắc Tập Trung Theo Nhóm Hành Động](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775204906462.png)
+
+### Cấu trúc một Quy tắc:
+Mỗi quy tắc hoạt động theo logic **IF (Nếu)** -> **THEN (Thì)**:
+*   **IF (Điều kiện)**: Bạn chọn trường dữ liệu để theo dõi (Ví dụ: Tồn kho thực tế, CPA, Clicks...).
+*   **Toán tử**: Lớn hơn, Nhỏ hơn, Bằng...
+*   **THEN (Hành động)**: 
+    *   `Tạm dừng (Pause)`: Tắt quảng cáo ngay lập tức.
+    *   `Bật lại (Enable)`: Mở lại quảng cáo khi điều kiện cho phép.
+    *   `Chỉ thông báo`: Gửi tin nhắn vào Chatter để bạn tự xử lý.
+
+![Giao Diện Thiết Lập Logic IF-THEN Trực Quan](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775204908140.png)
+
+### Giám sát và Nhật ký (Logs):
+Đây là phần quan trọng nhất để bạn kiểm soát hệ thống tự động:
+*   **Lịch sử thực thi**: Hệ thống lưu lại danh sách tất cả các lượt chạy để bạn đối soát.
+*   **Chi tiết từng lượt chạy**: Nhấp vào một dòng log để xem giải thích chi tiết lý do hệ thống ra quyết định.
+    *   Ví dụ: *"Chạy thành công - Không có đối tượng nào thoả mãn điều kiện lúc này"* hoặc *"Đã tạm dừng quảng cáo vì Tồn kho (4.0) thấp hơn ngưỡng (5.0)"*.
+
+![Danh Sách Toàn Bộ Lịch Sử Chạy Quy Tắc](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775205043598.png)
+
+![Chi Tiết Một Lượt Chạy Và Nội Dung Giải Thích](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775205037953.png)
+
+---
+
+## 7. Menu: Hành Động Chuyển Đổi (Conversion Actions)
+Kết nối kết quả kinh doanh với Google Ads.
+
+*   **Tạo mới**: Bạn cần tạo một bản ghi cho hành động "Mua hàng" (Purchase).
+*   **Cấu hình**: Nhập `Conversion ID` và `Conversion Label` từ Google Ads.
+*   **Loại**: 
+    *   `Webpage`: Dùng để lấy mã nhúng vào website.
+    *   `Upload Clicks`: Dùng để Odoo tự động gửi dữ liệu doanh thu qua API.
+
+---
+
+## 8. Menu: Lượt Chuyển Đổi (Conversions)
+Theo dõi từng đơn hàng thực tế phát sinh từ quảng cáo Google. Đây là dữ liệu quan trọng nhất để đánh giá hiệu quả kinh doanh.
+
+![Danh Sách Các Đơn Hàng Thành Công Từ Google Ads](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775205150940.png)
+
+### Các thông tin đo lường chính:
+*   **Mã GCLID (Google Click ID)**: Mã định danh click duy nhất từ Google. Nếu đơn hàng có mã này, Odoo sẽ tự động liên kết để đo lường.
+*   **Doanh thu thực tế**: Số tiền khách đã thanh toán cho đơn hàng.
+*   **Trạng thái đơn hàng**: Đồng bộ thời gian thực với module Bán hàng (Đang xử lý, Hoàn thành, Đã hủy).
+*   **Phân tích Attribution**: Xem đơn hàng này thuộc về chiến dịch nào và chi phí quảng cáo đã bỏ ra cho click đó là bao nhiêu.
+
+### Tính năng Offline Conversion (Upload API):
+Hệ thống hỗ trợ gửi dữ liệu "ngược" về cho Google Ads để thuật toán AI của Google học hỏi và tối ưu đúng tệp khách hàng hơn:
+*   **Tự động Upload**: Khi đơn hàng chuyển trạng thái "Hoàn thành", Odoo sẽ tự động đẩy doanh thu về Google qua API (Nếu bạn cấu hình loại `Upload Clicks`).
+*   **ROAS Đơn hàng**: Tính toán ngay tại chỗ: *"Với click này bạn bỏ ra 500đ và thu về 1.500.000đ"*.
+
+![Chi Tiết Một Lượt Chuyển Đổi Và Thông Tin Attribution](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775205152954.png)
+
+---
+
+## 9. Menu: Cấu Hình Tag (Tag Config)
+Dành cho việc cài đặt theo dõi lên Website.
+
+1.  Nhập mã GTM hoặc mã Google Ads của bạn.
+2.  Odoo tự động sinh ra các **đoạn mã PHP/JS (Snippets)** phía dưới.
+3.  Bạn chỉ việc Copy các đoạn mã này và dán vào Website (WooCommerce/WordPress) theo hướng dẫn đi kèm.
+4.  **Báo cáo GA4**: Kết nối GA4 để xem biểu đồ mật độ sự kiện (Mua hàng, Thêm giỏ hàng...) ngay trên Odoo để biết thẻ theo dõi có đang hoạt động tốt không.
+
+---
+
+## Lịch Trình Vận Hành Gợi Ý Cho Bạn:
+
+*   **Mỗi sáng (8:00 AM)**: Vào menu **Quy Tắc Tự Động**, kiểm tra xem có thông báo lỗi hay nhật ký tắt quảng cáo nào bất thường không.
+*   **Hàng tuần**: Vào menu **Chiến Dịch**, dùng **AI Adsroid** để đánh giá lại ngân sách xem có cần tăng/giảm cho tuần tới dựa trên tồn kho thực tế.
+*   **Hàng tháng**: Kiểm tra báo cáo **GA4 Health** trong menu **Tag Config** để đảm bảo quá trình đo lường không bị gián đoạn.
+
+---
+*Cẩm nang vận hành Google Ads Automation Odoo 18.*
