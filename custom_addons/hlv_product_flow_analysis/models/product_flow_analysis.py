@@ -1,8 +1,11 @@
+import io
+import json
 import logging
 from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
 
-from odoo import api, fields, models
+from odoo import api, fields, models, http
+from odoo.http import request, content_disposition
 
 _logger = logging.getLogger(__name__)
 
@@ -13,7 +16,7 @@ class ProductFlowAnalysis(models.AbstractModel):
 
     @api.model
     def get_product_flow_data(self, period='month', date_from=False, date_to=False, warehouse_id=False):
-        """Lấy dữ liệu phân tích lưu thông sản phẩm."""
+        """Lấy dữ liệu phân tích mua hàng & lưu thông sản phẩm."""
         date_from, date_to = self._compute_date_range(period, date_from, date_to)
 
         domain = [
@@ -40,6 +43,8 @@ class ProductFlowAnalysis(models.AbstractModel):
                     'incoming_qty': 0.0,
                     'outgoing_qty': 0.0,
                     'internal_qty': 0.0,
+                    'incoming_count': 0,
+                    'outgoing_count': 0,
                     'total_qty': 0.0,
                     'move_count': 0,
                     'qty_available': prod.qty_available,
@@ -50,25 +55,28 @@ class ProductFlowAnalysis(models.AbstractModel):
 
             if picking_type == 'incoming':
                 product_data[prod.id]['incoming_qty'] += qty
+                product_data[prod.id]['incoming_count'] += 1
             elif picking_type == 'outgoing':
                 product_data[prod.id]['outgoing_qty'] += qty
+                product_data[prod.id]['outgoing_count'] += 1
             elif picking_type == 'internal':
                 product_data[prod.id]['internal_qty'] += qty
 
             product_data[prod.id]['total_qty'] += qty
             product_data[prod.id]['move_count'] += 1
 
-        result = sorted(product_data.values(), key=lambda x: x['total_qty'], reverse=True)
+        result = sorted(product_data.values(), key=lambda x: x['incoming_count'], reverse=True)
         return {
             'products': result,
             'date_from': str(date_from),
             'date_to': str(date_to),
             'period': period,
+            'total_count': len(result),
         }
 
     @api.model
     def get_supplier_flow_data(self, period='month', date_from=False, date_to=False, warehouse_id=False):
-        """Lấy dữ liệu phân tích nhà cung cấp."""
+        """Lấy dữ liệu phân tích nhà cung cấp (chỉ từ đơn mua hàng, loại trừ trả hàng khách)."""
         date_from, date_to = self._compute_date_range(period, date_from, date_to)
 
         domain = [
@@ -76,6 +84,7 @@ class ProductFlowAnalysis(models.AbstractModel):
             ('date', '>=', fields.Datetime.to_string(date_from)),
             ('date', '<=', fields.Datetime.to_string(date_to)),
             ('picking_type_id.code', '=', 'incoming'),
+            ('purchase_line_id', '!=', False),  # Chỉ lấy moves từ đơn mua hàng
         ]
         if warehouse_id:
             domain.append(('warehouse_id', '=', warehouse_id))
@@ -84,7 +93,12 @@ class ProductFlowAnalysis(models.AbstractModel):
 
         supplier_data = {}
         for move in moves:
-            partner = move.picking_id.partner_id if move.picking_id else False
+            # Ưu tiên lấy partner từ purchase order, fallback picking partner
+            partner = False
+            if move.purchase_line_id and move.purchase_line_id.order_id:
+                partner = move.purchase_line_id.order_id.partner_id
+            if not partner:
+                partner = move.picking_id.partner_id if move.picking_id else False
             if not partner:
                 continue
 
@@ -232,8 +246,10 @@ class ProductFlowAnalysis(models.AbstractModel):
             incoming_moves.mapped('product_id.id') +
             outgoing_moves.mapped('product_id.id')
         ))
+        # Chỉ đếm nhà cung cấp từ đơn mua hàng (loại trừ trả hàng khách)
+        purchase_moves = incoming_moves.filtered(lambda m: m.purchase_line_id)
         unique_suppliers = len(set(
-            incoming_moves.mapped('picking_id.partner_id.id')
+            purchase_moves.mapped('purchase_line_id.order_id.partner_id.id')
         ) - {False})
 
         # Get warehouses for dropdown
@@ -313,3 +329,110 @@ class ProductFlowAnalysis(models.AbstractModel):
             })
 
         return trends
+
+    @api.model
+    def export_product_flow_excel(self, period='month', date_from=False, date_to=False, warehouse_id=False):
+        """Xuất dữ liệu sản phẩm ra Excel, trả về base64."""
+        import base64
+        try:
+            import xlsxwriter
+        except ImportError:
+            raise Exception("Thiếu thư viện xlsxwriter. Chạy: pip install xlsxwriter")
+
+        data = self.get_product_flow_data(
+            period=period, date_from=date_from, date_to=date_to, warehouse_id=warehouse_id
+        )
+        products = data.get('products', [])
+
+        output = io.BytesIO()
+        wb = xlsxwriter.Workbook(output, {'in_memory': True})
+        ws = wb.add_worksheet('Hàng hóa lưu thông')
+
+        # Formats
+        header_fmt = wb.add_format({
+            'bold': True, 'bg_color': '#017e84', 'font_color': 'white',
+            'border': 1, 'align': 'center', 'valign': 'vcenter', 'font_size': 11,
+        })
+        num_fmt = wb.add_format({'num_format': '#,##0.##', 'border': 1, 'align': 'right'})
+        text_fmt = wb.add_format({'border': 1})
+        title_fmt = wb.add_format({'bold': True, 'font_size': 14})
+
+        ws.write(0, 0, f"Báo cáo lưu thông hàng hóa ({data['date_from']} → {data['date_to']})", title_fmt)
+
+        headers = ['#', 'Mã SP', 'Tên sản phẩm', 'Nhóm SP', 'SL Mua', 'Số lần mua',
+                    'SL Bán', 'Số lần bán', 'SL Nội bộ', 'Tồn kho']
+        for col, h in enumerate(headers):
+            ws.write(2, col, h, header_fmt)
+
+        for idx, p in enumerate(products):
+            row = idx + 3
+            ws.write(row, 0, idx + 1, num_fmt)
+            ws.write(row, 1, p.get('default_code', ''), text_fmt)
+            ws.write(row, 2, p.get('product_name', ''), text_fmt)
+            ws.write(row, 3, p.get('categ_name', ''), text_fmt)
+            ws.write(row, 4, p.get('incoming_qty', 0), num_fmt)
+            ws.write(row, 5, p.get('incoming_count', 0), num_fmt)
+            ws.write(row, 6, p.get('outgoing_qty', 0), num_fmt)
+            ws.write(row, 7, p.get('outgoing_count', 0), num_fmt)
+            ws.write(row, 8, p.get('internal_qty', 0), num_fmt)
+            ws.write(row, 9, p.get('qty_available', 0), num_fmt)
+
+        ws.set_column(0, 0, 5)
+        ws.set_column(1, 1, 14)
+        ws.set_column(2, 2, 40)
+        ws.set_column(3, 3, 20)
+        ws.set_column(4, 9, 14)
+
+        wb.close()
+        output.seek(0)
+        return base64.b64encode(output.read()).decode('utf-8')
+
+    @api.model
+    def export_supplier_flow_excel(self, period='month', date_from=False, date_to=False, warehouse_id=False):
+        """Xuất dữ liệu nhà cung cấp ra Excel, trả về base64."""
+        import base64
+        try:
+            import xlsxwriter
+        except ImportError:
+            raise Exception("Thiếu thư viện xlsxwriter. Chạy: pip install xlsxwriter")
+
+        data = self.get_supplier_flow_data(
+            period=period, date_from=date_from, date_to=date_to, warehouse_id=warehouse_id
+        )
+        suppliers = data.get('suppliers', [])
+
+        output = io.BytesIO()
+        wb = xlsxwriter.Workbook(output, {'in_memory': True})
+        ws = wb.add_worksheet('Nhà cung cấp')
+
+        header_fmt = wb.add_format({
+            'bold': True, 'bg_color': '#017e84', 'font_color': 'white',
+            'border': 1, 'align': 'center', 'valign': 'vcenter', 'font_size': 11,
+        })
+        num_fmt = wb.add_format({'num_format': '#,##0.##', 'border': 1, 'align': 'right'})
+        money_fmt = wb.add_format({'num_format': '#,##0', 'border': 1, 'align': 'right'})
+        text_fmt = wb.add_format({'border': 1})
+        title_fmt = wb.add_format({'bold': True, 'font_size': 14})
+
+        ws.write(0, 0, f"Báo cáo nhà cung cấp ({data['date_from']} → {data['date_to']})", title_fmt)
+
+        headers = ['#', 'Nhà cung cấp', 'Tổng SL nhập', 'Tổng giá trị', 'Số lần nhập', 'Số SP']
+        for col, h in enumerate(headers):
+            ws.write(2, col, h, header_fmt)
+
+        for idx, s in enumerate(suppliers):
+            row = idx + 3
+            ws.write(row, 0, idx + 1, num_fmt)
+            ws.write(row, 1, s.get('partner_name', ''), text_fmt)
+            ws.write(row, 2, s.get('total_qty', 0), num_fmt)
+            ws.write(row, 3, s.get('total_amount', 0), money_fmt)
+            ws.write(row, 4, s.get('move_count', 0), num_fmt)
+            ws.write(row, 5, s.get('product_count', 0), num_fmt)
+
+        ws.set_column(0, 0, 5)
+        ws.set_column(1, 1, 35)
+        ws.set_column(2, 5, 16)
+
+        wb.close()
+        output.seek(0)
+        return base64.b64encode(output.read()).decode('utf-8')
