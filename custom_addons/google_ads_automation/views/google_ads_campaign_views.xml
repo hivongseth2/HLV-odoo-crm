@@ -51,6 +51,11 @@
                     <button name="action_ask_adsroid" string="🪄 Phân tích bằng Adsroid"
                             type="object" class="btn-info"
                             invisible="state != 'synced'"/>
+                    
+                    <button name="action_open_adsroid_chat" string="💬 Trò chuyện với Adsroid"
+                            type="object" class="btn-outline-primary fw-bold"
+                            invisible="state != 'synced'"/>
+                            
                     <field name="state" widget="statusbar" statusbar_visible="draft,synced"/>
                 </header>
                 <sheet>
@@ -182,10 +187,10 @@
                                     <field name="score" string="Score"/>
                                     <field name="suggested_action" widget="badge" 
                                            decoration-danger="suggested_action == 'PAUSE'"
-                                           decoration-warning="suggested_action == 'DECREASE_BUDGET'"
-                                           decoration-success="suggested_action == 'MAINTAIN'"/>
+                                           decoration-warning="suggested_action == 'DECREASE_BUDGET' or suggested_action == 'ADJUST_BUDGET'"
+                                           decoration-success="suggested_action == 'MAINTAIN' or suggested_action == 'ENABLE' or suggested_action == 'INCREASE_BUDGET'"/>
                                     <field name="insight"/>
-                                    <field name="is_applied" widget="boolean_invisible" string="Tự Xử Lý"/>
+                                    <field name="is_applied" widget="boolean" string="Đã Tự Xử Lý"/>
                                 </list>
                             </field>
                         </page>

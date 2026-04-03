@@ -586,6 +586,8 @@ class GoogleAdsCampaign(models.Model):
         
         if success:
             action = result.get('suggested_action', 'MAINTAIN')
+            new_budget = result.get('new_budget')
+            
             log_vals = {
                 'campaign_id': self.id,
                 'score': result.get('score', 0),
@@ -594,13 +596,36 @@ class GoogleAdsCampaign(models.Model):
                 'is_applied': False,
             }
             
-            # --- Auto-Apply Logic ---
+            # --- AI-Led Auto-Apply Logic ---
             if self.account_id.auto_apply_adsroid_action:
-                if action == 'PAUSE':
+                # 1. ADJUST_BUDGET: AI đề xuất bao nhiêu, đặt bấy nhiêu
+                if action == 'ADJUST_BUDGET' and new_budget:
+                    if self.account_id.is_demo:
+                        self.budget_amount = new_budget
+                        log_vals['is_applied'] = True
+                        log_vals['insight'] += f"\n\n[DEMO] AI đã tự động điều chỉnh ngân sách thành {new_budget:,}đ."
+                    else:
+                        client = self.account_id._get_google_ads_client()
+                        from ..services.google_ads_mutate import GoogleAdsMutateService
+                        # Google Ads yêu cầu micros (triệu)
+                        new_micros = int(new_budget * 1000000)
+                        ok, res = GoogleAdsMutateService.update_campaign_budget(
+                            client, self.account_id.operating_customer_id, 
+                            self.google_campaign_id, new_micros
+                        )
+                        if ok:
+                            self.budget_amount = new_budget
+                            log_vals['is_applied'] = True
+                            log_vals['insight'] += f"\n\n[Thành Công] AI đã tự động điều chỉnh ngân sách thành {new_budget:,}đ trên Google Ads."
+                        else:
+                            log_vals['insight'] += f"\n\n[Lỗi Auto-Budget]: {res}"
+                
+                # 2. PAUSE: Tạm dừng
+                elif action == 'PAUSE':
                     if self.account_id.is_demo:
                         self.status = 'paused'
                         log_vals['is_applied'] = True
-                        log_vals['insight'] += "\n\n[DEMO] Hệ thống đã tự động PAUSE chiến dịch."
+                        log_vals['insight'] += "\n\n[DEMO] AI đã tự động PAUSE chiến dịch."
                     else:
                         client = self.account_id._get_google_ads_client()
                         from ..services.google_ads_mutate import GoogleAdsMutateService
@@ -608,9 +633,26 @@ class GoogleAdsCampaign(models.Model):
                         if ok:
                             self.status = 'paused'
                             log_vals['is_applied'] = True
-                            log_vals['insight'] += "\n\n[Thành Công] Hệ thống đã tự động PAUSE chiến dịch trên Google Ads."
+                            log_vals['insight'] += "\n\n[Thành Công] AI đã tự động PAUSE chiến dịch trên Google Ads."
                         else:
-                            log_vals['insight'] += f"\n\n[Lỗi Auto-Apply]: {res}"
+                            log_vals['insight'] += f"\n\n[Lỗi Auto-Pause]: {res}"
+
+                # 3. ENABLE: Kích hoạt lại
+                elif action == 'ENABLE' and self.status == 'paused':
+                    if self.account_id.is_demo:
+                        self.status = 'enabled'
+                        log_vals['is_applied'] = True
+                        log_vals['insight'] += "\n\n[DEMO] AI đã tự động ENABLE chiến dịch."
+                    else:
+                        client = self.account_id._get_google_ads_client()
+                        from ..services.google_ads_mutate import GoogleAdsMutateService
+                        ok, res = GoogleAdsMutateService.enable_campaign(client, self.account_id.operating_customer_id, self.google_campaign_id)
+                        if ok:
+                            self.status = 'enabled'
+                            log_vals['is_applied'] = True
+                            log_vals['insight'] += "\n\n[Thành Công] AI đã tự động ENABLE chiến dịch trên Google Ads."
+                        else:
+                            log_vals['insight'] += f"\n\n[Lỗi Auto-Enable]: {res}"
             
             # Tạo log lịch sử
             self.env['google.ads.adsroid.log'].create(log_vals)
@@ -641,6 +683,19 @@ class GoogleAdsCampaign(models.Model):
         else:
             if is_cron: return False
             raise UserError(_("Không thể lấy nhận định từ Adsroid: %s") % result)
+    def action_open_adsroid_chat(self):
+        """Mở khung chat với Adsroid AI"""
+        self.ensure_one()
+        return {
+            'name': _(' Adsroid AI Assistant'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'google.ads.adsroid.chat',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_campaign_id': self.id,
+            }
+        }
 
     def action_pause_on_google(self):
         self.ensure_one()

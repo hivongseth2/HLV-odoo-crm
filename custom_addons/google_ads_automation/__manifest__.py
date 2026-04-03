@@ -20,6 +20,7 @@
         "data/google_ads_ad_group_type_data.xml",
         "data/ir_cron_data.xml",
         "wizard/google_ads_product_feed_wizard_views.xml",
+        "wizard/google_ads_adsroid_chat_views.xml",
         "views/google_ads_account_views.xml",
         "views/google_ads_campaign_views.xml",
         "views/google_ads_ad_group_views.xml",

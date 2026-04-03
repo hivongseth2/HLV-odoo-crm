@@ -19,21 +19,14 @@ class AdsroidApiService:
     ADSROID_ENDPOINT_ANALYZE = "https://rckoycauuwzdryvkjpac.supabase.co/functions/v1/adsroid"
 
     @staticmethod
-    def analyze_campaign(api_key, organisation_id, project_id, campaign_data, product_data, is_demo=False):
+    def analyze_campaign(api_key, organisation_id, project_id, campaign_data, product_data, is_demo=False, user_query=None):
         """
         Gửi dữ liệu chiến dịch và sản phẩm lên Adsroid để nhận AI Insights.
-        
-        :param api_key: str - API Key
-        :param organisation_id: str - Organization ID
-        :param project_id: str - Project ID
-        :param campaign_data: dict - Thông tin chiến dịch
-        :param product_data: list - Dữ liệu sản phẩm
-        :param is_demo: bool - Trạng thái Demo
-        :return: (bool, str/dict)
+        Xử lý cả chế độ phân tích tự động và chế độ Chat nếu có user_query.
         """
         if is_demo:
             _logger.info("[DEMO MODE] Trả về dữ liệu mô phỏng AI (Mock) cho chiến dịch: %s", campaign_data.get('name'))
-            return True, AdsroidApiService._mock_ai_response(campaign_data, product_data)
+            return True, AdsroidApiService._mock_ai_response(campaign_data, product_data, user_query)
 
         if not api_key or not organisation_id or not project_id:
             return False, _("Thiếu cấu hình Adsroid (API Key, Org ID hoặc Project ID).")
@@ -44,17 +37,35 @@ class AdsroidApiService:
             "products": product_data
         }, indent=2, ensure_ascii=False)
         
-        message = (
-            "Hãy đóng vai là một chuyên gia tối ưu hóa quảng cáo Google Ads. "
-            "Dựa trên dữ liệu chiến dịch và tồn kho sau đây, hãy phân tích và đưa ra quyết định. "
-            "YÊU CẦU QUAN TRỌNG: Bạn chỉ được phản hồi bằng định dạng JSON theo đúng cấu trúc sau:\n"
-            "{\n"
-            "  \"score\": 85, // Điểm hiệu suất 0-100\n"
-            "  \"suggested_action\": \"PAUSE\" | \"MAINTAIN\" | \"INCREASE_BUDGET\" | \"DECREASE_BUDGET\",\n"
-            "  \"insight\": \"Nội dung nhận định chi tiết bằng tiếng Việt...\"\n"
-            "}\n\n"
-            f"Dữ liệu: {data_str}"
-        )
+        if user_query:
+            # Chế độ CHAT: AI trả lời dựa trên câu hỏi người dùng và ngữ cảnh data
+            message = (
+                "Bạn là Adsroid AI Assistant. Hãy trả lời câu hỏi của người dùng dựa trên dữ liệu Google Ads sau đây. "
+                "Bạn có quyền đề xuất thay đổi cụ thể nếu cần.\n\n"
+                "YÊU CẦU: Bạn PHẢI trả về định dạng JSON chứa 'insight' (câu trả lời) và tùy chọn 'new_budget' hoặc 'new_status' nếu muốn thực hiện thay đổi.\n"
+                "{\n"
+                "  \"insight\": \"Câu trả lời của bạn...\",\n"
+                "  \"suggested_action\": \"ADJUST_BUDGET\" | \"PAUSE\" | \"ENABLE\" | \"MAINTAIN\",\n"
+                "  \"new_budget\": 1000000, // Chỉ điền nếu muốn đổi ngân sách (VND)\n"
+                "  \"score\": 85\n"
+                "}\n\n"
+                f"Dữ liệu ngữ cảnh: {data_str}\n"
+                f"Câu hỏi của người dùng: {user_query}"
+            )
+        else:
+            # Chế độ PHÂN TÍCH (Analyze): AI tự quét và đưa ra đề xuất
+            message = (
+                "Hãy đóng vai là một chuyên gia tối ưu hóa quảng cáo Google Ads. "
+                "Hãy phân tích dữ liệu chiến dịch và tồn kho sau đây để đưa ra quyết định tối ưu nhất.\n\n"
+                "YÊU CẦU QUAN TRỌNG: Bạn chỉ được phản hồi bằng định dạng JSON theo đúng cấu trúc sau:\n"
+                "{\n"
+                "  \"score\": 85, // Điểm hiệu suất 0-100\n"
+                "  \"suggested_action\": \"PAUSE\" | \"ENABLE\" | \"ADJUST_BUDGET\" | \"MAINTAIN\",\n"
+                "  \"new_budget\": 1200000, // QUAN TRỌNG: Nếu đề xuất tăng/giảm, hãy ghi rõ số tiền ngân sách mới (VND) bạn muốn đặt.\n"
+                "  \"insight\": \"Nội dung nhận định chi tiết, giải thích lý do tại sao bạn chọn ngân sách đó bằng tiếng Việt...\"\n"
+                "}\n\n"
+                f"Dữ liệu: {data_str}"
+            )
 
         payload = {
             "organisation_id": organisation_id,
@@ -68,41 +79,35 @@ class AdsroidApiService:
             "Accept": "application/json"
         }
 
-        _logger.info("Gửi yêu cầu phân tích tới Adsroid cho chiến dịch: %s", campaign_data.get('name'))
+        _logger.info("Gửi yêu cầu Adsroid cho chiến dịch: %s (User Query: %s)", campaign_data.get('name'), user_query or 'None')
 
         try:
-            # Gửi HTTP Request tới Adsroid (Mock/Placeholder nếu endpoint chưa public)
-            # Timeout 15s để tránh block Odoo
             response = requests.post(
                 AdsroidApiService.ADSROID_ENDPOINT_ANALYZE,
                 headers=headers,
                 data=json.dumps(payload),
-                timeout=15
+                timeout=25 # Tăng timeout cho chat
             )
 
-            # Trả về lỗi nếu gọi API thực tế thất bại
             if response.status_code != 200:
                 _logger.warning("Adsroid API trả về lỗi: %s - %s", response.status_code, response.text)
                 return False, _("Lỗi phản hồi từ server Adsroid (Code: %s): %s") % (response.status_code, response.text)
 
-            # Xử lý thành công
             res_data = response.json()
-            
-            # API Supabase này thường trả về string hoặc object chứa field 'response' hoặc 'message'
-            # Nếu Adsroid trả về raw text, ta cần extract nó hoặc parse nếu AI trả về JSON string
             content = ""
             if isinstance(res_data, dict):
                 content = res_data.get('response') or res_data.get('message') or str(res_data)
             else:
                 content = str(res_data)
 
-            # Thử parse JSON từ content (vì ta đã yêu cầu AI trả về JSON)
             try:
-                # Tìm JSON block nếu AI nhỡ tay viết thêm text
                 import re
                 json_match = re.search(r'\{.*\}', content, re.DOTALL)
                 if json_match:
                     parsed = json.loads(json_match.group())
+                    # Đồng bộ hóa suggested_action nếu AI dùng từ khác
+                    if 'new_budget' in parsed and not parsed.get('suggested_action'):
+                        parsed['suggested_action'] = 'ADJUST_BUDGET'
                     return True, parsed
                 return True, {"insight": content, "suggested_action": "MAINTAIN", "score": 0}
             except:
@@ -117,35 +122,45 @@ class AdsroidApiService:
             return False, str(e)
 
     @staticmethod
-    def _mock_ai_response(campaign_data, product_data):
-        """Giả lập phản hồi từ AI Agent khi chưa có Endpoint chuẩn"""
+    def _mock_ai_response(campaign_data, product_data, user_query=None):
+        """Giả lập phản hồi từ AI Agent khi chưa có Endpoint chuẩn hoặc ở chế độ Demo"""
         metrics = campaign_data.get('metrics', {})
         cost = metrics.get('cost', 0)
         conv = metrics.get('conversions', 0)
         roas = (conv * 500000) / cost if cost > 0 else 0
+        current_budget = campaign_data.get('metrics', {}).get('budget', 50000)
 
         # Kiểm tra tồn kho sản phẩm
         low_stock_products = [p for p in product_data if p.get('qty_available', 0) <= 20]
         
+        if user_query:
+            # Giả lập trả lời chat
+            return {
+                "score": 80,
+                "suggested_action": "MAINTAIN",
+                "insight": f"Đây là câu trả lời giả lập cho câu hỏi: '{user_query}'. Dữ liệu cho thấy ROAS của bạn đang ở mức {roas:.1f}x."
+            }
+
         if low_stock_products:
             action = "PAUSE"
-            message = f"AI Đề xuất: TẠM DỪNG. Phát hiện {len(low_stock_products)} sản phẩm trong chiến dịch đang sắp hết hàng."
-        elif roas < 2.0 and cost > 100000:
-            action = "DECREASE_BUDGET"
-            message = "AI Đề xuất: GIẢM NGÂN SÁCH. ROAS hiện tại < 2.0, quảng cáo đang tiêu tốn nhiều chi phí mà không đem lại chuyển đổi tốt."
-        elif roas >= 3.0:
-            action = "INCREASE_BUDGET"
-            message = "AI Đề xuất: TĂNG NGÂN SÁCH. ROAS rất tốt (>= 3.0), tồn kho đảm bảo."
+            new_budget = current_budget
+            message = f"Adsroid đề xuất: TẠM DỪNG. Phát hiện {len(low_stock_products)} sản phẩm đang sắp hết hàng, tránh lãng phí ngân sách."
+        elif roas < 1.5 and cost > 200000:
+            action = "ADJUST_BUDGET"
+            new_budget = round(current_budget * 0.7, -3) # Giảm 30%
+            message = f"Adsroid đề xuất: GIẢM NGÂN SÁCH về {new_budget:,}đ. Hiệu quả ROAS thấp, cần tối ưu lại từ khóa."
+        elif roas >= 4.0:
+            action = "ADJUST_BUDGET"
+            new_budget = round(current_budget * 1.5, -3) # Tăng 50%
+            message = f"Adsroid đề xuất: TĂNG NGÂN SÁCH lên {new_budget:,}đ. Hiệu quả đang rất tốt, hãy mở rộng quy mô."
         else:
             action = "MAINTAIN"
-            message = "AI Đề xuất: GIỮ NGUYÊN. Chiến dịch đang hoạt động ổn định ở mức chấp nhận được."
+            new_budget = current_budget
+            message = "Adsroid đề xuất: GIỮ NGUYÊN. Các chỉ số đang ở mức ổn định."
 
         return {
             "score": round(roas * 10, 2),
             "suggested_action": action,
-            "insight": message,
-            "raw_data_received": {
-                "campaign_id": campaign_data.get('id'),
-                "products_count": len(product_data)
-            }
+            "new_budget": new_budget,
+            "insight": message
         }
