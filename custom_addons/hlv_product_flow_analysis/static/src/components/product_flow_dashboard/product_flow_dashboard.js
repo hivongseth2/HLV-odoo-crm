@@ -65,16 +65,19 @@ export class ProductFlowDashboard extends Component {
         this.state.isLoading = true;
         try {
             const params = this._getParams();
-            const summary = await this.orm.call(
-                "product.flow.analysis",
-                "get_dashboard_summary",
-                [],
-                params
-            );
+            const [summary, productResult, supplierResult] = await Promise.all([
+                this.orm.call("product.flow.analysis", "get_dashboard_summary", [], params),
+                this.orm.call("product.flow.analysis", "get_product_flow_data", [], params),
+                this.orm.call("product.flow.analysis", "get_supplier_flow_data", [], params),
+            ]);
             this.state.summary = summary;
             this.state.warehouses = summary.warehouses || [];
             this.state.dateFrom = summary.date_from;
             this.state.dateTo = summary.date_to;
+            this.state.products = productResult.products || [];
+            this.state.productPage = 1;
+            this.state.suppliers = supplierResult.suppliers || [];
+            this.state.supplierPage = 1;
             await this.loadTabData();
         } catch (e) {
             this.notification.add("Lỗi tải dữ liệu: " + (e.message || e), { type: "danger" });
@@ -546,6 +549,60 @@ export class ProductFlowDashboard extends Component {
     getBarWidth(value, max) {
         if (!max) return "0%";
         return Math.round((value / max) * 100) + "%";
+    }
+
+    // ========== Supplier chart computed data ==========
+    get topSuppliersByQty() {
+        return [...this.state.suppliers]
+            .filter(s => s.total_qty > 0)
+            .sort((a, b) => b.total_qty - a.total_qty)
+            .slice(0, 8);
+    }
+
+    get topSuppliersByQtyMax() {
+        const items = this.topSuppliersByQty;
+        return items.length ? items[0].total_qty : 1;
+    }
+
+    get topSuppliersByAmount() {
+        return [...this.state.suppliers]
+            .filter(s => s.total_amount > 0)
+            .sort((a, b) => b.total_amount - a.total_amount)
+            .slice(0, 8);
+    }
+
+    get topSuppliersByAmountMax() {
+        const items = this.topSuppliersByAmount;
+        return items.length ? items[0].total_amount : 1;
+    }
+
+    get topSuppliersByFrequency() {
+        return [...this.state.suppliers]
+            .filter(s => s.move_count > 0)
+            .sort((a, b) => b.move_count - a.move_count)
+            .slice(0, 8);
+    }
+
+    get topSuppliersByFrequencyMax() {
+        const items = this.topSuppliersByFrequency;
+        return items.length ? items[0].move_count : 1;
+    }
+
+    get supplierConcentration() {
+        const suppliers = [...this.state.suppliers].sort((a, b) => b.total_amount - a.total_amount);
+        const totalAmount = suppliers.reduce((sum, s) => sum + s.total_amount, 0);
+        if (!totalAmount || !suppliers.length) return { top1: 0, top3: 0, top5: 0, total: 0, count: 0 };
+        const top1 = suppliers.length >= 1 ? Math.round(suppliers[0].total_amount / totalAmount * 100) : 0;
+        const top3 = Math.round(suppliers.slice(0, 3).reduce((s, x) => s + x.total_amount, 0) / totalAmount * 100);
+        const top5 = Math.round(suppliers.slice(0, 5).reduce((s, x) => s + x.total_amount, 0) / totalAmount * 100);
+        return {
+            top1,
+            top3,
+            top5,
+            total: totalAmount,
+            count: suppliers.length,
+            top1Name: suppliers.length >= 1 ? suppliers[0].partner_name : '',
+        };
     }
 }
 

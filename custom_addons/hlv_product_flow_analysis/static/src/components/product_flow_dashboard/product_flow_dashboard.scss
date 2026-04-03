@@ -966,6 +966,106 @@
     font-size: 12px;
 }
 
+/* Supplier chart bar fills */
+.pf-hbar-supplier-qty {
+    background: linear-gradient(90deg, #9775fa, #6f42c1);
+}
+
+.pf-hbar-supplier-amount {
+    background: linear-gradient(90deg, #ffd43b, #e67700);
+}
+
+.pf-hbar-supplier-freq {
+    background: linear-gradient(90deg, #63e6be, #0ca678);
+}
+
+.pf-hbar-label-supplier {
+    width: 180px;
+    min-width: 180px;
+}
+
+/* Supplier concentration */
+.pf-supplier-concentration {
+    padding: 4px 0;
+}
+
+.pf-conc-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #495057;
+}
+
+.pf-conc-total strong {
+    color: #212529;
+    font-size: 15px;
+}
+
+.pf-conc-count strong {
+    color: #4263eb;
+}
+
+.pf-conc-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.pf-conc-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pf-conc-label {
+    width: 160px;
+    min-width: 160px;
+    font-size: 12px;
+    color: #495057;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pf-conc-track {
+    flex: 1;
+    height: 20px;
+    background: #f1f3f5;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.pf-conc-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+}
+
+.pf-conc-1 { background: linear-gradient(90deg, #748ffc, #4263eb); }
+.pf-conc-3 { background: linear-gradient(90deg, #91a7ff, #5c7cfa); }
+.pf-conc-5 { background: linear-gradient(90deg, #bac8ff, #748ffc); }
+
+.pf-conc-pct {
+    width: 40px;
+    min-width: 40px;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 700;
+    color: #4263eb;
+}
+
+.pf-conc-hint {
+    font-size: 12px;
+    color: #6c757d;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 3px solid #dee2e6;
+}
+
 @media (max-width: 768px) {
     .pf-charts-grid {
         grid-template-columns: 1fr;
