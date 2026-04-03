@@ -180,14 +180,28 @@ class ProductFlowAnalysis(models.AbstractModel):
                     'default_code': prod.default_code or '',
                     'qty': 0.0,
                     'amount': 0.0,
+                    'po_names': set(),
+                    'picking_names': set(),
                 }
             supplier_data[partner.id]['products'][prod.id]['qty'] += qty
             supplier_data[partner.id]['products'][prod.id]['amount'] += qty * price
+            if move.purchase_line_id and move.purchase_line_id.order_id:
+                supplier_data[partner.id]['products'][prod.id]['po_names'].add(
+                    move.purchase_line_id.order_id.name
+                )
+            if move.picking_id:
+                supplier_data[partner.id]['products'][prod.id]['picking_names'].add(
+                    move.picking_id.name
+                )
 
         # Convert products dict to list
         for sid in supplier_data:
+            prods = supplier_data[sid]['products']
+            for prod_data in prods.values():
+                prod_data['po_names'] = sorted(prod_data['po_names'])
+                prod_data['picking_names'] = sorted(prod_data['picking_names'])
             supplier_data[sid]['products'] = sorted(
-                supplier_data[sid]['products'].values(),
+                prods.values(),
                 key=lambda x: x['qty'],
                 reverse=True,
             )

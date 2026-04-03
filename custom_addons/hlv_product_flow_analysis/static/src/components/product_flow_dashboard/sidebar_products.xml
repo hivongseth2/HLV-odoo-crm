@@ -7,7 +7,7 @@
                         <i class="fa fa-arrow-down me-1 text-success"/>Top mua nhiều
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Top 8 SP có số lượng mua (nhập kho) nhiều nhất trong kỳ.
+                        <i class="fa fa-question-circle me-1"/>Top 8 SP có tần suất nhập kho cao nhất (số lần mua). Thanh dài hơn = mua thường xuyên hơn.
                     </div>
                     <div class="pf-hbar-chart pf-hbar-compact">
                         <t t-foreach="topPurchasedProducts" t-as="item" t-key="item.product_id">
@@ -17,8 +17,8 @@
                                 </div>
                                 <div class="pf-hbar-track">
                                     <div class="pf-hbar-fill pf-hbar-incoming"
-                                         t-att-style="'width:' + getBarWidth(item.incoming_qty, topPurchasedMax)">
-                                        <span class="pf-hbar-val" t-esc="formatNumber(item.incoming_qty)"/>
+                                         t-att-style="'width:' + getBarWidth(item.incoming_count, topPurchasedMax)">
+                                        <span class="pf-hbar-val"><t t-esc="item.incoming_count"/> lần</span>
                                     </div>
                                 </div>
                             </div>
@@ -35,7 +35,7 @@
                         <i class="fa fa-arrow-up me-1 text-danger"/>Top bán chạy
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Top 8 SP có số lượng bán (xuất kho) nhiều nhất trong kỳ.
+                        <i class="fa fa-question-circle me-1"/>Top 8 SP có tần suất bán (xuất kho) cao nhất (số lần bán). Thanh dài hơn = bán thường xuyên hơn.
                     </div>
                     <div class="pf-hbar-chart pf-hbar-compact">
                         <t t-foreach="topSoldProducts" t-as="item" t-key="item.product_id">
@@ -45,8 +45,8 @@
                                 </div>
                                 <div class="pf-hbar-track">
                                     <div class="pf-hbar-fill pf-hbar-outgoing"
-                                         t-att-style="'width:' + getBarWidth(item.outgoing_qty, topSoldMax)">
-                                        <span class="pf-hbar-val" t-esc="formatNumber(item.outgoing_qty)"/>
+                                         t-att-style="'width:' + getBarWidth(item.outgoing_count, topSoldMax)">
+                                        <span class="pf-hbar-val"><t t-esc="item.outgoing_count"/> lần</span>
                                     </div>
                                 </div>
                             </div>

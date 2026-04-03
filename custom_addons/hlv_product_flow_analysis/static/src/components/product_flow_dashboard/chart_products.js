@@ -7,26 +7,26 @@
 export const productChartMixins = {
     get topPurchasedProducts() {
         return [...this.state.products]
-            .filter(p => p.incoming_qty > 0)
-            .sort((a, b) => b.incoming_qty - a.incoming_qty)
+            .filter(p => p.incoming_count > 0)
+            .sort((a, b) => b.incoming_count - a.incoming_count)
             .slice(0, 8);
     },
 
     get topSoldProducts() {
         return [...this.state.products]
-            .filter(p => p.outgoing_qty > 0)
-            .sort((a, b) => b.outgoing_qty - a.outgoing_qty)
+            .filter(p => p.outgoing_count > 0)
+            .sort((a, b) => b.outgoing_count - a.outgoing_count)
             .slice(0, 8);
     },
 
     get topPurchasedMax() {
         const items = this.topPurchasedProducts;
-        return items.length ? items[0].incoming_qty : 1;
+        return items.length ? items[0].incoming_count : 1;
     },
 
     get topSoldMax() {
         const items = this.topSoldProducts;
-        return items.length ? items[0].outgoing_qty : 1;
+        return items.length ? items[0].outgoing_count : 1;
     },
 
     get slowMovingProducts() {

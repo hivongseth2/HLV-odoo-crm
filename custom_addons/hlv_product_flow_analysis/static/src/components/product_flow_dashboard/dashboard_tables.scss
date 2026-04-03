@@ -319,6 +319,40 @@
     }
 }
 
+/* PO/Receipt doc tags in supplier detail */
+.pf-td-docs { vertical-align: middle; }
+
+.pf-sp-docs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.pf-sp-doc-group {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 3px;
+}
+
+.pf-doc-tag {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.pf-po-tag {
+    background: #dbe4ff;
+    color: #364fc7;
+}
+
+.pf-receipt-tag {
+    background: #d3f9d8;
+    color: #2b8a3e;
+}
+
 .pf-row-detail {
     background: #f8f9fa !important;
 
