@@ -202,27 +202,38 @@ class ProductFlowAnalysis(models.AbstractModel):
         }
 
     @api.model
-    def get_inventory_planning_data(self, period='month', date_from=False, date_to=False, warehouse_id=False):
-        """Gợi ý tồn kho tối thiểu dựa trên tần suất lưu thông."""
+    def get_inventory_planning_data(self, period='month', date_from=False, date_to=False, warehouse_id=False, min_frequency=3):
+        """Gợi ý tồn kho tối thiểu dựa trên tần suất lưu thông.
+        Chỉ ưu tiên sản phẩm có tần suất mua/bán >= min_frequency.
+        """
         date_from, date_to = self._compute_date_range(period, date_from, date_to)
 
         # Calculate total days in period
         total_days = max((date_to - date_from).days, 1)
 
-        domain = [
+        # Lấy cả outgoing lẫn incoming moves để tính tần suất tổng
+        domain_base = [
             ('state', '=', 'done'),
             ('date', '>=', fields.Datetime.to_string(date_from)),
             ('date', '<=', fields.Datetime.to_string(date_to)),
-            ('picking_type_id.code', '=', 'outgoing'),
             ('product_id.type', '!=', 'service'),
         ]
         if warehouse_id:
-            domain.append(('warehouse_id', '=', warehouse_id))
+            domain_base.append(('warehouse_id', '=', warehouse_id))
 
-        moves = self.env['stock.move'].search(domain)
+        outgoing_moves = self.env['stock.move'].search(domain_base + [('picking_type_id.code', '=', 'outgoing')])
+        incoming_moves = self.env['stock.move'].search(domain_base + [('picking_type_id.code', '=', 'incoming'), ('purchase_line_id', '!=', False)])
+
+        # Track incoming counts per product
+        incoming_count_map = {}
+        incoming_qty_map = {}
+        for move in incoming_moves:
+            pid = move.product_id.id
+            incoming_count_map[pid] = incoming_count_map.get(pid, 0) + 1
+            incoming_qty_map[pid] = incoming_qty_map.get(pid, 0) + move.product_uom_qty
 
         product_plan = {}
-        for move in moves:
+        for move in outgoing_moves:
             prod = move.product_id
             if prod.id not in product_plan:
                 product_plan[prod.id] = {
@@ -231,36 +242,57 @@ class ProductFlowAnalysis(models.AbstractModel):
                     'default_code': prod.default_code or '',
                     'categ_name': prod.categ_id.name or '',
                     'total_outgoing': 0.0,
-                    'move_count': 0,
+                    'total_incoming': incoming_qty_map.get(prod.id, 0),
+                    'outgoing_count': 0,
+                    'incoming_count': incoming_count_map.get(prod.id, 0),
                     'qty_available': prod.qty_available,
                 }
             product_plan[prod.id]['total_outgoing'] += move.product_uom_qty
-            product_plan[prod.id]['move_count'] += 1
+            # Chỉ đếm lần bán nếu gắn SO
+            if move.sale_line_id:
+                product_plan[prod.id]['outgoing_count'] += 1
 
         planning = []
         for data in product_plan.values():
+            # Tần suất tổng = lần mua + lần bán
+            total_frequency = data['incoming_count'] + data['outgoing_count']
+
             avg_daily = data['total_outgoing'] / total_days
-            # Lead time mặc định 7 ngày + safety buffer 3 ngày
             lead_time_days = 7
             safety_days = 3
             min_stock = round(avg_daily * (lead_time_days + safety_days), 2)
             reorder_point = round(avg_daily * lead_time_days, 2)
 
-            # Days of stock remaining
             days_remaining = round(data['qty_available'] / avg_daily, 1) if avg_daily > 0 else 9999
+
+            # Tính priority_score: tần suất cao + tồn kho thấp = ưu tiên cao
+            freq_score = min(total_frequency / max(min_frequency, 1), 5)  # cap at 5
+            urgency_score = max(0, 1 - (days_remaining / 30)) if days_remaining < 9999 else 0
+            priority_score = round(freq_score * 0.6 + urgency_score * 0.4, 2)
+
+            # Xác định priority_level
+            if total_frequency >= min_frequency * 2:
+                priority_level = 'high'
+            elif total_frequency >= min_frequency:
+                priority_level = 'medium'
+            else:
+                priority_level = 'low'
 
             planning.append({
                 **data,
+                'total_frequency': total_frequency,
                 'avg_daily': round(avg_daily, 2),
                 'min_stock': min_stock,
                 'reorder_point': reorder_point,
                 'days_remaining': days_remaining,
+                'priority_score': priority_score,
+                'priority_level': priority_level,
                 'status': 'danger' if days_remaining <= lead_time_days
                           else 'warning' if days_remaining <= (lead_time_days + safety_days)
                           else 'ok',
             })
 
-        planning.sort(key=lambda x: x['days_remaining'])
+        planning.sort(key=lambda x: (-x['priority_score'], x['days_remaining']))
         return {
             'planning': planning,
             'date_from': str(date_from),
@@ -269,6 +301,7 @@ class ProductFlowAnalysis(models.AbstractModel):
             'total_days': total_days,
             'lead_time_days': 7,
             'safety_days': 3,
+            'min_frequency': min_frequency,
         }
 
     @api.model

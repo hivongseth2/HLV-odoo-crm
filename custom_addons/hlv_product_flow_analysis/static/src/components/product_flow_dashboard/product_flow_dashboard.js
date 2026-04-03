@@ -57,6 +57,9 @@ export class ProductFlowDashboard extends Component {
             // Charts panel
             chartsPanelOpen: false,
             chartsActiveSection: 'products',
+            // Planning frequency filter
+            planningMinFrequency: 3,
+            planningShowAll: false,
         });
 
         onWillStart(async () => {
@@ -182,6 +185,17 @@ export class ProductFlowDashboard extends Component {
         this.state.productPage = 1;
     }
 
+    // ========== Planning frequency filter ==========
+    onPlanningMinFreqChange(ev) {
+        this.state.planningMinFrequency = parseInt(ev.target.value) || 3;
+        this.state.planningPage = 1;
+    }
+
+    togglePlanningShowAll() {
+        this.state.planningShowAll = !this.state.planningShowAll;
+        this.state.planningPage = 1;
+    }
+
     // ========== Sorting ==========
     sortProducts(field) {
         if (this.state.productSortField === field) {
@@ -294,6 +308,11 @@ export class ProductFlowDashboard extends Component {
                 p.product_name.toLowerCase().includes(q) ||
                 (p.default_code && p.default_code.toLowerCase().includes(q))
             );
+        }
+        // Frequency-based filter: chỉ ưu tiên SP hay mua bán
+        if (!this.state.planningShowAll) {
+            const minFreq = this.state.planningMinFrequency || 3;
+            items = items.filter(p => (p.total_frequency || 0) >= minFreq);
         }
         return this._sortItems(items, this.state.planningSortField, this.state.planningSortAsc);
     }
@@ -655,6 +674,68 @@ export class ProductFlowDashboard extends Component {
             count: suppliers.length,
             top1Name: suppliers.length >= 1 ? suppliers[0].partner_name : '',
         };
+    }
+
+    // ========== Buy-Sell Correlation (Scatter) ==========
+    get buySellCorrelation() {
+        const products = this.state.products.filter(p => p.incoming_qty > 0 || p.outgoing_qty > 0);
+        if (!products.length) return { points: [], maxBuy: 1, maxSell: 1, quadrants: { priority: 0, overstock: 0, supplyRisk: 0, lowActivity: 0 }, total: 0 };
+
+        const maxBuy = Math.max(...products.map(p => p.incoming_qty)) || 1;
+        const maxSell = Math.max(...products.map(p => p.outgoing_qty)) || 1;
+        const buyMedian = maxBuy * 0.3;
+        const sellMedian = maxSell * 0.3;
+
+        let priority = 0, overstock = 0, supplyRisk = 0, lowActivity = 0;
+        const points = products.map(p => {
+            const buyPct = Math.round((p.incoming_qty / maxBuy) * 100);
+            const sellPct = Math.round((p.outgoing_qty / maxSell) * 100);
+            let quadrant;
+            if (p.incoming_qty >= buyMedian && p.outgoing_qty >= sellMedian) {
+                quadrant = 'priority'; priority++;
+            } else if (p.incoming_qty >= buyMedian && p.outgoing_qty < sellMedian) {
+                quadrant = 'overstock'; overstock++;
+            } else if (p.incoming_qty < buyMedian && p.outgoing_qty >= sellMedian) {
+                quadrant = 'supplyRisk'; supplyRisk++;
+            } else {
+                quadrant = 'lowActivity'; lowActivity++;
+            }
+            return {
+                product_id: p.product_id,
+                name: p.default_code || p.product_name.substring(0, 15),
+                fullName: p.product_name,
+                buyQty: p.incoming_qty,
+                sellQty: p.outgoing_qty,
+                buyPct: Math.max(buyPct, 2),
+                sellPct: Math.max(sellPct, 2),
+                quadrant,
+            };
+        });
+        // Sort by total activity for display, limit to top 40
+        points.sort((a, b) => (b.buyQty + b.sellQty) - (a.buyQty + a.sellQty));
+        return {
+            points: points.slice(0, 40),
+            maxBuy, maxSell,
+            quadrants: { priority, overstock, supplyRisk, lowActivity },
+            total: products.length,
+        };
+    }
+
+    getCorrelationPointStyle(point) {
+        return `left:${point.buyPct}%;bottom:${point.sellPct}%`;
+    }
+
+    getCorrelationPointClass(point) {
+        return 'pf-scatter-dot pf-q-' + point.quadrant;
+    }
+
+    // Priority level helpers for planning
+    getPriorityClass(level) {
+        return { high: 'pf-priority-high', medium: 'pf-priority-medium', low: 'pf-priority-low' }[level] || 'pf-priority-low';
+    }
+
+    getPriorityLabel(level) {
+        return { high: 'Cao', medium: 'TB', low: 'Thấp' }[level] || 'Thấp';
     }
 }
 

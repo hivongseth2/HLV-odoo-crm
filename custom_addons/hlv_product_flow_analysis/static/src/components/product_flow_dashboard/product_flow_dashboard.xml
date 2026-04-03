@@ -129,6 +129,10 @@
                                         t-on-click="() => this.setChartsSection('heatmap')">
                                     <i class="fa fa-th me-1"/>Nhiệt
                                 </button>
+                                <button t-att-class="'pf-stab ' + (state.chartsActiveSection === 'correlation' ? 'active' : '')"
+                                        t-on-click="() => this.setChartsSection('correlation')">
+                                    <i class="fa fa-dot-circle-o me-1"/>Tương quan
+                                </button>
                             </div>
 
                             <div class="pf-sidebar-body">
@@ -436,6 +440,76 @@
                                         </t>
                                         <t t-else="">
                                             <div class="pf-chart-empty">Chưa có dữ liệu NCC</div>
+                                        </t>
+                                    </div>
+                                </t>
+
+                                <!-- ===== CORRELATION (Buy vs Sell scatter) ===== -->
+                                <t t-if="state.chartsActiveSection === 'correlation'">
+                                    <div class="pf-sc-card">
+                                        <h4 class="pf-sc-title">
+                                            <i class="fa fa-dot-circle-o me-1" style="color:#7048e8;"/>Tương quan Mua - Bán
+                                        </h4>
+                                        <t t-if="buySellCorrelation.points.length > 0">
+                                            <!-- Scatter plot area -->
+                                            <div class="pf-scatter-container">
+                                                <div class="pf-scatter-ylabel">SL Bán →</div>
+                                                <div class="pf-scatter-plot">
+                                                    <!-- Quadrant lines -->
+                                                    <div class="pf-scatter-midline-h"/>
+                                                    <div class="pf-scatter-midline-v"/>
+                                                    <!-- Quadrant labels -->
+                                                    <span class="pf-scatter-qlabel pf-ql-tl">Rủi ro cung</span>
+                                                    <span class="pf-scatter-qlabel pf-ql-tr">Ưu tiên kho</span>
+                                                    <span class="pf-scatter-qlabel pf-ql-bl">Ít giao dịch</span>
+                                                    <span class="pf-scatter-qlabel pf-ql-br">Tồn dư</span>
+                                                    <!-- Data points -->
+                                                    <t t-foreach="buySellCorrelation.points" t-as="pt" t-key="pt.product_id">
+                                                        <div t-att-class="getCorrelationPointClass(pt)"
+                                                             t-att-style="getCorrelationPointStyle(pt)"
+                                                             t-att-title="pt.fullName + ' | Mua: ' + formatNumber(pt.buyQty) + ' | Bán: ' + formatNumber(pt.sellQty)"/>
+                                                    </t>
+                                                </div>
+                                                <div class="pf-scatter-xlabel">SL Mua →</div>
+                                            </div>
+                                            <!-- Quadrant summary -->
+                                            <div class="pf-scatter-summary">
+                                                <div class="pf-scatter-quad">
+                                                    <span class="pf-sq-dot pf-q-priority"/>
+                                                    <span class="pf-sq-label">Ưu tiên kho</span>
+                                                    <strong class="pf-sq-count" t-esc="buySellCorrelation.quadrants.priority"/>
+                                                </div>
+                                                <div class="pf-scatter-quad">
+                                                    <span class="pf-sq-dot pf-q-overstock"/>
+                                                    <span class="pf-sq-label">Tồn dư</span>
+                                                    <strong class="pf-sq-count" t-esc="buySellCorrelation.quadrants.overstock"/>
+                                                </div>
+                                                <div class="pf-scatter-quad">
+                                                    <span class="pf-sq-dot pf-q-supplyRisk"/>
+                                                    <span class="pf-sq-label">Rủi ro cung</span>
+                                                    <strong class="pf-sq-count" t-esc="buySellCorrelation.quadrants.supplyRisk"/>
+                                                </div>
+                                                <div class="pf-scatter-quad">
+                                                    <span class="pf-sq-dot pf-q-lowActivity"/>
+                                                    <span class="pf-sq-label">Ít giao dịch</span>
+                                                    <strong class="pf-sq-count" t-esc="buySellCorrelation.quadrants.lowActivity"/>
+                                                </div>
+                                            </div>
+                                            <div class="pf-scatter-hint">
+                                                <i class="fa fa-info-circle me-1"/>
+                                                <t t-if="buySellCorrelation.quadrants.supplyRisk > buySellCorrelation.quadrants.priority">
+                                                    <span class="text-danger">Nhiều SP bán chạy nhưng mua ít - rủi ro hết hàng!</span>
+                                                </t>
+                                                <t t-elif="buySellCorrelation.quadrants.overstock > buySellCorrelation.quadrants.priority">
+                                                    <span class="text-warning">Nhiều SP mua nhiều nhưng bán chậm - kiểm tra tồn kho</span>
+                                                </t>
+                                                <t t-else="">
+                                                    <span class="text-success">Mua bán tương đối cân đối</span>
+                                                </t>
+                                            </div>
+                                        </t>
+                                        <t t-else="">
+                                            <div class="pf-chart-empty">Chưa có dữ liệu</div>
                                         </t>
                                     </div>
                                 </t>
@@ -764,6 +838,18 @@
                                 <input type="text" placeholder="Tìm sản phẩm..."
                                        t-on-input="(ev) => this.onPlanningSearch(ev)"/>
                             </div>
+                            <div class="pf-filter-group pf-filter-inline">
+                                <label>Tần suất ≥</label>
+                                <input type="number" min="1" class="pf-count-input" t-att-value="state.planningMinFrequency"
+                                       t-on-change="(ev) => this.onPlanningMinFreqChange(ev)"/>
+                                <button t-att-class="'pf-btn-toggle-all ' + (state.planningShowAll ? 'active' : '')"
+                                        t-on-click="() => this.togglePlanningShowAll()"
+                                        t-att-title="state.planningShowAll ? 'Đang hiện tất cả' : 'Chỉ hiện SP hay giao dịch'">
+                                    <i t-att-class="'fa ' + (state.planningShowAll ? 'fa-eye' : 'fa-filter')"/>
+                                    <t t-if="state.planningShowAll"> Tất cả</t>
+                                    <t t-else=""> Ưu tiên</t>
+                                </button>
+                            </div>
                             <div class="pf-toolbar-right">
                                 <span class="pf-info-badge">
                                     <i class="fa fa-info-circle me-1"/>
@@ -784,7 +870,10 @@
                                         <th class="pf-th-sortable" t-on-click="() => this.sortPlanning('product_name')">
                                             Tên sản phẩm <i t-att-class="getSortIcon('planning', 'product_name')"/>
                                         </th>
-                                        <th>Nhóm</th>
+                                        <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortPlanning('total_frequency')">
+                                            Tần suất <i t-att-class="getSortIcon('planning', 'total_frequency')"/>
+                                        </th>
+                                        <th>Ưu tiên</th>
                                         <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortPlanning('total_outgoing')">
                                             Tổng bán <i t-att-class="getSortIcon('planning', 'total_outgoing')"/>
                                         </th>
@@ -795,7 +884,6 @@
                                             Tồn hiện tại <i t-att-class="getSortIcon('planning', 'qty_available')"/>
                                         </th>
                                         <th class="pf-th-num">Tồn tối thiểu</th>
-                                        <th class="pf-th-num">Điểm đặt hàng</th>
                                         <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortPlanning('days_remaining')">
                                             Còn (ngày) <i t-att-class="getSortIcon('planning', 'days_remaining')"/>
                                         </th>
@@ -814,12 +902,17 @@
                                                    t-on-click.prevent="() => this.openProduct(p.product_id)"
                                                    t-esc="p.product_name"/>
                                             </td>
-                                            <td t-esc="p.categ_name"/>
+                                            <td class="pf-td-num">
+                                                <span class="pf-freq-badge" t-esc="p.total_frequency || 0"/>
+                                            </td>
+                                            <td>
+                                                <span t-att-class="'pf-priority-badge ' + getPriorityClass(p.priority_level)"
+                                                      t-esc="getPriorityLabel(p.priority_level)"/>
+                                            </td>
                                             <td class="pf-td-num pf-outgoing" t-esc="formatNumber(p.total_outgoing)"/>
                                             <td class="pf-td-num" t-esc="formatNumber(p.avg_daily)"/>
                                             <td class="pf-td-num" t-esc="formatNumber(p.qty_available)"/>
                                             <td class="pf-td-num pf-total-bold" t-esc="formatNumber(p.min_stock)"/>
-                                            <td class="pf-td-num" t-esc="formatNumber(p.reorder_point)"/>
                                             <td class="pf-td-num">
                                                 <t t-if="p.days_remaining >= 9999">∞</t>
                                                 <t t-else="" t-esc="p.days_remaining"/>
