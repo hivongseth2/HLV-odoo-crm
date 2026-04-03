@@ -39,32 +39,36 @@
                     </h4>
                     <div class="pf-freq-dist">
                         <div class="pf-freq-bar-stack">
-                            <div class="pf-freq-seg pf-freq-rare" t-att-style="'width:' + frequencyPie.rare.pct + '%'"
-                                 t-att-title="'1-2 lần: ' + frequencyPie.rare.count + ' SP'"/>
-                            <div class="pf-freq-seg pf-freq-low" t-att-style="'width:' + frequencyPie.low.pct + '%'"
-                                 t-att-title="'3-5 lần: ' + frequencyPie.low.count + ' SP'"/>
-                            <div class="pf-freq-seg pf-freq-med" t-att-style="'width:' + frequencyPie.medium.pct + '%'"
-                                 t-att-title="'6-10 lần: ' + frequencyPie.medium.count + ' SP'"/>
-                            <div class="pf-freq-seg pf-freq-high" t-att-style="'width:' + frequencyPie.high.pct + '%'"
-                                 t-att-title="'>10 lần: ' + frequencyPie.high.count + ' SP'"/>
+                            <div class="pf-freq-seg pf-freq-rare pf-clickable" t-att-style="'width:' + frequencyPie.rare.pct + '%'"
+                                 t-att-title="'1-2 lần: ' + frequencyPie.rare.count + ' SP'"
+                                 t-on-click="() => this.drilldownFrequency('rare')"/>
+                            <div class="pf-freq-seg pf-freq-low pf-clickable" t-att-style="'width:' + frequencyPie.low.pct + '%'"
+                                 t-att-title="'3-5 lần: ' + frequencyPie.low.count + ' SP'"
+                                 t-on-click="() => this.drilldownFrequency('low')"/>
+                            <div class="pf-freq-seg pf-freq-med pf-clickable" t-att-style="'width:' + frequencyPie.medium.pct + '%'"
+                                 t-att-title="'6-10 lần: ' + frequencyPie.medium.count + ' SP'"
+                                 t-on-click="() => this.drilldownFrequency('medium')"/>
+                            <div class="pf-freq-seg pf-freq-high pf-clickable" t-att-style="'width:' + frequencyPie.high.pct + '%'"
+                                 t-att-title="'>10 lần: ' + frequencyPie.high.count + ' SP'"
+                                 t-on-click="() => this.drilldownFrequency('high')"/>
                         </div>
                         <div class="pf-freq-legend">
-                            <div class="pf-freq-leg-item">
+                            <div class="pf-freq-leg-item pf-clickable" t-on-click="() => this.drilldownFrequency('rare')">
                                 <span class="pf-freq-dot pf-freq-rare"/>
                                 <span>1-2 lần</span>
                                 <strong t-esc="frequencyPie.rare.count"/>
                             </div>
-                            <div class="pf-freq-leg-item">
+                            <div class="pf-freq-leg-item pf-clickable" t-on-click="() => this.drilldownFrequency('low')">
                                 <span class="pf-freq-dot pf-freq-low"/>
                                 <span>3-5 lần</span>
                                 <strong t-esc="frequencyPie.low.count"/>
                             </div>
-                            <div class="pf-freq-leg-item">
+                            <div class="pf-freq-leg-item pf-clickable" t-on-click="() => this.drilldownFrequency('medium')">
                                 <span class="pf-freq-dot pf-freq-med"/>
                                 <span>6-10 lần</span>
                                 <strong t-esc="frequencyPie.medium.count"/>
                             </div>
-                            <div class="pf-freq-leg-item">
+                            <div class="pf-freq-leg-item pf-clickable" t-on-click="() => this.drilldownFrequency('high')">
                                 <span class="pf-freq-dot pf-freq-high"/>
                                 <span>&gt;10 lần</span>
                                 <strong t-esc="frequencyPie.high.count"/>

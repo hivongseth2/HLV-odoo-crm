@@ -8,29 +8,32 @@
                     </h4>
                     <t t-if="abcAnalysis">
                         <div class="pf-abc-bar">
-                            <div class="pf-abc-seg pf-abc-a" t-att-style="'width:' + abcAnalysis.a.pct + '%'"
-                                 t-att-title="'A: ' + abcAnalysis.a.count + ' SP = ' + abcAnalysis.a.qtyPct + '% SL bán'">
+                            <div class="pf-abc-seg pf-abc-a pf-clickable" t-att-style="'width:' + abcAnalysis.a.pct + '%'"
+                                 t-att-title="'A: ' + abcAnalysis.a.count + ' SP = ' + abcAnalysis.a.qtyPct + '% SL bán'"
+                                 t-on-click="() => this.drilldownABC('A')">
                                 <span t-if="abcAnalysis.a.pct >= 8">A</span>
                             </div>
-                            <div class="pf-abc-seg pf-abc-b" t-att-style="'width:' + abcAnalysis.b.pct + '%'"
-                                 t-att-title="'B: ' + abcAnalysis.b.count + ' SP = ' + abcAnalysis.b.qtyPct + '% SL bán'">
+                            <div class="pf-abc-seg pf-abc-b pf-clickable" t-att-style="'width:' + abcAnalysis.b.pct + '%'"
+                                 t-att-title="'B: ' + abcAnalysis.b.count + ' SP = ' + abcAnalysis.b.qtyPct + '% SL bán'"
+                                 t-on-click="() => this.drilldownABC('B')">
                                 <span t-if="abcAnalysis.b.pct >= 8">B</span>
                             </div>
-                            <div class="pf-abc-seg pf-abc-c" t-att-style="'width:' + abcAnalysis.c.pct + '%'"
-                                 t-att-title="'C: ' + abcAnalysis.c.count + ' SP = ' + abcAnalysis.c.qtyPct + '% SL bán'">
+                            <div class="pf-abc-seg pf-abc-c pf-clickable" t-att-style="'width:' + abcAnalysis.c.pct + '%'"
+                                 t-att-title="'C: ' + abcAnalysis.c.count + ' SP = ' + abcAnalysis.c.qtyPct + '% SL bán'"
+                                 t-on-click="() => this.drilldownABC('C')">
                                 <span t-if="abcAnalysis.c.pct >= 8">C</span>
                             </div>
                         </div>
                         <div class="pf-abc-legend">
-                            <div class="pf-abc-item">
+                            <div class="pf-abc-item pf-clickable" t-on-click="() => this.drilldownABC('A')">
                                 <span class="pf-abc-dot pf-abc-a"/>
                                 <span class="pf-abc-lbl">A: <strong t-esc="abcAnalysis.a.count"/> SP (<t t-esc="abcAnalysis.a.pct"/>%) = <t t-esc="abcAnalysis.a.qtyPct"/>% SL</span>
                             </div>
-                            <div class="pf-abc-item">
+                            <div class="pf-abc-item pf-clickable" t-on-click="() => this.drilldownABC('B')">
                                 <span class="pf-abc-dot pf-abc-b"/>
                                 <span class="pf-abc-lbl">B: <strong t-esc="abcAnalysis.b.count"/> SP (<t t-esc="abcAnalysis.b.pct"/>%) = <t t-esc="abcAnalysis.b.qtyPct"/>% SL</span>
                             </div>
-                            <div class="pf-abc-item">
+                            <div class="pf-abc-item pf-clickable" t-on-click="() => this.drilldownABC('C')">
                                 <span class="pf-abc-dot pf-abc-c"/>
                                 <span class="pf-abc-lbl">C: <strong t-esc="abcAnalysis.c.count"/> SP (<t t-esc="abcAnalysis.c.pct"/>%) = <t t-esc="abcAnalysis.c.qtyPct"/>% SL</span>
                             </div>
@@ -54,8 +57,9 @@
                                 <div class="pf-matrix-grid">
                                     <t t-foreach="flowMatrix.grid" t-as="row" t-key="row_index">
                                         <t t-foreach="row" t-as="cell" t-key="cell_index">
-                                            <div t-att-class="'pf-matrix-cell pf-mx-' + getMatrixHeat(cell, flowMatrix.maxCount)"
-                                                 t-att-title="cell + ' sản phẩm'">
+                                            <div t-att-class="'pf-matrix-cell pf-mx-' + getMatrixHeat(cell, flowMatrix.maxCount) + (cell > 0 ? ' pf-clickable' : '')"
+                                                 t-att-title="cell + ' sản phẩm'"
+                                                 t-on-click="() => this.drilldownMatrix(row_index, cell_index)">
                                                 <span t-esc="cell"/>
                                             </div>
                                         </t>
@@ -86,7 +90,7 @@
                     <t t-if="balanceDistribution">
                         <div class="pf-bal-chart">
                             <t t-foreach="balanceDistribution.buckets" t-as="bk" t-key="bk.label">
-                                <div class="pf-bal-row">
+                                <div class="pf-bal-row pf-clickable" t-on-click="() => this.drilldownBalance(bk_index)">
                                     <span class="pf-bal-label" t-esc="bk.label"/>
                                     <div class="pf-bal-track">
                                         <div t-att-class="'pf-bal-fill pf-bal-' + bk.type"
@@ -98,12 +102,12 @@
                         </div>
                         <div class="pf-bal-extra">
                             <t t-if="balanceDistribution.sellOnly > 0">
-                                <span class="pf-bal-tag pf-bal-sell-only">
+                                <span class="pf-bal-tag pf-bal-sell-only pf-clickable" t-on-click="() => this.drilldownBalanceSpecial('sellOnly')">
                                     <i class="fa fa-arrow-up me-1"/>Chỉ bán: <strong t-esc="balanceDistribution.sellOnly"/>
                                 </span>
                             </t>
                             <t t-if="balanceDistribution.buyOnly > 0">
-                                <span class="pf-bal-tag pf-bal-buy-only">
+                                <span class="pf-bal-tag pf-bal-buy-only pf-clickable" t-on-click="() => this.drilldownBalanceSpecial('buyOnly')">
                                     <i class="fa fa-arrow-down me-1"/>Chỉ mua: <strong t-esc="balanceDistribution.buyOnly"/>
                                 </span>
                             </t>
@@ -123,8 +127,9 @@
                             <div class="pf-density-grid" t-att-style="'grid-template-columns: repeat(' + densityMap.gridSize + ', 1fr)'">
                                 <t t-foreach="densityMap.grid" t-as="row" t-key="row_index">
                                     <t t-foreach="row" t-as="cell" t-key="cell_index">
-                                        <div t-att-class="'pf-density-cell pf-dn-' + getDensityLevel(cell, densityMap.maxCount)"
-                                             t-att-title="cell + ' sản phẩm'">
+                                        <div t-att-class="'pf-density-cell pf-dn-' + getDensityLevel(cell, densityMap.maxCount) + (cell > 0 ? ' pf-clickable' : '')"
+                                             t-att-title="cell + ' sản phẩm'"
+                                             t-on-click="() => this.drilldownDensity(row_index, cell_index)">
                                             <span t-if="cell > 0" t-esc="cell"/>
                                         </div>
                                     </t>

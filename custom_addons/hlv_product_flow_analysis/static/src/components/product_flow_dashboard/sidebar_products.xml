@@ -58,29 +58,33 @@
                     </h4>
                     <div class="pf-donut-chart">
                         <div class="pf-donut-bar">
-                            <div class="pf-donut-seg pf-seg-danger" t-att-style="'width:' + stockDistribution.outOfStock.pct + '%'"
-                                 t-att-title="'Hết hàng: ' + stockDistribution.outOfStock.count"/>
-                            <div class="pf-donut-seg pf-seg-warning" t-att-style="'width:' + stockDistribution.low.pct + '%'"
-                                 t-att-title="'Sắp hết: ' + stockDistribution.low.count"/>
-                            <div class="pf-donut-seg pf-seg-ok" t-att-style="'width:' + stockDistribution.healthy.pct + '%'"
-                                 t-att-title="'Bình thường: ' + stockDistribution.healthy.count"/>
-                            <div class="pf-donut-seg pf-seg-overstock" t-att-style="'width:' + stockDistribution.overstock.pct + '%'"
-                                 t-att-title="'Tồn nhiều: ' + stockDistribution.overstock.count"/>
+                            <div class="pf-donut-seg pf-seg-danger pf-clickable" t-att-style="'width:' + stockDistribution.outOfStock.pct + '%'"
+                                 t-att-title="'Hết hàng: ' + stockDistribution.outOfStock.count"
+                                 t-on-click="() => this.drilldownStock('outOfStock')"/>
+                            <div class="pf-donut-seg pf-seg-warning pf-clickable" t-att-style="'width:' + stockDistribution.low.pct + '%'"
+                                 t-att-title="'Sắp hết: ' + stockDistribution.low.count"
+                                 t-on-click="() => this.drilldownStock('low')"/>
+                            <div class="pf-donut-seg pf-seg-ok pf-clickable" t-att-style="'width:' + stockDistribution.healthy.pct + '%'"
+                                 t-att-title="'Bình thường: ' + stockDistribution.healthy.count"
+                                 t-on-click="() => this.drilldownStock('healthy')"/>
+                            <div class="pf-donut-seg pf-seg-overstock pf-clickable" t-att-style="'width:' + stockDistribution.overstock.pct + '%'"
+                                 t-att-title="'Tồn nhiều: ' + stockDistribution.overstock.count"
+                                 t-on-click="() => this.drilldownStock('overstock')"/>
                         </div>
                         <div class="pf-donut-legend pf-donut-legend-col">
-                            <div class="pf-donut-item">
+                            <div class="pf-donut-item pf-clickable" t-on-click="() => this.drilldownStock('outOfStock')">
                                 <span class="pf-donut-color pf-seg-danger"/> Hết hàng
                                 <strong class="ms-1"><t t-esc="stockDistribution.outOfStock.count"/></strong>
                             </div>
-                            <div class="pf-donut-item">
+                            <div class="pf-donut-item pf-clickable" t-on-click="() => this.drilldownStock('low')">
                                 <span class="pf-donut-color pf-seg-warning"/> Sắp hết
                                 <strong class="ms-1"><t t-esc="stockDistribution.low.count"/></strong>
                             </div>
-                            <div class="pf-donut-item">
+                            <div class="pf-donut-item pf-clickable" t-on-click="() => this.drilldownStock('healthy')">
                                 <span class="pf-donut-color pf-seg-ok"/> Bình thường
                                 <strong class="ms-1"><t t-esc="stockDistribution.healthy.count"/></strong>
                             </div>
-                            <div class="pf-donut-item">
+                            <div class="pf-donut-item pf-clickable" t-on-click="() => this.drilldownStock('overstock')">
                                 <span class="pf-donut-color pf-seg-overstock"/> Tồn nhiều
                                 <strong class="ms-1"><t t-esc="stockDistribution.overstock.count"/></strong>
                             </div>

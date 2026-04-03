@@ -28,6 +28,7 @@
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar_charts.scss",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar_charts_ext.scss",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar_correlation.scss",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/drilldown.scss",
             # XML templates
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/product_flow_dashboard.xml",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar_products.xml",
@@ -37,11 +38,13 @@
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/content_products.xml",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/content_suppliers.xml",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/content_planning.xml",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/drilldown_panel.xml",
             # JS modules
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/dashboard_data.js",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/chart_products.js",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/chart_suppliers.js",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/chart_correlation.js",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/drilldown.js",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/product_flow_dashboard.js",
         ],
     },

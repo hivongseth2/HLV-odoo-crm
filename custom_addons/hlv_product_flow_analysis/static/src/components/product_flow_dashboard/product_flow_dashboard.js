@@ -7,6 +7,7 @@ import { dashboardDataMixins } from "./dashboard_data";
 import { productChartMixins } from "./chart_products";
 import { supplierChartMixins } from "./chart_suppliers";
 import { correlationChartMixins } from "./chart_correlation";
+import { drilldownMixins } from "./drilldown";
 
 export class ProductFlowDashboard extends Component {
     static template = "hlv_product_flow_analysis.Dashboard";
@@ -57,6 +58,7 @@ export class ProductFlowDashboard extends Component {
         });
 
         onWillStart(async () => {
+            this._initDrilldown();
             await this.loadDashboard();
         });
     }
@@ -197,7 +199,7 @@ export class ProductFlowDashboard extends Component {
 }
 
 // Apply mixins (preserves getters via property descriptors)
-const mixins = [dashboardDataMixins, productChartMixins, supplierChartMixins, correlationChartMixins];
+const mixins = [dashboardDataMixins, productChartMixins, supplierChartMixins, correlationChartMixins, drilldownMixins];
 for (const mixin of mixins) {
     Object.defineProperties(
         ProductFlowDashboard.prototype,

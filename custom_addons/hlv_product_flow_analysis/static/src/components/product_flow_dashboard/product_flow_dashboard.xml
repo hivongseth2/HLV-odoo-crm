@@ -178,6 +178,9 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Drilldown Panel (overlay) -->
+                <t t-call="hlv_product_flow_analysis.DrilldownPanel"/>
             </t>
         </div>
     </t>
