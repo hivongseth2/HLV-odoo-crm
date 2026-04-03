@@ -297,6 +297,15 @@
     }
 }
 
+.pf-link-secondary {
+    color: #6c757d;
+    font-size: 0.85em;
+
+    &:hover {
+        color: #495057;
+    }
+}
+
 .pf-empty {
     text-align: center;
     padding: 40px !important;

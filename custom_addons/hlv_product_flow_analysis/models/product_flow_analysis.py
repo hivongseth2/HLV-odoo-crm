@@ -145,80 +145,62 @@ class ProductFlowAnalysis(models.AbstractModel):
 
     @api.model
     def get_product_orders(self, product_id, period='month', date_from=False, date_to=False, warehouse_id=False):
-        """Lấy danh sách đơn mua hàng (PO) và đơn bán hàng (SO) của 1 sản phẩm trong kỳ."""
+        """Lấy danh sách phiếu nhập/xuất (stock.move) của 1 sản phẩm trong kỳ,
+        khớp với incoming_count / outgoing_count trên bảng."""
         date_from, date_to = self._compute_date_range(period, date_from, date_to)
 
-        # --- Purchase Orders ---
-        po_lines = self.env['purchase.order.line'].search([
+        domain = [
             ('product_id', '=', product_id),
-            ('order_id.date_order', '>=', fields.Datetime.to_string(date_from)),
-            ('order_id.date_order', '<=', fields.Datetime.to_string(date_to)),
-            ('order_id.state', 'in', ('purchase', 'done')),
-            ('display_type', '=', False),
-        ])
-        purchase_orders = []
-        seen_po = set()
-        for line in po_lines:
-            order = line.order_id
-            if order.id in seen_po:
-                continue
-            seen_po.add(order.id)
-            # Tính tổng qty & amount cho sản phẩm này trong PO
-            po_product_lines = po_lines.filtered(lambda l: l.order_id.id == order.id)
-            total_qty = sum(po_product_lines.mapped('product_qty'))
-            total_amount = sum(l.product_qty * (l.price_unit or 0) for l in po_product_lines)
-            # Check nhận hàng
-            received_qty = sum(po_product_lines.mapped('qty_received'))
-            purchase_orders.append({
-                'id': order.id,
-                'name': order.name,
-                'date': str(order.date_order.date()) if order.date_order else '',
-                'partner_name': order.partner_id.display_name if order.partner_id else '',
-                'qty': total_qty,
-                'amount': total_amount,
-                'received_qty': received_qty,
-                'state': order.state,
-                'fully_received': received_qty >= total_qty,
-            })
-        purchase_orders.sort(key=lambda x: x['date'], reverse=True)
+            ('state', '=', 'done'),
+            ('date', '>=', fields.Datetime.to_string(date_from)),
+            ('date', '<=', fields.Datetime.to_string(date_to)),
+        ]
+        if warehouse_id:
+            domain.append(('warehouse_id', '=', warehouse_id))
 
-        # --- Sale Orders ---
-        so_lines = self.env['sale.order.line'].search([
-            ('product_id', '=', product_id),
-            ('order_id.date_order', '>=', fields.Datetime.to_string(date_from)),
-            ('order_id.date_order', '<=', fields.Datetime.to_string(date_to)),
-            ('order_id.state', 'in', ('sale', 'done')),
-            ('display_type', '=', False),
-        ])
-        sale_orders = []
-        seen_so = set()
-        for line in so_lines:
-            order = line.order_id
-            if order.id in seen_so:
-                continue
-            seen_so.add(order.id)
-            so_product_lines = so_lines.filtered(lambda l: l.order_id.id == order.id)
-            total_qty = sum(so_product_lines.mapped('product_uom_qty'))
-            total_amount = sum(l.product_uom_qty * (l.price_unit or 0) for l in so_product_lines)
-            delivered_qty = sum(so_product_lines.mapped('qty_delivered'))
-            sale_orders.append({
-                'id': order.id,
-                'name': order.name,
-                'date': str(order.date_order.date()) if order.date_order else '',
-                'partner_name': order.partner_id.display_name if order.partner_id else '',
-                'qty': total_qty,
-                'amount': total_amount,
-                'delivered_qty': delivered_qty,
-                'state': order.state,
-                'fully_delivered': delivered_qty >= total_qty,
-            })
-        sale_orders.sort(key=lambda x: x['date'], reverse=True)
+        moves = self.env['stock.move'].search(domain, order='date desc')
+
+        purchase_records = []
+        sale_records = []
+
+        for move in moves:
+            picking = move.picking_id
+            picking_type = move.picking_type_id.code if move.picking_type_id else ''
+
+            if picking_type == 'incoming' and move.purchase_line_id:
+                po = move.purchase_line_id.order_id
+                purchase_records.append({
+                    'move_id': move.id,
+                    'picking_id': picking.id if picking else False,
+                    'picking_name': picking.name if picking else '',
+                    'po_id': po.id if po else False,
+                    'po_name': po.name if po else '',
+                    'date': str(move.date.date()) if move.date else '',
+                    'partner_name': po.partner_id.display_name if po and po.partner_id else '',
+                    'qty': move.product_uom_qty,
+                    'price_unit': move.purchase_line_id.price_unit or 0,
+                    'amount': move.product_uom_qty * (move.purchase_line_id.price_unit or 0),
+                })
+            elif picking_type == 'outgoing' and move.sale_line_id:
+                so = move.sale_line_id.order_id
+                sale_records.append({
+                    'move_id': move.id,
+                    'picking_id': picking.id if picking else False,
+                    'picking_name': picking.name if picking else '',
+                    'so_id': so.id if so else False,
+                    'so_name': so.name if so else '',
+                    'date': str(move.date.date()) if move.date else '',
+                    'partner_name': so.partner_id.display_name if so and so.partner_id else '',
+                    'qty': move.product_uom_qty,
+                    'price_unit': move.sale_line_id.price_unit or 0,
+                    'amount': move.product_uom_qty * (move.sale_line_id.price_unit or 0),
+                })
 
         return {
-            'purchase_orders': purchase_orders,
-            'sale_orders': sale_orders,
-            'po_count': len(purchase_orders),
-            'so_count': len(sale_orders),
+            'purchase_records': purchase_records,
+            'sale_records': sale_records,
+            'po_count': len(purchase_records),
+            'so_count': len(sale_records),
         }
 
     @api.model

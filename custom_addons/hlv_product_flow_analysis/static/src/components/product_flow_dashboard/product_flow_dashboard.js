@@ -63,7 +63,7 @@ export class ProductFlowDashboard extends Component {
             productDetailId: null,
             productDetailName: "",
             productDetailLoading: false,
-            productDetailData: { purchase_orders: [], sale_orders: [] },
+            productDetailData: { purchase_records: [], sale_records: [] },
         });
 
         onWillStart(async () => {

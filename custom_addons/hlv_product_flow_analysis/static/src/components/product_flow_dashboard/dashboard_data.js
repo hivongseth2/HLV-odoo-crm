@@ -193,7 +193,7 @@ export const dashboardDataMixins = {
         this.state.productDetailName = productName;
         this.state.productDetailLoading = true;
         this.state.showProductDetail = true;
-        this.state.productDetailData = { purchase_orders: [], sale_orders: [] };
+        this.state.productDetailData = { purchase_records: [], sale_records: [] };
         try {
             const params = this._getParams();
             params.product_id = productId;
@@ -207,7 +207,7 @@ export const dashboardDataMixins = {
 
     closeProductDetail() {
         this.state.showProductDetail = false;
-        this.state.productDetailData = { purchase_orders: [], sale_orders: [] };
+        this.state.productDetailData = { purchase_records: [], sale_records: [] };
     },
 
     openPurchaseOrder(poId) {
@@ -216,7 +216,7 @@ export const dashboardDataMixins = {
             res_model: "purchase.order",
             res_id: poId,
             views: [[false, "form"]],
-            target: "current",
+            target: "new",
         });
     },
 
@@ -226,7 +226,17 @@ export const dashboardDataMixins = {
             res_model: "sale.order",
             res_id: soId,
             views: [[false, "form"]],
-            target: "current",
+            target: "new",
+        });
+    },
+
+    openPicking(pickingId) {
+        this.actionService.doAction({
+            type: "ir.actions.act_window",
+            res_model: "stock.picking",
+            res_id: pickingId,
+            views: [[false, "form"]],
+            target: "new",
         });
     },
 
