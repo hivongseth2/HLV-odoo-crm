@@ -54,6 +54,9 @@ export class ProductFlowDashboard extends Component {
             dateTo: "",
             // Export
             isExporting: false,
+            // Charts panel
+            chartsPanelOpen: false,
+            chartsActiveSection: 'products',
         });
 
         onWillStart(async () => {
@@ -109,6 +112,15 @@ export class ProductFlowDashboard extends Component {
             date_to: this.state.dateTo || false,
             warehouse_id: this.state.warehouseId || false,
         };
+    }
+
+    // ========== Charts panel ==========
+    toggleChartsPanel() {
+        this.state.chartsPanelOpen = !this.state.chartsPanelOpen;
+    }
+
+    setChartsSection(section) {
+        this.state.chartsActiveSection = section;
     }
 
     // ========== Tab switching ==========
@@ -549,6 +561,46 @@ export class ProductFlowDashboard extends Component {
     getBarWidth(value, max) {
         if (!max) return "0%";
         return Math.round((value / max) * 100) + "%";
+    }
+
+    // ========== Supplier-Product Heatmap ==========
+    get supplierProductHeatmap() {
+        const suppliers = [...this.state.suppliers]
+            .sort((a, b) => b.total_qty - a.total_qty)
+            .slice(0, 10);
+        // Collect all unique products across top suppliers
+        const productMap = new Map();
+        for (const s of suppliers) {
+            for (const p of (s.products || []).slice(0, 8)) {
+                if (!productMap.has(p.product_id)) {
+                    productMap.set(p.product_id, { id: p.product_id, name: p.default_code || p.product_name.substring(0, 12) });
+                }
+            }
+        }
+        const products = [...productMap.values()].slice(0, 12);
+        // Build matrix
+        let maxQty = 1;
+        const rows = suppliers.map(s => {
+            const prodQtyMap = {};
+            for (const p of s.products || []) {
+                prodQtyMap[p.product_id] = p.qty;
+                if (p.qty > maxQty) maxQty = p.qty;
+            }
+            return {
+                supplierName: s.partner_name,
+                cells: products.map(pr => ({ productId: pr.id, qty: prodQtyMap[pr.id] || 0 })),
+            };
+        });
+        return { products, rows, maxQty };
+    }
+
+    getHeatmapCellClass(qty, maxQty) {
+        if (!qty || qty <= 0) return 'pf-hm-0';
+        const ratio = qty / maxQty;
+        if (ratio >= 0.75) return 'pf-hm-4';
+        if (ratio >= 0.5) return 'pf-hm-3';
+        if (ratio >= 0.25) return 'pf-hm-2';
+        return 'pf-hm-1';
     }
 
     // ========== Supplier chart computed data ==========
