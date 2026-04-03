@@ -162,7 +162,7 @@ class GoogleAdsMutateService:
             channel_type_raw = str(vals.get('channel_type', 'SEARCH')).upper()
             try:
                 # Discovery (Khám phá) đã được đổi tên thành Demand Gen (Tạo nhu cầu) trong các phiên bản API mới
-                if channel_type_raw == 'DISCOVERY':
+                if channel_type_raw in ['DISCOVERY', 'DEMAND_GEN']:
                     if hasattr(client.enums.AdvertisingChannelTypeEnum, 'DEMAND_GEN'):
                         campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.DEMAND_GEN
                     elif hasattr(client.enums.AdvertisingChannelTypeEnum, 'DISCOVERY'):

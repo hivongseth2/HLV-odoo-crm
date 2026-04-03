@@ -118,7 +118,18 @@ class GoogleAdsAdGroup(models.Model):
     type_id = fields.Many2one('google.ads.ad.group.type', string='Loại Nhóm Quảng Cáo', required=True, help='Loại nhóm quảng cáo phù hợp với chiến dịch (Tìm kiếm, Hiển thị, Video...)')
     type = fields.Char(related='type_id.code', string='Mã Loại Nhóm', readonly=True, store=True)
 
-    campaign_channel_type = fields.Selection(related='campaign_id.channel_type', string='Loại Chiến Dịch', readonly=True)
+    campaign_channel_type = fields.Selection([
+        ('SEARCH',          'Tìm Kiếm (Search)'),
+        ('DISPLAY',         'Hiển Thị (Display)'),
+        ('SHOPPING',        'Mua Sắm (Shopping)'),
+        ('VIDEO',           'Video (YouTube)'),
+        ('MULTI_CHANNEL',   'Đa Kênh (UAC/App)'),
+        ('SMART',           'Thông Minh (Smart)'),
+        ('PERFORMANCE_MAX', 'Tối Đa Hiệu Suất (PMax)'),
+        ('DISCOVERY',       'Khám phá (Discovery)'),
+        ('DEMAND_GEN',      'Tạo nhu cầu (Demand Gen)'),
+        ('HOTEL',           'Khách Sạn (Hotel)'),
+    ], related='campaign_id.channel_type', string='Loại Chiến Dịch', readonly=True)
     is_campaign_dsa = fields.Boolean(related='campaign_id.is_dsa', string='Chiến dịch DSA', readonly=True)
 
     product_ids = fields.Many2many('product.template', 'google_ads_ad_group_product_rel', 

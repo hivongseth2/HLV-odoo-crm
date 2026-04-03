@@ -221,7 +221,7 @@ class GoogleAdsAd(models.Model):
         current_type_code = self.type
         
         # Mapping rules
-        if channel_type == 'DISCOVERY':
+        if channel_type in ['DISCOVERY', 'DEMAND_GEN']:
             if current_type_code not in ['DEMAND_GEN_RESPONSIVE_AD', 'DISCOVERY_RESPONSIVE_AD']:
                 new_type = self.env['google.ads.ad.type'].search([('code', '=', 'DEMAND_GEN_RESPONSIVE_AD')], limit=1)
                 if new_type:
