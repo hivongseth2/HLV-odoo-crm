@@ -122,6 +122,15 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         so_meta_dict = {}
 
         for so in sales:
+            # --- Loại bỏ đơn đã xử lý xong (không còn picking nào active) ---
+            # Đặc biệt: đơn trả hàng — tất cả pickings done/cancel, không cần hiển thị.
+            active_pickings = so.picking_ids.filtered(
+                lambda p: p.state not in ('done', 'cancel')
+            )
+            if so.picking_ids and not active_pickings:
+                # Tất cả pickings đã done/cancel → không còn gì để xử lý
+                continue
+
             has_pending = False
             has_delivered = False
             has_storable_line = False

@@ -1,0 +1,320 @@
+/* ===== Sidebar Charts Extended: Supplier, Pie, Frequency, Dual Bars ===== */
+
+/* Supplier chart bar fills */
+.pf-hbar-supplier-qty {
+    background: linear-gradient(90deg, #9775fa, #6f42c1);
+}
+
+.pf-hbar-supplier-amount {
+    background: linear-gradient(90deg, #ffd43b, #e67700);
+}
+
+.pf-hbar-supplier-freq {
+    background: linear-gradient(90deg, #63e6be, #0ca678);
+}
+
+.pf-hbar-label-supplier {
+    width: 180px;
+    min-width: 180px;
+}
+
+/* Supplier concentration */
+.pf-supplier-concentration {
+    padding: 4px 0;
+}
+
+.pf-conc-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #495057;
+}
+
+.pf-conc-total strong {
+    color: #212529;
+    font-size: 15px;
+}
+
+.pf-conc-count strong {
+    color: #4263eb;
+}
+
+.pf-conc-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.pf-conc-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pf-conc-label {
+    width: 160px;
+    min-width: 160px;
+    font-size: 12px;
+    color: #495057;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pf-conc-track {
+    flex: 1;
+    height: 20px;
+    background: #f1f3f5;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.pf-conc-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+}
+
+.pf-conc-1 { background: linear-gradient(90deg, #748ffc, #4263eb); }
+.pf-conc-3 { background: linear-gradient(90deg, #91a7ff, #5c7cfa); }
+.pf-conc-5 { background: linear-gradient(90deg, #bac8ff, #748ffc); }
+
+.pf-conc-pct {
+    width: 40px;
+    min-width: 40px;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 700;
+    color: #4263eb;
+}
+
+.pf-conc-hint {
+    font-size: 12px;
+    color: #6c757d;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 3px solid #dee2e6;
+}
+
+// ========== Pie/Donut Chart: Buy vs Sell ==========
+.pf-pie-container {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 0;
+}
+
+.pf-pie-ring {
+    width: 100px;
+    height: 100px;
+    min-width: 100px;
+    border-radius: 50%;
+    background: conic-gradient(#339af0 0deg, #339af0 var(--buy-deg), #f06595 var(--buy-deg), #f06595 360deg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.pf-pie-center {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.pf-pie-total {
+    font-size: 11px;
+    font-weight: 700;
+    color: #212529;
+    line-height: 1.1;
+}
+
+.pf-pie-sublabel {
+    font-size: 9px;
+    color: #868e96;
+}
+
+.pf-pie-legend {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.pf-pie-leg-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #495057;
+
+    strong {
+        font-size: 14px;
+        color: #212529;
+    }
+}
+
+.pf-pie-leg-val {
+    font-size: 11px;
+    color: #868e96;
+}
+
+.pf-pie-leg-dot {
+    width: 12px;
+    height: 12px;
+    min-width: 12px;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+.pf-leg-buy { background: #339af0; }
+.pf-leg-sell { background: #f06595; }
+
+// ========== Frequency Distribution Bar ==========
+.pf-freq-dist {
+    padding: 6px 0;
+}
+
+.pf-freq-bar-stack {
+    display: flex;
+    height: 24px;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.pf-freq-seg {
+    min-width: 2px;
+    transition: width 0.4s ease;
+    cursor: pointer;
+
+    &:hover { opacity: 0.85; }
+}
+
+.pf-freq-rare { background: #dee2e6; }
+.pf-freq-low { background: #ffd43b; }
+.pf-freq-med { background: #ff922b; }
+.pf-freq-high { background: #e03131; }
+
+.pf-freq-legend {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.pf-freq-leg-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: #495057;
+
+    strong { color: #212529; }
+}
+
+.pf-freq-dot {
+    width: 10px;
+    height: 10px;
+    min-width: 10px;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+.pf-freq-hint {
+    font-size: 12px;
+    color: #6c757d;
+    padding: 6px 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 3px solid #dee2e6;
+}
+
+// ========== Dual Bars: Buy vs Sell Comparison ==========
+.pf-dual-bars {
+    padding: 4px 0;
+}
+
+.pf-dual-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.pf-dual-label {
+    width: 52px;
+    min-width: 52px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #495057;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pf-dual-tracks {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.pf-dual-track {
+    height: 11px;
+    background: #f1f3f5;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.pf-dual-fill {
+    height: 100%;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 4px;
+    transition: width 0.4s ease;
+    min-width: 2px;
+}
+
+.pf-dual-buy {
+    background: linear-gradient(90deg, #74c0fc, #339af0);
+}
+
+.pf-dual-sell {
+    background: linear-gradient(90deg, #f783ac, #f06595);
+}
+
+.pf-dual-val {
+    font-size: 9px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.2);
+}
+
+.pf-dual-legend {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-top: 8px;
+    font-size: 12px;
+    color: #495057;
+}
+
+.pf-dual-leg-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+}

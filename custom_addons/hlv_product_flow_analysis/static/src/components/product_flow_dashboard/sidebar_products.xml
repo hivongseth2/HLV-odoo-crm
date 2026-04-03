@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_product_flow_analysis.SidebarProducts">
+                <!-- Top mua nhiều -->
+                <div class="pf-sc-card">
+                    <h4 class="pf-sc-title">
+                        <i class="fa fa-arrow-down me-1 text-success"/>Top mua nhiều
+                    </h4>
+                    <div class="pf-hbar-chart pf-hbar-compact">
+                        <t t-foreach="topPurchasedProducts" t-as="item" t-key="item.product_id">
+                            <div class="pf-hbar-row">
+                                <div class="pf-hbar-label pf-hbar-label-sm" t-att-title="item.product_name">
+                                    <span class="pf-hbar-code" t-esc="item.default_code || '?'"/>
+                                </div>
+                                <div class="pf-hbar-track">
+                                    <div class="pf-hbar-fill pf-hbar-incoming"
+                                         t-att-style="'width:' + getBarWidth(item.incoming_qty, topPurchasedMax)">
+                                        <span class="pf-hbar-val" t-esc="formatNumber(item.incoming_qty)"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
+                        <t t-if="topPurchasedProducts.length === 0">
+                            <div class="pf-chart-empty">Chưa có dữ liệu</div>
+                        </t>
+                    </div>
+                </div>
+
+                <!-- Top bán chạy -->
+                <div class="pf-sc-card">
+                    <h4 class="pf-sc-title">
+                        <i class="fa fa-arrow-up me-1 text-danger"/>Top bán chạy
+                    </h4>
+                    <div class="pf-hbar-chart pf-hbar-compact">
+                        <t t-foreach="topSoldProducts" t-as="item" t-key="item.product_id">
+                            <div class="pf-hbar-row">
+                                <div class="pf-hbar-label pf-hbar-label-sm" t-att-title="item.product_name">
+                                    <span class="pf-hbar-code" t-esc="item.default_code || '?'"/>
+                                </div>
+                                <div class="pf-hbar-track">
+                                    <div class="pf-hbar-fill pf-hbar-outgoing"
+                                         t-att-style="'width:' + getBarWidth(item.outgoing_qty, topSoldMax)">
+                                        <span class="pf-hbar-val" t-esc="formatNumber(item.outgoing_qty)"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
+                        <t t-if="topSoldProducts.length === 0">
+                            <div class="pf-chart-empty">Chưa có dữ liệu</div>
+                        </t>
+                    </div>
+                </div>
+
+                <!-- Phân bổ tồn kho -->
+                <div class="pf-sc-card">
+                    <h4 class="pf-sc-title">
+                        <i class="fa fa-pie-chart me-1"/>Phân bổ tồn kho
+                    </h4>
+                    <div class="pf-donut-chart">
+                        <div class="pf-donut-bar">
+                            <div class="pf-donut-seg pf-seg-danger" t-att-style="'width:' + stockDistribution.outOfStock.pct + '%'"
+                                 t-att-title="'Hết hàng: ' + stockDistribution.outOfStock.count"/>
+                            <div class="pf-donut-seg pf-seg-warning" t-att-style="'width:' + stockDistribution.low.pct + '%'"
+                                 t-att-title="'Sắp hết: ' + stockDistribution.low.count"/>
+                            <div class="pf-donut-seg pf-seg-ok" t-att-style="'width:' + stockDistribution.healthy.pct + '%'"
+                                 t-att-title="'Bình thường: ' + stockDistribution.healthy.count"/>
+                            <div class="pf-donut-seg pf-seg-overstock" t-att-style="'width:' + stockDistribution.overstock.pct + '%'"
+                                 t-att-title="'Tồn nhiều: ' + stockDistribution.overstock.count"/>
+                        </div>
+                        <div class="pf-donut-legend pf-donut-legend-col">
+                            <div class="pf-donut-item">
+                                <span class="pf-donut-color pf-seg-danger"/> Hết hàng
+                                <strong class="ms-1"><t t-esc="stockDistribution.outOfStock.count"/></strong>
+                            </div>
+                            <div class="pf-donut-item">
+                                <span class="pf-donut-color pf-seg-warning"/> Sắp hết
+                                <strong class="ms-1"><t t-esc="stockDistribution.low.count"/></strong>
+                            </div>
+                            <div class="pf-donut-item">
+                                <span class="pf-donut-color pf-seg-ok"/> Bình thường
+                                <strong class="ms-1"><t t-esc="stockDistribution.healthy.count"/></strong>
+                            </div>
+                            <div class="pf-donut-item">
+                                <span class="pf-donut-color pf-seg-overstock"/> Tồn nhiều
+                                <strong class="ms-1"><t t-esc="stockDistribution.overstock.count"/></strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Gợi ý mua hàng -->
+                <div class="pf-sc-card">
+                    <h4 class="pf-sc-title">
+                        <i class="fa fa-lightbulb-o me-1 text-warning"/>Gợi ý mua hàng
+                    </h4>
+                    <div class="pf-recommend-list pf-recommend-col">
+                        <t t-foreach="purchaseRecommendations" t-as="r" t-key="r.product_id">
+                            <div t-att-class="'pf-recommend-item pf-rec-' + r.urgency">
+                                <div class="pf-rec-header">
+                                    <span class="pf-rec-name">
+                                        <span class="pf-code me-1" t-esc="r.default_code || '?'"/>
+                                        <a href="#" class="pf-link" t-on-click.prevent="() => this.openProduct(r.product_id)"
+                                           t-esc="r.product_name"/>
+                                    </span>
+                                    <span t-att-class="'pf-rec-badge pf-status-' + r.urgency">
+                                        <t t-if="r.urgency === 'danger'">Gấp</t>
+                                        <t t-elif="r.urgency === 'warning'">Nên mua</t>
+                                        <t t-else="">OK</t>
+                                    </span>
+                                </div>
+                                <div class="pf-rec-stats">
+                                    <span>Bán: <strong t-esc="formatNumber(r.outgoing_qty)"/></span>
+                                    <span>Tồn: <strong t-esc="formatNumber(r.qty_available)"/></span>
+                                    <span>Mua: <strong class="pf-rec-suggest" t-esc="formatNumber(r.suggestQty)"/></span>
+                                </div>
+                            </div>
+                        </t>
+                        <t t-if="purchaseRecommendations.length === 0">
+                            <div class="pf-chart-empty">
+                                <i class="fa fa-check-circle me-1 text-success"/>Tồn kho ổn
+                            </div>
+                        </t>
+                    </div>
+                </div>
+    </t>
+</templates>

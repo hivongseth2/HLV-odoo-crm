@@ -19,8 +19,29 @@
     ],
     "assets": {
         "web.assets_backend": [
-            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/product_flow_dashboard.scss",
+            # SCSS partials
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/dashboard_base.scss",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/dashboard_tables.scss",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/dashboard_modal.scss",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/dashboard_responsive.scss",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar.scss",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar_charts.scss",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar_charts_ext.scss",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar_correlation.scss",
+            # XML templates
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/product_flow_dashboard.xml",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar_products.xml",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar_suppliers.xml",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar_analysis.xml",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar_correlation.xml",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/content_products.xml",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/content_suppliers.xml",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/content_planning.xml",
+            # JS modules
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/dashboard_data.js",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/chart_products.js",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/chart_suppliers.js",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/chart_correlation.js",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/product_flow_dashboard.js",
         ],
     },
