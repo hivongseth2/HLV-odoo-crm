@@ -194,7 +194,7 @@ class GoogleAdsMutateService:
             # Bidding Strategy handling
             # Note: For some campaign types like VIDEO, creation via standard mutate is restricted or has specific rules.
             channel = vals.get('channel_type', 'SEARCH')
-            if channel in ['PERFORMANCE_MAX', 'MULTI_CHANNEL', 'DISCOVERY']:
+            if channel in ['PERFORMANCE_MAX', 'MULTI_CHANNEL', 'DISCOVERY', 'DEMAND_GEN']:
                 # Modern types often require objective-based strategies
                 campaign.maximize_conversions = {}
                 
