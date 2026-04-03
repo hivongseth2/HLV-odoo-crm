@@ -323,6 +323,70 @@ class ProductFlowAnalysis(models.AbstractModel):
         }
 
     @api.model
+    def get_aggregate_trend_data(self, warehouse_id=False, months=6):
+        """Lấy dữ liệu trend tổng hợp mua/bán theo tháng (6 tháng gần nhất)."""
+        from collections import defaultdict
+        today = date.today()
+        start = (today - relativedelta(months=months - 1)).replace(day=1)
+        end = (today.replace(day=1) + relativedelta(months=1)) - timedelta(days=1)
+
+        domain_base = [
+            ('state', '=', 'done'),
+            ('date', '>=', fields.Datetime.to_string(start)),
+            ('date', '<=', fields.Datetime.to_string(end)),
+            ('product_id.type', '!=', 'service'),
+        ]
+        if warehouse_id:
+            domain_base.append(('warehouse_id', '=', warehouse_id))
+
+        incoming = self.env['stock.move'].search(
+            domain_base + [('picking_type_id.code', '=', 'incoming'), ('purchase_line_id', '!=', False)]
+        )
+        outgoing = self.env['stock.move'].search(
+            domain_base + [('picking_type_id.code', '=', 'outgoing')]
+        )
+
+        monthly = defaultdict(lambda: {
+            'buy_qty': 0, 'sell_qty': 0, 'buy_amount': 0,
+            'po_ids': set(), 'so_ids': set(),
+            'buy_products': set(), 'sell_products': set(),
+        })
+
+        for m in incoming:
+            key = m.date.strftime('%Y-%m')
+            monthly[key]['buy_qty'] += m.product_uom_qty
+            monthly[key]['buy_amount'] += m.product_uom_qty * (m.price_unit or 0)
+            monthly[key]['buy_products'].add(m.product_id.id)
+            if m.purchase_line_id and m.purchase_line_id.order_id:
+                monthly[key]['po_ids'].add(m.purchase_line_id.order_id.id)
+
+        for m in outgoing:
+            key = m.date.strftime('%Y-%m')
+            monthly[key]['sell_qty'] += m.product_uom_qty
+            monthly[key]['sell_products'].add(m.product_id.id)
+            if m.sale_line_id and m.sale_line_id.order_id:
+                monthly[key]['so_ids'].add(m.sale_line_id.order_id.id)
+
+        trends = []
+        for i in range(months - 1, -1, -1):
+            m_date = today - relativedelta(months=i)
+            key = m_date.strftime('%Y-%m')
+            d = monthly.get(key, {})
+            trends.append({
+                'month': m_date.strftime('%m/%Y'),
+                'month_label': m_date.strftime('%m/%y'),
+                'buy_qty': d.get('buy_qty', 0),
+                'sell_qty': d.get('sell_qty', 0),
+                'buy_amount': round(d.get('buy_amount', 0)),
+                'buy_count': len(d.get('po_ids', set())),
+                'sell_count': len(d.get('so_ids', set())),
+                'buy_products': len(d.get('buy_products', set())),
+                'sell_products': len(d.get('sell_products', set())),
+            })
+
+        return {'trends': trends}
+
+    @api.model
     def get_dashboard_summary(self, period='month', date_from=False, date_to=False, warehouse_id=False):
         """Lấy tổng quan cho dashboard."""
         date_from, date_to = self._compute_date_range(period, date_from, date_to)

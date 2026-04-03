@@ -101,7 +101,7 @@
                         <i class="fa fa-exchange me-1" style="color:#1971c2;"/>Top SP: Mua vs Bán
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Top 10 SP có tổng giao dịch cao nhất. Thanh xanh = SL mua, thanh hồng = SL bán.
+                        <i class="fa fa-question-circle me-1"/>Top <t t-esc="state.topN"/> SP có tổng giao dịch cao nhất. Thanh xanh = SL mua, thanh hồng = SL bán.
                     </div>
                     <div class="pf-dual-bars">
                         <t t-foreach="topBuySellComparison.items" t-as="item" t-key="item.product_id">

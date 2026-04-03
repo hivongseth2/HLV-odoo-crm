@@ -7,7 +7,7 @@
                         <i class="fa fa-truck me-1" style="color:#6f42c1;"/>Top NCC (SL mua)
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Top 8 NCC có tổng số lượng mua vào nhiều nhất trong kỳ.
+                        <i class="fa fa-question-circle me-1"/>Top <t t-esc="state.topN"/> NCC có tổng số lượng mua vào nhiều nhất trong kỳ.
                     </div>
                     <div class="pf-hbar-chart pf-hbar-compact">
                         <t t-foreach="topSuppliersByQty" t-as="item" t-key="item.partner_id">
@@ -35,7 +35,7 @@
                         <i class="fa fa-money me-1" style="color:#e67700;"/>Top NCC (Giá trị)
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Top 8 NCC có tổng giá trị mua hàng cao nhất (VNĐ) trong kỳ.
+                        <i class="fa fa-question-circle me-1"/>Top <t t-esc="state.topN"/> NCC có tổng giá trị mua hàng cao nhất (VNĐ) trong kỳ.
                     </div>
                     <div class="pf-hbar-chart pf-hbar-compact">
                         <t t-foreach="topSuppliersByAmount" t-as="item" t-key="item.partner_id">
@@ -63,7 +63,7 @@
                         <i class="fa fa-refresh me-1" style="color:#0ca678;"/>Top NCC (Tần suất)
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Top 8 NCC có số lần giao dịch (phiếu nhập) nhiều nhất trong kỳ.
+                        <i class="fa fa-question-circle me-1"/>Top <t t-esc="state.topN"/> NCC có số lần mua hàng (đơn mua PO) nhiều nhất trong kỳ.
                     </div>
                     <div class="pf-hbar-chart pf-hbar-compact">
                         <t t-foreach="topSuppliersByFrequency" t-as="item" t-key="item.partner_id">

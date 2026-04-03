@@ -203,7 +203,7 @@
     background: #f8f9fa;
     border-radius: 4px;
     height: 24px;
-    overflow: hidden;
+    position: relative;
 }
 
 .pf-hbar-fill {
@@ -211,10 +211,9 @@
     border-radius: 4px;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    padding-right: 8px;
-    min-width: 30px;
+    min-width: 2px;
     transition: width 0.4s ease;
+    position: relative;
 }
 
 .pf-hbar-incoming {
@@ -228,9 +227,13 @@
 .pf-hbar-val {
     font-size: 11px;
     font-weight: 700;
-    color: white;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    color: #333;
+    text-shadow: 0 0 3px #fff, 0 0 5px #fff, 0 0 8px #fff;
     white-space: nowrap;
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
 }
 
 /* Stacked bar / donut */

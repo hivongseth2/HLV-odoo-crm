@@ -1,0 +1,110 @@
+/* ===== Trend Analysis Styles ===== */
+
+.pf-trend-chart {
+    padding: 4px 0;
+}
+
+.pf-trend-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.pf-trend-month {
+    width: 40px;
+    min-width: 40px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #495057;
+    text-align: right;
+}
+
+.pf-trend-bars {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.pf-trend-bar-wrap {
+    height: 14px;
+    background: #f1f3f5;
+    border-radius: 3px;
+    position: relative;
+}
+
+.pf-trend-bar {
+    height: 100%;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    position: relative;
+    transition: width 0.4s ease;
+    min-width: 2px;
+}
+
+.pf-trend-buy {
+    background: linear-gradient(90deg, #74c0fc, #339af0);
+}
+
+.pf-trend-sell {
+    background: linear-gradient(90deg, #f783ac, #f06595);
+}
+
+.pf-trend-val {
+    font-size: 9px;
+    font-weight: 700;
+    color: #333;
+    text-shadow: 0 0 3px #fff, 0 0 5px #fff;
+    white-space: nowrap;
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* Compare month-over-month */
+.pf-trend-compare {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 4px 0;
+}
+
+.pf-trend-cmp-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+.pf-trend-cmp-label {
+    width: 60px;
+    min-width: 60px;
+    font-weight: 600;
+    color: #495057;
+}
+
+.pf-trend-cmp-prev {
+    color: #868e96;
+}
+
+.pf-trend-cmp-arrow {
+    color: #ced4da;
+    font-size: 10px;
+}
+
+.pf-trend-cmp-cur {
+    font-weight: 700;
+    color: #212529;
+}
+
+.pf-trend-cmp-pct {
+    margin-left: auto;
+    font-weight: 700;
+    font-size: 12px;
+}

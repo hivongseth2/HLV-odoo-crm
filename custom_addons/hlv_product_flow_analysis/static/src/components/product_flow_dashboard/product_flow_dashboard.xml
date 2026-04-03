@@ -131,6 +131,10 @@
                                         t-on-click="() => this.setChartsSection('correlation')">
                                     <i class="fa fa-dot-circle-o me-1"/>Tương quan
                                 </button>
+                                <button t-att-class="'pf-stab ' + (state.chartsActiveSection === 'trend' ? 'active' : '')"
+                                        t-on-click="() => this.setChartsSection('trend')">
+                                    <i class="fa fa-line-chart me-1"/>Biến động
+                                </button>
                                 <div class="pf-topn-select">
                                     <label>Top</label>
                                     <select t-on-change="(ev) => this.onTopNChange(ev)">
@@ -155,6 +159,9 @@
                                 </t>
                                 <t t-if="state.chartsActiveSection === 'correlation'">
                                     <t t-call="hlv_product_flow_analysis.SidebarCorrelation"/>
+                                </t>
+                                <t t-if="state.chartsActiveSection === 'trend'">
+                                    <t t-call="hlv_product_flow_analysis.SidebarTrend"/>
                                 </t>
                             </div>
                         </div>
