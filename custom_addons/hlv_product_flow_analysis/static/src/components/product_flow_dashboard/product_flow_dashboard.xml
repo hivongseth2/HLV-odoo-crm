@@ -59,16 +59,16 @@
                         <div class="pf-card-icon"><i class="fa fa-arrow-down"/></div>
                         <div class="pf-card-body">
                             <div class="pf-card-value" t-esc="formatNumber(state.summary.total_incoming)"/>
-                            <div class="pf-card-label">Tổng mua</div>
-                            <div class="pf-card-sub"><t t-esc="state.summary.incoming_count"/> phiếu nhập</div>
+                            <div class="pf-card-label">SL đặt mua</div>
+                            <div class="pf-card-sub"><t t-esc="state.summary.incoming_count"/> đơn mua hàng</div>
                         </div>
                     </div>
                     <div class="pf-card pf-card-outgoing">
                         <div class="pf-card-icon"><i class="fa fa-arrow-up"/></div>
                         <div class="pf-card-body">
                             <div class="pf-card-value" t-esc="formatNumber(state.summary.total_outgoing)"/>
-                            <div class="pf-card-label">Tổng bán</div>
-                            <div class="pf-card-sub"><t t-esc="state.summary.outgoing_count"/> phiếu xuất</div>
+                            <div class="pf-card-label">SL đặt bán</div>
+                            <div class="pf-card-sub"><t t-esc="state.summary.outgoing_count"/> đơn bán hàng</div>
                         </div>
                     </div>
                     <div class="pf-card pf-card-internal">

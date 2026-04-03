@@ -17,30 +17,41 @@ class ProductFlowAnalysis(models.AbstractModel):
 
     @api.model
     def get_product_flow_data(self, period='month', date_from=False, date_to=False, warehouse_id=False):
-        """Lấy dữ liệu phân tích mua hàng & lưu thông sản phẩm."""
+        """Lấy dữ liệu phân tích mua hàng & bán hàng theo đơn PO/SO."""
         date_from, date_to = self._compute_date_range(period, date_from, date_to)
 
-        domain = [
-            ('state', '=', 'done'),
-            ('date', '>=', fields.Datetime.to_string(date_from)),
-            ('date', '<=', fields.Datetime.to_string(date_to)),
+        # ── Query Purchase Order Lines ──
+        po_domain = [
+            ('order_id.state', 'in', ('purchase', 'done')),
+            ('order_id.date_order', '>=', fields.Datetime.to_string(date_from)),
+            ('order_id.date_order', '<=', fields.Datetime.to_string(date_to)),
             ('product_id.type', '!=', 'service'),
+            ('display_type', '=', False),
         ]
         if warehouse_id:
-            domain.append(('warehouse_id', '=', warehouse_id))
+            po_domain.append(('order_id.picking_type_id.warehouse_id', '=', warehouse_id))
 
-        moves = self.env['stock.move'].search(domain)
+        po_lines = self.env['purchase.order.line'].search(po_domain)
 
-        # Tính tổng số ngày trong kỳ
-        total_days = max((date_to - date_from).days, 1)
+        # ── Query Sale Order Lines ──
+        so_domain = [
+            ('order_id.state', 'in', ('sale', 'done')),
+            ('order_id.date_order', '>=', fields.Datetime.to_string(date_from)),
+            ('order_id.date_order', '<=', fields.Datetime.to_string(date_to)),
+            ('product_id.type', '!=', 'service'),
+            ('display_type', '=', False),
+        ]
+        if warehouse_id:
+            so_domain.append(('order_id.warehouse_id', '=', warehouse_id))
+
+        so_lines = self.env['sale.order.line'].search(so_domain)
 
         product_data = {}
-        # Track incoming dates per product để tính thời gian lưu kho
-        product_incoming_dates = {}  # {product_id: [datetime, ...]}
-        product_outgoing_dates = {}  # {product_id: [datetime, ...]}
 
-        for move in moves:
-            prod = move.product_id
+        for line in po_lines:
+            prod = line.product_id
+            if not prod:
+                continue
             if prod.id not in product_data:
                 product_data[prod.id] = {
                     'product_id': prod.id,
@@ -48,92 +59,112 @@ class ProductFlowAnalysis(models.AbstractModel):
                     'default_code': prod.default_code or '',
                     'incoming_qty': 0.0,
                     'outgoing_qty': 0.0,
-                    'internal_qty': 0.0,
+                    'received_qty': 0.0,
+                    'delivered_qty': 0.0,
                     'incoming_count': 0,
                     'outgoing_count': 0,
                     'total_qty': 0.0,
                     'move_count': 0,
                     'turnover_count': 0,
                     'qty_available': prod.qty_available,
+                    'avg_storage_days': 0,
                 }
-                product_incoming_dates[prod.id] = []
-                product_outgoing_dates[prod.id] = []
+            d = product_data[prod.id]
+            d['incoming_qty'] += line.product_qty
+            d['received_qty'] += line.qty_received
+            d['incoming_count'] += 1
+            d['total_qty'] += line.product_qty
+            d['move_count'] += 1
 
-            qty = move.product_uom_qty
-            picking_type = move.picking_type_id.code if move.picking_type_id else ''
+        for line in so_lines:
+            prod = line.product_id
+            if not prod:
+                continue
+            if prod.id not in product_data:
+                product_data[prod.id] = {
+                    'product_id': prod.id,
+                    'product_name': prod.display_name,
+                    'default_code': prod.default_code or '',
+                    'incoming_qty': 0.0,
+                    'outgoing_qty': 0.0,
+                    'received_qty': 0.0,
+                    'delivered_qty': 0.0,
+                    'incoming_count': 0,
+                    'outgoing_count': 0,
+                    'total_qty': 0.0,
+                    'move_count': 0,
+                    'turnover_count': 0,
+                    'qty_available': prod.qty_available,
+                    'avg_storage_days': 0,
+                }
+            d = product_data[prod.id]
+            d['outgoing_qty'] += line.product_uom_qty
+            d['delivered_qty'] += line.qty_delivered
+            d['outgoing_count'] += 1
+            d['total_qty'] += line.product_uom_qty
+            d['move_count'] += 1
 
-            if picking_type == 'incoming':
-                product_data[prod.id]['incoming_qty'] += qty
-                if move.date:
-                    product_incoming_dates[prod.id].append(move.date)
-                # Chỉ đếm lần mua nếu move gắn với đơn mua hàng (PO)
-                if move.purchase_line_id:
-                    product_data[prod.id]['incoming_count'] += 1
-            elif picking_type == 'outgoing':
-                product_data[prod.id]['outgoing_qty'] += qty
-                if move.date:
-                    product_outgoing_dates[prod.id].append(move.date)
-                # Chỉ đếm lần bán nếu move gắn với đơn bán hàng (SO)
-                if move.sale_line_id:
-                    product_data[prod.id]['outgoing_count'] += 1
-            elif picking_type == 'internal':
-                product_data[prod.id]['internal_qty'] += qty
+        # Tính turnover_count = tổng lần mua + lần bán
+        for d in product_data.values():
+            d['turnover_count'] = d['incoming_count'] + d['outgoing_count']
 
-            product_data[prod.id]['total_qty'] += qty
-            product_data[prod.id]['move_count'] += 1
-            product_data[prod.id]['turnover_count'] += 1
+        # ── Tính avg_storage_days từ stock.move ──
+        if product_data:
+            move_domain = [
+                ('state', '=', 'done'),
+                ('date', '>=', fields.Datetime.to_string(date_from)),
+                ('date', '<=', fields.Datetime.to_string(date_to)),
+                ('product_id', 'in', list(product_data.keys())),
+            ]
+            if warehouse_id:
+                move_domain.append(('warehouse_id', '=', warehouse_id))
 
-        # Tính thời gian lưu kho trung bình cho từng sản phẩm
-        for pid, data in product_data.items():
-            in_dates = sorted(product_incoming_dates.get(pid, []))
-            out_dates = sorted(product_outgoing_dates.get(pid, []))
+            moves = self.env['stock.move'].search(move_domain)
+            product_incoming_dates = {}
+            product_outgoing_dates = {}
 
-            if in_dates and out_dates:
-                # Tính trung bình khoảng cách nhập → xuất gần nhất
-                storage_days = []
-                in_idx = 0
-                for out_dt in out_dates:
-                    # Tìm ngày nhập gần nhất trước ngày xuất
-                    best_in = None
-                    for i in range(in_idx, len(in_dates)):
-                        if in_dates[i] <= out_dt:
-                            best_in = in_dates[i]
-                            in_idx = i + 1
-                        else:
-                            break
-                    if best_in:
-                        diff = (out_dt - best_in).days
-                        storage_days.append(max(diff, 0))
-                data['avg_storage_days'] = round(sum(storage_days) / len(storage_days), 1) if storage_days else 0
-            elif out_dates and not in_dates:
-                # Có xuất nhưng không có nhập trong kỳ → tìm lần nhập gần nhất trước kỳ
-                pre_incoming = self.env['stock.move'].search([
-                    ('product_id', '=', pid),
-                    ('state', '=', 'done'),
-                    ('picking_type_id.code', '=', 'incoming'),
-                    ('date', '<', fields.Datetime.to_string(date_from)),
-                ], order='date desc', limit=1)
-                if pre_incoming:
-                    last_in = pre_incoming.date
+            for move in moves:
+                pid = move.product_id.id
+                ptype = move.picking_type_id.code if move.picking_type_id else ''
+                if ptype == 'incoming' and move.date:
+                    product_incoming_dates.setdefault(pid, []).append(move.date)
+                elif ptype == 'outgoing' and move.date:
+                    product_outgoing_dates.setdefault(pid, []).append(move.date)
+
+            for pid, data in product_data.items():
+                in_dates = sorted(product_incoming_dates.get(pid, []))
+                out_dates = sorted(product_outgoing_dates.get(pid, []))
+
+                if in_dates and out_dates:
                     storage_days = []
+                    in_idx = 0
                     for out_dt in out_dates:
-                        diff = (out_dt - last_in).days
-                        storage_days.append(max(diff, 0))
-                    data['avg_storage_days'] = round(sum(storage_days) / len(storage_days), 1)
-                else:
-                    data['avg_storage_days'] = 0
-            elif data['qty_available'] > 0 and in_dates:
-                # Có nhập nhưng chưa xuất → tính từ ngày nhập gần nhất đến hôm nay
-                from datetime import datetime
-                now = datetime.now()
-                last_in = in_dates[-1]
-                # Xử lý timezone-aware vs naive
-                if last_in.tzinfo:
-                    from datetime import timezone
-                    now = now.replace(tzinfo=timezone.utc)
-                data['avg_storage_days'] = (now - last_in).days
-            else:
-                data['avg_storage_days'] = 0
+                        best_in = None
+                        for i in range(in_idx, len(in_dates)):
+                            if in_dates[i] <= out_dt:
+                                best_in = in_dates[i]
+                                in_idx = i + 1
+                            else:
+                                break
+                        if best_in:
+                            diff = (out_dt - best_in).days
+                            storage_days.append(max(diff, 0))
+                    data['avg_storage_days'] = round(sum(storage_days) / len(storage_days), 1) if storage_days else 0
+                elif out_dates and not in_dates:
+                    pre_incoming = self.env['stock.move'].search([
+                        ('product_id', '=', pid),
+                        ('state', '=', 'done'),
+                        ('picking_type_id.code', '=', 'incoming'),
+                        ('date', '<', fields.Datetime.to_string(date_from)),
+                    ], order='date desc', limit=1)
+                    if pre_incoming:
+                        last_in = pre_incoming.date
+                        storage_days = [(out_dt - last_in).days for out_dt in out_dates]
+                        data['avg_storage_days'] = round(sum(max(d, 0) for d in storage_days) / len(storage_days), 1)
+                elif data['qty_available'] > 0 and in_dates:
+                    from datetime import datetime, timezone
+                    now = datetime.now(timezone.utc) if in_dates[-1].tzinfo else datetime.now()
+                    data['avg_storage_days'] = (now - in_dates[-1]).days
 
         result = sorted(product_data.values(), key=lambda x: x['incoming_count'], reverse=True)
         return {
@@ -146,56 +177,68 @@ class ProductFlowAnalysis(models.AbstractModel):
 
     @api.model
     def get_product_orders(self, product_id, period='month', date_from=False, date_to=False, warehouse_id=False):
-        """Lấy danh sách phiếu nhập/xuất (stock.move) của 1 sản phẩm trong kỳ,
-        khớp với incoming_count / outgoing_count trên bảng."""
+        """Lấy danh sách đơn mua hàng (PO) và đơn bán hàng (SO) của 1 sản phẩm trong kỳ."""
         date_from, date_to = self._compute_date_range(period, date_from, date_to)
 
-        domain = [
+        # Purchase Order Lines
+        po_domain = [
             ('product_id', '=', product_id),
-            ('state', '=', 'done'),
-            ('date', '>=', fields.Datetime.to_string(date_from)),
-            ('date', '<=', fields.Datetime.to_string(date_to)),
+            ('order_id.state', 'in', ('purchase', 'done')),
+            ('order_id.date_order', '>=', fields.Datetime.to_string(date_from)),
+            ('order_id.date_order', '<=', fields.Datetime.to_string(date_to)),
+            ('display_type', '=', False),
         ]
         if warehouse_id:
-            domain.append(('warehouse_id', '=', warehouse_id))
+            po_domain.append(('order_id.picking_type_id.warehouse_id', '=', warehouse_id))
 
-        moves = self.env['stock.move'].search(domain, order='date desc')
+        po_lines = self.env['purchase.order.line'].search(po_domain, order='order_id desc')
 
         purchase_records = []
+        for line in po_lines:
+            po = line.order_id
+            purchase_records.append({
+                'line_id': line.id,
+                'po_id': po.id,
+                'po_name': po.name,
+                'date': str(po.date_order.date()) if po.date_order else '',
+                'partner_name': po.partner_id.display_name if po.partner_id else '',
+                'qty': line.product_qty,
+                'received_qty': line.qty_received,
+                'price_unit': line.price_unit or 0,
+                'amount': line.price_subtotal or 0,
+                'state': po.state,
+                'fully_received': line.qty_received >= line.product_qty,
+            })
+
+        # Sale Order Lines
+        so_domain = [
+            ('product_id', '=', product_id),
+            ('order_id.state', 'in', ('sale', 'done')),
+            ('order_id.date_order', '>=', fields.Datetime.to_string(date_from)),
+            ('order_id.date_order', '<=', fields.Datetime.to_string(date_to)),
+            ('display_type', '=', False),
+        ]
+        if warehouse_id:
+            so_domain.append(('order_id.warehouse_id', '=', warehouse_id))
+
+        so_lines = self.env['sale.order.line'].search(so_domain, order='order_id desc')
+
         sale_records = []
-
-        for move in moves:
-            picking = move.picking_id
-            picking_type = move.picking_type_id.code if move.picking_type_id else ''
-
-            if picking_type == 'incoming' and move.purchase_line_id:
-                po = move.purchase_line_id.order_id
-                purchase_records.append({
-                    'move_id': move.id,
-                    'picking_id': picking.id if picking else False,
-                    'picking_name': picking.name if picking else '',
-                    'po_id': po.id if po else False,
-                    'po_name': po.name if po else '',
-                    'date': str(move.date.date()) if move.date else '',
-                    'partner_name': po.partner_id.display_name if po and po.partner_id else '',
-                    'qty': move.product_uom_qty,
-                    'price_unit': move.purchase_line_id.price_unit or 0,
-                    'amount': move.product_uom_qty * (move.purchase_line_id.price_unit or 0),
-                })
-            elif picking_type == 'outgoing' and move.sale_line_id:
-                so = move.sale_line_id.order_id
-                sale_records.append({
-                    'move_id': move.id,
-                    'picking_id': picking.id if picking else False,
-                    'picking_name': picking.name if picking else '',
-                    'so_id': so.id if so else False,
-                    'so_name': so.name if so else '',
-                    'date': str(move.date.date()) if move.date else '',
-                    'partner_name': so.partner_id.display_name if so and so.partner_id else '',
-                    'qty': move.product_uom_qty,
-                    'price_unit': move.sale_line_id.price_unit or 0,
-                    'amount': move.product_uom_qty * (move.sale_line_id.price_unit or 0),
-                })
+        for line in so_lines:
+            so = line.order_id
+            sale_records.append({
+                'line_id': line.id,
+                'so_id': so.id,
+                'so_name': so.name,
+                'date': str(so.date_order.date()) if so.date_order else '',
+                'partner_name': so.partner_id.display_name if so.partner_id else '',
+                'qty': line.product_uom_qty,
+                'delivered_qty': line.qty_delivered,
+                'price_unit': line.price_unit or 0,
+                'amount': line.price_subtotal or 0,
+                'state': so.state,
+                'fully_delivered': line.qty_delivered >= line.product_uom_qty,
+            })
 
         return {
             'purchase_records': purchase_records,
@@ -494,35 +537,56 @@ class ProductFlowAnalysis(models.AbstractModel):
 
     @api.model
     def get_dashboard_summary(self, period='month', date_from=False, date_to=False, warehouse_id=False):
-        """Lấy tổng quan cho dashboard."""
+        """Lấy tổng quan cho dashboard dựa trên PO/SO."""
         date_from, date_to = self._compute_date_range(period, date_from, date_to)
 
-        domain_base = [
+        # ── Purchase Orders ──
+        po_domain = [
+            ('state', 'in', ('purchase', 'done')),
+            ('date_order', '>=', fields.Datetime.to_string(date_from)),
+            ('date_order', '<=', fields.Datetime.to_string(date_to)),
+        ]
+        if warehouse_id:
+            po_domain.append(('picking_type_id.warehouse_id', '=', warehouse_id))
+
+        purchase_orders = self.env['purchase.order'].search(po_domain)
+        po_lines = purchase_orders.mapped('order_line').filtered(
+            lambda l: not l.display_type and l.product_id and l.product_id.type != 'service'
+        )
+        total_incoming = sum(po_lines.mapped('product_qty'))
+        po_product_ids = set(po_lines.mapped('product_id.id'))
+
+        # ── Sale Orders ──
+        so_domain = [
+            ('state', 'in', ('sale', 'done')),
+            ('date_order', '>=', fields.Datetime.to_string(date_from)),
+            ('date_order', '<=', fields.Datetime.to_string(date_to)),
+        ]
+        if warehouse_id:
+            so_domain.append(('warehouse_id', '=', warehouse_id))
+
+        sale_orders = self.env['sale.order'].search(so_domain)
+        so_lines = sale_orders.mapped('order_line').filtered(
+            lambda l: not l.display_type and l.product_id and l.product_id.type != 'service'
+        )
+        total_outgoing = sum(so_lines.mapped('product_uom_qty'))
+        so_product_ids = set(so_lines.mapped('product_id.id'))
+
+        # ── Internal transfers (vẫn từ stock.move) ──
+        move_domain = [
             ('state', '=', 'done'),
             ('date', '>=', fields.Datetime.to_string(date_from)),
             ('date', '<=', fields.Datetime.to_string(date_to)),
+            ('picking_type_id.code', '=', 'internal'),
         ]
         if warehouse_id:
-            domain_base.append(('warehouse_id', '=', warehouse_id))
-
-        StockMove = self.env['stock.move']
-
-        incoming_moves = StockMove.search(domain_base + [('picking_type_id.code', '=', 'incoming')])
-        outgoing_moves = StockMove.search(domain_base + [('picking_type_id.code', '=', 'outgoing')])
-        internal_moves = StockMove.search(domain_base + [('picking_type_id.code', '=', 'internal')])
-
-        total_incoming = sum(incoming_moves.mapped('product_uom_qty'))
-        total_outgoing = sum(outgoing_moves.mapped('product_uom_qty'))
+            move_domain.append(('warehouse_id', '=', warehouse_id))
+        internal_moves = self.env['stock.move'].search(move_domain)
         total_internal = sum(internal_moves.mapped('product_uom_qty'))
 
-        unique_products = len(set(
-            incoming_moves.mapped('product_id.id') +
-            outgoing_moves.mapped('product_id.id')
-        ))
-        # Chỉ đếm nhà cung cấp từ đơn mua hàng (loại trừ trả hàng khách)
-        purchase_moves = incoming_moves.filtered(lambda m: m.purchase_line_id)
+        unique_products = len(po_product_ids | so_product_ids)
         unique_suppliers = len(set(
-            purchase_moves.mapped('purchase_line_id.order_id.partner_id.id')
+            purchase_orders.mapped('partner_id.commercial_partner_id.id')
         ) - {False})
 
         # Get warehouses for dropdown
@@ -535,8 +599,8 @@ class ProductFlowAnalysis(models.AbstractModel):
             'total_internal': total_internal,
             'unique_products': unique_products,
             'unique_suppliers': unique_suppliers,
-            'incoming_count': len(incoming_moves),
-            'outgoing_count': len(outgoing_moves),
+            'incoming_count': len(purchase_orders),
+            'outgoing_count': len(sale_orders),
             'date_from': str(date_from),
             'date_to': str(date_to),
             'warehouses': warehouse_list,
