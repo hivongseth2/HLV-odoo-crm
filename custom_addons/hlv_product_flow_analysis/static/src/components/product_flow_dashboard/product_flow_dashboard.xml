@@ -22,7 +22,6 @@
                         </span>
                     </div>
                     <div class="pf-header-right">
-                        <!-- Period selector -->
                         <div class="pf-filter-group">
                             <label>Kỳ:</label>
                             <select class="pf-select" t-on-change="(ev) => this.onPeriodChange(ev)">
@@ -32,7 +31,6 @@
                                 <option value="year" t-att-selected="state.period === 'year'">Năm</option>
                             </select>
                         </div>
-                        <!-- Warehouse selector -->
                         <div class="pf-filter-group">
                             <label>Kho:</label>
                             <select class="pf-select" t-on-change="(ev) => this.onWarehouseChange(ev)">
@@ -42,7 +40,6 @@
                                 </t>
                             </select>
                         </div>
-                        <!-- Custom date range -->
                         <div class="pf-filter-group">
                             <label>Từ:</label>
                             <input type="date" class="pf-date-input" t-att-value="state.dateFrom"
@@ -62,16 +59,16 @@
                         <div class="pf-card-icon"><i class="fa fa-arrow-down"/></div>
                         <div class="pf-card-body">
                             <div class="pf-card-value" t-esc="formatNumber(state.summary.total_incoming)"/>
-                            <div class="pf-card-label">Tổng nhập</div>
-                            <div class="pf-card-sub"><t t-esc="state.summary.incoming_count"/> phiếu</div>
+                            <div class="pf-card-label">Tổng mua</div>
+                            <div class="pf-card-sub"><t t-esc="state.summary.incoming_count"/> phiếu nhập</div>
                         </div>
                     </div>
                     <div class="pf-card pf-card-outgoing">
                         <div class="pf-card-icon"><i class="fa fa-arrow-up"/></div>
                         <div class="pf-card-body">
                             <div class="pf-card-value" t-esc="formatNumber(state.summary.total_outgoing)"/>
-                            <div class="pf-card-label">Tổng xuất</div>
-                            <div class="pf-card-sub"><t t-esc="state.summary.outgoing_count"/> phiếu</div>
+                            <div class="pf-card-label">Tổng bán</div>
+                            <div class="pf-card-sub"><t t-esc="state.summary.outgoing_count"/> phiếu xuất</div>
                         </div>
                     </div>
                     <div class="pf-card pf-card-internal">
@@ -101,7 +98,7 @@
                 <div class="pf-tabs">
                     <button t-att-class="'pf-tab ' + (state.activeTab === 'products' ? 'active' : '')"
                             t-on-click="() => this.switchTab('products')">
-                        <i class="fa fa-cube me-1"/>Hàng hóa lưu thông
+                        <i class="fa fa-cube me-1"/>Hàng hóa mua bán
                     </button>
                     <button t-att-class="'pf-tab ' + (state.activeTab === 'suppliers' ? 'active' : '')"
                             t-on-click="() => this.switchTab('suppliers')">
@@ -124,6 +121,20 @@
                                 <input type="text" placeholder="Tìm sản phẩm / mã..."
                                        t-on-input="(ev) => this.onProductSearch(ev)"/>
                             </div>
+                            <div class="pf-filter-group pf-filter-inline">
+                                <label>Số lần mua ≥</label>
+                                <input type="number" min="0" class="pf-count-input" value="0"
+                                       t-on-change="(ev) => this.onMinCountChange(ev)"/>
+                            </div>
+                            <div class="pf-toolbar-right">
+                                <span class="pf-result-count">
+                                    <t t-esc="productTotalFiltered"/> sản phẩm
+                                </span>
+                                <button class="pf-btn-export" t-on-click="() => this.exportProductExcel()"
+                                        t-att-disabled="state.isExporting">
+                                    <i class="fa fa-file-excel-o me-1"/>Xuất Excel
+                                </button>
+                            </div>
                         </div>
 
                         <div class="pf-table-wrap">
@@ -131,22 +142,35 @@
                                 <thead>
                                     <tr>
                                         <th class="pf-th-num">#</th>
-                                        <th>Mã SP</th>
-                                        <th>Tên sản phẩm</th>
+                                        <th class="pf-th-sortable" t-on-click="() => this.sortProducts('default_code')">
+                                            Mã SP <i t-att-class="getSortIcon('products', 'default_code')"/>
+                                        </th>
+                                        <th class="pf-th-sortable" t-on-click="() => this.sortProducts('product_name')">
+                                            Tên sản phẩm <i t-att-class="getSortIcon('products', 'product_name')"/>
+                                        </th>
                                         <th>Nhóm</th>
-                                        <th class="pf-th-num">SL Nhập</th>
-                                        <th class="pf-th-num">SL Xuất</th>
-                                        <th class="pf-th-num">Nội bộ</th>
-                                        <th class="pf-th-num">Tổng lưu thông</th>
-                                        <th class="pf-th-num">Số lần</th>
-                                        <th class="pf-th-num">Tồn kho</th>
+                                        <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('incoming_qty')">
+                                            SL Mua <i t-att-class="getSortIcon('products', 'incoming_qty')"/>
+                                        </th>
+                                        <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('incoming_count')">
+                                            Lần mua <i t-att-class="getSortIcon('products', 'incoming_count')"/>
+                                        </th>
+                                        <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('outgoing_qty')">
+                                            SL Bán <i t-att-class="getSortIcon('products', 'outgoing_qty')"/>
+                                        </th>
+                                        <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('outgoing_count')">
+                                            Lần bán <i t-att-class="getSortIcon('products', 'outgoing_count')"/>
+                                        </th>
+                                        <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('qty_available')">
+                                            Tồn kho <i t-att-class="getSortIcon('products', 'qty_available')"/>
+                                        </th>
                                         <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <t t-foreach="filteredProducts" t-as="p" t-key="p.product_id">
                                         <tr>
-                                            <td class="pf-td-num" t-esc="p_index + 1"/>
+                                            <td class="pf-td-num" t-esc="getPageStart('products') + p_index + 1"/>
                                             <td>
                                                 <span class="pf-code" t-esc="p.default_code || '-'"/>
                                             </td>
@@ -157,13 +181,12 @@
                                             </td>
                                             <td t-esc="p.categ_name"/>
                                             <td class="pf-td-num pf-incoming" t-esc="formatNumber(p.incoming_qty)"/>
+                                            <td class="pf-td-num pf-incoming-count" t-esc="p.incoming_count"/>
                                             <td class="pf-td-num pf-outgoing" t-esc="formatNumber(p.outgoing_qty)"/>
-                                            <td class="pf-td-num" t-esc="formatNumber(p.internal_qty)"/>
-                                            <td class="pf-td-num pf-total-bold" t-esc="formatNumber(p.total_qty)"/>
-                                            <td class="pf-td-num" t-esc="p.move_count"/>
+                                            <td class="pf-td-num pf-outgoing-count" t-esc="p.outgoing_count"/>
                                             <td class="pf-td-num" t-esc="formatNumber(p.qty_available)"/>
                                             <td>
-                                                <button class="pf-btn-trend" title="Xem trend"
+                                                <button class="pf-btn-trend" title="Xem trend 6 tháng"
                                                         t-on-click="() => this.showProductTrend(p.product_id, p.product_name)">
                                                     <i class="fa fa-line-chart"/>
                                                 </button>
@@ -172,11 +195,37 @@
                                     </t>
                                     <t t-if="filteredProducts.length === 0">
                                         <tr>
-                                            <td colspan="11" class="pf-empty">Không có dữ liệu lưu thông trong kỳ này</td>
+                                            <td colspan="10" class="pf-empty">Không có dữ liệu trong kỳ này</td>
                                         </tr>
                                     </t>
                                 </tbody>
                             </table>
+                        </div>
+
+                        <!-- Pagination - Products -->
+                        <div class="pf-pagination">
+                            <div class="pf-page-size">
+                                <label>Hiển thị:</label>
+                                <select t-on-change="(ev) => this.onProductPageSizeChange(ev)">
+                                    <option value="20" t-att-selected="state.productPageSize === 20">20</option>
+                                    <option value="50" t-att-selected="state.productPageSize === 50">50</option>
+                                    <option value="100" t-att-selected="state.productPageSize === 100">100</option>
+                                </select>
+                                <span>/ trang</span>
+                            </div>
+                            <div class="pf-page-nav">
+                                <button class="pf-page-btn" t-on-click="() => this.productPrevPage()"
+                                        t-att-disabled="state.productPage &lt;= 1">
+                                    <i class="fa fa-chevron-left"/>
+                                </button>
+                                <span class="pf-page-info">
+                                    Trang <t t-esc="state.productPage"/> / <t t-esc="productTotalPages"/>
+                                </span>
+                                <button class="pf-page-btn" t-on-click="() => this.productNextPage()"
+                                        t-att-disabled="state.productPage >= productTotalPages">
+                                    <i class="fa fa-chevron-right"/>
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Trend Modal -->
@@ -199,12 +248,12 @@
                                                 <div class="pf-trend-bars">
                                                     <div class="pf-trend-bar pf-bar-incoming"
                                                          t-att-style="'height: ' + getTrendBarHeight(t.incoming, trendMaxVal)"
-                                                         t-att-title="'Nhập: ' + formatNumber(t.incoming)">
+                                                         t-att-title="'Mua: ' + formatNumber(t.incoming)">
                                                         <span class="pf-bar-val" t-esc="formatNumber(t.incoming)"/>
                                                     </div>
                                                     <div class="pf-trend-bar pf-bar-outgoing"
                                                          t-att-style="'height: ' + getTrendBarHeight(t.outgoing, trendMaxVal)"
-                                                         t-att-title="'Xuất: ' + formatNumber(t.outgoing)">
+                                                         t-att-title="'Bán: ' + formatNumber(t.outgoing)">
                                                         <span class="pf-bar-val" t-esc="formatNumber(t.outgoing)"/>
                                                     </div>
                                                 </div>
@@ -214,10 +263,10 @@
                                     </div>
                                     <div class="pf-trend-legend">
                                         <span class="pf-legend-item">
-                                            <span class="pf-legend-color pf-bar-incoming"/>Nhập
+                                            <span class="pf-legend-color pf-bar-incoming"/>Mua
                                         </span>
                                         <span class="pf-legend-item">
-                                            <span class="pf-legend-color pf-bar-outgoing"/>Xuất
+                                            <span class="pf-legend-color pf-bar-outgoing"/>Bán
                                         </span>
                                     </div>
                                 </div>
@@ -233,6 +282,15 @@
                                 <input type="text" placeholder="Tìm nhà cung cấp..."
                                        t-on-input="(ev) => this.onSupplierSearch(ev)"/>
                             </div>
+                            <div class="pf-toolbar-right">
+                                <span class="pf-result-count">
+                                    <t t-esc="supplierTotalFiltered"/> nhà cung cấp
+                                </span>
+                                <button class="pf-btn-export" t-on-click="() => this.exportSupplierExcel()"
+                                        t-att-disabled="state.isExporting">
+                                    <i class="fa fa-file-excel-o me-1"/>Xuất Excel
+                                </button>
+                            </div>
                         </div>
 
                         <div class="pf-table-wrap">
@@ -240,11 +298,21 @@
                                 <thead>
                                     <tr>
                                         <th class="pf-th-num">#</th>
-                                        <th>Nhà cung cấp</th>
-                                        <th class="pf-th-num">Tổng SL nhập</th>
-                                        <th class="pf-th-num">Tổng giá trị</th>
-                                        <th class="pf-th-num">Số lần nhập</th>
-                                        <th class="pf-th-num">Số SP</th>
+                                        <th class="pf-th-sortable" t-on-click="() => this.sortSuppliers('partner_name')">
+                                            Nhà cung cấp <i t-att-class="getSortIcon('suppliers', 'partner_name')"/>
+                                        </th>
+                                        <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortSuppliers('total_qty')">
+                                            Tổng SL mua <i t-att-class="getSortIcon('suppliers', 'total_qty')"/>
+                                        </th>
+                                        <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortSuppliers('total_amount')">
+                                            Tổng giá trị <i t-att-class="getSortIcon('suppliers', 'total_amount')"/>
+                                        </th>
+                                        <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortSuppliers('move_count')">
+                                            Số lần mua <i t-att-class="getSortIcon('suppliers', 'move_count')"/>
+                                        </th>
+                                        <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortSuppliers('product_count')">
+                                            Số SP <i t-att-class="getSortIcon('suppliers', 'product_count')"/>
+                                        </th>
                                         <th></th>
                                     </tr>
                                 </thead>
@@ -252,7 +320,7 @@
                                     <t t-foreach="filteredSuppliers" t-as="s" t-key="s.partner_id">
                                         <tr class="pf-row-supplier"
                                             t-on-click="() => this.toggleSupplier(s.partner_id)">
-                                            <td class="pf-td-num" t-esc="s_index + 1"/>
+                                            <td class="pf-td-num" t-esc="getPageStart('suppliers') + s_index + 1"/>
                                             <td>
                                                 <a href="#" class="pf-link"
                                                    t-on-click.prevent.stop="() => this.openSupplier(s.partner_id)"
@@ -266,7 +334,6 @@
                                                 <i t-att-class="'fa ' + (state.expandedSupplier === s.partner_id ? 'fa-chevron-up' : 'fa-chevron-down')"/>
                                             </td>
                                         </tr>
-                                        <!-- Expanded product detail -->
                                         <t t-if="state.expandedSupplier === s.partner_id">
                                             <tr class="pf-row-detail-header">
                                                 <td/>
@@ -297,6 +364,32 @@
                                 </tbody>
                             </table>
                         </div>
+
+                        <!-- Pagination - Suppliers -->
+                        <div class="pf-pagination">
+                            <div class="pf-page-size">
+                                <label>Hiển thị:</label>
+                                <select t-on-change="(ev) => this.onSupplierPageSizeChange(ev)">
+                                    <option value="20" t-att-selected="state.supplierPageSize === 20">20</option>
+                                    <option value="50" t-att-selected="state.supplierPageSize === 50">50</option>
+                                    <option value="100" t-att-selected="state.supplierPageSize === 100">100</option>
+                                </select>
+                                <span>/ trang</span>
+                            </div>
+                            <div class="pf-page-nav">
+                                <button class="pf-page-btn" t-on-click="() => this.supplierPrevPage()"
+                                        t-att-disabled="state.supplierPage &lt;= 1">
+                                    <i class="fa fa-chevron-left"/>
+                                </button>
+                                <span class="pf-page-info">
+                                    Trang <t t-esc="state.supplierPage"/> / <t t-esc="supplierTotalPages"/>
+                                </span>
+                                <button class="pf-page-btn" t-on-click="() => this.supplierNextPage()"
+                                        t-att-disabled="state.supplierPage >= supplierTotalPages">
+                                    <i class="fa fa-chevron-right"/>
+                                </button>
+                            </div>
+                        </div>
                     </t>
 
                     <!-- ===== PLANNING TAB ===== -->
@@ -307,10 +400,13 @@
                                 <input type="text" placeholder="Tìm sản phẩm..."
                                        t-on-input="(ev) => this.onPlanningSearch(ev)"/>
                             </div>
-                            <div class="pf-planning-info">
+                            <div class="pf-toolbar-right">
                                 <span class="pf-info-badge">
                                     <i class="fa fa-info-circle me-1"/>
                                     Lead time: 7 ngày | Safety: 3 ngày
+                                </span>
+                                <span class="pf-result-count">
+                                    <t t-esc="planningTotalFiltered"/> sản phẩm
                                 </span>
                             </div>
                         </div>
@@ -321,21 +417,31 @@
                                     <tr>
                                         <th class="pf-th-num">#</th>
                                         <th>Mã SP</th>
-                                        <th>Tên sản phẩm</th>
+                                        <th class="pf-th-sortable" t-on-click="() => this.sortPlanning('product_name')">
+                                            Tên sản phẩm <i t-att-class="getSortIcon('planning', 'product_name')"/>
+                                        </th>
                                         <th>Nhóm</th>
-                                        <th class="pf-th-num">Tổng xuất</th>
-                                        <th class="pf-th-num">TB/ngày</th>
-                                        <th class="pf-th-num">Tồn hiện tại</th>
+                                        <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortPlanning('total_outgoing')">
+                                            Tổng bán <i t-att-class="getSortIcon('planning', 'total_outgoing')"/>
+                                        </th>
+                                        <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortPlanning('avg_daily')">
+                                            TB/ngày <i t-att-class="getSortIcon('planning', 'avg_daily')"/>
+                                        </th>
+                                        <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortPlanning('qty_available')">
+                                            Tồn hiện tại <i t-att-class="getSortIcon('planning', 'qty_available')"/>
+                                        </th>
                                         <th class="pf-th-num">Tồn tối thiểu</th>
                                         <th class="pf-th-num">Điểm đặt hàng</th>
-                                        <th class="pf-th-num">Còn (ngày)</th>
+                                        <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortPlanning('days_remaining')">
+                                            Còn (ngày) <i t-att-class="getSortIcon('planning', 'days_remaining')"/>
+                                        </th>
                                         <th>Trạng thái</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <t t-foreach="filteredPlanning" t-as="p" t-key="p.product_id">
                                         <tr>
-                                            <td class="pf-td-num" t-esc="p_index + 1"/>
+                                            <td class="pf-td-num" t-esc="getPageStart('planning') + p_index + 1"/>
                                             <td>
                                                 <span class="pf-code" t-esc="p.default_code || '-'"/>
                                             </td>
@@ -367,6 +473,32 @@
                                     </t>
                                 </tbody>
                             </table>
+                        </div>
+
+                        <!-- Pagination - Planning -->
+                        <div class="pf-pagination">
+                            <div class="pf-page-size">
+                                <label>Hiển thị:</label>
+                                <select t-on-change="(ev) => this.onPlanningPageSizeChange(ev)">
+                                    <option value="20" t-att-selected="state.planningPageSize === 20">20</option>
+                                    <option value="50" t-att-selected="state.planningPageSize === 50">50</option>
+                                    <option value="100" t-att-selected="state.planningPageSize === 100">100</option>
+                                </select>
+                                <span>/ trang</span>
+                            </div>
+                            <div class="pf-page-nav">
+                                <button class="pf-page-btn" t-on-click="() => this.planningPrevPage()"
+                                        t-att-disabled="state.planningPage &lt;= 1">
+                                    <i class="fa fa-chevron-left"/>
+                                </button>
+                                <span class="pf-page-info">
+                                    Trang <t t-esc="state.planningPage"/> / <t t-esc="planningTotalPages"/>
+                                </span>
+                                <button class="pf-page-btn" t-on-click="() => this.planningNextPage()"
+                                        t-att-disabled="state.planningPage >= planningTotalPages">
+                                    <i class="fa fa-chevron-right"/>
+                                </button>
+                            </div>
                         </div>
                     </t>
 
