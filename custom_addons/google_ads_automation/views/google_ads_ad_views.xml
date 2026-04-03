@@ -56,6 +56,7 @@
                 </header>
                 <sheet>
                     <field name="hero_header_html" widget="html" readonly="1"/>
+                    <field name="type" readonly="state == 'synced'"/>
                     
                     <div class="alert alert-warning mb-3" role="alert" 
                          invisible="not is_ad_content_invalid">
@@ -78,9 +79,9 @@
                                     <field name="google_ad_id" readonly="1" invisible="state == 'draft'"/>
 
                                     <field name="headline" placeholder="Mỗi tiêu đề 1 dòng. RSA: max 30kt. Khám phá: max 40kt." 
-                                           invisible="type not in ['RESPONSIVE_SEARCH_AD', 'DISCOVERY_RESPONSIVE_AD', 'DEMAND_GEN_RESPONSIVE_AD']"/>
+                                           invisible="type not in ['RESPONSIVE_SEARCH_AD', 'DISCOVERY_RESPONSIVE_AD', 'DEMAND_GEN_RESPONSIVE_AD', 'RESPONSIVE_DISPLAY_AD']"/>
                                     <field name="description" placeholder="Mỗi mô tả 1 dòng. RSA: max 90kt. Khám phá: max 160kt." 
-                                           invisible="type not in ['RESPONSIVE_SEARCH_AD', 'DISCOVERY_RESPONSIVE_AD', 'DEMAND_GEN_RESPONSIVE_AD']"/>
+                                           invisible="type not in ['RESPONSIVE_SEARCH_AD', 'DISCOVERY_RESPONSIVE_AD', 'DEMAND_GEN_RESPONSIVE_AD', 'RESPONSIVE_DISPLAY_AD']"/>
 
                                     <field name="is_ad_content_invalid" invisible="1"/>
                                     <field name="is_final_url_invalid" invisible="1"/>

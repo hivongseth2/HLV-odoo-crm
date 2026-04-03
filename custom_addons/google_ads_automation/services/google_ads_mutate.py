@@ -660,6 +660,12 @@ class GoogleAdsMutateService:
                 if vals.get('logo_image_asset'):
                     img = info.logo_images.add()
                     img.asset = vals.get('logo_image_asset')
+            elif ad_type == 'SHOPPING_PRODUCT_AD':
+                # --- Shopping Product Ad ---
+                # According to API, no fields can be set for this ad type. 
+                # Accessing the message is enough to initialize it in protobuf.
+                _ = pb_ad_group_ad.ad.shopping_product_ad
+                _logger.info("Sử dụng field shopping_product_ad (native pb)")
             else:
                 # --- Default: Responsive Search Ad (RSA) ---
                 rsa = pb_ad_group_ad.ad.responsive_search_ad

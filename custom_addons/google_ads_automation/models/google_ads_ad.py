@@ -245,6 +245,8 @@ class GoogleAdsAd(models.Model):
             'RESPONSIVE_SEARCH_AD',
             'DISCOVERY_RESPONSIVE_AD',
             'DEMAND_GEN_RESPONSIVE_AD',
+            'RESPONSIVE_DISPLAY_AD',
+            'SHOPPING_PRODUCT_AD',
         ]
         # Re-read type after auto-fix may have changed it
         current_type = self.type or 'RESPONSIVE_SEARCH_AD'
@@ -301,6 +303,9 @@ class GoogleAdsAd(models.Model):
                 raise UserError(_("Quảng cáo Tạo nhu cầu yêu cầu TỐI THIỂU 1 tiêu đề."))
             if len(descriptions) < 1:
                 raise UserError(_("Quảng cáo Tạo nhu cầu yêu cầu TỐI THIỂU 1 mô tả."))
+        elif current_type == 'SHOPPING_PRODUCT_AD':
+            # Shopping ads don't need headlines/descriptions
+            pass
 
         _logger.info(
             "action_sync_to_google: type=%s, headlines=%s, descriptions=%s, final_url=%s",
