@@ -252,6 +252,36 @@ class GoogleAdsAd(models.Model):
         if not final_url:
             raise UserError(_("Vui lòng nhập URL Đích (Final URL)."))
 
+        # ═══════════════════════════════════════════════════════
+        # STRICT VALIDATION: Chặn API call nếu thiếu nội dung
+        # (Thiếu headline/description → Google báo IMMUTABLE_FIELD
+        #  khó hiểu, thực chất là ad content rỗng)
+        # ═══════════════════════════════════════════════════════
+        current_type = self.type or 'RESPONSIVE_SEARCH_AD'
+        if current_type == 'RESPONSIVE_SEARCH_AD':
+            if len(headlines) < 3:
+                raise UserError(_(
+                    "Quảng cáo Tìm kiếm Thích ứng (RSA) yêu cầu TỐI THIỂU 3 tiêu đề.\n"
+                    "Hiện tại bạn có %d tiêu đề.\n\n"
+                    "Hãy nhập mỗi tiêu đề trên một dòng riêng biệt trong ô 'Tiêu đề'."
+                ) % len(headlines))
+            if len(descriptions) < 2:
+                raise UserError(_(
+                    "Quảng cáo Tìm kiếm Thích ứng (RSA) yêu cầu TỐI THIỂU 2 mô tả.\n"
+                    "Hiện tại bạn có %d mô tả.\n\n"
+                    "Hãy nhập mỗi mô tả trên một dòng riêng biệt trong ô 'Mô tả'."
+                ) % len(descriptions))
+        elif current_type in ['DISCOVERY_RESPONSIVE_AD', 'DEMAND_GEN_RESPONSIVE_AD']:
+            if len(headlines) < 1:
+                raise UserError(_("Quảng cáo Tạo nhu cầu yêu cầu TỐI THIỂU 1 tiêu đề."))
+            if len(descriptions) < 1:
+                raise UserError(_("Quảng cáo Tạo nhu cầu yêu cầu TỐI THIỂU 1 mô tả."))
+
+        _logger.info(
+            "action_sync_to_google: type=%s, headlines=%s, descriptions=%s, final_url=%s",
+            current_type, headlines, descriptions, final_url
+        )
+
         client = account._get_google_ads_client()
         customer_id = account.operating_customer_id
         from ..services.google_ads_mutate import GoogleAdsMutateService
@@ -263,6 +293,7 @@ class GoogleAdsAd(models.Model):
             'final_url': final_url,
             'channel_type': self.ad_group_id.campaign_id.channel_type, # Quan trọng để định hướng đúng field API
         }
+
 
         # Discovery (Demand Gen) Specific Assets
         if self.type in ['DISCOVERY_RESPONSIVE_AD', 'DEMAND_GEN_RESPONSIVE_AD']:
