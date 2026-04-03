@@ -255,9 +255,17 @@ class ProductFlowAnalysis(models.AbstractModel):
                     'product_count': 0,
                     'products': {},
                     '_po_ids': set(),
+                    '_delivery_days': [],
                 }
 
             supplier_data[company.id]['_po_ids'].add(order.id)
+
+            # Tính thời gian giao hàng: PO date_order → picking done date
+            if order.date_order:
+                for picking in order.picking_ids.filtered(lambda pk: pk.state == 'done' and pk.date_done):
+                    delta = (picking.date_done - order.date_order).days
+                    if delta >= 0:
+                        supplier_data[company.id]['_delivery_days'].append(delta)
 
             for line in order.order_line:
                 if line.display_type:
@@ -300,6 +308,17 @@ class ProductFlowAnalysis(models.AbstractModel):
         # Convert to final format
         for sid in supplier_data:
             supplier_data[sid]['move_count'] = len(supplier_data[sid].pop('_po_ids', set()))
+            delivery_days = supplier_data[sid].pop('_delivery_days', [])
+            if delivery_days:
+                supplier_data[sid]['avg_delivery_days'] = round(sum(delivery_days) / len(delivery_days), 1)
+                supplier_data[sid]['min_delivery_days'] = min(delivery_days)
+                supplier_data[sid]['max_delivery_days'] = max(delivery_days)
+                supplier_data[sid]['delivery_count'] = len(delivery_days)
+            else:
+                supplier_data[sid]['avg_delivery_days'] = 0
+                supplier_data[sid]['min_delivery_days'] = 0
+                supplier_data[sid]['max_delivery_days'] = 0
+                supplier_data[sid]['delivery_count'] = 0
             prods = supplier_data[sid]['products']
             for prod_data in prods.values():
                 all_pos = prod_data.pop('_all_pos', set())

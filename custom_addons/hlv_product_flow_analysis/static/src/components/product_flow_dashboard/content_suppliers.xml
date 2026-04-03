@@ -38,6 +38,9 @@
                                 <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortSuppliers('product_count')">
                                     Số SP <i t-att-class="getSortIcon('suppliers', 'product_count')"/>
                                 </th>
+                                <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortSuppliers('avg_delivery_days')">
+                                    TB giao hàng <i t-att-class="getSortIcon('suppliers', 'avg_delivery_days')"/>
+                                </th>
                                 <th></th>
                             </tr>
                         </thead>
@@ -55,6 +58,17 @@
                                     <td class="pf-td-num" t-esc="formatCurrency(s.total_amount)"/>
                                     <td class="pf-td-num" t-esc="s.move_count"/>
                                     <td class="pf-td-num" t-esc="s.product_count"/>
+                                    <td class="pf-td-num">
+                                        <t t-if="s.avg_delivery_days > 0">
+                                            <span t-att-class="s.avg_delivery_days > 7 ? 'pf-delivery-slow' : (s.avg_delivery_days > 3 ? 'pf-delivery-medium' : 'pf-delivery-fast')"
+                                                  t-att-title="'Nhanh nhất: ' + s.min_delivery_days + ' ngày | Lâu nhất: ' + s.max_delivery_days + ' ngày | ' + s.delivery_count + ' lần giao'">
+                                                <t t-esc="s.avg_delivery_days"/> ngày
+                                            </span>
+                                        </t>
+                                        <t t-else="">
+                                            <span class="pf-storage-na" title="Chưa có phiếu nhập hoàn thành">-</span>
+                                        </t>
+                                    </td>
                                     <td class="pf-td-expand">
                                         <i t-att-class="'fa ' + (state.expandedSupplier === s.partner_id ? 'fa-chevron-up' : 'fa-chevron-down')"/>
                                     </td>
@@ -66,6 +80,7 @@
                                         <td class="pf-th-num"><strong>SL</strong></td>
                                         <td class="pf-th-num"><strong>Giá trị</strong></td>
                                         <td colspan="2"><strong>Đơn mua / Phiếu nhập</strong></td>
+                                        <td/>
                                         <td/>
                                     </tr>
                                     <t t-foreach="s.products" t-as="sp" t-key="sp.product_id">
@@ -97,13 +112,14 @@
                                                 </div>
                                             </td>
                                             <td/>
+                                            <td/>
                                         </tr>
                                     </t>
                                 </t>
                             </t>
                             <t t-if="filteredSuppliers.length === 0">
                                 <tr>
-                                    <td colspan="7" class="pf-empty">Không có dữ liệu nhà cung cấp trong kỳ này</td>
+                                    <td colspan="8" class="pf-empty">Không có dữ liệu nhà cung cấp trong kỳ này</td>
                                 </tr>
                             </t>
                         </tbody>
