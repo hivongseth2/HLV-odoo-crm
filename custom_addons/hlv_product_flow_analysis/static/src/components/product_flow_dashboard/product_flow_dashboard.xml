@@ -675,73 +675,202 @@
                                     </div>
                                 </t>
 
-                                <!-- ===== CORRELATION (Buy vs Sell scatter) ===== -->
+                                <!-- ===== CORRELATION: Deep Analytics ===== -->
                                 <t t-if="state.chartsActiveSection === 'correlation'">
+                                    <!-- 1. ABC Pareto Analysis -->
                                     <div class="pf-sc-card">
                                         <h4 class="pf-sc-title">
-                                            <i class="fa fa-dot-circle-o me-1" style="color:#7048e8;"/>Tương quan Mua - Bán
+                                            <i class="fa fa-bar-chart me-1" style="color:#7048e8;"/>Phân tích ABC (Pareto)
                                         </h4>
-                                        <t t-if="buySellCorrelation.points.length > 0">
-                                            <!-- Scatter plot area -->
-                                            <div class="pf-scatter-container">
-                                                <div class="pf-scatter-ylabel">SL Bán →</div>
-                                                <div class="pf-scatter-plot">
-                                                    <!-- Quadrant lines -->
-                                                    <div class="pf-scatter-midline-h"/>
-                                                    <div class="pf-scatter-midline-v"/>
-                                                    <!-- Quadrant labels -->
-                                                    <span class="pf-scatter-qlabel pf-ql-tl">Rủi ro cung</span>
-                                                    <span class="pf-scatter-qlabel pf-ql-tr">Ưu tiên kho</span>
-                                                    <span class="pf-scatter-qlabel pf-ql-bl">Ít giao dịch</span>
-                                                    <span class="pf-scatter-qlabel pf-ql-br">Tồn dư</span>
-                                                    <!-- Data points -->
-                                                    <t t-foreach="buySellCorrelation.points" t-as="pt" t-key="pt.product_id">
-                                                        <div t-att-class="getCorrelationPointClass(pt)"
-                                                             t-att-style="getCorrelationPointStyle(pt)"
-                                                             t-att-title="pt.fullName + ' | Mua: ' + formatNumber(pt.buyQty) + ' | Bán: ' + formatNumber(pt.sellQty)"/>
+                                        <t t-if="abcAnalysis">
+                                            <div class="pf-abc-bar">
+                                                <div class="pf-abc-seg pf-abc-a" t-att-style="'width:' + abcAnalysis.a.pct + '%'"
+                                                     t-att-title="'A: ' + abcAnalysis.a.count + ' SP = ' + abcAnalysis.a.qtyPct + '% SL bán'">
+                                                    <span t-if="abcAnalysis.a.pct >= 8">A</span>
+                                                </div>
+                                                <div class="pf-abc-seg pf-abc-b" t-att-style="'width:' + abcAnalysis.b.pct + '%'"
+                                                     t-att-title="'B: ' + abcAnalysis.b.count + ' SP = ' + abcAnalysis.b.qtyPct + '% SL bán'">
+                                                    <span t-if="abcAnalysis.b.pct >= 8">B</span>
+                                                </div>
+                                                <div class="pf-abc-seg pf-abc-c" t-att-style="'width:' + abcAnalysis.c.pct + '%'"
+                                                     t-att-title="'C: ' + abcAnalysis.c.count + ' SP = ' + abcAnalysis.c.qtyPct + '% SL bán'">
+                                                    <span t-if="abcAnalysis.c.pct >= 8">C</span>
+                                                </div>
+                                            </div>
+                                            <div class="pf-abc-legend">
+                                                <div class="pf-abc-item">
+                                                    <span class="pf-abc-dot pf-abc-a"/>
+                                                    <span class="pf-abc-lbl">A: <strong t-esc="abcAnalysis.a.count"/> SP (<t t-esc="abcAnalysis.a.pct"/>%) = <t t-esc="abcAnalysis.a.qtyPct"/>% SL</span>
+                                                </div>
+                                                <div class="pf-abc-item">
+                                                    <span class="pf-abc-dot pf-abc-b"/>
+                                                    <span class="pf-abc-lbl">B: <strong t-esc="abcAnalysis.b.count"/> SP (<t t-esc="abcAnalysis.b.pct"/>%) = <t t-esc="abcAnalysis.b.qtyPct"/>% SL</span>
+                                                </div>
+                                                <div class="pf-abc-item">
+                                                    <span class="pf-abc-dot pf-abc-c"/>
+                                                    <span class="pf-abc-lbl">C: <strong t-esc="abcAnalysis.c.count"/> SP (<t t-esc="abcAnalysis.c.pct"/>%) = <t t-esc="abcAnalysis.c.qtyPct"/>% SL</span>
+                                                </div>
+                                            </div>
+                                        </t>
+                                        <t t-else=""><div class="pf-chart-empty">Chưa có dữ liệu</div></t>
+                                    </div>
+
+                                    <!-- 2. Flow Matrix 3x3 -->
+                                    <div class="pf-sc-card">
+                                        <h4 class="pf-sc-title">
+                                            <i class="fa fa-th me-1" style="color:#1971c2;"/>Ma trận Mua × Bán
+                                        </h4>
+                                        <t t-if="flowMatrix">
+                                            <div class="pf-matrix-wrap">
+                                                <div class="pf-matrix-ylabel">SL Bán ↑</div>
+                                                <div class="pf-matrix-body">
+                                                    <div class="pf-matrix-row-labels">
+                                                        <span>Cao</span><span>TB</span><span>Thấp</span>
+                                                    </div>
+                                                    <div class="pf-matrix-grid">
+                                                        <t t-foreach="flowMatrix.grid" t-as="row" t-key="row_index">
+                                                            <t t-foreach="row" t-as="cell" t-key="cell_index">
+                                                                <div t-att-class="'pf-matrix-cell pf-mx-' + getMatrixHeat(cell, flowMatrix.maxCount)"
+                                                                     t-att-title="cell + ' sản phẩm'">
+                                                                    <span t-esc="cell"/>
+                                                                </div>
+                                                            </t>
+                                                        </t>
+                                                    </div>
+                                                    <div class="pf-matrix-col-labels">
+                                                        <span>Thấp</span><span>TB</span><span>Cao</span>
+                                                    </div>
+                                                </div>
+                                                <div class="pf-matrix-xlabel">SL Mua →</div>
+                                            </div>
+                                            <div class="pf-matrix-scale">
+                                                <span class="pf-mx-s0">0</span>
+                                                <span class="pf-mx-s1">Ít</span>
+                                                <span class="pf-mx-s2">TB</span>
+                                                <span class="pf-mx-s3">Nhiều</span>
+                                                <span class="pf-mx-s4">Rất nhiều</span>
+                                            </div>
+                                        </t>
+                                        <t t-else=""><div class="pf-chart-empty">Chưa có dữ liệu</div></t>
+                                    </div>
+
+                                    <!-- 3. Balance Distribution -->
+                                    <div class="pf-sc-card">
+                                        <h4 class="pf-sc-title">
+                                            <i class="fa fa-balance-scale me-1" style="color:#e67700;"/>Phân bổ tỷ lệ Bán/Mua
+                                        </h4>
+                                        <t t-if="balanceDistribution">
+                                            <div class="pf-bal-chart">
+                                                <t t-foreach="balanceDistribution.buckets" t-as="bk" t-key="bk.label">
+                                                    <div class="pf-bal-row">
+                                                        <span class="pf-bal-label" t-esc="bk.label"/>
+                                                        <div class="pf-bal-track">
+                                                            <div t-att-class="'pf-bal-fill pf-bal-' + bk.type"
+                                                                 t-att-style="'width:' + Math.round(bk.count / balanceDistribution.maxCount * 100) + '%'"/>
+                                                        </div>
+                                                        <span class="pf-bal-count" t-esc="bk.count"/>
+                                                    </div>
+                                                </t>
+                                            </div>
+                                            <div class="pf-bal-extra">
+                                                <t t-if="balanceDistribution.sellOnly > 0">
+                                                    <span class="pf-bal-tag pf-bal-sell-only">
+                                                        <i class="fa fa-arrow-up me-1"/>Chỉ bán: <strong t-esc="balanceDistribution.sellOnly"/>
+                                                    </span>
+                                                </t>
+                                                <t t-if="balanceDistribution.buyOnly > 0">
+                                                    <span class="pf-bal-tag pf-bal-buy-only">
+                                                        <i class="fa fa-arrow-down me-1"/>Chỉ mua: <strong t-esc="balanceDistribution.buyOnly"/>
+                                                    </span>
+                                                </t>
+                                            </div>
+                                        </t>
+                                        <t t-else=""><div class="pf-chart-empty">Chưa có dữ liệu</div></t>
+                                    </div>
+
+                                    <!-- 4. Density Heatmap (Log-scale scatter) -->
+                                    <div class="pf-sc-card">
+                                        <h4 class="pf-sc-title">
+                                            <i class="fa fa-th-large me-1" style="color:#c2255c;"/>Mật độ Mua - Bán (Log)
+                                        </h4>
+                                        <t t-if="densityMap">
+                                            <div class="pf-density-wrap">
+                                                <div class="pf-density-ylabel">SL Bán ↑</div>
+                                                <div class="pf-density-grid" t-att-style="'grid-template-columns: repeat(' + densityMap.gridSize + ', 1fr)'">
+                                                    <t t-foreach="densityMap.grid" t-as="row" t-key="row_index">
+                                                        <t t-foreach="row" t-as="cell" t-key="cell_index">
+                                                            <div t-att-class="'pf-density-cell pf-dn-' + getDensityLevel(cell, densityMap.maxCount)"
+                                                                 t-att-title="cell + ' sản phẩm'">
+                                                                <span t-if="cell > 0" t-esc="cell"/>
+                                                            </div>
+                                                        </t>
                                                     </t>
                                                 </div>
-                                                <div class="pf-scatter-xlabel">SL Mua →</div>
+                                                <div class="pf-density-xlabel">SL Mua →</div>
                                             </div>
-                                            <!-- Quadrant summary -->
-                                            <div class="pf-scatter-summary">
-                                                <div class="pf-scatter-quad">
-                                                    <span class="pf-sq-dot pf-q-priority"/>
-                                                    <span class="pf-sq-label">Ưu tiên kho</span>
-                                                    <strong class="pf-sq-count" t-esc="buySellCorrelation.quadrants.priority"/>
-                                                </div>
-                                                <div class="pf-scatter-quad">
-                                                    <span class="pf-sq-dot pf-q-overstock"/>
-                                                    <span class="pf-sq-label">Tồn dư</span>
-                                                    <strong class="pf-sq-count" t-esc="buySellCorrelation.quadrants.overstock"/>
-                                                </div>
-                                                <div class="pf-scatter-quad">
-                                                    <span class="pf-sq-dot pf-q-supplyRisk"/>
-                                                    <span class="pf-sq-label">Rủi ro cung</span>
-                                                    <strong class="pf-sq-count" t-esc="buySellCorrelation.quadrants.supplyRisk"/>
-                                                </div>
-                                                <div class="pf-scatter-quad">
-                                                    <span class="pf-sq-dot pf-q-lowActivity"/>
-                                                    <span class="pf-sq-label">Ít giao dịch</span>
-                                                    <strong class="pf-sq-count" t-esc="buySellCorrelation.quadrants.lowActivity"/>
-                                                </div>
-                                            </div>
-                                            <div class="pf-scatter-hint">
+                                            <div class="pf-density-info">
                                                 <i class="fa fa-info-circle me-1"/>
-                                                <t t-if="buySellCorrelation.quadrants.supplyRisk > buySellCorrelation.quadrants.priority">
-                                                    <span class="text-danger">Nhiều SP bán chạy nhưng mua ít - rủi ro hết hàng!</span>
-                                                </t>
-                                                <t t-elif="buySellCorrelation.quadrants.overstock > buySellCorrelation.quadrants.priority">
-                                                    <span class="text-warning">Nhiều SP mua nhiều nhưng bán chậm - kiểm tra tồn kho</span>
-                                                </t>
-                                                <t t-else="">
-                                                    <span class="text-success">Mua bán tương đối cân đối</span>
-                                                </t>
+                                                Tổng: <strong t-esc="densityMap.total"/> SP • Thang log để phân bổ đều
                                             </div>
                                         </t>
-                                        <t t-else="">
-                                            <div class="pf-chart-empty">Chưa có dữ liệu</div>
+                                        <t t-else=""><div class="pf-chart-empty">Chưa có dữ liệu</div></t>
+                                    </div>
+
+                                    <!-- 5. Top Imbalanced Products -->
+                                    <div class="pf-sc-card">
+                                        <h4 class="pf-sc-title">
+                                            <i class="fa fa-exchange me-1" style="color:#e03131;"/>SP mất cân đối nhất
+                                        </h4>
+                                        <t t-if="topImbalanced.highSell.length > 0 || topImbalanced.highBuy.length > 0">
+                                            <t t-if="topImbalanced.highSell.length > 0">
+                                                <div class="pf-imb-label pf-imb-sell">
+                                                    <i class="fa fa-arrow-up me-1"/>Bán >> Mua (rủi ro hết hàng)
+                                                </div>
+                                                <div class="pf-imb-list">
+                                                    <t t-foreach="topImbalanced.highSell" t-as="p" t-key="p.product_id">
+                                                        <div class="pf-imb-row">
+                                                            <span class="pf-imb-name" t-esc="p.name" t-att-title="p.product_name"/>
+                                                            <span class="pf-imb-ratio pf-imb-sell-r">×<t t-esc="p.ratio.toFixed(1)"/></span>
+                                                            <span class="pf-imb-detail">
+                                                                M:<t t-esc="formatNumber(p.incoming_qty)"/> B:<t t-esc="formatNumber(p.outgoing_qty)"/>
+                                                            </span>
+                                                        </div>
+                                                    </t>
+                                                </div>
+                                            </t>
+                                            <t t-if="topImbalanced.highBuy.length > 0">
+                                                <div class="pf-imb-label pf-imb-buy">
+                                                    <i class="fa fa-arrow-down me-1"/>Mua >> Bán (tồn kho dư)
+                                                </div>
+                                                <div class="pf-imb-list">
+                                                    <t t-foreach="topImbalanced.highBuy" t-as="p" t-key="p.product_id">
+                                                        <div class="pf-imb-row">
+                                                            <span class="pf-imb-name" t-esc="p.name" t-att-title="p.product_name"/>
+                                                            <span class="pf-imb-ratio pf-imb-buy-r">×<t t-esc="(1/p.ratio).toFixed(1)"/></span>
+                                                            <span class="pf-imb-detail">
+                                                                M:<t t-esc="formatNumber(p.incoming_qty)"/> B:<t t-esc="formatNumber(p.outgoing_qty)"/>
+                                                            </span>
+                                                        </div>
+                                                    </t>
+                                                </div>
+                                            </t>
                                         </t>
+                                        <t t-else=""><div class="pf-chart-empty">Chưa có dữ liệu</div></t>
+                                    </div>
+
+                                    <!-- 6. Auto Insights -->
+                                    <div class="pf-sc-card" t-if="correlationInsights.length > 0">
+                                        <h4 class="pf-sc-title">
+                                            <i class="fa fa-lightbulb-o me-1" style="color:#f59f00;"/>Nhận định tự động
+                                        </h4>
+                                        <div class="pf-insights-list">
+                                            <t t-foreach="correlationInsights" t-as="ins" t-key="ins_index">
+                                                <div t-att-class="'pf-insight-row pf-ins-' + ins.type">
+                                                    <i t-att-class="'fa ' + ins.icon + ' pf-ins-icon'"/>
+                                                    <span class="pf-ins-text" t-esc="ins.text"/>
+                                                </div>
+                                            </t>
+                                        </div>
                                     </div>
                                 </t>
                             </div>
