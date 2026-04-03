@@ -1,0 +1,377 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_product_flow_analysis.Dashboard">
+        <div class="o_action pf-dashboard">
+            <!-- Loading -->
+            <t t-if="state.isLoading">
+                <div class="pf-loading">
+                    <div class="pf-spinner"/>
+                    <p>Đang tải dữ liệu...</p>
+                </div>
+            </t>
+
+            <t t-else="">
+                <!-- HEADER -->
+                <div class="pf-header">
+                    <div class="pf-header-left">
+                        <h1 class="pf-title">
+                            <i class="fa fa-bar-chart me-2"/>Phân tích lưu thông hàng hóa
+                        </h1>
+                        <span class="pf-period-label">
+                            <t t-esc="state.dateFrom"/> → <t t-esc="state.dateTo"/>
+                        </span>
+                    </div>
+                    <div class="pf-header-right">
+                        <!-- Period selector -->
+                        <div class="pf-filter-group">
+                            <label>Kỳ:</label>
+                            <select class="pf-select" t-on-change="(ev) => this.onPeriodChange(ev)">
+                                <option value="week" t-att-selected="state.period === 'week'">Tuần</option>
+                                <option value="month" t-att-selected="state.period === 'month'">Tháng</option>
+                                <option value="quarter" t-att-selected="state.period === 'quarter'">Quý</option>
+                                <option value="year" t-att-selected="state.period === 'year'">Năm</option>
+                            </select>
+                        </div>
+                        <!-- Warehouse selector -->
+                        <div class="pf-filter-group">
+                            <label>Kho:</label>
+                            <select class="pf-select" t-on-change="(ev) => this.onWarehouseChange(ev)">
+                                <option value="all">Tất cả kho</option>
+                                <t t-foreach="state.warehouses" t-as="wh" t-key="wh.id">
+                                    <option t-att-value="wh.id" t-esc="wh.name"/>
+                                </t>
+                            </select>
+                        </div>
+                        <!-- Custom date range -->
+                        <div class="pf-filter-group">
+                            <label>Từ:</label>
+                            <input type="date" class="pf-date-input" t-att-value="state.dateFrom"
+                                   t-on-change="(ev) => this.onDateFromChange(ev)"/>
+                        </div>
+                        <div class="pf-filter-group">
+                            <label>Đến:</label>
+                            <input type="date" class="pf-date-input" t-att-value="state.dateTo"
+                                   t-on-change="(ev) => this.onDateToChange(ev)"/>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUMMARY CARDS -->
+                <div class="pf-summary-cards">
+                    <div class="pf-card pf-card-incoming">
+                        <div class="pf-card-icon"><i class="fa fa-arrow-down"/></div>
+                        <div class="pf-card-body">
+                            <div class="pf-card-value" t-esc="formatNumber(state.summary.total_incoming)"/>
+                            <div class="pf-card-label">Tổng nhập</div>
+                            <div class="pf-card-sub"><t t-esc="state.summary.incoming_count"/> phiếu</div>
+                        </div>
+                    </div>
+                    <div class="pf-card pf-card-outgoing">
+                        <div class="pf-card-icon"><i class="fa fa-arrow-up"/></div>
+                        <div class="pf-card-body">
+                            <div class="pf-card-value" t-esc="formatNumber(state.summary.total_outgoing)"/>
+                            <div class="pf-card-label">Tổng xuất</div>
+                            <div class="pf-card-sub"><t t-esc="state.summary.outgoing_count"/> phiếu</div>
+                        </div>
+                    </div>
+                    <div class="pf-card pf-card-internal">
+                        <div class="pf-card-icon"><i class="fa fa-exchange"/></div>
+                        <div class="pf-card-body">
+                            <div class="pf-card-value" t-esc="formatNumber(state.summary.total_internal)"/>
+                            <div class="pf-card-label">Nội bộ</div>
+                        </div>
+                    </div>
+                    <div class="pf-card pf-card-products">
+                        <div class="pf-card-icon"><i class="fa fa-cubes"/></div>
+                        <div class="pf-card-body">
+                            <div class="pf-card-value" t-esc="state.summary.unique_products"/>
+                            <div class="pf-card-label">Sản phẩm</div>
+                        </div>
+                    </div>
+                    <div class="pf-card pf-card-suppliers">
+                        <div class="pf-card-icon"><i class="fa fa-truck"/></div>
+                        <div class="pf-card-body">
+                            <div class="pf-card-value" t-esc="state.summary.unique_suppliers"/>
+                            <div class="pf-card-label">Nhà cung cấp</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB NAVIGATION -->
+                <div class="pf-tabs">
+                    <button t-att-class="'pf-tab ' + (state.activeTab === 'products' ? 'active' : '')"
+                            t-on-click="() => this.switchTab('products')">
+                        <i class="fa fa-cube me-1"/>Hàng hóa lưu thông
+                    </button>
+                    <button t-att-class="'pf-tab ' + (state.activeTab === 'suppliers' ? 'active' : '')"
+                            t-on-click="() => this.switchTab('suppliers')">
+                        <i class="fa fa-truck me-1"/>Nhà cung cấp
+                    </button>
+                    <button t-att-class="'pf-tab ' + (state.activeTab === 'planning' ? 'active' : '')"
+                            t-on-click="() => this.switchTab('planning')">
+                        <i class="fa fa-tasks me-1"/>Kế hoạch tồn kho
+                    </button>
+                </div>
+
+                <!-- TAB CONTENT -->
+                <div class="pf-tab-content">
+
+                    <!-- ===== PRODUCTS TAB ===== -->
+                    <t t-if="state.activeTab === 'products'">
+                        <div class="pf-toolbar">
+                            <div class="pf-search-box">
+                                <i class="fa fa-search"/>
+                                <input type="text" placeholder="Tìm sản phẩm / mã..."
+                                       t-on-input="(ev) => this.onProductSearch(ev)"/>
+                            </div>
+                        </div>
+
+                        <div class="pf-table-wrap">
+                            <table class="pf-table">
+                                <thead>
+                                    <tr>
+                                        <th class="pf-th-num">#</th>
+                                        <th>Mã SP</th>
+                                        <th>Tên sản phẩm</th>
+                                        <th>Nhóm</th>
+                                        <th class="pf-th-num">SL Nhập</th>
+                                        <th class="pf-th-num">SL Xuất</th>
+                                        <th class="pf-th-num">Nội bộ</th>
+                                        <th class="pf-th-num">Tổng lưu thông</th>
+                                        <th class="pf-th-num">Số lần</th>
+                                        <th class="pf-th-num">Tồn kho</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="filteredProducts" t-as="p" t-key="p.product_id">
+                                        <tr>
+                                            <td class="pf-td-num" t-esc="p_index + 1"/>
+                                            <td>
+                                                <span class="pf-code" t-esc="p.default_code || '-'"/>
+                                            </td>
+                                            <td>
+                                                <a href="#" class="pf-link"
+                                                   t-on-click.prevent="() => this.openProduct(p.product_id)"
+                                                   t-esc="p.product_name"/>
+                                            </td>
+                                            <td t-esc="p.categ_name"/>
+                                            <td class="pf-td-num pf-incoming" t-esc="formatNumber(p.incoming_qty)"/>
+                                            <td class="pf-td-num pf-outgoing" t-esc="formatNumber(p.outgoing_qty)"/>
+                                            <td class="pf-td-num" t-esc="formatNumber(p.internal_qty)"/>
+                                            <td class="pf-td-num pf-total-bold" t-esc="formatNumber(p.total_qty)"/>
+                                            <td class="pf-td-num" t-esc="p.move_count"/>
+                                            <td class="pf-td-num" t-esc="formatNumber(p.qty_available)"/>
+                                            <td>
+                                                <button class="pf-btn-trend" title="Xem trend"
+                                                        t-on-click="() => this.showProductTrend(p.product_id, p.product_name)">
+                                                    <i class="fa fa-line-chart"/>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </t>
+                                    <t t-if="filteredProducts.length === 0">
+                                        <tr>
+                                            <td colspan="11" class="pf-empty">Không có dữ liệu lưu thông trong kỳ này</td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Trend Modal -->
+                        <t t-if="state.showTrend">
+                            <div class="pf-modal-backdrop" t-on-click="() => this.closeTrend()"/>
+                            <div class="pf-modal">
+                                <div class="pf-modal-header">
+                                    <h3>
+                                        <i class="fa fa-line-chart me-2"/>
+                                        Trend 6 tháng: <t t-esc="state.trendProductName"/>
+                                    </h3>
+                                    <button class="pf-modal-close" t-on-click="() => this.closeTrend()">
+                                        <i class="fa fa-times"/>
+                                    </button>
+                                </div>
+                                <div class="pf-modal-body">
+                                    <div class="pf-trend-chart">
+                                        <t t-foreach="state.trendData" t-as="t" t-key="t.month">
+                                            <div class="pf-trend-col">
+                                                <div class="pf-trend-bars">
+                                                    <div class="pf-trend-bar pf-bar-incoming"
+                                                         t-att-style="'height: ' + getTrendBarHeight(t.incoming, trendMaxVal)"
+                                                         t-att-title="'Nhập: ' + formatNumber(t.incoming)">
+                                                        <span class="pf-bar-val" t-esc="formatNumber(t.incoming)"/>
+                                                    </div>
+                                                    <div class="pf-trend-bar pf-bar-outgoing"
+                                                         t-att-style="'height: ' + getTrendBarHeight(t.outgoing, trendMaxVal)"
+                                                         t-att-title="'Xuất: ' + formatNumber(t.outgoing)">
+                                                        <span class="pf-bar-val" t-esc="formatNumber(t.outgoing)"/>
+                                                    </div>
+                                                </div>
+                                                <div class="pf-trend-label" t-esc="t.month"/>
+                                            </div>
+                                        </t>
+                                    </div>
+                                    <div class="pf-trend-legend">
+                                        <span class="pf-legend-item">
+                                            <span class="pf-legend-color pf-bar-incoming"/>Nhập
+                                        </span>
+                                        <span class="pf-legend-item">
+                                            <span class="pf-legend-color pf-bar-outgoing"/>Xuất
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
+                    </t>
+
+                    <!-- ===== SUPPLIERS TAB ===== -->
+                    <t t-if="state.activeTab === 'suppliers'">
+                        <div class="pf-toolbar">
+                            <div class="pf-search-box">
+                                <i class="fa fa-search"/>
+                                <input type="text" placeholder="Tìm nhà cung cấp..."
+                                       t-on-input="(ev) => this.onSupplierSearch(ev)"/>
+                            </div>
+                        </div>
+
+                        <div class="pf-table-wrap">
+                            <table class="pf-table">
+                                <thead>
+                                    <tr>
+                                        <th class="pf-th-num">#</th>
+                                        <th>Nhà cung cấp</th>
+                                        <th class="pf-th-num">Tổng SL nhập</th>
+                                        <th class="pf-th-num">Tổng giá trị</th>
+                                        <th class="pf-th-num">Số lần nhập</th>
+                                        <th class="pf-th-num">Số SP</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="filteredSuppliers" t-as="s" t-key="s.partner_id">
+                                        <tr class="pf-row-supplier"
+                                            t-on-click="() => this.toggleSupplier(s.partner_id)">
+                                            <td class="pf-td-num" t-esc="s_index + 1"/>
+                                            <td>
+                                                <a href="#" class="pf-link"
+                                                   t-on-click.prevent.stop="() => this.openSupplier(s.partner_id)"
+                                                   t-esc="s.partner_name"/>
+                                            </td>
+                                            <td class="pf-td-num pf-incoming" t-esc="formatNumber(s.total_qty)"/>
+                                            <td class="pf-td-num" t-esc="formatCurrency(s.total_amount)"/>
+                                            <td class="pf-td-num" t-esc="s.move_count"/>
+                                            <td class="pf-td-num" t-esc="s.product_count"/>
+                                            <td class="pf-td-expand">
+                                                <i t-att-class="'fa ' + (state.expandedSupplier === s.partner_id ? 'fa-chevron-up' : 'fa-chevron-down')"/>
+                                            </td>
+                                        </tr>
+                                        <!-- Expanded product detail -->
+                                        <t t-if="state.expandedSupplier === s.partner_id">
+                                            <tr class="pf-row-detail-header">
+                                                <td/>
+                                                <td colspan="2"><strong>Sản phẩm</strong></td>
+                                                <td class="pf-th-num"><strong>SL</strong></td>
+                                                <td class="pf-th-num"><strong>Giá trị</strong></td>
+                                                <td colspan="2"/>
+                                            </tr>
+                                            <t t-foreach="s.products" t-as="sp" t-key="sp.product_id">
+                                                <tr class="pf-row-detail">
+                                                    <td/>
+                                                    <td colspan="2">
+                                                        <span class="pf-code me-1" t-esc="sp.default_code || ''"/>
+                                                        <span t-esc="sp.product_name"/>
+                                                    </td>
+                                                    <td class="pf-td-num" t-esc="formatNumber(sp.qty)"/>
+                                                    <td class="pf-td-num" t-esc="formatCurrency(sp.amount)"/>
+                                                    <td colspan="2"/>
+                                                </tr>
+                                            </t>
+                                        </t>
+                                    </t>
+                                    <t t-if="filteredSuppliers.length === 0">
+                                        <tr>
+                                            <td colspan="7" class="pf-empty">Không có dữ liệu nhà cung cấp trong kỳ này</td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                        </div>
+                    </t>
+
+                    <!-- ===== PLANNING TAB ===== -->
+                    <t t-if="state.activeTab === 'planning'">
+                        <div class="pf-toolbar">
+                            <div class="pf-search-box">
+                                <i class="fa fa-search"/>
+                                <input type="text" placeholder="Tìm sản phẩm..."
+                                       t-on-input="(ev) => this.onPlanningSearch(ev)"/>
+                            </div>
+                            <div class="pf-planning-info">
+                                <span class="pf-info-badge">
+                                    <i class="fa fa-info-circle me-1"/>
+                                    Lead time: 7 ngày | Safety: 3 ngày
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="pf-table-wrap">
+                            <table class="pf-table">
+                                <thead>
+                                    <tr>
+                                        <th class="pf-th-num">#</th>
+                                        <th>Mã SP</th>
+                                        <th>Tên sản phẩm</th>
+                                        <th>Nhóm</th>
+                                        <th class="pf-th-num">Tổng xuất</th>
+                                        <th class="pf-th-num">TB/ngày</th>
+                                        <th class="pf-th-num">Tồn hiện tại</th>
+                                        <th class="pf-th-num">Tồn tối thiểu</th>
+                                        <th class="pf-th-num">Điểm đặt hàng</th>
+                                        <th class="pf-th-num">Còn (ngày)</th>
+                                        <th>Trạng thái</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="filteredPlanning" t-as="p" t-key="p.product_id">
+                                        <tr>
+                                            <td class="pf-td-num" t-esc="p_index + 1"/>
+                                            <td>
+                                                <span class="pf-code" t-esc="p.default_code || '-'"/>
+                                            </td>
+                                            <td>
+                                                <a href="#" class="pf-link"
+                                                   t-on-click.prevent="() => this.openProduct(p.product_id)"
+                                                   t-esc="p.product_name"/>
+                                            </td>
+                                            <td t-esc="p.categ_name"/>
+                                            <td class="pf-td-num pf-outgoing" t-esc="formatNumber(p.total_outgoing)"/>
+                                            <td class="pf-td-num" t-esc="formatNumber(p.avg_daily)"/>
+                                            <td class="pf-td-num" t-esc="formatNumber(p.qty_available)"/>
+                                            <td class="pf-td-num pf-total-bold" t-esc="formatNumber(p.min_stock)"/>
+                                            <td class="pf-td-num" t-esc="formatNumber(p.reorder_point)"/>
+                                            <td class="pf-td-num">
+                                                <t t-if="p.days_remaining >= 9999">∞</t>
+                                                <t t-else="" t-esc="p.days_remaining"/>
+                                            </td>
+                                            <td>
+                                                <span t-att-class="'pf-status-badge ' + getStatusClass(p.status)"
+                                                      t-esc="getStatusLabel(p.status)"/>
+                                            </td>
+                                        </tr>
+                                    </t>
+                                    <t t-if="filteredPlanning.length === 0">
+                                        <tr>
+                                            <td colspan="11" class="pf-empty">Không có dữ liệu kế hoạch trong kỳ này</td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                        </div>
+                    </t>
+
+                </div>
+            </t>
+        </div>
+    </t>
+</templates>

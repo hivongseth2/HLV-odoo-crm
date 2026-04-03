@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Top-level menu -->
+    <menuitem
+        id="menu_product_flow_root"
+        name="Phân tích lưu thông"
+        web_icon="hlv_product_flow_analysis,static/description/icon.png"
+        sequence="45"
+    />
+
+    <!-- Dashboard menu item -->
+    <menuitem
+        id="menu_product_flow_dashboard"
+        name="Dashboard lưu thông"
+        parent="menu_product_flow_root"
+        action="action_product_flow_dashboard"
+        sequence="10"
+    />
+</odoo>
