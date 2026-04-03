@@ -94,6 +94,140 @@
                     </div>
                 </div>
 
+                <!-- ANALYTICS CHARTS -->
+                <div class="pf-charts-section">
+                    <div class="pf-charts-grid">
+                        <!-- Top mua nhiều -->
+                        <div class="pf-chart-card">
+                            <h4 class="pf-chart-title">
+                                <i class="fa fa-arrow-down me-1 text-success"/>Top mua nhiều nhất
+                            </h4>
+                            <div class="pf-hbar-chart">
+                                <t t-foreach="topPurchasedProducts" t-as="item" t-key="item.product_id">
+                                    <div class="pf-hbar-row">
+                                        <div class="pf-hbar-label" t-att-title="item.product_name">
+                                            <span class="pf-hbar-code" t-esc="item.default_code || '?'"/>
+                                            <span class="pf-hbar-name" t-esc="item.product_name"/>
+                                        </div>
+                                        <div class="pf-hbar-track">
+                                            <div class="pf-hbar-fill pf-hbar-incoming"
+                                                 t-att-style="'width:' + getBarWidth(item.incoming_qty, topPurchasedMax)">
+                                                <span class="pf-hbar-val" t-esc="formatNumber(item.incoming_qty)"/>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </t>
+                                <t t-if="topPurchasedProducts.length === 0">
+                                    <div class="pf-chart-empty">Chưa có dữ liệu mua hàng</div>
+                                </t>
+                            </div>
+                        </div>
+
+                        <!-- Top bán chạy -->
+                        <div class="pf-chart-card">
+                            <h4 class="pf-chart-title">
+                                <i class="fa fa-arrow-up me-1 text-danger"/>Top bán chạy nhất
+                            </h4>
+                            <div class="pf-hbar-chart">
+                                <t t-foreach="topSoldProducts" t-as="item" t-key="item.product_id">
+                                    <div class="pf-hbar-row">
+                                        <div class="pf-hbar-label" t-att-title="item.product_name">
+                                            <span class="pf-hbar-code" t-esc="item.default_code || '?'"/>
+                                            <span class="pf-hbar-name" t-esc="item.product_name"/>
+                                        </div>
+                                        <div class="pf-hbar-track">
+                                            <div class="pf-hbar-fill pf-hbar-outgoing"
+                                                 t-att-style="'width:' + getBarWidth(item.outgoing_qty, topSoldMax)">
+                                                <span class="pf-hbar-val" t-esc="formatNumber(item.outgoing_qty)"/>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </t>
+                                <t t-if="topSoldProducts.length === 0">
+                                    <div class="pf-chart-empty">Chưa có dữ liệu bán hàng</div>
+                                </t>
+                            </div>
+                        </div>
+
+                        <!-- Phân bổ tồn kho -->
+                        <div class="pf-chart-card">
+                            <h4 class="pf-chart-title">
+                                <i class="fa fa-pie-chart me-1"/>Phân bổ trạng thái tồn kho
+                            </h4>
+                            <div class="pf-donut-chart">
+                                <div class="pf-donut-bar">
+                                    <div class="pf-donut-seg pf-seg-danger" t-att-style="'width:' + stockDistribution.outOfStock.pct + '%'"
+                                         t-att-title="'Hết hàng: ' + stockDistribution.outOfStock.count"/>
+                                    <div class="pf-donut-seg pf-seg-warning" t-att-style="'width:' + stockDistribution.low.pct + '%'"
+                                         t-att-title="'Sắp hết: ' + stockDistribution.low.count"/>
+                                    <div class="pf-donut-seg pf-seg-ok" t-att-style="'width:' + stockDistribution.healthy.pct + '%'"
+                                         t-att-title="'Bình thường: ' + stockDistribution.healthy.count"/>
+                                    <div class="pf-donut-seg pf-seg-overstock" t-att-style="'width:' + stockDistribution.overstock.pct + '%'"
+                                         t-att-title="'Tồn nhiều: ' + stockDistribution.overstock.count"/>
+                                </div>
+                                <div class="pf-donut-legend">
+                                    <div class="pf-donut-item">
+                                        <span class="pf-donut-color pf-seg-danger"/> Hết hàng
+                                        <strong class="ms-1"><t t-esc="stockDistribution.outOfStock.count"/></strong>
+                                        <span class="pf-donut-pct">(<t t-esc="stockDistribution.outOfStock.pct"/>%)</span>
+                                    </div>
+                                    <div class="pf-donut-item">
+                                        <span class="pf-donut-color pf-seg-warning"/> Sắp hết
+                                        <strong class="ms-1"><t t-esc="stockDistribution.low.count"/></strong>
+                                        <span class="pf-donut-pct">(<t t-esc="stockDistribution.low.pct"/>%)</span>
+                                    </div>
+                                    <div class="pf-donut-item">
+                                        <span class="pf-donut-color pf-seg-ok"/> Bình thường
+                                        <strong class="ms-1"><t t-esc="stockDistribution.healthy.count"/></strong>
+                                        <span class="pf-donut-pct">(<t t-esc="stockDistribution.healthy.pct"/>%)</span>
+                                    </div>
+                                    <div class="pf-donut-item">
+                                        <span class="pf-donut-color pf-seg-overstock"/> Tồn nhiều
+                                        <strong class="ms-1"><t t-esc="stockDistribution.overstock.count"/></strong>
+                                        <span class="pf-donut-pct">(<t t-esc="stockDistribution.overstock.pct"/>%)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Gợi ý mua hàng -->
+                        <div class="pf-chart-card pf-card-recommend">
+                            <h4 class="pf-chart-title">
+                                <i class="fa fa-lightbulb-o me-1 text-warning"/>Gợi ý mua hàng
+                            </h4>
+                            <div class="pf-recommend-list">
+                                <t t-foreach="purchaseRecommendations" t-as="r" t-key="r.product_id">
+                                    <div t-att-class="'pf-recommend-item pf-rec-' + r.urgency">
+                                        <div class="pf-rec-header">
+                                            <span class="pf-rec-name">
+                                                <span class="pf-code me-1" t-esc="r.default_code || '?'"/>
+                                                <a href="#" class="pf-link" t-on-click.prevent="() => this.openProduct(r.product_id)"
+                                                   t-esc="r.product_name"/>
+                                            </span>
+                                            <span t-att-class="'pf-rec-badge pf-status-' + r.urgency">
+                                                <t t-if="r.urgency === 'danger'">Cần mua gấp</t>
+                                                <t t-elif="r.urgency === 'warning'">Nên mua</t>
+                                                <t t-else="">Theo dõi</t>
+                                            </span>
+                                        </div>
+                                        <div class="pf-rec-stats">
+                                            <span>Đã bán: <strong t-esc="formatNumber(r.outgoing_qty)"/></span>
+                                            <span>Tồn kho: <strong t-esc="formatNumber(r.qty_available)"/></span>
+                                            <span>Đề xuất mua: <strong class="pf-rec-suggest" t-esc="formatNumber(r.suggestQty)"/></span>
+                                        </div>
+                                    </div>
+                                </t>
+                                <t t-if="purchaseRecommendations.length === 0">
+                                    <div class="pf-chart-empty">
+                                        <i class="fa fa-check-circle me-1 text-success"/>
+                                        Tồn kho đang ổn, chưa cần mua thêm
+                                    </div>
+                                </t>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- TAB NAVIGATION -->
                 <div class="pf-tabs">
                     <button t-att-class="'pf-tab ' + (state.activeTab === 'products' ? 'active' : '')"
@@ -148,7 +282,6 @@
                                         <th class="pf-th-sortable" t-on-click="() => this.sortProducts('product_name')">
                                             Tên sản phẩm <i t-att-class="getSortIcon('products', 'product_name')"/>
                                         </th>
-                                        <th>Nhóm</th>
                                         <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('incoming_qty')">
                                             SL Mua <i t-att-class="getSortIcon('products', 'incoming_qty')"/>
                                         </th>
@@ -160,6 +293,12 @@
                                         </th>
                                         <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('outgoing_count')">
                                             Lần bán <i t-att-class="getSortIcon('products', 'outgoing_count')"/>
+                                        </th>
+                                        <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('turnover_count')">
+                                            Luân chuyển <i t-att-class="getSortIcon('products', 'turnover_count')"/>
+                                        </th>
+                                        <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('avg_storage_days')">
+                                            TB lưu kho (ngày) <i t-att-class="getSortIcon('products', 'avg_storage_days')"/>
                                         </th>
                                         <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('qty_available')">
                                             Tồn kho <i t-att-class="getSortIcon('products', 'qty_available')"/>
@@ -179,11 +318,19 @@
                                                    t-on-click.prevent="() => this.openProduct(p.product_id)"
                                                    t-esc="p.product_name"/>
                                             </td>
-                                            <td t-esc="p.categ_name"/>
                                             <td class="pf-td-num pf-incoming" t-esc="formatNumber(p.incoming_qty)"/>
-                                            <td class="pf-td-num pf-incoming-count" t-esc="p.incoming_count"/>
+                                            <td t-att-class="'pf-td-num pf-incoming-count ' + getHeatClass(p.incoming_count, 'incoming_count')" t-esc="p.incoming_count"/>
                                             <td class="pf-td-num pf-outgoing" t-esc="formatNumber(p.outgoing_qty)"/>
-                                            <td class="pf-td-num pf-outgoing-count" t-esc="p.outgoing_count"/>
+                                            <td t-att-class="'pf-td-num pf-outgoing-count ' + getHeatClass(p.outgoing_count, 'outgoing_count')" t-esc="p.outgoing_count"/>
+                                            <td class="pf-td-num pf-turnover" t-esc="p.turnover_count"/>
+                                            <td class="pf-td-num">
+                                                <t t-if="p.avg_storage_days > 0">
+                                                    <span t-att-class="p.avg_storage_days > 30 ? 'pf-storage-slow' : (p.avg_storage_days > 14 ? 'pf-storage-medium' : 'pf-storage-fast')">
+                                                        <t t-esc="p.avg_storage_days"/> ngày
+                                                    </span>
+                                                </t>
+                                                <t t-else="">-</t>
+                                            </td>
                                             <td class="pf-td-num" t-esc="formatNumber(p.qty_available)"/>
                                             <td>
                                                 <button class="pf-btn-trend" title="Xem trend 6 tháng"
@@ -195,7 +342,7 @@
                                     </t>
                                     <t t-if="filteredProducts.length === 0">
                                         <tr>
-                                            <td colspan="10" class="pf-empty">Không có dữ liệu trong kỳ này</td>
+                                            <td colspan="11" class="pf-empty">Không có dữ liệu trong kỳ này</td>
                                         </tr>
                                     </t>
                                 </tbody>
