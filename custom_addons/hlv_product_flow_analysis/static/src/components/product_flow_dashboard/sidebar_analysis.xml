@@ -243,6 +243,22 @@
                     </t>
                 </div>
 
+                <!-- Scatter limit control -->
+                <div class="pf-chart-freq-toggle">
+                    <label class="me-2" style="font-size:12px;">Scatter: hiển thị</label>
+                    <select class="pf-count-input" style="width:auto;display:inline-block;padding:2px 6px;font-size:12px;"
+                            t-on-change="onScatterLimitChange">
+                        <option value="0" t-att-selected="state.scatterLimit === 0">Tất cả SP</option>
+                        <option value="30" t-att-selected="state.scatterLimit === 30">Top 30</option>
+                        <option value="50" t-att-selected="state.scatterLimit === 50">Top 50</option>
+                        <option value="100" t-att-selected="state.scatterLimit === 100">Top 100</option>
+                        <option value="200" t-att-selected="state.scatterLimit === 200">Top 200</option>
+                    </select>
+                    <span style="font-size:11px;color:#868e96;margin-left:6px;">
+                        (<t t-esc="scatterPlotData.points.length"/> chấm trên biểu đồ)
+                    </span>
+                </div>
+
                 <!-- 4. Scatter Plot: Mua vs Bán (số lượng) -->
                 <div class="pf-sc-card">
                     <h4 class="pf-sc-title">

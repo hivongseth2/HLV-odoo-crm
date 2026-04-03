@@ -57,8 +57,10 @@ export class ProductFlowDashboard extends Component {
             chartsActiveSection: 'products',
             planningMinFrequency: 3,
             planningShowAll: false,
+            planningStockOnly: true,
             topN: 10,
             chartFreqOnly: false,
+            scatterLimit: 0,
             trendMonthly: [],
             // Product detail modal
             showProductDetail: false,
@@ -187,8 +189,10 @@ export class ProductFlowDashboard extends Component {
     onMinCountChange(ev) { this.state.productMinCount = parseInt(ev.target.value) || 0; this.state.productPage = 1; }
     onPlanningMinFreqChange(ev) { this.state.planningMinFrequency = parseInt(ev.target.value) || 3; this.state.planningPage = 1; }
     togglePlanningShowAll() { this.state.planningShowAll = !this.state.planningShowAll; this.state.planningPage = 1; }
+    togglePlanningStockOnly() { this.state.planningStockOnly = !this.state.planningStockOnly; this.state.planningPage = 1; }
     onTopNChange(ev) { this.state.topN = parseInt(ev.target.value) || 10; }
     toggleChartFreqOnly() { this.state.chartFreqOnly = !this.state.chartFreqOnly; }
+    onScatterLimitChange(ev) { this.state.scatterLimit = parseInt(ev.target.value) || 0; }
 
     sortProducts(field) {
         if (this.state.productSortField === field) { this.state.productSortAsc = !this.state.productSortAsc; }

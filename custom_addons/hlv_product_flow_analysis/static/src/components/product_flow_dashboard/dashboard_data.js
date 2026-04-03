@@ -63,6 +63,10 @@ export const dashboardDataMixins = {
 
     get allFilteredPlanning() {
         let items = this.state.planning;
+        // Filter stock-only: default shows only products with qty_available > 0
+        if (this.state.planningStockOnly) {
+            items = items.filter(p => (p.qty_available || 0) > 0);
+        }
         const q = this.state.planningSearch;
         if (q) {
             items = items.filter(p =>

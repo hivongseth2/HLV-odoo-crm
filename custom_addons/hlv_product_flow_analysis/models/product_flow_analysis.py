@@ -378,7 +378,7 @@ class ProductFlowAnalysis(models.AbstractModel):
     @api.model
     def get_inventory_planning_data(self, period='month', date_from=False, date_to=False, warehouse_id=False, min_frequency=3):
         """Gợi ý tồn kho tối thiểu dựa trên tần suất lưu thông.
-        Chỉ ưu tiên sản phẩm có tần suất mua/bán >= min_frequency.
+        Trả về TẤT CẢ sản phẩm storable (không chỉ sản phẩm có giao dịch).
         """
         date_from, date_to = self._compute_date_range(period, date_from, date_to)
 
@@ -406,38 +406,38 @@ class ProductFlowAnalysis(models.AbstractModel):
             incoming_count_map[pid] = incoming_count_map.get(pid, 0) + 1
             incoming_qty_map[pid] = incoming_qty_map.get(pid, 0) + move.product_uom_qty
 
-        product_plan = {}
+        # Track outgoing counts per product
+        outgoing_count_map = {}
+        outgoing_qty_map = {}
         for move in outgoing_moves:
-            prod = move.product_id
-            if prod.id not in product_plan:
-                product_plan[prod.id] = {
-                    'product_id': prod.id,
-                    'product_name': prod.display_name,
-                    'default_code': prod.default_code or '',
-                    'categ_name': prod.categ_id.name or '',
-                    'total_outgoing': 0.0,
-                    'total_incoming': incoming_qty_map.get(prod.id, 0),
-                    'outgoing_count': 0,
-                    'incoming_count': incoming_count_map.get(prod.id, 0),
-                    'qty_available': prod.qty_available,
-                }
-            product_plan[prod.id]['total_outgoing'] += move.product_uom_qty
-            # Chỉ đếm lần bán nếu gắn SO
+            pid = move.product_id.id
+            outgoing_qty_map[pid] = outgoing_qty_map.get(pid, 0) + move.product_uom_qty
             if move.sale_line_id:
-                product_plan[prod.id]['outgoing_count'] += 1
+                outgoing_count_map[pid] = outgoing_count_map.get(pid, 0) + 1
+
+        # Lấy TẤT CẢ sản phẩm storable (product.product)
+        all_products = self.env['product.product'].search([
+            ('type', '!=', 'service'),
+            ('active', '=', True),
+        ])
+
+        lead_time_days = 7
+        safety_days = 3
 
         planning = []
-        for data in product_plan.values():
-            # Tần suất tổng = lần mua + lần bán
-            total_frequency = data['incoming_count'] + data['outgoing_count']
+        for prod in all_products:
+            pid = prod.id
+            total_outgoing = outgoing_qty_map.get(pid, 0)
+            total_incoming = incoming_qty_map.get(pid, 0)
+            outgoing_count = outgoing_count_map.get(pid, 0)
+            incoming_count = incoming_count_map.get(pid, 0)
+            total_frequency = incoming_count + outgoing_count
 
-            avg_daily = data['total_outgoing'] / total_days
-            lead_time_days = 7
-            safety_days = 3
+            avg_daily = total_outgoing / total_days
             min_stock = round(avg_daily * (lead_time_days + safety_days), 2)
             reorder_point = round(avg_daily * lead_time_days, 2)
 
-            days_remaining = round(data['qty_available'] / avg_daily, 1) if avg_daily > 0 else 9999
+            days_remaining = round(prod.qty_available / avg_daily, 1) if avg_daily > 0 else 9999
 
             # Tính priority_score: tần suất cao + tồn kho thấp = ưu tiên cao
             freq_score = min(total_frequency / max(min_frequency, 1), 5)  # cap at 5
@@ -453,7 +453,15 @@ class ProductFlowAnalysis(models.AbstractModel):
                 priority_level = 'low'
 
             planning.append({
-                **data,
+                'product_id': pid,
+                'product_name': prod.display_name,
+                'default_code': prod.default_code or '',
+                'categ_name': prod.categ_id.name or '',
+                'total_outgoing': total_outgoing,
+                'total_incoming': total_incoming,
+                'outgoing_count': outgoing_count,
+                'incoming_count': incoming_count,
+                'qty_available': prod.qty_available,
                 'total_frequency': total_frequency,
                 'avg_daily': round(avg_daily, 2),
                 'min_stock': min_stock,

@@ -162,7 +162,13 @@ export const analysisChartMixins = {
 
     // ========== Scatter Plot: Buy qty (X) vs Sell qty (Y) ==========
     get scatterPlotData() {
-        const products = this._chartFilteredProducts();
+        let products = this._chartFilteredProducts();
+        const limit = this.state.scatterLimit;
+        if (limit > 0) {
+            products = [...products]
+                .sort((a, b) => (b.incoming_qty + b.outgoing_qty) - (a.incoming_qty + a.outgoing_qty))
+                .slice(0, limit);
+        }
         return this._buildScatterData(
             products,
             p => p.incoming_qty,
@@ -173,9 +179,15 @@ export const analysisChartMixins = {
 
     // ========== Scatter Plot: Buy freq (X) vs Sell freq (Y) ==========
     get scatterFreqData() {
-        const products = this._chartFilteredProducts().filter(
+        let products = this._chartFilteredProducts().filter(
             p => (p.incoming_count + p.outgoing_count) > 0
         );
+        const limit = this.state.scatterLimit;
+        if (limit > 0) {
+            products = [...products]
+                .sort((a, b) => (b.incoming_count + b.outgoing_count) - (a.incoming_count + a.outgoing_count))
+                .slice(0, limit);
+        }
         return this._buildScatterData(
             products,
             p => p.incoming_count,
