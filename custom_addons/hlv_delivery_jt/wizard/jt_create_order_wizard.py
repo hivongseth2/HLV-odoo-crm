@@ -663,7 +663,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 'sender_address': s_address,
 
                 'receiver_name': receiver_partner.name or '',
-                'receiver_mobile': (receiver_partner.mobile or receiver_partner.phone or '').replace(' ', '').replace('+84', '0'),
+                'receiver_mobile': (picking.x_studio_sdt_giao_hng or picking.x_studio_st_giao_hng_1 or receiver_partner.mobile or receiver_partner.phone or '').replace(' ', '').replace('+84', '0'),
                 'receiver_prov_id': r_p,
                 'receiver_city_id': r_d,
                 'receiver_area_id': r_w,
