@@ -235,7 +235,32 @@ class GoogleAdsAd(models.Model):
                     self.message_post(body=_("💡 Hệ thống tự chuyển đổi mẫu quảng cáo sang loại 'Tìm kiếm thích ứng (RSA)' để tương thích với chiến dịch."))
         # --- End Auto-Fix ---
 
-        account = self.ad_group_id.campaign_id.account_id
+        # ═══════════════════════════════════════════════════════
+        # CHẶN ĐỒNG BỘ cho các loại QC không hỗ trợ tạo qua API
+        # Chỉ RSA và Demand Gen/Discovery Responsive Ad hỗ trợ tạo
+        # qua AdGroupAdService. Các loại khác (IMAGE, VIDEO, CALL, 
+        # EXPANDED_TEXT, SHOPPING, PMAX) Google quản lý riêng.
+        # ═══════════════════════════════════════════════════════
+        SUPPORTED_CREATE_TYPES = [
+            'RESPONSIVE_SEARCH_AD',
+            'DISCOVERY_RESPONSIVE_AD',
+            'DEMAND_GEN_RESPONSIVE_AD',
+        ]
+        # Re-read type after auto-fix may have changed it
+        current_type = self.type or 'RESPONSIVE_SEARCH_AD'
+        
+        if current_type not in SUPPORTED_CREATE_TYPES:
+            raise UserError(_(
+                "Loại quảng cáo '%s' (%s) hiện không hỗ trợ tạo/đồng bộ thủ công qua API.\n\n"
+                "💡 Chỉ các loại sau được hỗ trợ:\n"
+                "• Tìm Kiếm Thích Ứng (RSA)\n"
+                "• Tạo nhu cầu (Demand Gen)\n"
+                "• Khám phá (Discovery)\n\n"
+                "Các loại quảng cáo khác (Hình ảnh, Video, Cuộc gọi, Mua sắm...) "
+                "được Google tự động quản lý hoặc cần tạo trực tiếp trên giao diện Google Ads."
+            ) % (self.type_id.name, current_type))
+
+        account = cam.account_id
         if account.is_demo:
             self.google_ad_id = f"DEMO_AD_SYNC_{self.id}"
             self.state = 'synced'
@@ -257,8 +282,8 @@ class GoogleAdsAd(models.Model):
         # (Thiếu headline/description → Google báo IMMUTABLE_FIELD
         #  khó hiểu, thực chất là ad content rỗng)
         # ═══════════════════════════════════════════════════════
-        current_type = self.type or 'RESPONSIVE_SEARCH_AD'
         if current_type == 'RESPONSIVE_SEARCH_AD':
+
             if len(headlines) < 3:
                 raise UserError(_(
                     "Quảng cáo Tìm kiếm Thích ứng (RSA) yêu cầu TỐI THIỂU 3 tiêu đề.\n"
@@ -287,11 +312,11 @@ class GoogleAdsAd(models.Model):
         from ..services.google_ads_mutate import GoogleAdsMutateService
 
         vals = {
-            'type': self.type,
+            'type': current_type,
             'headlines': headlines,
             'descriptions': descriptions,
             'final_url': final_url,
-            'channel_type': self.ad_group_id.campaign_id.channel_type, # Quan trọng để định hướng đúng field API
+            'channel_type': cam.channel_type,
         }
 
 
