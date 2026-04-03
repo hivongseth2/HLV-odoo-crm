@@ -135,6 +135,10 @@
                                         t-on-click="() => this.setChartsSection('trend')">
                                     <i class="fa fa-line-chart me-1"/>Biến động
                                 </button>
+                                <button t-att-class="'pf-stab ' + (state.chartsActiveSection === 'help' ? 'active' : '')"
+                                        t-on-click="() => this.setChartsSection('help')">
+                                    <i class="fa fa-question-circle me-1"/>Hướng dẫn
+                                </button>
                                 <div class="pf-topn-select">
                                     <label>Top</label>
                                     <select t-on-change="(ev) => this.onTopNChange(ev)">
@@ -162,6 +166,9 @@
                                 </t>
                                 <t t-if="state.chartsActiveSection === 'trend'">
                                     <t t-call="hlv_product_flow_analysis.SidebarTrend"/>
+                                </t>
+                                <t t-if="state.chartsActiveSection === 'help'">
+                                    <t t-call="hlv_product_flow_analysis.SidebarHelp"/>
                                 </t>
                             </div>
                         </div>

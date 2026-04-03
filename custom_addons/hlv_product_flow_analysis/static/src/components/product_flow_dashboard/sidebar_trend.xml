@@ -1,39 +1,45 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="hlv_product_flow_analysis.SidebarTrend">
-                <!-- 1. SL Mua vs Bán theo tháng -->
+
+                <!-- 1. Biến động SL Mua / Bán theo tháng (bar chart + % thay đổi) -->
                 <div class="pf-sc-card">
                     <h4 class="pf-sc-title">
-                        <i class="fa fa-line-chart me-1" style="color:#1971c2;"/>Biến động SL mua bán
+                        <i class="fa fa-line-chart me-1" style="color:#1971c2;"/>Biến động SL mua bán (theo tháng)
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>So sánh SL mua/bán 6 tháng gần nhất. Xanh = Mua, Hồng = Bán.
+                        <i class="fa fa-question-circle me-1"/>Biểu đồ cột SL mua/bán 6 tháng gần nhất. Mũi tên = % thay đổi so tháng trước.
                     </div>
                     <t t-if="trendMonthlyData.length > 0">
-                        <div class="pf-trend-chart">
-                            <t t-foreach="trendMonthlyData" t-as="m" t-key="m.month">
-                                <div class="pf-trend-row">
-                                    <div class="pf-trend-month" t-esc="m.month_label"/>
-                                    <div class="pf-trend-bars">
-                                        <div class="pf-trend-bar-wrap">
-                                            <div class="pf-trend-bar pf-trend-buy"
-                                                 t-att-style="'width:' + getBarWidth(m.buy_qty, trendMaxQty)"
+                        <div class="pf-trend-vchart">
+                            <div class="pf-trend-vchart-area">
+                                <t t-foreach="trendMonthlyData" t-as="m" t-key="m.month">
+                                    <div class="pf-trend-vcol">
+                                        <div class="pf-trend-vbars">
+                                            <div class="pf-trend-vbar pf-trend-buy"
+                                                 t-att-style="'height:' + getBarWidth(m.buy_qty, trendMaxQty)"
                                                  t-att-title="'Mua: ' + formatNumber(m.buy_qty)">
-                                                <span class="pf-trend-val" t-if="m.buy_qty > 0"
+                                                <span class="pf-trend-vval" t-if="m.buy_qty > 0"
                                                       t-esc="formatNumber(m.buy_qty)"/>
                                             </div>
-                                        </div>
-                                        <div class="pf-trend-bar-wrap">
-                                            <div class="pf-trend-bar pf-trend-sell"
-                                                 t-att-style="'width:' + getBarWidth(m.sell_qty, trendMaxQty)"
+                                            <div class="pf-trend-vbar pf-trend-sell"
+                                                 t-att-style="'height:' + getBarWidth(m.sell_qty, trendMaxQty)"
                                                  t-att-title="'Bán: ' + formatNumber(m.sell_qty)">
-                                                <span class="pf-trend-val" t-if="m.sell_qty > 0"
+                                                <span class="pf-trend-vval" t-if="m.sell_qty > 0"
                                                       t-esc="formatNumber(m.sell_qty)"/>
                                             </div>
                                         </div>
+                                        <div class="pf-trend-vlabel" t-esc="m.month_label"/>
+                                        <t t-set="chg" t-value="trendChanges[m_index]"/>
+                                        <div class="pf-trend-vchg" t-if="chg and chg.buyQtyChg !== null">
+                                            <span t-att-class="getTrendChangeClass(chg.buyQtyChg)">
+                                                <i t-att-class="getTrendChangeIcon(chg.buyQtyChg)"/>
+                                                <t t-esc="Math.abs(chg.buyQtyChg)"/>%
+                                            </span>
+                                        </div>
                                     </div>
-                                </div>
-                            </t>
+                                </t>
+                            </div>
                             <div class="pf-dual-legend">
                                 <span><span class="pf-dual-leg-dot pf-trend-buy"/> Mua</span>
                                 <span><span class="pf-dual-leg-dot pf-trend-sell"/> Bán</span>
@@ -45,53 +51,7 @@
                     </t>
                 </div>
 
-                <!-- 2. Số đơn PO / SO theo tháng -->
-                <div class="pf-sc-card">
-                    <h4 class="pf-sc-title">
-                        <i class="fa fa-file-text-o me-1" style="color:#e67700;"/>Số đơn mua / bán
-                    </h4>
-                    <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Số đơn mua hàng (PO) và đơn bán hàng (SO) mỗi tháng.
-                    </div>
-                    <t t-if="trendMonthlyData.length > 0">
-                        <div class="pf-trend-chart">
-                            <t t-foreach="trendMonthlyData" t-as="m" t-key="m.month">
-                                <div class="pf-trend-row">
-                                    <div class="pf-trend-month" t-esc="m.month_label"/>
-                                    <div class="pf-trend-bars">
-                                        <div class="pf-trend-bar-wrap">
-                                            <div class="pf-trend-bar pf-trend-buy"
-                                                 t-att-style="'width:' + getBarWidth(m.buy_count, trendMaxCount)"
-                                                 t-att-title="'PO: ' + m.buy_count">
-                                                <span class="pf-trend-val" t-if="m.buy_count > 0">
-                                                    <t t-esc="m.buy_count"/> PO
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div class="pf-trend-bar-wrap">
-                                            <div class="pf-trend-bar pf-trend-sell"
-                                                 t-att-style="'width:' + getBarWidth(m.sell_count, trendMaxCount)"
-                                                 t-att-title="'SO: ' + m.sell_count">
-                                                <span class="pf-trend-val" t-if="m.sell_count > 0">
-                                                    <t t-esc="m.sell_count"/> SO
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </t>
-                            <div class="pf-dual-legend">
-                                <span><span class="pf-dual-leg-dot pf-trend-buy"/> Đơn mua</span>
-                                <span><span class="pf-dual-leg-dot pf-trend-sell"/> Đơn bán</span>
-                            </div>
-                        </div>
-                    </t>
-                    <t t-else="">
-                        <div class="pf-chart-empty">Chưa có dữ liệu</div>
-                    </t>
-                </div>
-
-                <!-- 3. So với tháng trước -->
+                <!-- 2. So với tháng trước (snapshot) -->
                 <div class="pf-sc-card">
                     <h4 class="pf-sc-title">
                         <i class="fa fa-exchange me-1" style="color:#0ca678;"/>So với tháng trước
@@ -148,39 +108,181 @@
                     </t>
                 </div>
 
-                <!-- 4. Số loại SP giao dịch -->
+                <!-- 3. Số đơn PO / SO theo tháng -->
                 <div class="pf-sc-card">
                     <h4 class="pf-sc-title">
-                        <i class="fa fa-cubes me-1" style="color:#5f3dc4;"/>Số loại SP giao dịch
+                        <i class="fa fa-file-text-o me-1" style="color:#e67700;"/>Số đơn mua / bán (theo tháng)
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Số loại SP (SKU) được mua/bán mỗi tháng.
+                        <i class="fa fa-question-circle me-1"/>Số đơn mua hàng (PO) và đơn bán hàng (SO) mỗi tháng.
                     </div>
                     <t t-if="trendMonthlyData.length > 0">
-                        <div class="pf-trend-chart">
-                            <t t-foreach="trendMonthlyData" t-as="m" t-key="m.month">
-                                <div class="pf-trend-row">
-                                    <div class="pf-trend-month" t-esc="m.month_label"/>
-                                    <div class="pf-trend-bars">
-                                        <div class="pf-trend-bar-wrap">
-                                            <div class="pf-trend-bar pf-trend-buy"
-                                                 t-att-style="'width:' + getBarWidth(m.buy_products, trendMaxProducts)">
-                                                <span class="pf-trend-val" t-if="m.buy_products > 0">
-                                                    <t t-esc="m.buy_products"/> SP
+                        <div class="pf-trend-vchart">
+                            <div class="pf-trend-vchart-area">
+                                <t t-foreach="trendMonthlyData" t-as="m" t-key="m.month + '_cnt'">
+                                    <div class="pf-trend-vcol">
+                                        <div class="pf-trend-vbars">
+                                            <div class="pf-trend-vbar pf-trend-buy"
+                                                 t-att-style="'height:' + getBarWidth(m.buy_count, trendMaxCount)"
+                                                 t-att-title="'PO: ' + m.buy_count">
+                                                <span class="pf-trend-vval" t-if="m.buy_count > 0">
+                                                    <t t-esc="m.buy_count"/>
+                                                </span>
+                                            </div>
+                                            <div class="pf-trend-vbar pf-trend-sell"
+                                                 t-att-style="'height:' + getBarWidth(m.sell_count, trendMaxCount)"
+                                                 t-att-title="'SO: ' + m.sell_count">
+                                                <span class="pf-trend-vval" t-if="m.sell_count > 0">
+                                                    <t t-esc="m.sell_count"/>
                                                 </span>
                                             </div>
                                         </div>
-                                        <div class="pf-trend-bar-wrap">
-                                            <div class="pf-trend-bar pf-trend-sell"
-                                                 t-att-style="'width:' + getBarWidth(m.sell_products, trendMaxProducts)">
-                                                <span class="pf-trend-val" t-if="m.sell_products > 0">
-                                                    <t t-esc="m.sell_products"/> SP
-                                                </span>
-                                            </div>
-                                        </div>
+                                        <div class="pf-trend-vlabel" t-esc="m.month_label"/>
                                     </div>
-                                </div>
-                            </t>
+                                </t>
+                            </div>
+                            <div class="pf-dual-legend">
+                                <span><span class="pf-dual-leg-dot pf-trend-buy"/> Đơn mua</span>
+                                <span><span class="pf-dual-leg-dot pf-trend-sell"/> Đơn bán</span>
+                            </div>
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <div class="pf-chart-empty">Chưa có dữ liệu</div>
+                    </t>
+                </div>
+
+                <!-- 4. Biến động SL theo quý -->
+                <div class="pf-sc-card">
+                    <h4 class="pf-sc-title">
+                        <i class="fa fa-calendar me-1" style="color:#5f3dc4;"/>Biến động theo quý
+                    </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Tổng hợp SL mua/bán theo quý. Giúp thấy xu hướng dài hạn.
+                    </div>
+                    <t t-if="trendQuarterlyData.length > 0">
+                        <div class="pf-trend-vchart">
+                            <div class="pf-trend-vchart-area">
+                                <t t-foreach="trendQuarterlyData" t-as="q" t-key="q.quarter">
+                                    <div class="pf-trend-vcol pf-trend-vcol-q">
+                                        <div class="pf-trend-vbars">
+                                            <div class="pf-trend-vbar pf-trend-buy"
+                                                 t-att-style="'height:' + getBarWidth(q.buy_qty, trendMaxQtyQ)"
+                                                 t-att-title="'Mua: ' + formatNumber(q.buy_qty)">
+                                                <span class="pf-trend-vval" t-if="q.buy_qty > 0"
+                                                      t-esc="formatNumber(q.buy_qty)"/>
+                                            </div>
+                                            <div class="pf-trend-vbar pf-trend-sell"
+                                                 t-att-style="'height:' + getBarWidth(q.sell_qty, trendMaxQtyQ)"
+                                                 t-att-title="'Bán: ' + formatNumber(q.sell_qty)">
+                                                <span class="pf-trend-vval" t-if="q.sell_qty > 0"
+                                                      t-esc="formatNumber(q.sell_qty)"/>
+                                            </div>
+                                        </div>
+                                        <div class="pf-trend-vlabel" t-esc="q.quarter"/>
+                                    </div>
+                                </t>
+                            </div>
+                            <div class="pf-dual-legend">
+                                <span><span class="pf-dual-leg-dot pf-trend-buy"/> Mua</span>
+                                <span><span class="pf-dual-leg-dot pf-trend-sell"/> Bán</span>
+                            </div>
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <div class="pf-chart-empty">Chưa có dữ liệu</div>
+                    </t>
+                </div>
+
+                <!-- 5. Bảng biến động chi tiết -->
+                <div class="pf-sc-card">
+                    <h4 class="pf-sc-title">
+                        <i class="fa fa-table me-1" style="color:#e64980;"/>Bảng biến động chi tiết
+                    </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Bảng số liệu + % thay đổi so tháng trước. Xanh = tăng, đỏ = giảm.
+                    </div>
+                    <t t-if="trendMonthlyData.length > 0">
+                        <div class="pf-trend-table-wrap">
+                            <table class="pf-trend-table">
+                                <thead>
+                                    <tr>
+                                        <th>Tháng</th>
+                                        <th>SL Mua</th>
+                                        <th>%</th>
+                                        <th>SL Bán</th>
+                                        <th>%</th>
+                                        <th>Đơn PO</th>
+                                        <th>Đơn SO</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="trendMonthlyData" t-as="m" t-key="m.month + '_tbl'">
+                                        <t t-set="chg" t-value="trendChanges[m_index]"/>
+                                        <tr>
+                                            <td class="pf-trend-tbl-month" t-esc="m.month_label"/>
+                                            <td class="pf-trend-tbl-num" t-esc="formatNumber(m.buy_qty)"/>
+                                            <td class="pf-trend-tbl-chg">
+                                                <span t-if="chg and chg.buyQtyChg !== null"
+                                                      t-att-class="getTrendChangeClass(chg.buyQtyChg)">
+                                                    <i t-att-class="getTrendChangeIcon(chg.buyQtyChg)"/>
+                                                    <t t-esc="Math.abs(chg.buyQtyChg)"/>%
+                                                </span>
+                                                <span t-else="" class="pf-chg-flat">-</span>
+                                            </td>
+                                            <td class="pf-trend-tbl-num" t-esc="formatNumber(m.sell_qty)"/>
+                                            <td class="pf-trend-tbl-chg">
+                                                <span t-if="chg and chg.sellQtyChg !== null"
+                                                      t-att-class="getTrendChangeClass(chg.sellQtyChg)">
+                                                    <i t-att-class="getTrendChangeIcon(chg.sellQtyChg)"/>
+                                                    <t t-esc="Math.abs(chg.sellQtyChg)"/>%
+                                                </span>
+                                                <span t-else="" class="pf-chg-flat">-</span>
+                                            </td>
+                                            <td class="pf-trend-tbl-num" t-esc="m.buy_count"/>
+                                            <td class="pf-trend-tbl-num" t-esc="m.sell_count"/>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <div class="pf-chart-empty">Chưa có dữ liệu</div>
+                    </t>
+                </div>
+
+                <!-- 6. Số loại SP giao dịch -->
+                <div class="pf-sc-card">
+                    <h4 class="pf-sc-title">
+                        <i class="fa fa-cubes me-1" style="color:#5f3dc4;"/>Số loại SP giao dịch (theo tháng)
+                    </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Số loại SP (SKU) được mua/bán mỗi tháng. Tăng = mở rộng danh mục.
+                    </div>
+                    <t t-if="trendMonthlyData.length > 0">
+                        <div class="pf-trend-vchart">
+                            <div class="pf-trend-vchart-area">
+                                <t t-foreach="trendMonthlyData" t-as="m" t-key="m.month + '_prod'">
+                                    <div class="pf-trend-vcol">
+                                        <div class="pf-trend-vbars">
+                                            <div class="pf-trend-vbar pf-trend-buy"
+                                                 t-att-style="'height:' + getBarWidth(m.buy_products, trendMaxProducts)">
+                                                <span class="pf-trend-vval" t-if="m.buy_products > 0">
+                                                    <t t-esc="m.buy_products"/>
+                                                </span>
+                                            </div>
+                                            <div class="pf-trend-vbar pf-trend-sell"
+                                                 t-att-style="'height:' + getBarWidth(m.sell_products, trendMaxProducts)">
+                                                <span class="pf-trend-vval" t-if="m.sell_products > 0">
+                                                    <t t-esc="m.sell_products"/>
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="pf-trend-vlabel" t-esc="m.month_label"/>
+                                    </div>
+                                </t>
+                            </div>
                             <div class="pf-dual-legend">
                                 <span><span class="pf-dual-leg-dot pf-trend-buy"/> SP mua</span>
                                 <span><span class="pf-dual-leg-dot pf-trend-sell"/> SP bán</span>

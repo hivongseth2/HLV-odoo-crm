@@ -81,7 +81,10 @@
                                                 <t t-esc="p.avg_storage_days"/> ngày
                                             </span>
                                         </t>
-                                        <t t-else="">-</t>
+                                        <t t-else="">
+                                            <span class="pf-storage-na"
+                                                  title="Không đủ dữ liệu nhập-xuất trong kỳ để tính (SP chỉ có xuất hoặc chỉ có nhập nội bộ)">-</span>
+                                        </t>
                                     </td>
                                     <td class="pf-td-num" t-esc="formatNumber(p.qty_available)"/>
                                     <td>

@@ -82,7 +82,10 @@
                                                     <span t-if="sp.po_names and sp.po_names.length" class="pf-sp-doc-group">
                                                         <i class="fa fa-file-text-o me-1 text-primary"/>
                                                         <t t-foreach="sp.po_names" t-as="po" t-key="po">
-                                                            <span class="pf-doc-tag pf-po-tag" t-esc="po"/>
+                                                            <span t-att-class="'pf-doc-tag ' + (sp.pending_po_names and sp.pending_po_names.includes(po) ? 'pf-po-pending' : 'pf-po-tag')"
+                                                                  t-esc="po"/>
+                                                            <span t-if="sp.pending_po_names and sp.pending_po_names.includes(po)"
+                                                                  class="pf-badge-pending">chưa nhập</span>
                                                         </t>
                                                     </span>
                                                     <span t-if="sp.picking_names and sp.picking_names.length" class="pf-sp-doc-group">

@@ -162,14 +162,15 @@ export const productChartMixins = {
                 const sellQty = p.outgoing_qty || 0;
                 const stock = p.qty_available || 0;
                 // Tỷ lệ tồn kho / SL bán: stock đủ bao nhiêu lần bán
-                const stockCover = sellQty > 0 ? Math.round(stock / sellQty * 100) / 100 : (stock > 0 ? 99 : 0);
+                const stockCover = sellQty > 0 ? Math.round(stock / sellQty * 100) / 100 : -1;
+                const stockCoverLabel = stockCover < 0 ? 'Không bán' : ('×' + stockCover);
                 // Net need = SL bán - SL mua - Tồn kho
                 const netNeed = sellQty - buyQty - stock;
                 let optType;
-                if (sellFreq >= 2 && netNeed > 0 && stockCover < 0.5) optType = 'underBuy';
-                else if (buyQty > sellQty && stock > sellQty * 2) optType = 'overBuy';
+                if (sellFreq >= 2 && netNeed > 0 && stockCover >= 0 && stockCover < 0.5) optType = 'underBuy';
+                else if (buyQty > 0 && sellQty > 0 && stock > sellQty * 2) optType = 'overBuy';
                 else optType = 'balanced';
-                return { ...p, buyFreq, sellFreq, buyQty, sellQty, stock, stockCover, netNeed, optType };
+                return { ...p, buyFreq, sellFreq, buyQty, sellQty, stock, stockCover, stockCoverLabel, netNeed, optType };
             });
         const underBuy = items.filter(i => i.optType === 'underBuy')
             .sort((a, b) => b.netNeed - a.netNeed).slice(0, n);

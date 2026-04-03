@@ -29,6 +29,7 @@
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar_charts_ext.scss",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar_correlation.scss",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar_trend.scss",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar_help.scss",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/drilldown.scss",
             # XML templates
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/product_flow_dashboard.xml",
@@ -37,6 +38,7 @@
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar_analysis.xml",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar_correlation.xml",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar_trend.xml",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/sidebar_help.xml",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/content_products.xml",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/content_suppliers.xml",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/content_planning.xml",

@@ -271,6 +271,7 @@
 .pf-storage-fast { color: #28a745; font-weight: 600; }
 .pf-storage-medium { color: #e67700; font-weight: 600; }
 .pf-storage-slow { color: #dc3545; font-weight: 600; }
+.pf-storage-na { color: #adb5bd; cursor: help; }
 
 .pf-code {
     font-family: 'Consolas', 'Monaco', monospace;
@@ -351,6 +352,23 @@
 .pf-receipt-tag {
     background: #d3f9d8;
     color: #2b8a3e;
+}
+
+.pf-po-pending {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px dashed #ffc107;
+}
+
+.pf-badge-pending {
+    font-size: 9px;
+    padding: 0 4px;
+    border-radius: 3px;
+    background: #f44336;
+    color: #fff;
+    font-weight: 700;
+    margin-left: -2px;
+    vertical-align: middle;
 }
 
 .pf-row-detail {

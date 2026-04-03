@@ -1,67 +1,98 @@
 /* ===== Trend Analysis Styles ===== */
 
-.pf-trend-chart {
+/* Vertical column chart */
+.pf-trend-vchart {
     padding: 4px 0;
 }
 
-.pf-trend-row {
+.pf-trend-vchart-area {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
+    align-items: flex-end;
+    gap: 6px;
+    min-height: 140px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #e9ecef;
 }
 
-.pf-trend-month {
-    width: 40px;
-    min-width: 40px;
-    font-size: 11px;
-    font-weight: 700;
-    color: #495057;
-    text-align: right;
-}
-
-.pf-trend-bars {
+.pf-trend-vcol {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 2px;
-}
-
-.pf-trend-bar-wrap {
-    height: 14px;
-    background: #f1f3f5;
-    border-radius: 3px;
-    position: relative;
-}
-
-.pf-trend-bar {
-    height: 100%;
-    border-radius: 3px;
-    display: flex;
     align-items: center;
+    gap: 2px;
+    min-width: 0;
+}
+
+.pf-trend-vcol-q {
+    min-width: 60px;
+}
+
+.pf-trend-vbars {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 120px;
+    width: 100%;
+    justify-content: center;
+}
+
+.pf-trend-vbar {
+    width: 45%;
+    max-width: 24px;
+    border-radius: 3px 3px 0 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
     position: relative;
-    transition: width 0.4s ease;
-    min-width: 2px;
+    transition: height 0.4s ease;
+    min-height: 2px;
 }
 
-.pf-trend-buy {
-    background: linear-gradient(90deg, #74c0fc, #339af0);
-}
-
-.pf-trend-sell {
-    background: linear-gradient(90deg, #f783ac, #f06595);
-}
-
-.pf-trend-val {
-    font-size: 9px;
+.pf-trend-vval {
+    font-size: 8px;
     font-weight: 700;
     color: #333;
     text-shadow: 0 0 3px #fff, 0 0 5px #fff;
     white-space: nowrap;
     position: absolute;
-    right: 4px;
-    top: 50%;
-    transform: translateY(-50%);
+    top: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.pf-trend-vlabel {
+    font-size: 10px;
+    font-weight: 700;
+    color: #495057;
+    text-align: center;
+    margin-top: 4px;
+}
+
+.pf-trend-vchg {
+    font-size: 9px;
+    font-weight: 700;
+    white-space: nowrap;
+    margin-top: 1px;
+}
+
+.pf-chg-up {
+    color: #2b8a3e;
+}
+
+.pf-chg-down {
+    color: #e03131;
+}
+
+.pf-chg-flat {
+    color: #adb5bd;
+}
+
+.pf-trend-buy {
+    background: linear-gradient(180deg, #339af0, #74c0fc);
+}
+
+.pf-trend-sell {
+    background: linear-gradient(180deg, #f06595, #f783ac);
 }
 
 /* Compare month-over-month */
@@ -107,4 +138,47 @@
     margin-left: auto;
     font-weight: 700;
     font-size: 12px;
+}
+
+/* Detail table */
+.pf-trend-table-wrap {
+    overflow-x: auto;
+}
+
+.pf-trend-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+
+    th {
+        background: #f1f3f5;
+        padding: 5px 6px;
+        text-align: center;
+        font-weight: 600;
+        color: #495057;
+        border: 1px solid #e9ecef;
+        font-size: 10px;
+    }
+
+    td {
+        padding: 4px 6px;
+        text-align: center;
+        border: 1px solid #e9ecef;
+    }
+}
+
+.pf-trend-tbl-month {
+    font-weight: 700;
+    color: #495057;
+    text-align: left !important;
+}
+
+.pf-trend-tbl-num {
+    font-weight: 600;
+    color: #212529;
+}
+
+.pf-trend-tbl-chg {
+    font-weight: 700;
+    font-size: 10px;
 }

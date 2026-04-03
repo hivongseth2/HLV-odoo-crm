@@ -128,29 +128,22 @@ class ProductFlowAnalysis(models.AbstractModel):
 
     @api.model
     def get_supplier_flow_data(self, period='month', date_from=False, date_to=False, warehouse_id=False):
-        """Lấy dữ liệu phân tích nhà cung cấp (chỉ từ đơn mua hàng, loại trừ trả hàng khách)."""
+        """Lấy dữ liệu nhà cung cấp từ đơn mua hàng (PO), bao gồm cả PO chưa nhập kho."""
         date_from, date_to = self._compute_date_range(period, date_from, date_to)
 
-        domain = [
-            ('state', '=', 'done'),
-            ('date', '>=', fields.Datetime.to_string(date_from)),
-            ('date', '<=', fields.Datetime.to_string(date_to)),
-            ('picking_type_id.code', '=', 'incoming'),
-            ('purchase_line_id', '!=', False),  # Chỉ lấy moves từ đơn mua hàng
+        po_domain = [
+            ('date_order', '>=', fields.Datetime.to_string(date_from)),
+            ('date_order', '<=', fields.Datetime.to_string(date_to)),
+            ('state', 'in', ('purchase', 'done')),
         ]
         if warehouse_id:
-            domain.append(('warehouse_id', '=', warehouse_id))
+            po_domain.append(('picking_type_id.warehouse_id', '=', warehouse_id))
 
-        moves = self.env['stock.move'].search(domain)
+        orders = self.env['purchase.order'].search(po_domain)
 
         supplier_data = {}
-        for move in moves:
-            # Ưu tiên lấy partner từ purchase order, fallback picking partner
-            partner = False
-            if move.purchase_line_id and move.purchase_line_id.order_id:
-                partner = move.purchase_line_id.order_id.partner_id
-            if not partner:
-                partner = move.picking_id.partner_id if move.picking_id else False
+        for order in orders:
+            partner = order.partner_id
             if not partner:
                 continue
 
@@ -163,47 +156,60 @@ class ProductFlowAnalysis(models.AbstractModel):
                     'move_count': 0,
                     'product_count': 0,
                     'products': {},
-                    '_po_ids': set(),  # Track unique PO ids
+                    '_po_ids': set(),
                 }
 
-            prod = move.product_id
-            qty = move.product_uom_qty
-            price = move.price_unit if move.price_unit else 0.0
+            supplier_data[partner.id]['_po_ids'].add(order.id)
 
-            supplier_data[partner.id]['total_qty'] += qty
-            supplier_data[partner.id]['total_amount'] += qty * price
-            # Đếm số đơn mua hàng (PO) thay vì phiếu nhập kho
-            if move.purchase_line_id and move.purchase_line_id.order_id:
-                supplier_data[partner.id]['_po_ids'].add(move.purchase_line_id.order_id.id)
+            for line in order.order_line:
+                if line.display_type:
+                    continue
+                prod = line.product_id
+                if not prod or prod.type == 'service':
+                    continue
 
-            if prod.id not in supplier_data[partner.id]['products']:
-                supplier_data[partner.id]['products'][prod.id] = {
-                    'product_id': prod.id,
-                    'product_name': prod.display_name,
-                    'default_code': prod.default_code or '',
-                    'qty': 0.0,
-                    'amount': 0.0,
-                    'po_names': set(),
-                    'picking_names': set(),
-                }
-            supplier_data[partner.id]['products'][prod.id]['qty'] += qty
-            supplier_data[partner.id]['products'][prod.id]['amount'] += qty * price
-            if move.purchase_line_id and move.purchase_line_id.order_id:
-                supplier_data[partner.id]['products'][prod.id]['po_names'].add(
-                    move.purchase_line_id.order_id.name
-                )
-            if move.picking_id:
-                supplier_data[partner.id]['products'][prod.id]['picking_names'].add(
-                    move.picking_id.name
-                )
+                qty = line.product_qty
+                price = line.price_unit or 0.0
 
-        # Convert po count and products dict to list
+                supplier_data[partner.id]['total_qty'] += qty
+                supplier_data[partner.id]['total_amount'] += qty * price
+
+                if prod.id not in supplier_data[partner.id]['products']:
+                    supplier_data[partner.id]['products'][prod.id] = {
+                        'product_id': prod.id,
+                        'product_name': prod.display_name,
+                        'default_code': prod.default_code or '',
+                        'qty': 0.0,
+                        'amount': 0.0,
+                        '_all_pos': set(),
+                        '_received_pos': set(),
+                        '_pickings': set(),
+                    }
+
+                p = supplier_data[partner.id]['products'][prod.id]
+                p['qty'] += qty
+                p['amount'] += qty * price
+                p['_all_pos'].add(order.name)
+
+                # Kiểm tra phiếu nhập kho cho dòng PO này
+                received_moves = line.move_ids.filtered(lambda m: m.state == 'done')
+                if received_moves:
+                    p['_received_pos'].add(order.name)
+                    for m in received_moves:
+                        if m.picking_id:
+                            p['_pickings'].add(m.picking_id.name)
+
+        # Convert to final format
         for sid in supplier_data:
             supplier_data[sid]['move_count'] = len(supplier_data[sid].pop('_po_ids', set()))
             prods = supplier_data[sid]['products']
             for prod_data in prods.values():
-                prod_data['po_names'] = sorted(prod_data['po_names'])
-                prod_data['picking_names'] = sorted(prod_data['picking_names'])
+                all_pos = prod_data.pop('_all_pos', set())
+                received_pos = prod_data.pop('_received_pos', set())
+                pickings = prod_data.pop('_pickings', set())
+                prod_data['po_names'] = sorted(all_pos)
+                prod_data['picking_names'] = sorted(pickings)
+                prod_data['pending_po_names'] = sorted(all_pos - received_pos)
             supplier_data[sid]['products'] = sorted(
                 prods.values(),
                 key=lambda x: x['qty'],
@@ -582,7 +588,7 @@ class ProductFlowAnalysis(models.AbstractModel):
 
         ws.write(0, 0, f"Báo cáo nhà cung cấp ({data['date_from']} → {data['date_to']})", title_fmt)
 
-        headers = ['#', 'Nhà cung cấp', 'Tổng SL nhập', 'Tổng giá trị', 'Số lần mua (PO)', 'Số SP']
+        headers = ['#', 'Nhà cung cấp', 'Tổng SL mua', 'Tổng giá trị', 'Số lần mua (PO)', 'Số SP']
         for col, h in enumerate(headers):
             ws.write(2, col, h, header_fmt)
 

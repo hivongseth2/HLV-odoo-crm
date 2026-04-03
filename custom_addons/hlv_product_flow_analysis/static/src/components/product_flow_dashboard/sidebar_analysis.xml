@@ -236,9 +236,12 @@
                                     </span>
                                     <span class="pf-opt-stats">
                                         <span class="pf-opt-buy">M: <t t-esc="formatNumber(p.buyQty)"/> (<t t-esc="p.buyFreq"/>x)</span>
+                                        <span class="pf-opt-sell">B: <t t-esc="formatNumber(p.sellQty)"/> (<t t-esc="p.sellFreq"/>x)</span>
                                         <span class="pf-opt-stock">Tồn: <t t-esc="formatNumber(p.stock)"/></span>
                                     </span>
-                                    <span class="pf-opt-ratio text-warning">×<t t-esc="p.stockCover"/></span>
+                                    <span class="pf-opt-ratio text-warning"
+                                          t-att-title="'Tồn kho gấp ' + p.stockCover + ' lần SL bán'"
+                                          t-esc="p.stockCoverLabel"/>
                                 </div>
                             </t>
                         </div>
