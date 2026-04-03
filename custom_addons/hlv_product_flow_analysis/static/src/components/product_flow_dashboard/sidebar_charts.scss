@@ -73,6 +73,30 @@
 .pf-hm-3 { background: #51cf66; color: white; }
 .pf-hm-4 { background: #2b8a3e; color: white; }
 
+/* Product buy/sell heatmap: 4-dimension colors */
+.pf-hm-buy-0, .pf-hm-buyf-0, .pf-hm-sell-0, .pf-hm-sellf-0 { background: #f8f9fa; color: #dee2e6; }
+.pf-hm-buy-1 { background: #d0ebff; color: #1971c2; }
+.pf-hm-buy-2 { background: #74c0fc; color: #1864ab; }
+.pf-hm-buy-3 { background: #339af0; color: #fff; }
+.pf-hm-buy-4 { background: #1864ab; color: #fff; }
+.pf-hm-buyf-1 { background: #c3fae8; color: #087f5b; }
+.pf-hm-buyf-2 { background: #63e6be; color: #087f5b; }
+.pf-hm-buyf-3 { background: #20c997; color: #fff; }
+.pf-hm-buyf-4 { background: #087f5b; color: #fff; }
+.pf-hm-sell-1 { background: #ffe3e3; color: #c92a2a; }
+.pf-hm-sell-2 { background: #ff8787; color: #c92a2a; }
+.pf-hm-sell-3 { background: #f03e3e; color: #fff; }
+.pf-hm-sell-4 { background: #c92a2a; color: #fff; }
+.pf-hm-sellf-1 { background: #e5dbff; color: #6741d9; }
+.pf-hm-sellf-2 { background: #b197fc; color: #5f3dc4; }
+.pf-hm-sellf-3 { background: #7950f2; color: #fff; }
+.pf-hm-sellf-4 { background: #5f3dc4; color: #fff; }
+
+.pf-hm-legend-multi {
+    flex-wrap: wrap;
+    div { display: flex; align-items: center; gap: 3px; }
+}
+
 .pf-hm-legend {
     display: flex;
     align-items: center;
@@ -179,7 +203,7 @@
     background: #f8f9fa;
     border-radius: 4px;
     height: 24px;
-    overflow: hidden;
+    position: relative;
 }
 
 .pf-hbar-fill {
@@ -187,10 +211,9 @@
     border-radius: 4px;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    padding-right: 8px;
-    min-width: 30px;
+    min-width: 2px;
     transition: width 0.4s ease;
+    position: relative;
 }
 
 .pf-hbar-incoming {
@@ -204,9 +227,13 @@
 .pf-hbar-val {
     font-size: 11px;
     font-weight: 700;
-    color: white;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    color: #333;
+    text-shadow: 0 0 3px #fff, 0 0 5px #fff, 0 0 8px #fff;
     white-space: nowrap;
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
 }
 
 /* Stacked bar / donut */

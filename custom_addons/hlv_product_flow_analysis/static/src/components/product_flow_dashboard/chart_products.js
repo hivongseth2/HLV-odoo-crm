@@ -6,27 +6,29 @@
  */
 export const productChartMixins = {
     get topPurchasedProducts() {
+        const n = this.state.topN || 10;
         return [...this.state.products]
-            .filter(p => p.incoming_qty > 0)
-            .sort((a, b) => b.incoming_qty - a.incoming_qty)
-            .slice(0, 8);
+            .filter(p => p.incoming_count > 0)
+            .sort((a, b) => b.incoming_count - a.incoming_count)
+            .slice(0, n);
     },
 
     get topSoldProducts() {
+        const n = this.state.topN || 10;
         return [...this.state.products]
-            .filter(p => p.outgoing_qty > 0)
-            .sort((a, b) => b.outgoing_qty - a.outgoing_qty)
-            .slice(0, 8);
+            .filter(p => p.outgoing_count > 0)
+            .sort((a, b) => b.outgoing_count - a.outgoing_count)
+            .slice(0, n);
     },
 
     get topPurchasedMax() {
         const items = this.topPurchasedProducts;
-        return items.length ? items[0].incoming_qty : 1;
+        return items.length ? items[0].incoming_count : 1;
     },
 
     get topSoldMax() {
         const items = this.topSoldProducts;
-        return items.length ? items[0].outgoing_qty : 1;
+        return items.length ? items[0].outgoing_count : 1;
     },
 
     get slowMovingProducts() {
@@ -148,26 +150,32 @@ export const productChartMixins = {
         return 1;
     },
 
-    // ========== Purchase optimization ==========
+    // ========== Purchase optimization (xét tồn kho) ==========
     get purchaseOptimization() {
+        const n = this.state.topN || 10;
         const items = [...this.state.products]
-            .filter(p => p.incoming_qty > 0 || p.outgoing_qty > 0)
+            .filter(p => p.outgoing_qty > 0 || p.incoming_qty > 0)
             .map(p => {
                 const buyFreq = p.incoming_count || 0;
                 const sellFreq = p.outgoing_count || 0;
                 const buyQty = p.incoming_qty || 0;
                 const sellQty = p.outgoing_qty || 0;
-                const qtyRatio = buyQty > 0 ? Math.round(sellQty / buyQty * 100) / 100 : (sellQty > 0 ? 999 : 0);
-                const freqRatio = buyFreq > 0 ? Math.round(sellFreq / buyFreq * 100) / 100 : (sellFreq > 0 ? 999 : 0);
+                const stock = p.qty_available || 0;
+                // Tỷ lệ tồn kho / SL bán: stock đủ bao nhiêu lần bán
+                const stockCover = sellQty > 0 ? Math.round(stock / sellQty * 100) / 100 : -1;
+                const stockCoverLabel = stockCover < 0 ? 'Không bán' : ('×' + stockCover);
+                // Net need = SL bán - SL mua - Tồn kho
+                const netNeed = sellQty - buyQty - stock;
                 let optType;
-                if (sellFreq >= 3 && qtyRatio > 1.5) optType = 'underBuy';
-                else if (buyFreq >= 3 && qtyRatio < 0.5) optType = 'overBuy';
-                else if (sellFreq >= 3 && buyFreq >= 3) optType = 'balanced';
-                else optType = 'rare';
-                return { ...p, buyFreq, sellFreq, buyQty, sellQty, qtyRatio, freqRatio, optType };
+                if (sellFreq >= 2 && netNeed > 0 && stockCover >= 0 && stockCover < 0.5) optType = 'underBuy';
+                else if (buyQty > 0 && sellQty > 0 && stock > sellQty * 2) optType = 'overBuy';
+                else optType = 'balanced';
+                return { ...p, buyFreq, sellFreq, buyQty, sellQty, stock, stockCover, stockCoverLabel, netNeed, optType };
             });
-        const underBuy = items.filter(i => i.optType === 'underBuy').sort((a, b) => b.qtyRatio - a.qtyRatio).slice(0, 5);
-        const overBuy = items.filter(i => i.optType === 'overBuy').sort((a, b) => a.qtyRatio - b.qtyRatio).slice(0, 5);
+        const underBuy = items.filter(i => i.optType === 'underBuy')
+            .sort((a, b) => b.netNeed - a.netNeed).slice(0, n);
+        const overBuy = items.filter(i => i.optType === 'overBuy')
+            .sort((a, b) => b.stockCover - a.stockCover).slice(0, n);
         return { underBuy, overBuy };
     },
 

@@ -42,10 +42,11 @@ export const supplierChartMixins = {
     },
 
     get topSuppliersByQty() {
+        const n = this.state.topN || 10;
         return [...this.state.suppliers]
             .filter(s => s.total_qty > 0)
             .sort((a, b) => b.total_qty - a.total_qty)
-            .slice(0, 8);
+            .slice(0, n);
     },
 
     get topSuppliersByQtyMax() {
@@ -54,10 +55,11 @@ export const supplierChartMixins = {
     },
 
     get topSuppliersByAmount() {
+        const n = this.state.topN || 10;
         return [...this.state.suppliers]
             .filter(s => s.total_amount > 0)
             .sort((a, b) => b.total_amount - a.total_amount)
-            .slice(0, 8);
+            .slice(0, n);
     },
 
     get topSuppliersByAmountMax() {
@@ -66,10 +68,11 @@ export const supplierChartMixins = {
     },
 
     get topSuppliersByFrequency() {
+        const n = this.state.topN || 10;
         return [...this.state.suppliers]
             .filter(s => s.move_count > 0)
             .sort((a, b) => b.move_count - a.move_count)
-            .slice(0, 8);
+            .slice(0, n);
     },
 
     get topSuppliersByFrequencyMax() {
@@ -89,6 +92,8 @@ export const supplierChartMixins = {
             total: totalAmount,
             count: suppliers.length,
             top1Name: suppliers.length >= 1 ? suppliers[0].partner_name : '',
+            top3Names: suppliers.slice(0, 3).map(s => s.partner_name),
+            top5Names: suppliers.slice(0, 5).map(s => s.partner_name),
         };
     },
 };

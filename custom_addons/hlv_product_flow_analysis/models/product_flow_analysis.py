@@ -128,29 +128,22 @@ class ProductFlowAnalysis(models.AbstractModel):
 
     @api.model
     def get_supplier_flow_data(self, period='month', date_from=False, date_to=False, warehouse_id=False):
-        """Lấy dữ liệu phân tích nhà cung cấp (chỉ từ đơn mua hàng, loại trừ trả hàng khách)."""
+        """Lấy dữ liệu nhà cung cấp từ đơn mua hàng (PO), bao gồm cả PO chưa nhập kho."""
         date_from, date_to = self._compute_date_range(period, date_from, date_to)
 
-        domain = [
-            ('state', '=', 'done'),
-            ('date', '>=', fields.Datetime.to_string(date_from)),
-            ('date', '<=', fields.Datetime.to_string(date_to)),
-            ('picking_type_id.code', '=', 'incoming'),
-            ('purchase_line_id', '!=', False),  # Chỉ lấy moves từ đơn mua hàng
+        po_domain = [
+            ('date_order', '>=', fields.Datetime.to_string(date_from)),
+            ('date_order', '<=', fields.Datetime.to_string(date_to)),
+            ('state', 'in', ('purchase', 'done')),
         ]
         if warehouse_id:
-            domain.append(('warehouse_id', '=', warehouse_id))
+            po_domain.append(('picking_type_id.warehouse_id', '=', warehouse_id))
 
-        moves = self.env['stock.move'].search(domain)
+        orders = self.env['purchase.order'].search(po_domain)
 
         supplier_data = {}
-        for move in moves:
-            # Ưu tiên lấy partner từ purchase order, fallback picking partner
-            partner = False
-            if move.purchase_line_id and move.purchase_line_id.order_id:
-                partner = move.purchase_line_id.order_id.partner_id
-            if not partner:
-                partner = move.picking_id.partner_id if move.picking_id else False
+        for order in orders:
+            partner = order.partner_id
             if not partner:
                 continue
 
@@ -163,31 +156,62 @@ class ProductFlowAnalysis(models.AbstractModel):
                     'move_count': 0,
                     'product_count': 0,
                     'products': {},
+                    '_po_ids': set(),
                 }
 
-            prod = move.product_id
-            qty = move.product_uom_qty
-            price = move.price_unit if move.price_unit else 0.0
+            supplier_data[partner.id]['_po_ids'].add(order.id)
 
-            supplier_data[partner.id]['total_qty'] += qty
-            supplier_data[partner.id]['total_amount'] += qty * price
-            supplier_data[partner.id]['move_count'] += 1
+            for line in order.order_line:
+                if line.display_type:
+                    continue
+                prod = line.product_id
+                if not prod or prod.type == 'service':
+                    continue
 
-            if prod.id not in supplier_data[partner.id]['products']:
-                supplier_data[partner.id]['products'][prod.id] = {
-                    'product_id': prod.id,
-                    'product_name': prod.display_name,
-                    'default_code': prod.default_code or '',
-                    'qty': 0.0,
-                    'amount': 0.0,
-                }
-            supplier_data[partner.id]['products'][prod.id]['qty'] += qty
-            supplier_data[partner.id]['products'][prod.id]['amount'] += qty * price
+                qty = line.product_qty
+                price = line.price_unit or 0.0
 
-        # Convert products dict to list
+                supplier_data[partner.id]['total_qty'] += qty
+                supplier_data[partner.id]['total_amount'] += qty * price
+
+                if prod.id not in supplier_data[partner.id]['products']:
+                    supplier_data[partner.id]['products'][prod.id] = {
+                        'product_id': prod.id,
+                        'product_name': prod.display_name,
+                        'default_code': prod.default_code or '',
+                        'qty': 0.0,
+                        'amount': 0.0,
+                        '_all_pos': set(),
+                        '_received_pos': set(),
+                        '_pickings': set(),
+                    }
+
+                p = supplier_data[partner.id]['products'][prod.id]
+                p['qty'] += qty
+                p['amount'] += qty * price
+                p['_all_pos'].add(order.name)
+
+                # Kiểm tra phiếu nhập kho cho dòng PO này
+                received_moves = line.move_ids.filtered(lambda m: m.state == 'done')
+                if received_moves:
+                    p['_received_pos'].add(order.name)
+                    for m in received_moves:
+                        if m.picking_id:
+                            p['_pickings'].add(m.picking_id.name)
+
+        # Convert to final format
         for sid in supplier_data:
+            supplier_data[sid]['move_count'] = len(supplier_data[sid].pop('_po_ids', set()))
+            prods = supplier_data[sid]['products']
+            for prod_data in prods.values():
+                all_pos = prod_data.pop('_all_pos', set())
+                received_pos = prod_data.pop('_received_pos', set())
+                pickings = prod_data.pop('_pickings', set())
+                prod_data['po_names'] = sorted(all_pos)
+                prod_data['picking_names'] = sorted(pickings)
+                prod_data['pending_po_names'] = sorted(all_pos - received_pos)
             supplier_data[sid]['products'] = sorted(
-                supplier_data[sid]['products'].values(),
+                prods.values(),
                 key=lambda x: x['qty'],
                 reverse=True,
             )
@@ -303,6 +327,70 @@ class ProductFlowAnalysis(models.AbstractModel):
             'safety_days': 3,
             'min_frequency': min_frequency,
         }
+
+    @api.model
+    def get_aggregate_trend_data(self, warehouse_id=False, months=6):
+        """Lấy dữ liệu trend tổng hợp mua/bán theo tháng (6 tháng gần nhất)."""
+        from collections import defaultdict
+        today = date.today()
+        start = (today - relativedelta(months=months - 1)).replace(day=1)
+        end = (today.replace(day=1) + relativedelta(months=1)) - timedelta(days=1)
+
+        domain_base = [
+            ('state', '=', 'done'),
+            ('date', '>=', fields.Datetime.to_string(start)),
+            ('date', '<=', fields.Datetime.to_string(end)),
+            ('product_id.type', '!=', 'service'),
+        ]
+        if warehouse_id:
+            domain_base.append(('warehouse_id', '=', warehouse_id))
+
+        incoming = self.env['stock.move'].search(
+            domain_base + [('picking_type_id.code', '=', 'incoming'), ('purchase_line_id', '!=', False)]
+        )
+        outgoing = self.env['stock.move'].search(
+            domain_base + [('picking_type_id.code', '=', 'outgoing')]
+        )
+
+        monthly = defaultdict(lambda: {
+            'buy_qty': 0, 'sell_qty': 0, 'buy_amount': 0,
+            'po_ids': set(), 'so_ids': set(),
+            'buy_products': set(), 'sell_products': set(),
+        })
+
+        for m in incoming:
+            key = m.date.strftime('%Y-%m')
+            monthly[key]['buy_qty'] += m.product_uom_qty
+            monthly[key]['buy_amount'] += m.product_uom_qty * (m.price_unit or 0)
+            monthly[key]['buy_products'].add(m.product_id.id)
+            if m.purchase_line_id and m.purchase_line_id.order_id:
+                monthly[key]['po_ids'].add(m.purchase_line_id.order_id.id)
+
+        for m in outgoing:
+            key = m.date.strftime('%Y-%m')
+            monthly[key]['sell_qty'] += m.product_uom_qty
+            monthly[key]['sell_products'].add(m.product_id.id)
+            if m.sale_line_id and m.sale_line_id.order_id:
+                monthly[key]['so_ids'].add(m.sale_line_id.order_id.id)
+
+        trends = []
+        for i in range(months - 1, -1, -1):
+            m_date = today - relativedelta(months=i)
+            key = m_date.strftime('%Y-%m')
+            d = monthly.get(key, {})
+            trends.append({
+                'month': m_date.strftime('%m/%Y'),
+                'month_label': m_date.strftime('%m/%y'),
+                'buy_qty': d.get('buy_qty', 0),
+                'sell_qty': d.get('sell_qty', 0),
+                'buy_amount': round(d.get('buy_amount', 0)),
+                'buy_count': len(d.get('po_ids', set())),
+                'sell_count': len(d.get('so_ids', set())),
+                'buy_products': len(d.get('buy_products', set())),
+                'sell_products': len(d.get('sell_products', set())),
+            })
+
+        return {'trends': trends}
 
     @api.model
     def get_dashboard_summary(self, period='month', date_from=False, date_to=False, warehouse_id=False):
@@ -500,7 +588,7 @@ class ProductFlowAnalysis(models.AbstractModel):
 
         ws.write(0, 0, f"Báo cáo nhà cung cấp ({data['date_from']} → {data['date_to']})", title_fmt)
 
-        headers = ['#', 'Nhà cung cấp', 'Tổng SL nhập', 'Tổng giá trị', 'Số lần nhập', 'Số SP']
+        headers = ['#', 'Nhà cung cấp', 'Tổng SL mua', 'Tổng giá trị', 'Số lần mua (PO)', 'Số SP']
         for col, h in enumerate(headers):
             ws.write(2, col, h, header_fmt)
 

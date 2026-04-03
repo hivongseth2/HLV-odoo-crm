@@ -131,6 +131,25 @@
                                         t-on-click="() => this.setChartsSection('correlation')">
                                     <i class="fa fa-dot-circle-o me-1"/>Tương quan
                                 </button>
+                                <button t-att-class="'pf-stab ' + (state.chartsActiveSection === 'trend' ? 'active' : '')"
+                                        t-on-click="() => this.setChartsSection('trend')">
+                                    <i class="fa fa-line-chart me-1"/>Biến động
+                                </button>
+                                <button t-att-class="'pf-stab ' + (state.chartsActiveSection === 'help' ? 'active' : '')"
+                                        t-on-click="() => this.setChartsSection('help')">
+                                    <i class="fa fa-question-circle me-1"/>Hướng dẫn
+                                </button>
+                                <div class="pf-topn-select">
+                                    <label>Top</label>
+                                    <select t-on-change="(ev) => this.onTopNChange(ev)">
+                                        <option value="5" t-att-selected="state.topN === 5">5</option>
+                                        <option value="10" t-att-selected="state.topN === 10">10</option>
+                                        <option value="15" t-att-selected="state.topN === 15">15</option>
+                                        <option value="20" t-att-selected="state.topN === 20">20</option>
+                                        <option value="30" t-att-selected="state.topN === 30">30</option>
+                                        <option value="50" t-att-selected="state.topN === 50">50</option>
+                                    </select>
+                                </div>
                             </div>
                             <div class="pf-sidebar-body">
                                 <t t-if="state.chartsActiveSection === 'products'">
@@ -144,6 +163,12 @@
                                 </t>
                                 <t t-if="state.chartsActiveSection === 'correlation'">
                                     <t t-call="hlv_product_flow_analysis.SidebarCorrelation"/>
+                                </t>
+                                <t t-if="state.chartsActiveSection === 'trend'">
+                                    <t t-call="hlv_product_flow_analysis.SidebarTrend"/>
+                                </t>
+                                <t t-if="state.chartsActiveSection === 'help'">
+                                    <t t-call="hlv_product_flow_analysis.SidebarHelp"/>
                                 </t>
                             </div>
                         </div>

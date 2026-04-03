@@ -7,6 +7,7 @@ import { dashboardDataMixins } from "./dashboard_data";
 import { productChartMixins } from "./chart_products";
 import { supplierChartMixins } from "./chart_suppliers";
 import { correlationChartMixins } from "./chart_correlation";
+import { trendChartMixins } from "./chart_trend";
 import { drilldownMixins } from "./drilldown";
 
 export class ProductFlowDashboard extends Component {
@@ -55,6 +56,8 @@ export class ProductFlowDashboard extends Component {
             chartsActiveSection: 'products',
             planningMinFrequency: 3,
             planningShowAll: false,
+            topN: 10,
+            trendMonthly: [],
         });
 
         onWillStart(async () => {
@@ -80,6 +83,7 @@ export class ProductFlowDashboard extends Component {
             this.state.productPage = 1;
             this.state.suppliers = supplierResult.suppliers || [];
             this.state.supplierPage = 1;
+            this.state.trendMonthly = [];
             await this.loadTabData();
         } catch (e) {
             this.notification.add("Lỗi tải dữ liệu: " + (e.message || e), { type: "danger" });
@@ -114,7 +118,12 @@ export class ProductFlowDashboard extends Component {
     }
 
     toggleChartsPanel() { this.state.chartsPanelOpen = !this.state.chartsPanelOpen; }
-    setChartsSection(section) { this.state.chartsActiveSection = section; }
+    setChartsSection(section) {
+        this.state.chartsActiveSection = section;
+        if (section === 'trend' && this.state.trendMonthly.length === 0) {
+            this.loadTrendData();
+        }
+    }
 
     switchTab(tab) {
         if (this.state.activeTab !== tab) {
@@ -159,6 +168,7 @@ export class ProductFlowDashboard extends Component {
     onMinCountChange(ev) { this.state.productMinCount = parseInt(ev.target.value) || 0; this.state.productPage = 1; }
     onPlanningMinFreqChange(ev) { this.state.planningMinFrequency = parseInt(ev.target.value) || 3; this.state.planningPage = 1; }
     togglePlanningShowAll() { this.state.planningShowAll = !this.state.planningShowAll; this.state.planningPage = 1; }
+    onTopNChange(ev) { this.state.topN = parseInt(ev.target.value) || 10; }
 
     sortProducts(field) {
         if (this.state.productSortField === field) { this.state.productSortAsc = !this.state.productSortAsc; }
@@ -199,7 +209,7 @@ export class ProductFlowDashboard extends Component {
 }
 
 // Apply mixins (preserves getters via property descriptors)
-const mixins = [dashboardDataMixins, productChartMixins, supplierChartMixins, correlationChartMixins, drilldownMixins];
+const mixins = [dashboardDataMixins, productChartMixins, supplierChartMixins, correlationChartMixins, trendChartMixins, drilldownMixins];
 for (const mixin of mixins) {
     Object.defineProperties(
         ProductFlowDashboard.prototype,

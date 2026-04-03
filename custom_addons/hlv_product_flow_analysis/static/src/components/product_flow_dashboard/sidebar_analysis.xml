@@ -7,6 +7,9 @@
                     <h4 class="pf-sc-title">
                         <i class="fa fa-pie-chart me-1" style="color:#7048e8;"/>Tỷ lệ Mua vs Bán
                     </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Tổng SL mua và bán trong kỳ. So sánh tỷ trọng mua/bán để đánh giá cân đối.
+                    </div>
                     <div class="pf-pie-container">
                         <div class="pf-pie-ring"
                              t-att-style="'--buy-deg:' + buySellRatioPie.buyDeg + 'deg'">
@@ -37,6 +40,9 @@
                     <h4 class="pf-sc-title">
                         <i class="fa fa-signal me-1" style="color:#e8590c;"/>Phân bổ tần suất
                     </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Nhóm SP theo số lần giao dịch (mua+bán): 1-2 lần / 3-5 / 6-10 / &gt;10 lần. Click để xem DS sản phẩm.
+                    </div>
                     <div class="pf-freq-dist">
                         <div class="pf-freq-bar-stack">
                             <div class="pf-freq-seg pf-freq-rare pf-clickable" t-att-style="'width:' + frequencyPie.rare.pct + '%'"
@@ -94,6 +100,9 @@
                     <h4 class="pf-sc-title">
                         <i class="fa fa-exchange me-1" style="color:#1971c2;"/>Top SP: Mua vs Bán
                     </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Top <t t-esc="state.topN"/> SP có tổng giao dịch cao nhất. Thanh xanh = SL mua, thanh hồng = SL bán.
+                    </div>
                     <div class="pf-dual-bars">
                         <t t-foreach="topBuySellComparison.items" t-as="item" t-key="item.product_id">
                             <div class="pf-dual-row">
@@ -128,6 +137,9 @@
                     <h4 class="pf-sc-title">
                         <i class="fa fa-th me-1" style="color:#e64980;"/>Nhiệt: SL × Tần suất
                     </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Heatmap 4 chiều: SL mua, lần mua, SL bán, lần bán cho top 12 SP. Màu đậm = giá trị cao.
+                    </div>
                     <t t-if="productBuySellHeat.items.length > 0">
                         <div class="pf-heatmap-wrap">
                             <table class="pf-heatmap pf-hm-product">
@@ -190,10 +202,13 @@
                     <h4 class="pf-sc-title">
                         <i class="fa fa-shopping-cart me-1" style="color:#2b8a3e;"/>Tối ưu mua hàng
                     </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Đề xuất dựa trên: SL bán − SL mua − Tồn kho. Chỉ hiện SP bán thường xuyên mà tồn thấp (cần mua) hoặc mua nhiều mà tồn dư (giảm mua).
+                    </div>
                     <t t-if="purchaseOptimization.underBuy.length > 0">
                         <div class="pf-opt-section">
                             <div class="pf-opt-label pf-opt-under">
-                                <i class="fa fa-arrow-up me-1"/>Cần mua thêm (bán &gt; mua)
+                                <i class="fa fa-arrow-up me-1"/>Cần mua thêm (tồn không đủ)
                             </div>
                             <t t-foreach="purchaseOptimization.underBuy" t-as="p" t-key="p.product_id">
                                 <div class="pf-opt-row">
@@ -201,10 +216,10 @@
                                         <span class="pf-code me-1" t-esc="p.default_code || '?'"/>
                                     </span>
                                     <span class="pf-opt-stats">
-                                        <span class="pf-opt-buy">M: <t t-esc="formatNumber(p.buyQty)"/> (<t t-esc="p.buyFreq"/>x)</span>
                                         <span class="pf-opt-sell">B: <t t-esc="formatNumber(p.sellQty)"/> (<t t-esc="p.sellFreq"/>x)</span>
+                                        <span class="pf-opt-stock">Tồn: <t t-esc="formatNumber(p.stock)"/></span>
                                     </span>
-                                    <span class="pf-opt-ratio text-danger">×<t t-esc="p.qtyRatio"/></span>
+                                    <span class="pf-opt-ratio text-danger">Thiếu <t t-esc="formatNumber(p.netNeed)"/></span>
                                 </div>
                             </t>
                         </div>
@@ -212,7 +227,7 @@
                     <t t-if="purchaseOptimization.overBuy.length > 0">
                         <div class="pf-opt-section">
                             <div class="pf-opt-label pf-opt-over">
-                                <i class="fa fa-arrow-down me-1"/>Nên giảm mua (mua &gt; bán)
+                                <i class="fa fa-arrow-down me-1"/>Nên giảm mua (tồn dư nhiều)
                             </div>
                             <t t-foreach="purchaseOptimization.overBuy" t-as="p" t-key="p.product_id">
                                 <div class="pf-opt-row">
@@ -222,8 +237,11 @@
                                     <span class="pf-opt-stats">
                                         <span class="pf-opt-buy">M: <t t-esc="formatNumber(p.buyQty)"/> (<t t-esc="p.buyFreq"/>x)</span>
                                         <span class="pf-opt-sell">B: <t t-esc="formatNumber(p.sellQty)"/> (<t t-esc="p.sellFreq"/>x)</span>
+                                        <span class="pf-opt-stock">Tồn: <t t-esc="formatNumber(p.stock)"/></span>
                                     </span>
-                                    <span class="pf-opt-ratio text-warning">×<t t-esc="p.qtyRatio"/></span>
+                                    <span class="pf-opt-ratio text-warning"
+                                          t-att-title="'Tồn kho gấp ' + p.stockCover + ' lần SL bán'"
+                                          t-esc="p.stockCoverLabel"/>
                                 </div>
                             </t>
                         </div>
@@ -240,6 +258,9 @@
                     <h4 class="pf-sc-title">
                         <i class="fa fa-th me-1" style="color:#e64980;"/>NCC × Sản phẩm (SL mua)
                     </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Ma trận NCC vs SP: hiển thị SL mua từ mỗi NCC cho từng SP. Màu đậm = mua nhiều hơn.
+                    </div>
                     <t t-if="supplierProductHeatmap.rows.length > 0">
                         <div class="pf-heatmap-wrap">
                             <table class="pf-heatmap">

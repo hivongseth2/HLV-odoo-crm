@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_product_flow_analysis.SidebarHelp">
+
+                <div class="pf-help-section">
+                    <h4 class="pf-help-main-title">
+                        <i class="fa fa-book me-1"/>Hướng dẫn sử dụng Dashboard
+                    </h4>
+
+                    <!-- 1. Tổng quan -->
+                    <div class="pf-help-card">
+                        <h5 class="pf-help-title">
+                            <i class="fa fa-dashboard me-1"/>1. Tổng quan Dashboard
+                        </h5>
+                        <div class="pf-help-body">
+                            <p>Dashboard gồm <b>5 thẻ tóm tắt</b> trên cùng:</p>
+                            <ul>
+                                <li><b>Tổng mua</b>: Tổng SL hàng nhập kho trong kỳ</li>
+                                <li><b>Tổng bán</b>: Tổng SL hàng xuất kho (bán) trong kỳ</li>
+                                <li><b>Nội bộ</b>: SL hàng điều chuyển giữa các kho</li>
+                                <li><b>Sản phẩm</b>: Số loại SP có giao dịch</li>
+                                <li><b>Nhà cung cấp</b>: Số NCC có đơn mua hàng</li>
+                            </ul>
+                            <p class="pf-help-tip"><i class="fa fa-lightbulb-o me-1"/>Dùng bộ lọc <b>Kỳ</b> (Tuần/Tháng/Quý/Năm) và <b>Kho</b> để thay đổi phạm vi dữ liệu.</p>
+                        </div>
+                    </div>
+
+                    <!-- 2. Tab Hàng hóa mua bán -->
+                    <div class="pf-help-card">
+                        <h5 class="pf-help-title">
+                            <i class="fa fa-cube me-1"/>2. Tab: Hàng hóa mua bán
+                        </h5>
+                        <div class="pf-help-body">
+                            <p>Bảng chi tiết từng sản phẩm:</p>
+                            <table class="pf-help-table">
+                                <tr><td><b>SL Mua</b></td><td>Tổng SL nhập kho từ đơn mua hàng (PO)</td></tr>
+                                <tr><td><b>Lần mua</b></td><td>Số lần mua (đếm theo dòng PO line)</td></tr>
+                                <tr><td><b>SL Bán</b></td><td>Tổng SL xuất kho (gắn đơn bán SO)</td></tr>
+                                <tr><td><b>Lần bán</b></td><td>Số lần bán (đếm theo SO line)</td></tr>
+                                <tr><td><b>Luân chuyển</b></td><td>Tổng số lần di chuyển (mua+bán+nội bộ)</td></tr>
+                                <tr><td><b>TB lưu kho</b></td><td>Trung bình số ngày từ nhập → xuất. Dấu "-" = không đủ dữ liệu nhập-xuất trong kỳ (hover để xem giải thích)</td></tr>
+                                <tr><td><b>Tồn kho</b></td><td>Tồn kho hiện tại (real-time)</td></tr>
+                            </table>
+                            <p class="pf-help-tip"><i class="fa fa-lightbulb-o me-1"/>Click tên SP để mở form sản phẩm. Click <i class="fa fa-line-chart"/> để xem trend 6 tháng của SP đó.</p>
+                            <div class="pf-help-legend">
+                                <b>Màu TB lưu kho:</b>
+                                <span class="pf-storage-fast">≤14 ngày (nhanh)</span> /
+                                <span class="pf-storage-medium">15-30 ngày (trung bình)</span> /
+                                <span class="pf-storage-slow">>30 ngày (chậm)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. Tab Nhà cung cấp -->
+                    <div class="pf-help-card">
+                        <h5 class="pf-help-title">
+                            <i class="fa fa-truck me-1"/>3. Tab: Nhà cung cấp
+                        </h5>
+                        <div class="pf-help-body">
+                            <p>Dữ liệu lấy trực tiếp từ <b>Đơn mua hàng (PO)</b>, bao gồm cả PO chưa nhập kho.</p>
+                            <table class="pf-help-table">
+                                <tr><td><b>Tổng SL mua</b></td><td>Tổng SL đặt mua trên PO</td></tr>
+                                <tr><td><b>Tổng giá trị</b></td><td>= SL × Đơn giá trên PO</td></tr>
+                                <tr><td><b>Số lần mua</b></td><td>Số đơn mua hàng (PO) riêng biệt</td></tr>
+                                <tr><td><b>Số SP</b></td><td>Số loại SP mua từ NCC này</td></tr>
+                            </table>
+                            <p>Click dòng NCC để mở rộng xem chi tiết từng SP:</p>
+                            <div class="pf-help-legend">
+                                <span class="pf-doc-tag pf-po-tag">DMH00123</span> = Đơn mua đã nhập kho<br/>
+                                <span class="pf-doc-tag pf-po-pending">DMH00456</span> <span class="pf-badge-pending">chưa nhập</span> = Đơn mua chưa có phiếu nhập<br/>
+                                <span class="pf-doc-tag pf-receipt-tag">WH/IN/00789</span> = Phiếu nhập kho
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. Tab Kế hoạch tồn kho -->
+                    <div class="pf-help-card">
+                        <h5 class="pf-help-title">
+                            <i class="fa fa-tasks me-1"/>4. Tab: Kế hoạch tồn kho
+                        </h5>
+                        <div class="pf-help-body">
+                            <p>Gợi ý tồn kho tối thiểu dựa trên tần suất lưu thông:</p>
+                            <table class="pf-help-table">
+                                <tr><td><b>SL xuất/ngày</b></td><td>Trung bình SL bán mỗi ngày trong kỳ</td></tr>
+                                <tr><td><b>Tồn tối thiểu</b></td><td>= SL xuất/ngày × (7 ngày lead time + 3 ngày an toàn)</td></tr>
+                                <tr><td><b>Còn lại (ngày)</b></td><td>Tồn kho hiện tại ÷ SL xuất/ngày. Hết nhanh = ưu tiên cao</td></tr>
+                            </table>
+                            <div class="pf-help-legend">
+                                <b>Trạng thái:</b>
+                                <span style="color:#dc3545;">■ Nguy hiểm</span> (≤7 ngày) /
+                                <span style="color:#ffc107;">■ Cẩn thận</span> (≤10 ngày) /
+                                <span style="color:#28a745;">■ An toàn</span> (>10 ngày)
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 5. Biểu đồ Sản phẩm -->
+                    <div class="pf-help-card">
+                        <h5 class="pf-help-title">
+                            <i class="fa fa-cube me-1"/>5. Biểu đồ: Tab Sản phẩm
+                        </h5>
+                        <div class="pf-help-body">
+                            <p><b>Top SP mua nhiều nhất</b>: SP có SL mua cao nhất trong kỳ. Thanh dài = mua nhiều.</p>
+                            <p><b>Top SP bán nhiều nhất</b>: SP có SL bán cao nhất. Giúp xác định hàng chủ lực.</p>
+                            <p><b>Top SP mua thường xuyên</b>: Sắp xếp theo số lần mua (tần suất), không phải SL. SP mua thường xuyên = hàng tiêu thụ ổn định.</p>
+                        </div>
+                    </div>
+
+                    <!-- 6. Biểu đồ NCC -->
+                    <div class="pf-help-card">
+                        <h5 class="pf-help-title">
+                            <i class="fa fa-truck me-1"/>6. Biểu đồ: Tab NCC
+                        </h5>
+                        <div class="pf-help-body">
+                            <p><b>Top NCC mua nhiều nhất</b>: NCC có tổng SL mua cao nhất.</p>
+                            <p><b>Top NCC mua thường xuyên</b>: NCC đặt nhiều đơn PO nhất = đối tác thường xuyên.</p>
+                            <p><b>Top NCC giá trị cao</b>: NCC có tổng giá trị mua hàng lớn nhất.</p>
+                        </div>
+                    </div>
+
+                    <!-- 7. Biểu đồ Phân tích -->
+                    <div class="pf-help-card">
+                        <h5 class="pf-help-title">
+                            <i class="fa fa-th me-1"/>7. Biểu đồ: Tab Phân tích
+                        </h5>
+                        <div class="pf-help-body">
+                            <p><b>Tỷ lệ Mua vs Bán</b>: Biểu đồ donut so sánh tổng SL mua và bán. Nếu mua >> bán → đang tồn kho nhiều.</p>
+                            <p><b>Phân bổ tần suất</b>: Nhóm SP theo số lần giao dịch:</p>
+                            <ul>
+                                <li>1-2 lần: Hàng ít giao dịch → không nên dự trữ nhiều</li>
+                                <li>3-5 lần: Trung bình</li>
+                                <li>6-10 lần: Giao dịch thường xuyên</li>
+                                <li>>10 lần: Hàng chủ lực, cần dự trữ đủ</li>
+                            </ul>
+                            <p><b>Top SP: Mua vs Bán</b>: Biểu đồ thanh đôi so sánh SL mua/bán cho từng SP. SP mua nhiều nhưng bán ít → tồn kho cao.</p>
+                            <p><b>Nhiệt: SL × Tần suất</b>: Heatmap 4 chiều (SL mua, lần mua, SL bán, lần bán). Ô màu đậm = giá trị cao. Giúp nhanh chóng nhận diện SP hot.</p>
+                            <p><b>Tối ưu mua hàng</b>: Hệ thống tự động phân tích và đề xuất:</p>
+                            <ul>
+                                <li><span style="color:#dc3545;">Cần mua thêm</span>: SP bán thường xuyên (≥2 lần) nhưng tồn không đủ. "Thiếu X" = cần mua thêm X đơn vị.</li>
+                                <li><span style="color:#e67700;">Nên giảm mua</span>: SP mua nhiều hơn bán và tồn kho > 2× SL bán. "×Y" = tồn kho gấp Y lần SL bán.</li>
+                            </ul>
+                            <p><b>NCC × SP (heatmap)</b>: Ma trận NCC vs SP. Giúp thấy NCC nào cung cấp SP nào, mua bao nhiêu.</p>
+                        </div>
+                    </div>
+
+                    <!-- 8. Tab Tương quan -->
+                    <div class="pf-help-card">
+                        <h5 class="pf-help-title">
+                            <i class="fa fa-dot-circle-o me-1"/>8. Biểu đồ: Tab Tương quan
+                        </h5>
+                        <div class="pf-help-body">
+                            <p>Biểu đồ chấm (scatter) phân tích mối quan hệ giữa các chỉ số:</p>
+                            <ul>
+                                <li><b>Mua vs Bán</b>: Điểm nằm trên đường chéo = mua bán cân đối. Dưới đường = bán nhiều hơn mua.</li>
+                                <li><b>Tần suất vs SL</b>: SP mua thường xuyên có SL cao không? Giúp tối ưu chiến lược đặt hàng.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- 9. Tab Biến động -->
+                    <div class="pf-help-card">
+                        <h5 class="pf-help-title">
+                            <i class="fa fa-line-chart me-1"/>9. Biểu đồ: Tab Biến động
+                        </h5>
+                        <div class="pf-help-body">
+                            <p>Theo dõi xu hướng mua/bán qua thời gian (6 tháng gần nhất):</p>
+                            <ul>
+                                <li><b>Biến động SL (tháng)</b>: Biểu đồ cột dọc so sánh SL mua/bán theo tháng. Mũi tên + % = thay đổi so tháng trước.</li>
+                                <li><b>So với tháng trước</b>: Bảng so sánh nhanh SL mua/bán và số đơn giữa tháng hiện tại và tháng trước. <span style="color:#2b8a3e;">↑ Xanh = tăng</span>, <span style="color:#dc3545;">↓ Đỏ = giảm</span>.</li>
+                                <li><b>Số đơn PO/SO (tháng)</b>: Đếm số đơn mua hàng (PO) và đơn bán hàng (SO) mỗi tháng.</li>
+                                <li><b>Biến động theo quý</b>: Tổng hợp SL theo quý → thấy xu hướng dài hạn rõ hơn.</li>
+                                <li><b>Bảng biến động chi tiết</b>: Số liệu gốc + % thay đổi so tháng trước cho qua bảng.</li>
+                                <li><b>Số loại SP giao dịch</b>: Bao nhiêu SKU được mua/bán mỗi tháng. Tăng = mở rộng danh mục, giảm = thu hẹp.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- 10. Phím tắt -->
+                    <div class="pf-help-card">
+                        <h5 class="pf-help-title">
+                            <i class="fa fa-keyboard-o me-1"/>10. Mẹo sử dụng
+                        </h5>
+                        <div class="pf-help-body">
+                            <ul>
+                                <li>Dùng <b>Top N</b> (5/10/15/20/30/50) để thay đổi số SP/NCC hiển thị trên biểu đồ</li>
+                                <li>Click tiêu đề cột để <b>sắp xếp</b> tăng/giảm</li>
+                                <li>Dùng ô tìm kiếm để lọc nhanh theo tên/mã SP</li>
+                                <li>Click <b>Xuất Excel</b> để tải dữ liệu về file Excel</li>
+                                <li>Bộ lọc "Số lần mua ≥" ở tab Hàng hóa giúp loại bỏ SP mua 1 lần</li>
+                                <li>Tab Kế hoạch tồn kho có nút "Hiện tất cả" để xem cả SP ít giao dịch</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+    </t>
+</templates>

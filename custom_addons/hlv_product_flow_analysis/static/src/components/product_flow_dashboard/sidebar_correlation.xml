@@ -6,6 +6,9 @@
                     <h4 class="pf-sc-title">
                         <i class="fa fa-bar-chart me-1" style="color:#7048e8;"/>Phân tích ABC (Pareto)
                     </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Nhóm A: 20% SP chiếm 80% SL bán. Nhóm B: 15%. Nhóm C: 5%. Click vào thanh hoặc chú thích để xem DS sản phẩm.
+                    </div>
                     <t t-if="abcAnalysis">
                         <div class="pf-abc-bar">
                             <div class="pf-abc-seg pf-abc-a pf-clickable" t-att-style="'width:' + abcAnalysis.a.pct + '%'"
@@ -47,6 +50,9 @@
                     <h4 class="pf-sc-title">
                         <i class="fa fa-th me-1" style="color:#1971c2;"/>Ma trận Mua × Bán
                     </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Lưới 3×3 phân nhóm SP theo SL mua (cột) và SL bán (hàng): Thấp/TB/Cao. Click ô để xem DS. Góc trên-phải = mua ít bán nhiều (rủi ro hết hàng).
+                    </div>
                     <t t-if="flowMatrix">
                         <div class="pf-matrix-wrap">
                             <div class="pf-matrix-ylabel">SL Bán ↑</div>
@@ -87,6 +93,9 @@
                     <h4 class="pf-sc-title">
                         <i class="fa fa-balance-scale me-1" style="color:#e67700;"/>Phân bổ tỷ lệ Bán/Mua
                     </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Tỷ lệ = SL bán ÷ SL mua. Gần 1.0 là cân đối. &lt;0.5 = mua nhiều hơn bán. &gt;2.0 = bán nhiều hơn mua. Click cột để xem DS.
+                    </div>
                     <t t-if="balanceDistribution">
                         <div class="pf-bal-chart">
                             <t t-foreach="balanceDistribution.buckets" t-as="bk" t-key="bk.label">
@@ -121,6 +130,9 @@
                     <h4 class="pf-sc-title">
                         <i class="fa fa-th-large me-1" style="color:#c2255c;"/>Mật độ Mua - Bán (Log)
                     </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Heatmap 7×7 theo thang log. Trục ngang = SL mua, trục dọc = SL bán. Ô đậm = nhiều SP tập trung. Click ô để xem DS.
+                    </div>
                     <t t-if="densityMap">
                         <div class="pf-density-wrap">
                             <div class="pf-density-ylabel">SL Bán ↑</div>
@@ -150,6 +162,9 @@
                     <h4 class="pf-sc-title">
                         <i class="fa fa-exchange me-1" style="color:#e03131;"/>SP mất cân đối nhất
                     </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Top 5 SP có chênh lệch mua-bán lớn nhất. ×N = bán gấp N lần mua (rủi ro hết hàng) hoặc mua gấp N lần bán (tồn kho dư).
+                    </div>
                     <t t-if="topImbalanced.highSell.length > 0 || topImbalanced.highBuy.length > 0">
                         <t t-if="topImbalanced.highSell.length > 0">
                             <div class="pf-imb-label pf-imb-sell">
