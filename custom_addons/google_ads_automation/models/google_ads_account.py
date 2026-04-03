@@ -748,12 +748,15 @@ class GoogleAdsAccount(models.Model):
                     if not campaign_record:
                         continue # Bỏ qua nếu chưa đồng bộ campaign này
                     
+                    type_code = ad_group.type_.name if hasattr(ad_group, 'type_') else 'UNKNOWN'
+                    type_rec = self._get_or_create_ad_group_type(type_code)
+                    
                     vals = {
                         'name': ad_group.name,
                         'campaign_id': campaign_record.id,
                         'google_ad_group_id': str(ad_group.id),
                         'status': status_name,
-                        'type': ad_group.type_.name if hasattr(ad_group, 'type_') else 'UNKNOWN',
+                        'type_id': type_rec.id,
                         'clicks': metrics.clicks,
                         'impressions': metrics.impressions,
                         'cost': metrics.cost_micros / 1000000.0,
@@ -818,12 +821,15 @@ class GoogleAdsAccount(models.Model):
                     
                     final_urls = ", ".join(ad.final_urls) if getattr(ad, 'final_urls', None) else ""
                     
+                    type_code = ad.type_.name if hasattr(ad, 'type_') else 'UNKNOWN'
+                    type_rec = self._get_or_create_ad_type(type_code)
+                    
                     vals = {
                         'name': ad.name or f"Ad {ad.id}",
                         'ad_group_id': ad_group_record.id,
                         'google_ad_id': str(ad.id),
                         'status': status_name,
-                        'type': ad.type_.name if hasattr(ad, 'type_') else 'UNKNOWN',
+                        'type_id': type_rec.id,
                         'final_urls': final_urls,
                         'clicks': metrics.clicks,
                         'impressions': metrics.impressions,
@@ -843,6 +849,28 @@ class GoogleAdsAccount(models.Model):
             
         except GoogleAdsException as ex:
             raise UserError(_("Không thể lấy dữ liệu mẫu quảng cáo. Lỗi API: %s") % str(ex))
+
+    def _get_or_create_ad_group_type(self, code):
+        """Helper: Tìm hoặc tạo record google.ads.ad.group.type từ mã của Google"""
+        model = self.env['google.ads.ad.group.type']
+        existing = model.search([('code', '=', code)], limit=1)
+        if existing:
+            return existing
+        return model.create({
+            'code': code,
+            'name': code.replace('_', ' ').title(),
+        })
+
+    def _get_or_create_ad_type(self, code):
+        """Helper: Tìm hoặc tạo record google.ads.ad.type từ mã của Google"""
+        model = self.env['google.ads.ad.type']
+        existing = model.search([('code', '=', code)], limit=1)
+        if existing:
+            return existing
+        return model.create({
+            'code': code,
+            'name': code.replace('_', ' ').title(),
+        })
 
     @api.model
     def cron_fetch_adsroid_insights(self):
