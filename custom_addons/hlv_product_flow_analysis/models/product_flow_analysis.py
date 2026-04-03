@@ -269,13 +269,16 @@ class ProductFlowAnalysis(models.AbstractModel):
             if not partner:
                 continue
 
-            # Dùng commercial_partner_id để gộp tất cả liên hệ cùng 1 công ty
+            # Gộp theo tên công ty (commercial_partner) để tránh trùng NCC cùng tên
             company = partner.commercial_partner_id or partner
+            group_key = (company.name or company.display_name or '').strip()
+            if not group_key:
+                continue
 
-            if company.id not in supplier_data:
-                supplier_data[company.id] = {
+            if group_key not in supplier_data:
+                supplier_data[group_key] = {
                     'partner_id': company.id,
-                    'partner_name': company.display_name,
+                    'partner_name': group_key,
                     'total_qty': 0.0,
                     'total_amount': 0.0,
                     'move_count': 0,
@@ -285,14 +288,15 @@ class ProductFlowAnalysis(models.AbstractModel):
                     '_delivery_days': [],
                 }
 
-            supplier_data[company.id]['_po_ids'].add(order.id)
+            sd = supplier_data[group_key]
+            sd['_po_ids'].add(order.id)
 
             # Tính thời gian giao hàng: PO date_order → picking done date
             if order.date_order:
                 for picking in order.picking_ids.filtered(lambda pk: pk.state == 'done' and pk.date_done):
                     delta = (picking.date_done - order.date_order).days
                     if delta >= 0:
-                        supplier_data[company.id]['_delivery_days'].append(delta)
+                        sd['_delivery_days'].append(delta)
 
             for line in order.order_line:
                 if line.display_type:
@@ -304,11 +308,11 @@ class ProductFlowAnalysis(models.AbstractModel):
                 qty = line.product_qty
                 price = line.price_unit or 0.0
 
-                supplier_data[company.id]['total_qty'] += qty
-                supplier_data[company.id]['total_amount'] += qty * price
+                sd['total_qty'] += qty
+                sd['total_amount'] += qty * price
 
-                if prod.id not in supplier_data[company.id]['products']:
-                    supplier_data[company.id]['products'][prod.id] = {
+                if prod.id not in sd['products']:
+                    sd['products'][prod.id] = {
                         'product_id': prod.id,
                         'product_name': prod.display_name,
                         'default_code': prod.default_code or '',
@@ -319,7 +323,7 @@ class ProductFlowAnalysis(models.AbstractModel):
                         '_pickings': set(),
                     }
 
-                p = supplier_data[company.id]['products'][prod.id]
+                p = sd['products'][prod.id]
                 p['qty'] += qty
                 p['amount'] += qty * price
                 p['_all_pos'].add(order.name)
