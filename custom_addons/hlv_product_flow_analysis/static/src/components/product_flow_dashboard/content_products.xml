@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_product_flow_analysis.ContentProducts">
+                <div class="pf-toolbar">
+                    <div class="pf-search-box">
+                        <i class="fa fa-search"/>
+                        <input type="text" placeholder="Tìm sản phẩm / mã..."
+                               t-on-input="(ev) => this.onProductSearch(ev)"/>
+                    </div>
+                    <div class="pf-filter-group pf-filter-inline">
+                        <label>Số lần mua ≥</label>
+                        <input type="number" min="0" class="pf-count-input" value="0"
+                               t-on-change="(ev) => this.onMinCountChange(ev)"/>
+                    </div>
+                    <div class="pf-toolbar-right">
+                        <span class="pf-result-count">
+                            <t t-esc="productTotalFiltered"/> sản phẩm
+                        </span>
+                        <button class="pf-btn-export" t-on-click="() => this.exportProductExcel()"
+                                t-att-disabled="state.isExporting">
+                            <i class="fa fa-file-excel-o me-1"/>Xuất Excel
+                        </button>
+                    </div>
+                </div>
+
+                <div class="pf-table-wrap">
+                    <table class="pf-table">
+                        <thead>
+                            <tr>
+                                <th class="pf-th-num">#</th>
+                                <th class="pf-th-sortable" t-on-click="() => this.sortProducts('default_code')">
+                                    Mã SP <i t-att-class="getSortIcon('products', 'default_code')"/>
+                                </th>
+                                <th class="pf-th-sortable" t-on-click="() => this.sortProducts('product_name')">
+                                    Tên sản phẩm <i t-att-class="getSortIcon('products', 'product_name')"/>
+                                </th>
+                                <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('incoming_qty')">
+                                    SL Mua <i t-att-class="getSortIcon('products', 'incoming_qty')"/>
+                                </th>
+                                <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('incoming_count')">
+                                    Lần mua <i t-att-class="getSortIcon('products', 'incoming_count')"/>
+                                </th>
+                                <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('outgoing_qty')">
+                                    SL Bán <i t-att-class="getSortIcon('products', 'outgoing_qty')"/>
+                                </th>
+                                <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('outgoing_count')">
+                                    Lần bán <i t-att-class="getSortIcon('products', 'outgoing_count')"/>
+                                </th>
+                                <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('turnover_count')">
+                                    Luân chuyển <i t-att-class="getSortIcon('products', 'turnover_count')"/>
+                                </th>
+                                <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('avg_storage_days')">
+                                    TB lưu kho (ngày) <i t-att-class="getSortIcon('products', 'avg_storage_days')"/>
+                                </th>
+                                <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('qty_available')">
+                                    Tồn kho <i t-att-class="getSortIcon('products', 'qty_available')"/>
+                                </th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <t t-foreach="filteredProducts" t-as="p" t-key="p.product_id">
+                                <tr>
+                                    <td class="pf-td-num" t-esc="getPageStart('products') + p_index + 1"/>
+                                    <td>
+                                        <span class="pf-code" t-esc="p.default_code || '-'"/>
+                                    </td>
+                                    <td>
+                                        <a href="#" class="pf-link"
+                                           t-on-click.prevent="() => this.openProduct(p.product_id)"
+                                           t-esc="p.product_name"/>
+                                    </td>
+                                    <td class="pf-td-num pf-incoming" t-esc="formatNumber(p.incoming_qty)"/>
+                                    <td t-att-class="'pf-td-num pf-incoming-count ' + getHeatClass(p.incoming_count, 'incoming_count')" t-esc="p.incoming_count"/>
+                                    <td class="pf-td-num pf-outgoing" t-esc="formatNumber(p.outgoing_qty)"/>
+                                    <td t-att-class="'pf-td-num pf-outgoing-count ' + getHeatClass(p.outgoing_count, 'outgoing_count')" t-esc="p.outgoing_count"/>
+                                    <td class="pf-td-num pf-turnover" t-esc="p.turnover_count"/>
+                                    <td class="pf-td-num">
+                                        <t t-if="p.avg_storage_days > 0">
+                                            <span t-att-class="p.avg_storage_days > 30 ? 'pf-storage-slow' : (p.avg_storage_days > 14 ? 'pf-storage-medium' : 'pf-storage-fast')">
+                                                <t t-esc="p.avg_storage_days"/> ngày
+                                            </span>
+                                        </t>
+                                        <t t-else="">-</t>
+                                    </td>
+                                    <td class="pf-td-num" t-esc="formatNumber(p.qty_available)"/>
+                                    <td>
+                                        <button class="pf-btn-trend" title="Xem trend 6 tháng"
+                                                t-on-click="() => this.showProductTrend(p.product_id, p.product_name)">
+                                            <i class="fa fa-line-chart"/>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </t>
+                            <t t-if="filteredProducts.length === 0">
+                                <tr>
+                                    <td colspan="11" class="pf-empty">Không có dữ liệu trong kỳ này</td>
+                                </tr>
+                            </t>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination - Products -->
+                <div class="pf-pagination">
+                    <div class="pf-page-size">
+                        <label>Hiển thị:</label>
+                        <select t-on-change="(ev) => this.onProductPageSizeChange(ev)">
+                            <option value="20" t-att-selected="state.productPageSize === 20">20</option>
+                            <option value="50" t-att-selected="state.productPageSize === 50">50</option>
+                            <option value="100" t-att-selected="state.productPageSize === 100">100</option>
+                        </select>
+                        <span>/ trang</span>
+                    </div>
+                    <div class="pf-page-nav">
+                        <button class="pf-page-btn" t-on-click="() => this.productPrevPage()"
+                                t-att-disabled="state.productPage &lt;= 1">
+                            <i class="fa fa-chevron-left"/>
+                        </button>
+                        <span class="pf-page-info">
+                            Trang <t t-esc="state.productPage"/> / <t t-esc="productTotalPages"/>
+                        </span>
+                        <button class="pf-page-btn" t-on-click="() => this.productNextPage()"
+                                t-att-disabled="state.productPage >= productTotalPages">
+                            <i class="fa fa-chevron-right"/>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Trend Modal -->
+                <t t-if="state.showTrend">
+                    <div class="pf-modal-backdrop" t-on-click="() => this.closeTrend()"/>
+                    <div class="pf-modal">
+                        <div class="pf-modal-header">
+                            <h3>
+                                <i class="fa fa-line-chart me-2"/>
+                                Trend 6 tháng: <t t-esc="state.trendProductName"/>
+                            </h3>
+                            <button class="pf-modal-close" t-on-click="() => this.closeTrend()">
+                                <i class="fa fa-times"/>
+                            </button>
+                        </div>
+                        <div class="pf-modal-body">
+                            <div class="pf-trend-chart">
+                                <t t-foreach="state.trendData" t-as="t" t-key="t.month">
+                                    <div class="pf-trend-col">
+                                        <div class="pf-trend-bars">
+                                            <div class="pf-trend-bar pf-bar-incoming"
+                                                 t-att-style="'height: ' + getTrendBarHeight(t.incoming, trendMaxVal)"
+                                                 t-att-title="'Mua: ' + formatNumber(t.incoming)">
+                                                <span class="pf-bar-val" t-esc="formatNumber(t.incoming)"/>
+                                            </div>
+                                            <div class="pf-trend-bar pf-bar-outgoing"
+                                                 t-att-style="'height: ' + getTrendBarHeight(t.outgoing, trendMaxVal)"
+                                                 t-att-title="'Bán: ' + formatNumber(t.outgoing)">
+                                                <span class="pf-bar-val" t-esc="formatNumber(t.outgoing)"/>
+                                            </div>
+                                        </div>
+                                        <div class="pf-trend-label" t-esc="t.month"/>
+                                    </div>
+                                </t>
+                            </div>
+                            <div class="pf-trend-legend">
+                                <span class="pf-legend-item">
+                                    <span class="pf-legend-color pf-bar-incoming"/>Mua
+                                </span>
+                                <span class="pf-legend-item">
+                                    <span class="pf-legend-color pf-bar-outgoing"/>Bán
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </t>
+    </t>
+</templates>

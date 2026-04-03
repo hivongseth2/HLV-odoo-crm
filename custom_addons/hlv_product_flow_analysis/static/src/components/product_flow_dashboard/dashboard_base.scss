@@ -1,0 +1,208 @@
+﻿/* ===== Dashboard Base Styles ===== */
+
+/* ===== Product Flow Analysis Dashboard ===== */
+
+/* Override Odoo's o_action_manager overflow: hidden */
+.o_action_manager:has(.pf-dashboard) {
+    overflow: auto !important;
+}
+
+.pf-dashboard {
+    background: #f0f2f5;
+    min-height: 100%;
+    overflow-y: auto;
+    padding: 0;
+    padding-bottom: 40px;
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Loading */
+.pf-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    color: #6c757d;
+}
+
+.pf-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #e9ecef;
+    border-top-color: #017e84;
+    border-radius: 50%;
+    animation: pf-spin 0.8s linear infinite;
+    margin-bottom: 16px;
+}
+
+@keyframes pf-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Header */
+.pf-header {
+    background: linear-gradient(135deg, #017e84 0%, #015b5f 100%);
+    color: white;
+    padding: 20px 28px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.pf-title {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.pf-period-label {
+    font-size: 13px;
+    opacity: 0.85;
+    display: block;
+    margin-top: 4px;
+}
+
+.pf-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.pf-filter-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    label {
+        font-size: 12px;
+        font-weight: 500;
+        opacity: 0.9;
+        white-space: nowrap;
+    }
+}
+
+.pf-select, .pf-date-input {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+    transition: background 0.2s;
+
+    &:focus {
+        background: rgba(255, 255, 255, 0.25);
+        border-color: rgba(255, 255, 255, 0.5);
+    }
+
+    option {
+        color: #333;
+        background: white;
+    }
+}
+
+.pf-date-input {
+    width: 140px;
+    color-scheme: dark;
+}
+
+/* Summary Cards */
+.pf-summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    padding: 20px 28px;
+}
+
+.pf-card {
+    background: white;
+    border-radius: 12px;
+    padding: 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    transition: transform 0.15s, box-shadow 0.15s;
+
+    &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    }
+}
+
+.pf-card-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    color: white;
+    flex-shrink: 0;
+}
+
+.pf-card-incoming .pf-card-icon { background: linear-gradient(135deg, #28a745, #20c997); }
+.pf-card-outgoing .pf-card-icon { background: linear-gradient(135deg, #dc3545, #fd7e14); }
+.pf-card-internal .pf-card-icon { background: linear-gradient(135deg, #6f42c1, #e83e8c); }
+.pf-card-products .pf-card-icon { background: linear-gradient(135deg, #007bff, #17a2b8); }
+.pf-card-suppliers .pf-card-icon { background: linear-gradient(135deg, #fd7e14, #ffc107); }
+
+.pf-card-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #212529;
+    line-height: 1.2;
+}
+
+.pf-card-label {
+    font-size: 13px;
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.pf-card-sub {
+    font-size: 11px;
+    color: #adb5bd;
+}
+
+/* Tabs */
+.pf-tabs {
+    display: flex;
+    gap: 0;
+    padding: 0 28px;
+    border-bottom: 2px solid #dee2e6;
+    background: white;
+}
+
+.pf-tab {
+    background: none;
+    border: none;
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #6c757d;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.2s, border-color 0.2s;
+
+    &:hover {
+        color: #017e84;
+    }
+
+    &.active {
+        color: #017e84;
+        border-bottom-color: #017e84;
+    }
+}
+
+/* Tab content */
+.pf-tab-content {
+    padding: 20px 28px;
+}

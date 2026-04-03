@@ -1,0 +1,116 @@
+﻿/* ===== Dashboard Responsive & Badge Styles ===== */
+
+@media (max-width: 768px) {
+    .pf-sidebar {
+        width: 320px;
+        right: -320px;
+    }
+    .pf-sidebar-open .pf-content-area {
+        margin-right: 0;
+    }
+    .pf-charts-toggle {
+        right: 12px;
+        bottom: 12px;
+        padding: 8px 14px;
+        font-size: 12px;
+    }
+    .pf-charts-grid {
+        grid-template-columns: 1fr;
+    }
+    .pf-card-recommend {
+        grid-column: span 1;
+    }
+    .pf-recommend-list {
+        grid-template-columns: 1fr;
+    }
+    .pf-header {
+        padding: 16px;
+    }
+
+    .pf-summary-cards {
+        grid-template-columns: repeat(2, 1fr);
+        padding: 12px 16px;
+    }
+
+    .pf-tab-content {
+        padding: 12px 16px;
+    }
+
+    .pf-tabs {
+        padding: 0 16px;
+        overflow-x: auto;
+    }
+
+    .pf-tab {
+        padding: 10px 14px;
+        font-size: 13px;
+    }
+
+    .pf-modal {
+        width: 95vw;
+    }
+}
+
+// ========== Priority & Frequency badges ==========
+.pf-priority-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+    min-width: 36px;
+}
+
+.pf-priority-high {
+    background: #d3f9d8;
+    color: #2b8a3e;
+}
+
+.pf-priority-medium {
+    background: #fff3bf;
+    color: #e67700;
+}
+
+.pf-priority-low {
+    background: #f1f3f5;
+    color: #868e96;
+}
+
+.pf-freq-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    background: #e7f5ff;
+    color: #1971c2;
+    min-width: 24px;
+    text-align: center;
+}
+
+// ========== Toggle all button ==========
+.pf-btn-toggle-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    background: #fff;
+    color: #495057;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-left: 6px;
+
+    &:hover {
+        background: #f1f3f5;
+    }
+
+    &.active {
+        background: #e7f5ff;
+        border-color: #74c0fc;
+        color: #1971c2;
+    }
+}

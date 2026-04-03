@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_product_flow_analysis.ContentPlanning">
+                <div class="pf-toolbar">
+                    <div class="pf-search-box">
+                        <i class="fa fa-search"/>
+                        <input type="text" placeholder="Tìm sản phẩm..."
+                               t-on-input="(ev) => this.onPlanningSearch(ev)"/>
+                    </div>
+                    <div class="pf-filter-group pf-filter-inline">
+                        <label>Tần suất ≥</label>
+                        <input type="number" min="1" class="pf-count-input" t-att-value="state.planningMinFrequency"
+                               t-on-change="(ev) => this.onPlanningMinFreqChange(ev)"/>
+                        <button t-att-class="'pf-btn-toggle-all ' + (state.planningShowAll ? 'active' : '')"
+                                t-on-click="() => this.togglePlanningShowAll()"
+                                t-att-title="state.planningShowAll ? 'Đang hiện tất cả' : 'Chỉ hiện SP hay giao dịch'">
+                            <i t-att-class="'fa ' + (state.planningShowAll ? 'fa-eye' : 'fa-filter')"/>
+                            <t t-if="state.planningShowAll"> Tất cả</t>
+                            <t t-else=""> Ưu tiên</t>
+                        </button>
+                    </div>
+                    <div class="pf-toolbar-right">
+                        <span class="pf-info-badge">
+                            <i class="fa fa-info-circle me-1"/>
+                            Lead time: 7 ngày | Safety: 3 ngày
+                        </span>
+                        <span class="pf-result-count">
+                            <t t-esc="planningTotalFiltered"/> sản phẩm
+                        </span>
+                    </div>
+                </div>
+
+                <div class="pf-table-wrap">
+                    <table class="pf-table">
+                        <thead>
+                            <tr>
+                                <th class="pf-th-num">#</th>
+                                <th>Mã SP</th>
+                                <th class="pf-th-sortable" t-on-click="() => this.sortPlanning('product_name')">
+                                    Tên sản phẩm <i t-att-class="getSortIcon('planning', 'product_name')"/>
+                                </th>
+                                <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortPlanning('total_frequency')">
+                                    Tần suất <i t-att-class="getSortIcon('planning', 'total_frequency')"/>
+                                </th>
+                                <th>Ưu tiên</th>
+                                <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortPlanning('total_outgoing')">
+                                    Tổng bán <i t-att-class="getSortIcon('planning', 'total_outgoing')"/>
+                                </th>
+                                <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortPlanning('avg_daily')">
+                                    TB/ngày <i t-att-class="getSortIcon('planning', 'avg_daily')"/>
+                                </th>
+                                <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortPlanning('qty_available')">
+                                    Tồn hiện tại <i t-att-class="getSortIcon('planning', 'qty_available')"/>
+                                </th>
+                                <th class="pf-th-num">Tồn tối thiểu</th>
+                                <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortPlanning('days_remaining')">
+                                    Còn (ngày) <i t-att-class="getSortIcon('planning', 'days_remaining')"/>
+                                </th>
+                                <th>Trạng thái</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <t t-foreach="filteredPlanning" t-as="p" t-key="p.product_id">
+                                <tr>
+                                    <td class="pf-td-num" t-esc="getPageStart('planning') + p_index + 1"/>
+                                    <td>
+                                        <span class="pf-code" t-esc="p.default_code || '-'"/>
+                                    </td>
+                                    <td>
+                                        <a href="#" class="pf-link"
+                                           t-on-click.prevent="() => this.openProduct(p.product_id)"
+                                           t-esc="p.product_name"/>
+                                    </td>
+                                    <td class="pf-td-num">
+                                        <span class="pf-freq-badge" t-esc="p.total_frequency || 0"/>
+                                    </td>
+                                    <td>
+                                        <span t-att-class="'pf-priority-badge ' + getPriorityClass(p.priority_level)"
+                                              t-esc="getPriorityLabel(p.priority_level)"/>
+                                    </td>
+                                    <td class="pf-td-num pf-outgoing" t-esc="formatNumber(p.total_outgoing)"/>
+                                    <td class="pf-td-num" t-esc="formatNumber(p.avg_daily)"/>
+                                    <td class="pf-td-num" t-esc="formatNumber(p.qty_available)"/>
+                                    <td class="pf-td-num pf-total-bold" t-esc="formatNumber(p.min_stock)"/>
+                                    <td class="pf-td-num">
+                                        <t t-if="p.days_remaining >= 9999">∞</t>
+                                        <t t-else="" t-esc="p.days_remaining"/>
+                                    </td>
+                                    <td>
+                                        <span t-att-class="'pf-status-badge ' + getStatusClass(p.status)"
+                                              t-esc="getStatusLabel(p.status)"/>
+                                    </td>
+                                </tr>
+                            </t>
+                            <t t-if="filteredPlanning.length === 0">
+                                <tr>
+                                    <td colspan="11" class="pf-empty">Không có dữ liệu kế hoạch trong kỳ này</td>
+                                </tr>
+                            </t>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination - Planning -->
+                <div class="pf-pagination">
+                    <div class="pf-page-size">
+                        <label>Hiển thị:</label>
+                        <select t-on-change="(ev) => this.onPlanningPageSizeChange(ev)">
+                            <option value="20" t-att-selected="state.planningPageSize === 20">20</option>
+                            <option value="50" t-att-selected="state.planningPageSize === 50">50</option>
+                            <option value="100" t-att-selected="state.planningPageSize === 100">100</option>
+                        </select>
+                        <span>/ trang</span>
+                    </div>
+                    <div class="pf-page-nav">
+                        <button class="pf-page-btn" t-on-click="() => this.planningPrevPage()"
+                                t-att-disabled="state.planningPage &lt;= 1">
+                            <i class="fa fa-chevron-left"/>
+                        </button>
+                        <span class="pf-page-info">
+                            Trang <t t-esc="state.planningPage"/> / <t t-esc="planningTotalPages"/>
+                        </span>
+                        <button class="pf-page-btn" t-on-click="() => this.planningNextPage()"
+                                t-att-disabled="state.planningPage >= planningTotalPages">
+                            <i class="fa fa-chevron-right"/>
+                        </button>
+                    </div>
+                </div>
+    </t>
+</templates>
