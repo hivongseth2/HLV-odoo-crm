@@ -72,6 +72,10 @@ export class ProductFlowDashboard extends Component {
             aiStats: null,
             aiModel: "",
             aiTokens: {},
+            // AI Chat
+            aiChatMessages: [],
+            aiChatInput: "",
+            aiChatLoading: false,
         });
 
         onWillStart(async () => {

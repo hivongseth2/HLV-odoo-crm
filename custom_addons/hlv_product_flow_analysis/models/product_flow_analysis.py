@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 import logging
@@ -1025,3 +1026,289 @@ class ProductFlowAnalysis(models.AbstractModel):
             "- Tồn kho thực = stock_quant.quantity tại location có usage='internal'\n"
             "- Dùng date_order để lọc theo kỳ phân tích"
         )
+
+    @api.model
+    def chat_with_ai(self, user_message, conversation_history=None, period='month',
+                     date_from=False, date_to=False, warehouse_id=False):
+        """Chat tương tác với AI — hỗ trợ query DB và tạo Excel."""
+        api_key = self.env['ir.config_parameter'].sudo().get_param('openai.api_key', '')
+        if not api_key:
+            return {'error': 'Chưa cấu hình OpenAI API Key. Vào Cài đặt → Thông số hệ thống → thêm key "openai.api_key".'}
+
+        if not user_message or not user_message.strip():
+            return {'error': 'Vui lòng nhập câu hỏi.'}
+
+        d_from, d_to = self._compute_date_range(period, date_from, date_to)
+        date_ctx = f"Kỳ phân tích hiện tại: {d_from} đến {d_to}"
+        if warehouse_id:
+            wh = self.env['stock.warehouse'].browse(warehouse_id)
+            date_ctx += f", Kho: {wh.name}"
+
+        schema = self._get_db_schema_description()
+        system_prompt = (
+            "Bạn là trợ lý AI phân tích mua hàng cho công ty thương mại (trading company).\n\n"
+            "Bạn có thể:\n"
+            "1. Truy vấn database PostgreSQL (chỉ SELECT) để lấy dữ liệu theo yêu cầu người dùng\n"
+            "2. Tạo file Excel báo cáo từ kết quả truy vấn\n\n"
+            "Đặc điểm nghiệp vụ:\n"
+            "- Công ty MUA hàng từ NCC rồi BÁN lại cho khách\n"
+            "- Có kho riêng lưu trữ. Không phải SP nào cũng nên lưu kho\n"
+            "- Nhiều SP chỉ mua-bán 1-2 lần (mua theo yêu cầu)\n\n"
+            f"Database schema:\n{schema}\n\n"
+            f"{date_ctx}\n\n"
+            "Quy tắc:\n"
+            "- Luôn thêm LIMIT (tối đa 200) trong mỗi query\n"
+            "- Trả lời bằng tiếng Việt, ngắn gọn, rõ ràng\n"
+            "- Sử dụng markdown: ## heading, **bold**, - bullet points\n"
+            "- Khi người dùng yêu cầu tạo báo cáo/excel, hãy:\n"
+            "  + Đầu tiên query dữ liệu cần thiết\n"
+            "  + Sau đó gọi generate_excel với tiêu đề cột và dữ liệu\n"
+            "- Đưa ra con số cụ thể trong phân tích"
+        )
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "query_database",
+                    "description": "Truy vấn SQL SELECT trên database PostgreSQL. Luôn thêm LIMIT (tối đa 200).",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "sql": {"type": "string", "description": "Câu truy vấn PostgreSQL SELECT"},
+                            "purpose": {"type": "string", "description": "Mục đích truy vấn"}
+                        },
+                        "required": ["sql", "purpose"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "generate_excel",
+                    "description": "Tạo file Excel từ dữ liệu đã query. Gọi sau khi đã có dữ liệu từ query_database.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string", "description": "Tiêu đề báo cáo"},
+                            "sheets": {
+                                "type": "array",
+                                "description": "Danh sách các sheet trong Excel",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {"type": "string", "description": "Tên sheet (max 31 ký tự)"},
+                                        "headers": {
+                                            "type": "array",
+                                            "items": {"type": "string"},
+                                            "description": "Tên cột header"
+                                        },
+                                        "rows": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "array",
+                                                "items": {}
+                                            },
+                                            "description": "Dữ liệu các dòng, mỗi dòng là mảng giá trị"
+                                        }
+                                    },
+                                    "required": ["name", "headers", "rows"]
+                                }
+                            }
+                        },
+                        "required": ["title", "sheets"]
+                    }
+                }
+            },
+        ]
+
+        # Build messages from history
+        messages = [{"role": "system", "content": system_prompt}]
+        if conversation_history:
+            for msg in conversation_history:
+                role = msg.get('role', 'user')
+                if role in ('user', 'assistant'):
+                    messages.append({"role": role, "content": msg.get('content', '')})
+        messages.append({"role": "user", "content": user_message})
+
+        headers_req = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+        }
+        total_tokens = {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}
+        model_used = 'gpt-4o-mini'
+        excel_file = None
+
+        try:
+            for iteration in range(8):
+                response = requests.post(
+                    'https://api.openai.com/v1/chat/completions',
+                    headers=headers_req,
+                    json={
+                        'model': 'gpt-4o-mini',
+                        'messages': messages,
+                        'tools': tools,
+                        'tool_choice': 'auto',
+                        'temperature': 0.3,
+                        'max_tokens': 4000,
+                    },
+                    timeout=30,
+                )
+                response.raise_for_status()
+                result = response.json()
+                model_used = result.get('model', model_used)
+                usage = result.get('usage', {})
+                for k in total_tokens:
+                    total_tokens[k] += usage.get(k, 0)
+
+                choice = result['choices'][0]
+                message = choice['message']
+                messages.append(message)
+
+                tool_calls = message.get('tool_calls')
+                if tool_calls:
+                    for tc in tool_calls:
+                        fn_name = tc['function']['name']
+                        try:
+                            args = json.loads(tc['function']['arguments'])
+                        except json.JSONDecodeError:
+                            args = {}
+
+                        if fn_name == 'query_database':
+                            sql = args.get('sql', '')
+                            _logger.info("AI Chat query [%s]: %s", args.get('purpose', ''), sql[:200])
+                            query_result = self._execute_readonly_query(sql)
+                            messages.append({
+                                'role': 'tool',
+                                'tool_call_id': tc['id'],
+                                'content': json.dumps(query_result, ensure_ascii=False, default=str)[:8000],
+                            })
+                        elif fn_name == 'generate_excel':
+                            title = args.get('title', 'Báo cáo')
+                            sheets = args.get('sheets', [])
+                            _logger.info("AI generating Excel: %s (%d sheets)", title, len(sheets))
+                            excel_result = self._generate_excel_from_ai(title, sheets)
+                            if excel_result.get('success'):
+                                excel_file = {
+                                    'data': excel_result['data'],
+                                    'filename': excel_result['filename'],
+                                }
+                                messages.append({
+                                    'role': 'tool',
+                                    'tool_call_id': tc['id'],
+                                    'content': json.dumps({
+                                        'success': True,
+                                        'message': f'Đã tạo file Excel "{excel_result["filename"]}" thành công.',
+                                    }),
+                                })
+                            else:
+                                messages.append({
+                                    'role': 'tool',
+                                    'tool_call_id': tc['id'],
+                                    'content': json.dumps({'error': excel_result.get('error', 'Lỗi tạo Excel')}),
+                                })
+                        else:
+                            messages.append({
+                                'role': 'tool',
+                                'tool_call_id': tc['id'],
+                                'content': json.dumps({'error': f'Unknown function: {fn_name}'}),
+                            })
+                else:
+                    # Final response
+                    resp = {
+                        'reply': message.get('content', ''),
+                        'model': model_used,
+                        'tokens': total_tokens,
+                    }
+                    if excel_file:
+                        resp['excel'] = excel_file
+                    return resp
+
+            # Max iterations
+            last_content = ''
+            for msg in reversed(messages):
+                if msg.get('role') == 'assistant' and msg.get('content'):
+                    last_content = msg['content']
+                    break
+            resp = {
+                'reply': last_content or 'Xử lý chưa hoàn tất.',
+                'model': model_used,
+                'tokens': total_tokens,
+            }
+            if excel_file:
+                resp['excel'] = excel_file
+            return resp
+
+        except requests.exceptions.Timeout:
+            return {'error': 'OpenAI API timeout. Vui lòng thử lại.'}
+        except requests.exceptions.HTTPError as e:
+            status = e.response.status_code if e.response else 'unknown'
+            detail = ''
+            if e.response is not None:
+                try:
+                    detail = e.response.json().get('error', {}).get('message', '')
+                except Exception:
+                    pass
+            return {'error': f'OpenAI API lỗi ({status}): {detail}'}
+        except Exception as e:
+            _logger.exception("AI chat error")
+            return {'error': f'Lỗi: {str(e)}'}
+
+    @api.model
+    def _generate_excel_from_ai(self, title, sheets):
+        """Generate Excel file from AI-provided data structure."""
+        try:
+            import xlsxwriter
+        except ImportError:
+            return {'error': 'Thiếu thư viện xlsxwriter.'}
+
+        output = io.BytesIO()
+        wb = xlsxwriter.Workbook(output, {'in_memory': True})
+
+        header_fmt = wb.add_format({
+            'bold': True, 'bg_color': '#667eea', 'font_color': 'white',
+            'border': 1, 'align': 'center', 'valign': 'vcenter', 'font_size': 11,
+        })
+        num_fmt = wb.add_format({'num_format': '#,##0.##', 'border': 1, 'align': 'right'})
+        text_fmt = wb.add_format({'border': 1, 'text_wrap': True})
+        title_fmt = wb.add_format({'bold': True, 'font_size': 14})
+
+        for sheet_def in sheets[:5]:  # Max 5 sheets
+            sheet_name = str(sheet_def.get('name', 'Sheet'))[:31]
+            ws = wb.add_worksheet(sheet_name)
+
+            ws.write(0, 0, title, title_fmt)
+
+            col_headers = sheet_def.get('headers', [])
+            for col, h in enumerate(col_headers):
+                ws.write(2, col, str(h), header_fmt)
+
+            rows = sheet_def.get('rows', [])
+            for r_idx, row_data in enumerate(rows[:500]):  # Max 500 rows
+                for c_idx, val in enumerate(row_data):
+                    if val is None:
+                        ws.write(r_idx + 3, c_idx, '', text_fmt)
+                    elif isinstance(val, (int, float)):
+                        ws.write_number(r_idx + 3, c_idx, val, num_fmt)
+                    else:
+                        ws.write(r_idx + 3, c_idx, str(val), text_fmt)
+
+            # Auto-size columns (estimate)
+            for col in range(len(col_headers)):
+                max_len = len(str(col_headers[col])) if col < len(col_headers) else 8
+                for row_data in rows[:50]:
+                    if col < len(row_data) and row_data[col] is not None:
+                        max_len = max(max_len, len(str(row_data[col])))
+                ws.set_column(col, col, min(max_len + 2, 50))
+
+        wb.close()
+        output.seek(0)
+
+        safe_title = re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')[:40]
+        filename = f"{safe_title}_{date.today().strftime('%Y%m%d')}.xlsx"
+
+        return {
+            'success': True,
+            'data': base64.b64encode(output.read()).decode('utf-8'),
+            'filename': filename,
+        }

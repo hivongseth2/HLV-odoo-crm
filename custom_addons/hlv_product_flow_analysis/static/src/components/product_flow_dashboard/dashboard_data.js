@@ -424,6 +424,121 @@ export const dashboardDataMixins = {
         this.state.aiStats = null;
     },
 
+    // ========== AI Chat ==========
+    onChatInputChange(ev) {
+        this.state.aiChatInput = ev.target.value;
+    },
+
+    onChatKeydown(ev) {
+        if (ev.key === 'Enter' && !ev.shiftKey) {
+            ev.preventDefault();
+            this.sendChatMessage();
+        }
+    },
+
+    async sendChatMessage() {
+        const text = (this.state.aiChatInput || '').trim();
+        if (!text || this.state.aiChatLoading) return;
+
+        // Add user message
+        this.state.aiChatMessages = [
+            ...this.state.aiChatMessages,
+            { role: 'user', content: text, ts: Date.now() },
+        ];
+        this.state.aiChatInput = "";
+        this.state.aiChatLoading = true;
+
+        // Scroll to bottom
+        this._scrollChatToBottom();
+
+        try {
+            // Build history (last 10 messages for context)
+            const history = this.state.aiChatMessages
+                .filter(m => m.role === 'user' || m.role === 'assistant')
+                .slice(-10)
+                .map(m => ({ role: m.role, content: m.content }));
+            // Remove last user message (sent separately)
+            history.pop();
+
+            const result = await this.orm.call(
+                "product.flow.analysis",
+                "chat_with_ai",
+                [],
+                {
+                    user_message: text,
+                    conversation_history: history,
+                    period: this.state.period,
+                    date_from: this.state.dateFrom || false,
+                    date_to: this.state.dateTo || false,
+                    warehouse_id: this.state.warehouseId || false,
+                }
+            );
+
+            if (result.error) {
+                this.state.aiChatMessages = [
+                    ...this.state.aiChatMessages,
+                    { role: 'error', content: result.error, ts: Date.now() },
+                ];
+            } else {
+                const msg = {
+                    role: 'assistant',
+                    content: result.reply || '',
+                    model: result.model || '',
+                    tokens: result.tokens || {},
+                    ts: Date.now(),
+                };
+                if (result.excel) {
+                    msg.excel = result.excel;
+                }
+                this.state.aiChatMessages = [...this.state.aiChatMessages, msg];
+            }
+        } catch (e) {
+            this.state.aiChatMessages = [
+                ...this.state.aiChatMessages,
+                { role: 'error', content: 'Lỗi kết nối: ' + (e.message || e), ts: Date.now() },
+            ];
+        }
+        this.state.aiChatLoading = false;
+        this._scrollChatToBottom();
+    },
+
+    clearChat() {
+        this.state.aiChatMessages = [];
+        this.state.aiChatInput = "";
+    },
+
+    downloadExcel(msg) {
+        if (!msg.excel) return;
+        const { data, filename } = msg.excel;
+        const byteCharacters = atob(data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename || 'report.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    },
+
+    _scrollChatToBottom() {
+        setTimeout(() => {
+            const el = document.querySelector('.pf-chat-messages');
+            if (el) el.scrollTop = el.scrollHeight;
+        }, 50);
+    },
+
+    useSuggestion(text) {
+        this.state.aiChatInput = text;
+        this.sendChatMessage();
+    },
+
     /** Convert markdown-like text to safe HTML for display */
     renderMarkdown(text) {
         if (!text) return "";

@@ -2,36 +2,27 @@
 <templates xml:space="preserve">
     <t t-name="hlv_product_flow_analysis.SidebarAI">
         <div class="pf-sidebar-ai">
-            <!-- Header & Button -->
-            <div class="pf-ai-header">
-                <div class="pf-ai-icon">
-                    <i class="fa fa-magic"/>
-                </div>
-                <h4>AI Phân tích mua hàng</h4>
-                <p class="pf-ai-desc">
-                    Sử dụng GPT phân tích dữ liệu lưu thông, đề xuất chiến lược mua hàng
-                    và mức tồn kho tối thiểu cho từng sản phẩm.
-                </p>
+
+            <!-- === Quick Analysis Button === -->
+            <div class="pf-ai-header-compact">
                 <button class="pf-ai-btn"
                         t-att-disabled="state.aiLoading"
                         t-on-click="() => this.runAiAnalysis()">
                     <t t-if="state.aiLoading">
-                        <div class="pf-spinner-sm"/>
-                        Đang phân tích...
+                        <div class="pf-spinner-sm"/> Đang phân tích...
                     </t>
                     <t t-else="">
-                        <i class="fa fa-bolt me-1"/>
-                        Phân tích với AI
+                        <i class="fa fa-bolt me-1"/> Phân tích tổng quan
                     </t>
                 </button>
                 <t t-if="state.aiAnalysis">
                     <button class="pf-ai-btn-clear" t-on-click="() => this.clearAiAnalysis()">
-                        <i class="fa fa-refresh me-1"/>Phân tích lại
+                        <i class="fa fa-refresh me-1"/>Xoá
                     </button>
                 </t>
             </div>
 
-            <!-- Error -->
+            <!-- Error auto-analysis -->
             <t t-if="state.aiError">
                 <div class="pf-ai-error">
                     <i class="fa fa-exclamation-triangle me-1"/>
@@ -39,18 +30,15 @@
                 </div>
             </t>
 
-            <!-- Loading -->
+            <!-- Loading auto-analysis -->
             <t t-if="state.aiLoading">
                 <div class="pf-ai-loading">
-                    <div class="pf-ai-loading-dots">
-                        <span/><span/><span/>
-                    </div>
-                    <p>AI đang phân tích dữ liệu của bạn...</p>
-                    <p class="pf-ai-loading-sub">Quá trình này có thể mất 15-30 giây</p>
+                    <div class="pf-ai-loading-dots"><span/><span/><span/></div>
+                    <p>AI đang phân tích...</p>
                 </div>
             </t>
 
-            <!-- Stats Summary -->
+            <!-- Stats -->
             <t t-if="state.aiStats and !state.aiLoading">
                 <div class="pf-ai-stats">
                     <div class="pf-ai-stat">
@@ -72,12 +60,12 @@
                 </div>
             </t>
 
-            <!-- AI Analysis Result -->
+            <!-- Auto-analysis Result -->
             <t t-if="state.aiAnalysis and !state.aiLoading">
                 <div class="pf-ai-result">
                     <div class="pf-ai-result-header">
                         <i class="fa fa-lightbulb-o me-1"/>
-                        Kết quả phân tích AI
+                        Kết quả phân tích
                         <span class="pf-ai-model" t-if="state.aiModel">
                             (<t t-esc="state.aiModel"/>)
                         </span>
@@ -85,30 +73,116 @@
                     <div class="pf-ai-content" t-out="renderMarkdown(state.aiAnalysis)"/>
                     <t t-if="state.aiTokens and state.aiTokens.total_tokens">
                         <div class="pf-ai-footer">
-                            <small>
-                                Tokens: <t t-esc="state.aiTokens.total_tokens"/>
-                            </small>
+                            <small>Tokens: <t t-esc="state.aiTokens.total_tokens"/></small>
                         </div>
                     </t>
                 </div>
             </t>
 
-            <!-- Empty state -->
-            <t t-if="!state.aiAnalysis and !state.aiLoading and !state.aiError">
-                <div class="pf-ai-empty">
-                    <div class="pf-ai-empty-icon">
-                        <i class="fa fa-lightbulb-o"/>
+            <!-- === Chat Interface === -->
+            <div class="pf-chat-divider">
+                <span>Chat với AI</span>
+            </div>
+
+            <!-- Chat Messages -->
+            <div class="pf-chat-messages">
+                <!-- Empty state -->
+                <t t-if="state.aiChatMessages.length === 0 and !state.aiChatLoading">
+                    <div class="pf-chat-empty">
+                        <i class="fa fa-comments-o"/>
+                        <p>Hỏi bất cứ gì về dữ liệu mua bán</p>
+                        <div class="pf-chat-suggestions">
+                            <button class="pf-chat-suggest-btn" t-on-click="() => this.useSuggestion('Top 30 nhà cung cấp hay mua nhất')">
+                                Top 30 NCC hay mua
+                            </button>
+                            <button class="pf-chat-suggest-btn" t-on-click="() => this.useSuggestion('Top 30 sản phẩm hay mua nhất, tạo file Excel')">
+                                Top 30 SP hay mua (Excel)
+                            </button>
+                            <button class="pf-chat-suggest-btn" t-on-click="() => this.useSuggestion('Phân tích và tạo báo cáo mua hàng tổng hợp dạng Excel')">
+                                Báo cáo mua hàng (Excel)
+                            </button>
+                            <button class="pf-chat-suggest-btn" t-on-click="() => this.useSuggestion('Sản phẩm nào tồn kho cao nhưng ít bán?')">
+                                SP tồn kho cao ít bán
+                            </button>
+                        </div>
                     </div>
-                    <p>Nhấn <strong>"Phân tích với AI"</strong> để nhận:</p>
-                    <ul>
-                        <li><i class="fa fa-check-circle me-1"/>Phân loại sản phẩm nên lưu kho</li>
-                        <li><i class="fa fa-check-circle me-1"/>Chiến lược mua hàng tối ưu</li>
-                        <li><i class="fa fa-check-circle me-1"/>Đề xuất tồn kho tối thiểu</li>
-                        <li><i class="fa fa-check-circle me-1"/>Đánh giá nhà cung cấp</li>
-                        <li><i class="fa fa-check-circle me-1"/>Cảnh báo rủi ro</li>
-                    </ul>
+                </t>
+
+                <!-- Message list -->
+                <t t-foreach="state.aiChatMessages" t-as="msg" t-key="msg.ts">
+                    <!-- User message -->
+                    <t t-if="msg.role === 'user'">
+                        <div class="pf-chat-msg pf-chat-msg-user">
+                            <div class="pf-chat-bubble pf-chat-bubble-user">
+                                <t t-esc="msg.content"/>
+                            </div>
+                        </div>
+                    </t>
+                    <!-- AI message -->
+                    <t t-if="msg.role === 'assistant'">
+                        <div class="pf-chat-msg pf-chat-msg-ai">
+                            <div class="pf-chat-avatar"><i class="fa fa-magic"/></div>
+                            <div class="pf-chat-bubble pf-chat-bubble-ai">
+                                <div class="pf-ai-content" t-out="renderMarkdown(msg.content)"/>
+                                <!-- Excel download -->
+                                <t t-if="msg.excel">
+                                    <div class="pf-chat-excel">
+                                        <button class="pf-chat-excel-btn" t-on-click="() => this.downloadExcel(msg)">
+                                            <i class="fa fa-file-excel-o me-1"/>
+                                            <t t-esc="msg.excel.filename"/>
+                                        </button>
+                                    </div>
+                                </t>
+                                <div class="pf-chat-meta" t-if="msg.model">
+                                    <small><t t-esc="msg.model"/> · <t t-esc="msg.tokens.total_tokens || 0"/> tokens</small>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                    <!-- Error message -->
+                    <t t-if="msg.role === 'error'">
+                        <div class="pf-chat-msg pf-chat-msg-ai">
+                            <div class="pf-chat-bubble pf-chat-bubble-error">
+                                <i class="fa fa-exclamation-triangle me-1"/>
+                                <t t-esc="msg.content"/>
+                            </div>
+                        </div>
+                    </t>
+                </t>
+
+                <!-- Typing indicator -->
+                <t t-if="state.aiChatLoading">
+                    <div class="pf-chat-msg pf-chat-msg-ai">
+                        <div class="pf-chat-avatar"><i class="fa fa-magic"/></div>
+                        <div class="pf-chat-bubble pf-chat-bubble-ai pf-chat-typing">
+                            <div class="pf-ai-loading-dots"><span/><span/><span/></div>
+                        </div>
+                    </div>
+                </t>
+            </div>
+
+            <!-- Chat Input -->
+            <div class="pf-chat-input-area">
+                <div class="pf-chat-input-wrap">
+                    <input type="text" class="pf-chat-input"
+                           placeholder="Hỏi về dữ liệu mua bán, NCC, tạo báo cáo..."
+                           t-att-value="state.aiChatInput"
+                           t-on-input="onChatInputChange"
+                           t-on-keydown="onChatKeydown"
+                           t-att-disabled="state.aiChatLoading"/>
+                    <button class="pf-chat-send-btn"
+                            t-att-disabled="state.aiChatLoading or !state.aiChatInput"
+                            t-on-click="() => this.sendChatMessage()">
+                        <i class="fa fa-paper-plane"/>
+                    </button>
                 </div>
-            </t>
+                <div class="pf-chat-actions">
+                    <button class="pf-chat-clear-btn" t-on-click="() => this.clearChat()"
+                            t-if="state.aiChatMessages.length > 0">
+                        <i class="fa fa-trash-o me-1"/>Xoá hội thoại
+                    </button>
+                </div>
+            </div>
         </div>
     </t>
 </templates>
