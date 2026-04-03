@@ -1,6 +1,7 @@
 import io
 import json
 import logging
+import re
 import requests
 from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
@@ -777,143 +778,162 @@ class ProductFlowAnalysis(models.AbstractModel):
 
     @api.model
     def get_ai_procurement_analysis(self, period='month', date_from=False, date_to=False, warehouse_id=False):
-        """Gửi dữ liệu phân tích tới OpenAI GPT để nhận chiến lược mua hàng & tồn kho tối thiểu."""
+        """Phân tích AI kiểu MCP: GPT tự query database qua function calling."""
         api_key = self.env['ir.config_parameter'].sudo().get_param('openai.api_key', '')
         if not api_key:
             return {'error': 'Chưa cấu hình OpenAI API Key. Vào Cài đặt → Thông số hệ thống → thêm key "openai.api_key".'}
 
-        # Thu thập dữ liệu
+        # Quick stats for sidebar display
         product_data = self.get_product_flow_data(
             period=period, date_from=date_from, date_to=date_to, warehouse_id=warehouse_id
         )
-        supplier_data = self.get_supplier_flow_data(
-            period=period, date_from=date_from, date_to=date_to, warehouse_id=warehouse_id
-        )
-        planning_data = self.get_inventory_planning_data(
-            period=period, date_from=date_from, date_to=date_to, warehouse_id=warehouse_id, min_frequency=2
-        )
-        trend_data = self.get_aggregate_trend_data(warehouse_id=warehouse_id, months=6)
-
-        # Phân loại sản phẩm
         products = product_data.get('products', [])
-        high_freq = [p for p in products if p['outgoing_count'] >= 5]
-        medium_freq = [p for p in products if 2 <= p['outgoing_count'] < 5]
-        low_freq = [p for p in products if p['outgoing_count'] == 1]
-        no_sell = [p for p in products if p['outgoing_count'] == 0 and p['incoming_count'] > 0]
+        product_stats = {
+            'total': len(products),
+            'high_freq': len([p for p in products if p['outgoing_count'] >= 5]),
+            'medium_freq': len([p for p in products if 2 <= p['outgoing_count'] < 5]),
+            'low_freq': len([p for p in products if p['outgoing_count'] == 1]),
+            'no_sell': len([p for p in products if p['outgoing_count'] == 0 and p['incoming_count'] > 0]),
+        }
 
-        # Tóm tắt sản phẩm (giới hạn để không vượt token)
-        def summarize_products(items, limit=30):
-            result = []
-            for p in items[:limit]:
-                result.append({
-                    'name': p['product_name'][:60],
-                    'sku': p['default_code'],
-                    'buy': p['incoming_count'],
-                    'sell': p['outgoing_count'],
-                    'buy_qty': round(p['incoming_qty'], 1),
-                    'sell_qty': round(p['outgoing_qty'], 1),
-                    'stock': round(p['qty_available'], 1),
-                    'storage_days': round(p.get('avg_storage_days', 0), 1),
-                })
-            return result
+        # Date range context
+        d_from, d_to = self._compute_date_range(period, date_from, date_to)
+        date_ctx = f"Kỳ phân tích: {d_from} đến {d_to}"
+        if warehouse_id:
+            wh = self.env['stock.warehouse'].browse(warehouse_id)
+            date_ctx += f", Kho: {wh.name}"
 
-        # Tóm tắt nhà cung cấp
-        suppliers = supplier_data.get('suppliers', [])
-        supplier_summary = []
-        for s in suppliers[:20]:
-            supplier_summary.append({
-                'name': s['partner_name'][:40],
-                'products': s['product_count'],
-                'orders': s['move_count'],
-                'amount': round(s['total_amount']),
-                'delivery_days': s.get('avg_delivery_days', 0),
-            })
-
-        # Tóm tắt planning
-        planning = planning_data.get('planning', [])
-        planning_summary = []
-        for p in planning[:30]:
-            planning_summary.append({
-                'name': p['product_name'][:60],
-                'freq': p['total_frequency'],
-                'daily_avg': p['avg_daily'],
-                'min_stock': p['min_stock'],
-                'stock': round(p['qty_available'], 1),
-                'days_left': p['days_remaining'] if p['days_remaining'] < 9999 else 'N/A',
-                'priority': p['priority_level'],
-            })
-
-        data_payload = json.dumps({
-            'period': product_data.get('period', period),
-            'date_from': product_data.get('date_from', ''),
-            'date_to': product_data.get('date_to', ''),
-            'total_products': len(products),
-            'high_frequency_products': summarize_products(high_freq),
-            'medium_frequency_products': summarize_products(medium_freq),
-            'low_frequency_count': len(low_freq),
-            'low_frequency_sample': summarize_products(low_freq, 10),
-            'no_sell_count': len(no_sell),
-            'suppliers': supplier_summary,
-            'inventory_planning': planning_summary,
-            'trend_6months': trend_data.get('trends', []),
-        }, ensure_ascii=False)
-
+        schema = self._get_db_schema_description()
         system_prompt = (
-            "Bạn là chuyên gia phân tích chuỗi cung ứng và quản lý tồn kho cho công ty thương mại (trading company).\n\n"
+            "Bạn là chuyên gia phân tích chuỗi cung ứng và quản lý tồn kho cho công ty thương mại.\n\n"
             "Đặc điểm nghiệp vụ:\n"
             "- Công ty MUA hàng từ nhà cung cấp rồi BÁN lại cho khách hàng\n"
-            "- Có kho riêng có thể lưu trữ hàng hóa\n"
-            "- KHÔNG phải tất cả sản phẩm đều nên lưu kho sẵn\n"
-            "- Nhiều sản phẩm chỉ mua-bán 1-2 lần rồi không bán nữa (mua theo yêu cầu)\n"
-            "- Một số sản phẩm bán thường xuyên (pin, sạc, linh kiện...) → nên lưu kho\n\n"
+            "- Có kho riêng lưu trữ hàng hóa\n"
+            "- KHÔNG phải tất cả sản phẩm đều nên lưu kho\n"
+            "- Nhiều SP chỉ mua-bán 1-2 lần (mua theo yêu cầu khách)\n"
+            "- Một số SP bán thường xuyên → nên lưu kho sẵn\n\n"
+            "Bạn có quyền truy vấn database PostgreSQL (chỉ SELECT) để lấy dữ liệu.\n"
+            "Hãy tự query dữ liệu cần thiết, phân tích và đưa ra đề xuất cụ thể.\n"
+            "Chú ý thêm LIMIT vào mỗi query (tối đa 200 dòng).\n\n"
             "Nhiệm vụ phân tích:\n"
-            "1. **Phân loại sản phẩm**: Xác định sản phẩm nào nên lưu kho, sản phẩm nào mua theo đơn\n"
-            "2. **Chiến lược mua hàng**: Đề xuất thời điểm, số lượng mua cho các sản phẩm bán thường xuyên\n"
-            "3. **Tồn kho tối thiểu**: Đề xuất mức tồn kho tối thiểu cho từng sản phẩm cần lưu kho\n"
-            "4. **Đánh giá nhà cung cấp**: Nhà cung cấp nào ổn định, giao nhanh, nên ưu tiên\n"
-            "5. **Cảnh báo rủi ro**: Sản phẩm sắp hết, xu hướng bất thường, hàng tồn lâu\n"
-            "6. **Xu hướng**: Phân tích trend 6 tháng, dự báo ngắn hạn\n\n"
-            "Trả lời bằng tiếng Việt, ngắn gọn, có cấu trúc rõ ràng với các mục đánh số.\n"
-            "Sử dụng markdown formatting (## cho heading, **bold** cho emphasis, - cho bullet points).\n"
-            "Đưa ra con số cụ thể khi đề xuất tồn kho tối thiểu."
+            "1. Phân loại SP: nên lưu kho vs mua theo đơn\n"
+            "2. Chiến lược mua hàng: thời điểm, số lượng cho SP bán thường xuyên\n"
+            "3. Tồn kho tối thiểu cho SP cần lưu kho (đưa CON SỐ CỤ THỂ)\n"
+            "4. Đánh giá nhà cung cấp: ổn định, giao nhanh, nên ưu tiên\n"
+            "5. Cảnh báo rủi ro: hàng sắp hết, tồn lâu, xu hướng bất thường\n"
+            "6. Xu hướng và dự báo ngắn hạn\n\n"
+            f"Database schema:\n{schema}\n\n"
+            "Trả lời bằng tiếng Việt, ngắn gọn, có cấu trúc rõ ràng.\n"
+            "Sử dụng markdown: ## heading, **bold**, - bullet points.\n"
+            "Đưa ra con số cụ thể khi đề xuất."
         )
 
-        user_prompt = f"Phân tích dữ liệu lưu thông hàng hóa và đề xuất chiến lược mua hàng, tồn kho tối thiểu:\n\n{data_payload}"
+        tools = [{
+            "type": "function",
+            "function": {
+                "name": "query_database",
+                "description": "Thực thi truy vấn SQL SELECT trên database PostgreSQL để lấy dữ liệu phân tích. Luôn thêm LIMIT (tối đa 200).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "sql": {
+                            "type": "string",
+                            "description": "Câu truy vấn PostgreSQL SELECT"
+                        },
+                        "purpose": {
+                            "type": "string",
+                            "description": "Mục đích của truy vấn này"
+                        }
+                    },
+                    "required": ["sql", "purpose"]
+                }
+            }
+        }]
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"{date_ctx}.\nPhân tích dữ liệu lưu thông hàng hóa và đề xuất chiến lược mua hàng, tồn kho tối thiểu."},
+        ]
+
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+        }
+        total_tokens = {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}
+        model_used = 'gpt-4o-mini'
 
         try:
-            response = requests.post(
-                'https://api.openai.com/v1/chat/completions',
-                headers={
-                    'Authorization': f'Bearer {api_key}',
-                    'Content-Type': 'application/json',
-                },
-                json={
-                    'model': 'gpt-4o-mini',
-                    'messages': [
-                        {'role': 'system', 'content': system_prompt},
-                        {'role': 'user', 'content': user_prompt},
-                    ],
-                    'temperature': 0.3,
-                    'max_tokens': 4000,
-                },
-                timeout=60,
-            )
-            response.raise_for_status()
-            result = response.json()
-            ai_text = result['choices'][0]['message']['content']
+            for iteration in range(8):
+                response = requests.post(
+                    'https://api.openai.com/v1/chat/completions',
+                    headers=headers,
+                    json={
+                        'model': 'gpt-4o-mini',
+                        'messages': messages,
+                        'tools': tools,
+                        'tool_choice': 'auto',
+                        'temperature': 0.3,
+                        'max_tokens': 4000,
+                    },
+                    timeout=30,
+                )
+                response.raise_for_status()
+                result = response.json()
+                model_used = result.get('model', model_used)
+                usage = result.get('usage', {})
+                for k in total_tokens:
+                    total_tokens[k] += usage.get(k, 0)
 
+                choice = result['choices'][0]
+                message = choice['message']
+                messages.append(message)
+
+                tool_calls = message.get('tool_calls')
+                if tool_calls:
+                    for tc in tool_calls:
+                        fn_name = tc['function']['name']
+                        try:
+                            args = json.loads(tc['function']['arguments'])
+                        except json.JSONDecodeError:
+                            args = {}
+
+                        if fn_name == 'query_database':
+                            sql = args.get('sql', '')
+                            _logger.info("AI query [%s]: %s", args.get('purpose', ''), sql[:200])
+                            query_result = self._execute_readonly_query(sql)
+                            messages.append({
+                                'role': 'tool',
+                                'tool_call_id': tc['id'],
+                                'content': json.dumps(query_result, ensure_ascii=False, default=str)[:8000],
+                            })
+                        else:
+                            messages.append({
+                                'role': 'tool',
+                                'tool_call_id': tc['id'],
+                                'content': json.dumps({'error': f'Unknown function: {fn_name}'}),
+                            })
+                else:
+                    # Final response — no more tool calls
+                    return {
+                        'analysis': message.get('content', ''),
+                        'model': model_used,
+                        'tokens': total_tokens,
+                        'product_stats': product_stats,
+                    }
+
+            # Max iterations reached
+            last_content = ''
+            for msg in reversed(messages):
+                if msg.get('role') == 'assistant' and msg.get('content'):
+                    last_content = msg['content']
+                    break
             return {
-                'analysis': ai_text,
-                'model': result.get('model', 'gpt-4o-mini'),
-                'tokens': result.get('usage', {}),
-                'product_stats': {
-                    'total': len(products),
-                    'high_freq': len(high_freq),
-                    'medium_freq': len(medium_freq),
-                    'low_freq': len(low_freq),
-                    'no_sell': len(no_sell),
-                },
+                'analysis': last_content or 'Phân tích chưa hoàn tất (đã đạt giới hạn vòng lặp).',
+                'model': model_used,
+                'tokens': total_tokens,
+                'product_stats': product_stats,
             }
+
         except requests.exceptions.Timeout:
             return {'error': 'OpenAI API timeout. Vui lòng thử lại.'}
         except requests.exceptions.HTTPError as e:
@@ -928,3 +948,76 @@ class ProductFlowAnalysis(models.AbstractModel):
         except Exception as e:
             _logger.exception("AI analysis error")
             return {'error': f'Lỗi khi gọi AI: {str(e)}'}
+
+    @api.model
+    def _execute_readonly_query(self, sql, max_rows=200):
+        """Execute a read-only SQL SELECT query safely with savepoint protection."""
+        sql = sql.strip().rstrip(';').strip()
+
+        if not sql.upper().startswith('SELECT'):
+            return {'error': 'Chỉ cho phép truy vấn SELECT.'}
+
+        sql_upper = sql.upper()
+        banned_keywords = [
+            'INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'CREATE',
+            'TRUNCATE', 'GRANT', 'REVOKE', 'EXECUTE', 'COPY', 'VACUUM',
+        ]
+        for kw in banned_keywords:
+            if re.search(r'\b' + kw + r'\b', sql_upper):
+                return {'error': f'Từ khóa không được phép: {kw}'}
+
+        if 'LIMIT' not in sql_upper:
+            sql = f"SELECT * FROM ({sql}) _sub LIMIT {max_rows}"
+
+        cr = self.env.cr
+        try:
+            cr.execute("SAVEPOINT ai_query_sp")
+            cr.execute("SET LOCAL statement_timeout = '10s'")
+            cr.execute(sql)
+            columns = [desc[0] for desc in cr.description]
+            rows = cr.fetchmany(max_rows)
+            cr.execute("RELEASE SAVEPOINT ai_query_sp")
+
+            data = [dict(zip(columns, row)) for row in rows]
+            return {'columns': columns, 'row_count': len(data), 'data': data}
+        except Exception as e:
+            try:
+                cr.execute("ROLLBACK TO SAVEPOINT ai_query_sp")
+            except Exception:
+                pass
+            return {'error': f'Lỗi truy vấn: {str(e)}'}
+
+    @api.model
+    def _get_db_schema_description(self):
+        """Return database schema description for AI context."""
+        return (
+            "1. product_product (pp) - Sản phẩm\n"
+            "   - id, default_code (SKU/mã SP), barcode, active, product_tmpl_id\n"
+            "2. product_template (pt) - Template SP (JOIN pp.product_tmpl_id = pt.id)\n"
+            "   - id, name, list_price, standard_price, type, categ_id\n"
+            "3. purchase_order (po) - Đơn mua hàng\n"
+            "   - id, name, partner_id (NCC), date_order, state, amount_total, currency_id\n"
+            "   - state: 'draft','sent','purchase' (đã xác nhận),'done' (hoàn thành),'cancel'\n"
+            "4. purchase_order_line (pol) - Chi tiết đơn mua\n"
+            "   - id, order_id, product_id, product_qty, qty_received, price_unit, price_subtotal, date_planned\n"
+            "5. sale_order (so) - Đơn bán hàng\n"
+            "   - id, name, partner_id (KH), date_order, state, amount_total, warehouse_id\n"
+            "   - state: 'draft','sent','sale' (đã xác nhận),'done','cancel'\n"
+            "6. sale_order_line (sol) - Chi tiết đơn bán\n"
+            "   - id, order_id, product_id, product_uom_qty, qty_delivered, price_unit, price_subtotal\n"
+            "7. stock_move (sm) - Dịch chuyển kho\n"
+            "   - id, product_id, product_uom_qty, state, date, picking_id, origin, location_id, location_dest_id\n"
+            "   - state: 'draft','waiting','confirmed','assigned','done','cancel'\n"
+            "8. stock_quant (sq) - Tồn kho hiện tại\n"
+            "   - id, product_id, location_id, quantity, reserved_quantity\n"
+            "9. stock_warehouse (sw) - Kho hàng: id, name, code\n"
+            "10. stock_location (sl) - Vị trí kho\n"
+            "    - id, name, usage ('internal','customer','supplier','transit'), complete_name\n"
+            "11. res_partner (rp) - Đối tác: id, name, supplier_rank, customer_rank, email, phone, city\n"
+            "12. product_category (pc) - Danh mục SP: id, name, complete_name, parent_id\n\n"
+            "Lưu ý:\n"
+            "- supplier_rank > 0 = nhà cung cấp, customer_rank > 0 = khách hàng\n"
+            "- stock_location.usage = 'internal' cho vị trí kho nội bộ\n"
+            "- Tồn kho thực = stock_quant.quantity tại location có usage='internal'\n"
+            "- Dùng date_order để lọc theo kỳ phân tích"
+        )

@@ -8,6 +8,7 @@ import { productChartMixins } from "./chart_products";
 import { supplierChartMixins } from "./chart_suppliers";
 import { correlationChartMixins } from "./chart_correlation";
 import { trendChartMixins } from "./chart_trend";
+import { analysisChartMixins } from "./chart_analysis";
 import { drilldownMixins } from "./drilldown";
 
 export class ProductFlowDashboard extends Component {
@@ -222,7 +223,7 @@ export class ProductFlowDashboard extends Component {
 }
 
 // Apply mixins (preserves getters via property descriptors)
-const mixins = [dashboardDataMixins, productChartMixins, supplierChartMixins, correlationChartMixins, trendChartMixins, drilldownMixins];
+const mixins = [dashboardDataMixins, productChartMixins, supplierChartMixins, correlationChartMixins, trendChartMixins, analysisChartMixins, drilldownMixins];
 for (const mixin of mixins) {
     Object.defineProperties(
         ProductFlowDashboard.prototype,

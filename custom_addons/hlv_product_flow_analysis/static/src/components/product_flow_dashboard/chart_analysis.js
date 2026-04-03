@@ -1,0 +1,203 @@
+/** @odoo-module **/
+
+/**
+ * Analysis chart getters: Treemap, Scatter Plot, SVG Heatmap.
+ */
+export const analysisChartMixins = {
+
+    // ========== Treemap: Product proportion by total quantity ==========
+    get treemapData() {
+        const n = Math.min(this.state.topN || 10, 20);
+        const products = [...this.state.products]
+            .filter(p => (p.incoming_qty + p.outgoing_qty) > 0)
+            .sort((a, b) => (b.incoming_qty + b.outgoing_qty) - (a.incoming_qty + a.outgoing_qty))
+            .slice(0, n);
+
+        if (!products.length) return { rects: [] };
+
+        const W = 300, H = 200;
+        const total = products.reduce((s, p) => s + p.incoming_qty + p.outgoing_qty, 0) || 1;
+
+        const items = products.map(p => {
+            const qty = p.incoming_qty + p.outgoing_qty;
+            const freq = p.outgoing_count + p.incoming_count;
+            const color = freq >= 10 ? '#e03131' : freq >= 5 ? '#ff922b' : freq >= 2 ? '#fcc419' : '#adb5bd';
+            return {
+                id: p.product_id,
+                value: qty,
+                label: p.default_code || p.product_name.substring(0, 10),
+                name: p.product_name,
+                qty,
+                freq,
+                color,
+            };
+        });
+
+        const rects = this._layoutTreemap(items, 0, 0, W, H);
+        return { rects, width: W, height: H };
+    },
+
+    _layoutTreemap(items, x, y, w, h) {
+        if (!items.length) return [];
+        if (items.length === 1) {
+            return [{ ...items[0], x, y, w, h }];
+        }
+
+        const total = items.reduce((s, i) => s + i.value, 0);
+        if (total <= 0) return [];
+
+        let halfSum = 0;
+        let splitIdx = 1;
+        for (let i = 0; i < items.length - 1; i++) {
+            halfSum += items[i].value;
+            if (halfSum >= total / 2) {
+                splitIdx = i + 1;
+                break;
+            }
+        }
+
+        const left = items.slice(0, splitIdx);
+        const right = items.slice(splitIdx);
+        const leftSum = left.reduce((s, i) => s + i.value, 0);
+        const ratio = leftSum / total;
+
+        if (w >= h) {
+            const leftW = w * ratio;
+            return [
+                ...this._layoutTreemap(left, x, y, leftW, h),
+                ...this._layoutTreemap(right, x + leftW, y, w - leftW, h),
+            ];
+        } else {
+            const leftH = h * ratio;
+            return [
+                ...this._layoutTreemap(left, x, y, w, leftH),
+                ...this._layoutTreemap(right, x, y + leftH, w, h - leftH),
+            ];
+        }
+    },
+
+    // ========== Scatter Plot: Buy qty (X) vs Sell qty (Y) ==========
+    get scatterPlotData() {
+        const products = this.state.products.filter(p => p.incoming_qty > 0 || p.outgoing_qty > 0);
+        if (!products.length) return { points: [], show: false };
+
+        const W = 280, H = 210;
+        const pad = { l: 38, r: 8, t: 8, b: 28 };
+        const plotW = W - pad.l - pad.r;
+        const plotH = H - pad.t - pad.b;
+
+        const maxBuy = Math.max(...products.map(p => p.incoming_qty)) || 1;
+        const maxSell = Math.max(...products.map(p => p.outgoing_qty)) || 1;
+
+        const points = products.slice(0, 60).map(p => {
+            const x = pad.l + (p.incoming_qty / maxBuy) * plotW;
+            const y = pad.t + plotH - (p.outgoing_qty / maxSell) * plotH;
+            const totalQty = p.incoming_qty + p.outgoing_qty;
+            const r = Math.min(Math.max(Math.sqrt(totalQty) * 0.4 + 2, 3), 14);
+
+            const ratio = p.incoming_qty > 0 ? p.outgoing_qty / p.incoming_qty : (p.outgoing_qty > 0 ? 2 : 0);
+            const color = ratio > 1.5 ? '#e03131' : ratio > 0.8 ? '#2b8a3e' : ratio > 0.3 ? '#339af0' : '#868e96';
+
+            return {
+                id: p.product_id,
+                x: Math.round(x * 10) / 10,
+                y: Math.round(y * 10) / 10,
+                r: Math.round(r * 10) / 10,
+                color,
+                label: p.default_code || p.product_name.substring(0, 8),
+                name: p.product_name,
+                buyQty: p.incoming_qty,
+                sellQty: p.outgoing_qty,
+            };
+        });
+
+        // Axis ticks (5 ticks each)
+        const xTicks = [0, 0.25, 0.5, 0.75, 1].map(p => ({
+            x: Math.round(pad.l + p * plotW),
+            label: this.formatNumber(Math.round(maxBuy * p)),
+        }));
+        const yTicks = [0, 0.25, 0.5, 0.75, 1].map(p => ({
+            y: Math.round(pad.t + plotH - p * plotH),
+            label: this.formatNumber(Math.round(maxSell * p)),
+        }));
+
+        // Diagonal reference line (1:1 ratio)
+        const scale = Math.min(maxBuy, maxSell);
+        const diagEndX = pad.l + (scale / maxBuy) * plotW;
+        const diagEndY = pad.t + plotH - (scale / maxSell) * plotH;
+
+        return {
+            points, show: true,
+            W, H, pad, plotW, plotH,
+            xTicks, yTicks,
+            axisBottom: pad.t + plotH,
+            diagX1: pad.l, diagY1: pad.t + plotH,
+            diagX2: diagEndX, diagY2: diagEndY,
+        };
+    },
+
+    // ========== SVG Heatmap: Product × Metrics with color intensity ==========
+    get svgHeatmapData() {
+        const n = Math.min(this.state.topN || 10, 12);
+        const products = [...this.state.products]
+            .filter(p => (p.incoming_qty + p.outgoing_qty) > 0)
+            .sort((a, b) => (b.incoming_qty + b.outgoing_qty) - (a.incoming_qty + a.outgoing_qty))
+            .slice(0, n);
+
+        if (!products.length) return { cells: [], show: false };
+
+        const metrics = [
+            { key: 'incoming_qty', label: 'SL Mua', baseColor: [51, 154, 240] },
+            { key: 'incoming_count', label: 'Lần Mua', baseColor: [116, 143, 252] },
+            { key: 'outgoing_qty', label: 'SL Bán', baseColor: [240, 101, 149] },
+            { key: 'outgoing_count', label: 'Lần Bán', baseColor: [255, 107, 107] },
+            { key: 'qty_available', label: 'Tồn kho', baseColor: [81, 207, 102] },
+        ];
+
+        // Max per metric for normalization
+        const maxVals = {};
+        for (const m of metrics) {
+            maxVals[m.key] = Math.max(...products.map(p => Math.abs(p[m.key] || 0)), 1);
+        }
+
+        const labelW = 58, cellW = 44, cellH = 18, headerH = 28, gap = 2;
+        const W = labelW + metrics.length * (cellW + gap);
+        const H = headerH + products.length * (cellH + gap) + 5;
+
+        const mLabels = metrics.map((m, j) => ({
+            x: labelW + j * (cellW + gap) + cellW / 2,
+            y: 14,
+            text: m.label,
+        }));
+
+        const rowLabels = products.map((p, i) => ({
+            x: 2,
+            y: headerH + i * (cellH + gap) + cellH / 2 + 4,
+            text: p.default_code || p.product_name.substring(0, 8),
+            title: p.product_name,
+        }));
+
+        const cells = [];
+        products.forEach((p, i) => {
+            metrics.forEach((m, j) => {
+                const val = Math.abs(p[m.key] || 0);
+                const intensity = val / maxVals[m.key];
+                const alpha = Math.max(intensity * 0.85 + 0.12, 0.12);
+                const [r, g, b] = m.baseColor;
+
+                cells.push({
+                    key: `${p.product_id}_${m.key}`,
+                    x: labelW + j * (cellW + gap),
+                    y: headerH + i * (cellH + gap),
+                    w: cellW,
+                    h: cellH,
+                    fill: `rgba(${r},${g},${b},${alpha.toFixed(2)})`,
+                    val: this.formatNumber(val),
+                    title: `${m.label}: ${this.formatNumber(val)}`,
+                });
+            });
+        });
+
+        return { cells, mLabels, rowLabels, W, H, show: true };
+    },
+};

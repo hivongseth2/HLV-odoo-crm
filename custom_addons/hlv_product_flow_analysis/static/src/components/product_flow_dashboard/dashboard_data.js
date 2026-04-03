@@ -1,5 +1,7 @@
 /** @odoo-module **/
 
+import { markup } from "@odoo/owl";
+
 /**
  * Data management mixins: filtered/sorted/paginated data, pagination handlers,
  * export, navigation, formatting helpers.
@@ -450,6 +452,6 @@ export const dashboardDataMixins = {
         html = html.replace(/(<\/h[45]>)\s*<\/p>/g, '$1');
         html = html.replace(/<p>\s*(<ul)/g, '$1');
         html = html.replace(/(<\/ul>)\s*<\/p>/g, '$1');
-        return html;
+        return markup(html);
     },
 };

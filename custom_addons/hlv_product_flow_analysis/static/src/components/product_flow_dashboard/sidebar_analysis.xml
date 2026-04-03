@@ -95,7 +95,153 @@
                     </div>
                 </div>
 
-                <!-- 3. Dual Bars: So sánh SL Mua vs Bán per product -->
+                <!-- 3. Treemap: Cơ cấu hàng hóa -->
+                <div class="pf-sc-card">
+                    <h4 class="pf-sc-title">
+                        <i class="fa fa-th-large me-1" style="color:#e03131;"/>Treemap: Cơ cấu hàng hóa
+                    </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Diện tích ~ tổng SL mua+bán. Màu theo tần suất: đỏ ≥10, cam 5-9, vàng 2-4, xám 1 lần.
+                    </div>
+                    <t t-if="treemapData.rects.length > 0">
+                        <div class="pf-svg-chart-wrap">
+                            <svg class="pf-chart-svg" viewBox="0 0 300 200" preserveAspectRatio="xMidYMid meet">
+                                <t t-foreach="treemapData.rects" t-as="r" t-key="r.id">
+                                    <rect t-att-x="r.x" t-att-y="r.y" t-att-width="r.w" t-att-height="r.h"
+                                          t-att-fill="r.color" stroke="#fff" stroke-width="1.5" rx="2" class="pf-tm-rect">
+                                        <title t-esc="r.name + ': ' + formatNumber(r.qty) + ' (' + r.freq + ' lần)'"/>
+                                    </rect>
+                                    <t t-if="r.w > 35 &amp;&amp; r.h > 16">
+                                        <text t-att-x="r.x + 4" t-att-y="r.y + 12"
+                                              class="pf-tm-label" t-esc="r.label"/>
+                                    </t>
+                                    <t t-if="r.w > 50 &amp;&amp; r.h > 28">
+                                        <text t-att-x="r.x + 4" t-att-y="r.y + 24"
+                                              class="pf-tm-val" t-esc="formatNumber(r.qty)"/>
+                                    </t>
+                                </t>
+                            </svg>
+                        </div>
+                        <div class="pf-tm-legend">
+                            <span><span class="pf-tm-dot" style="background:#e03131;"/>≥10</span>
+                            <span><span class="pf-tm-dot" style="background:#ff922b;"/>5-9</span>
+                            <span><span class="pf-tm-dot" style="background:#fcc419;"/>2-4</span>
+                            <span><span class="pf-tm-dot" style="background:#adb5bd;"/>1</span>
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <div class="pf-chart-empty">Chưa có dữ liệu</div>
+                    </t>
+                </div>
+
+                <!-- 4. Scatter Plot: Mua vs Bán -->
+                <div class="pf-sc-card">
+                    <h4 class="pf-sc-title">
+                        <i class="fa fa-dot-circle-o me-1" style="color:#2b8a3e;"/>Scatter: Mua vs Bán
+                    </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Trục X = SL mua, Y = SL bán. Kích thước = tổng SL. Đường chéo = cân bằng mua/bán.
+                    </div>
+                    <t t-if="scatterPlotData.show">
+                        <div class="pf-svg-chart-wrap">
+                            <svg class="pf-chart-svg" t-att-viewBox="'0 0 ' + scatterPlotData.W + ' ' + scatterPlotData.H"
+                                 preserveAspectRatio="xMidYMid meet">
+                                <!-- Grid lines -->
+                                <t t-foreach="scatterPlotData.xTicks" t-as="tk" t-key="tk.x">
+                                    <line t-att-x1="tk.x" t-att-y1="scatterPlotData.pad.t"
+                                          t-att-x2="tk.x" t-att-y2="scatterPlotData.axisBottom"
+                                          stroke="#f1f3f5" stroke-width="0.5"/>
+                                    <text t-att-x="tk.x" t-att-y="scatterPlotData.axisBottom + 14"
+                                          class="pf-sc-tick" text-anchor="middle" t-esc="tk.label"/>
+                                </t>
+                                <t t-foreach="scatterPlotData.yTicks" t-as="tk" t-key="tk.y">
+                                    <line t-att-x1="scatterPlotData.pad.l" t-att-y1="tk.y"
+                                          t-att-x2="scatterPlotData.pad.l + scatterPlotData.plotW" t-att-y2="tk.y"
+                                          stroke="#f1f3f5" stroke-width="0.5"/>
+                                    <text t-att-x="scatterPlotData.pad.l - 4" t-att-y="tk.y + 3"
+                                          class="pf-sc-tick" text-anchor="end" t-esc="tk.label"/>
+                                </t>
+                                <!-- Axes -->
+                                <line t-att-x1="scatterPlotData.pad.l" t-att-y1="scatterPlotData.pad.t"
+                                      t-att-x2="scatterPlotData.pad.l" t-att-y2="scatterPlotData.axisBottom"
+                                      stroke="#ced4da" stroke-width="1"/>
+                                <line t-att-x1="scatterPlotData.pad.l" t-att-y1="scatterPlotData.axisBottom"
+                                      t-att-x2="scatterPlotData.pad.l + scatterPlotData.plotW" t-att-y2="scatterPlotData.axisBottom"
+                                      stroke="#ced4da" stroke-width="1"/>
+                                <!-- Diagonal reference (1:1) -->
+                                <line t-att-x1="scatterPlotData.diagX1" t-att-y1="scatterPlotData.diagY1"
+                                      t-att-x2="scatterPlotData.diagX2" t-att-y2="scatterPlotData.diagY2"
+                                      stroke="#dee2e6" stroke-width="0.8" stroke-dasharray="4,3"/>
+                                <!-- Axis labels -->
+                                <text t-att-x="scatterPlotData.pad.l + scatterPlotData.plotW / 2"
+                                      t-att-y="scatterPlotData.H - 2"
+                                      class="pf-sc-axis-label" text-anchor="middle">SL Mua →</text>
+                                <text x="10" t-att-y="scatterPlotData.pad.t + scatterPlotData.plotH / 2"
+                                      class="pf-sc-axis-label" text-anchor="middle"
+                                      transform="rotate(-90, 10, 110)">SL Bán →</text>
+                                <!-- Points -->
+                                <t t-foreach="scatterPlotData.points" t-as="pt" t-key="pt.id">
+                                    <circle t-att-cx="pt.x" t-att-cy="pt.y" t-att-r="pt.r"
+                                            t-att-fill="pt.color" opacity="0.7" stroke="#fff" stroke-width="0.5"
+                                            class="pf-scatter-dot">
+                                        <title t-esc="pt.name + ' | Mua: ' + formatNumber(pt.buyQty) + ' | Bán: ' + formatNumber(pt.sellQty)"/>
+                                    </circle>
+                                </t>
+                            </svg>
+                        </div>
+                        <div class="pf-scatter-legend">
+                            <span><span class="pf-tm-dot" style="background:#e03131;"/>Bán &gt; Mua</span>
+                            <span><span class="pf-tm-dot" style="background:#2b8a3e;"/>Cân bằng</span>
+                            <span><span class="pf-tm-dot" style="background:#339af0;"/>Mua &gt; Bán</span>
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <div class="pf-chart-empty">Chưa có dữ liệu</div>
+                    </t>
+                </div>
+
+                <!-- 5. SVG Heatmap: Tổng quan đa chiều -->
+                <div class="pf-sc-card">
+                    <h4 class="pf-sc-title">
+                        <i class="fa fa-th me-1" style="color:#845ef7;"/>Heatmap: Tổng quan đa chiều
+                    </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Ma trận SP × chỉ số: SL mua, lần mua, SL bán, lần bán, tồn kho. Màu đậm = giá trị cao.
+                    </div>
+                    <t t-if="svgHeatmapData.show">
+                        <div class="pf-svg-chart-wrap pf-svg-heatmap-wrap">
+                            <svg class="pf-chart-svg" t-att-viewBox="'0 0 ' + svgHeatmapData.W + ' ' + svgHeatmapData.H"
+                                 preserveAspectRatio="xMidYMid meet">
+                                <!-- Metric column headers -->
+                                <t t-foreach="svgHeatmapData.mLabels" t-as="ml" t-key="ml.text">
+                                    <text t-att-x="ml.x" t-att-y="ml.y"
+                                          class="pf-hm-header" text-anchor="middle" t-esc="ml.text"/>
+                                </t>
+                                <!-- Row labels -->
+                                <t t-foreach="svgHeatmapData.rowLabels" t-as="rl" t-key="rl.text">
+                                    <text t-att-x="rl.x" t-att-y="rl.y"
+                                          class="pf-hm-row-label" t-esc="rl.text">
+                                        <title t-esc="rl.title"/>
+                                    </text>
+                                </t>
+                                <!-- Heatmap cells -->
+                                <t t-foreach="svgHeatmapData.cells" t-as="c" t-key="c.key">
+                                    <rect t-att-x="c.x" t-att-y="c.y" t-att-width="c.w" t-att-height="c.h"
+                                          t-att-fill="c.fill" rx="2" class="pf-hm-svg-cell">
+                                        <title t-esc="c.title"/>
+                                    </rect>
+                                    <text t-att-x="c.x + c.w / 2" t-att-y="c.y + c.h / 2 + 3.5"
+                                          class="pf-hm-cell-text" text-anchor="middle" t-esc="c.val"/>
+                                </t>
+                            </svg>
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <div class="pf-chart-empty">Chưa có dữ liệu</div>
+                    </t>
+                </div>
+
+                <!-- 6. Dual Bars: So sánh SL Mua vs Bán per product -->
                 <div class="pf-sc-card">
                     <h4 class="pf-sc-title">
                         <i class="fa fa-exchange me-1" style="color:#1971c2;"/>Top SP: Mua vs Bán
@@ -132,7 +278,7 @@
                     </div>
                 </div>
 
-                <!-- 4. Product Buy/Sell Heatmap (4 dimensions) -->
+                <!-- 7. Product Buy/Sell Heatmap (4 dimensions) -->
                 <div class="pf-sc-card">
                     <h4 class="pf-sc-title">
                         <i class="fa fa-th me-1" style="color:#e64980;"/>Nhiệt: SL × Tần suất
@@ -197,7 +343,7 @@
                     </t>
                 </div>
 
-                <!-- 5. Tối ưu mua hàng -->
+                <!-- 8. Tối ưu mua hàng -->
                 <div class="pf-sc-card">
                     <h4 class="pf-sc-title">
                         <i class="fa fa-shopping-cart me-1" style="color:#2b8a3e;"/>Tối ưu mua hàng
@@ -253,7 +399,7 @@
                     </t>
                 </div>
 
-                <!-- 6. Original NCC × SP heatmap -->
+                <!-- 9. Original NCC × SP heatmap -->
                 <div class="pf-sc-card">
                     <h4 class="pf-sc-title">
                         <i class="fa fa-th me-1" style="color:#e64980;"/>NCC × Sản phẩm (SL mua)

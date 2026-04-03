@@ -51,6 +51,7 @@
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/chart_suppliers.js",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/chart_correlation.js",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/chart_trend.js",
+            "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/chart_analysis.js",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/drilldown.js",
             "hlv_product_flow_analysis/static/src/components/product_flow_dashboard/product_flow_dashboard.js",
         ],
