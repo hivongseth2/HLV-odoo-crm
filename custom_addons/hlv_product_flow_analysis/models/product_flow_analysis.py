@@ -163,6 +163,7 @@ class ProductFlowAnalysis(models.AbstractModel):
                     'move_count': 0,
                     'product_count': 0,
                     'products': {},
+                    '_po_ids': set(),  # Track unique PO ids
                 }
 
             prod = move.product_id
@@ -171,7 +172,9 @@ class ProductFlowAnalysis(models.AbstractModel):
 
             supplier_data[partner.id]['total_qty'] += qty
             supplier_data[partner.id]['total_amount'] += qty * price
-            supplier_data[partner.id]['move_count'] += 1
+            # Đếm số đơn mua hàng (PO) thay vì phiếu nhập kho
+            if move.purchase_line_id and move.purchase_line_id.order_id:
+                supplier_data[partner.id]['_po_ids'].add(move.purchase_line_id.order_id.id)
 
             if prod.id not in supplier_data[partner.id]['products']:
                 supplier_data[partner.id]['products'][prod.id] = {
@@ -194,8 +197,9 @@ class ProductFlowAnalysis(models.AbstractModel):
                     move.picking_id.name
                 )
 
-        # Convert products dict to list
+        # Convert po count and products dict to list
         for sid in supplier_data:
+            supplier_data[sid]['move_count'] = len(supplier_data[sid].pop('_po_ids', set()))
             prods = supplier_data[sid]['products']
             for prod_data in prods.values():
                 prod_data['po_names'] = sorted(prod_data['po_names'])
@@ -514,7 +518,7 @@ class ProductFlowAnalysis(models.AbstractModel):
 
         ws.write(0, 0, f"Báo cáo nhà cung cấp ({data['date_from']} → {data['date_to']})", title_fmt)
 
-        headers = ['#', 'Nhà cung cấp', 'Tổng SL nhập', 'Tổng giá trị', 'Số lần nhập', 'Số SP']
+        headers = ['#', 'Nhà cung cấp', 'Tổng SL nhập', 'Tổng giá trị', 'Số lần mua (PO)', 'Số SP']
         for col, h in enumerate(headers):
             ws.write(2, col, h, header_fmt)
 
