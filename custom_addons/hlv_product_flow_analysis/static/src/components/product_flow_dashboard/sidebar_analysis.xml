@@ -243,13 +243,13 @@
                     </t>
                 </div>
 
-                <!-- 4. Scatter Plot: Mua vs Bán -->
+                <!-- 4. Scatter Plot: Mua vs Bán (số lượng) -->
                 <div class="pf-sc-card">
                     <h4 class="pf-sc-title">
-                        <i class="fa fa-dot-circle-o me-1" style="color:#2b8a3e;"/>Scatter: Mua vs Bán
+                        <i class="fa fa-dot-circle-o me-1" style="color:#2b8a3e;"/>Scatter: Số lượng Mua vs Bán
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Trục X = số lượng mua, Y = số lượng bán. Kích thước = tổng số lượng. Đường chéo = cân bằng mua/bán.
+                        <i class="fa fa-question-circle me-1"/>Trục X = số lượng mua, Y = số lượng bán. Kích thước = tổng số lượng. Đường chéo = cân bằng mua/bán. Click vào chấm để xem chi tiết.
                     </div>
                     <t t-if="scatterPlotData.show">
                         <div class="pf-svg-chart-wrap">
@@ -287,7 +287,7 @@
                                       class="pf-sc-axis-label" text-anchor="middle">Số lượng Mua →</text>
                                 <text x="10" t-att-y="scatterPlotData.pad.t + scatterPlotData.plotH / 2"
                                       class="pf-sc-axis-label" text-anchor="middle"
-                                      transform="rotate(-90, 10, 110)">Số lượng Bán →</text>
+                                      transform="rotate(-90, 10, 135)">Số lượng Bán →</text>
                                 <!-- Points -->
                                 <t t-foreach="scatterPlotData.points" t-as="pt" t-key="pt.id">
                                     <circle t-att-cx="pt.x" t-att-cy="pt.y" t-att-r="pt.r"
@@ -296,7 +296,7 @@
                                             t-att-data-product-id="pt.id"
                                             t-att-data-product-name="pt.name"
                                             t-on-click="onScatterDotClick">
-                                        <title t-esc="pt.name + ' | Lượng mua: ' + formatNumber(pt.buyQty) + ' | Lượng bán: ' + formatNumber(pt.sellQty) + ' (click xem chi tiết)'"/>
+                                        <title t-esc="pt.name + ' | Lượng mua: ' + formatNumber(pt.buyVal) + ' | Lượng bán: ' + formatNumber(pt.sellVal) + ' (click xem chi tiết)'"/>
                                     </circle>
                                 </t>
                             </svg>
@@ -307,6 +307,80 @@
                             <span><span class="pf-tm-dot" style="background:#339af0;"/>Mua &gt; Bán</span>
                         </div>
                         <t t-if="scatterPlotData.useLog">
+                            <div class="pf-chart-log-hint">
+                                <i class="fa fa-info-circle me-1"/>Đang dùng log scale (dữ liệu chênh lệch lớn)
+                            </div>
+                        </t>
+                    </t>
+                    <t t-else="">
+                        <div class="pf-chart-empty">Chưa có dữ liệu</div>
+                    </t>
+                </div>
+
+                <!-- 4b. Scatter Plot: Số lần Mua vs Số lần Bán -->
+                <div class="pf-sc-card">
+                    <h4 class="pf-sc-title">
+                        <i class="fa fa-dot-circle-o me-1" style="color:#845ef7;"/>Scatter: Số lần Mua vs Bán
+                    </h4>
+                    <div class="pf-chart-guide">
+                        <i class="fa fa-question-circle me-1"/>Trục X = số lần mua, Y = số lần bán. Kích thước = tổng số lần giao dịch. Đường chéo = cân bằng tần suất mua/bán. Click vào chấm để xem chi tiết.
+                    </div>
+                    <t t-if="scatterFreqData.show">
+                        <div class="pf-svg-chart-wrap">
+                            <svg class="pf-chart-svg" t-att-viewBox="'0 0 ' + scatterFreqData.W + ' ' + scatterFreqData.H"
+                                 preserveAspectRatio="xMidYMid meet">
+                                <!-- Grid lines -->
+                                <t t-foreach="scatterFreqData.xTicks" t-as="tk" t-key="tk.x">
+                                    <line t-att-x1="tk.x" t-att-y1="scatterFreqData.pad.t"
+                                          t-att-x2="tk.x" t-att-y2="scatterFreqData.axisBottom"
+                                          stroke="#f1f3f5" stroke-width="0.5"/>
+                                    <text t-att-x="tk.x" t-att-y="scatterFreqData.axisBottom + 14"
+                                          class="pf-sc-tick" text-anchor="middle" t-esc="tk.label"/>
+                                </t>
+                                <t t-foreach="scatterFreqData.yTicks" t-as="tk" t-key="tk.y">
+                                    <line t-att-x1="scatterFreqData.pad.l" t-att-y1="tk.y"
+                                          t-att-x2="scatterFreqData.pad.l + scatterFreqData.plotW" t-att-y2="tk.y"
+                                          stroke="#f1f3f5" stroke-width="0.5"/>
+                                    <text t-att-x="scatterFreqData.pad.l - 4" t-att-y="tk.y + 3"
+                                          class="pf-sc-tick" text-anchor="end" t-esc="tk.label"/>
+                                </t>
+                                <!-- Axes -->
+                                <line t-att-x1="scatterFreqData.pad.l" t-att-y1="scatterFreqData.pad.t"
+                                      t-att-x2="scatterFreqData.pad.l" t-att-y2="scatterFreqData.axisBottom"
+                                      stroke="#ced4da" stroke-width="1"/>
+                                <line t-att-x1="scatterFreqData.pad.l" t-att-y1="scatterFreqData.axisBottom"
+                                      t-att-x2="scatterFreqData.pad.l + scatterFreqData.plotW" t-att-y2="scatterFreqData.axisBottom"
+                                      stroke="#ced4da" stroke-width="1"/>
+                                <!-- Diagonal reference (1:1) -->
+                                <line t-att-x1="scatterFreqData.diagX1" t-att-y1="scatterFreqData.diagY1"
+                                      t-att-x2="scatterFreqData.diagX2" t-att-y2="scatterFreqData.diagY2"
+                                      stroke="#dee2e6" stroke-width="0.8" stroke-dasharray="4,3"/>
+                                <!-- Axis labels -->
+                                <text t-att-x="scatterFreqData.pad.l + scatterFreqData.plotW / 2"
+                                      t-att-y="scatterFreqData.H - 2"
+                                      class="pf-sc-axis-label" text-anchor="middle">Số lần Mua →</text>
+                                <text x="10" t-att-y="scatterFreqData.pad.t + scatterFreqData.plotH / 2"
+                                      class="pf-sc-axis-label" text-anchor="middle"
+                                      transform="rotate(-90, 10, 135)">Số lần Bán →</text>
+                                <!-- Points -->
+                                <t t-foreach="scatterFreqData.points" t-as="pt" t-key="pt.id">
+                                    <circle t-att-cx="pt.x" t-att-cy="pt.y" t-att-r="pt.r"
+                                            t-att-fill="pt.color" opacity="0.7" stroke="#fff" stroke-width="0.5"
+                                            class="pf-scatter-dot pf-clickable"
+                                            t-att-data-product-id="pt.id"
+                                            t-att-data-product-name="pt.name"
+                                            t-on-click="onScatterDotClick">
+                                        <title t-esc="pt.name + ' | Lần mua: ' + pt.buyVal + ' | Lần bán: ' + pt.sellVal + ' (click xem chi tiết)'"/>
+                                    </circle>
+                                </t>
+                            </svg>
+                        </div>
+                        <div class="pf-scatter-legend">
+                            <span><span class="pf-tm-dot" style="background:#e03131;"/>Bán nhiều hơn</span>
+                            <span><span class="pf-tm-dot" style="background:#2b8a3e;"/>Cân bằng</span>
+                            <span><span class="pf-tm-dot" style="background:#339af0;"/>Mua nhiều hơn</span>
+                        </div>
+                        <t t-if="scatterFreqData.useLog">
                             <div class="pf-chart-log-hint">
                                 <i class="fa fa-info-circle me-1"/>Đang dùng log scale (dữ liệu chênh lệch lớn)
                             </div>

@@ -86,28 +86,25 @@ export const analysisChartMixins = {
         }
     },
 
-    // ========== Scatter Plot: Buy qty (X) vs Sell qty (Y) ==========
+    // ========== Scatter Plot helpers ==========
     _logScale(val, maxVal) {
-        // Log scale: spreads out clustered data near zero
         if (val <= 0 || maxVal <= 0) return 0;
         return Math.log(val + 1) / Math.log(maxVal + 1);
     },
 
-    get scatterPlotData() {
-        const products = this._chartFilteredProducts();
+    _buildScatterData(products, getX, getY, getSizeVal) {
         if (!products.length) return { points: [], show: false };
 
-        const W = 280, H = 210;
-        const pad = { l: 38, r: 8, t: 8, b: 28 };
+        const W = 380, H = 280;
+        const pad = { l: 42, r: 10, t: 10, b: 30 };
         const plotW = W - pad.l - pad.r;
         const plotH = H - pad.t - pad.b;
 
-        const maxBuy = Math.max(...products.map(p => p.incoming_qty)) || 1;
-        const maxSell = Math.max(...products.map(p => p.outgoing_qty)) || 1;
+        const maxBuy = Math.max(...products.map(p => getX(p))) || 1;
+        const maxSell = Math.max(...products.map(p => getY(p))) || 1;
 
-        // Detect if outliers are skewing the chart (top value > 5x median)
-        const buyVals = products.map(p => p.incoming_qty).filter(v => v > 0).sort((a, b) => a - b);
-        const sellVals = products.map(p => p.outgoing_qty).filter(v => v > 0).sort((a, b) => a - b);
+        const buyVals = products.map(p => getX(p)).filter(v => v > 0).sort((a, b) => a - b);
+        const sellVals = products.map(p => getY(p)).filter(v => v > 0).sort((a, b) => a - b);
         const medianBuy = buyVals.length ? buyVals[Math.floor(buyVals.length / 2)] : 1;
         const medianSell = sellVals.length ? sellVals[Math.floor(sellVals.length / 2)] : 1;
         const useLog = (maxBuy > medianBuy * 5) || (maxSell > medianSell * 5);
@@ -115,13 +112,15 @@ export const analysisChartMixins = {
         const scaleX = (v) => useLog ? this._logScale(v, maxBuy) : v / maxBuy;
         const scaleY = (v) => useLog ? this._logScale(v, maxSell) : v / maxSell;
 
-        const points = products.slice(0, 60).map(p => {
-            const x = pad.l + scaleX(p.incoming_qty) * plotW;
-            const y = pad.t + plotH - scaleY(p.outgoing_qty) * plotH;
-            const totalQty = p.incoming_qty + p.outgoing_qty;
-            const r = Math.min(Math.max(Math.sqrt(totalQty) * 0.4 + 2, 3), 14);
+        const points = products.map(p => {
+            const xVal = getX(p);
+            const yVal = getY(p);
+            const x = pad.l + scaleX(xVal) * plotW;
+            const y = pad.t + plotH - scaleY(yVal) * plotH;
+            const sizeVal = getSizeVal(p);
+            const r = Math.min(Math.max(Math.sqrt(sizeVal) * 0.35 + 2, 2.5), 13);
 
-            const ratio = p.incoming_qty > 0 ? p.outgoing_qty / p.incoming_qty : (p.outgoing_qty > 0 ? 2 : 0);
+            const ratio = xVal > 0 ? yVal / xVal : (yVal > 0 ? 2 : 0);
             const color = ratio > 1.5 ? '#e03131' : ratio > 0.8 ? '#2b8a3e' : ratio > 0.3 ? '#339af0' : '#868e96';
 
             return {
@@ -132,29 +131,21 @@ export const analysisChartMixins = {
                 color,
                 label: p.default_code || p.product_name.substring(0, 8),
                 name: p.product_name,
-                buyQty: p.incoming_qty,
-                sellQty: p.outgoing_qty,
+                buyVal: xVal,
+                sellVal: yVal,
             };
         });
 
-        // Axis ticks (5 ticks each) — map back from scale to real values
         const tickPositions = [0, 0.25, 0.5, 0.75, 1];
         const xTicks = tickPositions.map(p => {
             const realVal = useLog ? Math.round(Math.pow(maxBuy + 1, p) - 1) : Math.round(maxBuy * p);
-            return {
-                x: Math.round(pad.l + p * plotW),
-                label: this.formatNumber(realVal),
-            };
+            return { x: Math.round(pad.l + p * plotW), label: this.formatNumber(realVal) };
         });
         const yTicks = tickPositions.map(p => {
             const realVal = useLog ? Math.round(Math.pow(maxSell + 1, p) - 1) : Math.round(maxSell * p);
-            return {
-                y: Math.round(pad.t + plotH - p * plotH),
-                label: this.formatNumber(realVal),
-            };
+            return { y: Math.round(pad.t + plotH - p * plotH), label: this.formatNumber(realVal) };
         });
 
-        // Diagonal reference line (1:1 ratio)
         const scale = Math.min(maxBuy, maxSell);
         const diagEndX = pad.l + scaleX(scale) * plotW;
         const diagEndY = pad.t + plotH - scaleY(scale) * plotH;
@@ -167,6 +158,30 @@ export const analysisChartMixins = {
             diagX1: pad.l, diagY1: pad.t + plotH,
             diagX2: diagEndX, diagY2: diagEndY,
         };
+    },
+
+    // ========== Scatter Plot: Buy qty (X) vs Sell qty (Y) ==========
+    get scatterPlotData() {
+        const products = this._chartFilteredProducts();
+        return this._buildScatterData(
+            products,
+            p => p.incoming_qty,
+            p => p.outgoing_qty,
+            p => p.incoming_qty + p.outgoing_qty
+        );
+    },
+
+    // ========== Scatter Plot: Buy freq (X) vs Sell freq (Y) ==========
+    get scatterFreqData() {
+        const products = this._chartFilteredProducts().filter(
+            p => (p.incoming_count + p.outgoing_count) > 0
+        );
+        return this._buildScatterData(
+            products,
+            p => p.incoming_count,
+            p => p.outgoing_count,
+            p => p.incoming_count + p.outgoing_count
+        );
     },
 
     // ========== SVG Heatmap: Product × Metrics with color intensity ==========
