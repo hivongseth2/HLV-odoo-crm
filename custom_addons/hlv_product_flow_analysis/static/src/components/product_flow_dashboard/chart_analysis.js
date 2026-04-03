@@ -177,9 +177,9 @@ export const analysisChartMixins = {
         if (!products.length) return { cells: [], show: false };
 
         const metrics = [
-            { key: 'incoming_qty', label: 'SL Mua', baseColor: [51, 154, 240] },
+            { key: 'incoming_qty', label: 'Lượng Mua', baseColor: [51, 154, 240] },
             { key: 'incoming_count', label: 'Lần Mua', baseColor: [116, 143, 252] },
-            { key: 'outgoing_qty', label: 'SL Bán', baseColor: [240, 101, 149] },
+            { key: 'outgoing_qty', label: 'Lượng Bán', baseColor: [240, 101, 149] },
             { key: 'outgoing_count', label: 'Lần Bán', baseColor: [255, 107, 107] },
             { key: 'qty_available', label: 'Tồn kho', baseColor: [81, 207, 102] },
         ];

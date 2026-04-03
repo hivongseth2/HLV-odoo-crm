@@ -8,14 +8,14 @@
                         <i class="fa fa-pie-chart me-1" style="color:#7048e8;"/>Tỷ lệ Mua vs Bán
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Tổng SL mua và bán trong kỳ. So sánh tỷ trọng mua/bán để đánh giá cân đối.
+                        <i class="fa fa-question-circle me-1"/>Tổng số lượng mua và bán trong kỳ. So sánh tỷ trọng mua/bán để đánh giá cân đối.
                     </div>
                     <div class="pf-pie-container">
                         <div class="pf-pie-ring"
                              t-att-style="'--buy-deg:' + buySellRatioPie.buyDeg + 'deg'">
                             <div class="pf-pie-center">
                                 <span class="pf-pie-total" t-esc="formatNumber(buySellRatioPie.buyQty + buySellRatioPie.sellQty)"/>
-                                <span class="pf-pie-sublabel">Tổng SL</span>
+                                <span class="pf-pie-sublabel">Tổng số lượng</span>
                             </div>
                         </div>
                         <div class="pf-pie-legend">
@@ -111,7 +111,7 @@
                         <i class="fa fa-th-large me-1" style="color:#e03131;"/>Treemap: Cơ cấu hàng hóa
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Diện tích ~ tổng SL mua+bán. Màu theo tần suất: đỏ ≥10, cam 5-9, vàng 2-4, xám 1 lần.
+                        <i class="fa fa-question-circle me-1"/>Diện tích ~ tổng số lượng mua+bán. Màu theo số lần giao dịch: đỏ ≥10 lần, cam 5-9 lần, vàng 2-4 lần, xám 1 lần.
                     </div>
                     <t t-if="treemapData.rects.length > 0">
                         <div class="pf-svg-chart-wrap">
@@ -133,10 +133,10 @@
                             </svg>
                         </div>
                         <div class="pf-tm-legend">
-                            <span><span class="pf-tm-dot" style="background:#e03131;"/>≥10</span>
-                            <span><span class="pf-tm-dot" style="background:#ff922b;"/>5-9</span>
-                            <span><span class="pf-tm-dot" style="background:#fcc419;"/>2-4</span>
-                            <span><span class="pf-tm-dot" style="background:#adb5bd;"/>1</span>
+                            <span><span class="pf-tm-dot" style="background:#e03131;"/>≥10 lần</span>
+                            <span><span class="pf-tm-dot" style="background:#ff922b;"/>5-9 lần</span>
+                            <span><span class="pf-tm-dot" style="background:#fcc419;"/>2-4 lần</span>
+                            <span><span class="pf-tm-dot" style="background:#adb5bd;"/>1 lần</span>
                         </div>
                     </t>
                     <t t-else="">
@@ -150,7 +150,7 @@
                         <i class="fa fa-dot-circle-o me-1" style="color:#2b8a3e;"/>Scatter: Mua vs Bán
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Trục X = SL mua, Y = SL bán. Kích thước = tổng SL. Đường chéo = cân bằng mua/bán.
+                        <i class="fa fa-question-circle me-1"/>Trục X = số lượng mua, Y = số lượng bán. Kích thước = tổng số lượng. Đường chéo = cân bằng mua/bán.
                     </div>
                     <t t-if="scatterPlotData.show">
                         <div class="pf-svg-chart-wrap">
@@ -185,16 +185,16 @@
                                 <!-- Axis labels -->
                                 <text t-att-x="scatterPlotData.pad.l + scatterPlotData.plotW / 2"
                                       t-att-y="scatterPlotData.H - 2"
-                                      class="pf-sc-axis-label" text-anchor="middle">SL Mua →</text>
+                                      class="pf-sc-axis-label" text-anchor="middle">Số lượng Mua →</text>
                                 <text x="10" t-att-y="scatterPlotData.pad.t + scatterPlotData.plotH / 2"
                                       class="pf-sc-axis-label" text-anchor="middle"
-                                      transform="rotate(-90, 10, 110)">SL Bán →</text>
+                                      transform="rotate(-90, 10, 110)">Số lượng Bán →</text>
                                 <!-- Points -->
                                 <t t-foreach="scatterPlotData.points" t-as="pt" t-key="pt.id">
                                     <circle t-att-cx="pt.x" t-att-cy="pt.y" t-att-r="pt.r"
                                             t-att-fill="pt.color" opacity="0.7" stroke="#fff" stroke-width="0.5"
                                             class="pf-scatter-dot">
-                                        <title t-esc="pt.name + ' | Mua: ' + formatNumber(pt.buyQty) + ' | Bán: ' + formatNumber(pt.sellQty)"/>
+                                        <title t-esc="pt.name + ' | Lượng mua: ' + formatNumber(pt.buyQty) + ' | Lượng bán: ' + formatNumber(pt.sellQty)"/>
                                     </circle>
                                 </t>
                             </svg>
@@ -218,10 +218,10 @@
                 <!-- 5. SVG Heatmap: Tổng quan đa chiều -->
                 <div class="pf-sc-card">
                     <h4 class="pf-sc-title">
-                        <i class="fa fa-th me-1" style="color:#845ef7;"/>Heatmap: Tổng quan đa chiều
+                        <i class="fa fa-th me-1" style="color:#845ef7;"/>Heatmap: Tổng quan (xếp theo số lượng)
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Ma trận SP × chỉ số: SL mua, lần mua, SL bán, lần bán, tồn kho. Màu đậm = giá trị cao.
+                        <i class="fa fa-question-circle me-1"/>Ma trận SP × chỉ số: số lượng mua, số lần mua, số lượng bán, số lần bán, tồn kho. Xếp theo tổng số lượng mua+bán. Màu đậm = giá trị cao.
                     </div>
                     <t t-if="svgHeatmapData.show">
                         <div class="pf-svg-chart-wrap pf-svg-heatmap-wrap">
@@ -262,7 +262,7 @@
                         <i class="fa fa-exchange me-1" style="color:#1971c2;"/>Top SP: Mua vs Bán
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Top <t t-esc="state.topN"/> SP có tổng giao dịch cao nhất. Thanh xanh = SL mua, thanh hồng = SL bán.
+                        <i class="fa fa-question-circle me-1"/>Top <t t-esc="state.topN"/> SP có tổng số lượng mua+bán cao nhất. Thanh xanh = số lượng mua, thanh hồng = số lượng bán.
                     </div>
                     <div class="pf-dual-bars">
                         <t t-foreach="topBuySellComparison.items" t-as="item" t-key="item.product_id">
@@ -296,10 +296,10 @@
                 <!-- 7. Product Buy/Sell Heatmap (4 dimensions) -->
                 <div class="pf-sc-card">
                     <h4 class="pf-sc-title">
-                        <i class="fa fa-th me-1" style="color:#e64980;"/>Nhiệt: SL × Tần suất
+                        <i class="fa fa-th me-1" style="color:#e64980;"/>Nhiệt: Số lượng × Số lần
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Heatmap 4 chiều: SL mua, lần mua, SL bán, lần bán cho top 12 SP. Màu đậm = giá trị cao.
+                        <i class="fa fa-question-circle me-1"/>Heatmap 4 chiều: số lượng mua, số lần mua, số lượng bán, số lần bán. Top 12 SP xếp theo tổng số lần giao dịch (mua+bán). Màu đậm = giá trị cao.
                     </div>
                     <t t-if="productBuySellHeat.items.length > 0">
                         <div class="pf-heatmap-wrap">
@@ -307,9 +307,9 @@
                                 <thead>
                                     <tr>
                                         <th class="pf-hm-corner">SP</th>
-                                        <th class="pf-hm-col-head"><span>SL Mua</span></th>
+                                        <th class="pf-hm-col-head"><span>Lượng Mua</span></th>
                                         <th class="pf-hm-col-head"><span>Lần Mua</span></th>
-                                        <th class="pf-hm-col-head"><span>SL Bán</span></th>
+                                        <th class="pf-hm-col-head"><span>Lượng Bán</span></th>
                                         <th class="pf-hm-col-head"><span>Lần Bán</span></th>
                                     </tr>
                                 </thead>
@@ -320,19 +320,19 @@
                                                 <span t-esc="p.default_code || p.product_name.substring(0, 10)"/>
                                             </td>
                                             <td t-att-class="'pf-hm-cell pf-hm-buy-' + getHeatLevel(p.incoming_qty, productBuySellHeat.maxBuyQty)"
-                                                t-att-title="'SL Mua: ' + formatNumber(p.incoming_qty)">
+                                                t-att-title="'Số lượng mua: ' + formatNumber(p.incoming_qty)">
                                                 <span t-esc="formatNumber(p.incoming_qty)"/>
                                             </td>
                                             <td t-att-class="'pf-hm-cell pf-hm-buyf-' + getHeatLevel(p.incoming_count, productBuySellHeat.maxBuyFreq)"
-                                                t-att-title="'Lần mua: ' + p.incoming_count">
+                                                t-att-title="'Số lần mua: ' + p.incoming_count">
                                                 <span t-esc="p.incoming_count"/>
                                             </td>
                                             <td t-att-class="'pf-hm-cell pf-hm-sell-' + getHeatLevel(p.outgoing_qty, productBuySellHeat.maxSellQty)"
-                                                t-att-title="'SL Bán: ' + formatNumber(p.outgoing_qty)">
+                                                t-att-title="'Số lượng bán: ' + formatNumber(p.outgoing_qty)">
                                                 <span t-esc="formatNumber(p.outgoing_qty)"/>
                                             </td>
                                             <td t-att-class="'pf-hm-cell pf-hm-sellf-' + getHeatLevel(p.outgoing_count, productBuySellHeat.maxSellFreq)"
-                                                t-att-title="'Lần bán: ' + p.outgoing_count">
+                                                t-att-title="'Số lần bán: ' + p.outgoing_count">
                                                 <span t-esc="p.outgoing_count"/>
                                             </td>
                                         </tr>
@@ -364,7 +364,7 @@
                         <i class="fa fa-shopping-cart me-1" style="color:#2b8a3e;"/>Tối ưu mua hàng
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Đề xuất dựa trên: SL bán − SL mua − Tồn kho. Chỉ hiện SP bán thường xuyên mà tồn thấp (cần mua) hoặc mua nhiều mà tồn dư (giảm mua).
+                        <i class="fa fa-question-circle me-1"/>Đề xuất dựa trên: Số lượng bán − Số lượng mua − Tồn kho. Chỉ hiện SP bán thường xuyên (≥2 lần) mà tồn thấp (cần mua) hoặc mua nhiều mà tồn dư (giảm mua).
                     </div>
                     <t t-if="purchaseOptimization.underBuy.length > 0">
                         <div class="pf-opt-section">
@@ -401,7 +401,7 @@
                                         <span class="pf-opt-stock">Tồn: <t t-esc="formatNumber(p.stock)"/></span>
                                     </span>
                                     <span class="pf-opt-ratio text-warning"
-                                          t-att-title="'Tồn kho gấp ' + p.stockCover + ' lần SL bán'"
+                                          t-att-title="'Tồn kho gấp ' + p.stockCover + ' lần số lượng bán'"
                                           t-esc="p.stockCoverLabel"/>
                                 </div>
                             </t>
@@ -417,10 +417,10 @@
                 <!-- 9. Original NCC × SP heatmap -->
                 <div class="pf-sc-card">
                     <h4 class="pf-sc-title">
-                        <i class="fa fa-th me-1" style="color:#e64980;"/>NCC × Sản phẩm (SL mua)
+                        <i class="fa fa-th me-1" style="color:#e64980;"/>NCC × Sản phẩm (Số lượng mua)
                     </h4>
                     <div class="pf-chart-guide">
-                        <i class="fa fa-question-circle me-1"/>Ma trận NCC vs SP: hiển thị SL mua từ mỗi NCC cho từng SP. Màu đậm = mua nhiều hơn.
+                        <i class="fa fa-question-circle me-1"/>Ma trận NCC vs SP: hiển thị số lượng mua từ mỗi NCC cho từng SP. Màu đậm = mua nhiều hơn.
                     </div>
                     <t t-if="supplierProductHeatmap.rows.length > 0">
                         <div class="pf-heatmap-wrap">
