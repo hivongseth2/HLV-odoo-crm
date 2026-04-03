@@ -16,14 +16,16 @@ export const analysisChartMixins = {
 
     // ========== Treemap: Product proportion by total quantity ==========
     get treemapData() {
-        const n = Math.min(this.state.topN || 10, 20);
+        const n = this.state.topN || 10;
         const products = [...this._chartFilteredProducts()]
             .sort((a, b) => (b.incoming_qty + b.outgoing_qty) - (a.incoming_qty + a.outgoing_qty))
             .slice(0, n);
 
         if (!products.length) return { rects: [] };
 
-        const W = 300, H = 200;
+        const W = 400;
+        // Scale height: more items need more vertical space
+        const H = n <= 15 ? 250 : n <= 30 ? 350 : 450;
         const total = products.reduce((s, p) => s + p.incoming_qty + p.outgoing_qty, 0) || 1;
 
         const items = products.map(p => {
@@ -42,7 +44,7 @@ export const analysisChartMixins = {
         });
 
         const rects = this._layoutTreemap(items, 0, 0, W, H);
-        return { rects, width: W, height: H };
+        return { rects, width: W, height: H, viewBox: `0 0 ${W} ${H}` };
     },
 
     _layoutTreemap(items, x, y, w, h) {

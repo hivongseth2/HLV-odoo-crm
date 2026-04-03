@@ -207,6 +207,24 @@ export const dashboardDataMixins = {
         this.state.productDetailLoading = false;
     },
 
+    onScatterDotClick(ev) {
+        const el = ev.target.closest('circle') || ev.target;
+        const productId = parseInt(el.dataset.productId);
+        const productName = el.dataset.productName || '';
+        if (productId) {
+            this.showProductDetail(productId, productName);
+        }
+    },
+
+    onTreemapClick(ev) {
+        const el = ev.target.closest('rect') || ev.target;
+        const productId = parseInt(el.dataset.productId);
+        const productName = el.dataset.productName || '';
+        if (productId) {
+            this.showProductDetail(productId, productName);
+        }
+    },
+
     closeProductDetail() {
         this.state.showProductDetail = false;
         this.state.productDetailData = { purchase_records: [], sale_records: [] };

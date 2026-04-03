@@ -396,6 +396,14 @@
         height: auto;
         display: block;
     }
+
+    &.pf-treemap-wrap {
+        overflow: visible;
+
+        .pf-chart-svg {
+            max-height: 500px;
+        }
+    }
 }
 
 .pf-svg-heatmap-wrap {
