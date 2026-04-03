@@ -76,7 +76,7 @@ class ProductFlowAnalysis(models.AbstractModel):
 
     @api.model
     def get_supplier_flow_data(self, period='month', date_from=False, date_to=False, warehouse_id=False):
-        """Lấy dữ liệu phân tích nhà cung cấp."""
+        """Lấy dữ liệu phân tích nhà cung cấp (chỉ từ đơn mua hàng, loại trừ trả hàng khách)."""
         date_from, date_to = self._compute_date_range(period, date_from, date_to)
 
         domain = [
@@ -84,6 +84,7 @@ class ProductFlowAnalysis(models.AbstractModel):
             ('date', '>=', fields.Datetime.to_string(date_from)),
             ('date', '<=', fields.Datetime.to_string(date_to)),
             ('picking_type_id.code', '=', 'incoming'),
+            ('purchase_line_id', '!=', False),  # Chỉ lấy moves từ đơn mua hàng
         ]
         if warehouse_id:
             domain.append(('warehouse_id', '=', warehouse_id))
@@ -92,7 +93,12 @@ class ProductFlowAnalysis(models.AbstractModel):
 
         supplier_data = {}
         for move in moves:
-            partner = move.picking_id.partner_id if move.picking_id else False
+            # Ưu tiên lấy partner từ purchase order, fallback picking partner
+            partner = False
+            if move.purchase_line_id and move.purchase_line_id.order_id:
+                partner = move.purchase_line_id.order_id.partner_id
+            if not partner:
+                partner = move.picking_id.partner_id if move.picking_id else False
             if not partner:
                 continue
 
@@ -240,8 +246,10 @@ class ProductFlowAnalysis(models.AbstractModel):
             incoming_moves.mapped('product_id.id') +
             outgoing_moves.mapped('product_id.id')
         ))
+        # Chỉ đếm nhà cung cấp từ đơn mua hàng (loại trừ trả hàng khách)
+        purchase_moves = incoming_moves.filtered(lambda m: m.purchase_line_id)
         unique_suppliers = len(set(
-            incoming_moves.mapped('picking_id.partner_id.id')
+            purchase_moves.mapped('purchase_line_id.order_id.partner_id.id')
         ) - {False})
 
         # Get warehouses for dropdown

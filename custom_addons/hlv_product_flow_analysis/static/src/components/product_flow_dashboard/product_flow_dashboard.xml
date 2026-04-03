@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="hlv_product_flow_analysis.Dashboard">
-        <div class="o_action pf-dashboard">
+        <div class="pf-dashboard">
             <!-- Loading -->
             <t t-if="state.isLoading">
                 <div class="pf-loading">
