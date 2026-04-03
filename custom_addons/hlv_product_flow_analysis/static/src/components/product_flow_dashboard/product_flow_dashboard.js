@@ -58,6 +58,12 @@ export class ProductFlowDashboard extends Component {
             planningShowAll: false,
             topN: 10,
             trendMonthly: [],
+            // Product detail modal
+            showProductDetail: false,
+            productDetailId: null,
+            productDetailName: "",
+            productDetailLoading: false,
+            productDetailData: { purchase_orders: [], sale_orders: [] },
         });
 
         onWillStart(async () => {

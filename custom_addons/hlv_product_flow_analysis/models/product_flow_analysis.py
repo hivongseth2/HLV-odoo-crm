@@ -144,6 +144,84 @@ class ProductFlowAnalysis(models.AbstractModel):
         }
 
     @api.model
+    def get_product_orders(self, product_id, period='month', date_from=False, date_to=False, warehouse_id=False):
+        """Lấy danh sách đơn mua hàng (PO) và đơn bán hàng (SO) của 1 sản phẩm trong kỳ."""
+        date_from, date_to = self._compute_date_range(period, date_from, date_to)
+
+        # --- Purchase Orders ---
+        po_lines = self.env['purchase.order.line'].search([
+            ('product_id', '=', product_id),
+            ('order_id.date_order', '>=', fields.Datetime.to_string(date_from)),
+            ('order_id.date_order', '<=', fields.Datetime.to_string(date_to)),
+            ('order_id.state', 'in', ('purchase', 'done')),
+            ('display_type', '=', False),
+        ])
+        purchase_orders = []
+        seen_po = set()
+        for line in po_lines:
+            order = line.order_id
+            if order.id in seen_po:
+                continue
+            seen_po.add(order.id)
+            # Tính tổng qty & amount cho sản phẩm này trong PO
+            po_product_lines = po_lines.filtered(lambda l: l.order_id.id == order.id)
+            total_qty = sum(po_product_lines.mapped('product_qty'))
+            total_amount = sum(l.product_qty * (l.price_unit or 0) for l in po_product_lines)
+            # Check nhận hàng
+            received_qty = sum(po_product_lines.mapped('qty_received'))
+            purchase_orders.append({
+                'id': order.id,
+                'name': order.name,
+                'date': str(order.date_order.date()) if order.date_order else '',
+                'partner_name': order.partner_id.display_name if order.partner_id else '',
+                'qty': total_qty,
+                'amount': total_amount,
+                'received_qty': received_qty,
+                'state': order.state,
+                'fully_received': received_qty >= total_qty,
+            })
+        purchase_orders.sort(key=lambda x: x['date'], reverse=True)
+
+        # --- Sale Orders ---
+        so_lines = self.env['sale.order.line'].search([
+            ('product_id', '=', product_id),
+            ('order_id.date_order', '>=', fields.Datetime.to_string(date_from)),
+            ('order_id.date_order', '<=', fields.Datetime.to_string(date_to)),
+            ('order_id.state', 'in', ('sale', 'done')),
+            ('display_type', '=', False),
+        ])
+        sale_orders = []
+        seen_so = set()
+        for line in so_lines:
+            order = line.order_id
+            if order.id in seen_so:
+                continue
+            seen_so.add(order.id)
+            so_product_lines = so_lines.filtered(lambda l: l.order_id.id == order.id)
+            total_qty = sum(so_product_lines.mapped('product_uom_qty'))
+            total_amount = sum(l.product_uom_qty * (l.price_unit or 0) for l in so_product_lines)
+            delivered_qty = sum(so_product_lines.mapped('qty_delivered'))
+            sale_orders.append({
+                'id': order.id,
+                'name': order.name,
+                'date': str(order.date_order.date()) if order.date_order else '',
+                'partner_name': order.partner_id.display_name if order.partner_id else '',
+                'qty': total_qty,
+                'amount': total_amount,
+                'delivered_qty': delivered_qty,
+                'state': order.state,
+                'fully_delivered': delivered_qty >= total_qty,
+            })
+        sale_orders.sort(key=lambda x: x['date'], reverse=True)
+
+        return {
+            'purchase_orders': purchase_orders,
+            'sale_orders': sale_orders,
+            'po_count': len(purchase_orders),
+            'so_count': len(sale_orders),
+        }
+
+    @api.model
     def get_supplier_flow_data(self, period='month', date_from=False, date_to=False, warehouse_id=False):
         """Lấy dữ liệu nhà cung cấp từ đơn mua hàng (PO), bao gồm cả PO chưa nhập kho."""
         date_from, date_to = self._compute_date_range(period, date_from, date_to)
