@@ -37,7 +37,7 @@ class StockPicking(models.Model):
             'merge_picking_ids': [fields.Command.set(self.ids)],
         })
         return {
-            'name': _('Merge Picking Orders'),
+            'name': _('Gộp phiếu kho'),
             'type': 'ir.actions.act_window',
             'res_model': 'merge.picking',
             'view_mode': 'form',

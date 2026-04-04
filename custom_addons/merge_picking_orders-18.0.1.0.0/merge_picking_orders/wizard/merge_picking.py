@@ -33,12 +33,12 @@ class MergePicking(models.TransientModel):
     _name = 'merge.picking'
     _description = "Merge Picking Wizard"
 
-    merge_picking_ids = fields.Many2many('stock.picking', string='Orders',
-                                         help="Selected orders")
+    merge_picking_ids = fields.Many2many('stock.picking', string='Danh sách phiếu',
+                                         help="Các phiếu đã chọn để gộp")
     existing_pick_id = fields.Many2one(
-        'stock.picking', string="Merge to existing",
-        help="Select a pick if you want to merge pickings to a existing picking"
-             " else leave it as empty")
+        'stock.picking', string="Gộp vào phiếu có sẵn",
+        help="Chọn phiếu nếu bạn muốn gộp vào phiếu đã có sẵn,"
+             " nếu không thì để trống")
 
     def action_merge(self):
         """
@@ -52,29 +52,32 @@ class MergePicking(models.TransientModel):
         # Checking for exceptions if exist raise corresponding messages
         if len(list(set(x.partner_id if x.partner_id else None for x in
                         self.merge_picking_ids))) > 1:
-            raise AccessError(_("Merging is not allowed on Different partners,"
-                                " please add same partner's orders"))
+            raise AccessError(_("Không thể gộp phiếu của các đối tác khác nhau,"
+                                " vui lòng chọn phiếu cùng đối tác"))
         if len(list(set(self.merge_picking_ids.mapped('picking_type_id')))) > 1:
             raise AccessError(
-                _("Merging is not allowed on Different picking type,"
-                  " please choose same type"))
+                _("Không thể gộp phiếu khác loại,"
+                  " vui lòng chọn phiếu cùng loại"))
         if any(state in ['done', 'cancel'] for state in
                self.merge_picking_ids.mapped('state')):
-            raise AccessError(_('Merging is not allowed on Done/Cancelled '
-                                'pickings, so please remove them and continue'))
+            raise AccessError(_('Không thể gộp phiếu đã Hoàn thành/Đã hủy, '
+                                'vui lòng bỏ chọn các phiếu đó và thử lại'))
         if len(list(set(self.merge_picking_ids.mapped('state')))) > 1:
-            raise AccessError(_('Merging is not allowed on Different State '
-                                'Pickings, please add orders in same State'))
+            raise AccessError(_('Không thể gộp phiếu ở trạng thái khác nhau, '
+                                'vui lòng chọn phiếu cùng trạng thái'))
         if len(self.merge_picking_ids) == 1:
-            raise AccessError(_('Merging is not allowed on Single picking,'
-                                ' please add minimum Two'))
+            raise AccessError(_('Không thể gộp khi chỉ có một phiếu,'
+                                ' vui lòng chọn ít nhất hai phiếu'))
         # If there is no exception, continues with the merging process
         source_document = []
+        origins = set()
         if self.existing_pick_id:
             main_pick = self.existing_pick_id
             orders = self.merge_picking_ids-main_pick
             moves = main_pick.move_ids
             source_document.append(main_pick.name)
+            if main_pick.origin:
+                origins.add(main_pick.origin)
         else:
             orders = self.merge_picking_ids
             moves = self.env['stock.move']
@@ -83,7 +86,20 @@ class MergePicking(models.TransientModel):
             for line in record.move_ids:
                 moves += line.copy({'picking_id': main_pick.id})
             source_document.append(record.name)
+            if record.origin:
+                origins.add(record.origin)
             record.action_cancel()
-        main_pick.write(
-            {'origin': f"Merged ({(', '.join(source_document))})"})
+        # Giữ nguyên origin nếu tất cả phiếu cùng origin, ngược lại ghi "Gộp từ"
+        if len(origins) == 1:
+            merged_origin = origins.pop()
+        else:
+            merged_origin = f"Gộp từ ({', '.join(source_document)})"
+        main_pick.write({'origin': merged_origin})
         main_pick.action_confirm()
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'stock.picking',
+            'view_mode': 'form',
+            'res_id': main_pick.id,
+            'target': 'current',
+        }
