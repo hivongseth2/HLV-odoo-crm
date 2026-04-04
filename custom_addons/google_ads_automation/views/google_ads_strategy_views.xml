@@ -10,22 +10,22 @@
         <field name="arch" type="xml">
             <list>
                 <field name="sequence" widget="handle"/>
-                <field name="name"/>
-                <field name="strategy_type"/>
-                <field name="feed_id"/>
-                <field name="account_id"/>
+                <field name="name" string="Tên chiến lược"/>
+                <field name="strategy_type" string="Loại"/>
+                <field name="feed_id" string="Product Feed"/>
+                <field name="account_id" string="Tài khoản"/>
                 <field name="state" widget="badge"
                        decoration-success="state == 'active'"
                        decoration-warning="state == 'draft'"
                        decoration-danger="state == 'paused'"/>
-                <field name="is_live" widget="boolean_toggle"/>
-                <field name="rule_count"/>
+                <field name="is_live" widget="boolean_toggle" string="Live"/>
+                <field name="rule_count" string="Số rules"/>
             </list>
         </field>
     </record>
 
     <!-- ═══════════════════════════════════════════════ -->
-    <!-- Strategy – Form View                             -->
+    <!-- Strategy – Form View (Redesigned)                -->
     <!-- ═══════════════════════════════════════════════ -->
     <record id="view_google_ads_strategy_form" model="ir.ui.view">
         <field name="name">google.ads.strategy.form</field>
@@ -33,139 +33,260 @@
         <field name="arch" type="xml">
             <form string="Chiến Lược Tự Động" class="o_google_ads_premium_form">
                 <header>
-                    <button name="action_generate_rules" string="Sinh Rules Tự Động" type="object"
-                            class="btn-primary" invisible="state == 'active'"/>
-                    <button name="action_activate" string="Kích Hoạt Chiến Lược" type="object"
-                            class="btn-success" invisible="state == 'active'"/>
-                    <button name="action_pause" string="Tạm Dừng" type="object"
-                            invisible="state != 'active'" class="btn-warning" icon="fa-pause"/>
-                     <button name="action_draft" string="Về Nháp" type="object"
-                            invisible="state == 'draft'" class="btn-secondary" icon="fa-undo"/>
+                    <button name="action_generate_rules" string="⚡ Sinh Rules" type="object"
+                            class="btn-primary" invisible="state == 'active'"
+                            help="Quét Product Feed và tự động sinh ra các quy tắc dựa trên chiến lược đã cấu hình"/>
+                    <button name="action_activate" string="🚀 Kích Hoạt" type="object"
+                            class="btn-success" invisible="state == 'active'"
+                            help="Bật chiến lược — các Rule sẽ bắt đầu kiểm tra và thực thi tự động"/>
+                    <button name="action_pause" string="⏸ Tạm Dừng" type="object"
+                            invisible="state != 'active'" class="btn-warning"/>
+                    <button name="action_draft" string="↩ Về Nháp" type="object"
+                            invisible="state == 'draft'" class="btn-secondary"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,active"/>
                 </header>
                 <sheet>
-                    <field name="hero_header_html" widget="html" readonly="1"/>
+                    <field name="state" invisible="1"/>
+                    <field name="strategy_type" invisible="1"/>
 
-                    <div class="oe_title mb-3 border-bottom pb-2">
-                        <h1 class="d-flex align-items-center">
-                            <field name="name" placeholder="Tên chiến lược..." class="oe_inline"/>
-                        </h1>
-                    </div>
-
-                    <div class="o_kpi_dashboard">
-                         <div class="o_kpi_tile border-0 bg-white">
-                            <span class="o_kpi_label">RULES HIỆN CÓ</span>
-                            <span class="o_kpi_value text-info"><field name="rule_count"/></span>
-                        </div>
-                        <div class="o_kpi_tile border-0 bg-white">
-                            <span class="o_kpi_label">TRẠNG THÁI</span>
-                            <span class="o_kpi_value text-secondary" style="font-size: 14px; padding-top: 10px;">
-                                <field name="state" invisible="1"/>
-                                <span invisible="state != 'draft'" class="badge text-bg-secondary">Bản Nháp</span>
-                                <span invisible="state != 'active'" class="badge text-bg-success">Đang Chạy</span>
-                                <span invisible="state != 'paused'" class="badge text-bg-warning">Tạm Dừng</span>
-                            </span>
+                    <!-- ══ Banner cảnh báo Live Mode ══ -->
+                    <div class="alert alert-danger mb-3 d-flex align-items-center gap-3" invisible="not is_live">
+                        <i class="fa fa-exclamation-triangle fa-2x"/>
+                        <div>
+                            <strong>Chế độ LIVE đang BẬT</strong><br/>
+                            Khi rule kích hoạt, hệ thống sẽ gửi lệnh thay đổi <b>trực tiếp lên Google Ads</b> (tạm dừng/bật chiến dịch thật). Hãy đảm bảo bạn đã kiểm tra kỹ trước khi bật chế độ này.
                         </div>
                     </div>
 
-                    <div class="o_premium_card mb-4 mt-3">
+                    <!-- ══ BƯỚC 1: Thông tin cơ bản ══ -->
+                    <div class="o_premium_card mb-4">
                         <h5 class="text-primary fw-bold mb-3 border-bottom pb-2">
-                            <i class="fa fa-info-circle me-2"></i>Thông Tin Cấu Hình
+                            <span class="badge text-bg-primary rounded-circle me-2" style="width:28px; height:28px; line-height:20px;">1</span>
+                            Đặt tên &amp; chọn nguồn dữ liệu
                         </h5>
                         <group>
                             <group>
-                                <field name="account_id" options="{'no_create': True}"/>
-                                <field name="feed_id" options="{'no_create': True}"/>
+                                <field name="name" placeholder="VD: Tự động dừng khi hết hàng" string="Tên chiến lược"/>
+                                <field name="account_id" options="{'no_create': True}" string="Tài khoản Google Ads"
+                                       help="Chọn tài khoản Google Ads mà chiến lược này sẽ áp dụng"/>
                             </group>
                             <group>
-                                <field name="strategy_type"/>
+                                <field name="feed_id" options="{'no_create': True}" string="Product Feed"
+                                       help="Danh sách sản phẩm mà chiến lược sẽ theo dõi tồn kho, biên lợi nhuận..."/>
                                 <field name="sequence" groups="base.group_no_one"/>
                             </group>
                         </group>
                     </div>
 
+                    <!-- ══ BƯỚC 2: Chọn loại chiến lược ══ -->
+                    <div class="o_premium_card mb-4">
+                        <h5 class="text-primary fw-bold mb-3 border-bottom pb-2">
+                            <span class="badge text-bg-primary rounded-circle me-2" style="width:28px; height:28px; line-height:20px;">2</span>
+                            Chọn loại chiến lược
+                        </h5>
+                        <p class="text-muted mb-3">Hệ thống sẽ tự động tạo các quy tắc phù hợp dựa trên loại bạn chọn. Mỗi loại giải quyết một bài toán kinh doanh cụ thể:</p>
+                        <field name="strategy_type" widget="radio" class="o_strategy_type_selector"/>
+
+                        <!-- Mô tả chi tiết từng loại -->
+                        <div class="alert alert-info border-0 mt-3 mb-0" invisible="strategy_type != 'protect_low'">
+                            <i class="fa fa-shield me-2"/>
+                            <b>Bảo Vệ Hàng Sắp Hết:</b> Khi tồn kho giảm xuống dưới ngưỡng, hệ thống sẽ <b>tự động DỪNG</b> chiến dịch quảng cáo để tránh bán quá tay.
+                        </div>
+                        <div class="alert alert-success border-0 mt-3 mb-0" invisible="strategy_type != 'push_stock'">
+                            <i class="fa fa-rocket me-2"/>
+                            <b>Đẩy Hàng Tồn:</b> Khi tồn kho vượt ngưỡng cao, hệ thống sẽ <b>BẬT chiến dịch + TĂNG ngân sách</b> để đẩy bán nhanh hơn.
+                        </div>
+                        <div class="alert alert-warning border-0 mt-3 mb-0" invisible="strategy_type != 'optimize_profit'">
+                            <i class="fa fa-line-chart me-2"/>
+                            <b>Tối Ưu Lợi Nhuận:</b> Nếu chi phí quảng cáo/đơn hàng (CPA) quá cao hoặc biên lợi nhuận quá thấp → <b>DỪNG chiến dịch</b> để cắt lỗ.
+                        </div>
+                        <div class="alert alert-info border-0 mt-3 mb-0" invisible="strategy_type != 'push_new'">
+                            <i class="fa fa-star me-2"/>
+                            <b>Đẩy Hàng Mới:</b> Sản phẩm mới nhập kho trong thời gian gần đây sẽ được <b>tự động BẬT chiến dịch</b> để quảng bá.
+                        </div>
+                        <div class="alert alert-primary border-0 mt-3 mb-0" invisible="strategy_type != 'auto_balance'">
+                            <i class="fa fa-balance-scale me-2"/>
+                            <b>Cân Bằng Tự Động:</b> Kết hợp cả 3 chiến lược: Bảo vệ hàng hết + Đẩy hàng tồn + Tối ưu lợi nhuận. <b>Đề xuất cho hầu hết doanh nghiệp.</b>
+                        </div>
+                        <div class="alert alert-secondary border-0 mt-3 mb-0" invisible="strategy_type != 'custom'">
+                            <i class="fa fa-wrench me-2"/>
+                            <b>Tùy Chỉnh:</b> Bạn tự thiết lập điều kiện NẾU... THÌ... theo ý muốn.
+                        </div>
+                    </div>
+
+                    <!-- ══ BƯỚC 3: Cấu hình ngưỡng (cho chiến lược có sẵn) ══ -->
+                    <div class="o_premium_card mb-4" invisible="strategy_type == 'custom'">
+                        <h5 class="text-primary fw-bold mb-3 border-bottom pb-2">
+                            <span class="badge text-bg-primary rounded-circle me-2" style="width:28px; height:28px; line-height:20px;">3</span>
+                            Điều chỉnh ngưỡng kích hoạt
+                        </h5>
+                        <p class="text-muted mb-3">Các giá trị mặc định đã được tối ưu cho đa số trường hợp. Bạn có thể thay đổi nếu cần.</p>
+
+                        <div class="row">
+                            <!-- Cột 1: Tồn kho -->
+                            <div class="col-md-4" invisible="strategy_type not in ('protect_low', 'push_stock', 'auto_balance')">
+                                <div class="border rounded-3 p-3 h-100 bg-light">
+                                    <h6 class="fw-bold text-danger mb-3">
+                                        <i class="fa fa-archive me-1"/> Ngưỡng Tồn Kho
+                                    </h6>
+                                    <field name="stock_low_threshold" string="Tồn thấp (dừng QC)" 
+                                           help="VD: 20 → Khi tồn kho &lt; 20 sản phẩm sẽ dừng quảng cáo"/>
+                                    <field name="stock_high_threshold" string="Tồn cao (đẩy bán)"
+                                           help="VD: 200 → Khi tồn kho > 200 sản phẩm sẽ đẩy mạnh quảng cáo"
+                                           invisible="strategy_type not in ('push_stock', 'auto_balance')"/>
+                                    <field name="days_stock_critical" string="Ngày tồn nguy hiểm"
+                                           help="Số ngày tồn kho dưới mức này sẽ kích hoạt cảnh báo khẩn"/>
+                                </div>
+                            </div>
+
+                            <!-- Cột 2: Hiệu suất -->
+                            <div class="col-md-4" invisible="strategy_type not in ('optimize_profit', 'auto_balance')">
+                                <div class="border rounded-3 p-3 h-100 bg-light">
+                                    <h6 class="fw-bold text-warning mb-3">
+                                        <i class="fa fa-line-chart me-1"/> Chỉ Số Hiệu Suất
+                                    </h6>
+                                    <field name="min_margin_percent" string="Biên lợi nhuận tối thiểu (%)"
+                                           help="Dừng QC nếu margin sản phẩm thấp hơn giá trị này"/>
+                                    <field name="max_cpa" string="CPA tối đa (VNĐ)"
+                                           help="Chi phí quảng cáo cho mỗi đơn hàng. Vượt ngưỡng → dừng QC"/>
+                                    <field name="target_roas" string="ROAS mục tiêu"
+                                           help="Thu nhập / Chi phí QC. VD: 3 = thu 3đ cho mỗi 1đ chi"/>
+                                </div>
+                            </div>
+
+                            <!-- Cột 3: Ngân sách & SP mới -->
+                            <div class="col-md-4" invisible="strategy_type not in ('push_stock', 'push_new', 'auto_balance')">
+                                <div class="border rounded-3 p-3 h-100 bg-light">
+                                    <h6 class="fw-bold text-success mb-3">
+                                        <i class="fa fa-money me-1"/> Ngân Sách &amp; SP Mới
+                                    </h6>
+                                    <field name="budget_increase_percent" string="Tăng ngân sách (%)"
+                                           help="Khi cần đẩy bán, tăng budget bao nhiêu %"
+                                           invisible="strategy_type not in ('push_stock', 'auto_balance')"/>
+                                    <field name="budget_decrease_percent" string="Giảm ngân sách (%)"
+                                           help="Khi cần tiết kiệm, giảm budget bao nhiêu %"
+                                           invisible="strategy_type not in ('push_stock', 'auto_balance')"/>
+                                    <field name="new_product_days" string="SP mới trong (ngày)"
+                                           help="Sản phẩm được tạo trong vòng N ngày gần nhất được coi là hàng mới"
+                                           invisible="strategy_type not in ('push_new', 'auto_balance')"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ══ BƯỚC 3 (Custom): Cấu hình IF → THEN ══ -->
+                    <div class="o_premium_card mb-4" invisible="strategy_type != 'custom'">
+                        <h5 class="text-primary fw-bold mb-3 border-bottom pb-2">
+                            <span class="badge text-bg-primary rounded-circle me-2" style="width:28px; height:28px; line-height:20px;">3</span>
+                            Thiết lập quy tắc NẾU → THÌ
+                        </h5>
+                        <p class="text-muted mb-3">
+                            <i class="fa fa-info-circle me-1"/>
+                            Hệ thống sẽ quét tất cả sản phẩm trong Product Feed và tạo 1 Rule cho mỗi sản phẩm có chiến dịch liên kết.
+                        </p>
+                        
+                        <!-- Visual IF → THEN Builder -->
+                        <div class="row align-items-center">
+                            <div class="col-md-5">
+                                <div class="o_logic_builder">
+                                    <span class="o_logic_tag">NẾU</span>
+                                    <div class="d-flex flex-column flex-grow-1">
+                                        <field name="custom_condition_field" class="fw-bold text-primary" required="strategy_type == 'custom'"
+                                               string="Trường kiểm tra"/>
+                                        <div class="d-flex align-items-center gap-2 mt-1">
+                                            <field name="custom_condition_operator" class="text-muted" required="strategy_type == 'custom'"/>
+                                            <field name="custom_condition_value" class="badge text-bg-light border" required="strategy_type == 'custom'"
+                                                   string="Giá trị"/>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-2 text-center text-muted py-3">
+                                <i class="fa fa-long-arrow-right fa-2x"/>
+                            </div>
+                            <div class="col-md-5">
+                                <div class="o_logic_builder" style="border-left-color: #10B981;">
+                                    <span class="o_logic_tag bg-success">THÌ</span>
+                                    <div class="d-flex flex-column flex-grow-1">
+                                        <field name="custom_action_type" class="fw-bold text-success" required="strategy_type == 'custom'"
+                                               string="Hành động"/>
+                                        <field name="custom_action_value" class="text-muted small mt-1" 
+                                               invisible="custom_action_type not in ('increase_budget', 'decrease_budget')"
+                                               string="Giá trị (%)"
+                                               help="VD: 30 = tăng/giảm 30% ngân sách"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ══ BƯỚC 4: Chế độ hoạt động ══ -->
+                    <div class="o_premium_card mb-4">
+                        <h5 class="text-primary fw-bold mb-3 border-bottom pb-2">
+                            <span class="badge text-bg-primary rounded-circle me-2" style="width:28px; height:28px; line-height:20px;">4</span>
+                            Chế độ hoạt động
+                        </h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-start gap-3 p-3 rounded-3 border">
+                                    <div class="pt-1">
+                                        <field name="is_live" widget="boolean_toggle"/>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold">Chế độ Live (Gửi lệnh thật lên Google)</div>
+                                        <div class="text-muted small">
+                                            <span invisible="is_live">
+                                                <i class="fa fa-flask me-1"/>Đang ở chế độ <b>THỬ NGHIỆM</b> — chỉ ghi log, không gửi lệnh lên Google Ads.
+                                            </span>
+                                            <span invisible="not is_live">
+                                                <i class="fa fa-bolt me-1 text-danger"/>Đang ở chế độ <b class="text-danger">LIVE</b> — sẽ tạm dừng/bật chiến dịch <b>thật</b> trên Google Ads!
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="p-3 rounded-3 border bg-light">
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <i class="fa fa-terminal text-info"/>
+                                        <span class="fw-bold">Thông tin hệ thống</span>
+                                    </div>
+                                    <div class="text-muted small">
+                                        <div class="mb-1">
+                                            <i class="fa fa-cog me-1"/> Số rules hiện có: <b class="text-dark"><field name="rule_count" class="d-inline"/></b>
+                                        </div>
+                                        <div>
+                                            <i class="fa fa-clock-o me-1"/> Rules được thực thi tự động mỗi <b>4 giờ</b> qua Cron Job hoặc khi có biến động tồn kho.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ══ Tab: Danh sách Rules đã sinh ══ -->
                     <notebook>
-                        <page string="Cấu Hình Thông Minh" icon="fa-sliders" invisible="strategy_type == 'custom'">
-                            <div class="row mt-3">
-                                <div class="col-md-6">
-                                    <div class="o_premium_card h-100">
-                                        <h5 class="text-primary fw-bold mb-4 border-bottom pb-2"><i class="fa fa-archive me-2"></i>Ngưỡng Tồn Kho</h5>
-                                        <group>
-                                            <field name="stock_low_threshold"/>
-                                            <field name="stock_high_threshold"/>
-                                            <field name="days_stock_critical"/>
-                                        </group>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="o_premium_card h-100">
-                                        <h5 class="text-success fw-bold mb-4 border-bottom pb-2"><i class="fa fa-line-chart me-2"></i>Chỉ Số Hiệu Suất</h5>
-                                        <group>
-                                            <field name="min_margin_percent"/>
-                                            <field name="max_cpa"/>
-                                            <field name="target_roas"/>
-                                        </group>
-                                    </div>
-                                </div>
+                        <page string="📋 Danh sách Rules đã sinh" name="rules_page">
+                            <div class="alert alert-light border mb-3 d-flex align-items-center gap-2" invisible="rule_count > 0">
+                                <i class="fa fa-info-circle text-muted fa-lg"/>
+                                <span class="text-muted">Chưa có rule nào. Bấm <b>"⚡ Sinh Rules"</b> ở phía trên để hệ thống tự động tạo các quy tắc từ Product Feed.</span>
                             </div>
-                            <div class="row mt-4">
-                                <div class="col-md-6">
-                                    <div class="o_premium_card h-100 bg-light border-0">
-                                        <h5 class="text-indigo fw-bold mb-4 border-bottom pb-2"><i class="fa fa-money me-2"></i>Thay Đổi Budget</h5>
-                                        <group>
-                                            <field name="budget_increase_percent"/>
-                                            <field name="budget_decrease_percent"/>
-                                        </group>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="o_premium_card h-100 bg-light border-0">
-                                        <h5 class="text-warning fw-bold mb-4 border-bottom pb-2"><i class="fa fa-star me-2"></i>Ưu Tiên Sản Phẩm</h5>
-                                        <group>
-                                            <field name="new_product_days"/>
-                                            <field name="is_live" widget="boolean_toggle"/>
-                                        </group>
-                                    </div>
-                                </div>
-                            </div>
-                        </page>
-                        <page string="Cấu Hình Tùy Chỉnh" icon="fa-wrench" invisible="strategy_type != 'custom'">
-                            <div class="row mt-3">
-                                <div class="col-md-12">
-                                    <div class="o_premium_card h-100 bg-light border-0">
-                                        <h5 class="text-indigo fw-bold mb-4 border-bottom pb-2"><i class="fa fa-wrench me-2"></i>Rule Tùy Chỉnh Chung</h5>
-                                        <p class="text-muted mb-3"><i class="fa fa-info-circle me-1"></i>Hệ thống sẽ đồng loạt quét tất cả sản phẩm trong Product Feed và tạo ra các Rules tương ứng dựa trên mẫu cấu hình dưới đây.</p>
-                                        <group>
-                                            <group>
-                                                <field name="custom_condition_field" required="strategy_type == 'custom'"/>
-                                                <field name="custom_condition_operator" required="strategy_type == 'custom'"/>
-                                                <field name="custom_condition_value" required="strategy_type == 'custom'"/>
-                                            </group>
-                                            <group>
-                                                <field name="custom_action_type" required="strategy_type == 'custom'"/>
-                                                <field name="custom_action_value" invisible="custom_action_type not in ('increase_budget', 'decrease_budget')" required="strategy_type == 'custom' and custom_action_type in ('increase_budget', 'decrease_budget')"/>
-                                                <field name="is_live" widget="boolean_toggle"/>
-                                            </group>
-                                        </group>
-                                    </div>
-                                </div>
-                            </div>
-                        </page>
-                        <page string="Danh Sách Rules" icon="fa-terminal">
-                            <div class="o_premium_card mt-3 p-0 overflow-hidden border-0">
-                                <field name="rule_ids" mode="list" readonly="1" 
-                                       domain="['|', ('active', '=', True), ('active', '=', False)]"
-                                       context="{'active_test': False}">
-                                    <list decoration-muted="not active">
-                                        <field name="name" class="fw-bold"/>
-                                        <field name="condition_field"/>
-                                        <field name="condition_operator"/>
-                                        <field name="condition_value" class="badge text-bg-light"/>
-                                        <field name="action_type" class="text-success"/>
-                                        <field name="active" widget="boolean_toggle"/>
-                                    </list>
-                                </field>
-                            </div>
+                            <field name="rule_ids" mode="list" readonly="1" 
+                                   domain="['|', ('active', '=', True), ('active', '=', False)]"
+                                   context="{'active_test': False}">
+                                <list decoration-muted="not active">
+                                    <field name="name" class="fw-bold" string="Tên Rule"/>
+                                    <field name="condition_field" string="Điều kiện"/>
+                                    <field name="condition_operator" string="So sánh"/>
+                                    <field name="condition_value" string="Ngưỡng"/>
+                                    <field name="action_type" string="Hành động"
+                                           decoration-danger="action_type == 'pause'"
+                                           decoration-success="action_type == 'enable'"
+                                           decoration-warning="action_type in ('increase_budget', 'decrease_budget')"
+                                           widget="badge"/>
+                                    <field name="active" widget="boolean_toggle" string="Bật"/>
+                                </list>
+                            </field>
                         </page>
                     </notebook>
                 </sheet>
@@ -174,6 +295,9 @@
         </field>
     </record>
 
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- Strategy – Kanban View                           -->
+    <!-- ═══════════════════════════════════════════════ -->
     <record id="view_google_ads_strategy_kanban" model="ir.ui.view">
         <field name="name">google.ads.strategy.kanban</field>
         <field name="model">google.ads.strategy</field>
@@ -194,33 +318,33 @@
                                     <span class="o_kanban_header_title mb-1">
                                         <field name="name"/>
                                     </span>
-                                    <div class="d-flex gap-1">
+                                    <div class="d-flex gap-1 flex-wrap">
                                         <span class="o_kanban_tech_pill">
                                             <field name="strategy_type"/>
                                         </span>
-                                        <span t-if="record.is_live.raw_value" class="badge text-bg-danger rounded-pill" style="font-size: 9px; padding: 2px 6px;">LIVE</span>
-                                        <span t-else="" class="badge text-bg-secondary rounded-pill" style="font-size: 9px; padding: 2px 6px;">TEST</span>
+                                        <span t-if="record.is_live.raw_value" class="badge text-bg-danger rounded-pill" style="font-size: 9px; padding: 2px 6px;">🔴 LIVE</span>
+                                        <span t-else="" class="badge text-bg-secondary rounded-pill" style="font-size: 9px; padding: 2px 6px;">🧪 TEST</span>
                                     </div>
                                 </div>
                                 <div class="bg-light p-2 rounded-3 border">
-                                    <i class="fa fa-cogs text-primary"></i>
+                                    <i class="fa fa-cogs text-primary"/>
                                 </div>
                             </div>
 
                             <div class="o_kanban_main_content">
                                 <div class="o_kanban_info_row">
-                                    <i class="fa fa-cubes"></i>
+                                    <i class="fa fa-cubes"/>
                                     <span>Feed: <b><field name="feed_id"/></b></span>
                                 </div>
                                 <div class="o_kanban_info_row">
-                                    <i class="fa fa-google"></i>
+                                    <i class="fa fa-google"/>
                                     <span>Account: <field name="account_id"/></span>
                                 </div>
                             </div>
 
                             <div class="o_kanban_footer">
                                 <span class="badge rounded-pill text-bg-info shadow-sm" style="font-size: 11px; padding: 4px 10px;">
-                                    <t t-esc="record.rule_count.value"/> rules active
+                                    <t t-esc="record.rule_count.value"/> rules
                                 </span>
                                 <field name="state" widget="badge" 
                                        decoration-success="state == 'active'" 

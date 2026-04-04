@@ -317,4 +317,53 @@
 .fs-2 { font-size: 1.5rem !important; }
 @media (min-width: 992px) {
     .fs-2 { font-size: 2rem !important; }
-}
+}
+
+/* Strategy Type Selector (Radio as Cards) */
+.o_strategy_type_selector .o_radio_item {
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 18px;
+    margin: 0 8px 8px 0;
+    border: 2px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--white);
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.o_strategy_type_selector .o_radio_item:hover {
+    border-color: var(--info-color);
+    background: #f0f9ff;
+    transform: translateY(-1px);
+}
+
+.o_strategy_type_selector .o_radio_item.o_selected {
+    border-color: var(--primary-color);
+    background: #eef2ff;
+    box-shadow: 0 0 0 3px rgba(44, 62, 80, 0.1);
+}
+
+/* Step number badges */
+.o_premium_card .badge.rounded-circle {
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Strategy config columns */
+.o_google_ads_premium_form .col-md-4 .border {
+    transition: all 0.2s ease;
+}
+
+.o_google_ads_premium_form .col-md-4 .border:hover {
+    border-color: var(--info-color) !important;
+    box-shadow: var(--shadow-sm);
+}
+
+/* Landscape Image for PMax */
+.o_google_ads_landscape_img {
+    max-width: 320px;
+}
+
