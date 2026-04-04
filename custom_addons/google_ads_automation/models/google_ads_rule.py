@@ -385,3 +385,51 @@ class GoogleAdsRule(models.Model):
         # 3. Chạy tất cả rules active
         rules = self.search([('active', '=', True)])
         rules.run_rule()
+    @api.model
+    def _run_rules_for_products(self, product_tmpl_ids):
+        """
+        Kích hoạt chạy Rule ngay lập tức cho danh sách sản phẩm (Reactive Trigger).
+        Được gọi từ stock.move khi có biến động kho.
+        """
+        if not product_tmpl_ids:
+            return
+        
+        _logger.info("Reactive Trigger: Checking rules for products %s", product_tmpl_ids)
+        
+        # 1. Tìm các Feed Lines chứa sản phẩm này
+        feed_lines = self.env['google.ads.product.feed.line'].search([
+            ('product_id', 'in', product_tmpl_ids)
+        ])
+        if not feed_lines:
+            return
+
+        # 2. Cập nhật tồn kho ngay lập tức cho các line này
+        for line in feed_lines:
+            line._compute_stock_fields()
+            line._compute_margin_percent()
+            line._compute_avg_daily_sales()
+
+        # 3. Tìm các Rule liên kết trực tiếp với Feed Line này
+        rules = self.search([
+            ('active', '=', True),
+            ('product_feed_line_id', 'in', feed_lines.ids)
+        ])
+        
+        # 4. Tìm thêm các Rule thủ công (không auto-gen) nhưng target vào Campaign có chứa SP này
+        # (Chỉ lấy các rule đang active)
+        manual_rules = self.search([
+            ('active', '=', True),
+            ('auto_generated', '=', False),
+            ('target_type', '=', 'campaign')
+        ])
+        for m_rule in manual_rules:
+            # Nếu rule này áp dụng cho account của SP và campaign có chứa SP
+            campaigns = m_rule._get_target_records()
+            for camp in campaigns:
+                if any(p.id in product_tmpl_ids for p in camp.product_ids):
+                    rules |= m_rule
+                    break
+
+        if rules:
+            _logger.info("Found %s relevant rules to execute immediately.", len(rules))
+            rules.run_rule()

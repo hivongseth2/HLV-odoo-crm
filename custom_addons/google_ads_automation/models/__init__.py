@@ -6,6 +6,7 @@ from . import google_ads_product_feed
 from . import google_ads_strategy
 from . import google_ads_rule
 from . import google_ads_rule_log
+from . import stock_move
 from . import google_ads_conversion
 from . import google_ads_conversion_action
 from . import google_ads_tag

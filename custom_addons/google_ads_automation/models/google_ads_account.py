@@ -692,6 +692,7 @@ class GoogleAdsAccount(models.Model):
                         'impressions': metrics.impressions,
                         'cost': metrics.cost_micros / 1000000.0,
                         'conversions': metrics.conversions,
+                        'state': 'synced',
                     }
                     
                     existing = campaign_obj.search([('google_campaign_id', '=', str(campaign.id))], limit=1)
