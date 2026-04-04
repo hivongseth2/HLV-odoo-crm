@@ -8,7 +8,7 @@
                                t-on-input="(ev) => this.onProductSearch(ev)"/>
                     </div>
                     <div class="pf-filter-group pf-filter-inline">
-                        <label>Số lần mua ≥</label>
+                        <label>Số đơn mua ≥</label>
                         <input type="number" min="0" class="pf-count-input" value="0"
                                t-on-change="(ev) => this.onMinCountChange(ev)"/>
                     </div>
@@ -35,16 +35,16 @@
                                     Tên sản phẩm <i t-att-class="getSortIcon('products', 'product_name')"/>
                                 </th>
                                 <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('incoming_qty')">
-                                    SL Mua <i t-att-class="getSortIcon('products', 'incoming_qty')"/>
+                                    SL đặt mua <i t-att-class="getSortIcon('products', 'incoming_qty')"/>
                                 </th>
                                 <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('incoming_count')">
-                                    Lần mua <i t-att-class="getSortIcon('products', 'incoming_count')"/>
+                                    Đơn mua <i t-att-class="getSortIcon('products', 'incoming_count')"/>
                                 </th>
                                 <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('outgoing_qty')">
-                                    SL Bán <i t-att-class="getSortIcon('products', 'outgoing_qty')"/>
+                                    SL đặt bán <i t-att-class="getSortIcon('products', 'outgoing_qty')"/>
                                 </th>
                                 <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('outgoing_count')">
-                                    Lần bán <i t-att-class="getSortIcon('products', 'outgoing_count')"/>
+                                    Đơn bán <i t-att-class="getSortIcon('products', 'outgoing_count')"/>
                                 </th>
                                 <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortProducts('turnover_count')">
                                     Luân chuyển <i t-att-class="getSortIcon('products', 'turnover_count')"/>
@@ -202,14 +202,14 @@
                                 </div>
                             </t>
                             <t t-else="">
-                                <!-- Purchase Orders -->
+                                <!-- Đơn mua hàng (Purchase Orders) -->
                                 <div class="pf-detail-section">
                                     <h4 class="pf-detail-section-title pf-detail-po-title">
                                         <i class="fa fa-arrow-down me-1"/>
                                         Đơn mua hàng
                                         <span class="pf-detail-count">(<t t-esc="state.productDetailData.po_count"/> đơn)</span>
                                     </h4>
-                                    <t t-if="state.productDetailData.purchase_orders.length > 0">
+                                    <t t-if="state.productDetailData.purchase_records.length > 0">
                                         <table class="pf-table pf-detail-table">
                                             <thead>
                                                 <tr>
@@ -224,24 +224,24 @@
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <t t-foreach="state.productDetailData.purchase_orders" t-as="po" t-key="po.id">
+                                                <t t-foreach="state.productDetailData.purchase_records" t-as="r" t-key="r.line_id">
                                                     <tr>
-                                                        <td t-esc="po_index + 1"/>
+                                                        <td t-esc="r_index + 1"/>
                                                         <td>
                                                             <a href="#" class="pf-link"
-                                                               t-on-click.prevent.stop="() => this.openPurchaseOrder(po.id)"
-                                                               t-esc="po.name"/>
+                                                               t-on-click.prevent.stop="() => this.openPurchaseOrder(r.po_id)"
+                                                               t-esc="r.po_name"/>
                                                         </td>
-                                                        <td t-esc="po.date"/>
-                                                        <td t-esc="po.partner_name"/>
-                                                        <td class="pf-td-num pf-incoming" t-esc="formatNumber(po.qty)"/>
+                                                        <td t-esc="r.date"/>
+                                                        <td t-esc="r.partner_name"/>
+                                                        <td class="pf-td-num pf-incoming" t-esc="formatNumber(r.qty)"/>
                                                         <td class="pf-td-num">
-                                                            <span t-att-class="po.fully_received ? 'pf-incoming' : 'pf-rec-orange-text'"
-                                                                  t-esc="formatNumber(po.received_qty)"/>
+                                                            <span t-att-class="r.fully_received ? 'pf-incoming' : 'pf-rec-orange-text'"
+                                                                  t-esc="formatNumber(r.received_qty)"/>
                                                         </td>
-                                                        <td class="pf-td-num" t-esc="formatCurrency(po.amount)"/>
+                                                        <td class="pf-td-num" t-esc="formatCurrency(r.amount)"/>
                                                         <td>
-                                                            <t t-if="po.fully_received">
+                                                            <t t-if="r.fully_received">
                                                                 <span class="pf-status-badge pf-status-ok">Đã nhận</span>
                                                             </t>
                                                             <t t-else="">
@@ -258,14 +258,14 @@
                                     </t>
                                 </div>
 
-                                <!-- Sale Orders -->
+                                <!-- Đơn bán hàng (Sale Orders) -->
                                 <div class="pf-detail-section">
                                     <h4 class="pf-detail-section-title pf-detail-so-title">
                                         <i class="fa fa-arrow-up me-1"/>
                                         Đơn bán hàng
                                         <span class="pf-detail-count">(<t t-esc="state.productDetailData.so_count"/> đơn)</span>
                                     </h4>
-                                    <t t-if="state.productDetailData.sale_orders.length > 0">
+                                    <t t-if="state.productDetailData.sale_records.length > 0">
                                         <table class="pf-table pf-detail-table">
                                             <thead>
                                                 <tr>
@@ -280,24 +280,24 @@
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <t t-foreach="state.productDetailData.sale_orders" t-as="so" t-key="so.id">
+                                                <t t-foreach="state.productDetailData.sale_records" t-as="r" t-key="r.line_id">
                                                     <tr>
-                                                        <td t-esc="so_index + 1"/>
+                                                        <td t-esc="r_index + 1"/>
                                                         <td>
                                                             <a href="#" class="pf-link"
-                                                               t-on-click.prevent.stop="() => this.openSaleOrder(so.id)"
-                                                               t-esc="so.name"/>
+                                                               t-on-click.prevent.stop="() => this.openSaleOrder(r.so_id)"
+                                                               t-esc="r.so_name"/>
                                                         </td>
-                                                        <td t-esc="so.date"/>
-                                                        <td t-esc="so.partner_name"/>
-                                                        <td class="pf-td-num pf-outgoing" t-esc="formatNumber(so.qty)"/>
+                                                        <td t-esc="r.date"/>
+                                                        <td t-esc="r.partner_name"/>
+                                                        <td class="pf-td-num pf-outgoing" t-esc="formatNumber(r.qty)"/>
                                                         <td class="pf-td-num">
-                                                            <span t-att-class="so.fully_delivered ? 'pf-outgoing' : 'pf-rec-orange-text'"
-                                                                  t-esc="formatNumber(so.delivered_qty)"/>
+                                                            <span t-att-class="r.fully_delivered ? 'pf-outgoing' : 'pf-rec-orange-text'"
+                                                                  t-esc="formatNumber(r.delivered_qty)"/>
                                                         </td>
-                                                        <td class="pf-td-num" t-esc="formatCurrency(so.amount)"/>
+                                                        <td class="pf-td-num" t-esc="formatCurrency(r.amount)"/>
                                                         <td>
-                                                            <t t-if="so.fully_delivered">
+                                                            <t t-if="r.fully_delivered">
                                                                 <span class="pf-status-badge pf-status-ok">Đã giao</span>
                                                             </t>
                                                             <t t-else="">

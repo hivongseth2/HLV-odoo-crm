@@ -1,5 +1,7 @@
 /** @odoo-module **/
 
+import { markup } from "@odoo/owl";
+
 /**
  * Data management mixins: filtered/sorted/paginated data, pagination handlers,
  * export, navigation, formatting helpers.
@@ -61,6 +63,10 @@ export const dashboardDataMixins = {
 
     get allFilteredPlanning() {
         let items = this.state.planning;
+        // Filter stock-only: default shows only products with qty_available > 0
+        if (this.state.planningStockOnly) {
+            items = items.filter(p => (p.qty_available || 0) > 0);
+        }
         const q = this.state.planningSearch;
         if (q) {
             items = items.filter(p =>
@@ -193,7 +199,7 @@ export const dashboardDataMixins = {
         this.state.productDetailName = productName;
         this.state.productDetailLoading = true;
         this.state.showProductDetail = true;
-        this.state.productDetailData = { purchase_orders: [], sale_orders: [] };
+        this.state.productDetailData = { purchase_records: [], sale_records: [] };
         try {
             const params = this._getParams();
             params.product_id = productId;
@@ -205,9 +211,27 @@ export const dashboardDataMixins = {
         this.state.productDetailLoading = false;
     },
 
+    onScatterDotClick(ev) {
+        const el = ev.target.closest('circle') || ev.target;
+        const productId = parseInt(el.dataset.productId);
+        const productName = el.dataset.productName || '';
+        if (productId) {
+            this.showProductDetail(productId, productName);
+        }
+    },
+
+    onTreemapClick(ev) {
+        const el = ev.target.closest('rect') || ev.target;
+        const productId = parseInt(el.dataset.productId);
+        const productName = el.dataset.productName || '';
+        if (productId) {
+            this.showProductDetail(productId, productName);
+        }
+    },
+
     closeProductDetail() {
         this.state.showProductDetail = false;
-        this.state.productDetailData = { purchase_orders: [], sale_orders: [] };
+        this.state.productDetailData = { purchase_records: [], sale_records: [] };
     },
 
     openPurchaseOrder(poId) {
@@ -216,7 +240,7 @@ export const dashboardDataMixins = {
             res_model: "purchase.order",
             res_id: poId,
             views: [[false, "form"]],
-            target: "current",
+            target: "new",
         });
     },
 
@@ -226,7 +250,17 @@ export const dashboardDataMixins = {
             res_model: "sale.order",
             res_id: soId,
             views: [[false, "form"]],
-            target: "current",
+            target: "new",
+        });
+    },
+
+    openPicking(pickingId) {
+        this.actionService.doAction({
+            type: "ir.actions.act_window",
+            res_model: "stock.picking",
+            res_id: pickingId,
+            views: [[false, "form"]],
+            target: "new",
         });
     },
 
@@ -372,5 +406,189 @@ export const dashboardDataMixins = {
     getBarWidth(value, max) {
         if (!max) return "0%";
         return Math.round((value / max) * 100) + "%";
+    },
+
+    // ========== AI Analysis ==========
+    async runAiAnalysis() {
+        this.state.aiLoading = true;
+        this.state.aiError = "";
+        this.state.aiAnalysis = "";
+        this.state.aiStats = null;
+        try {
+            const result = await this.orm.call(
+                "product.flow.analysis",
+                "get_ai_procurement_analysis",
+                [],
+                {
+                    period: this.state.period,
+                    date_from: this.state.dateFrom || false,
+                    date_to: this.state.dateTo || false,
+                    warehouse_id: this.state.warehouseId || false,
+                }
+            );
+            if (result.error) {
+                this.state.aiError = result.error;
+            } else {
+                this.state.aiAnalysis = result.analysis || "";
+                this.state.aiStats = result.product_stats || null;
+                this.state.aiModel = result.model || "";
+                this.state.aiTokens = result.tokens || {};
+            }
+        } catch (e) {
+            this.state.aiError = "Lỗi kết nối: " + (e.message || e);
+        }
+        this.state.aiLoading = false;
+    },
+
+    clearAiAnalysis() {
+        this.state.aiAnalysis = "";
+        this.state.aiError = "";
+        this.state.aiStats = null;
+    },
+
+    // ========== AI Chat ==========
+    onChatInputChange(ev) {
+        this.state.aiChatInput = ev.target.value;
+    },
+
+    onChatKeydown(ev) {
+        if (ev.key === 'Enter' && !ev.shiftKey) {
+            ev.preventDefault();
+            this.sendChatMessage();
+        }
+    },
+
+    async sendChatMessage() {
+        const text = (this.state.aiChatInput || '').trim();
+        if (!text || this.state.aiChatLoading) return;
+
+        // Add user message
+        this.state.aiChatMessages = [
+            ...this.state.aiChatMessages,
+            { role: 'user', content: text, ts: Date.now() },
+        ];
+        this.state.aiChatInput = "";
+        this.state.aiChatLoading = true;
+
+        // Scroll to bottom
+        this._scrollChatToBottom();
+
+        try {
+            // Build history (last 10 messages for context)
+            const history = this.state.aiChatMessages
+                .filter(m => m.role === 'user' || m.role === 'assistant')
+                .slice(-10)
+                .map(m => ({ role: m.role, content: m.content }));
+            // Remove last user message (sent separately)
+            history.pop();
+
+            const result = await this.orm.call(
+                "product.flow.analysis",
+                "chat_with_ai",
+                [],
+                {
+                    user_message: text,
+                    conversation_history: history,
+                    period: this.state.period,
+                    date_from: this.state.dateFrom || false,
+                    date_to: this.state.dateTo || false,
+                    warehouse_id: this.state.warehouseId || false,
+                }
+            );
+
+            if (result.error) {
+                this.state.aiChatMessages = [
+                    ...this.state.aiChatMessages,
+                    { role: 'error', content: result.error, ts: Date.now() },
+                ];
+            } else {
+                const msg = {
+                    role: 'assistant',
+                    content: result.reply || '',
+                    model: result.model || '',
+                    tokens: result.tokens || {},
+                    ts: Date.now(),
+                };
+                if (result.excel) {
+                    msg.excel = result.excel;
+                }
+                this.state.aiChatMessages = [...this.state.aiChatMessages, msg];
+            }
+        } catch (e) {
+            this.state.aiChatMessages = [
+                ...this.state.aiChatMessages,
+                { role: 'error', content: 'Lỗi kết nối: ' + (e.message || e), ts: Date.now() },
+            ];
+        }
+        this.state.aiChatLoading = false;
+        this._scrollChatToBottom();
+    },
+
+    clearChat() {
+        this.state.aiChatMessages = [];
+        this.state.aiChatInput = "";
+    },
+
+    downloadExcel(msg) {
+        if (!msg.excel) return;
+        const { data, filename } = msg.excel;
+        const byteCharacters = atob(data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename || 'report.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    },
+
+    _scrollChatToBottom() {
+        setTimeout(() => {
+            const el = document.querySelector('.pf-chat-messages');
+            if (el) el.scrollTop = el.scrollHeight;
+        }, 50);
+    },
+
+    useSuggestion(text) {
+        this.state.aiChatInput = text;
+        this.sendChatMessage();
+    },
+
+    /** Convert markdown-like text to safe HTML for display */
+    renderMarkdown(text) {
+        if (!text) return "";
+        let html = text;
+        // Escape HTML entities first
+        html = html.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        // Headings: ## heading → <h4>
+        html = html.replace(/^### (.+)$/gm, '<h5 class="pf-ai-h5">$1</h5>');
+        html = html.replace(/^## (.+)$/gm, '<h4 class="pf-ai-h4">$1</h4>');
+        // Bold: **text** → <strong>
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        // Italic: *text* → <em>
+        html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+        // Bullet lists: - item → <li>
+        html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\/li>\n?)+/gs, '<ul class="pf-ai-list">$&</ul>');
+        // Numbered lists: 1. item
+        html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+        // Line breaks
+        html = html.replace(/\n\n/g, '</p><p>');
+        html = html.replace(/\n/g, '<br/>');
+        html = '<p>' + html + '</p>';
+        // Clean up empty paragraphs
+        html = html.replace(/<p>\s*<\/p>/g, '');
+        html = html.replace(/<p>\s*(<h[45])/g, '$1');
+        html = html.replace(/(<\/h[45]>)\s*<\/p>/g, '$1');
+        html = html.replace(/<p>\s*(<ul)/g, '$1');
+        html = html.replace(/(<\/ul>)\s*<\/p>/g, '$1');
+        return markup(html);
     },
 };

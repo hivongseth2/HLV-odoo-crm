@@ -18,6 +18,12 @@
                             <t t-if="state.planningShowAll"> Tất cả</t>
                             <t t-else=""> Ưu tiên</t>
                         </button>
+                        <label class="pf-checkbox-label ms-3" style="font-size:12px;cursor:pointer;">
+                            <input type="checkbox" t-att-checked="state.planningStockOnly"
+                                   t-on-change="() => this.togglePlanningStockOnly()"
+                                   style="margin-right:4px;"/>
+                            Chỉ SP có tồn
+                        </label>
                     </div>
                     <div class="pf-toolbar-right">
                         <span class="pf-info-badge" title="Tần suất = Tổng số lần giao dịch (mua + bán) trong kỳ. Lead time: thời gian chờ nhập hàng. Safety: dự phòng thêm.">

@@ -385,3 +385,173 @@
     text-align: right;
     white-space: nowrap;
 }
+
+// ========== SVG Chart Container ==========
+.pf-svg-chart-wrap {
+    padding: 4px 0;
+    overflow: hidden;
+
+    .pf-chart-svg {
+        width: 100%;
+        height: auto;
+        display: block;
+    }
+
+    &.pf-treemap-wrap {
+        overflow: visible;
+
+        .pf-chart-svg {
+            max-height: 500px;
+        }
+    }
+}
+
+.pf-svg-heatmap-wrap {
+    overflow-x: auto;
+}
+
+// ========== Treemap ==========
+.pf-tm-rect {
+    cursor: pointer;
+    transition: opacity 0.2s;
+
+    &:hover {
+        opacity: 0.82;
+    }
+}
+
+.pf-tm-label {
+    font-size: 8px;
+    font-weight: 700;
+    fill: #fff;
+    pointer-events: none;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.pf-tm-val {
+    font-size: 7px;
+    fill: rgba(255, 255, 255, 0.85);
+    pointer-events: none;
+}
+
+.pf-tm-legend,
+.pf-scatter-legend {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 6px;
+    font-size: 11px;
+    color: #495057;
+
+    .pf-tm-dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        margin-right: 3px;
+        vertical-align: middle;
+    }
+}
+
+// ========== Scatter Plot ==========
+.pf-scatter-dot {
+    cursor: pointer;
+    transition: opacity 0.2s, r 0.2s;
+
+    &:hover {
+        opacity: 1 !important;
+        stroke: #212529;
+        stroke-width: 1;
+    }
+}
+
+.pf-sc-tick {
+    font-size: 7px;
+    fill: #868e96;
+}
+
+.pf-sc-axis-label {
+    font-size: 8px;
+    fill: #495057;
+    font-weight: 600;
+}
+
+// ========== SVG Heatmap ==========
+.pf-hm-header {
+    font-size: 7.5px;
+    fill: #495057;
+    font-weight: 700;
+}
+
+.pf-hm-row-label {
+    font-size: 7px;
+    fill: #495057;
+    font-weight: 600;
+}
+
+.pf-hm-svg-cell {
+    cursor: pointer;
+    transition: opacity 0.2s;
+
+    &:hover {
+        opacity: 0.75;
+        stroke: #212529;
+        stroke-width: 0.8;
+    }
+}
+
+.pf-hm-cell-text {
+    font-size: 6.5px;
+    fill: #212529;
+    pointer-events: none;
+    font-weight: 500;
+}
+
+// ========== Chart Frequency Toggle ==========
+.pf-chart-freq-toggle {
+    padding: 6px 0;
+    margin-bottom: 4px;
+}
+
+.pf-freq-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 16px;
+    background: #f8f9fa;
+    color: #495057;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+        border-color: #748ffc;
+        color: #4263eb;
+        background: #edf2ff;
+    }
+
+    &.active {
+        background: linear-gradient(135deg, #4263eb, #5c7cfa);
+        color: #fff;
+        border-color: #4263eb;
+        box-shadow: 0 2px 6px rgba(66, 99, 235, 0.3);
+
+        &:hover {
+            background: linear-gradient(135deg, #3b5bdb, #4c6ef5);
+        }
+    }
+}
+
+// ========== Log scale hint ==========
+.pf-chart-log-hint {
+    font-size: 0.72rem;
+    color: #868e96;
+    margin-top: 4px;
+    text-align: center;
+    font-style: italic;
+
+    .fa-info-circle { color: #748ffc; }
+}

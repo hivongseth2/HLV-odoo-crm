@@ -59,16 +59,16 @@
                         <div class="pf-card-icon"><i class="fa fa-arrow-down"/></div>
                         <div class="pf-card-body">
                             <div class="pf-card-value" t-esc="formatNumber(state.summary.total_incoming)"/>
-                            <div class="pf-card-label">Tổng mua</div>
-                            <div class="pf-card-sub"><t t-esc="state.summary.incoming_count"/> phiếu nhập</div>
+                            <div class="pf-card-label">SL đặt mua</div>
+                            <div class="pf-card-sub"><t t-esc="state.summary.incoming_count"/> đơn mua hàng</div>
                         </div>
                     </div>
                     <div class="pf-card pf-card-outgoing">
                         <div class="pf-card-icon"><i class="fa fa-arrow-up"/></div>
                         <div class="pf-card-body">
                             <div class="pf-card-value" t-esc="formatNumber(state.summary.total_outgoing)"/>
-                            <div class="pf-card-label">Tổng bán</div>
-                            <div class="pf-card-sub"><t t-esc="state.summary.outgoing_count"/> phiếu xuất</div>
+                            <div class="pf-card-label">SL đặt bán</div>
+                            <div class="pf-card-sub"><t t-esc="state.summary.outgoing_count"/> đơn bán hàng</div>
                         </div>
                     </div>
                     <div class="pf-card pf-card-internal">
@@ -139,6 +139,10 @@
                                         t-on-click="() => this.setChartsSection('help')">
                                     <i class="fa fa-question-circle me-1"/>Hướng dẫn
                                 </button>
+                                <button t-att-class="'pf-stab pf-stab-ai ' + (state.chartsActiveSection === 'ai' ? 'active' : '')"
+                                        t-on-click="() => this.setChartsSection('ai')">
+                                    <i class="fa fa-magic me-1"/>AI
+                                </button>
                                 <div class="pf-topn-select">
                                     <label>Top</label>
                                     <select t-on-change="(ev) => this.onTopNChange(ev)">
@@ -169,6 +173,9 @@
                                 </t>
                                 <t t-if="state.chartsActiveSection === 'help'">
                                     <t t-call="hlv_product_flow_analysis.SidebarHelp"/>
+                                </t>
+                                <t t-if="state.chartsActiveSection === 'ai'">
+                                    <t t-call="hlv_product_flow_analysis.SidebarAI"/>
                                 </t>
                             </div>
                         </div>
