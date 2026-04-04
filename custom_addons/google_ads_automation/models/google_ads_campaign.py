@@ -741,20 +741,11 @@ class GoogleAdsCampaign(models.Model):
         raise UserError(_("Không thể xóa trên Google Ads: %s") % res)
 
     def unlink(self):
-        """Khi xóa trên Odoo, thực hiện xóa vĩnh viễn trên Google Ads nếu đã đồng bộ"""
-        for rec in self:
-            if rec.google_campaign_id and rec.account_id.state == 'authenticated':
-                try:
-                    client = rec.account_id.get_google_ads_client()
-                    customer_id = rec.account_id.google_customer_id
-                    from ..services.google_ads_mutate import GoogleAdsMutateService
-                    ok, result = GoogleAdsMutateService.remove_campaign(client, customer_id, rec.google_campaign_id)
-                    if ok:
-                        _logger.info("Deleted campaign %s from Google Ads via Odoo unlink.", rec.google_campaign_id)
-                    else:
-                        _logger.warning("Could not delete campaign %s from Google Ads: %s", rec.google_campaign_id, result)
-                except Exception as e:
-                    _logger.error("Error during unlink sync for campaign %s: %s", rec.id, str(e))
+        """
+        Khi xóa trên Odoo: Chỉ đơn thuần xóa bản ghi nội bộ Odoo.
+        Việc xóa trên Google Ads giờ đây được xử lý qua Wizard Confirm 
+        để đảm bảo tính an toàn và minh bạch theo yêu cầu người dùng.
+        """
         return super().unlink()
 
     _sql_constraints = [

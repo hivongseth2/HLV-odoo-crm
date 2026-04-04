@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_google_ads_campaign_remove_wizard_form" model="ir.ui.view">
+        <field name="name">google.ads.campaign.remove.wizard.form</field>
+        <field name="model">google.ads.campaign.remove.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Xác nhận xóa chiến dịch">
+                <div class="alert alert-danger shadow-sm border-0 mb-4 rounded-3 d-flex align-items-center">
+                    <div class="p-3 me-3 bg-danger-subtle rounded-circle">
+                         <i class="fa fa-exclamation-triangle fs-4 text-danger"></i>
+                    </div>
+                    <div>
+                        <h5 class="alert-heading mb-1 text-danger fw-bold">XÓA CHIẾN DỊCH QUẢNG CÁO</h5>
+                        <p class="mb-0 text-muted small">Hành động này có thể gỡ bỏ quảng cáo của bạn vĩnh viễn trên thực tế.</p>
+                    </div>
+                </div>
+                
+                <sheet>
+                    <div class="mb-3">
+                        <field name="sync_state_info" readonly="1" class="fw-medium text-dark"/>
+                    </div>
+                    <group>
+                        <field name="delete_on_google" widget="boolean_toggle" class="fw-bold text-danger"/>
+                    </group>
+                    <div class="mt-2 text-muted small border-start ps-3" invisible="not delete_on_google">
+                        <i class="fa fa-info-circle me-1"></i> <b>Lưu ý:</b> Hệ thống sẽ gửi lệnh xóa tới Google Ads API. 
+                        Chiến dịch cùng các dữ liệu lịch sử trên Google sẽ bị gắn nhãn "REMOVED" (Xóa).
+                    </div>
+                    <div class="mt-2 text-muted small border-start ps-3" invisible="delete_on_google">
+                         <i class="fa fa-eye-slash me-1"></i> <b>Lưu ý:</b> Chỉ xóa bản ghi trên hệ thống Odoo nội bộ. 
+                         Quảng cáo trên Google Ads sẽ KHÔNG bị ảnh hưởng.
+                    </div>
+                    
+                    <footer class="mt-4 border-top pt-3">
+                        <button name="action_confirm_remove" string="Xác nhận Xóa" type="object" class="btn-danger shadow-sm"/>
+                        <button string="Hủy" class="btn-secondary" special="cancel"/>
+                    </footer>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action cho Wizard -->
+    <record id="action_google_ads_campaign_remove_wizard" model="ir.actions.act_window">
+        <field name="name">Xóa Chiến Dịch</field>
+        <field name="res_model">google.ads.campaign.remove.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="model_google_ads_campaign"/>
+        <field name="binding_view_types">list,form</field>
+    </record>
+</odoo>

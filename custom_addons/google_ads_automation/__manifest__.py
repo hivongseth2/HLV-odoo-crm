@@ -21,6 +21,7 @@
         "data/ir_cron_data.xml",
         "wizard/google_ads_product_feed_wizard_views.xml",
         "wizard/google_ads_adsroid_chat_views.xml",
+        "wizard/google_ads_campaign_remove_wizard_views.xml",
         "views/google_ads_account_views.xml",
         "views/google_ads_campaign_views.xml",
         "views/google_ads_ad_group_views.xml",
@@ -37,6 +38,7 @@
     "assets": {
         "web.assets_backend": [
             "google_ads_automation/static/src/css/premium_dashboard.css",
+            "google_ads_automation/static/src/js/campaign_delete_patch.js",
         ],
     },
     "installable": True,
