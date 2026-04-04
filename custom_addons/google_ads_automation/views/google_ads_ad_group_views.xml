@@ -79,7 +79,7 @@
                                         class="btn-link p-0 ms-2" 
                                         icon="fa-download"
                                         title="Tự động lấy toàn bộ sản phẩm từ chiến dịch cha"
-                                        invisible="state == 'synced' or not campaign_id"/>
+                                        invisible="not campaign_id"/>
                             </div>
                             <field name="google_ad_group_id" readonly="1" invisible="state == 'draft'"/>
                         </group>
