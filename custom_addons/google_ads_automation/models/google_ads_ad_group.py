@@ -181,7 +181,8 @@ class GoogleAdsAdGroup(models.Model):
         """Lấy toàn bộ sản phẩm từ chiến dịch cha điền vào nhóm quảng cáo"""
         self.ensure_one()
         if self.campaign_id and self.campaign_id.product_ids:
-            self.product_ids = [fields.Command.set(self.campaign_id.product_ids.ids)]
+            # Dùng toán tử |= để thêm các sản phẩm mới vào danh sách hiện có (không bị trùng lặp)
+            self.product_ids |= self.campaign_id.product_ids
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
