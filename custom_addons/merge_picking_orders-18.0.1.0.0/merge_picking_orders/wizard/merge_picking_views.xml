@@ -5,15 +5,13 @@
         <field name="name">merge.picking.view.form</field>
         <field name="model">merge.picking</field>
         <field name="arch" type="xml">
-            <form string="Merge Pickings">
+            <form string="Gộp phiếu kho">
                 <sheet>
-                    <p>When selecting pickings for merging,
+                    <p>Lưu ý khi gộp phiếu:
                         <br/>
-                        * Merging is not allowed in a single picking and Done
-                        state picking
+                        * Không thể gộp khi chỉ có một phiếu hoặc phiếu đã hoàn thành/đã hủy
                         <br/>
-                        * Pickings should be of the same partners, same types,
-                        same states
+                        * Các phiếu phải cùng đối tác, cùng loại, cùng trạng thái
                     </p>
                     <field name="merge_picking_ids">
                     </field>
@@ -23,9 +21,9 @@
                                widget="selection"/>
                     </group>
                     <footer>
-                        <button name="action_merge" string="Merge" type="object"
+                        <button name="action_merge" string="Gộp phiếu" type="object"
                                 class="btn-primary"/>
-                        <button string="Cancel" class="btn-secondary"
+                        <button string="Hủy bỏ" class="btn-secondary"
                                 special="cancel"/>
                     </footer>
                 </sheet>
