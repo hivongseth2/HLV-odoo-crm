@@ -437,6 +437,31 @@ class GoogleAdsCampaign(models.Model):
         
         if self.channel_type == 'SHOPPING' and not self.account_id.merchant_center_id:
             raise UserError(_("Vui lòng cấu hình Merchant Center ID trong mục Cài đặt Tài khoản Google Ads để tạo chiến dịch Mua Sắm!"))
+
+        # ── Validation cho chiến dịch mới (chỉ khi tạo mới, không áp dụng cho đã sync) ──
+        if not self.google_campaign_id:
+            missing = []
+            if self.channel_type == 'PERFORMANCE_MAX':
+                if not self.final_url:
+                    missing.append('URL trang đích (Landing Page)')
+                if not self.business_name:
+                    missing.append('Tên thương hiệu')
+                if not self.logo_image:
+                    missing.append('Logo hình vuông')
+                if not self.marketing_image:
+                    missing.append('Ảnh quảng cáo (Ngang)')
+            elif self.channel_type == 'VIDEO':
+                if not self.final_url:
+                    missing.append('URL trang đích (Landing Page)')
+                if not self.video_sub_type:
+                    missing.append('Cấu Hình Video')
+            elif self.channel_type == 'MULTI_CHANNEL':
+                if not self.app_id:
+                    missing.append('ID Ứng dụng')
+                if not self.app_sub_type:
+                    missing.append('Cấu Hình Ứng Dụng')
+            if missing:
+                raise UserError(_("Vui lòng điền đủ thông tin trước khi đồng bộ:\n- %s") % "\n- ".join(missing))
         
         # Determine the effective sub-type to send
         sub_type = False

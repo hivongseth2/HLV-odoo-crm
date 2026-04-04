@@ -78,25 +78,19 @@
                             <field name="channel_type" readonly="state != 'draft'"/>
                             <field name="video_sub_type" 
                                    invisible="channel_type != 'VIDEO'"
-                                   required="channel_type == 'VIDEO' and state != 'synced'"
                                    readonly="state != 'draft'"/>
                             <field name="app_sub_type" 
                                    invisible="channel_type != 'MULTI_CHANNEL'"
-                                   required="channel_type == 'MULTI_CHANNEL' and state != 'synced'"
                                    readonly="state != 'draft'"/>
                             <field name="google_campaign_id" readonly="1" invisible="state == 'draft'"/>
                         </group>
                         <group string="Cấu hình Google Ads">
                             <field name="budget_amount" widget="monetary" options="{'currency_field': 'currency_id'}"/>
-                            <field name="final_url" placeholder="https://example.com" 
-                                   required="(channel_type == 'VIDEO' or channel_type == 'PERFORMANCE_MAX') and state != 'synced'"/>
-                            <field name="business_name" invisible="channel_type != 'PERFORMANCE_MAX'" 
-                                   required="channel_type == 'PERFORMANCE_MAX' and state != 'synced'"/>
+                            <field name="final_url" placeholder="https://example.com"/>
+                            <field name="business_name" invisible="channel_type != 'PERFORMANCE_MAX'"/>
                             <field name="logo_image" widget="image" invisible="channel_type != 'PERFORMANCE_MAX'" 
-                                   required="channel_type == 'PERFORMANCE_MAX' and state != 'synced'"
                                    class="oe_avatar" options="{'size': [96, 96]}"/>
                             <field name="marketing_image" widget="image" invisible="channel_type != 'PERFORMANCE_MAX'"
-                                   required="channel_type == 'PERFORMANCE_MAX' and state != 'synced'"
                                    class="o_google_ads_landscape_img"/>
                             <field name="status" widget="badge" readonly="1" invisible="state == 'draft'"
                                    decoration-success="status == 'enabled'"
@@ -166,14 +160,11 @@
                                 </div>
                                 <group>
                                     <group>
-                                        <field name="app_id" placeholder="VD: com.myapp.android" 
-                                               required="channel_type == 'MULTI_CHANNEL' and state != 'synced'"/>
-                                        <field name="app_store" 
-                                               required="channel_type == 'MULTI_CHANNEL' and state != 'synced'"/>
+                                        <field name="app_id" placeholder="VD: com.myapp.android"/>
+                                        <field name="app_store"/>
                                     </group>
                                     <group>
-                                        <field name="app_bidding_goal" 
-                                               required="channel_type == 'MULTI_CHANNEL' and state != 'synced'"/>
+                                        <field name="app_bidding_goal"/>
                                     </group>
                                 </group>
                             </div>
