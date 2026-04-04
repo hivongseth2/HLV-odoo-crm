@@ -178,18 +178,7 @@ Mỗi quy tắc hoạt động theo logic **IF (Nếu)** -> **THEN (Thì)**:
 
 ---
 
-## 7. Menu: Hành Động Chuyển Đổi (Conversion Actions)
-Kết nối kết quả kinh doanh với Google Ads.
-
-*   **Tạo mới**: Bạn cần tạo một bản ghi cho hành động "Mua hàng" (Purchase).
-*   **Cấu hình**: Nhập `Conversion ID` và `Conversion Label` từ Google Ads.
-*   **Loại**: 
-    *   `Webpage`: Dùng để lấy mã nhúng vào website.
-    *   `Upload Clicks`: Dùng để Odoo tự động gửi dữ liệu doanh thu qua API.
-
----
-
-## 8. Menu: Lượt Chuyển Đổi (Conversions)
+## 7. Menu: Lượt Chuyển Đổi (Conversions)
 Theo dõi từng đơn hàng thực tế phát sinh từ quảng cáo Google. Đây là dữ liệu quan trọng nhất để đánh giá hiệu quả kinh doanh.
 
 ![Danh Sách Các Đơn Hàng Thành Công Từ Google Ads](file:///C:/Users/atu30/.gemini/antigravity/brain/8926f9b8-0514-4c41-9059-ed35ae7f66a3/artifacts/media__1775205150940.png)
@@ -209,7 +198,7 @@ Hệ thống hỗ trợ gửi dữ liệu "ngược" về cho Google Ads để t
 
 ---
 
-## 9. Menu: Cấu Hình Tag (Tag Config)
+## 8. Menu: Cấu Hình Tag (Tag Config)
 Dành cho việc cài đặt theo dõi lên Website.
 
 1.  Nhập mã GTM hoặc mã Google Ads của bạn.
@@ -217,13 +206,3 @@ Dành cho việc cài đặt theo dõi lên Website.
 3.  Bạn chỉ việc Copy các đoạn mã này và dán vào Website (WooCommerce/WordPress) theo hướng dẫn đi kèm.
 4.  **Báo cáo GA4**: Kết nối GA4 để xem biểu đồ mật độ sự kiện (Mua hàng, Thêm giỏ hàng...) ngay trên Odoo để biết thẻ theo dõi có đang hoạt động tốt không.
 
----
-
-## Lịch Trình Vận Hành Gợi Ý Cho Bạn:
-
-*   **Mỗi sáng (8:00 AM)**: Vào menu **Quy Tắc Tự Động**, kiểm tra xem có thông báo lỗi hay nhật ký tắt quảng cáo nào bất thường không.
-*   **Hàng tuần**: Vào menu **Chiến Dịch**, dùng **AI Adsroid** để đánh giá lại ngân sách xem có cần tăng/giảm cho tuần tới dựa trên tồn kho thực tế.
-*   **Hàng tháng**: Kiểm tra báo cáo **GA4 Health** trong menu **Tag Config** để đảm bảo quá trình đo lường không bị gián đoạn.
-
----
-*Cẩm nang vận hành Google Ads Automation Odoo 18.*

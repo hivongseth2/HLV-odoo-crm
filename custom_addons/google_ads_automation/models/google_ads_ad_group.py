@@ -135,6 +135,8 @@ class GoogleAdsAdGroup(models.Model):
     product_ids = fields.Many2many('product.template', 'google_ads_ad_group_product_rel', 
                                     'ad_group_id', 'product_id', string='Sản Phẩm')
 
+    campaign_product_ids = fields.Many2many('product.template', related='campaign_id.product_ids', string='Sản phẩm chiến dịch')
+
     status = fields.Selection([
         ('unspecified', 'Chưa xác định'),
         ('unknown', 'Không rõ'),
@@ -174,6 +176,24 @@ class GoogleAdsAdGroup(models.Model):
                 rec.roas = (rec.conversions * 500000) / rec.cost
             else:
                 rec.roas = 0.0
+
+    def action_pull_products_from_campaign(self):
+        """Lấy toàn bộ sản phẩm từ chiến dịch cha điền vào nhóm quảng cáo"""
+        self.ensure_one()
+        if self.campaign_id and self.campaign_id.product_ids:
+            self.product_ids = [fields.Command.set(self.campaign_id.product_ids.ids)]
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _('Đã Lấy Sản Phẩm'),
+                    'message': _('Đã tự động điền %s sản phẩm từ chiến dịch vào nhóm.') % len(self.campaign_id.product_ids),
+                    'type': 'success',
+                    'sticky': False,
+                }
+            }
+        else:
+            raise UserError(_("Chiến dịch chưa có sản phẩm nào trong Product Feed để lấy."))
 
     @api.onchange('campaign_id')
     def _onchange_campaign_id_clear_type(self):

@@ -67,7 +67,21 @@
                                    readonly="state == 'synced'"/>
                             <field name="type" invisible="1"/>
                             <field name="status" readonly="state == 'synced'"/>
-                            <field name="product_ids" widget="many2many_tags" options="{'no_create': True}"/>
+                            <field name="campaign_product_ids" invisible="1"/>
+                            <label for="product_ids" string="Sản Phẩm"/>
+                            <div class="d-flex align-items-center">
+                                <field name="product_ids" widget="many2many_tags" 
+                                       options="{'no_create': True}"
+                                       domain="[('id', 'in', campaign_product_ids)]"
+                                       class="flex-grow-1"/>
+                                <button name="action_pull_products_from_campaign" 
+                                        string=" Lấy SP từ chiến dịch" 
+                                        type="object" 
+                                        class="btn-link p-0 ms-2" 
+                                        icon="fa-download"
+                                        title="Tự động lấy toàn bộ sản phẩm từ chiến dịch cha"
+                                        invisible="state == 'synced' or not campaign_id"/>
+                            </div>
                             <field name="google_ad_group_id" readonly="1" invisible="state == 'draft'"/>
                         </group>
                     </div>
