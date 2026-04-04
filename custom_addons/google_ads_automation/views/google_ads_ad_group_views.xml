@@ -72,7 +72,6 @@
                             <div class="d-flex align-items-center">
                                 <field name="product_ids" widget="many2many_tags" 
                                        options="{'no_create': True}"
-                                       domain="[('id', 'in', campaign_product_ids)]"
                                        class="flex-grow-1"/>
                                 <button name="action_pull_products_from_campaign" 
                                         string=" Lấy SP từ chiến dịch" 
