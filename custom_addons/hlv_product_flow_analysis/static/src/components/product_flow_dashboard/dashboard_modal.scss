@@ -1,0 +1,157 @@
+/* ===== Dashboard Modal & Trend Chart Styles ===== */
+
+/* Modal */
+.pf-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 1050;
+}
+
+.pf-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: 16px;
+    width: 680px;
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow: auto;
+    z-index: 1051;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.pf-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 24px;
+    border-bottom: 1px solid #dee2e6;
+
+    h3 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: #212529;
+    }
+}
+
+.pf-modal-close {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 4px;
+
+    &:hover {
+        color: #212529;
+    }
+}
+
+.pf-modal-body {
+    padding: 24px;
+}
+
+/* Trend Chart */
+.pf-trend-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    height: 220px;
+    padding: 0 16px;
+}
+
+.pf-trend-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+}
+
+.pf-trend-bars {
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    width: 100%;
+}
+
+.pf-trend-bar {
+    flex: 1;
+    border-radius: 4px 4px 0 0;
+    min-height: 4px;
+    position: relative;
+    transition: height 0.3s ease;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+.pf-bar-incoming {
+    background: linear-gradient(180deg, #28a745, #20c997);
+}
+
+.pf-bar-outgoing {
+    background: linear-gradient(180deg, #dc3545, #fd7e14);
+}
+
+.pf-bar-val {
+    font-size: 10px;
+    font-weight: 600;
+    color: white;
+    padding-top: 4px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    white-space: nowrap;
+}
+
+.pf-trend-label {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.pf-trend-legend {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-top: 20px;
+}
+
+.pf-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #495057;
+}
+
+.pf-legend-color {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    display: inline-block;
+
+    &.pf-bar-incoming {
+        background: #28a745;
+    }
+
+    &.pf-bar-outgoing {
+        background: #dc3545;
+    }
+}
+
+/* Responsive */
+
+/* ===== HEAT MAP for counts ===== */
+.pf-heat-1 { background: rgba(1, 126, 132, 0.08) !important; }
+.pf-heat-2 { background: rgba(1, 126, 132, 0.18) !important; }
+.pf-heat-3 { background: rgba(1, 126, 132, 0.30) !important; font-weight: 700; }
+.pf-heat-4 { background: rgba(1, 126, 132, 0.45) !important; font-weight: 700; color: #01585c; }

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Client Action for OWL Dashboard -->
+    <record id="action_product_flow_dashboard" model="ir.actions.client">
+        <field name="name">Phân tích lưu thông hàng hóa</field>
+        <field name="tag">hlv_product_flow_analysis.Dashboard</field>
+        <field name="target">main</field>
+    </record>
+</odoo>

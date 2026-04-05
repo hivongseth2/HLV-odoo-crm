@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Nhóm: Quản lý phân quyền kho -->
+    <record id="group_warehouse_permission_manager" model="res.groups">
+        <field name="name">Quản lý phân quyền kho</field>
+        <field name="comment">Cho phép quản lý bảng phân quyền kho cho người dùng</field>
+        <field name="category_id" ref="base.module_category_inventory"/>
+    </record>
+
+    <!-- Stock Manager tự động có quyền quản lý phân quyền -->
+    <record id="stock.group_stock_manager" model="res.groups">
+        <field name="implied_ids" eval="[(4, ref('group_warehouse_permission_manager'))]"/>
+    </record>
+</odoo>

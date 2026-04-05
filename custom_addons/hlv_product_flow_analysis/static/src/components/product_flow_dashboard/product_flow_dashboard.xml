@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_product_flow_analysis.Dashboard">
+        <div class="pf-dashboard">
+            <!-- Loading -->
+            <t t-if="state.isLoading">
+                <div class="pf-loading">
+                    <div class="pf-spinner"/>
+                    <p>Đang tải dữ liệu...</p>
+                </div>
+            </t>
+
+            <t t-else="">
+                <!-- HEADER -->
+                <div class="pf-header">
+                    <div class="pf-header-left">
+                        <h1 class="pf-title">
+                            <i class="fa fa-bar-chart me-2"/>Phân tích lưu thông hàng hóa
+                        </h1>
+                        <span class="pf-period-label">
+                            <t t-esc="state.dateFrom"/> → <t t-esc="state.dateTo"/>
+                        </span>
+                    </div>
+                    <div class="pf-header-right">
+                        <div class="pf-filter-group">
+                            <label>Kỳ:</label>
+                            <select class="pf-select" t-on-change="(ev) => this.onPeriodChange(ev)">
+                                <option value="week" t-att-selected="state.period === 'week'">Tuần</option>
+                                <option value="month" t-att-selected="state.period === 'month'">Tháng</option>
+                                <option value="quarter" t-att-selected="state.period === 'quarter'">Quý</option>
+                                <option value="year" t-att-selected="state.period === 'year'">Năm</option>
+                            </select>
+                        </div>
+                        <div class="pf-filter-group">
+                            <label>Kho:</label>
+                            <select class="pf-select" t-on-change="(ev) => this.onWarehouseChange(ev)">
+                                <option value="all">Tất cả kho</option>
+                                <t t-foreach="state.warehouses" t-as="wh" t-key="wh.id">
+                                    <option t-att-value="wh.id" t-esc="wh.name"/>
+                                </t>
+                            </select>
+                        </div>
+                        <div class="pf-filter-group">
+                            <label>Từ:</label>
+                            <input type="date" class="pf-date-input" t-att-value="state.dateFrom"
+                                   t-on-change="(ev) => this.onDateFromChange(ev)"/>
+                        </div>
+                        <div class="pf-filter-group">
+                            <label>Đến:</label>
+                            <input type="date" class="pf-date-input" t-att-value="state.dateTo"
+                                   t-on-change="(ev) => this.onDateToChange(ev)"/>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUMMARY CARDS -->
+                <div class="pf-summary-cards">
+                    <div class="pf-card pf-card-incoming">
+                        <div class="pf-card-icon"><i class="fa fa-arrow-down"/></div>
+                        <div class="pf-card-body">
+                            <div class="pf-card-value" t-esc="formatNumber(state.summary.total_incoming)"/>
+                            <div class="pf-card-label">SL đặt mua</div>
+                            <div class="pf-card-sub"><t t-esc="state.summary.incoming_count"/> đơn mua hàng</div>
+                        </div>
+                    </div>
+                    <div class="pf-card pf-card-outgoing">
+                        <div class="pf-card-icon"><i class="fa fa-arrow-up"/></div>
+                        <div class="pf-card-body">
+                            <div class="pf-card-value" t-esc="formatNumber(state.summary.total_outgoing)"/>
+                            <div class="pf-card-label">SL đặt bán</div>
+                            <div class="pf-card-sub"><t t-esc="state.summary.outgoing_count"/> đơn bán hàng</div>
+                        </div>
+                    </div>
+                    <div class="pf-card pf-card-internal">
+                        <div class="pf-card-icon"><i class="fa fa-exchange"/></div>
+                        <div class="pf-card-body">
+                            <div class="pf-card-value" t-esc="formatNumber(state.summary.total_internal)"/>
+                            <div class="pf-card-label">Nội bộ</div>
+                        </div>
+                    </div>
+                    <div class="pf-card pf-card-products">
+                        <div class="pf-card-icon"><i class="fa fa-cubes"/></div>
+                        <div class="pf-card-body">
+                            <div class="pf-card-value" t-esc="state.summary.unique_products"/>
+                            <div class="pf-card-label">Sản phẩm</div>
+                        </div>
+                    </div>
+                    <div class="pf-card pf-card-suppliers">
+                        <div class="pf-card-icon"><i class="fa fa-truck"/></div>
+                        <div class="pf-card-body">
+                            <div class="pf-card-value" t-esc="state.summary.unique_suppliers"/>
+                            <div class="pf-card-label">Nhà cung cấp</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CHARTS TOGGLE BUTTON -->
+                <button class="pf-charts-toggle" t-on-click="() => this.toggleChartsPanel()">
+                    <i t-att-class="'fa ' + (state.chartsPanelOpen ? 'fa-times' : 'fa-bar-chart')"/>
+                    <span t-if="!state.chartsPanelOpen">Biểu đồ phân tích</span>
+                    <span t-else="">Đóng</span>
+                </button>
+
+                <!-- MAIN LAYOUT with sidebar -->
+                <div t-att-class="'pf-main-layout ' + (state.chartsPanelOpen ? 'pf-sidebar-open' : '')">
+                    <!-- SIDEBAR CHARTS PANEL -->
+                    <div class="pf-sidebar">
+                        <div class="pf-sidebar-inner">
+                            <div class="pf-sidebar-header">
+                                <h3 class="pf-sidebar-title">
+                                    <i class="fa fa-bar-chart me-2"/>Biểu đồ phân tích
+                                </h3>
+                                <button class="pf-sidebar-close" t-on-click="() => this.toggleChartsPanel()">
+                                    <i class="fa fa-times"/>
+                                </button>
+                            </div>
+                            <div class="pf-sidebar-tabs">
+                                <button t-att-class="'pf-stab ' + (state.chartsActiveSection === 'products' ? 'active' : '')"
+                                        t-on-click="() => this.setChartsSection('products')">
+                                    <i class="fa fa-cube me-1"/>Sản phẩm
+                                </button>
+                                <button t-att-class="'pf-stab ' + (state.chartsActiveSection === 'suppliers' ? 'active' : '')"
+                                        t-on-click="() => this.setChartsSection('suppliers')">
+                                    <i class="fa fa-truck me-1"/>NCC
+                                </button>
+                                <button t-att-class="'pf-stab ' + (state.chartsActiveSection === 'heatmap' ? 'active' : '')"
+                                        t-on-click="() => this.setChartsSection('heatmap')">
+                                    <i class="fa fa-th me-1"/>Phân tích
+                                </button>
+                                <button t-att-class="'pf-stab ' + (state.chartsActiveSection === 'correlation' ? 'active' : '')"
+                                        t-on-click="() => this.setChartsSection('correlation')">
+                                    <i class="fa fa-dot-circle-o me-1"/>Tương quan
+                                </button>
+                                <button t-att-class="'pf-stab ' + (state.chartsActiveSection === 'trend' ? 'active' : '')"
+                                        t-on-click="() => this.setChartsSection('trend')">
+                                    <i class="fa fa-line-chart me-1"/>Biến động
+                                </button>
+                                <button t-att-class="'pf-stab ' + (state.chartsActiveSection === 'help' ? 'active' : '')"
+                                        t-on-click="() => this.setChartsSection('help')">
+                                    <i class="fa fa-question-circle me-1"/>Hướng dẫn
+                                </button>
+                                <button t-att-class="'pf-stab pf-stab-ai ' + (state.chartsActiveSection === 'ai' ? 'active' : '')"
+                                        t-on-click="() => this.setChartsSection('ai')">
+                                    <i class="fa fa-magic me-1"/>AI
+                                </button>
+                                <div class="pf-topn-select">
+                                    <label>Top</label>
+                                    <select t-on-change="(ev) => this.onTopNChange(ev)">
+                                        <option value="5" t-att-selected="state.topN === 5">5</option>
+                                        <option value="10" t-att-selected="state.topN === 10">10</option>
+                                        <option value="15" t-att-selected="state.topN === 15">15</option>
+                                        <option value="20" t-att-selected="state.topN === 20">20</option>
+                                        <option value="30" t-att-selected="state.topN === 30">30</option>
+                                        <option value="50" t-att-selected="state.topN === 50">50</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="pf-sidebar-body">
+                                <t t-if="state.chartsActiveSection === 'products'">
+                                    <t t-call="hlv_product_flow_analysis.SidebarProducts"/>
+                                </t>
+                                <t t-if="state.chartsActiveSection === 'suppliers'">
+                                    <t t-call="hlv_product_flow_analysis.SidebarSuppliers"/>
+                                </t>
+                                <t t-if="state.chartsActiveSection === 'heatmap'">
+                                    <t t-call="hlv_product_flow_analysis.SidebarAnalysis"/>
+                                </t>
+                                <t t-if="state.chartsActiveSection === 'correlation'">
+                                    <t t-call="hlv_product_flow_analysis.SidebarCorrelation"/>
+                                </t>
+                                <t t-if="state.chartsActiveSection === 'trend'">
+                                    <t t-call="hlv_product_flow_analysis.SidebarTrend"/>
+                                </t>
+                                <t t-if="state.chartsActiveSection === 'help'">
+                                    <t t-call="hlv_product_flow_analysis.SidebarHelp"/>
+                                </t>
+                                <t t-if="state.chartsActiveSection === 'ai'">
+                                    <t t-call="hlv_product_flow_analysis.SidebarAI"/>
+                                </t>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CONTENT AREA -->
+                    <div class="pf-content-area">
+                        <div class="pf-tabs">
+                            <button t-att-class="'pf-tab ' + (state.activeTab === 'products' ? 'active' : '')"
+                                    t-on-click="() => this.switchTab('products')">
+                                <i class="fa fa-cube me-1"/>Hàng hóa mua bán
+                            </button>
+                            <button t-att-class="'pf-tab ' + (state.activeTab === 'suppliers' ? 'active' : '')"
+                                    t-on-click="() => this.switchTab('suppliers')">
+                                <i class="fa fa-truck me-1"/>Nhà cung cấp
+                            </button>
+                            <button t-att-class="'pf-tab ' + (state.activeTab === 'planning' ? 'active' : '')"
+                                    t-on-click="() => this.switchTab('planning')">
+                                <i class="fa fa-tasks me-1"/>Kế hoạch tồn kho
+                            </button>
+                        </div>
+                        <div class="pf-tab-content">
+                            <t t-if="state.activeTab === 'products'">
+                                <t t-call="hlv_product_flow_analysis.ContentProducts"/>
+                            </t>
+                            <t t-if="state.activeTab === 'suppliers'">
+                                <t t-call="hlv_product_flow_analysis.ContentSuppliers"/>
+                            </t>
+                            <t t-if="state.activeTab === 'planning'">
+                                <t t-call="hlv_product_flow_analysis.ContentPlanning"/>
+                            </t>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Drilldown Panel (overlay) -->
+                <t t-call="hlv_product_flow_analysis.DrilldownPanel"/>
+            </t>
+        </div>
+    </t>
+</templates>

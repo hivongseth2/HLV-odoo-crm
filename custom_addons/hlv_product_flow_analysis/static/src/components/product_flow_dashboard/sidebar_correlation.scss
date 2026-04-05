@@ -1,0 +1,357 @@
+/* ===== Sidebar Correlation & Deep Analytics Styles ===== */
+
+// ========== ABC Pareto Analysis ==========
+.pf-abc-bar {
+    display: flex;
+    height: 28px;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.pf-abc-seg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    transition: width 0.3s ease;
+
+    &.pf-abc-a { background: #2b8a3e; }
+    &.pf-abc-b { background: #1971c2; }
+    &.pf-abc-c { background: #adb5bd; }
+}
+
+.pf-abc-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.pf-abc-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #495057;
+}
+
+.pf-abc-dot {
+    width: 10px;
+    height: 10px;
+    min-width: 10px;
+    border-radius: 3px;
+    display: inline-block;
+    &.pf-abc-a { background: #2b8a3e; }
+    &.pf-abc-b { background: #1971c2; }
+    &.pf-abc-c { background: #adb5bd; }
+}
+
+.pf-abc-lbl { flex: 1; }
+
+// ========== Flow Matrix 3x3 ==========
+.pf-matrix-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 0;
+}
+
+.pf-matrix-ylabel {
+    font-size: 10px;
+    font-weight: 600;
+    color: #868e96;
+    margin-bottom: 2px;
+}
+
+.pf-matrix-body {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.pf-matrix-row-labels {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    font-size: 10px;
+    color: #868e96;
+    font-weight: 600;
+    text-align: right;
+
+    span {
+        height: 42px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding-right: 4px;
+    }
+}
+
+.pf-matrix-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2px;
+}
+
+.pf-matrix-cell {
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    border-radius: 4px;
+    color: #495057;
+    cursor: default;
+}
+
+.pf-mx-0 { background: #f1f3f5; color: #adb5bd; }
+.pf-mx-1 { background: #d0ebff; color: #1971c2; }
+.pf-mx-2 { background: #74c0fc; color: #fff; }
+.pf-mx-3 { background: #339af0; color: #fff; }
+.pf-mx-4 { background: #1864ab; color: #fff; }
+
+.pf-matrix-col-labels {
+    display: grid;
+    grid-template-columns: repeat(3, 42px);
+    gap: 2px;
+    margin-left: auto;
+    text-align: center;
+    font-size: 10px;
+    color: #868e96;
+    font-weight: 600;
+}
+
+.pf-matrix-xlabel {
+    font-size: 10px;
+    font-weight: 600;
+    color: #868e96;
+    margin-top: 2px;
+}
+
+.pf-matrix-scale {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    margin-top: 6px;
+    font-size: 10px;
+
+    span {
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-weight: 600;
+    }
+
+    .pf-mx-s0 { background: #f1f3f5; color: #adb5bd; }
+    .pf-mx-s1 { background: #d0ebff; color: #1971c2; }
+    .pf-mx-s2 { background: #74c0fc; color: #fff; }
+    .pf-mx-s3 { background: #339af0; color: #fff; }
+    .pf-mx-s4 { background: #1864ab; color: #fff; }
+}
+
+// ========== Balance Distribution ==========
+.pf-bal-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 0;
+}
+
+.pf-bal-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pf-bal-label {
+    width: 52px;
+    font-size: 11px;
+    color: #495057;
+    text-align: right;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.pf-bal-track {
+    flex: 1;
+    height: 16px;
+    background: #f1f3f5;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.pf-bal-fill {
+    height: 100%;
+    border-radius: 3px;
+    min-width: 2px;
+    transition: width 0.3s ease;
+}
+
+.pf-bal-heavy-buy { background: #e03131; }
+.pf-bal-over-buy { background: #e8590c; }
+.pf-bal-slight-buy { background: #f59f00; }
+.pf-bal-balanced { background: #2b8a3e; }
+.pf-bal-slight-sell { background: #1098ad; }
+.pf-bal-over-sell { background: #1971c2; }
+.pf-bal-heavy-sell { background: #7048e8; }
+
+.pf-bal-count {
+    width: 32px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #212529;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.pf-bal-extra {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+
+.pf-bal-tag {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+.pf-bal-sell-only { background: #fff3bf; color: #e67700; }
+.pf-bal-buy-only { background: #d0ebff; color: #1971c2; }
+
+// ========== Density Heatmap ==========
+.pf-density-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 0;
+}
+
+.pf-density-ylabel {
+    font-size: 10px;
+    font-weight: 600;
+    color: #868e96;
+}
+
+.pf-density-grid {
+    display: grid;
+    gap: 2px;
+    width: 100%;
+    max-width: 280px;
+}
+
+.pf-density-cell {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 3px;
+    cursor: default;
+}
+
+.pf-dn-0 { background: #f8f9fa; color: transparent; }
+.pf-dn-1 { background: #ffe3e3; color: #c92a2a; }
+.pf-dn-2 { background: #ff8787; color: #fff; }
+.pf-dn-3 { background: #f03e3e; color: #fff; }
+.pf-dn-4 { background: #a61e4d; color: #fff; }
+
+.pf-density-xlabel {
+    font-size: 10px;
+    font-weight: 600;
+    color: #868e96;
+}
+
+.pf-density-info {
+    font-size: 11px;
+    color: #6c757d;
+    text-align: center;
+    margin-top: 4px;
+}
+
+// ========== Top Imbalanced ==========
+.pf-imb-label {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin: 6px 0 4px;
+
+    &.pf-imb-sell { background: #fff3bf; color: #e67700; }
+    &.pf-imb-buy { background: #d0ebff; color: #1971c2; }
+}
+
+.pf-imb-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.pf-imb-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    font-size: 11px;
+}
+
+.pf-imb-name {
+    flex: 1;
+    font-weight: 600;
+    color: #212529;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100px;
+}
+
+.pf-imb-ratio {
+    font-weight: 800;
+    font-size: 12px;
+    min-width: 32px;
+    text-align: center;
+
+    &.pf-imb-sell-r { color: #e03131; }
+    &.pf-imb-buy-r { color: #1971c2; }
+}
+
+.pf-imb-detail {
+    font-size: 10px;
+    color: #868e96;
+    white-space: nowrap;
+}
+
+// ========== Correlation Insights ==========
+.pf-insights-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.pf-insight-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+
+    &.pf-ins-success { background: #d3f9d8; color: #2b8a3e; }
+    &.pf-ins-info { background: #d0ebff; color: #1971c2; }
+    &.pf-ins-warning { background: #fff3bf; color: #e67700; }
+    &.pf-ins-danger { background: #ffe3e3; color: #c92a2a; }
+}
+
+.pf-ins-icon { margin-top: 2px; font-size: 13px; }
+.pf-ins-text { flex: 1; }

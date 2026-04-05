@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_warehouse_permission_manager,warehouse.user.permission.manager,model_warehouse_user_permission,group_warehouse_permission_manager,1,1,1,1
+access_warehouse_permission_user,warehouse.user.permission.user,model_warehouse_user_permission,stock.group_stock_user,1,0,0,0
+access_picking_permission_manager,warehouse.picking.permission.manager,model_warehouse_picking_permission,group_warehouse_permission_manager,1,1,1,1
+access_picking_permission_user,warehouse.picking.permission.user,model_warehouse_picking_permission,stock.group_stock_user,1,0,0,0

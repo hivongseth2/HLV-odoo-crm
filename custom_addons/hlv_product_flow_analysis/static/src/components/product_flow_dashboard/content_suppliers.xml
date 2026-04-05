@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_product_flow_analysis.ContentSuppliers">
+                <div class="pf-toolbar">
+                    <div class="pf-search-box">
+                        <i class="fa fa-search"/>
+                        <input type="text" placeholder="Tìm nhà cung cấp..."
+                               t-on-input="(ev) => this.onSupplierSearch(ev)"/>
+                    </div>
+                    <div class="pf-toolbar-right">
+                        <span class="pf-result-count">
+                            <t t-esc="supplierTotalFiltered"/> nhà cung cấp
+                        </span>
+                        <button class="pf-btn-export" t-on-click="() => this.exportSupplierExcel()"
+                                t-att-disabled="state.isExporting">
+                            <i class="fa fa-file-excel-o me-1"/>Xuất Excel
+                        </button>
+                    </div>
+                </div>
+
+                <div class="pf-table-wrap">
+                    <table class="pf-table">
+                        <thead>
+                            <tr>
+                                <th class="pf-th-num">#</th>
+                                <th class="pf-th-sortable" t-on-click="() => this.sortSuppliers('partner_name')">
+                                    Nhà cung cấp <i t-att-class="getSortIcon('suppliers', 'partner_name')"/>
+                                </th>
+                                <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortSuppliers('total_qty')">
+                                    Tổng SL mua <i t-att-class="getSortIcon('suppliers', 'total_qty')"/>
+                                </th>
+                                <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortSuppliers('total_amount')">
+                                    Tổng giá trị <i t-att-class="getSortIcon('suppliers', 'total_amount')"/>
+                                </th>
+                                <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortSuppliers('move_count')">
+                                    Số lần mua <i t-att-class="getSortIcon('suppliers', 'move_count')"/>
+                                </th>
+                                <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortSuppliers('product_count')">
+                                    Số SP <i t-att-class="getSortIcon('suppliers', 'product_count')"/>
+                                </th>
+                                <th class="pf-th-num pf-th-sortable" t-on-click="() => this.sortSuppliers('avg_delivery_days')">
+                                    TB giao hàng <i t-att-class="getSortIcon('suppliers', 'avg_delivery_days')"/>
+                                </th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <t t-foreach="filteredSuppliers" t-as="s" t-key="s.partner_id">
+                                <tr class="pf-row-supplier"
+                                    t-on-click="() => this.toggleSupplier(s.partner_id)">
+                                    <td class="pf-td-num" t-esc="getPageStart('suppliers') + s_index + 1"/>
+                                    <td>
+                                        <a href="#" class="pf-link"
+                                           t-on-click.prevent.stop="() => this.openSupplier(s.partner_id)"
+                                           t-esc="s.partner_name"/>
+                                    </td>
+                                    <td class="pf-td-num pf-incoming" t-esc="formatNumber(s.total_qty)"/>
+                                    <td class="pf-td-num" t-esc="formatCurrency(s.total_amount)"/>
+                                    <td class="pf-td-num" t-esc="s.move_count"/>
+                                    <td class="pf-td-num" t-esc="s.product_count"/>
+                                    <td class="pf-td-num">
+                                        <t t-if="s.avg_delivery_days > 0">
+                                            <span t-att-class="s.avg_delivery_days > 7 ? 'pf-delivery-slow' : (s.avg_delivery_days > 3 ? 'pf-delivery-medium' : 'pf-delivery-fast')"
+                                                  t-att-title="'Nhanh nhất: ' + s.min_delivery_days + ' ngày | Lâu nhất: ' + s.max_delivery_days + ' ngày | ' + s.delivery_count + ' lần giao'">
+                                                <t t-esc="s.avg_delivery_days"/> ngày
+                                            </span>
+                                        </t>
+                                        <t t-else="">
+                                            <span class="pf-storage-na" title="Chưa có phiếu nhập hoàn thành">-</span>
+                                        </t>
+                                    </td>
+                                    <td class="pf-td-expand">
+                                        <i t-att-class="'fa ' + (state.expandedSupplier === s.partner_id ? 'fa-chevron-up' : 'fa-chevron-down')"/>
+                                    </td>
+                                </tr>
+                                <t t-if="state.expandedSupplier === s.partner_id">
+                                    <tr class="pf-row-detail-header">
+                                        <td/>
+                                        <td><strong>Sản phẩm</strong></td>
+                                        <td class="pf-th-num"><strong>SL</strong></td>
+                                        <td class="pf-th-num"><strong>Giá trị</strong></td>
+                                        <td colspan="2"><strong>Đơn mua / Phiếu nhập</strong></td>
+                                        <td/>
+                                        <td/>
+                                    </tr>
+                                    <t t-foreach="s.products" t-as="sp" t-key="sp.product_id">
+                                        <tr class="pf-row-detail">
+                                            <td/>
+                                            <td>
+                                                <span class="pf-code me-1" t-esc="sp.default_code || ''"/>
+                                                <span t-esc="sp.product_name"/>
+                                            </td>
+                                            <td class="pf-td-num" t-esc="formatNumber(sp.qty)"/>
+                                            <td class="pf-td-num" t-esc="formatCurrency(sp.amount)"/>
+                                            <td colspan="2" class="pf-td-docs">
+                                                <div class="pf-sp-docs" t-if="(sp.po_names and sp.po_names.length) or (sp.picking_names and sp.picking_names.length)">
+                                                    <span t-if="sp.po_names and sp.po_names.length" class="pf-sp-doc-group">
+                                                        <i class="fa fa-file-text-o me-1 text-primary"/>
+                                                        <t t-foreach="sp.po_names" t-as="po" t-key="po">
+                                                            <span t-att-class="'pf-doc-tag ' + (sp.pending_po_names and sp.pending_po_names.includes(po) ? 'pf-po-pending' : 'pf-po-tag')"
+                                                                  t-esc="po"/>
+                                                            <span t-if="sp.pending_po_names and sp.pending_po_names.includes(po)"
+                                                                  class="pf-badge-pending">chưa nhập</span>
+                                                        </t>
+                                                    </span>
+                                                    <span t-if="sp.picking_names and sp.picking_names.length" class="pf-sp-doc-group">
+                                                        <i class="fa fa-truck me-1 text-success"/>
+                                                        <t t-foreach="sp.picking_names" t-as="pk" t-key="pk">
+                                                            <span class="pf-doc-tag pf-receipt-tag" t-esc="pk"/>
+                                                        </t>
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td/>
+                                            <td/>
+                                        </tr>
+                                    </t>
+                                </t>
+                            </t>
+                            <t t-if="filteredSuppliers.length === 0">
+                                <tr>
+                                    <td colspan="8" class="pf-empty">Không có dữ liệu nhà cung cấp trong kỳ này</td>
+                                </tr>
+                            </t>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination - Suppliers -->
+                <div class="pf-pagination">
+                    <div class="pf-page-size">
+                        <label>Hiển thị:</label>
+                        <select t-on-change="(ev) => this.onSupplierPageSizeChange(ev)">
+                            <option value="20" t-att-selected="state.supplierPageSize === 20">20</option>
+                            <option value="50" t-att-selected="state.supplierPageSize === 50">50</option>
+                            <option value="100" t-att-selected="state.supplierPageSize === 100">100</option>
+                        </select>
+                        <span>/ trang</span>
+                    </div>
+                    <div class="pf-page-nav">
+                        <button class="pf-page-btn" t-on-click="() => this.supplierPrevPage()"
+                                t-att-disabled="state.supplierPage &lt;= 1">
+                            <i class="fa fa-chevron-left"/>
+                        </button>
+                        <span class="pf-page-info">
+                            Trang <t t-esc="state.supplierPage"/> / <t t-esc="supplierTotalPages"/>
+                        </span>
+                        <button class="pf-page-btn" t-on-click="() => this.supplierNextPage()"
+                                t-att-disabled="state.supplierPage >= supplierTotalPages">
+                            <i class="fa fa-chevron-right"/>
+                        </button>
+                    </div>
+                </div>
+    </t>
+</templates>

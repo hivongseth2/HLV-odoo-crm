@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_warehouse_permission" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.hlv.warehouse.permission</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="stock.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//block[@name='operations_setting_container']" position="after">
+                <block title="Phan quyen kho hang" name="hlv_warehouse_permission_settings">
+                    <setting string="Phan quyen theo kho"
+                             help="Phan quyen chi tiet cho tung nguoi dung tai tung kho: tao phieu, xac nhan, thao tac, cap nhat ton kho.">
+                        <div class="mt-2">
+                            <button name="%(action_warehouse_permission)d"
+                                    type="action"
+                                    string="Cau hinh phan quyen kho"
+                                    class="btn-link"
+                                    icon="fa-arrow-right"/>
+                        </div>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>

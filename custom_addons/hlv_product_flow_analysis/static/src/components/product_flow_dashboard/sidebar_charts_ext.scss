@@ -1,0 +1,557 @@
+/* ===== Sidebar Charts Extended: Supplier, Pie, Frequency, Dual Bars ===== */
+
+/* Supplier chart bar fills */
+.pf-hbar-supplier-qty {
+    background: linear-gradient(90deg, #9775fa, #6f42c1);
+}
+
+.pf-hbar-supplier-amount {
+    background: linear-gradient(90deg, #ffd43b, #e67700);
+}
+
+.pf-hbar-supplier-freq {
+    background: linear-gradient(90deg, #63e6be, #0ca678);
+}
+
+.pf-hbar-label-supplier {
+    width: 180px;
+    min-width: 180px;
+}
+
+/* Supplier concentration */
+.pf-supplier-concentration {
+    padding: 4px 0;
+}
+
+.pf-conc-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #495057;
+}
+
+.pf-conc-total strong {
+    color: #212529;
+    font-size: 15px;
+}
+
+.pf-conc-count strong {
+    color: #4263eb;
+}
+
+.pf-conc-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.pf-conc-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pf-conc-label {
+    width: 160px;
+    min-width: 160px;
+    font-size: 12px;
+    color: #495057;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pf-conc-track {
+    flex: 1;
+    height: 20px;
+    background: #f1f3f5;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.pf-conc-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    overflow: hidden;
+}
+
+.pf-conc-name {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.95);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.pf-conc-1 { background: linear-gradient(90deg, #748ffc, #4263eb); }
+.pf-conc-3 { background: linear-gradient(90deg, #91a7ff, #5c7cfa); }
+.pf-conc-5 { background: linear-gradient(90deg, #bac8ff, #748ffc); }
+
+.pf-conc-pct {
+    width: 40px;
+    min-width: 40px;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 700;
+    color: #4263eb;
+}
+
+.pf-conc-hint {
+    font-size: 12px;
+    color: #6c757d;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 3px solid #dee2e6;
+}
+
+// ========== Pie/Donut Chart: Buy vs Sell ==========
+.pf-pie-container {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 0;
+}
+
+.pf-pie-ring {
+    width: 100px;
+    height: 100px;
+    min-width: 100px;
+    border-radius: 50%;
+    background: conic-gradient(#339af0 0deg, #339af0 var(--buy-deg), #f06595 var(--buy-deg), #f06595 360deg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.pf-pie-center {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.pf-pie-total {
+    font-size: 11px;
+    font-weight: 700;
+    color: #212529;
+    line-height: 1.1;
+}
+
+.pf-pie-sublabel {
+    font-size: 9px;
+    color: #868e96;
+}
+
+.pf-pie-legend {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.pf-pie-leg-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #495057;
+
+    strong {
+        font-size: 14px;
+        color: #212529;
+    }
+}
+
+.pf-pie-leg-val {
+    font-size: 11px;
+    color: #868e96;
+}
+
+.pf-pie-leg-dot {
+    width: 12px;
+    height: 12px;
+    min-width: 12px;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+.pf-leg-buy { background: #339af0; }
+.pf-leg-sell { background: #f06595; }
+
+// ========== Frequency Distribution Bar ==========
+.pf-freq-dist {
+    padding: 6px 0;
+}
+
+.pf-freq-bar-stack {
+    display: flex;
+    height: 24px;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.pf-freq-seg {
+    min-width: 2px;
+    transition: width 0.4s ease;
+    cursor: pointer;
+
+    &:hover { opacity: 0.85; }
+}
+
+.pf-freq-rare { background: #dee2e6; }
+.pf-freq-low { background: #ffd43b; }
+.pf-freq-med { background: #ff922b; }
+.pf-freq-high { background: #e03131; }
+
+.pf-freq-legend {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.pf-freq-leg-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: #495057;
+
+    strong { color: #212529; }
+}
+
+.pf-freq-dot {
+    width: 10px;
+    height: 10px;
+    min-width: 10px;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+.pf-freq-hint {
+    font-size: 12px;
+    color: #6c757d;
+    padding: 6px 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 3px solid #dee2e6;
+}
+
+// ========== Dual Bars: Buy vs Sell Comparison ==========
+.pf-dual-bars {
+    padding: 4px 0;
+}
+
+.pf-dual-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.pf-dual-label {
+    width: 52px;
+    min-width: 52px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #495057;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pf-dual-tracks {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.pf-dual-track {
+    height: 11px;
+    background: #f1f3f5;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.pf-dual-fill {
+    height: 100%;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 4px;
+    transition: width 0.4s ease;
+    min-width: 2px;
+}
+
+.pf-dual-buy {
+    background: linear-gradient(90deg, #74c0fc, #339af0);
+}
+
+.pf-dual-sell {
+    background: linear-gradient(90deg, #f783ac, #f06595);
+}
+
+.pf-dual-val {
+    font-size: 9px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.2);
+}
+
+.pf-dual-legend {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-top: 8px;
+    font-size: 12px;
+    color: #495057;
+}
+
+.pf-dual-leg-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+}
+
+// ========== Purchase Optimization ==========
+.pf-opt-section { margin-bottom: 10px; }
+
+.pf-opt-label {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 4px;
+    margin-bottom: 6px;
+
+    &.pf-opt-under { background: #ffe3e3; color: #c92a2a; }
+    &.pf-opt-over { background: #fff3bf; color: #e67700; }
+}
+
+.pf-opt-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: white;
+    border-radius: 4px;
+    margin-bottom: 3px;
+    font-size: 11px;
+}
+
+.pf-opt-name {
+    min-width: 70px;
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.pf-opt-stats {
+    flex: 1;
+    display: flex;
+    gap: 8px;
+    color: #495057;
+}
+
+.pf-opt-buy { color: #1971c2; }
+.pf-opt-sell { color: #e03131; }
+.pf-opt-stock { color: #5f3dc4; font-weight: 600; }
+
+.pf-opt-ratio {
+    font-weight: 800;
+    font-size: 11px;
+    min-width: 50px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+// ========== SVG Chart Container ==========
+.pf-svg-chart-wrap {
+    padding: 4px 0;
+    overflow: hidden;
+
+    .pf-chart-svg {
+        width: 100%;
+        height: auto;
+        display: block;
+    }
+
+    &.pf-treemap-wrap {
+        overflow: visible;
+
+        .pf-chart-svg {
+            max-height: 500px;
+        }
+    }
+}
+
+.pf-svg-heatmap-wrap {
+    overflow-x: auto;
+}
+
+// ========== Treemap ==========
+.pf-tm-rect {
+    cursor: pointer;
+    transition: opacity 0.2s;
+
+    &:hover {
+        opacity: 0.82;
+    }
+}
+
+.pf-tm-label {
+    font-size: 8px;
+    font-weight: 700;
+    fill: #fff;
+    pointer-events: none;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.pf-tm-val {
+    font-size: 7px;
+    fill: rgba(255, 255, 255, 0.85);
+    pointer-events: none;
+}
+
+.pf-tm-legend,
+.pf-scatter-legend {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 6px;
+    font-size: 11px;
+    color: #495057;
+
+    .pf-tm-dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        margin-right: 3px;
+        vertical-align: middle;
+    }
+}
+
+// ========== Scatter Plot ==========
+.pf-scatter-dot {
+    cursor: pointer;
+    transition: opacity 0.2s, r 0.2s;
+
+    &:hover {
+        opacity: 1 !important;
+        stroke: #212529;
+        stroke-width: 1;
+    }
+}
+
+.pf-sc-tick {
+    font-size: 7px;
+    fill: #868e96;
+}
+
+.pf-sc-axis-label {
+    font-size: 8px;
+    fill: #495057;
+    font-weight: 600;
+}
+
+// ========== SVG Heatmap ==========
+.pf-hm-header {
+    font-size: 7.5px;
+    fill: #495057;
+    font-weight: 700;
+}
+
+.pf-hm-row-label {
+    font-size: 7px;
+    fill: #495057;
+    font-weight: 600;
+}
+
+.pf-hm-svg-cell {
+    cursor: pointer;
+    transition: opacity 0.2s;
+
+    &:hover {
+        opacity: 0.75;
+        stroke: #212529;
+        stroke-width: 0.8;
+    }
+}
+
+.pf-hm-cell-text {
+    font-size: 6.5px;
+    fill: #212529;
+    pointer-events: none;
+    font-weight: 500;
+}
+
+// ========== Chart Frequency Toggle ==========
+.pf-chart-freq-toggle {
+    padding: 6px 0;
+    margin-bottom: 4px;
+}
+
+.pf-freq-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 16px;
+    background: #f8f9fa;
+    color: #495057;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+        border-color: #748ffc;
+        color: #4263eb;
+        background: #edf2ff;
+    }
+
+    &.active {
+        background: linear-gradient(135deg, #4263eb, #5c7cfa);
+        color: #fff;
+        border-color: #4263eb;
+        box-shadow: 0 2px 6px rgba(66, 99, 235, 0.3);
+
+        &:hover {
+            background: linear-gradient(135deg, #3b5bdb, #4c6ef5);
+        }
+    }
+}
+
+// ========== Log scale hint ==========
+.pf-chart-log-hint {
+    font-size: 0.72rem;
+    color: #868e96;
+    margin-top: 4px;
+    text-align: center;
+    font-style: italic;
+
+    .fa-info-circle { color: #748ffc; }
+}

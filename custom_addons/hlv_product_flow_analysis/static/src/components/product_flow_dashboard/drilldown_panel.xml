@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_product_flow_analysis.DrilldownPanel">
+        <div t-if="state.showDrilldown" class="pf-drilldown-overlay" t-on-click="(ev) => this.onDrilldownOverlayClick(ev)">
+            <div class="pf-drilldown-panel">
+                <div class="pf-drilldown-header">
+                    <h3 class="pf-drilldown-title">
+                        <i class="fa fa-list-alt me-2"/>
+                        <t t-esc="state.drilldownTitle"/>
+                    </h3>
+                    <div class="pf-drilldown-actions">
+                        <button class="pf-drilldown-export" t-on-click="() => this.exportDrilldownExcel()"
+                                t-if="state.drilldownProducts.length > 0" title="Xuất Excel/CSV">
+                            <i class="fa fa-download me-1"/>Xuất Excel
+                        </button>
+                        <button class="pf-drilldown-close" t-on-click="() => this.closeDrilldown()">
+                            <i class="fa fa-times"/>
+                        </button>
+                    </div>
+                </div>
+                <div class="pf-drilldown-body">
+                    <t t-if="state.drilldownProducts.length > 0">
+                        <div class="pf-drilldown-count">
+                            <i class="fa fa-cubes me-1"/>
+                            <strong t-esc="state.drilldownProducts.length"/> sản phẩm
+                        </div>
+                        <div class="pf-drilldown-table-wrap">
+                            <table class="pf-drilldown-table">
+                                <thead>
+                                    <tr>
+                                        <th class="pf-dd-th-idx">#</th>
+                                        <th class="pf-dd-th-code">Mã SP</th>
+                                        <th class="pf-dd-th-name">Tên sản phẩm</th>
+                                        <th class="pf-dd-th-num">SL Mua</th>
+                                        <th class="pf-dd-th-num">Lần Mua</th>
+                                        <th class="pf-dd-th-num">SL Bán</th>
+                                        <th class="pf-dd-th-num">Lần Bán</th>
+                                        <th class="pf-dd-th-num">Tồn kho</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="state.drilldownProducts" t-as="p" t-key="p.product_id">
+                                        <tr class="pf-dd-row" t-on-click.prevent="() => this.openProduct(p.product_id)">
+                                            <td class="pf-dd-idx" t-esc="p_index + 1"/>
+                                            <td class="pf-dd-code" t-esc="p.default_code"/>
+                                            <td class="pf-dd-name" t-att-title="p.product_name" t-esc="p.product_name"/>
+                                            <td class="pf-dd-num" t-esc="formatNumber(p.incoming_qty)"/>
+                                            <td class="pf-dd-num" t-esc="p.incoming_count"/>
+                                            <td class="pf-dd-num" t-esc="formatNumber(p.outgoing_qty)"/>
+                                            <td class="pf-dd-num" t-esc="p.outgoing_count"/>
+                                            <td class="pf-dd-num" t-esc="formatNumber(p.qty_available)"/>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <div class="pf-drilldown-empty">
+                            <i class="fa fa-inbox fa-2x mb-2"/>
+                            <p>Không có sản phẩm nào trong tiêu chí này</p>
+                        </div>
+                    </t>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>
