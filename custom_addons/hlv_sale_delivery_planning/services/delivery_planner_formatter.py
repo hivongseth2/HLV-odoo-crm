@@ -14,8 +14,8 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         if not so.warehouse_id:
             return []
 
-        # Thu thập sản phẩm thiếu
-        shortage_products = []
+        # Thu thập sản phẩm thiếu (group theo product_id)
+        shortage_map = {}
         for line_data in so_lines_data:
             if not line_data.get('product_id') or line_data.get('is_kit'):
                 continue
@@ -27,11 +27,17 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             eff_stock = (line_data.get('qty_warehouse_free') or 0) + (line_data.get('qty_reserved_here') or 0)
             shortage = pending - eff_stock
             if shortage > 0:
-                shortage_products.append({
-                    'product_id': line_data['product_id'][0],
-                    'product_name': line_data['product_id'][1],
-                    'shortage': shortage,
-                })
+                pid = line_data['product_id'][0]
+                if pid in shortage_map:
+                    shortage_map[pid]['shortage'] += shortage
+                else:
+                    shortage_map[pid] = {
+                        'product_id': pid,
+                        'product_name': line_data['product_id'][1],
+                        'shortage': shortage,
+                    }
+
+        shortage_products = list(shortage_map.values())
 
         if not shortage_products:
             return []
