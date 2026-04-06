@@ -122,13 +122,96 @@ class AdsroidApiService:
             return False, str(e)
 
     @staticmethod
+    def analyze_multiple_campaigns(api_key, organisation_id, project_id, campaigns_data, is_demo=False):
+        """
+        Gửi danh sách nhiều chiến dịch lên Adsroid để phân tích toàn diện và so sánh.
+        """
+        if is_demo:
+            _logger.info("[DEMO MODE] Trả về dữ liệu mô phỏng AI (Mock) cho %s chiến dịch.", len(campaigns_data))
+            results = []
+            for item in campaigns_data:
+                _, res = AdsroidApiService.analyze_campaign(api_key, organisation_id, project_id, item['campaign'], item['products'], is_demo=True)
+                res['campaign_id'] = item['campaign'].get('id_odoo') # Lưu ID Odoo để map lại
+                results.append(res)
+            return True, results
+
+        if not api_key or not organisation_id or not project_id:
+            return False, _("Thiếu cấu hình Adsroid (API Key, Org ID hoặc Project ID).")
+
+        # Chuẩn bị nội dung 'message' cho AI phân tích đa chiến dịch
+        data_str = json.dumps(campaigns_data, indent=2, ensure_ascii=False)
+        
+        message = (
+            "Hãy đóng vai là một Giám đốc Marketing (CMO) dày dạn kinh nghiệm. "
+            "Bạn nhận được dữ liệu của một danh mục gồm nhiều chiến dịch quảng cáo và tình trạng kho hàng tương ứng.\n\n"
+            "YÊU CẦU QUAN TRỌNG:\n"
+            "1. Phân tích hiệu quả từng chiến dịch dựa trên ROAS và tồn kho.\n"
+            "2. Đề xuất điều hướng ngân sách: Giảm ở nơi kém hiệu quả, tăng ở nơi đang tốt và còn nhiều hàng.\n"
+            "3. Bạn chỉ được phản hồi bằng định dạng JSON duy nhất là một MẢNG các đối tượng theo cấu trúc sau:\n"
+            "[\n"
+            "  {\n"
+            "    \"campaign_id_odoo\": 123, // ID Odoo của chiến dịch\n"
+            "    \"score\": 85,\n"
+            "    \"suggested_action\": \"PAUSE\" | \"ENABLE\" | \"ADJUST_BUDGET\" | \"MAINTAIN\",\n"
+            "    \"new_budget\": 1500000,\n"
+            "    \"insight\": \"Nhận định ngắn gọn bằng tiếng Việt...\"\n"
+            "  }, \n"
+            "  ... \n"
+            "]\n\n"
+            f"Dữ liệu danh mục: {data_str}"
+        )
+
+        payload = {
+            "organisation_id": organisation_id,
+            "project_id": project_id,
+            "message": message
+        }
+
+        headers = {
+            "Authorization": f"bearer {api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+
+        _logger.info("Gửi yêu cầu Adsroid Audit cho %s chiến dịch.", len(campaigns_data))
+
+        try:
+            response = requests.post(
+                AdsroidApiService.ADSROID_ENDPOINT_ANALYZE,
+                headers=headers,
+                data=json.dumps(payload),
+                timeout=45 # Tăng timeout vì dữ liệu nhiều hơn
+            )
+
+            if response.status_code != 200:
+                return False, _("Lỗi server Adsroid (Code: %s)") % response.status_code
+
+            res_data = response.json()
+            content = res_data.get('response') or res_data.get('message') or str(res_data)
+
+            # Trích xuất JSON mảng
+            try:
+                import re
+                json_match = re.search(r'\[.*\]', content, re.DOTALL)
+                if json_match:
+                    parsed = json.loads(json_match.group())
+                    return True, parsed
+                return False, _("AI không trả về định dạng mảng JSON hợp lệ.")
+            except:
+                return False, _("Lỗi khi xử lý dữ liệu từ AI.")
+
+        except Exception as e:
+            _logger.error("Adsroid Audit Error: %s", str(e))
+            return False, str(e)
+
+    @staticmethod
     def _mock_ai_response(campaign_data, product_data, user_query=None):
         """Giả lập phản hồi từ AI Agent khi chưa có Endpoint chuẩn hoặc ở chế độ Demo"""
         metrics = campaign_data.get('metrics', {})
         cost = metrics.get('cost', 0)
         conv = metrics.get('conversions', 0)
         roas = (conv * 500000) / cost if cost > 0 else 0
-        current_budget = campaign_data.get('metrics', {}).get('budget', 50000)
+        current_budget = metrics.get('budget', 50000)
 
         # Kiểm tra tồn kho sản phẩm
         low_stock_products = [p for p in product_data if p.get('qty_available', 0) <= 20]

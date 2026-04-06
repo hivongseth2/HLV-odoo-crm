@@ -12,6 +12,8 @@
                             class="btn-secondary" invisible="is_demo"/>
                     <button name="action_sync_all_data" string="Đồng Bộ Ngay" type="object"
                             class="btn-success" invisible="state != 'connected'"/>
+                    <button name="action_adsroid_audit_all" string="AI Audit Toàn Bộ" type="object"
+                            class="btn-info" icon="fa-magic" invisible="not use_adsroid or state != 'connected'"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,connected,error"/>
                 </header>
                 <sheet>
