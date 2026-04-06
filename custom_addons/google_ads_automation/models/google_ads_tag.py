@@ -210,7 +210,7 @@ class GoogleAdsTag(models.Model):
         # Real mode (hoặc Demo mode nhưng có điền 1 trong 2 loại Token) → gọi GTM API v2
         is_real_sync = not (self.account_id and self.account_id.is_demo)
         has_manual_token = bool(self.gtm_access_token and self.gtm_account_id)
-        has_auto_token = bool(self.account_id.refresh_token and self.account_id.client_id and self.account_id.client_secret and self.gtm_account_id)
+        has_auto_token = bool(self.gtm_refresh_token and self.account_id.client_id and self.account_id.client_secret and self.gtm_account_id)
         
         if self.account_id and self.account_id.is_demo and (has_manual_token or has_auto_token):
             is_real_sync = True # Force real sync if credentials are provided in demo mode
@@ -296,7 +296,11 @@ class GoogleAdsTag(models.Model):
                     raise UserError(_('Lỗi khi làm mới Access Token GTM: %s') % err_msg)
 
         if not final_access_token:
-            raise UserError(_('Không có Access Token hợp lệ để gọi GTM API.'))
+            raise UserError(_(
+                'Không có Access Token hợp lệ để gọi GTM API.\n\n'
+                '👉 NGUYÊN NHÂN: Bạn chưa "Xác thực Tài khoản GTM" hoặc GTM Refresh Token bị trống.\n'
+                '👉 CÁCH KHẮC PHỤC: Hãy bấm nút "Lấy Mã Xác Thực GTM" và đăng nhập lại tài khoản Google của GTM.'
+            ))
 
         container_num = self.gtm_container_id.replace('GTM-', '')
         base_url = (
