@@ -21,16 +21,20 @@ TOOL_DEFINITIONS = [
         "function": {
             "name": "search_product",
             "description": (
-                "Tìm sản phẩm trong hệ thống Odoo theo mã sản phẩm (default_code) hoặc tên. "
-                "Trả về danh sách sản phẩm khớp với keyword. "
-                "Luôn gọi tool này TRƯỚC khi gọi các tool khác để lấy product_id."
+                "Tìm sản phẩm trong hệ thống Odoo. Hỗ trợ tìm theo mã SP (default_code), tên, "
+                "hoặc từ khóa gợi nhớ. Tool tự động tách keyword và tìm nhiều cách.\n"
+                "VÍ DỤ CÁCH DÙNG:\n"
+                "- User nói 'Contactor Fuji 110V' → keyword='Contactor Fuji 110V'\n"
+                "- User nói 'SC-5-1' → keyword='SC-5-1'\n"
+                "- User nói 'contactor SC-N1 Fuji' → keyword='SC-N1'\n"
+                "MẸO: Nếu không tìm thấy, thử lại với keyword ngắn hơn (chỉ mã SP)."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "keyword": {
                         "type": "string",
-                        "description": "Mã sản phẩm (VD: SC-5-1-110V-FUJI) hoặc tên sản phẩm để tìm kiếm",
+                        "description": "Mã sản phẩm, tên, hoặc từ khóa gợi nhớ. Có thể dùng 1 phần mã (VD: 'SC-5-1' thay vì 'SC-5-1-110V-FUJI')",
                     },
                 },
                 "required": ["keyword"],
@@ -479,15 +483,75 @@ class PriceChatSession(models.Model):
             return {'error': str(e)}
 
     def _tool_search_product(self, keyword, **kw):
-        """Tìm sản phẩm theo mã hoặc tên."""
+        """Tìm sản phẩm — multi-strategy: exact → ilike → từng từ → partial code."""
         Product = self.env['product.product'].sudo()
-        domain = [
-            '|',
-            ('default_code', 'ilike', keyword),
-            ('name', 'ilike', keyword),
-        ]
-        products = Product.search(domain, limit=15, order='default_code, name')
-        return {
+        keyword = (keyword or '').strip()
+        if not keyword:
+            return {'total_found': 0, 'products': [], 'hint': 'Keyword trống'}
+
+        found = Product.browse()
+
+        # Strategy 1: Exact match trên default_code
+        exact = Product.search([('default_code', '=ilike', keyword)], limit=10)
+        found |= exact
+
+        # Strategy 2: ilike trên cả code + name
+        if len(found) < 10:
+            ilike = Product.search([
+                '|',
+                ('default_code', 'ilike', keyword),
+                ('name', 'ilike', keyword),
+            ], limit=15)
+            found |= ilike
+
+        # Strategy 3: Tách keyword thành từng phần và tìm mỗi phần
+        if not found:
+            # Tách theo dấu cách, gạch ngang, gạch dưới
+            import re
+            parts = re.split(r'[\s,;]+', keyword)
+            # Lọc bỏ stop words tiếng Việt phổ biến
+            stop_words = {
+                'bán', 'mua', 'giá', 'cho', 'của', 'và', 'với', 'là', 'này',
+                'cái', 'chiếc', 'con', 'bộ', 'cây', 'hộp', 'bao', 'nhiêu',
+                'nên', 'thì', 'được', 'không', 'có', 'tôi', 'sản', 'phẩm',
+                'the', 'and', 'for', 'how', 'much', 'price',
+            }
+            parts = [p for p in parts if len(p) >= 2 and p.lower() not in stop_words]
+
+            if len(parts) >= 2:
+                # Tìm sản phẩm chứa TẤT CẢ các từ (AND logic)
+                domain = []
+                for part in parts[:5]:  # Tối đa 5 từ
+                    domain.append('|')
+                    domain.append(('default_code', 'ilike', part))
+                    domain.append(('name', 'ilike', part))
+                # Tìm rồi lọc lại: chỉ giữ SP chứa nhiều từ nhất
+                candidates = Product.search(domain, limit=50)
+                if candidates:
+                    scored = []
+                    for p in candidates:
+                        text = f"{p.default_code or ''} {p.name}".lower()
+                        score = sum(1 for part in parts if part.lower() in text)
+                        scored.append((score, p))
+                    scored.sort(key=lambda x: x[0], reverse=True)
+                    best_score = scored[0][0]
+                    found |= Product.browse([p.id for s, p in scored if s >= best_score][:15])
+            elif parts:
+                # Một từ duy nhất có nghĩa
+                single = parts[0]
+                found |= Product.search([
+                    '|',
+                    ('default_code', 'ilike', single),
+                    ('name', 'ilike', single),
+                ], limit=15)
+
+        # Strategy 4: Tìm theo barcode
+        if not found:
+            barcode_match = Product.search([('barcode', 'ilike', keyword)], limit=5)
+            found |= barcode_match
+
+        products = found[:20]
+        result = {
             'total_found': len(products),
             'products': [{
                 'id': p.id,
@@ -500,6 +564,14 @@ class PriceChatSession(models.Model):
                 'active': p.active,
             } for p in products],
         }
+
+        if not products:
+            result['hint'] = (
+                f'Không tìm thấy sản phẩm với "{keyword}". '
+                'Thử search lại với từ khóa ngắn hơn hoặc chỉ dùng mã SP (VD: SC-5-1).'
+            )
+
+        return result
 
     def _tool_get_purchase_history(self, product_id, limit=15, **kw):
         """Lấy lịch sử mua hàng PO."""
