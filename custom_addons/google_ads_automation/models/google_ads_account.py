@@ -873,7 +873,108 @@ class GoogleAdsAccount(models.Model):
             'name': code.replace('_', ' ').title(),
         })
 
+    def action_adsroid_audit_all(self):
+        """Audit tất cả chiến dịch trong tài khoản bằng Adsroid AI"""
+        self.ensure_one()
+        if not self.use_adsroid:
+            raise UserError(_("Vui lòng bật 'Sử dụng Adsroid AI' và cấu hình API Key trước!"))
+        
+        # Lấy các chiến dịch đang hoạt động hoặc tạm dừng
+        campaigns = self.campaign_ids.filtered(lambda c: c.status in ['enabled', 'paused'] and c.google_campaign_id)
+        if not campaigns:
+            raise UserError(_("Không tìm thấy chiến dịch nào khả dụng để audit (cần có ID Google)."))
+
+        # Chuẩn bị dữ liệu hàng loạt
+        batch_data = []
+        for camp in campaigns:
+            c_data = {
+                "id_odoo": camp.id,
+                "id_google": camp.google_campaign_id,
+                "name": camp.name,
+                "status": camp.status,
+                "metrics": {
+                    "clicks": camp.clicks,
+                    "cost": camp.cost,
+                    "conversions": camp.conversions,
+                    "roas": camp.roas,
+                    "budget": camp.budget_amount,
+                }
+            }
+            p_data = []
+            for line in camp.feed_line_ids:
+                p_data.append({
+                    "sku": line.product_default_code,
+                    "qty": line.qty_available,
+                    "status": line.stock_status,
+                })
+            batch_data.append({"campaign": c_data, "products": p_data})
+
+        from ..services.adsroid_api import AdsroidApiService
+        success, results = AdsroidApiService.analyze_multiple_campaigns(
+            self.adsroid_api_key, self.adsroid_organisation_id, self.adsroid_project_id,
+            batch_data, is_demo=self.is_demo
+        )
+
+        if not success:
+            raise UserError(_("Lỗi khi gọi Adsroid Audit: %s") % results)
+
+        # Xử lý kết quả trả về
+        applied_count = 0
+        summary_lines = []
+        
+        for res in results:
+            # Map kết quả dựa trên campaign_id_odoo hoặc campaign_id (tùy mock/real)
+            camp_id = res.get('campaign_id_odoo') or res.get('campaign_id')
+            if not camp_id: continue
+            
+            camp = self.env['google.ads.campaign'].browse(camp_id)
+            if not camp.exists(): continue
+
+            action = res.get('suggested_action', 'MAINTAIN')
+            score = res.get('score', 0)
+            insight = res.get('insight', '')
+
+            # Tạo log cho từng chiến dịch
+            self.env['google.ads.adsroid.log'].create({
+                'campaign_id': camp.id,
+                'score': score,
+                'suggested_action': action,
+                'insight': f"[GLOBAL AUDIT] {insight}",
+                'is_applied': False,
+            })
+            
+            # Cập nhật hiển thị cuối cùng trên campaign
+            insight_html = f"""
+                <div class="alert alert-info shadow-sm border-0">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong><i class="fa fa-magic me-1"></i> Adsroid Audit</strong>
+                        <span class="badge text-bg-info">Score: {score}/100</span>
+                    </div>
+                    <div class="mb-2"><strong>Đề xuất:</strong> <span class="badge text-bg-warning">{action}</span></div>
+                    {insight}
+                </div>
+            """
+            camp.adsroid_last_insight = Markup(insight_html)
+            summary_lines.append(f"• <b>{camp.name}</b>: {action} (Score: {score})")
+            applied_count += 1
+
+        # Thông báo tổng hợp
+        msg = _("Đã hoàn thành Audit cho %s chiến dịch.") % applied_count
+        self.message_post(body=Markup(f"<b>Adsroid Global Audit:</b> {msg}<br/>" + "<br/>".join(summary_lines)))
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Adsroid Audit Hoàn Tất'),
+                'message': msg,
+                'type': 'success',
+                'sticky': True,
+            }
+        }
+
     @api.model
+
     def cron_fetch_adsroid_insights(self):
         """Cron job: Lấy insight cho các chiến dịch tự động mỗi ngày"""
         accounts = self.search([('use_adsroid', '=', True), ('state', '=', 'connected')])
