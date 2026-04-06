@@ -4,6 +4,7 @@ import { Component, useState, useRef, onMounted, onWillUnmount } from "@odoo/owl
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { _t } from "@web/core/l10n/translation";
+import { session } from "@web/session";
 
 class PriceChatAction extends Component {
     static template = "hlv_price_suggestion.PriceChatAction";
@@ -11,7 +12,6 @@ class PriceChatAction extends Component {
 
     setup() {
         this.orm = useService("orm");
-        this.user = useService("user");
         this.notification = useService("notification");
         this.action = useService("action");
 
@@ -35,7 +35,7 @@ class PriceChatAction extends Component {
     async _loadSessions() {
         const sessions = await this.orm.searchRead(
             "price.chat.session",
-            [["user_id", "=", this.user.userId]],
+            [["user_id", "=", session.uid]],
             ["id", "name", "create_date"],
             { order: "create_date desc", limit: 50 },
         );
