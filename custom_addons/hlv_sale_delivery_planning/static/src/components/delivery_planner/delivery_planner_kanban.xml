@@ -268,9 +268,10 @@
                 <!-- Row 8: Transfer suggestion badge -->
                 <div t-if="so.transfer_suggestions and so.transfer_suggestions.length"
                      class="mt-1" style="font-size: 0.68rem;">
+                    <t t-set="tsNumWh" t-value="[...new Set(so.transfer_suggestions.flatMap(s => s.sources.map(src => src.from_warehouse_id)))].length"/>
                     <span class="badge bg-danger bg-opacity-75 text-white" style="font-size:0.62rem;">
-                        <i class="fa fa-exchange me-1"></i>Cần chuyển kho
-                        (<t t-esc="so.transfer_suggestions.length"/> SP)
+                        <i class="fa fa-exchange me-1"></i>Cần chuyển
+                        <t t-esc="so.transfer_suggestions.length"/> SP từ <t t-esc="tsNumWh"/> kho khác
                     </span>
                 </div>
 

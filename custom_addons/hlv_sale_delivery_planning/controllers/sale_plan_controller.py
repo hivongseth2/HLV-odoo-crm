@@ -499,7 +499,11 @@ function renderSOCard(o){
   if(o.x_studio_misa_saler_code) h+='<small class="text-muted"><i class="fa fa-id-badge me-1"></i>NV: '+esc(o.x_studio_misa_saler_code)+'</small><br>';
   if(o.misa_shipping_address) h+='<small class="text-muted" style="font-size:.7rem"><i class="fa fa-map-marker me-1 text-danger"></i>'+esc(o.misa_shipping_address)+'</small><br>';
   if(o.tag_ids&&o.tag_ids.length) h+='<div class="mt-1">'+o.tag_ids.map(tagBadge).join('')+'</div>';
-  if(o.transfer_suggestions&&o.transfer_suggestions.length) h+='<div class="mt-1"><span class="badge bg-danger bg-opacity-75 text-white" style="font-size:.68rem"><i class="fa fa-exchange me-1"></i>Cần chuyển kho ('+o.transfer_suggestions.length+' SP)</span></div>';
+  if(o.transfer_suggestions&&o.transfer_suggestions.length){
+    var tsWhs={};o.transfer_suggestions.forEach(function(s){s.sources.forEach(function(src){tsWhs[src.from_warehouse_id]=1;});});
+    var nWh=Object.keys(tsWhs).length;
+    h+='<div class="mt-1"><span class="badge bg-danger bg-opacity-75 text-white" style="font-size:.68rem"><i class="fa fa-exchange me-1"></i>Cần chuyển '+o.transfer_suggestions.length+' SP từ '+nWh+' kho khác</span></div>';
+  }
   h+='<div class="d-flex justify-content-between align-items-center">'
     +'<span class="fw-bold">'+fm(o.amount_total)+'</span>';
   var pc=o.pos?o.pos.length:0;
@@ -596,11 +600,14 @@ function openDrawer(id){
       +'<table class="table table-sm table-bordered table-hover text-center align-middle bg-white mb-0">'
       +'<thead class="table-light"><tr><th class="text-start">Sản phẩm</th><th>Từ kho</th><th>Khả dụng</th><th>Thiếu</th><th>Đề xuất</th></tr></thead><tbody>';
     o.transfer_suggestions.forEach(function(s){
-      h+='<tr><td class="text-start small">'+esc(s.product_name)+'</td>'
-        +'<td><span class="badge bg-info bg-opacity-25 text-dark"><i class="fa fa-building me-1"></i>'+esc(s.from_warehouse_name)+'</span></td>'
-        +'<td class="text-success fw-bold">'+fq(s.available_qty)+'</td>'
-        +'<td class="text-danger fw-bold">'+fq(s.shortage)+'</td>'
-        +'<td><span class="badge bg-warning text-dark fw-bold"><i class="fa fa-arrow-right me-1"></i>'+fq(s.suggested_qty)+'</span></td></tr>';
+      s.sources.forEach(function(src,idx){
+        h+='<tr>';
+        if(idx===0) h+='<td class="text-start small align-middle" rowspan="'+s.sources.length+'">'+esc(s.product_name)+'</td>';
+        h+='<td><span class="badge bg-info bg-opacity-25 text-dark"><i class="fa fa-building me-1"></i>'+esc(src.from_warehouse_name)+'</span></td>'
+          +'<td class="text-success fw-bold">'+fq(src.available_qty)+'</td>';
+        if(idx===0) h+='<td class="text-danger fw-bold align-middle" rowspan="'+s.sources.length+'">'+fq(s.shortage)+'</td>';
+        h+='<td><span class="badge bg-warning text-dark fw-bold"><i class="fa fa-arrow-right me-1"></i>'+fq(src.suggested_qty)+'</span></td></tr>';
+      });
     });
     h+='</tbody></table></div>';
   }

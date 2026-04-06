@@ -154,25 +154,41 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <t t-foreach="state.selectedOrder.transfer_suggestions" t-as="sug" t-key="sug_index">
-                                    <tr>
-                                        <td class="text-start small">
-                                            <t t-esc="sug.product_name"/>
-                                        </td>
-                                        <td>
-                                            <span class="badge bg-info bg-opacity-25 text-dark">
-                                                <i class="fa fa-building me-1"></i>
-                                                <t t-esc="sug.from_warehouse_name"/>
-                                            </span>
-                                        </td>
-                                        <td class="text-success fw-bold">
-                                            <t t-esc="this.formatQty(sug.available_qty)"/>
-                                        </td>
-                                        <td class="text-danger fw-bold">
-                                            <t t-esc="this.formatQty(sug.shortage)"/>
-                                        </td>
-                                        <td>
-                                            <span class="badge bg-warning text-dark fw-bold">
+                                <t t-foreach="state.selectedOrder.transfer_suggestions" t-as="sug" t-key="sug.product_id">
+                                    <t t-foreach="sug.sources" t-as="src" t-key="src.from_warehouse_id">
+                                        <tr>
+                                            <t t-if="src_index === 0">
+                                                <td class="text-start small align-middle" t-att-rowspan="sug.sources.length">
+                                                    <t t-esc="sug.product_name"/>
+                                                </td>
+                                            </t>
+                                            <td>
+                                                <span class="badge bg-info bg-opacity-25 text-dark">
+                                                    <i class="fa fa-building me-1"></i>
+                                                    <t t-esc="src.from_warehouse_name"/>
+                                                </span>
+                                            </td>
+                                            <td class="text-success fw-bold">
+                                                <t t-esc="this.formatQty(src.available_qty)"/>
+                                            </td>
+                                            <t t-if="src_index === 0">
+                                                <td class="text-danger fw-bold align-middle" t-att-rowspan="sug.sources.length">
+                                                    <t t-esc="this.formatQty(sug.shortage)"/>
+                                                </td>
+                                            </t>
+                                            <td>
+                                                <span class="badge bg-warning text-dark fw-bold">
+                                                    <i class="fa fa-arrow-right me-1"></i>
+                                                    <t t-esc="this.formatQty(src.suggested_qty)"/>
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    </t>
+                                </t>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
                                                 <i class="fa fa-arrow-right me-1"></i>
                                                 <t t-esc="this.formatQty(sug.suggested_qty)"/>
                                             </span>
