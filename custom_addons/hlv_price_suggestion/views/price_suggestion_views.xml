@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- Price Suggestion - List View             -->
+    <!-- ════════════════════════════════════════ -->
+    <record id="price_suggestion_view_list" model="ir.ui.view">
+        <field name="name">price.suggestion.list</field>
+        <field name="model">price.suggestion</field>
+        <field name="arch" type="xml">
+            <list decoration-success="state == 'applied'"
+                  decoration-info="state == 'suggested'"
+                  decoration-warning="state == 'approved'"
+                  decoration-muted="state == 'rejected'">
+                <field name="suggestion_date"/>
+                <field name="product_id"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="last_purchase_price" widget="monetary"/>
+                <field name="current_sale_price" widget="monetary"/>
+                <field name="suggested_price" widget="monetary"/>
+                <field name="price_change_pct" widget="percentage"/>
+                <field name="margin_pct" widget="percentage"/>
+                <field name="stock_qty"/>
+                <field name="avg_daily_sales"/>
+                <field name="sales_rank" widget="badge"
+                       decoration-danger="sales_rank == 'hot'"
+                       decoration-success="sales_rank == 'normal'"
+                       decoration-warning="sales_rank == 'slow'"
+                       decoration-muted="sales_rank == 'no_sale'"/>
+                <field name="supplier_stock_status" widget="badge"
+                       decoration-danger="supplier_stock_status == 'out_of_stock'"
+                       decoration-warning="supplier_stock_status == 'low'"
+                       decoration-success="supplier_stock_status == 'available'"/>
+                <field name="state" widget="badge"
+                       decoration-info="state == 'suggested'"
+                       decoration-warning="state == 'approved'"
+                       decoration-success="state == 'applied'"
+                       decoration-danger="state == 'rejected'"/>
+                <field name="currency_id" column_invisible="True"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- Price Suggestion - Form View             -->
+    <!-- ════════════════════════════════════════ -->
+    <record id="price_suggestion_view_form" model="ir.ui.view">
+        <field name="name">price.suggestion.form</field>
+        <field name="model">price.suggestion</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_suggest_price_rule"
+                            string="Đề xuất (Quy tắc)"
+                            type="object"
+                            class="btn-primary"
+                            invisible="state != 'draft'"/>
+                    <button name="action_suggest_price_ai"
+                            string="Đề xuất (AI)"
+                            type="object"
+                            class="btn-primary"
+                            invisible="state != 'draft'"/>
+                    <button name="action_collect_data"
+                            string="Thu thập dữ liệu"
+                            type="object"
+                            invisible="state != 'draft'"/>
+                    <button name="action_approve"
+                            string="Duyệt"
+                            type="object"
+                            class="btn-success"
+                            invisible="state != 'suggested'"/>
+                    <button name="action_apply_price"
+                            string="Áp dụng giá"
+                            type="object"
+                            class="btn-warning"
+                            confirm="Bạn có chắc muốn áp dụng giá đề xuất lên sản phẩm?"
+                            invisible="state != 'approved'"/>
+                    <button name="action_reject"
+                            string="Từ chối"
+                            type="object"
+                            invisible="state not in ('suggested', 'approved')"/>
+                    <button name="action_reset_draft"
+                            string="Về nháp"
+                            type="object"
+                            invisible="state not in ('rejected', 'applied')"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,suggested,approved,applied"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="product_id" placeholder="Chọn sản phẩm..."
+                                   readonly="state != 'draft'"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Thông tin chung">
+                            <field name="company_id" groups="base.group_multi_company"
+                                   readonly="state != 'draft'"/>
+                            <field name="suggestion_date"/>
+                            <field name="currency_id" invisible="True"/>
+                            <field name="product_tmpl_id" invisible="True"/>
+                        </group>
+                        <group string="Tình trạng NCC">
+                            <field name="supplier_stock_status"
+                                   widget="radio"
+                                   readonly="state in ('applied', 'rejected')"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page string="Giá cả" name="pricing">
+                            <group>
+                                <group string="Giá nhập">
+                                    <field name="last_purchase_price" widget="monetary"/>
+                                    <field name="avg_purchase_price" widget="monetary"/>
+                                </group>
+                                <group string="Giá bán">
+                                    <field name="current_sale_price" widget="monetary"/>
+                                    <field name="suggested_price" widget="monetary"
+                                           class="oe_inline fw-bold text-primary"/>
+                                    <field name="price_change_pct"
+                                           widget="percentage"/>
+                                    <field name="margin_pct"
+                                           widget="percentage"/>
+                                </group>
+                            </group>
+                        </page>
+
+                        <page string="Tồn kho &amp; Bán hàng" name="stock_sales">
+                            <group>
+                                <group string="Tồn kho">
+                                    <field name="stock_qty"/>
+                                    <field name="days_of_stock"/>
+                                </group>
+                                <group string="Dữ liệu bán hàng">
+                                    <field name="avg_daily_sales"/>
+                                    <field name="total_sold_30d"/>
+                                    <field name="sales_rank" widget="badge"/>
+                                </group>
+                            </group>
+                        </page>
+
+                        <page string="Phân tích AI" name="ai_analysis">
+                            <group>
+                                <field name="ai_model_used"/>
+                            </group>
+                            <separator string="Phân tích chi tiết"/>
+                            <field name="ai_analysis" readonly="True"
+                                   placeholder="Nhấn 'Đề xuất (AI)' để nhận phân tích từ AI..."/>
+                        </page>
+
+                        <page string="Ghi chú" name="notes">
+                            <field name="note"
+                                   placeholder="Ghi chú thêm..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- Price Suggestion - Search View           -->
+    <!-- ════════════════════════════════════════ -->
+    <record id="price_suggestion_view_search" model="ir.ui.view">
+        <field name="name">price.suggestion.search</field>
+        <field name="model">price.suggestion</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="product_id"/>
+                <field name="company_id"/>
+                <filter name="filter_draft" string="Nháp"
+                        domain="[('state', '=', 'draft')]"/>
+                <filter name="filter_suggested" string="Đã đề xuất"
+                        domain="[('state', '=', 'suggested')]"/>
+                <filter name="filter_approved" string="Đã duyệt"
+                        domain="[('state', '=', 'approved')]"/>
+                <filter name="filter_applied" string="Đã áp dụng"
+                        domain="[('state', '=', 'applied')]"/>
+                <separator/>
+                <filter name="filter_hot" string="Bán chạy"
+                        domain="[('sales_rank', '=', 'hot')]"/>
+                <filter name="filter_low_stock" string="Tồn kho thấp"
+                        domain="[('days_of_stock', '&lt;', 15), ('days_of_stock', '&gt;', 0)]"/>
+                <filter name="filter_supplier_oos" string="NCC hết hàng"
+                        domain="[('supplier_stock_status', '=', 'out_of_stock')]"/>
+                <separator/>
+                <filter name="filter_price_increase" string="Tăng giá"
+                        domain="[('price_change_pct', '&gt;', 0)]"/>
+                <filter name="filter_price_decrease" string="Giảm giá"
+                        domain="[('price_change_pct', '&lt;', 0)]"/>
+                <separator/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_state" string="Trạng thái"
+                            context="{'group_by': 'state'}"/>
+                    <filter name="group_sales_rank" string="Xếp hạng bán"
+                            context="{'group_by': 'sales_rank'}"/>
+                    <filter name="group_supplier" string="Tình trạng NCC"
+                            context="{'group_by': 'supplier_stock_status'}"/>
+                    <filter name="group_company" string="Công ty"
+                            context="{'group_by': 'company_id'}"/>
+                    <filter name="group_date" string="Ngày đề xuất"
+                            context="{'group_by': 'suggestion_date:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- Price Suggestion - Action                -->
+    <!-- ════════════════════════════════════════ -->
+    <record id="price_suggestion_action" model="ir.actions.act_window">
+        <field name="name">Đề xuất giá bán</field>
+        <field name="res_model">price.suggestion</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="price_suggestion_view_search"/>
+        <field name="context">{'search_default_filter_suggested': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Tạo đề xuất giá bán đầu tiên
+            </p>
+            <p>
+                Hệ thống sẽ phân tích giá nhập, tồn kho, lượt bán và
+                tình trạng hàng từ nhà cung cấp để đề xuất giá bán tối ưu.
+            </p>
+        </field>
+    </record>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- Batch generate server action             -->
+    <!-- ════════════════════════════════════════ -->
+    <record id="price_suggestion_batch_generate_action" model="ir.actions.server">
+        <field name="name">Tạo đề xuất hàng loạt</field>
+        <field name="model_id" ref="model_price_suggestion"/>
+        <field name="binding_model_id" ref="model_price_suggestion"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code"><![CDATA[
+action = env['price.suggestion'].action_batch_generate()
+]]></field>
+    </record>
+
+</odoo>
