@@ -13,3 +13,4 @@ qrcode[pil]
 openai
 python-barcode
 google-ads>=24.0.0
+mcp
