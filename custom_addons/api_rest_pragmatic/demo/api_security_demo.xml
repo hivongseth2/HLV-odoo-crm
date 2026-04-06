@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Demo User with API access -->
+        <record id="demo_api_user" model="res.users">
+            <field name="name">API Demo User</field>
+            <field name="login">api_demo</field>
+            <field name="email">api_demo@example.com</field>
+            <field name="groups_id" eval="[(4, ref('pragmatic_engineering_api.group_api_user'))]"/>
+            <field name="namespace_ids" eval="[(4, ref('demo_namespace_test'))]"/>
+        </record>
+
+        <!-- Assign demo namespace to admin user -->
+        <record id="base.user_admin" model="res.users">
+            <field name="namespace_ids" eval="[(4, ref('demo_namespace_test'))]"/>
+            <field name="groups_id" eval="[(4, ref('pragmatic_engineering_api.group_api_manager'))]"/>
+        </record>
+    </data>
+</odoo>

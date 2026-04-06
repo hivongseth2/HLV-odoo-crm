@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- Client Action — Custom Chat UI           -->
+    <!-- ════════════════════════════════════════ -->
+    <record id="price_chat_client_action" model="ir.actions.client">
+        <field name="name">AI Tư vấn giá</field>
+        <field name="tag">price_chat_action</field>
+    </record>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- Menu                                     -->
+    <!-- ════════════════════════════════════════ -->
+    <menuitem id="menu_price_chat_root"
+              name="AI Tư vấn giá"
+              web_icon="hlv_price_suggestion,static/description/icon.png"
+              sequence="45"/>
+
+    <menuitem id="menu_price_chat_main"
+              name="Chat tư vấn giá"
+              parent="menu_price_chat_root"
+              action="price_chat_client_action"
+              sequence="10"/>
+
+</odoo>

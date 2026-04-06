@@ -1,2 +1,5 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_price_suggestion_manager,price.suggestion.manager,model_price_suggestion,base.group_user,1,1,1,1
+access_price_chat_session,price.chat.session.user,model_price_chat_session,base.group_user,1,1,1,1
+access_price_chat_message,price.chat.message.user,model_price_chat_message,base.group_user,1,1,1,1
+access_price_chat_config_read,price.chat.config.read,model_price_chat_config,base.group_user,1,0,0,0
+access_price_chat_config_full,price.chat.config.full,model_price_chat_config,base.group_system,1,1,1,1

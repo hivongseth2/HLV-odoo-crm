@@ -13,3 +13,15 @@ qrcode[pil]
 openai
 python-barcode
 google-ads>=24.0.0
+
+# ====== LLM Modules ======
+mcp
+markdownify
+emoji
+pydantic>=2.0.0
+jinja2
+pyyaml
+jsonschema
+PyMuPDF
+markdown2
+requests

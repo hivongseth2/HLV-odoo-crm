@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+<t t-name="hlv_price_suggestion.PriceChatAction">
+    <div class="pc-container d-flex h-100">
+
+        <!-- ══════════ SIDEBAR ══════════ -->
+        <div t-attf-class="pc-sidebar {{ state.sidebarOpen ? '' : 'pc-sidebar--collapsed' }}">
+            <div class="pc-sidebar-header">
+                <button class="btn btn-primary w-100 mb-2" t-on-click="onNewSession">
+                    <i class="fa fa-plus me-1"/> Phiên mới
+                </button>
+            </div>
+            <div class="pc-sidebar-list">
+                <t t-foreach="state.sessions" t-as="session" t-key="session.id">
+                    <div t-attf-class="pc-session-item {{ state.currentSessionId === session.id ? 'active' : '' }}"
+                         t-on-click="() => this.onSelectSession(session.id)">
+                        <div class="pc-session-name text-truncate" t-esc="session.name"/>
+                        <div class="pc-session-date" t-esc="formatDate(session.create_date)"/>
+                        <button class="pc-session-delete btn btn-sm"
+                                t-on-click="(ev) => this.onDeleteSession(ev, session.id)"
+                                title="Xóa">
+                            <i class="fa fa-trash"/>
+                        </button>
+                    </div>
+                </t>
+                <div t-if="!state.sessions.length" class="pc-no-sessions text-muted p-3 text-center">
+                    Chưa có phiên nào
+                </div>
+            </div>
+        </div>
+
+        <!-- ══════════ MAIN CHAT AREA ══════════ -->
+        <div class="pc-main flex-grow-1 d-flex flex-column">
+
+            <!-- Top bar -->
+            <div class="pc-topbar d-flex align-items-center px-3 py-2">
+                <button class="btn btn-sm btn-light me-2" t-on-click="toggleSidebar">
+                    <i class="fa fa-bars"/>
+                </button>
+                <div class="pc-topbar-title flex-grow-1 fw-bold">
+                    <i class="fa fa-robot me-1"/>
+                    AI Tư vấn giá
+                </div>
+                <button class="btn btn-sm btn-outline-primary me-2"
+                        t-on-click="onCrawlMarket"
+                        t-att-disabled="!state.currentSessionId || state.loading"
+                        title="Crawl giá thị trường">
+                    <i class="fa fa-globe me-1"/> Giá thị trường
+                </button>
+                <button class="btn btn-sm btn-success"
+                        t-on-click="onExportExcel"
+                        t-att-disabled="!state.currentSessionId">
+                    <i class="fa fa-file-excel-o me-1"/> Xuất Excel
+                </button>
+            </div>
+
+            <!-- Chat body -->
+            <div class="pc-chat-body flex-grow-1" t-ref="chatBody">
+                <!-- Welcome screen -->
+                <t t-if="!state.messages.length">
+                    <div class="pc-welcome">
+                        <div class="pc-welcome-icon">
+                            <i class="fa fa-comments-o"/>
+                        </div>
+                        <h3>AI Tư vấn giá sản phẩm</h3>
+                        <p class="text-muted">
+                            Hỏi tôi về giá bán của bất kỳ sản phẩm nào.<br/>
+                            Tôi sẽ phân tích dữ liệu thực tế từ hệ thống và đưa ra đề xuất.
+                        </p>
+                        <div class="pc-suggestions">
+                            <div class="pc-suggestion-chip"
+                                 t-on-click="() => { this.state.inputText = 'Giá bán hợp lý cho sản phẩm đang bán chạy nhất là bao nhiêu?'; }">
+                                Sản phẩm bán chạy nên bán giá bao nhiêu?
+                            </div>
+                            <div class="pc-suggestion-chip"
+                                 t-on-click="() => { this.state.inputText = 'So sánh giá nhập và giá bán của tất cả sản phẩm'; }">
+                                So sánh giá nhập vs giá bán
+                            </div>
+                            <div class="pc-suggestion-chip"
+                                 t-on-click="() => { this.state.inputText = 'Sản phẩm nào nên tăng giá?'; }">
+                                Sản phẩm nào nên tăng giá?
+                            </div>
+                        </div>
+                    </div>
+                </t>
+
+                <!-- Messages -->
+                <t t-foreach="state.messages" t-as="msg" t-key="msg.id">
+                    <div t-attf-class="pc-message pc-message--{{ msg.role }}">
+                        <div class="pc-avatar">
+                            <i t-if="msg.role === 'assistant'" class="fa fa-robot"/>
+                            <i t-else="" class="fa fa-user"/>
+                        </div>
+                        <div class="pc-bubble">
+                            <t t-if="msg._loading">
+                                <div class="pc-typing">
+                                    <span class="pc-dot"/>
+                                    <span class="pc-dot"/>
+                                    <span class="pc-dot"/>
+                                </div>
+                            </t>
+                            <t t-else="">
+                                <div class="pc-bubble-content"
+                                     t-out="formatContent(msg.content)"/>
+                            </t>
+                            <div class="pc-time" t-esc="formatTime(msg.create_date)"/>
+                        </div>
+                    </div>
+                </t>
+            </div>
+
+            <!-- Input area -->
+            <div class="pc-input-area">
+                <div class="pc-input-wrapper">
+                    <!-- Upload Excel button -->
+                    <button class="pc-upload-btn" t-on-click="onClickUpload"
+                            title="Upload file Excel (mã sản phẩm)"
+                            t-att-disabled="state.loading">
+                        <i class="fa fa-paperclip"/>
+                    </button>
+                    <input type="file" t-ref="fileInput"
+                           accept=".xlsx,.xls"
+                           style="display:none"
+                           t-on-change="onFileSelected"/>
+
+                    <textarea class="pc-input"
+                              t-att-value="state.inputText"
+                              t-on-input="(ev) => { this.state.inputText = ev.target.value; }"
+                              t-on-keydown="onInputKeydown"
+                              placeholder="Nhập câu hỏi về giá sản phẩm... (Enter để gửi, Shift+Enter xuống dòng)"
+                              t-att-disabled="state.loading"
+                              rows="1"/>
+                    <button class="pc-send-btn"
+                            t-on-click="onSendMessage"
+                            t-att-disabled="state.loading || !state.inputText.trim()">
+                        <t t-if="state.loading">
+                            <i class="fa fa-spinner fa-spin"/>
+                        </t>
+                        <t t-else="">
+                            <i class="fa fa-paper-plane"/>
+                        </t>
+                    </button>
+                </div>
+                <div class="pc-input-hint text-muted">
+                    <i class="fa fa-lightbulb-o me-1"/>
+                    Gợi ý: Nhập tên/mã sản phẩm hoặc upload file Excel để AI phân tích
+                </div>
+            </div>
+
+        </div>
+    </div>
+</t>
+
+</templates>
