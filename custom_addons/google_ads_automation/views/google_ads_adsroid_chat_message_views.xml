@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_google_ads_adsroid_chat_message_list" model="ir.ui.view">
+        <field name="name">google.ads.adsroid.chat.message.list</field>
+        <field name="model">google.ads.adsroid.chat.message</field>
+        <field name="arch" type="xml">
+            <list string="Lịch sử Chat Adsroid" create="false">
+                <field name="create_date" string="Thời gian"/>
+                <field name="campaign_id"/>
+                <field name="role" widget="badge" 
+                       decoration-info="role == 'user'" 
+                       decoration-success="role == 'assistant'"/>
+                <field name="content"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_google_ads_adsroid_chat_message_form" model="ir.ui.view">
+        <field name="name">google.ads.adsroid.chat.message.form</field>
+        <field name="model">google.ads.adsroid.chat.message</field>
+        <field name="arch" type="xml">
+            <form string="Chi tiết tin nhắn" create="false">
+                <sheet>
+                    <group>
+                        <field name="create_date" readonly="1"/>
+                        <field name="campaign_id" readonly="1"/>
+                        <field name="role" readonly="1"/>
+                    </group>
+                    <label for="content"/>
+                    <field name="content" readonly="1"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+</odoo>

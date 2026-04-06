@@ -36,3 +36,4 @@ access_google_ads_adsroid_chat,google.ads.adsroid.chat,model_google_ads_adsroid_
 access_google_ads_conversion_action_user,google.ads.conversion.action.user,model_google_ads_conversion_action,group_google_ads_user,1,1,1,1
 access_google_ads_conversion_action_manager,google.ads.conversion.action.manager,model_google_ads_conversion_action,group_google_ads_manager,1,1,1,1
 access_google_ads_campaign_remove_wizard,google.ads.campaign.remove.wizard,model_google_ads_campaign_remove_wizard,base.group_user,1,1,1,1
+access_google_ads_adsroid_chat_message,google.ads.adsroid.chat.message,model_google_ads_adsroid_chat_message,base.group_user,1,1,1,1

@@ -109,6 +109,13 @@ class GoogleAdsAd(models.Model):
             """
             rec.performance_dashboard_html = Markup(html)
 
+    # ── Adsroid Integration ──────────────────────
+    adsroid_last_insight = fields.Html(string='Nhận định AI (Adsroid)', readonly=True)
+    adsroid_log_ids = fields.One2many(
+        'google.ads.adsroid.log', 'ad_id', 
+        string='Lịch sử Adsroid', readonly=True
+    )
+
     name = fields.Char(string='Tên/Tiêu Đề Quảng Cáo')
     ad_group_id = fields.Many2one('google.ads.ad.group', string='Nhóm Quảng Cáo', required=True, ondelete='cascade')
     google_ad_id = fields.Char(string='Google Ad ID', index=True, readonly=True)
@@ -432,6 +439,90 @@ class GoogleAdsAd(models.Model):
                 except Exception as e:
                     _logger.error("Error during ad unlink sync: %s", str(e))
         return super().unlink()
+
+    def action_adsroid_ad_audit(self):
+        """Phân tích và chấm điểm mẫu quảng cáo (RSA/Demand Gen) bằng Adsroid AI"""
+        self.ensure_one()
+        account = self.ad_group_id.campaign_id.account_id
+        if not account.use_adsroid:
+            raise UserError(_("Vui lòng bật 'Sử dụng Adsroid AI' trong cấu hình tài khoản trước!"))
+
+        # Trích xuất nội dung chữ
+        headlines = [h.strip() for h in (self.headline or "").split('\n') if h.strip()]
+        descriptions = [d.strip() for d in (self.description or "").split('\n') if d.strip()]
+
+        if not headlines or not descriptions:
+            raise UserError(_("Vui lòng nhập Tiêu đề và Mô tả để AI có thể phân tích."))
+
+        # Chuẩn bị dữ liệu cho Adsroid
+        # Theo feedback AI: Cần ad_id, headlines[], descriptions[]
+        ad_data = {
+            "id_odoo": self.id,
+            "id_google": self.google_ad_id,
+            "type": self.type,
+            "headlines": headlines,
+            "descriptions": descriptions,
+            "metrics": {
+                "clicks": self.clicks,
+                "impressions": self.impressions,
+                "cost": self.cost,
+                "conversions": self.conversions,
+                "ctr": (self.clicks / self.impressions * 100) if self.impressions > 0 else 0,
+            }
+        }
+
+        # Query đặc thù cho việc chấm điểm nội dung
+        user_query = _(
+            "Hãy đóng vai là một chuyên gia sáng tạo nội dung (Creative Strategist). "
+            "Hãy phân tích và chấm điểm chất lượng của mẫu quảng cáo này dựa trên headlines và descriptions cung cấp. "
+            "Đưa ra lời khuyên cụ thể để cải thiện CTR và tỷ lệ chuyển đổi."
+        )
+
+        from ..services.adsroid_api import AdsroidApiService
+        success, result = AdsroidApiService.analyze_campaign(
+            account.adsroid_api_key, account.adsroid_organisation_id, account.adsroid_project_id,
+            ad_data, [], is_demo=account.is_demo, user_query=user_query
+        )
+
+        if not success:
+            raise UserError(_("Lỗi khi gọi Adsroid AI: %s") % result)
+
+        # Lưu kết quả
+        score = result.get('score', 0)
+        insight = result.get('insight', '')
+        
+        self.env['google.ads.adsroid.log'].create({
+            'ad_id': self.id,
+            'score': score,
+            'suggested_action': result.get('suggested_action', 'MAINTAIN'),
+            'insight': insight,
+            'is_applied': False,
+        })
+
+        # Render Insight HTML safely for Odoo 18
+        template = Markup("""
+            <div class="alert alert-primary shadow-sm border-0 bg-white">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <strong class="text-primary"><i class="fa fa-pencil-square-o me-2"></i> Adsroid Ad Audit</strong>
+                    <span class="badge rounded-pill text-bg-primary px-3">Creative Score: {}/100</span>
+                </div>
+                <div class="text-muted small">
+                    {}
+                </div>
+            </div>
+        """)
+        self.adsroid_last_insight = template.format(score, Markup(insight))
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('AI Audit Hoàn Tất'),
+                'message': _('Mẫu quảng cáo đã được AI chấm điểm: %s/100') % score,
+                'type': 'success',
+                'sticky': False,
+            }
+        }
 
     _sql_constraints = [
         ('google_ad_id_uniq', 'unique(google_ad_id)', 'Google Ad ID phải là duy nhất!'),
