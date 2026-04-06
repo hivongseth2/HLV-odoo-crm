@@ -261,6 +261,7 @@ class GoogleAdsTag(models.Model):
             except Exception as e:
                 raise UserError(_('Lỗi xác thực Service Account: %s') % str(e))
                 
+        else:
             # Independent OAuth2 Flow for GTM (Uses Account-level Client ID/Secret)
             client_id = self.account_id.client_id
             client_secret = self.account_id.client_secret
