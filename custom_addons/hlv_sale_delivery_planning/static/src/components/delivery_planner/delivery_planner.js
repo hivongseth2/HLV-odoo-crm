@@ -348,13 +348,9 @@ export class DeliveryPlannerDashboard extends Component {
         try {
             this.state.isLoading = true;
 
-            // Kiểm tra đơn nào có hàng mà chưa giữ hàng (stock_status ready/partial_ready)
-            const selectedOrders = this.state.saleOrders.filter(so => this.state.selectedSOIds.has(so.id));
-            const needsReservation = selectedOrders.filter(
-                so => so.stock_status === 'ready' || so.stock_status === 'partial_ready'
-            );
-
-            if (needsReservation.length > 0) {
+            // Luôn gọi giữ hàng (check availability) trước khi in
+            // Backend sẽ tự xác định picking nào chưa assigned để reserve
+            try {
                 const reserveResponse = await fetch('/hlv_sale_delivery_planning/reserve_stock', {
                     method: 'POST',
                     headers: {
@@ -364,15 +360,15 @@ export class DeliveryPlannerDashboard extends Component {
                     body: JSON.stringify({
                         jsonrpc: '2.0',
                         method: 'call',
-                        params: { sale_order_ids: needsReservation.map(so => so.id) },
+                        params: { sale_order_ids: selectedIds },
                     }),
                 });
                 const reserveResult = await reserveResponse.json();
-                if (reserveResult.error) {
-                    console.warn('Giữ hàng thất bại:', reserveResult.error);
-                } else if (reserveResult.result) {
+                if (reserveResult.result) {
                     console.log('Giữ hàng:', reserveResult.result.message);
                 }
+            } catch (reserveErr) {
+                console.warn('Giữ hàng thất bại, tiếp tục in:', reserveErr);
             }
 
             const url = `/hlv_sale_delivery_planning/print_picking_slips`;

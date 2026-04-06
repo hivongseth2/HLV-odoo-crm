@@ -108,7 +108,8 @@ class DeliveryPlannerController(http.Controller):
     def reserve_stock(self, sale_order_ids=None, **kwargs):
         """
         Giữ hàng (action_assign) cho các picking liên quan đến đơn hàng đã chọn.
-        Chỉ xử lý các picking chưa được giữ hàng đầy đủ (state không phải 'assigned').
+        Gọi action_assign cho tất cả picking chưa done/cancel — kể cả picking đã
+        'assigned' nhưng chưa reserve đủ số lượng (partial).
         """
         try:
             if not isinstance(sale_order_ids, list):
@@ -130,25 +131,29 @@ class DeliveryPlannerController(http.Controller):
                 ('state', 'not in', ['done', 'cancel']),
             ])
 
-            # Chỉ giữ hàng cho các picking chưa được giữ đầy đủ
+            # Giữ hàng cho tất cả picking chưa done/cancel
+            # Không loại trừ 'assigned' vì picking có thể ở state assigned
+            # nhưng vẫn chưa reserve đủ số lượng yêu cầu
             pickings_to_reserve = linked_pickings.filtered(
                 lambda p: p.picking_type_code in ['outgoing', 'internal']
-                          and p.state not in ['done', 'cancel', 'assigned']
+                          and p.state not in ['done', 'cancel']
             )
 
             if not pickings_to_reserve:
-                return {'success': True, 'reserved_count': 0, 'message': 'Tất cả phiếu đã được giữ hàng rồi'}
+                return {'success': True, 'reserved_count': 0, 'message': 'Tất cả phiếu đã hoàn thành hoặc đã hủy'}
 
+            reserved_count = 0
             for picking in pickings_to_reserve:
                 try:
-                    picking.action_assign()
+                    picking.with_context(skip_unreserve_wizard=True).action_assign()
+                    reserved_count += 1
                 except Exception as e_pick:
                     _logger.warning("Could not reserve picking %s: %s", picking.name, e_pick)
 
             return {
                 'success': True,
-                'reserved_count': len(pickings_to_reserve),
-                'message': f'Đã giữ hàng cho {len(pickings_to_reserve)} phiếu',
+                'reserved_count': reserved_count,
+                'message': f'Đã giữ hàng cho {reserved_count} phiếu',
             }
         except Exception as e:
             _logger.error("Error reserving stock: %s", str(e), exc_info=True)
