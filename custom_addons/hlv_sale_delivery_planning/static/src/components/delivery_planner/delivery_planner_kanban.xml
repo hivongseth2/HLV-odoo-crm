@@ -265,7 +265,16 @@
                     </t>
                 </div>
 
-                <!-- Row 8: POs count + warehouse -->
+                <!-- Row 8: Transfer suggestion badge -->
+                <div t-if="so.transfer_suggestions and so.transfer_suggestions.length"
+                     class="mt-1" style="font-size: 0.68rem;">
+                    <span class="badge bg-danger bg-opacity-75 text-white" style="font-size:0.62rem;">
+                        <i class="fa fa-exchange me-1"></i>Cần chuyển kho
+                        (<t t-esc="so.transfer_suggestions.length"/> SP)
+                    </span>
+                </div>
+
+                <!-- Row 9: POs count + warehouse -->
                 <div class="d-flex justify-content-between align-items-center mt-1 pt-1 border-top"
                      style="font-size: 0.68rem;" t-if="so.pos and so.pos.length">
                     <span class="text-muted">
