@@ -15,182 +15,214 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+
+
 #. module: llm_thread
-#: model:llm.thread,_description
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "LLM Chat Thread"
 msgstr "Cuộc trò chuyện AI"
 
 #. module: llm_thread
-#: model:llm.thread,field_description:llm_thread.field_llm_thread__name
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Title"
 msgstr "Tiêu đề"
 
 #. module: llm_thread
-#: model:llm.thread,field_description:llm_thread.field_llm_thread__user_id
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "User"
 msgstr "Người dùng"
 
 #. module: llm_thread
-#: model:llm.thread,field_description:llm_thread.field_llm_thread__provider_id
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Provider"
 msgstr "Nhà cung cấp"
 
 #. module: llm_thread
-#: model:llm.thread,field_description:llm_thread.field_llm_thread__model_id
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Model"
 msgstr "Mô hình"
 
 #. module: llm_thread
-#: model:llm.thread,field_description:llm_thread.field_llm_thread__res_model
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Related Document Model"
 msgstr "Mô hình tài liệu liên quan"
 
 #. module: llm_thread
-#: model:llm.thread,help:llm_thread.field_llm_thread__res_model
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Technical name of the related model"
 msgstr "Tên kỹ thuật của mô hình liên quan"
 
 #. module: llm_thread
-#: model:llm.thread,field_description:llm_thread.field_llm_thread__res_id
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Related Document ID"
 msgstr "ID tài liệu liên quan"
 
 #. module: llm_thread
-#: model:llm.thread,help:llm_thread.field_llm_thread__res_id
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "ID of the related record"
 msgstr "ID của bản ghi liên quan"
 
 #. module: llm_thread
-#: model:llm.thread,field_description:llm_thread.field_llm_thread__tool_ids
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Available Tools"
 msgstr "Công cụ khả dụng"
 
 #. module: llm_thread
-#: model:llm.thread,help:llm_thread.field_llm_thread__tool_ids
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Tools that can be used by the LLM in this thread"
 msgstr "Công cụ mà AI có thể sử dụng trong cuộc trò chuyện này"
 
 #. module: llm_thread
-#: model:llm.thread,field_description:llm_thread.field_llm_thread__attachment_ids
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "All Thread Attachments"
 msgstr "Tất cả tệp đính kèm"
 
 #. module: llm_thread
-#: model:llm.thread,help:llm_thread.field_llm_thread__attachment_ids
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "All attachments from all messages in this thread"
 msgstr "Tất cả tệp đính kèm từ các tin nhắn trong cuộc trò chuyện"
 
 #. module: llm_thread
-#: model:llm.thread,field_description:llm_thread.field_llm_thread__attachment_count
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Thread Attachments"
 msgstr "Tệp đính kèm"
 
 #. module: llm_thread
-#: model:llm.thread,help:llm_thread.field_llm_thread__attachment_count
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Total number of attachments in this thread"
 msgstr "Tổng số tệp đính kèm trong cuộc trò chuyện"
 
 #. module: llm_thread
-#: code:addons/llm_thread/models/llm_thread.py
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Unsupported file(s)"
 msgstr "Tệp không được hỗ trợ"
 
 #. module: llm_thread
-#: code:addons/llm_thread/models/llm_thread.py
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "These files will be skipped."
 msgstr "Các tệp này sẽ bị bỏ qua."
 
 #. module: llm_thread
-#: code:addons/llm_thread/models/llm_thread.py
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Error"
 msgstr "Lỗi"
 
 #. module: llm_thread
-#: code:addons/llm_thread/models/llm_thread.py
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Please install the llm_assistant module for actual AI generation."
 msgstr "Vui lòng cài đặt module llm_assistant để tạo AI thực tế."
 
 #. module: llm_thread
-#: code:addons/llm_thread/models/llm_thread.py
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "This conversation is currently generating a response. Please wait for it to complete before sending another message."
 msgstr "Cuộc trò chuyện này đang tạo phản hồi. Vui lòng đợi hoàn tất trước khi gửi tin nhắn khác."
 
 #. module: llm_thread
-#: code:addons/llm_thread/models/llm_thread.py
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Unable to process your request due to a system conflict. Please wait a moment and try again."
 msgstr "Không thể xử lý yêu cầu do xung đột hệ thống. Vui lòng đợi một chút và thử lại."
 
 #. module: llm_thread
-#: code:addons/llm_thread/models/llm_thread.py
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Your request could not be processed. Please refresh the page and try again."
 msgstr "Không thể xử lý yêu cầu. Vui lòng tải lại trang và thử lại."
 
 #. module: llm_thread
-#: model:mail.message,field_description:llm_thread.field_mail_message__user_vote
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "User Vote"
 msgstr "Đánh giá người dùng"
 
 #. module: llm_thread
-#: model:mail.message,help:llm_thread.field_mail_message__user_vote
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Vote status given by the user. 0: No vote, 1: Upvoted, -1: Downvoted."
 msgstr "Trạng thái đánh giá. 0: Chưa đánh giá, 1: Thích, -1: Không thích."
 
 #. module: llm_thread
-#: code:addons/llm_thread/models/mail_message.py
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Voting is only allowed on messages generated by the assistant or a tool."
 msgstr "Chỉ cho phép đánh giá tin nhắn do trợ lý hoặc công cụ tạo."
 
 #. module: llm_thread
-#: code:addons/llm_thread/models/mail_message.py
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Invalid vote value. Must be an integer: 1 (up), -1 (down), or 0 (none)."
 msgstr "Giá trị đánh giá không hợp lệ. Phải là số nguyên: 1 (thích), -1 (không thích), hoặc 0 (bỏ)."
 
 #. module: llm_thread
-#: code:addons/llm_thread/controllers/main.py
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "LLM Thread not found."
 msgstr "Không tìm thấy cuộc trò chuyện AI."
 
 #. module: llm_thread
-#: model_terms:ir.ui.view,arch_db:llm_thread.llm_thread_views
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Chat Title"
 msgstr "Tiêu đề trò chuyện"
 
 #. module: llm_thread
-#: model:ir.actions.act_window,name:llm_thread.action_llm_threads
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Chat Threads"
 msgstr "Cuộc trò chuyện"
 
 #. module: llm_thread
-#: model_terms:ir.ui.view,arch_db:llm_thread.llm_thread_views
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Create your first chat thread!"
 msgstr "Tạo cuộc trò chuyện đầu tiên!"
 
 #. module: llm_thread
-#: model_terms:ir.ui.view,arch_db:llm_thread.llm_thread_views
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Start a conversation with any of your configured LLM providers."
 msgstr "Bắt đầu trò chuyện với bất kỳ nhà cung cấp AI nào đã cấu hình."
 
 #. module: llm_thread
-#: model:ir.actions.client,name:llm_thread.action_llm_chat
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Chat"
 msgstr "Trò chuyện"
 
 #. module: llm_thread
-#: model:ir.ui.menu,name:llm_thread.menu_llm_chat
-msgid "Chat"
-msgstr "Trò chuyện"
-
-#. module: llm_thread
-#: model:ir.ui.menu,name:llm_thread.menu_llm_threads
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Threads"
 msgstr "Cuộc trò chuyện"
 
 #. module: llm_thread
-#: model:ir.rule,name:llm_thread.rule_llm_thread_personal
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "Personal Chat Threads"
 msgstr "Cuộc trò chuyện cá nhân"
 
 #. module: llm_thread
-#: model:ir.rule,name:llm_thread.rule_llm_thread_all
+#: code:addons/llm_thread/models/__init__.py:0
+#, python-format
 msgid "All Chat Threads"
 msgstr "Tất cả cuộc trò chuyện"

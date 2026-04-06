@@ -15,997 +15,1144 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+
+
 #. module: llm_knowledge
-#: model:llm.resource,_description
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "LLM Resource for Document Management"
 msgstr "Tài nguyên AI để quản lý tài liệu"
 
 #. module: llm_knowledge
-#: sql_constraint:llm.resource:
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "A resource already exists for this record. Please use the existing resource."
 msgstr "Đã tồn tại tài nguyên cho bản ghi này. Vui lòng sử dụng tài nguyên hiện có."
 
 #. module: llm_knowledge
-#: model:llm.resource,field_description:llm_knowledge.field_llm_resource__model_id
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Related Model"
 msgstr "Mô hình liên quan"
 
 #. module: llm_knowledge
-#: model:llm.resource,help:llm_knowledge.field_llm_resource__model_id
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "The model of the referenced document"
 msgstr "Mô hình của tài liệu được tham chiếu"
 
 #. module: llm_knowledge
-#: model:llm.resource,field_description:llm_knowledge.field_llm_resource__res_model
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Model Name"
 msgstr "Tên mô hình"
 
 #. module: llm_knowledge
-#: model:llm.resource,help:llm_knowledge.field_llm_resource__res_model
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Technical name of the related model"
 msgstr "Tên kỹ thuật của mô hình liên quan"
 
 #. module: llm_knowledge
-#: model:llm.resource,field_description:llm_knowledge.field_llm_resource__res_id
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Record ID"
 msgstr "ID bản ghi"
 
 #. module: llm_knowledge
-#: model:llm.resource,help:llm_knowledge.field_llm_resource__res_id
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "The ID of the referenced record"
 msgstr "ID của bản ghi được tham chiếu"
 
 #. module: llm_knowledge
-#: model:llm.resource,field_description:llm_knowledge.field_llm_resource__content
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Content"
 msgstr "Nội dung"
 
 #. module: llm_knowledge
-#: model:llm.resource,help:llm_knowledge.field_llm_resource__content
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Markdown representation of the resource content"
 msgstr "Nội dung tài nguyên dạng Markdown"
 
 #. module: llm_knowledge
-#: model:llm.resource,field_description:llm_knowledge.field_llm_resource__external_url
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "External URL"
 msgstr "URL bên ngoài"
 
 #. module: llm_knowledge
-#: model:llm.resource,help:llm_knowledge.field_llm_resource__external_url
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "External URL from the related record if available"
 msgstr "URL bên ngoài từ bản ghi liên quan (nếu có)"
 
 #. module: llm_knowledge
-#: selection:llm.resource,state:
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Draft"
 msgstr "Nháp"
 
 #. module: llm_knowledge
-#: selection:llm.resource,state:
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Retrieved"
 msgstr "Đã truy xuất"
 
 #. module: llm_knowledge
-#: selection:llm.resource,state:
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Parsed"
 msgstr "Đã phân tích"
 
 #. module: llm_knowledge
-#: selection:llm.resource,state:
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Chunked"
 msgstr "Đã chia đoạn"
 
 #. module: llm_knowledge
-#: selection:llm.resource,state:
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Ready"
 msgstr "Sẵn sàng"
 
 #. module: llm_knowledge
-#: model:llm.resource,field_description:llm_knowledge.field_llm_resource__state
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "State"
 msgstr "Trạng thái"
 
 #. module: llm_knowledge
-#: model:llm.resource,field_description:llm_knowledge.field_llm_resource__lock_date
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Lock Date"
 msgstr "Ngày khóa"
 
 #. module: llm_knowledge
-#: model:llm.resource,help:llm_knowledge.field_llm_resource__lock_date
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Date when the resource was locked for processing"
 msgstr "Ngày tài nguyên bị khóa để xử lý"
 
 #. module: llm_knowledge
-#: selection:llm.resource,kanban_state:
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Blocked"
 msgstr "Bị chặn"
 
 #. module: llm_knowledge
-#: selection:llm.resource,kanban_state:
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Done"
 msgstr "Hoàn thành"
 
 #. module: llm_knowledge
-#: model:llm.resource,field_description:llm_knowledge.field_llm_resource__kanban_state
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Kanban State"
 msgstr "Trạng thái Kanban"
 
 #. module: llm_knowledge
-#: model:llm.resource,field_description:llm_knowledge.field_llm_resource__collection_ids
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Collections"
 msgstr "Bộ sưu tập"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "No Resources Selected"
 msgstr "Chưa chọn tài nguyên nào"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Please select resources to process."
 msgstr "Vui lòng chọn tài nguyên để xử lý."
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Processing Failed"
 msgstr "Xử lý thất bại"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Mass processing resources failed"
 msgstr "Xử lý hàng loạt tài nguyên thất bại"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Resources Unlocked"
 msgstr "Đã mở khóa tài nguyên"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "%(count)s resources have been unlocked"
 msgstr "Đã mở khóa %(count)s tài nguyên"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Please select resources to reset."
 msgstr "Vui lòng chọn tài nguyên để đặt lại."
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "No Resources Reset"
 msgstr "Không có tài nguyên nào được đặt lại"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "No resources found that need resetting."
 msgstr "Không tìm thấy tài nguyên nào cần đặt lại."
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Document embedding process completed successfully."
 msgstr "Quá trình nhúng tài liệu hoàn tất thành công."
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Document embedding process did not complete properly, check logs on resources."
 msgstr "Quá trình nhúng tài liệu chưa hoàn tất đúng, kiểm tra nhật ký trên tài nguyên."
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Embedding"
 msgstr "Nhúng văn bản"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Reindexing"
 msgstr "Đánh lại chỉ mục"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Resource does not belong to any collections."
 msgstr "Tài nguyên không thuộc bộ sưu tập nào."
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "No chunks found for this resource."
 msgstr "Không tìm thấy đoạn nào cho tài nguyên này."
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "No resources in 'chunked' state to embed."
 msgstr "Không có tài nguyên ở trạng thái 'đã chia đoạn' để nhúng."
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "No collections found for the selected resources."
 msgstr "Không tìm thấy bộ sưu tập cho tài nguyên đã chọn."
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "No resources could be embedded. Check that resources have correct collections and collections have valid embedding models and stores."
 msgstr "Không thể nhúng tài nguyên nào. Kiểm tra xem tài nguyên có đúng bộ sưu tập và bộ sưu tập có mô hình nhúng và kho hợp lệ không."
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Reset to 'chunked' state after removal from all collections"
 msgstr "Đặt lại trạng thái 'đã chia đoạn' sau khi xóa khỏi tất cả bộ sưu tập"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.chunk,_description
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Document Chunk for RAG"
 msgstr "Đoạn tài liệu cho RAG"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.chunk,field_description:llm_knowledge.field_llm_knowledge_chunk__resource_id
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Resource"
 msgstr "Tài nguyên"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.chunk,field_description:llm_knowledge.field_llm_knowledge_chunk__sequence
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Sequence"
 msgstr "Thứ tự"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.chunk,help:llm_knowledge.field_llm_knowledge_chunk__sequence
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Order of the chunk within the resource"
 msgstr "Thứ tự của đoạn trong tài nguyên"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.chunk,help:llm_knowledge.field_llm_knowledge_chunk__content
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Chunk text content"
 msgstr "Nội dung văn bản của đoạn"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.chunk,field_description:llm_knowledge.field_llm_knowledge_chunk__metadata
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Metadata"
 msgstr "Thông tin bổ sung"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.chunk,help:llm_knowledge.field_llm_knowledge_chunk__metadata
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Additional metadata for this chunk"
 msgstr "Thông tin bổ sung cho đoạn này"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.chunk,field_description:llm_knowledge.field_llm_knowledge_chunk__embedding
-msgid "Embedding"
-msgstr "Vector nhúng"
-
-#. module: llm_knowledge
-#: model:llm.knowledge.chunk,field_description:llm_knowledge.field_llm_knowledge_chunk__similarity
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Similarity Score"
 msgstr "Điểm tương đồng"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_knowledge_chunk.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "A pre-computed 'query_vector' can only be used when a specific 'collection_id' is also provided. Searching across multiple collections requires a 'vector_search_term' for model-specific embedding generation."
 msgstr "Vector truy vấn đã tính trước chỉ có thể sử dụng khi chỉ định 'collection_id'. Tìm kiếm nhiều bộ sưu tập yêu cầu 'vector_search_term' để tạo nhúng theo mô hình."
 
 #. module: llm_knowledge
-#: model:llm.knowledge.collection,_description
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Knowledge Collection for RAG"
 msgstr "Bộ sưu tập tri thức cho RAG"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.collection,field_description:llm_knowledge.field_llm_knowledge_collection__description
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Description"
 msgstr "Mô tả"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.collection,field_description:llm_knowledge.field_llm_knowledge_collection__embedding_model_id
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Embedding Model"
 msgstr "Mô hình nhúng"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.collection,help:llm_knowledge.field_llm_knowledge_collection__embedding_model_id
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "The model used to create embeddings for documents in this collection"
 msgstr "Mô hình dùng để tạo nhúng cho tài liệu trong bộ sưu tập này"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.collection,field_description:llm_knowledge.field_llm_knowledge_collection__resource_ids
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Resources"
 msgstr "Tài nguyên"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.collection,field_description:llm_knowledge.field_llm_knowledge_collection__domain_ids
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Domain Filters"
 msgstr "Bộ lọc miền"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.collection,help:llm_knowledge.field_llm_knowledge_collection__domain_ids
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Domain filters to select records for RAG document creation"
 msgstr "Bộ lọc miền để chọn bản ghi tạo tài liệu RAG"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.collection,field_description:llm_knowledge.field_llm_knowledge_collection__resource_count
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Resource Count"
 msgstr "Số tài nguyên"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.collection,field_description:llm_knowledge.field_llm_knowledge_collection__chunk_count
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Chunk Count"
 msgstr "Số đoạn"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.collection,field_description:llm_knowledge.field_llm_knowledge_collection__chunk_ids
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Chunks (from Resources)"
 msgstr "Đoạn (từ tài nguyên)"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.collection,help:llm_knowledge.field_llm_knowledge_collection__chunk_ids
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Chunks belonging to the resources included in this collection."
 msgstr "Các đoạn thuộc tài nguyên trong bộ sưu tập này."
 
 #. module: llm_knowledge
-#: model:llm.knowledge.collection,field_description:llm_knowledge.field_llm_knowledge_collection__default_chunk_size
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Default Chunk Size"
 msgstr "Kích thước đoạn mặc định"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.collection,help:llm_knowledge.field_llm_knowledge_collection__default_chunk_size
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Default target size of chunks in tokens for resources in this collection"
 msgstr "Kích thước mục tiêu mặc định của đoạn tính bằng token cho tài nguyên trong bộ sưu tập"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.collection,field_description:llm_knowledge.field_llm_knowledge_collection__default_chunk_overlap
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Default Chunk Overlap"
 msgstr "Chồng chéo đoạn mặc định"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.collection,help:llm_knowledge.field_llm_knowledge_collection__default_chunk_overlap
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Default number of tokens to overlap between chunks for resources in this collection"
 msgstr "Số token chồng chéo mặc định giữa các đoạn cho tài nguyên trong bộ sưu tập"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.collection,field_description:llm_knowledge.field_llm_knowledge_collection__default_chunker
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Default Chunker"
 msgstr "Bộ chia đoạn mặc định"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.collection,help:llm_knowledge.field_llm_knowledge_collection__default_chunker
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Default chunker to use for resources in this collection"
 msgstr "Bộ chia đoạn mặc định cho tài nguyên trong bộ sưu tập"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.collection,field_description:llm_knowledge.field_llm_knowledge_collection__default_parser
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Default Parser"
 msgstr "Bộ phân tích mặc định"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.collection,help:llm_knowledge.field_llm_knowledge_collection__default_parser
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Default parser to use for resources in this collection"
 msgstr "Bộ phân tích mặc định cho tài nguyên trong bộ sưu tập"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_knowledge_collection.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Failed to create collection in store for collection %s"
 msgstr "Không thể tạo bộ sưu tập trong kho cho bộ sưu tập %s"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_knowledge_collection.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Collection Resources"
 msgstr "Tài nguyên bộ sưu tập"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_knowledge_collection.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Collection Chunks"
 msgstr "Đoạn bộ sưu tập"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_knowledge_collection.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "No changes made - collection is already in sync with domains."
 msgstr "Không thay đổi - bộ sưu tập đã đồng bộ với bộ lọc miền."
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_knowledge_collection.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "No resources found to reindex."
 msgstr "Không tìm thấy tài nguyên để đánh lại chỉ mục."
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_knowledge_collection.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Embedding Failed"
 msgstr "Nhúng thất bại"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_knowledge_collection.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Failed to embed resources. Check the logs for details."
 msgstr "Không thể nhúng tài nguyên. Kiểm tra nhật ký để biết chi tiết."
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_knowledge_collection.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "No embedding model configured for this collection."
 msgstr "Chưa cấu hình mô hình nhúng cho bộ sưu tập này."
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_knowledge_collection.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "No vector store configured for this collection."
 msgstr "Chưa cấu hình kho vector cho bộ sưu tập này."
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_knowledge_collection.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "No chunks found for resources in chunked state"
 msgstr "Không tìm thấy đoạn nào cho tài nguyên ở trạng thái đã chia đoạn"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_knowledge_collection.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "All chunks already have embeddings for the selected model"
 msgstr "Tất cả đoạn đã có vector nhúng cho mô hình đã chọn"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_knowledge_collection.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "No chunks were successfully embedded. Check logs for errors."
 msgstr "Không nhúng thành công đoạn nào. Kiểm tra nhật ký lỗi."
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_knowledge_collection.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Vectors removed for resource %s"
 msgstr "Đã xóa vector cho tài nguyên %s"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_knowledge_collection.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Vectors removed from collection %s"
 msgstr "Đã xóa vector khỏi bộ sưu tập %s"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_knowledge_collection.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Error removing vectors for resource %s"
 msgstr "Lỗi khi xóa vector cho tài nguyên %s"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_knowledge_collection.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Error removing vectors from collection %s"
 msgstr "Lỗi khi xóa vector khỏi bộ sưu tập %s"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.domain,_description
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Collection Domain Filter"
 msgstr "Bộ lọc miền bộ sưu tập"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.domain,field_description:llm_knowledge.field_llm_knowledge_domain__model_id
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Model"
 msgstr "Mô hình"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.domain,field_description:llm_knowledge.field_llm_knowledge_domain__domain
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Domain"
 msgstr "Miền"
 
 #. module: llm_knowledge
-#: model:llm.knowledge.domain,help:llm_knowledge.field_llm_knowledge_domain__domain
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Domain filter to select records"
 msgstr "Bộ lọc miền để chọn bản ghi"
 
 #. module: llm_knowledge
-#: model:llm.resource,field_description:llm_knowledge.field_llm_resource__chunker
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Chunker"
 msgstr "Bộ chia đoạn"
 
 #. module: llm_knowledge
-#: model:llm.resource,help:llm_knowledge.field_llm_resource__chunker
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Method used to chunk resource content"
 msgstr "Phương thức dùng để chia đoạn nội dung tài nguyên"
 
 #. module: llm_knowledge
-#: model:llm.resource,field_description:llm_knowledge.field_llm_resource__target_chunk_size
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Target Chunk Size"
 msgstr "Kích thước đoạn mục tiêu"
 
 #. module: llm_knowledge
-#: model:llm.resource,help:llm_knowledge.field_llm_resource__target_chunk_size
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Target size of chunks in tokens"
 msgstr "Kích thước mục tiêu của đoạn tính bằng token"
 
 #. module: llm_knowledge
-#: model:llm.resource,field_description:llm_knowledge.field_llm_resource__target_chunk_overlap
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Chunk Overlap"
 msgstr "Chồng chéo đoạn"
 
 #. module: llm_knowledge
-#: model:llm.resource,help:llm_knowledge.field_llm_resource__target_chunk_overlap
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Number of tokens to overlap between chunks"
 msgstr "Số token chồng chéo giữa các đoạn"
 
 #. module: llm_knowledge
-#: model:llm.resource,field_description:llm_knowledge.field_llm_resource__chunk_ids
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Chunks"
 msgstr "Đoạn"
 
 #. module: llm_knowledge
-#: selection:llm.resource,chunker:
-msgid "Default Chunker"
-msgstr "Bộ chia đoạn mặc định"
-
-#. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource_chunker.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Resource Chunks"
 msgstr "Đoạn tài nguyên"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource_chunker.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Error in batch chunking: %s"
 msgstr "Lỗi khi chia đoạn hàng loạt: %s"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource_chunker.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "No content to chunk"
 msgstr "Không có nội dung để chia đoạn"
 
 #. module: llm_knowledge
-#: model:llm.resource,field_description:llm_knowledge.field_llm_resource__retriever
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Retriever"
 msgstr "Bộ truy xuất"
 
 #. module: llm_knowledge
-#: model:llm.resource,help:llm_knowledge.field_llm_resource__retriever
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Method used to retrieve resource content"
 msgstr "Phương thức dùng để truy xuất nội dung tài nguyên"
 
 #. module: llm_knowledge
-#: selection:llm.resource,retriever:
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Default Retriever"
 msgstr "Bộ truy xuất mặc định"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource_retriever.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Referenced record not found"
 msgstr "Không tìm thấy bản ghi được tham chiếu"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/models/llm_resource_retriever.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Error in batch retrieval: %s"
 msgstr "Lỗi khi truy xuất hàng loạt: %s"
 
 #. module: llm_knowledge
-#: model:llm.resource,field_description:llm_knowledge.field_llm_resource__parser
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Parser"
 msgstr "Bộ phân tích"
 
 #. module: llm_knowledge
-#: model:llm.resource,help:llm_knowledge.field_llm_resource__parser
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Method used to parse resource content"
 msgstr "Phương thức dùng để phân tích nội dung tài nguyên"
 
 #. module: llm_knowledge
-#: selection:llm.resource,parser:
-msgid "Default Parser"
-msgstr "Bộ phân tích mặc định"
-
-#. module: llm_knowledge
-#: selection:llm.resource,parser:
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "JSON Parser"
 msgstr "Bộ phân tích JSON"
 
 #. module: llm_knowledge
-#: selection:llm.resource,retriever:
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "HTTP Retriever"
 msgstr "Bộ truy xuất HTTP"
 
 #. module: llm_knowledge
-#: model:create.rag.resource.wizard,_description
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Create RAG Resources Wizard"
 msgstr "Trình hướng dẫn tạo tài nguyên RAG"
 
 #. module: llm_knowledge
-#: model:create.rag.resource.wizard,field_description:llm_knowledge.field_create_rag_resource_wizard__record_count
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Records"
 msgstr "Bản ghi"
 
 #. module: llm_knowledge
-#: model:create.rag.resource.wizard,field_description:llm_knowledge.field_create_rag_resource_wizard__resource_name_template
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Resource Name Template"
 msgstr "Mẫu tên tài nguyên"
 
 #. module: llm_knowledge
-#: model:create.rag.resource.wizard,help:llm_knowledge.field_create_rag_resource_wizard__resource_name_template
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Template for resource names. Use {record_name}, {model_name}, and {id} as placeholders."
 msgstr "Mẫu đặt tên tài nguyên. Dùng {record_name}, {model_name} và {id} làm biến."
 
 #. module: llm_knowledge
-#: model:create.rag.resource.wizard,field_description:llm_knowledge.field_create_rag_resource_wizard__process_immediately
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Process Immediately"
 msgstr "Xử lý ngay"
 
 #. module: llm_knowledge
-#: model:create.rag.resource.wizard,help:llm_knowledge.field_create_rag_resource_wizard__process_immediately
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "If checked, resources will be immediately processed through the RAG pipeline"
 msgstr "Nếu chọn, tài nguyên sẽ được xử lý ngay qua quy trình RAG"
 
 #. module: llm_knowledge
-#: model:create.rag.resource.wizard,field_description:llm_knowledge.field_create_rag_resource_wizard__created_resource_ids
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Created Resources"
 msgstr "Tài nguyên đã tạo"
 
 #. module: llm_knowledge
-#: model:create.rag.resource.wizard,field_description:llm_knowledge.field_create_rag_resource_wizard__created_count
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Created"
 msgstr "Đã tạo"
 
 #. module: llm_knowledge
-#: model:upload.resource.wizard,_description
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Upload RAG Resources Wizard"
 msgstr "Trình hướng dẫn tải lên tài nguyên RAG"
 
 #. module: llm_knowledge
-#: model:upload.resource.wizard,field_description:llm_knowledge.field_upload_resource_wizard__collection_id
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Collection"
 msgstr "Bộ sưu tập"
 
 #. module: llm_knowledge
-#: model:upload.resource.wizard,help:llm_knowledge.field_upload_resource_wizard__collection_id
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Collection to which resources will be added"
 msgstr "Bộ sưu tập mà tài nguyên sẽ được thêm vào"
 
 #. module: llm_knowledge
-#: model:upload.resource.wizard,field_description:llm_knowledge.field_upload_resource_wizard__file_ids
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Files"
 msgstr "Tệp"
 
 #. module: llm_knowledge
-#: model:upload.resource.wizard,help:llm_knowledge.field_upload_resource_wizard__file_ids
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Local files to upload"
 msgstr "Tệp cục bộ để tải lên"
 
 #. module: llm_knowledge
-#: model:upload.resource.wizard,field_description:llm_knowledge.field_upload_resource_wizard__external_urls
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "External URLs"
 msgstr "URL bên ngoài"
 
 #. module: llm_knowledge
-#: model:upload.resource.wizard,help:llm_knowledge.field_upload_resource_wizard__external_urls
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "External URLs to include, one per line"
 msgstr "URL bên ngoài, mỗi dòng một URL"
 
 #. module: llm_knowledge
-#: code:addons/llm_knowledge/wizards/upload_resource_wizard.py
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Please provide at least one file or URL"
 msgstr "Vui lòng cung cấp ít nhất một tệp hoặc URL"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_resource_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Retrieve"
 msgstr "Truy xuất"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_resource_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Parse"
 msgstr "Phân tích"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_resource_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Chunk"
 msgstr "Chia đoạn"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_resource_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Embed"
 msgstr "Nhúng"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_resource_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Process All"
 msgstr "Xử lý tất cả"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_resource_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Re-index"
 msgstr "Đánh lại chỉ mục"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_resource_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Resource Name"
 msgstr "Tên tài nguyên"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_resource_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Resource content will appear here after retrieval and parsing"
 msgstr "Nội dung tài nguyên sẽ hiển thị ở đây sau khi truy xuất và phân tích"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_resource_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "RESET CHUNK SETTINGS"
 msgstr "ĐẶT LẠI CÀI ĐẶT CHIA ĐOẠN"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_resource_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Edit"
 msgstr "Sửa"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_resource_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Delete"
 msgstr "Xóa"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_resource_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Locked"
 msgstr "Đã khóa"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_resource_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Group By"
 msgstr "Nhóm theo"
 
 #. module: llm_knowledge
-#: model:ir.actions.act_window,name:llm_knowledge.action_llm_resource
-msgid "Resources"
-msgstr "Tài nguyên"
-
-#. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_resource_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Create your first resource"
 msgstr "Tạo tài nguyên đầu tiên"
 
 #. module: llm_knowledge
-#: model:ir.actions.act_window,name:llm_knowledge.action_llm_documents
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Documents"
 msgstr "Tài liệu"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_resource_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Manage knowledge documents."
 msgstr "Quản lý tài liệu tri thức."
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_resource_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "These are resources used for Retrieval Augmented Generation (RAG)."
 msgstr "Đây là các tài nguyên dùng cho Tạo sinh tăng cường truy xuất (RAG)."
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_collection_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Sync Resources"
 msgstr "Đồng bộ tài nguyên"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_collection_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "This will synchronize the collection with domain filters, adding new resources and removing those no longer matching. Continue?"
 msgstr "Thao tác này sẽ đồng bộ bộ sưu tập với bộ lọc miền, thêm tài nguyên mới và xóa tài nguyên không còn khớp. Tiếp tục?"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_collection_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Upload Resources"
 msgstr "Tải lên tài nguyên"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_collection_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Process Resources"
 msgstr "Xử lý tài nguyên"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_collection_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "This will process resources through the RAG pipeline until chunked state. Continue?"
 msgstr "Thao tác này sẽ xử lý tài nguyên qua quy trình RAG đến trạng thái chia đoạn. Tiếp tục?"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_collection_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Embed Resources"
 msgstr "Nhúng tài nguyên"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_collection_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "This will embed all resource chunks with the selected embedding model. Continue?"
 msgstr "Thao tác này sẽ nhúng tất cả đoạn tài nguyên với mô hình nhúng đã chọn. Tiếp tục?"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_collection_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Reindex Collection"
 msgstr "Đánh lại chỉ mục bộ sưu tập"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_collection_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "This will recreate vector indexes for resources. Continue?"
 msgstr "Thao tác này sẽ tạo lại chỉ mục vector cho tài nguyên. Tiếp tục?"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_collection_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Collection Name"
 msgstr "Tên bộ sưu tập"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_collection_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Collection description..."
 msgstr "Mô tả bộ sưu tập..."
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_collection_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Process"
 msgstr "Xử lý"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_collection_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "View"
 msgstr "Xem"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_collection_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Domain filters are used to automatically create RAG resources"
 msgstr "Bộ lọc miền dùng để tự động tạo tài nguyên RAG"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_collection_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Add domain filters for different models to select records that will be converted to RAG resources. Click 'Sync Resources' to process these filters."
 msgstr "Thêm bộ lọc miền cho các mô hình khác nhau để chọn bản ghi sẽ được chuyển thành tài nguyên RAG. Nhấn 'Đồng bộ tài nguyên' để xử lý."
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_collection_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Archived"
 msgstr "Đã lưu trữ"
 
 #. module: llm_knowledge
-#: model:ir.actions.act_window,name:llm_knowledge.action_llm_collection
-msgid "Collections"
-msgstr "Bộ sưu tập"
-
-#. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_collection_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Create your first RAG collection"
 msgstr "Tạo bộ sưu tập RAG đầu tiên"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_collection_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Collections group resources that share the same embedding model for RAG processing."
 msgstr "Bộ sưu tập nhóm các tài nguyên dùng chung mô hình nhúng để xử lý RAG."
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_chunk_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Knowledge Chunk"
 msgstr "Đoạn tri thức"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_chunk_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Chunk Detail"
 msgstr "Chi tiết đoạn"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_chunk_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Similarity Threshold"
 msgstr "Ngưỡng tương đồng"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_chunk_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "High Similarity (0.75)"
 msgstr "Tương đồng cao (0.75)"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_chunk_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Medium Similarity (0.5)"
 msgstr "Tương đồng trung bình (0.5)"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_chunk_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Low Similarity (0.25)"
 msgstr "Tương đồng thấp (0.25)"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_chunk_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Search Method"
 msgstr "Phương pháp tìm kiếm"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_chunk_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Cosine Similarity(<=>)"
 msgstr "Độ tương đồng cosine (<=>)"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_chunk_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Euclidean Distance(<->)"
 msgstr "Khoảng cách Euclid (<->)"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_chunk_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Inner Product(<#>)"
 msgstr "Tích vô hướng (<#>)"
 
 #. module: llm_knowledge
-#: model:ir.actions.act_window,name:llm_knowledge.action_llm_knowledge_chunks
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Knowledge Chunks"
 msgstr "Đoạn tri thức"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_chunk_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "No knowledge chunks found"
 msgstr "Không tìm thấy đoạn tri thức nào"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.llm_knowledge_chunk_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Knowledge chunks are segments of resources used for RAG (Retrieval Augmented Generation)."
 msgstr "Đoạn tri thức là các phân đoạn tài nguyên dùng cho RAG (Tạo sinh tăng cường truy xuất)."
 
 #. module: llm_knowledge
-#: model:ir.ui.menu,name:llm_knowledge.menu_llm_knowledge
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Knowledge"
 msgstr "Tri thức"
 
 #. module: llm_knowledge
-#: model:ir.ui.menu,name:llm_knowledge.menu_llm_knowledge_chunks
-msgid "Knowledge Chunks"
-msgstr "Đoạn tri thức"
-
-#. module: llm_knowledge
-#: model:ir.actions.server,name:llm_knowledge.action_process_resources
-msgid "Process Resources"
-msgstr "Xử lý tài nguyên"
-
-#. module: llm_knowledge
-#: model:ir.actions.server,name:llm_knowledge.action_force_unlock
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Force Unlock"
 msgstr "Buộc mở khóa"
 
 #. module: llm_knowledge
-#: model:ir.actions.server,name:llm_knowledge.action_reset_resources
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Reset Resources"
 msgstr "Đặt lại tài nguyên"
 
 #. module: llm_knowledge
-#: model:ir.actions.server,name:llm_knowledge.action_create_rag_resource
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Create RAG Resource"
 msgstr "Tạo tài nguyên RAG"
 
 #. module: llm_knowledge
-#: model:ir.actions.server,name:llm_knowledge.action_reindex_resources
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Re-index RAG Resources"
 msgstr "Đánh lại chỉ mục tài nguyên RAG"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.create_rag_resource_wizard_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Create RAG Resources"
 msgstr "Tạo tài nguyên RAG"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.create_rag_resource_wizard_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "RAG (Retrieval Augmented Generation) resources will be used by AI models to retrieve relevant information."
 msgstr "Tài nguyên RAG (Tạo sinh tăng cường truy xuất) sẽ được mô hình AI sử dụng để truy xuất thông tin liên quan."
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.create_rag_resource_wizard_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Create Resources"
 msgstr "Tạo tài nguyên"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.create_rag_resource_wizard_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "View Resources"
 msgstr "Xem tài nguyên"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.create_rag_resource_wizard_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Close"
 msgstr "Đóng"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.create_rag_resource_wizard_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Success"
 msgstr "Thành công"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.upload_resource_wizard_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Upload RAG Resources"
 msgstr "Tải lên tài nguyên RAG"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.upload_resource_wizard_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Upload resources for RAG processing"
 msgstr "Tải lên tài nguyên để xử lý RAG"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.upload_resource_wizard_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "You can upload local files and/or provide external URLs. Resources will be added to the selected collection."
 msgstr "Bạn có thể tải lên tệp cục bộ và/hoặc cung cấp URL bên ngoài. Tài nguyên sẽ được thêm vào bộ sưu tập đã chọn."
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.upload_resource_wizard_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Local Files"
 msgstr "Tệp cục bộ"
 
 #. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.upload_resource_wizard_views
-msgid "External URLs"
-msgstr "URL bên ngoài"
-
-#. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.upload_resource_wizard_views
-msgid "Upload Resources"
-msgstr "Tải lên tài nguyên"
-
-#. module: llm_knowledge
-#: model_terms:ir.ui.view,arch_db:llm_knowledge.upload_resource_wizard_views
+#: code:addons/llm_knowledge/models/__init__.py:0
+#, python-format
 msgid "Cancel"
 msgstr "Hủy"

@@ -16,21 +16,25 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 
 #. module: llm_tool_knowledge
-#: selection:llm.tool,implementation:
+#: code:addons/llm_tool_knowledge/models/__init__.py:0
+#, python-format
 msgid "Knowledge Retriever"
 msgstr "Truy xuất tri thức"
 
 #. module: llm_tool_knowledge
-#: model:llm.tool,name:llm_tool_knowledge.tool_knowledge_retriever
+#: code:addons/llm_tool_knowledge/models/__init__.py:0
+#, python-format
 msgid "knowledge_retriever"
 msgstr "knowledge_retriever"
 
 #. module: llm_tool_knowledge
-#: model:llm.tool,description:llm_tool_knowledge.tool_knowledge_retriever
+#: code:addons/llm_tool_knowledge/models/__init__.py:0
+#, python-format
 msgid "Retrieves relevant knowledge from document database using semantic search. Use this tool when you need specific information from the knowledge base to answer questions accurately. Supports both pure semantic and hybrid search methods, with configurable relevance thresholds."
 msgstr "Truy xuất tri thức liên quan từ cơ sở dữ liệu tài liệu bằng tìm kiếm ngữ nghĩa. Sử dụng công cụ này khi cần thông tin cụ thể từ cơ sở tri thức để trả lời chính xác. Hỗ trợ tìm kiếm ngữ nghĩa thuần túy và kết hợp, với ngưỡng liên quan có thể cấu hình."
 
 #. module: llm_tool_knowledge
-#: model:llm.assistant,name:llm_tool_knowledge.assistant_knowledge_bot
+#: code:addons/llm_tool_knowledge/models/__init__.py:0
+#, python-format
 msgid "Knowledge Bot"
 msgstr "Bot tri thức"

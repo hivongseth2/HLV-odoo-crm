@@ -15,42 +15,46 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+
+
 #. module: llm_tool_web_search
-#: model:llm.web.search.site,_description
+#: code:addons/llm_tool_web_search/models/__init__.py:0
+#, python-format
 msgid "Website được phép tìm kiếm"
 msgstr "Website được phép tìm kiếm"
 
 #. module: llm_tool_web_search
-#: model:llm.web.search.site,field_description:name
+#: code:addons/llm_tool_web_search/models/__init__.py:0
+#, python-format
 msgid "Website Name"
 msgstr "Tên website"
 
 #. module: llm_tool_web_search
-#: model:llm.web.search.site,field_description:url
+#: code:addons/llm_tool_web_search/models/__init__.py:0
+#, python-format
 msgid "Base URL"
 msgstr "URL gốc"
 
 #. module: llm_tool_web_search
-#: model:llm.web.search.site,field_description:description
+#: code:addons/llm_tool_web_search/models/__init__.py:0
+#, python-format
 msgid "Description"
 msgstr "Mô tả"
 
 #. module: llm_tool_web_search
-#: model:ir.actions.act_window,name:action_web_search_sites
+#: code:addons/llm_tool_web_search/models/__init__.py:0
+#, python-format
 msgid "Search Websites"
 msgstr "Website tìm kiếm"
 
 #. module: llm_tool_web_search
-#: model:ir.ui.menu,name:menu_web_search_sites
-msgid "Search Websites"
-msgstr "Website tìm kiếm"
-
-#. module: llm_tool_web_search
-#: model_terms:ir.ui.view,arch_db:view_web_search_site_form
+#: code:addons/llm_tool_web_search/models/__init__.py:0
+#, python-format
 msgid "Add a website for AI search!"
 msgstr "Thêm website cho AI tìm kiếm!"
 
 #. module: llm_tool_web_search
-#: selection:llm.tool,implementation:
+#: code:addons/llm_tool_web_search/models/__init__.py:0
+#, python-format
 msgid "Web Search"
 msgstr "Tìm kiếm Web"

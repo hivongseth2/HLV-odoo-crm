@@ -15,427 +15,502 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+
+
 #. module: llm
-#: model:ir.module.category,name:llm.module_category_llm
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "LLM"
 msgstr "LLM (Mô hình AI)"
 
 #. module: llm
-#: model:ir.ui.menu,name:llm.menu_llm_root
-msgid "LLM"
-msgstr "LLM"
-
-#. module: llm
-#: model:ir.ui.menu,name:llm.menu_llm_configuration
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Configuration"
 msgstr "Cấu hình"
 
 #. module: llm
-#: model:ir.ui.menu,name:llm.menu_llm_providers
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Providers"
 msgstr "Nhà cung cấp AI"
 
 #. module: llm
-#: model:ir.ui.menu,name:llm.menu_llm_publishers
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Publishers"
 msgstr "Nhà phát hành"
 
 #. module: llm
-#: model:ir.ui.menu,name:llm.menu_llm_models
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Models"
 msgstr "Mô hình"
 
 #. module: llm
-#: model:ir.actions.act_window,name:llm.llm_model_action
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "LLM Models"
 msgstr "Mô hình AI"
 
 #. module: llm
-#: model:ir.actions.act_window,name:llm.llm_provider_action
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "LLM Providers"
 msgstr "Nhà cung cấp AI"
 
 #. module: llm
-#: model:ir.actions.act_window,name:llm.llm_publisher_action
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "LLM Publishers"
 msgstr "Nhà phát hành AI"
 
 #. module: llm
-#: model:llm.provider,_description
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "LLM Provider"
 msgstr "Nhà cung cấp AI"
 
 #. module: llm
-#: model:llm.model,_description
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "LLM Model"
 msgstr "Mô hình AI"
 
 #. module: llm
-#: model:llm.publisher,_description
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "LLM Publisher"
 msgstr "Nhà phát hành AI"
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.llm_provider_form_view
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Fetch Models"
 msgstr "Tải danh sách mô hình"
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.llm_provider_form_view
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Create your first LLM provider!"
 msgstr "Tạo nhà cung cấp AI đầu tiên!"
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.llm_provider_form_view
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Configure providers like OpenAI, Anthropic, or Ollama to enable AI features."
 msgstr "Cấu hình nhà cung cấp như OpenAI, Anthropic, hoặc Ollama để kích hoạt tính năng AI."
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.llm_model_search_view
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Default Models"
 msgstr "Mô hình mặc định"
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.llm_model_search_view
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Archived"
 msgstr "Đã lưu trữ"
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.llm_model_search_view
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Group By"
 msgstr "Nhóm theo"
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.llm_model_search_view
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Provider"
 msgstr "Nhà cung cấp"
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.llm_model_search_view
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Usage"
 msgstr "Mục đích"
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.llm_model_action
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "No models found!"
 msgstr "Không tìm thấy mô hình nào!"
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.llm_model_action
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Models will be automatically created when you configure a provider."
 msgstr "Mô hình sẽ được tạo tự động khi bạn cấu hình nhà cung cấp."
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.llm_model_form_view
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Fetch This Model Update"
 msgstr "Cập nhật mô hình này"
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.llm_model_form_view
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Fetch the latest information for this specific model from the provider."
 msgstr "Tải thông tin mới nhất cho mô hình này từ nhà cung cấp."
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.llm_publisher_search_view
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Official Publishers"
 msgstr "Nhà phát hành chính thức"
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.llm_publisher_search_view
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Frontier AI"
 msgstr "AI tiên tiến"
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.llm_publisher_search_view
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Official Status"
 msgstr "Trạng thái chính thức"
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.llm_publisher_search_view
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Frontier Status"
 msgstr "Trạng thái tiên tiến"
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.llm_publisher_action
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Create your first LLM publisher!"
 msgstr "Tạo nhà phát hành AI đầu tiên!"
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.llm_publisher_action
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Add publishers like OpenAI, Anthropic, Meta, Google, etc."
 msgstr "Thêm nhà phát hành như OpenAI, Anthropic, Meta, Google, v.v."
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.llm_publisher_form_view
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Description"
 msgstr "Mô tả"
 
 #. module: llm
-#: model:llm.model,field_description:llm.field_llm_model__publisher_id
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Publisher"
 msgstr "Nhà phát hành"
 
 #. module: llm
-#: model:llm.model,help:llm.field_llm_model__publisher_id
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "The organization or entity that published this model"
 msgstr "Tổ chức hoặc đơn vị đã phát hành mô hình này"
 
 #. module: llm
-#: model:llm.model,field_description:llm.field_llm_model__model_use
-msgid "Usage"
-msgstr "Mục đích sử dụng"
-
-#. module: llm
-#: selection:llm.model,model_use:
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Chat"
 msgstr "Trò chuyện"
 
 #. module: llm
-#: selection:llm.model,model_use:
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Embedding"
 msgstr "Nhúng văn bản"
 
 #. module: llm
-#: selection:llm.model,model_use:
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Completion"
 msgstr "Hoàn thành văn bản"
 
 #. module: llm
-#: selection:llm.model,model_use:
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Multimodal"
 msgstr "Đa phương thức"
 
 #. module: llm
-#: selection:llm.model,model_use:
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Generic binary generation"
 msgstr "Tạo dữ liệu nhị phân"
 
 #. module: llm
-#: selection:llm.model,model_use:
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Image Generation"
 msgstr "Tạo hình ảnh"
 
 #. module: llm
-#: model:llm.provider,field_description:llm.field_llm_provider__company_id
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Company"
 msgstr "Công ty"
 
 #. module: llm
-#: model:llm.publisher,field_description:llm.field_llm_publisher__meta
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Publisher Metadata"
 msgstr "Thông tin nhà phát hành"
 
 #. module: llm
-#: model:llm.publisher,help:llm.field_llm_publisher__logo
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Publisher logo"
 msgstr "Logo nhà phát hành"
 
 #. module: llm
-#: model:llm.publisher,help:llm.field_llm_publisher__official
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Indicates if this is an official model publisher"
 msgstr "Cho biết đây có phải là nhà phát hành chính thức không"
 
 #. module: llm
-#: model:llm.publisher,help:llm.field_llm_publisher__frontier
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Indicates if this publisher is working on frontier AI models"
 msgstr "Cho biết nhà phát hành này có đang phát triển mô hình AI tiên tiến không"
 
 #. module: llm
-#: model:mail.message,field_description:llm.field_mail_message__llm_role
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "LLM Role"
 msgstr "Vai trò AI"
 
 #. module: llm
-#: model:mail.message,help:llm.field_mail_message__llm_role
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "The LLM role for this message (user, assistant, tool, system)"
 msgstr "Vai trò AI của tin nhắn này (người dùng, trợ lý, công cụ, hệ thống)"
 
 #. module: llm
-#: model:mail.message,field_description:llm.field_mail_message__is_error
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Is Error Message"
 msgstr "Là tin nhắn lỗi"
 
 #. module: llm
-#: model:mail.message,help:llm.field_mail_message__is_error
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Error messages are shown to users but excluded from LLM context"
 msgstr "Tin nhắn lỗi hiển thị cho người dùng nhưng loại khỏi ngữ cảnh AI"
 
 #. module: llm
-#: model:mail.message,field_description:llm.field_mail_message__body_json
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "JSON Body"
 msgstr "Nội dung JSON"
 
 #. module: llm
-#: model:mail.message,help:llm.field_mail_message__body_json
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "JSON data for tool messages and other structured content"
 msgstr "Dữ liệu JSON cho tin nhắn công cụ và nội dung có cấu trúc"
 
 #. module: llm
-#: model:mail.message.subtype,name:llm.mt_tool
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "LLM Tool"
 msgstr "Công cụ AI"
 
 #. module: llm
-#: model:mail.message.subtype,name:llm.mt_user
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "LLM User"
 msgstr "Người dùng AI"
 
 #. module: llm
-#: model:mail.message.subtype,name:llm.mt_assistant
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "LLM Assistant"
 msgstr "Trợ lý AI"
 
 #. module: llm
-#: model:mail.message.subtype,name:llm.mt_system
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "LLM System"
 msgstr "Hệ thống AI"
 
 #. module: llm
-#: code:addons/llm/models/llm_provider.py
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "The provider name must be unique (case-insensitive)."
 msgstr "Tên nhà cung cấp phải là duy nhất (không phân biệt hoa thường)."
 
 #. module: llm
-#: code:addons/llm/models/llm_provider.py
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Provider service not configured"
 msgstr "Dịch vụ nhà cung cấp chưa được cấu hình"
 
 #. module: llm
-#: code:addons/llm/models/llm_provider.py
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Import Models"
 msgstr "Nhập mô hình"
 
 #. module: llm
-#: model:ir.model.access,name:llm.access_llm_provider_user
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "LLM Providers: read-only for all users"
 msgstr "Nhà cung cấp AI: chỉ đọc cho tất cả người dùng"
 
 #. module: llm
-#: model:ir.model.access,name:llm.access_llm_provider_manager
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "LLM Providers: full access for managers"
 msgstr "Nhà cung cấp AI: toàn quyền cho quản lý"
 
 #. module: llm
-#: model:ir.model.access,name:llm.access_llm_model_user
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "LLM Models: read-only for all users"
 msgstr "Mô hình AI: chỉ đọc cho tất cả người dùng"
 
 #. module: llm
-#: model:ir.model.access,name:llm.access_llm_model_manager
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "LLM Models: full access for managers"
 msgstr "Mô hình AI: toàn quyền cho quản lý"
 
 #. module: llm
-#: model:res.groups,name:llm.group_llm_manager
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "LLM Manager"
 msgstr "Quản lý AI"
 
 #. module: llm
-#: model:ir.module.category,comment:llm.module_category_llm
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Manage access to LLM features"
 msgstr "Quản lý quyền truy cập tính năng AI"
 
 #. module: llm
-#: code:addons/llm/models/mail_message.py
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Video files are not supported"
 msgstr "Không hỗ trợ tệp video"
 
 #. module: llm
-#: code:addons/llm/models/mail_message.py
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Office documents must be converted to PDF first"
 msgstr "Tài liệu Office phải chuyển sang PDF trước"
 
 #. module: llm
-#: code:addons/llm/models/mail_message.py
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Audio files are not yet supported"
 msgstr "Chưa hỗ trợ tệp âm thanh"
 
 #. module: llm
-#: code:addons/llm/models/mail_message.py
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "This model does not support images"
 msgstr "Mô hình này không hỗ trợ hình ảnh"
 
 #. module: llm
-#: code:addons/llm/models/mail_message.py
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "This model does not support PDFs"
 msgstr "Mô hình này không hỗ trợ PDF"
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.fetch_models_wizard_form
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Select the models you want to import or update. New models will be created, and existing ones will be updated if modified."
 msgstr "Chọn các mô hình bạn muốn nhập hoặc cập nhật. Mô hình mới sẽ được tạo, mô hình hiện có sẽ được cập nhật nếu có thay đổi."
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.fetch_models_wizard_form
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Import Selected Models"
 msgstr "Nhập mô hình đã chọn"
 
 #. module: llm
-#: model_terms:ir.ui.view,arch_db:llm.fetch_models_wizard_form
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Cancel"
 msgstr "Hủy"
 
 #. module: llm
-#: model:ir.model,name:llm.model_llm_model_import_line
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "LLM Model Import Line"
 msgstr "Dòng nhập mô hình AI"
 
 #. module: llm
-#: model:ir.model,name:llm.model_llm_fetch_models_wizard
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Import LLM Models"
 msgstr "Nhập mô hình AI"
 
 #. module: llm
-#: model:llm.model.import.line,field_description:llm.field_model_line__name
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Model Name"
 msgstr "Tên mô hình"
 
 #. module: llm
-#: model:llm.fetch.models.wizard,field_description:llm.field_wizard__model_count
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Models Found"
 msgstr "Số mô hình tìm thấy"
 
 #. module: llm
-#: model:llm.fetch.models.wizard,field_description:llm.field_wizard__new_count
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "New Models"
 msgstr "Mô hình mới"
 
 #. module: llm
-#: model:llm.fetch.models.wizard,field_description:llm.field_wizard__modified_count
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Modified Models"
 msgstr "Mô hình đã sửa đổi"
 
 #. module: llm
-#: selection:llm.model.import.line,status:
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "New"
 msgstr "Mới"
 
 #. module: llm
-#: selection:llm.model.import.line,status:
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Existing"
 msgstr "Đã tồn tại"
 
 #. module: llm
-#: selection:llm.model.import.line,status:
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Modified"
 msgstr "Đã sửa đổi"
 
 #. module: llm
-#: sql_constraint:llm.model.import.line:
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Each model can only be listed once per import."
 msgstr "Mỗi mô hình chỉ được liệt kê một lần trong mỗi lần nhập."
 
 #. module: llm
-#: code:addons/llm/wizards/fetch_models_wizard.py
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Please select at least one model to import."
 msgstr "Vui lòng chọn ít nhất một mô hình để nhập."
 
 #. module: llm
-#: code:addons/llm/wizards/fetch_models_wizard.py
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "Success"
 msgstr "Thành công"
 
 #. module: llm
-#: code:addons/llm/wizards/fetch_models_wizard.py
+#: code:addons/llm/models/__init__.py:0
+#, python-format
 msgid "%d models have been imported/updated."
 msgstr "%d mô hình đã được nhập/cập nhật."

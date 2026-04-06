@@ -15,17 +15,16 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+
+
 #. module: llm_openai
-#: selection:llm.provider,service:
+#: code:addons/llm_openai/models/__init__.py:0
+#, python-format
 msgid "OpenAI"
 msgstr "OpenAI"
 
 #. module: llm_openai
-#: model:llm.publisher,name:llm_openai.llm_publisher_openai
-msgid "OpenAI"
-msgstr "OpenAI"
-
-#. module: llm_openai
-#: model:llm.publisher,description:llm_openai.llm_publisher_openai
+#: code:addons/llm_openai/models/__init__.py:0
+#, python-format
 msgid "OpenAI is an artificial intelligence research organization. Founded in 2015, OpenAI's mission is to ensure that artificial general intelligence benefits all of humanity. The company is known for developing the GPT series of language models."
 msgstr "OpenAI là tổ chức nghiên cứu trí tuệ nhân tạo. Được thành lập năm 2015, sứ mệnh của OpenAI là đảm bảo trí tuệ nhân tạo tổng quát mang lại lợi ích cho toàn nhân loại. Công ty nổi tiếng với việc phát triển dòng mô hình ngôn ngữ GPT."

@@ -15,97 +15,112 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+
+
 #. module: llm_store
-#: model:llm.store,_description
+#: code:addons/llm_store/models/__init__.py:0
+#, python-format
 msgid "LLM Vector Store"
 msgstr "Kho vector AI"
 
 #. module: llm_store
-#: model:llm.store,field_description:llm_store.field_llm_store__metadata
+#: code:addons/llm_store/models/__init__.py:0
+#, python-format
 msgid "Store Metadata"
 msgstr "Thông tin kho"
 
 #. module: llm_store
-#: code:addons/llm_store/models/llm_store.py
+#: code:addons/llm_store/models/__init__.py:0
+#, python-format
 msgid "Vector store service not configured"
 msgstr "Dịch vụ kho vector chưa được cấu hình"
 
 #. module: llm_store
-#: code:addons/llm_store/models/llm_store.py
+#: code:addons/llm_store/models/__init__.py:0
+#, python-format
 msgid "Method %s not implemented for service %s"
 msgstr "Phương thức %s chưa được triển khai cho dịch vụ %s"
 
 #. module: llm_store
-#: model:llm.store.collection,_description
+#: code:addons/llm_store/models/__init__.py:0
+#, python-format
 msgid "LLM Vector Store Collection"
 msgstr "Bộ sưu tập kho vector AI"
 
 #. module: llm_store
-#: model:llm.store.collection,field_description:llm_store.field_llm_store_collection__store_id
+#: code:addons/llm_store/models/__init__.py:0
+#, python-format
 msgid "Vector Store"
 msgstr "Kho vector"
 
 #. module: llm_store
-#: model:llm.store.collection,help:llm_store.field_llm_store_collection__dimension
+#: code:addons/llm_store/models/__init__.py:0
+#, python-format
 msgid "Dimension of vectors in this collection"
 msgstr "Chiều của vector trong bộ sưu tập này"
 
 #. module: llm_store
-#: model:llm.store.collection,help:llm_store.field_llm_store_collection__vector_count
+#: code:addons/llm_store/models/__init__.py:0
+#, python-format
 msgid "Number of vectors in this collection"
 msgstr "Số lượng vector trong bộ sưu tập này"
 
 #. module: llm_store
-#: model:llm.store.collection,field_description:llm_store.field_llm_store_collection__metadata
+#: code:addons/llm_store/models/__init__.py:0
+#, python-format
 msgid "Collection Metadata"
 msgstr "Thông tin bộ sưu tập"
 
 #. module: llm_store
-#: sql_constraint:llm.store.collection:
+#: code:addons/llm_store/models/__init__.py:0
+#, python-format
 msgid "Collection names must be unique per store."
 msgstr "Tên bộ sưu tập phải là duy nhất trong mỗi kho."
 
 #. module: llm_store
-#: code:addons/llm_store/models/llm_store_collection.py
+#: code:addons/llm_store/models/__init__.py:0
+#, python-format
 msgid "No store configured for this collection."
 msgstr "Chưa cấu hình kho cho bộ sưu tập này."
 
 #. module: llm_store
-#: model_terms:ir.ui.view,arch_db:llm_store.llm_store_views
+#: code:addons/llm_store/models/__init__.py:0
+#, python-format
 msgid "Store Name"
 msgstr "Tên kho"
 
 #. module: llm_store
-#: model_terms:ir.ui.view,arch_db:llm_store.llm_store_views
+#: code:addons/llm_store/models/__init__.py:0
+#, python-format
 msgid "Archived"
 msgstr "Đã lưu trữ"
 
 #. module: llm_store
-#: model_terms:ir.ui.view,arch_db:llm_store.llm_store_views
+#: code:addons/llm_store/models/__init__.py:0
+#, python-format
 msgid "Group By"
 msgstr "Nhóm theo"
 
 #. module: llm_store
-#: model_terms:ir.ui.view,arch_db:llm_store.llm_store_views
+#: code:addons/llm_store/models/__init__.py:0
+#, python-format
 msgid "Service"
 msgstr "Dịch vụ"
 
 #. module: llm_store
-#: model:ir.actions.act_window,name:llm_store.action_llm_store
+#: code:addons/llm_store/models/__init__.py:0
+#, python-format
 msgid "Vector Stores"
 msgstr "Kho vector"
 
 #. module: llm_store
-#: model_terms:ir.ui.view,arch_db:llm_store.llm_store_views
+#: code:addons/llm_store/models/__init__.py:0
+#, python-format
 msgid "Create your first vector store!"
 msgstr "Tạo kho vector đầu tiên!"
 
 #. module: llm_store
-#: model_terms:ir.ui.view,arch_db:llm_store.llm_store_views
+#: code:addons/llm_store/models/__init__.py:0
+#, python-format
 msgid "Configure vector stores like Chroma, Qdrant, or PostgreSQL to enable vector search for RAG."
 msgstr "Cấu hình kho vector như Chroma, Qdrant, hoặc PostgreSQL để kích hoạt tìm kiếm vector cho RAG."
-
-#. module: llm_store
-#: model:ir.ui.menu,name:llm_store.menu_llm_vector_stores
-msgid "Vector Stores"
-msgstr "Kho vector"
