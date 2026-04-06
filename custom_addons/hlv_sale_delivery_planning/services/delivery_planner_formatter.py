@@ -4,6 +4,72 @@ from odoo import models
 class DeliveryPlannerServiceFormatter(models.AbstractModel):
     _inherit = 'hlv.delivery.planner.service'
 
+    def _compute_transfer_suggestions(self, so, so_lines_data):
+        """
+        Đề xuất chuyển kho: tìm sản phẩm thiếu ở kho hiện tại
+        nhưng có sẵn (chưa bị giữ bởi đơn khác) ở kho khác.
+        """
+        if not so.warehouse_id:
+            return []
+
+        # Thu thập sản phẩm thiếu
+        shortage_products = []
+        for line_data in so_lines_data:
+            if not line_data.get('product_id') or line_data.get('is_kit'):
+                continue
+            if line_data.get('product_type') == 'service':
+                continue
+            pending = line_data['product_uom_qty'] - line_data['qty_delivered']
+            if pending <= 0:
+                continue
+            eff_stock = (line_data.get('qty_warehouse_free') or 0) + (line_data.get('qty_reserved_here') or 0)
+            shortage = pending - eff_stock
+            if shortage > 0:
+                shortage_products.append({
+                    'product_id': line_data['product_id'][0],
+                    'product_name': line_data['product_id'][1],
+                    'shortage': shortage,
+                })
+
+        if not shortage_products:
+            return []
+
+        other_warehouses = self.env['stock.warehouse'].search([
+            ('id', '!=', so.warehouse_id.id),
+        ])
+        if not other_warehouses:
+            return []
+
+        suggestions = []
+        for sp in shortage_products:
+            remaining = sp['shortage']
+            for wh in other_warehouses:
+                if remaining <= 0:
+                    break
+                quants = self.env['stock.quant'].sudo().search([
+                    ('product_id', '=', sp['product_id']),
+                    ('location_id', 'child_of', wh.lot_stock_id.id),
+                ])
+                available = sum(
+                    max(float(q.quantity) - float(q.reserved_quantity), 0.0)
+                    for q in quants
+                )
+                if available > 0:
+                    suggest_qty = min(available, remaining)
+                    suggestions.append({
+                        'product_id': sp['product_id'],
+                        'product_name': sp['product_name'],
+                        'from_warehouse_id': wh.id,
+                        'from_warehouse_name': wh.name,
+                        'to_warehouse_name': so.warehouse_id.name,
+                        'available_qty': available,
+                        'suggested_qty': suggest_qty,
+                        'shortage': sp['shortage'],
+                    })
+                    remaining -= suggest_qty
+
+        return suggestions
+
     def _format_dashboard_order(
         self, so, po_by_origin, product_availabilities,
         att_by_picking, so_packages_dict, so_status_dict,
@@ -195,6 +261,8 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             if p.picking_type_id and p.picking_type_id.warehouse_id
         ]))
 
+        transfer_suggestions = self._compute_transfer_suggestions(so, so_lines_data)
+
         return {
             'id': so.id, 'name': so.name,
             'partner_id': [so.partner_id.id, so.partner_id.name] if so.partner_id else False,
@@ -220,4 +288,5 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             'x_studio_delivery_type': so.x_studio_delivery_type or '',
             'x_studio_misa_saler_code': so.x_studio_misa_saler_code or '',
             'tag_ids': [[t.id, t.name, t.color] for t in so.tag_ids] if so.tag_ids else [],
+            'transfer_suggestions': transfer_suggestions,
         }

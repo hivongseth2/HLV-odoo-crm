@@ -572,6 +572,22 @@ function openDrawer(id){
       +'<td class="text-end '+(shortage>0?'cell-shortage':'text-muted opacity-50')+'">'+fq(shortage)+'</td></tr>';
   });
   h+='</tbody></table>';
+  // Đề xuất chuyển kho
+  if(o.transfer_suggestions&&o.transfer_suggestions.length){
+    h+='<div class="alert alert-warning border-warning mt-3 p-3" style="background:rgba(255,193,7,.08)">'
+      +'<h6 class="text-uppercase small mb-2"><i class="fa fa-exchange me-1"></i> Đề Xuất Chuyển Kho</h6>'
+      +'<div class="small text-muted mb-2"><i class="fa fa-info-circle me-1"></i>Hàng chưa bị giữ bởi đơn khác</div>'
+      +'<table class="table table-sm table-bordered table-hover text-center align-middle bg-white mb-0">'
+      +'<thead class="table-light"><tr><th class="text-start">Sản phẩm</th><th>Từ kho</th><th>Khả dụng</th><th>Thiếu</th><th>Đề xuất</th></tr></thead><tbody>';
+    o.transfer_suggestions.forEach(function(s){
+      h+='<tr><td class="text-start small">'+esc(s.product_name)+'</td>'
+        +'<td><span class="badge bg-info bg-opacity-25 text-dark"><i class="fa fa-building me-1"></i>'+esc(s.from_warehouse_name)+'</span></td>'
+        +'<td class="text-success fw-bold">'+fq(s.available_qty)+'</td>'
+        +'<td class="text-danger fw-bold">'+fq(s.shortage)+'</td>'
+        +'<td><span class="badge bg-warning text-dark fw-bold"><i class="fa fa-arrow-right me-1"></i>'+fq(s.suggested_qty)+'</span></td></tr>';
+    });
+    h+='</tbody></table></div>';
+  }
   if(o.pos&&o.pos.length){
     h+='<h6 class="mt-3"><i class="fa fa-truck"></i> Đơn mua hàng ('+o.pos.length+')</h6>'
       +'<ul class="list-group list-group-flush">';
