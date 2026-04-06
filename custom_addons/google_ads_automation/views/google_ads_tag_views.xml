@@ -66,21 +66,36 @@
                                    widget="radio"
                                    invisible="tag_type != 'gtm'"/>
 
-                            <!-- Fields for OAuth2 -->
-                            <group string="Xác Thực GTM (OAuth 2.0)" 
-                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"
-                                   colspan="2">
-                                <field name="gtm_client_id" placeholder="Nhập Client ID cho GTM..."/>
-                                <field name="gtm_client_secret" password="True" placeholder="Nhập Client Secret..."/>
+                            <!-- OAuth 2.0 Credentials (Independent) -->
+                            <separator string="Xác Thực GTM (OAuth 2.0)" 
+                                       invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"/>
+                            <field name="gtm_client_id" 
+                                   placeholder="Nhập Client ID cho GTM..."
+                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"/>
+                            <field name="gtm_client_secret" 
+                                   password="True" 
+                                   placeholder="Nhập Client Secret..."
+                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"/>
+                            
+                            <div class="o_td_label" invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'">
+                                <label for="action_gtm_generate_auth_url" string="Xác Thực"/>
+                            </div>
+                            <div invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'">
                                 <button name="action_gtm_generate_auth_url" 
                                         string="Lấy Mã Xác Thực GTM" 
                                         type="object" 
-                                        class="btn-primary"
-                                        icon="fa-google"
-                                        style="width: 100%; margin-top: 10px; margin-bottom: 10px;"/>
-                                <field name="gtm_refresh_token" readonly="1" password="True" invisible="not gtm_refresh_token"/>
-                                <field name="gtm_access_token" password="True" placeholder="Tự động sinh sau khi xác thực..."/>
-                            </group>
+                                        class="btn-primary w-100"
+                                        icon="fa-google"/>
+                            </div>
+
+                            <field name="gtm_refresh_token" 
+                                   readonly="1" 
+                                   password="True" 
+                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth' or not gtm_refresh_token"/>
+                            <field name="gtm_access_token" 
+                                   password="True" 
+                                   placeholder="Tự động sinh sau khi xác thực..."
+                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"/>
                                    
                             <field name="measurement_id"
                                    placeholder="AW-XXXXXXXXX hoặc G-XXXXXXXXXX"
