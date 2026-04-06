@@ -153,62 +153,7 @@ class GoogleAdsProductFeed(models.Model):
             'context': {'default_feed_id': self.id, 'default_account_id': self.account_id.id},
         }
 
-    def action_auto_link_campaigns(self):
-        """Tự động tìm và link Campaign nếu tên Campaign chứa Mã SP (SKU)"""
-        self.ensure_one()
-        count = 0
-        campaigns = self.env['google.ads.campaign'].search([
-            ('account_id', '=', self.account_id.id),
-            ('status', 'in', ['enabled', 'paused', 'unknown'])
-        ])
-        
-        if not campaigns:
-            raise UserError(_("Không tìm thấy Chiến dịch nào khớp trong tài khoản '%s'. "
-                              "Vui lòng nhấn 'Đồng bộ dữ liệu' ở Tài khoản Google Ads trước.") % self.account_id.name)
 
-        for line in self.line_ids:
-            sku = (line.product_default_code or '').strip()
-            name = (line.product_id.name or '').strip()
-            if not sku and not name:
-                continue
-            
-            matched = self.env['google.ads.campaign'].browse()
-            
-            # 1. Match bằng SKU (Tìm trong tên Campaign - dùng clean_str để bỏ qua dấu gạch, khoảng trắng)
-            if sku:
-                c_sku = clean_str(sku)
-                matched |= campaigns.filtered(lambda c: c_sku in clean_str(c.name))
-            
-            # 2. Match bằng Tên Sản phẩm (Nếu chưa có SKU match)
-            if not matched and name:
-                # Thử tìm tên sản phẩm trong tên campaign
-                matched |= campaigns.filtered(lambda c: name.lower() in (c.name or '').lower())
-                
-            if matched:
-                # Thêm vào Many2many (link) - trigger recompute of product_ids on campaign
-                line.campaign_ids = [fields.Command.link(c.id) for c in matched]
-                count += 1
-        
-        message = _('Đã tự động liên kết thành công cho %s sản phẩm.') % count
-        title = _('Thành công')
-        type = 'success'
-        
-        if count == 0:
-            title = _('Thông báo')
-            message = _('Không tìm thấy Chiến dịch nào khớp với SKU hoặc Tên sản phẩm trong Feed này. '
-                        'Vui lòng kiểm tra lại tên Chiến dịch hoặc gán thủ công ở cột "Chiến Dịch Liên Kết".')
-            type = 'warning'
-
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': title,
-                'message': message,
-                'type': type,
-                'sticky': count == 0,
-            }
-        }
 
 
 class GoogleAdsProductFeedLine(models.Model):
