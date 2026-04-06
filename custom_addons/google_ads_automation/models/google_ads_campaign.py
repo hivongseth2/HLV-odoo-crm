@@ -41,6 +41,19 @@ class GoogleAdsCampaign(models.Model):
         'google.ads.adsroid.log', 'campaign_id', 
         string='Lịch sử Adsroid', readonly=True
     )
+    adsroid_chat_ids = fields.One2many(
+        'google.ads.adsroid.chat.message', 'campaign_id',
+        string='Lịch sử Chat Adsroid', readonly=True
+    )
+    adsroid_chat_history_html = fields.Html(
+        string='Nội dung Chat (HTML)', 
+        compute='_compute_adsroid_chat_history_html'
+    )
+
+    def _compute_adsroid_chat_history_html(self):
+        for rec in self:
+            html_parts = [msg.content_html for msg in rec.adsroid_chat_ids]
+            rec.adsroid_chat_history_html = Markup("").join(html_parts)
 
     @api.onchange('product_feed_id')
     def _onchange_product_feed_id(self):
@@ -86,6 +99,9 @@ class GoogleAdsCampaign(models.Model):
                                 <div class="ms-4">
                                     <i class="fa fa-info-circle me-1"></i> Channel: <span class="text-dark">{rec.channel_type}</span>
                                 </div>
+                            </div>
+                            <div class="mt-2 text-muted fw-bold small">
+                                <i class="fa fa-eye me-1"></i> Impression Share: <span class="text-primary">{rec.search_impression_share or 0:.1f}%</span>
                             </div>
                         </div>
                         <div class="col-md-4">
@@ -145,6 +161,35 @@ class GoogleAdsCampaign(models.Model):
                             <div class="o_metric_label">Cost</div>
                             <div class="o_metric_value" style="font-size: 1.3rem;">{rec.cost:,.0f} VNĐ</div>
                             <div class="o_metric_sub_label text-danger"><i class="fa fa-bank me-1"></i>Total Investment</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Visibility Section for AI -->
+                <div class="row g-4 mt-1">
+                    <div class="col-md-12">
+                        <div class="o_premium_card bg-light border-0 shadow-sm p-4 rounded-4">
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <strong class="text-secondary small fw-bold text-uppercase"><i class="fa fa-magic me-1"></i> Adsroid Visibility Audit</strong>
+                                <span class="badge rounded-pill text-bg-primary px-3">AI Context Ready</span>
+                            </div>
+                            <div class="row text-center">
+                                <div class="col-md-3 border-end">
+                                    <div class="text-muted small mb-2">Mất do Xếp hạng</div>
+                                    <div class="h4 mb-0 text-danger fw-bold">{rec.search_rank_lost_impression_share or 0:.1f}%</div>
+                                </div>
+                                <div class="col-md-3 border-end">
+                                    <div class="text-muted small mb-2">Mất do Ngân sách</div>
+                                    <div class="h4 mb-0 text-warning fw-bold">{rec.search_budget_lost_impression_share or 0:.1f}%</div>
+                                </div>
+                                <div class="col-md-3 border-end">
+                                    <div class="text-muted small mb-2">Đầu trang tuyệt đối</div>
+                                    <div class="h4 mb-0 text-success fw-bold">{rec.absolute_top_impression_rate or 0:.1f}%</div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-muted small mb-2">Click Share</div>
+                                    <div class="h4 mb-0 text-info fw-bold">{rec.click_share or 0:.1f}%</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -226,6 +271,13 @@ class GoogleAdsCampaign(models.Model):
     impressions = fields.Integer(string='Lượt Hiển Thị', default=0, readonly=True)
     cost = fields.Float(string='Chi Phí', default=0.0, readonly=True)
     conversions = fields.Float(string='Lượt Chuyển Đổi', default=0.0, readonly=True)
+
+    # Advanced Visibility Metrics (Adsroid AI specific)
+    search_impression_share = fields.Float(string='Tỷ lệ hiển thị Tìm kiếm (%)', readonly=True, group_operator='avg')
+    search_rank_lost_impression_share = fields.Float(string='Mất hiển thị do Xếp hạng (%)', readonly=True, group_operator='avg')
+    search_budget_lost_impression_share = fields.Float(string='Mất hiển thị do Ngân sách (%)', readonly=True, group_operator='avg')
+    absolute_top_impression_rate = fields.Float(string='Tỷ lệ hiển thị đầu trang (%)', readonly=True, group_operator='avg')
+    click_share = fields.Float(string='Tỷ lệ Nhấp chuột (%)', readonly=True, group_operator='avg')
 
     # Computed Metrics for UI
     conversion_rate = fields.Float(

@@ -532,6 +532,11 @@ class GoogleAdsAccount(models.Model):
                 'impressions': random.randint(500, 20000),
                 'cost':        round(random.uniform(100000, 3000000), 0),
                 'conversions': round(random.uniform(0, 25), 1),
+                'search_impression_share': random.uniform(20, 95),
+                'search_rank_lost_impression_share': random.uniform(5, 40),
+                'search_budget_lost_impression_share': random.uniform(0, 30),
+                'absolute_top_impression_rate': random.uniform(10, 60),
+                'click_share': random.uniform(5, 25),
             }
             if existing:
                 existing.write(vals)
@@ -664,7 +669,12 @@ class GoogleAdsAccount(models.Model):
               metrics.clicks,
               metrics.impressions,
               metrics.cost_micros,
-              metrics.conversions
+              metrics.conversions,
+              metrics.search_impression_share,
+              metrics.search_rank_lost_impression_share,
+              metrics.search_budget_lost_impression_share,
+              metrics.absolute_top_impression_rate,
+              metrics.click_share
             FROM campaign
             WHERE campaign.status != 'REMOVED'
             ORDER BY campaign.id
@@ -692,6 +702,11 @@ class GoogleAdsAccount(models.Model):
                         'impressions': metrics.impressions,
                         'cost': metrics.cost_micros / 1000000.0,
                         'conversions': metrics.conversions,
+                        'search_impression_share': metrics.search_impression_share * 100 if metrics.search_impression_share else 0.0,
+                        'search_rank_lost_impression_share': metrics.search_rank_lost_impression_share * 100 if metrics.search_rank_lost_impression_share else 0.0,
+                        'search_budget_lost_impression_share': metrics.search_budget_lost_impression_share * 100 if metrics.search_budget_lost_impression_share else 0.0,
+                        'absolute_top_impression_rate': metrics.absolute_top_impression_rate * 100 if metrics.absolute_top_impression_rate else 0.0,
+                        'click_share': metrics.click_share * 100 if metrics.click_share else 0.0,
                         'state': 'synced',
                     }
                     
@@ -898,6 +913,11 @@ class GoogleAdsAccount(models.Model):
                     "conversions": camp.conversions,
                     "roas": camp.roas,
                     "budget": camp.budget_amount,
+                    "search_impression_share": camp.search_impression_share,
+                    "search_rank_lost_impression_share": camp.search_rank_lost_impression_share,
+                    "search_budget_lost_impression_share": camp.search_budget_lost_impression_share,
+                    "absolute_top_impression_rate": camp.absolute_top_impression_rate,
+                    "click_share": camp.click_share,
                 }
             }
             p_data = []

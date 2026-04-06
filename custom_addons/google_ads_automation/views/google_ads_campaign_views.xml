@@ -12,6 +12,9 @@
                 <field name="cost" sum="Tổng Chi Phí" optional="show"/>
                 <field name="conversions" sum="Tổng Đơn" optional="show"/>
                 <field name="conversion_rate" widget="progressbar" string="Tỷ Lệ CĐ (%)" optional="show"/>
+                <field name="search_impression_share" string="IS (%)" optional="hide"/>
+                <field name="search_rank_lost_impression_share" string="Mất do Rank (%)" optional="hide"/>
+                <field name="search_budget_lost_impression_share" string="Mất do Ngân sách (%)" optional="hide"/>
                 <field name="roas" string="ROAS" widget="badge" 
                        decoration-success="roas &gt;= 3" 
                        decoration-danger="roas &lt; 1" 
@@ -190,6 +193,19 @@
                                     <field name="is_applied" widget="boolean" string="Đã Tự Xử Lý"/>
                                 </list>
                             </field>
+                        </page>
+                        <page name="adsroid_chat_history" string="💬 Lịch sử AI Chat">
+                            <div class="o_premium_card border-0 bg-light p-4 rounded-4" style="min-height: 400px; max-height: 600px; overflow-y: auto;">
+                                <h4 class="mb-4 text-primary fw-bold"><i class="fa fa-comments me-2"></i>Toàn bộ cuộc hội thoại</h4>
+                                <div invisible="not adsroid_chat_history_html">
+                                    <field name="adsroid_chat_history_html" widget="html" nolabel="1"/>
+                                </div>
+                                <div invisible="adsroid_chat_history_html" class="text-center mt-5 text-muted">
+                                    <i class="fa fa-comment-o fa-4x mb-3 opacity-25"></i>
+                                    <p>Chưa có lịch sử trò chuyện cho chiến dịch này.</p>
+                                    <button name="action_open_adsroid_chat" string="Bắt đầu Chat ngay" type="object" class="btn btn-primary"/>
+                                </div>
+                            </div>
                         </page>
                     </notebook>
                 </sheet>

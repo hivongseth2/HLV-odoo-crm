@@ -8,7 +8,8 @@
 2. **Product Feed:** Liên kết Sản phẩm Odoo ↔ Chiến dịch (Campaign) Google Ads.
 3. **Smart Rule Engine (Chiến lược tự động):** Tự sinh Rules điều khiển thầu/trạng thái dựa trên Tồn kho, Biên lợi nhuận, và ROAS.
 4. **Mutate API:** Thực thi hành động Bật/Tắt chiến dịch tự động lên Google Ads.
-5. **Chế Độ Demo Toàn Trị:** Giả lập toàn bộ luồng hoạt động mà không cần tài khoản Ads thật.
+5. **Adsroid AI (Decision Support):** Phân tích chiến dịch chuyên sâu (Audit) ở mức Portfolio (Toàn tài khoản) và Creative (Mẫu quảng cáo) dựa trên dữ liệu Impression Share.
+6. **Chế Độ Demo Toàn Trị:** Giả lập toàn bộ luồng hoạt động mà không cần tài khoản Ads thật.
 
 ---
 
@@ -30,9 +31,12 @@ google_ads_automation/
 │   ├── google_ads_product_feed.py   # Product Feed liên kết SP Odoo & Campaign
 │   ├── google_ads_strategy.py       # Sinh Rules tự động theo các bộ chiến lược (mẫu sẵn hoặc Tùy chỉnh)
 │   ├── google_ads_rule.py           # Engine đánh giá độ thỏa mãn của Rule & thực thi (RSA Support)
-│   └── google_ads_rule_log.py       # Ghi log kết quả thực thi Rules
+│   ├── google_ads_adsroid_log.py       # Lịch sử Receipt/Insight (Audit)
+│   ├── google_ads_adsroid_chat_message.py # ★ Lịch sử Chat vĩnh viễn
+│   ├── google_ads_ad_type.py
 ├── services/
-│   └── google_ads_mutate.py         # Mutate API (Pause/Enable)
+│   ├── google_ads_mutate.py         # Mutate API (Pause/Enable)
+│   └── adsroid_api.py               # ★ Adsroid AI Service (Decision support)
 ├── wizard/
 │   └── google_ads_product_feed_wizard.py  # Wizard chọn nhanh Sản phẩm
 ├── security/
@@ -122,6 +126,31 @@ Tính năng cốt lõi cho việc testing/UAT. Khi `google.ads.account.is_demo =
   Bổ sung hàm định dạng Resource trong file `services/google_ads_mutate.py` (Ví dụ: `create_campaign`).
 - **Nâng cấp Offline Conversion:**
   Chỉnh sửa `GoogleAdsConversionService` để hỗ trợ thêm các field metadata (`user_identifier`, hay `custom_variable`).
+
+---
+
+## 6. Adsroid AI 2.0: Deep Data Auditing
+
+Hệ thống tích hợp Adsroid AI để giải quyết bài toán "Tại sao hiệu suất giảm?".
+
+### 6.1. Metric Enrichment (Làm giàu dữ liệu)
+Ngoài các chỉ số cơ bản (Clicks, Cost), module fetch thêm các chỉ số **Impression Share (IS)**:
+- `search_rank_lost_impression_share`: AI sẽ đề xuất **Tối ưu nội dung/Thầu** nếu chỉ số này cao.
+- `search_budget_lost_impression_share`: AI sẽ đề xuất **Tăng ngân sách** nếu chỉ số này cao.
+
+### 6.2. Ad Copy Audit (Chấm điểm sáng tạo)
+Hỗ trợ chấm điểm Headlines/Descriptions của RSA và Demand Gen. 
+- **Input:** Headlines list + Descriptions list + Ad Performance.
+- **Output:** Creative Score (0-100) + Insight cải thiện.
+
+### 6.3. Portfolio Analysis (CMO Mode)
+Trong chế độ audit toàn tài khoản, dữ liệu của tất cả chiến dịch được gộp thành một batch payload duy nhất gửi sang Adsroid. Điều này giúp AI có cái nhìn tổng thể để thực hiện **Tái phân bổ ngân sách (Budget Reallocation)** giữa các chiến dịch hiệu quả khác nhau.
+
+### 6.4. Persistent Chat History (Lưu trữ hội thoại)
+Khắc phục nhược điểm của Adsroid Web, Odoo lưu trữ toàn bộ lịch sử chat:
+- **Model:** `google.ads.adsroid.chat.message`.
+- **UI:** Tích hợp tab "Lịch sử AI Chat" trong Campaign form với giao diện tin nhắn (Bubble chat).
+- **Context Awareness:** Mỗi khi chat, Odoo tự động gửi kèm Performance Metrics (IS, ROAS, Budget) để AI có bối cảnh tư vấn chính xác nhất.
 
 ---
 

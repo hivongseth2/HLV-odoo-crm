@@ -33,6 +33,7 @@
         "views/google_ads_conversion_action_views.xml",
         "views/google_ads_tag_views.xml",
         "views/google_ads_adsroid_log_views.xml",
+        "views/google_ads_adsroid_chat_message_views.xml",
         "views/menu_views.xml",
     ],
     "assets": {

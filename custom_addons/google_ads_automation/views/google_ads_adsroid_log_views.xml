@@ -6,12 +6,14 @@
         <field name="arch" type="xml">
             <list string="Lịch sử AI Adsroid" default_order="create_date desc">
                 <field name="create_date" string="Thời gian" widget="datetime"/>
+                <field name="campaign_id" optional="show"/>
+                <field name="ad_id" optional="show"/>
                 <field name="score" widget="progressbar"/>
                 <field name="suggested_action" widget="badge"
                        decoration-danger="suggested_action == 'PAUSE'"
-                       decoration-warning="suggested_action == 'DECREASE_BUDGET'"
-                       decoration-info="suggested_action == 'INCREASE_BUDGET'"
-                       decoration-success="suggested_action == 'MAINTAIN'"/>
+                       decoration-warning="suggested_action == 'DECREASE_BUDGET' or suggested_action == 'ADJUST_BUDGET'"
+                       decoration-info="suggested_action == 'INCREASE_BUDGET' or suggested_action == 'OPTIMIZE_CONTENT'"
+                       decoration-success="suggested_action == 'MAINTAIN' or suggested_action == 'ENABLE'"/>
                 <field name="insight"/>
                 <field name="is_applied" widget="boolean" string="Đã Tự Động Xử Lý"/>
             </list>

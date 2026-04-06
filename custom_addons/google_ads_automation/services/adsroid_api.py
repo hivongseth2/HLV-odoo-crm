@@ -150,15 +150,16 @@ class AdsroidApiService:
             "3. Bạn chỉ được phản hồi bằng định dạng JSON duy nhất là một MẢNG các đối tượng theo cấu trúc sau:\n"
             "[\n"
             "  {\n"
-            "    \"campaign_id_odoo\": 123, // ID Odoo của chiến dịch\n"
+            "    \"campaign_id_odoo\": 123,\n"
             "    \"score\": 85,\n"
             "    \"suggested_action\": \"PAUSE\" | \"ENABLE\" | \"ADJUST_BUDGET\" | \"MAINTAIN\",\n"
             "    \"new_budget\": 1500000,\n"
-            "    \"insight\": \"Nhận định ngắn gọn bằng tiếng Việt...\"\n"
+            "    \"insight\": \"Nhận định ngắn gọn bằng tiếng Việt. Ví dụ: 'Tăng ngân sách vì ROAS cao và Impression Share còn dư', hoặc 'Giảm ngân sách do Lost IS (Rank) cao - cần tối ưu nội dung/thầu'.\"\n"
             "  }, \n"
             "  ... \n"
             "]\n\n"
-            f"Dữ liệu danh mục: {data_str}"
+            f"Dữ liệu danh mục: {data_str}\n"
+            "GHI CHÚ: Hãy đặc biệt chú ý các chỉ số 'Lost IS (Rank)' và 'Lost IS (Budget)' để đưa ra đề xuất chính xác là nên tăng tiền hay nên tối ưu nội dung/giá thầu."
         )
 
         payload = {
