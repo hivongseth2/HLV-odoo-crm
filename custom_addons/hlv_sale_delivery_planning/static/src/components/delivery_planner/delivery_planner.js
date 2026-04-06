@@ -38,6 +38,7 @@ export class DeliveryPlannerDashboard extends Component {
             filterHtgh: "",
             filterDeliveryType: "all",
             filterTagIds: [],
+            filterNeedTransfer: false,
 
             // Stats
             dashboardStats: { total: 0, ready: 0, partial: 0, out_of_stock: 0 },
@@ -244,7 +245,9 @@ export class DeliveryPlannerDashboard extends Component {
         };
         const field = fieldMap[dim];
 
+        const needTransfer = this.state.filterNeedTransfer;
         const base = this.state.saleOrders.filter(so => {
+            if (needTransfer && !(so.transfer_suggestions && so.transfer_suggestions.length > 0)) return false;
             let val = so[field];
             if (dim === 'delivery_status' && val === 'unshipped') val = 'pending';
             if (dim === 'packing_status') {
@@ -781,6 +784,7 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.filterHtgh = "";
         this.state.filterDeliveryType = "all";
         this.state.filterTagIds = [];
+        this.state.filterNeedTransfer = false;
         this.state.currentPage = 1;
         this.fetchData();
     }

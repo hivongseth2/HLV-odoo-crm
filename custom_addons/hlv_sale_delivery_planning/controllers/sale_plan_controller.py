@@ -226,6 +226,12 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
     </select></div>
   </div>
 
+  <div class="col-md-2 d-flex align-items-end">
+    <div class="form-check form-switch mb-1">
+      <input class="form-check-input" type="checkbox" id="f-need-transfer">
+      <label class="form-check-label small fw-bold" for="f-need-transfer"><i class="fa fa-exchange text-danger me-1"></i>Cần chuyển kho</label>
+    </div>
+  </div>
 </div></div>
 <!-- View toggle -->
 <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
@@ -436,7 +442,11 @@ function renderKanban(){
   var wrap=$('kanban-view');wrap.innerHTML='';
   cols.forEach(function(c){
     var field=(gb==='delivery_status')?'real_delivery_status':gb;
-    var items=S.orders.filter(function(o){return o[field]===c.key;});
+    var needTransfer=$('f-need-transfer').checked;
+    var items=S.orders.filter(function(o){
+      if(needTransfer&&!(o.transfer_suggestions&&o.transfer_suggestions.length)) return false;
+      return o[field]===c.key;
+    });
     var pageSize=S.kanbanColPageSize[c.key]||15;
     var visible=items.slice(0,pageSize);
     var remaining=items.length-pageSize;
@@ -489,6 +499,7 @@ function renderSOCard(o){
   if(o.x_studio_misa_saler_code) h+='<small class="text-muted"><i class="fa fa-id-badge me-1"></i>NV: '+esc(o.x_studio_misa_saler_code)+'</small><br>';
   if(o.misa_shipping_address) h+='<small class="text-muted" style="font-size:.7rem"><i class="fa fa-map-marker me-1 text-danger"></i>'+esc(o.misa_shipping_address)+'</small><br>';
   if(o.tag_ids&&o.tag_ids.length) h+='<div class="mt-1">'+o.tag_ids.map(tagBadge).join('')+'</div>';
+  if(o.transfer_suggestions&&o.transfer_suggestions.length) h+='<div class="mt-1"><span class="badge bg-danger bg-opacity-75 text-white" style="font-size:.68rem"><i class="fa fa-exchange me-1"></i>Cần chuyển kho ('+o.transfer_suggestions.length+' SP)</span></div>';
   h+='<div class="d-flex justify-content-between align-items-center">'
     +'<span class="fw-bold">'+fm(o.amount_total)+'</span>';
   var pc=o.pos?o.pos.length:0;
@@ -506,7 +517,12 @@ function renderSOCard(o){
 
 function renderList(){
   var tb=$('tbl-body');tb.innerHTML='';
-  S.orders.forEach(function(o){
+  var needTransfer=$('f-need-transfer').checked;
+  var filtered=S.orders.filter(function(o){
+    if(needTransfer&&!(o.transfer_suggestions&&o.transfer_suggestions.length)) return false;
+    return true;
+  });
+  filtered.forEach(function(o){
     var rd=o.real_delivery_status||o.delivery_status;
     var tr=document.createElement('tr');
     tr.className='cursor-pointer';
@@ -682,6 +698,7 @@ function clearAll(){
 }
 
 $('btn-filter').addEventListener('click',function(){S.kanbanColPageSize={};load(false);});
+$('f-need-transfer').addEventListener('change',function(){render();});
 $('f-q').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();S.kanbanColPageSize={};load(false);}});
 $('f-saler').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();S.kanbanColPageSize={};load(false);}});
 $('f-htgh').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();S.kanbanColPageSize={};load(false);}});
