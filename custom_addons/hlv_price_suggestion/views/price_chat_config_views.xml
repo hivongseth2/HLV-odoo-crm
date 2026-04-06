@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- Config Form View                         -->
+    <!-- ════════════════════════════════════════ -->
+    <record id="price_chat_config_form" model="ir.ui.view">
+        <field name="name">price.chat.config.form</field>
+        <field name="model">price.chat.config</field>
+        <field name="arch" type="xml">
+            <form string="Cấu hình AI tư vấn giá">
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" placeholder="Tên cấu hình"/></h1>
+                    </div>
+
+                    <notebook>
+                        <!-- Tab 1: Quy tắc đề xuất giá -->
+                        <page string="Quy tắc đề xuất giá" name="rules">
+                            <group>
+                                <group string="Quy tắc giá">
+                                    <field name="min_margin_percent" widget="percentage"/>
+                                </group>
+                            </group>
+                            <separator string="System Prompt — Quy tắc gửi cho AI"/>
+                            <field name="system_prompt"
+                                   widget="text"
+                                   placeholder="Nhập quy tắc đề xuất giá cho AI..."
+                                   style="min-height: 400px; font-family: monospace;"/>
+                            <div class="alert alert-info" role="alert">
+                                <strong>Hướng dẫn:</strong> Đây là prompt hệ thống gửi cho AI. Bạn có thể điều chỉnh
+                                quy tắc đề xuất giá, format trả lời, ngôn ngữ, v.v. tại đây. AI sẽ tuân theo các
+                                quy tắc này khi đề xuất giá cho sản phẩm.
+                            </div>
+                        </page>
+
+                        <!-- Tab 2: Cấu hình AI -->
+                        <page string="Cấu hình AI" name="ai_settings">
+                            <group>
+                                <group string="Model AI">
+                                    <field name="ai_model"/>
+                                    <field name="max_tokens"/>
+                                    <field name="temperature"/>
+                                </group>
+                            </group>
+                            <div class="alert alert-warning" role="alert">
+                                <strong>Lưu ý:</strong> API Key được cấu hình tại:
+                                Settings → Technical → System Parameters → key <code>openai.api_key</code>
+                            </div>
+                        </page>
+
+                        <!-- Tab 3: Crawl giá thị trường -->
+                        <page string="Crawl giá thị trường" name="market_crawl">
+                            <group>
+                                <group string="Cài đặt crawl">
+                                    <field name="market_crawl_enabled"/>
+                                    <field name="crawl_timeout"
+                                           invisible="not market_crawl_enabled"/>
+                                </group>
+                            </group>
+                            <group invisible="not market_crawl_enabled">
+                                <separator string="Danh sách website crawl (mỗi dòng 1 URL)"/>
+                                <field name="market_urls"
+                                       widget="text" nolabel="1"
+                                       style="min-height: 150px; font-family: monospace;"/>
+                            </group>
+                            <div class="alert alert-info" role="alert"
+                                 invisible="not market_crawl_enabled">
+                                <strong>Cách hoạt động:</strong> Khi bật, AI sẽ tự động tìm giá sản phẩm trên các
+                                website được cấu hình và đưa vào phân tích đề xuất giá. Dữ liệu crawl là tham khảo.
+                            </div>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- Config Tree View                         -->
+    <!-- ════════════════════════════════════════ -->
+    <record id="price_chat_config_tree" model="ir.ui.view">
+        <field name="name">price.chat.config.tree</field>
+        <field name="model">price.chat.config</field>
+        <field name="arch" type="xml">
+            <list string="Cấu hình AI">
+                <field name="name"/>
+                <field name="ai_model"/>
+                <field name="min_margin_percent"/>
+                <field name="market_crawl_enabled"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- Config Action                            -->
+    <!-- ════════════════════════════════════════ -->
+    <record id="price_chat_config_action" model="ir.actions.act_window">
+        <field name="name">Cấu hình AI</field>
+        <field name="res_model">price.chat.config</field>
+        <field name="view_mode">form</field>
+        <field name="target">current</field>
+    </record>
+
+    <!-- ════════════════════════════════════════ -->
+    <!-- Menu — Cấu hình                          -->
+    <!-- ════════════════════════════════════════ -->
+    <menuitem id="menu_price_chat_config"
+              name="Cấu hình"
+              parent="menu_price_chat_root"
+              action="price_chat_config_action"
+              sequence="90"
+              groups="base.group_system"/>
+
+</odoo>

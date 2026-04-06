@@ -355,6 +355,33 @@ $pc-topbar-bg: #fff;
     padding-left: 16px;
 }
 
+/* ── Upload button ── */
+.pc-upload-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    font-size: 18px;
+
+    &:hover:not(:disabled) {
+        background: rgba(99, 102, 241, 0.1);
+        color: $pc-primary;
+    }
+
+    &:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+}
+
 /* ── Responsive ── */
 @media (max-width: 768px) {
     .pc-sidebar {

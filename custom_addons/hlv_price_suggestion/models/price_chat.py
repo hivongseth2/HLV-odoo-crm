@@ -1,6 +1,10 @@
+import base64
+import io
 import json
 import logging
+import re
 from datetime import timedelta
+from urllib.parse import quote_plus
 
 import requests
 
@@ -30,6 +34,10 @@ class PriceChatSession(models.Model):
         'res.company', string='Công ty',
         default=lambda self: self.env.company,
     )
+
+    def _get_config(self):
+        """Lấy cấu hình AI."""
+        return self.env['price.chat.config'].get_config()
 
     @api.model
     def rpc_send_message(self, session_id, message):
@@ -71,6 +79,95 @@ class PriceChatSession(models.Model):
 
         return {'ai_response': ai_response}
 
+    @api.model
+    def rpc_process_excel(self, session_id, base64_data, file_name):
+        """RPC endpoint: nhận file Excel, trích mã SP, thu thập data, gọi AI."""
+        session = self.browse(session_id)
+        if not session.exists():
+            raise UserError(_('Phiên chat không tồn tại.'))
+
+        try:
+            import openpyxl
+        except ImportError:
+            raise UserError(_('Cần cài thư viện openpyxl.'))
+
+        # Decode & parse Excel
+        try:
+            file_bytes = base64.b64decode(base64_data)
+            wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+        except Exception as e:
+            raise UserError(_('Không thể đọc file Excel: %s') % str(e))
+
+        # Extract product codes/names from all sheets
+        product_keywords = set()
+        for ws in wb.worksheets:
+            for row in ws.iter_rows(max_row=500, values_only=True):
+                for cell_value in row:
+                    if cell_value and isinstance(cell_value, str):
+                        val = cell_value.strip()
+                        if 2 <= len(val) <= 100:
+                            product_keywords.add(val)
+                    elif cell_value and isinstance(cell_value, (int, float)):
+                        # Mã SP dạng số
+                        val = str(int(cell_value)).strip()
+                        if len(val) >= 3:
+                            product_keywords.add(val)
+        wb.close()
+
+        if not product_keywords:
+            raise UserError(_('Không tìm thấy mã/tên sản phẩm trong file Excel.'))
+
+        # Tìm sản phẩm trong hệ thống
+        Product = self.env['product.product']
+        found_products = Product.browse()
+        for keyword in list(product_keywords)[:100]:  # Giới hạn 100
+            matches = Product.search([
+                '|',
+                ('default_code', '=ilike', keyword),
+                ('name', 'ilike', keyword),
+                ('type', 'in', ('product', 'consu')),
+            ], limit=5)
+            found_products |= matches
+        found_products = found_products[:30]  # Giới hạn 30 SP
+
+        # Lưu tin nhắn user
+        product_list_str = ', '.join(product_keywords) if len(product_keywords) <= 20 else \
+            ', '.join(list(product_keywords)[:20]) + f'... (tổng {len(product_keywords)} mã)'
+        user_msg = f'📎 File: {file_name}\nMã sản phẩm tìm thấy: {product_list_str}'
+        self.env['price.chat.message'].create({
+            'session_id': session.id,
+            'role': 'user',
+            'content': user_msg,
+        })
+
+        # Thu thập data & gọi AI
+        try:
+            data_context = session._collect_all_data(found_products)
+            question = (
+                f'Phân tích và đề xuất giá cho các sản phẩm từ file Excel "{file_name}". '
+                f'Tìm thấy {len(found_products)} sản phẩm trong hệ thống. '
+                f'Hãy đề xuất giá bán cho từng sản phẩm.'
+            )
+            ai_response = session._call_openai(question, data_context)
+        except UserError:
+            raise
+        except Exception as e:
+            _logger.exception('Price chat Excel AI error')
+            ai_response = _('Xin lỗi, đã có lỗi xảy ra khi xử lý file: %s') % str(e)
+
+        # Lưu tin nhắn AI
+        self.env['price.chat.message'].create({
+            'session_id': session.id,
+            'role': 'assistant',
+            'content': ai_response,
+        })
+
+        # Cập nhật tiêu đề
+        if session.name == _('Phiên tư vấn giá mới'):
+            session.name = f'Excel: {file_name}'[:80]
+
+        return {'ai_response': ai_response}
+
     # ────────────────────────────────────────────
     # Core AI logic
     # ────────────────────────────────────────────
@@ -84,7 +181,17 @@ class PriceChatSession(models.Model):
         # 2. Thu thập dữ liệu thực tế
         data_context = self._collect_all_data(products)
 
-        # 3. Gọi OpenAI
+        # 3. Crawl giá thị trường (nếu bật)
+        market_data = self._crawl_market_prices(products)
+        if market_data:
+            for item in data_context:
+                code = item.get('ma_sp', '')
+                name = item.get('san_pham', '')
+                for mk in market_data:
+                    if mk.get('ma_sp') == code or mk.get('san_pham') == name:
+                        item['gia_thi_truong'] = mk.get('ket_qua', [])
+
+        # 4. Gọi OpenAI
         return self._call_openai(question, data_context)
 
     def _find_products_from_question(self, question):
@@ -222,6 +329,152 @@ class PriceChatSession(models.Model):
 
         return data
 
+    # ────────────────────────────────────────────
+    # Market crawl
+    # ────────────────────────────────────────────
+    def _crawl_market_prices(self, products):
+        """Crawl giá thị trường từ các website đã cấu hình."""
+        self.ensure_one()
+        config = self._get_config()
+        if not config.market_crawl_enabled or not products:
+            return []
+
+        urls_text = (config.market_urls or '').strip()
+        if not urls_text:
+            return []
+
+        base_urls = [u.strip() for u in urls_text.splitlines() if u.strip()]
+        timeout = config.crawl_timeout or 10
+        results = []
+
+        for product in products[:5]:  # Giới hạn 5 SP để tránh quá lâu
+            product_name = product.name or ''
+            product_code = product.default_code or ''
+            search_term = product_code if product_code else product_name
+
+            market_results = []
+            for base_url in base_urls:
+                try:
+                    crawl_data = self._crawl_single_site(base_url, search_term, timeout)
+                    if crawl_data:
+                        market_results.extend(crawl_data)
+                except Exception as e:
+                    _logger.warning('Market crawl failed for %s on %s: %s', search_term, base_url, e)
+
+            results.append({
+                'san_pham': product.display_name,
+                'ma_sp': product_code,
+                'ket_qua': market_results,
+            })
+
+        return results
+
+    def _crawl_single_site(self, base_url, search_term, timeout):
+        """Crawl 1 website, tìm sản phẩm và trả về danh sách giá."""
+        results = []
+        try:
+            from lxml import html as lxml_html
+        except ImportError:
+            _logger.warning('lxml not available for market crawl')
+            return results
+
+        # Sanitize URL
+        base_url = base_url.rstrip('/')
+        encoded_term = quote_plus(search_term)
+
+        # Thử các pattern search URL phổ biến
+        search_urls = [
+            f'{base_url}/?s={encoded_term}',
+            f'{base_url}/search?q={encoded_term}',
+            f'{base_url}/tim-kiem?q={encoded_term}',
+        ]
+
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml',
+            'Accept-Language': 'vi-VN,vi;q=0.9',
+        }
+
+        for search_url in search_urls:
+            try:
+                resp = requests.get(search_url, headers=headers, timeout=timeout, verify=True)
+                if resp.status_code != 200:
+                    continue
+
+                tree = lxml_html.fromstring(resp.content)
+
+                # Tìm giá từ structured data (JSON-LD)
+                json_ld_scripts = tree.xpath('//script[@type="application/ld+json"]/text()')
+                for script_text in json_ld_scripts:
+                    try:
+                        ld_data = json.loads(script_text)
+                        items = ld_data if isinstance(ld_data, list) else [ld_data]
+                        for item in items:
+                            if item.get('@type') == 'Product':
+                                name = item.get('name', '')
+                                offers = item.get('offers', {})
+                                price = offers.get('price') or offers.get('lowPrice', '')
+                                if name and price:
+                                    results.append({
+                                        'nguon': base_url,
+                                        'ten_sp': name[:100],
+                                        'gia': str(price),
+                                    })
+                    except (json.JSONDecodeError, TypeError, AttributeError):
+                        pass
+
+                # Tìm giá từ common CSS selectors
+                price_selectors = [
+                    './/span[contains(@class,"price")]',
+                    './/div[contains(@class,"price")]',
+                    './/*[contains(@class,"product-price")]',
+                    './/*[contains(@class,"woocommerce-Price-amount")]',
+                ]
+                name_selectors = [
+                    './/h2[contains(@class,"product")]//a',
+                    './/h3[contains(@class,"product")]//a',
+                    './/*[contains(@class,"product-title")]//a',
+                    './/*[contains(@class,"product-name")]//a',
+                ]
+
+                # Lấy tên sản phẩm
+                product_names = []
+                for sel in name_selectors:
+                    elements = tree.xpath(sel)
+                    for el in elements[:10]:
+                        text = (el.text_content() or '').strip()
+                        if text:
+                            product_names.append(text[:100])
+
+                # Lấy giá
+                prices_found = []
+                for sel in price_selectors:
+                    elements = tree.xpath(sel)
+                    for el in elements[:10]:
+                        text = (el.text_content() or '').strip()
+                        # Trích xuất số tiền
+                        nums = re.findall(r'[\d,.]+', text)
+                        if nums:
+                            prices_found.append(nums[0])
+
+                # Ghép tên + giá
+                for i, name in enumerate(product_names[:5]):
+                    price = prices_found[i] if i < len(prices_found) else ''
+                    if price:
+                        results.append({
+                            'nguon': base_url,
+                            'ten_sp': name,
+                            'gia': price,
+                        })
+
+                if results:
+                    break  # Đã tìm thấy, không cần thử URL khác
+
+            except requests.exceptions.RequestException:
+                continue
+
+        return results[:5]  # Tối đa 5 kết quả mỗi site
+
     def _call_openai(self, question, data_context):
         """Gọi OpenAI API để phân tích và đề xuất giá."""
         ICP = self.env['ir.config_parameter'].sudo()
@@ -233,31 +486,12 @@ class PriceChatSession(models.Model):
                 'Vào Settings → Technical → System Parameters → tạo key "openai.api_key"'
             ))
 
-        ai_model = ICP.get_param('openai.model', 'gpt-4o-mini')
-
-        system_prompt = """Bạn là chuyên gia tư vấn giá bán sản phẩm cho doanh nghiệp bán lẻ tại Việt Nam.
-
-NHIỆM VỤ:
-- Phân tích dữ liệu thực tế được cung cấp và đề xuất giá bán tối ưu
-- LUÔN đưa ra căn cứ cụ thể từ data (tên đơn hàng, giá, số lượng)
-- Giải thích lý luận rõ ràng
-
-FORMAT TRẢ LỜI:
-1. **Tóm tắt**: Đề xuất giá ngắn gọn
-2. **Căn cứ giá nhập**: Liệt kê các đơn mua hàng cụ thể (PO name, giá, NCC)
-3. **Căn cứ giá bán**: Giá đã bán cho từng công ty/khách hàng (SO name, giá)
-4. **Tình hình kho**: Tồn kho, tốc độ bán, ước tính ngày còn hàng
-5. **Phân tích & lý luận**: Giải thích tại sao đề xuất giá này
-6. **Đề xuất giá**: Giá cụ thể (làm tròn hàng nghìn VND)
-
-QUY TẮC:
-- Giá đề xuất PHẢI cao hơn giá nhập (tối thiểu 10% margin)
-- Bán chạy + tồn ít → tăng giá
-- Nhà cung cấp có vẻ khan hiếm hàng → tăng giá
-- Bán chậm + tồn nhiều → xem xét giảm giá
-- Nếu không có data đủ, nói rõ thiếu gì
-- Format số tiền theo VND: 1,000,000
-- Trả lời bằng tiếng Việt"""
+        # Lấy cấu hình từ config model
+        config = self._get_config()
+        ai_model = config.ai_model or 'gpt-4o-mini'
+        max_tokens = config.max_tokens or 2000
+        temperature = config.temperature or 0.3
+        system_prompt = config.system_prompt or 'Bạn là chuyên gia tư vấn giá bán sản phẩm.'
 
         data_str = json.dumps(data_context, ensure_ascii=False, indent=2) if data_context else 'Không tìm thấy sản phẩm phù hợp trong hệ thống.'
 
@@ -287,8 +521,8 @@ QUY TẮC:
                 json={
                     'model': ai_model,
                     'messages': messages,
-                    'max_tokens': 2000,
-                    'temperature': 0.3,
+                    'max_tokens': max_tokens,
+                    'temperature': temperature,
                 },
                 timeout=60,
             )

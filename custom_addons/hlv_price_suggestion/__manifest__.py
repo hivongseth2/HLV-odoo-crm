@@ -22,6 +22,7 @@
     'data': [
         'security/ir.model.access.csv',
         'views/price_chat_views.xml',
+        'views/price_chat_config_views.xml',
     ],
     'assets': {
         'web.assets_backend': [

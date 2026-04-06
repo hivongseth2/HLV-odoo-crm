@@ -42,6 +42,12 @@
                     <i class="fa fa-robot me-1"/>
                     AI Tư vấn giá
                 </div>
+                <button class="btn btn-sm btn-outline-primary me-2"
+                        t-on-click="onCrawlMarket"
+                        t-att-disabled="!state.currentSessionId || state.loading"
+                        title="Crawl giá thị trường">
+                    <i class="fa fa-globe me-1"/> Giá thị trường
+                </button>
                 <button class="btn btn-sm btn-success"
                         t-on-click="onExportExcel"
                         t-att-disabled="!state.currentSessionId">
@@ -107,6 +113,17 @@
             <!-- Input area -->
             <div class="pc-input-area">
                 <div class="pc-input-wrapper">
+                    <!-- Upload Excel button -->
+                    <button class="pc-upload-btn" t-on-click="onClickUpload"
+                            title="Upload file Excel (mã sản phẩm)"
+                            t-att-disabled="state.loading">
+                        <i class="fa fa-paperclip"/>
+                    </button>
+                    <input type="file" t-ref="fileInput"
+                           accept=".xlsx,.xls"
+                           style="display:none"
+                           t-on-change="onFileSelected"/>
+
                     <textarea class="pc-input"
                               t-att-value="state.inputText"
                               t-on-input="(ev) => { this.state.inputText = ev.target.value; }"
@@ -127,7 +144,7 @@
                 </div>
                 <div class="pc-input-hint text-muted">
                     <i class="fa fa-lightbulb-o me-1"/>
-                    Gợi ý: Nhập tên hoặc mã sản phẩm để AI tìm &amp; phân tích dữ liệu
+                    Gợi ý: Nhập tên/mã sản phẩm hoặc upload file Excel để AI phân tích
                 </div>
             </div>
 
