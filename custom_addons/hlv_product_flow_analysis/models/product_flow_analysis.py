@@ -111,7 +111,7 @@ class ProductFlowAnalysis(models.AbstractModel):
         for d in product_data.values():
             d['turnover_count'] = d['incoming_count'] + d['outgoing_count']
 
-        # ── Tính avg_storage_days từ stock.move ──
+        # ── Tính avg_storage_days từ stock.move (FIFO theo số lượng) ──
         if product_data:
             move_domain = [
                 ('state', '=', 'done'),
@@ -122,38 +122,49 @@ class ProductFlowAnalysis(models.AbstractModel):
             if warehouse_id:
                 move_domain.append(('warehouse_id', '=', warehouse_id))
 
-            moves = self.env['stock.move'].search(move_domain)
-            product_incoming_dates = {}
-            product_outgoing_dates = {}
+            moves = self.env['stock.move'].search(move_domain, order='date asc')
+            # Thu thập moves kèm qty, sort theo ngày
+            product_incoming_moves = {}  # pid -> [(date, remaining_qty)]
+            product_outgoing_moves = {}  # pid -> [(date, qty)]
 
             for move in moves:
                 pid = move.product_id.id
                 ptype = move.picking_type_id.code if move.picking_type_id else ''
-                if ptype == 'incoming' and move.date:
-                    product_incoming_dates.setdefault(pid, []).append(move.date)
-                elif ptype == 'outgoing' and move.date:
-                    product_outgoing_dates.setdefault(pid, []).append(move.date)
+                qty = move.product_uom_qty
+                if ptype == 'incoming' and move.date and qty > 0:
+                    product_incoming_moves.setdefault(pid, []).append([move.date, qty])
+                elif ptype == 'outgoing' and move.date and qty > 0:
+                    product_outgoing_moves.setdefault(pid, []).append((move.date, qty))
 
             for pid, data in product_data.items():
-                in_dates = sorted(product_incoming_dates.get(pid, []))
-                out_dates = sorted(product_outgoing_dates.get(pid, []))
+                in_batches = product_incoming_moves.get(pid, [])
+                out_moves = product_outgoing_moves.get(pid, [])
 
-                if in_dates and out_dates:
-                    storage_days = []
+                if in_batches and out_moves:
+                    # FIFO: mỗi lần xuất tiêu thụ từ lô nhập cũ nhất còn lại
+                    weighted_days = 0.0
+                    total_matched_qty = 0.0
                     in_idx = 0
-                    for out_dt in out_dates:
-                        best_in = None
-                        for i in range(in_idx, len(in_dates)):
-                            if in_dates[i] <= out_dt:
-                                best_in = in_dates[i]
-                                in_idx = i + 1
-                            else:
-                                break
-                        if best_in:
-                            diff = (out_dt - best_in).days
-                            storage_days.append(max(diff, 0))
-                    data['avg_storage_days'] = round(sum(storage_days) / len(storage_days), 1) if storage_days else 0
-                elif out_dates and not in_dates:
+
+                    for out_dt, out_qty in out_moves:
+                        remaining_out = out_qty
+                        while remaining_out > 0 and in_idx < len(in_batches):
+                            in_dt, in_remaining = in_batches[in_idx]
+                            if in_dt > out_dt:
+                                break  # lô nhập sau ngày xuất → bỏ qua
+                            matched = min(remaining_out, in_remaining)
+                            days = max((out_dt - in_dt).days, 0)
+                            weighted_days += days * matched
+                            total_matched_qty += matched
+                            remaining_out -= matched
+                            in_batches[in_idx][1] -= matched
+                            if in_batches[in_idx][1] <= 0:
+                                in_idx += 1
+
+                    data['avg_storage_days'] = round(weighted_days / total_matched_qty, 1) if total_matched_qty > 0 else 0
+
+                elif out_moves and not in_batches:
+                    # Không có nhập trong kỳ → tìm lần nhập gần nhất trước kỳ
                     pre_incoming = self.env['stock.move'].search([
                         ('product_id', '=', pid),
                         ('state', '=', 'done'),
@@ -162,12 +173,16 @@ class ProductFlowAnalysis(models.AbstractModel):
                     ], order='date desc', limit=1)
                     if pre_incoming:
                         last_in = pre_incoming.date
-                        storage_days = [(out_dt - last_in).days for out_dt in out_dates]
-                        data['avg_storage_days'] = round(sum(max(d, 0) for d in storage_days) / len(storage_days), 1)
-                elif data['qty_available'] > 0 and in_dates:
+                        weighted = sum(max((out_dt - last_in).days, 0) * qty for out_dt, qty in out_moves)
+                        total_qty = sum(qty for _, qty in out_moves)
+                        data['avg_storage_days'] = round(weighted / total_qty, 1) if total_qty > 0 else 0
+
+                elif data['qty_available'] > 0 and in_batches:
+                    # Còn tồn kho + có nhập nhưng chưa xuất → tính từ lần nhập cuối
                     from datetime import datetime, timezone
-                    now = datetime.now(timezone.utc) if in_dates[-1].tzinfo else datetime.now()
-                    data['avg_storage_days'] = (now - in_dates[-1]).days
+                    last_in_dt = in_batches[-1][0]
+                    now = datetime.now(timezone.utc) if last_in_dt.tzinfo else datetime.now()
+                    data['avg_storage_days'] = (now - last_in_dt).days
 
         result = sorted(product_data.values(), key=lambda x: x['incoming_count'], reverse=True)
         return {

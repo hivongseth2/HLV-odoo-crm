@@ -46,6 +46,11 @@
                                    t-att-class="{'fa-spin': state.isLoading}"
                                    title="Làm mới"></i> Làm mới
                             </button>
+                            <button class="btn btn-success shadow-sm"
+                                    t-on-click="exportExcel"
+                                    title="Xuất Excel theo bộ lọc hiện tại">
+                                <i class="fa fa-file-excel-o me-1"></i> Xuất Excel
+                            </button>
                         </div>
                     </div>
 

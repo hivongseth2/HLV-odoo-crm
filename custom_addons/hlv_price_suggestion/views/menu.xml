@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- Root menu -->
+    <menuitem id="menu_price_suggestion_root"
+              name="Đề xuất giá"
+              web_icon="hlv_price_suggestion,static/description/icon.png"
+              sequence="45"/>
+
+    <!-- Sub menu -->
+    <menuitem id="menu_price_suggestion_sub"
+              name="Đề xuất giá bán"
+              parent="menu_price_suggestion_root"
+              sequence="10"/>
+
+    <menuitem id="menu_price_suggestion_list"
+              name="Danh sách đề xuất"
+              parent="menu_price_suggestion_sub"
+              action="price_suggestion_action"
+              sequence="10"/>
+
+</odoo>
