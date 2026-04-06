@@ -1,1 +1,1 @@
-from . import price_suggestion
+from . import price_chat

@@ -1,22 +1,19 @@
 {
-    'name': 'HLV Price Suggestion (AI)',
+    'name': 'HLV AI Price Advisor',
     'version': '18.0.1.0.0',
     'category': 'Sales',
-    'summary': 'Đề xuất giá bán thông minh dựa trên giá nhập, tồn kho, lượt bán và AI',
+    'summary': 'Chatbot AI tư vấn giá bán dựa trên giá nhập, tồn kho, lượt bán',
     'description': """
-        Module đề xuất giá bán cho sản phẩm dựa trên:
-        - Giá nhập từ đơn mua hàng (Purchase Order)
-        - Giá bán theo từng công ty (Company-specific pricing)
-        - Số lượng tồn kho hiện tại
-        - Lượt bán (tốc độ bán hàng)
-        - Tình trạng hàng từ nhà cung cấp
-        - Phân tích AI (OpenAI) để đề xuất giá tối ưu
+        Chatbot AI hỗ trợ tư vấn giá bán sản phẩm:
+        - Hỏi AI về giá bán nên đặt cho sản phẩm
+        - AI phân tích căn cứ: giá nhập (PO), giá bán cho từng công ty (SO), tồn kho
+        - Trả về lý luận chi tiết kèm dữ liệu minh chứng
+        - Hỗ trợ xuất file Excel báo cáo đề xuất giá
     """,
     'author': 'HLV',
     'website': '',
     'depends': [
         'base',
-        'mail',
         'product',
         'sale',
         'purchase',
@@ -24,9 +21,7 @@
     ],
     'data': [
         'security/ir.model.access.csv',
-        'data/ir_cron_data.xml',
-        'views/price_suggestion_views.xml',
-        'views/menu.xml',
+        'views/price_chat_views.xml',
     ],
     'installable': True,
     'application': True,
