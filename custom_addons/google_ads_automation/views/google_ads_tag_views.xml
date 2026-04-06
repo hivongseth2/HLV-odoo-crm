@@ -89,11 +89,13 @@
                             <field name="gtm_refresh_token" 
                                    readonly="1" 
                                    password="True" 
-                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth' or not gtm_refresh_token"/>
+                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth' or not gtm_refresh_token"
+                                   groups="base.group_no_one"/>
                             <field name="gtm_access_token" 
                                    password="True" 
                                    placeholder="Tự động sinh sau khi xác thực..."
-                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"/>
+                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"
+                                   groups="base.group_no_one"/>
                                    
                             <field name="measurement_id"
                                    placeholder="AW-XXXXXXXXX hoặc G-XXXXXXXXXX"

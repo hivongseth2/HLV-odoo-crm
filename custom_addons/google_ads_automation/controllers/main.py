@@ -87,14 +87,22 @@ class GoogleAdsAuthController(http.Controller):
             
             data = response.json()
             refresh_token = data.get('refresh_token')
+            access_token = data.get('access_token')
             
             if refresh_token:
                 if is_tag:
-                    record.write({'gtm_refresh_token': refresh_token})
+                    record.write({
+                        'gtm_refresh_token': refresh_token,
+                        'gtm_access_token': access_token,
+                    })
                 else:
                     record.write({'refresh_token': refresh_token})
                 record.message_post(body=Markup(_("<b>Xác thực OAuth 2.0 thành công!</b> Đã cấp phát Refresh Token mới tự động.")))
             else:
+                if access_token:
+                     # Có trường hợp chỉ trả về access_token nếu không dùng prompt=consent hoặc đã có token hợp lệ
+                     if is_tag:
+                         record.write({'gtm_access_token': access_token})
                 _logger.warning("No refresh_token returned in Google response: %s", data)
                 record.message_post(body=Markup(_("<b>Oauth Warning:</b> Google xác thực thành công nhưng không trả về refresh_token. Hãy chắc chắn bạn đang dùng prompt=consent hoặc kiểm tra Google Cloud.")))
 
