@@ -8,6 +8,8 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         """
         Đề xuất chuyển kho: tìm sản phẩm thiếu ở kho hiện tại
         nhưng có sẵn (chưa bị giữ bởi đơn khác) ở kho khác.
+        Trả về list grouped by product:
+        [{ product_id, product_name, shortage, sources: [{from_warehouse_id, from_warehouse_name, available_qty, suggested_qty}] }]
         """
         if not so.warehouse_id:
             return []
@@ -43,6 +45,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         suggestions = []
         for sp in shortage_products:
             remaining = sp['shortage']
+            sources = []
             for wh in other_warehouses:
                 if remaining <= 0:
                     break
@@ -56,17 +59,21 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 )
                 if available > 0:
                     suggest_qty = min(available, remaining)
-                    suggestions.append({
-                        'product_id': sp['product_id'],
-                        'product_name': sp['product_name'],
+                    sources.append({
                         'from_warehouse_id': wh.id,
                         'from_warehouse_name': wh.name,
-                        'to_warehouse_name': so.warehouse_id.name,
                         'available_qty': available,
                         'suggested_qty': suggest_qty,
-                        'shortage': sp['shortage'],
                     })
                     remaining -= suggest_qty
+            if sources:
+                suggestions.append({
+                    'product_id': sp['product_id'],
+                    'product_name': sp['product_name'],
+                    'shortage': sp['shortage'],
+                    'to_warehouse_name': so.warehouse_id.name,
+                    'sources': sources,
+                })
 
         return suggestions
 
