@@ -769,6 +769,13 @@ export class DeliveryPlannerDashboard extends Component {
             this.state.filterTagIds.length > 0;
     }
 
+    countTransferWarehouses(so) {
+        if (!so.transfer_suggestions) return 0;
+        const whIds = {};
+        so.transfer_suggestions.forEach(s => (s.sources || []).forEach(src => { whIds[src.from_warehouse_id] = 1; }));
+        return Object.keys(whIds).length;
+    }
+
     resetFilters() {
         this.state.searchQuery = "";
         this.state.filterWarehouseId = "all";
