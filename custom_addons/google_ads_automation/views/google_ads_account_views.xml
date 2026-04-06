@@ -50,10 +50,10 @@
                                 <h4 class="mb-4 text-primary fw-bold"><i class="fa fa-key me-2"></i>Cài Đặt Xác Thực (Credentials)</h4>
                                 <group>
                                     <group string="OAuth 2.0" class="border-0">
-                                        <field name="client_id" password="True"/>
-                                        <field name="client_secret" password="True"/>
-                                        <field name="developer_token" password="True" invisible="is_demo"/>
-                                        <field name="refresh_token" password="True"/>
+                                        <field name="client_id" password="True" groups="base.group_no_one"/>
+                                        <field name="client_secret" password="True" groups="base.group_no_one"/>
+                                        <field name="developer_token" password="True" invisible="is_demo" groups="base.group_no_one"/>
+                                        <field name="refresh_token" password="True" groups="base.group_no_one"/>
                                     </group>
                                 </group>
                                 
@@ -76,9 +76,9 @@
                                 
                                 <group>
                                     <group string="Service Account" class="border-0">
-                                        <field name="service_account_json" placeholder='{"type": "service_account", ...}'/>
+                                        <field name="service_account_json" placeholder='{"type": "service_account", ...}' groups="base.group_no_one"/>
                                         <button name="action_test_service_account" string="Kiểm Tra JSON" type="object" 
-                                            class="btn btn-secondary mt-2 w-100" icon="fa-check-square-o"/>
+                                            class="btn-secondary mt-2 w-100" icon="fa-check-square-o" groups="base.group_no_one"/>
                                     </group>
                                 </group>
 
@@ -86,9 +86,9 @@
                                     <group string="Adsroid AI Integration" class="border-0">
                                         <field name="use_adsroid" widget="boolean_toggle"/>
                                         <field name="auto_apply_adsroid_action" widget="boolean_toggle" invisible="not use_adsroid"/>
-                                        <field name="adsroid_api_key" password="True" invisible="not use_adsroid" required="use_adsroid"/>
-                                        <field name="adsroid_organisation_id" invisible="not use_adsroid" required="use_adsroid"/>
-                                        <field name="adsroid_project_id" invisible="not use_adsroid" required="use_adsroid"/>
+                                        <field name="adsroid_api_key" password="True" invisible="not use_adsroid" required="use_adsroid" groups="base.group_no_one"/>
+                                        <field name="adsroid_organisation_id" invisible="not use_adsroid" required="use_adsroid" groups="base.group_no_one"/>
+                                        <field name="adsroid_project_id" invisible="not use_adsroid" required="use_adsroid" groups="base.group_no_one"/>
                                     </group>
                                 </group>
                             </div>
