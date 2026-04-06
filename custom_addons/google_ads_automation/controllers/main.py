@@ -55,13 +55,17 @@ class GoogleAdsAuthController(http.Controller):
                     'status_message': _('Không tìm thấy bản ghi %s có ID: %s' % (target_model, target_id)),
                 })
 
-            client_id = record.gtm_client_id if is_tag else record.client_id
-            client_secret = record.gtm_client_secret if is_tag else record.client_secret
+            if is_tag:
+                client_id = record.account_id.client_id
+                client_secret = record.account_id.client_secret
+            else:
+                client_id = record.client_id
+                client_secret = record.client_secret
 
             if not client_id or not client_secret:
                 return request.render('http_routing.http_error', {
                     'status_code': 400,
-                    'status_message': _('Tài khoản/Cấu hình chưa được điền Client ID / Client Secret.'),
+                    'status_message': _('Tài khoản/Cấu hình chưa được điền Client ID / Client Secret (Xem lại ở Tab Tài Khoản Google Ads).'),
                 })
 
             # URL Gọi từ đâu thì tạo Redirect URI về đúng đó

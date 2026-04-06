@@ -165,10 +165,14 @@ class GoogleAdsTag(models.Model):
             rec.gtm_variable_count = len(items.filtered(lambda i: i.item_type == 'variable'))
 
     def action_gtm_generate_auth_url(self):
-        """Tạo URL Đăng nhập Google để lấy Refresh Token dành riêng cho GTM."""
+        """Tạo URL Đăng nhập Google để lấy Refresh Token dành riêng cho GTM.
+        Sử dụng chung Client ID / Client Secret từ Tài khoản Google Ads liên kết."""
         self.ensure_one()
-        if not self.gtm_client_id or not self.gtm_client_secret:
-            raise UserError(_('Vui lòng nhập GTM Client ID và Client Secret trước khi Xác thực!'))
+        client_id = self.account_id.client_id
+        client_secret = self.account_id.client_secret
+
+        if not client_id or not client_secret:
+            raise UserError(_('Vui lòng nhập Client ID và Client Secret ở Tab "Tài Khoản Google Ads" liên kết trước khi Xác thực!'))
             
         from urllib.parse import urlencode
         base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
@@ -257,9 +261,10 @@ class GoogleAdsTag(models.Model):
             except Exception as e:
                 raise UserError(_('Lỗi xác thực Service Account: %s') % str(e))
                 
-        else:
-            # Independent OAuth2 Flow for GTM
-            has_gtm_oauth = bool(self.gtm_refresh_token and self.gtm_client_id and self.gtm_client_secret)
+            # Independent OAuth2 Flow for GTM (Uses Account-level Client ID/Secret)
+            client_id = self.account_id.client_id
+            client_secret = self.account_id.client_secret
+            has_gtm_oauth = bool(self.gtm_refresh_token and client_id and client_secret)
             
             if not self.gtm_access_token and not has_gtm_oauth:
                  raise UserError(_('Vui lòng bấm [Xác thực Tài khoản GTM] HOẶC điền đủ bộ [Client ID + Secret + Refresh Token] cho GTM.'))
@@ -270,8 +275,8 @@ class GoogleAdsTag(models.Model):
             if has_gtm_oauth:
                 token_url = 'https://oauth2.googleapis.com/token'
                 token_data = {
-                    'client_id': self.gtm_client_id,
-                    'client_secret': self.gtm_client_secret,
+                    'client_id': client_id,
+                    'client_secret': client_secret,
                     'refresh_token': self.gtm_refresh_token,
                     'grant_type': 'refresh_token',
                 }

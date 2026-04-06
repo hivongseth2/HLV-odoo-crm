@@ -66,16 +66,14 @@
                                    widget="radio"
                                    invisible="tag_type != 'gtm'"/>
 
-                            <!-- OAuth 2.0 Credentials (Independent) -->
+                            <!-- OAuth 2.0 Credentials (Inherited from Account) -->
                             <separator string="Xác Thực GTM (OAuth 2.0)" 
                                        invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"/>
-                            <field name="gtm_client_id" 
-                                   placeholder="Nhập Client ID cho GTM..."
-                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"/>
-                            <field name="gtm_client_secret" 
-                                   password="True" 
-                                   placeholder="Nhập Client Secret..."
-                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"/>
+                            <div class="alert alert-info" invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'">
+                                <i class="fa fa-info-circle me-1"/> 
+                                Sử dụng chung <b>Client ID / Secret</b> từ Tài khoản: 
+                                <field name="account_id" readonly="1" class="fw-bold"/>.
+                            </div>
                             
                             <div class="o_td_label" invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'">
                                 <label for="action_gtm_generate_auth_url" string="Xác Thực"/>
