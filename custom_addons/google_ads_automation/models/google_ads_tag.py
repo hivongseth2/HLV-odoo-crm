@@ -186,7 +186,7 @@ class GoogleAdsTag(models.Model):
         
         auth_url = 'https://accounts.google.com/o/oauth2/v2/auth'
         params = {
-            'client_id': self.gtm_client_id,
+            'client_id': client_id, # Dùng biến local đã lấy từ account_id
             'redirect_uri': redirect_uri,
             'response_type': 'code',
             'scope': ' '.join(scopes),
