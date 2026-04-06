@@ -34,18 +34,38 @@ class GoogleAdsAuthController(http.Controller):
             })
 
         try:
-            account_id = int(state)
-            account = request.env['google.ads.account'].sudo().browse(account_id)
-            if not account.exists():
+            # Phân tích state để biết đối tượng cần xác thực (Account hay Tag Config)
+            target_model = 'google.ads.account'
+            target_id = False
+            is_tag = False
+            
+            if state.startswith('tag_'):
+                is_tag = True
+                target_model = 'google.ads.tag'
+                target_id = int(state.replace('tag_', ''))
+            elif state.startswith('acc_'):
+                target_id = int(state.replace('acc_', ''))
+            else:
+                target_id = int(state) # Tương thích ngược
+
+            record = request.env[target_model].sudo().browse(target_id)
+            if not record.exists():
                 return request.render('http_routing.http_error', {
                     'status_code': 404,
-                    'status_message': _('Không tìm thấy tài khoản Google Ads có ID: %s' % account_id),
+                    'status_message': _('Không tìm thấy bản ghi %s có ID: %s' % (target_model, target_id)),
                 })
 
-            if not account.client_id or not account.client_secret:
+            if is_tag:
+                client_id = record.account_id.client_id
+                client_secret = record.account_id.client_secret
+            else:
+                client_id = record.client_id
+                client_secret = record.client_secret
+
+            if not client_id or not client_secret:
                 return request.render('http_routing.http_error', {
                     'status_code': 400,
-                    'status_message': _('Tài khoản chưa được cấu hình Client ID / Client Secret.'),
+                    'status_message': _('Tài khoản/Cấu hình chưa được điền Client ID / Client Secret (Xem lại ở Tab Tài Khoản Google Ads).'),
                 })
 
             # URL Gọi từ đâu thì tạo Redirect URI về đúng đó
@@ -56,8 +76,8 @@ class GoogleAdsAuthController(http.Controller):
             token_url = "https://oauth2.googleapis.com/token"
             payload = {
                 'code': code,
-                'client_id': account.client_id,
-                'client_secret': account.client_secret,
+                'client_id': client_id,
+                'client_secret': client_secret,
                 'redirect_uri': redirect_uri,
                 'grant_type': 'authorization_code',
             }
@@ -69,15 +89,22 @@ class GoogleAdsAuthController(http.Controller):
             refresh_token = data.get('refresh_token')
             
             if refresh_token:
-                account.write({'refresh_token': refresh_token})
-                account.message_post(body=Markup(_("<b>Xác thực OAuth 2.0 thành công!</b> Đã cấp phát Refresh Token mới tự động.")))
+                if is_tag:
+                    record.write({'gtm_refresh_token': refresh_token})
+                else:
+                    record.write({'refresh_token': refresh_token})
+                record.message_post(body=Markup(_("<b>Xác thực OAuth 2.0 thành công!</b> Đã cấp phát Refresh Token mới tự động.")))
             else:
                 _logger.warning("No refresh_token returned in Google response: %s", data)
-                account.message_post(body=Markup(_("<b>Oauth Warning:</b> Google xác thực thành công nhưng không trả về refresh_token. Hãy chắc chắn bạn đang dùng prompt=consent hoặc kiểm tra Google Cloud.")))
+                record.message_post(body=Markup(_("<b>Oauth Warning:</b> Google xác thực thành công nhưng không trả về refresh_token. Hãy chắc chắn bạn đang dùng prompt=consent hoặc kiểm tra Google Cloud.")))
 
-            # Redirect về Form Tài khoản
-            action = request.env.ref('google_ads_automation.action_google_ads_account').id
-            return request.redirect(f'/web#id={account.id}&view_type=form&model=google.ads.account&action={action}')
+            # Redirect về Form tương ứng
+            if is_tag:
+                action = request.env.ref('google_ads_automation.action_google_ads_tag').id
+                return request.redirect(f'/web#id={record.id}&view_type=form&model=google.ads.tag&action={action}')
+            else:
+                action = request.env.ref('google_ads_automation.action_google_ads_account').id
+                return request.redirect(f'/web#id={record.id}&view_type=form&model=google.ads.account&action={action}')
 
         except Exception as e:
             _logger.exception("Lỗi xử lý OAuth Callback Google Ads: %s", str(e))

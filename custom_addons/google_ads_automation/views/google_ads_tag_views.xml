@@ -65,11 +65,34 @@
                             <field name="gtm_auth_type"
                                    widget="radio"
                                    invisible="tag_type != 'gtm'"/>
-                                   
-                            <!-- Fields for OAuth2 -->
-                            <field name="gtm_access_token"
-                                   placeholder="Dạng ya29.a0..."
-                                   password="True"
+
+                            <!-- OAuth 2.0 Credentials (Inherited from Account) -->
+                            <separator string="Xác Thực GTM (OAuth 2.0)" 
+                                       invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"/>
+                            <div class="alert alert-info" invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'">
+                                <i class="fa fa-info-circle me-1"/> 
+                                Sử dụng chung <b>Client ID / Secret</b> từ Tài khoản: 
+                                <field name="account_id" readonly="1" class="fw-bold"/>.
+                            </div>
+                            
+                            <div class="o_td_label" invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'">
+                                <label for="action_gtm_generate_auth_url" string="Xác Thực"/>
+                            </div>
+                            <div invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'">
+                                <button name="action_gtm_generate_auth_url" 
+                                        string="Lấy Mã Xác Thực GTM" 
+                                        type="object" 
+                                        class="btn-primary w-100"
+                                        icon="fa-google"/>
+                            </div>
+
+                            <field name="gtm_refresh_token" 
+                                   readonly="1" 
+                                   password="True" 
+                                   invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth' or not gtm_refresh_token"/>
+                            <field name="gtm_access_token" 
+                                   password="True" 
+                                   placeholder="Tự động sinh sau khi xác thực..."
                                    invisible="tag_type != 'gtm' or gtm_auth_type != 'oauth'"/>
                                    
                             <field name="measurement_id"

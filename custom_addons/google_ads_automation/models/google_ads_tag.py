@@ -125,17 +125,22 @@ class GoogleAdsTag(models.Model):
 
     # ── GTM API credentials (chỉ cần cho Real mode) ──
     gtm_auth_type = fields.Selection([
-        ('oauth', 'OAuth 2.0 (Lấy chung từ cài đặt Tài Khoản Google)'),
+        ('oauth', 'OAuth 2.0 (Tài khoản Google riêng cho GTM)'),
         ('service_account', 'Service Account (File JSON)'),
     ], string='Kiểu Xác Thực', default='oauth')
     gtm_account_id = fields.Char(
         string='GTM Account ID',
         help='Lấy từ GTM > Admin > Account Settings (dạng số)',
     )
+    # --- OAuth 2.0 Fields ---
+    gtm_client_id = fields.Char(string='GTM Client ID')
+    gtm_client_secret = fields.Char(string='GTM Client Secret')
+    gtm_refresh_token = fields.Char(string='GTM Refresh Token')
+
     gtm_access_token = fields.Char(
         string='Access Token (Thủ Công)',
         password=True,
-        help='OAuth2 access token sống 1 tiếng. Nếu để trống, hệ thống sẽ tự sinh mã mới dựa trên Refresh Token của Tài khoản Google.',
+        help='OAuth2 access token sống 1 tiếng. Nếu sử dụng OAuth2 bên trên, hệ thống sẽ tự sinh mã mới.',
     )
     
     # ── GA4 Kho dữ liệu ──
@@ -158,6 +163,45 @@ class GoogleAdsTag(models.Model):
             rec.gtm_tag_count = len(items.filtered(lambda i: i.item_type == 'tag'))
             rec.gtm_trigger_count = len(items.filtered(lambda i: i.item_type == 'trigger'))
             rec.gtm_variable_count = len(items.filtered(lambda i: i.item_type == 'variable'))
+
+    def action_gtm_generate_auth_url(self):
+        """Tạo URL Đăng nhập Google để lấy Refresh Token dành riêng cho GTM.
+        Sử dụng chung Client ID / Client Secret từ Tài khoản Google Ads liên kết."""
+        self.ensure_one()
+        client_id = self.account_id.client_id
+        client_secret = self.account_id.client_secret
+
+        if not client_id or not client_secret:
+            raise UserError(_('Vui lòng nhập Client ID và Client Secret ở Tab "Tài Khoản Google Ads" liên kết trước khi Xác thực!'))
+            
+        from urllib.parse import urlencode
+        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
+        redirect_uri = f"{base_url}/google_ads/auth_callback"
+        
+        # Scopes cho GTM và Analytics
+        scopes = [
+            'https://www.googleapis.com/auth/tagmanager.readonly',
+            'https://www.googleapis.com/auth/analytics.readonly'
+        ]
+        
+        auth_url = 'https://accounts.google.com/o/oauth2/v2/auth'
+        params = {
+            'client_id': client_id, # Dùng biến local đã lấy từ account_id
+            'redirect_uri': redirect_uri,
+            'response_type': 'code',
+            'scope': ' '.join(scopes),
+            'access_type': 'offline',
+            'prompt': 'consent',
+            'state': f"tag_{self.id}", # Prefix 'tag_' để callback nhận diện
+        }
+        
+        url = f"{auth_url}?{urlencode(params)}"
+        
+        return {
+            'type': 'ir.actions.act_url',
+            'url': url,
+            'target': 'new',
+        }
 
     def action_sync_from_gtm(self):
         """Kéo dữ liệu Tags/Triggers/Variables từ GTM API về Odoo (GET only)"""
@@ -217,20 +261,23 @@ class GoogleAdsTag(models.Model):
             except Exception as e:
                 raise UserError(_('Lỗi xác thực Service Account: %s') % str(e))
                 
-        else:
-            # OAuth2 Flow (Sử dụng chung cấu hình với Account Google Ads)
-            if not self.gtm_access_token and not (self.account_id.refresh_token and self.account_id.client_id and self.account_id.client_secret):
-                 raise UserError(_('Vui lòng điền [Access Token (Thủ Công)] HOẶC khai báo ĐỦ BỘ [Client ID + Secret + Refresh Token] bên tab Tài Khoản Google.'))
+            # Independent OAuth2 Flow for GTM (Uses Account-level Client ID/Secret)
+            client_id = self.account_id.client_id
+            client_secret = self.account_id.client_secret
+            has_gtm_oauth = bool(self.gtm_refresh_token and client_id and client_secret)
+            
+            if not self.gtm_access_token and not has_gtm_oauth:
+                 raise UserError(_('Vui lòng bấm [Xác thực Tài khoản GTM] HOẶC điền đủ bộ [Client ID + Secret + Refresh Token] cho GTM.'))
 
             final_access_token = self.gtm_access_token
 
-            # Nếu cấu hình đủ bộ Refresh Token => Bỏ qua Access Token thủ công, ưu tiên lấy Token mới
-            if self.account_id.refresh_token and self.account_id.client_id and self.account_id.client_secret:
+            # Nếu cấu hình đủ bộ GTM Refresh Token => Tự động lấy Token mới
+            if has_gtm_oauth:
                 token_url = 'https://oauth2.googleapis.com/token'
                 token_data = {
-                    'client_id': self.account_id.client_id,
-                    'client_secret': self.account_id.client_secret,
-                    'refresh_token': self.account_id.refresh_token,
+                    'client_id': client_id,
+                    'client_secret': client_secret,
+                    'refresh_token': self.gtm_refresh_token,
                     'grant_type': 'refresh_token',
                 }
                 try:
@@ -238,15 +285,15 @@ class GoogleAdsTag(models.Model):
                     token_resp.raise_for_status()
                     final_access_token = token_resp.json().get('access_token')
                     if not final_access_token:
-                        raise UserError(_('Không lấy được Access Token tự động từ Google. Hãy kiểm tra lại Refresh Token và Client ID/Secret ở tab Tài Khoản Google.'))
+                        raise UserError(_('Không lấy được Access Token tự động từ Google GTM. Kiểm tra lại thông tin Xác thực GTM.'))
                     
-                    # Cập nhật lại ô Access Token thủ công trên giao diện để user thấy
+                    # Lưu lại để dùng cho GA4 hoặc các lần sau trong vòng 1h
                     self.gtm_access_token = final_access_token
                 except _requests.exceptions.RequestException as e:
                     err_msg = str(e)
                     if hasattr(e, 'response') and e.response is not None:
                         err_msg += f" - {e.response.text}"
-                    raise UserError(_('Lỗi khi xin Access Token mới tự động từ Account: %s') % err_msg)
+                    raise UserError(_('Lỗi khi làm mới Access Token GTM: %s') % err_msg)
 
         if not final_access_token:
             raise UserError(_('Không có Access Token hợp lệ để gọi GTM API.'))
