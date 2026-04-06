@@ -795,6 +795,26 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.currentPage = 1;
         this.fetchData();
     }
+
+    exportExcel() {
+        const params = new URLSearchParams({
+            search_query: this.state.searchQuery.trim(),
+            filter_warehouse_id: this.state.filterWarehouseId,
+            filter_delivery_status: this.state.filterDeliveryStatus,
+            filter_stock_status: this.state.filterStockStatus,
+            filter_packing_status: this.state.filterPackingStatus,
+            filter_date_from: this.state.filterDateFrom || '',
+            filter_date_to: this.state.filterDateTo || '',
+            filter_po_date_from: this.state.filterPODateFrom || '',
+            filter_po_date_to: this.state.filterPODateTo || '',
+            filter_po_status: this.state.filterPOStatus,
+            filter_saler_code: this.state.filterSalerCode.trim(),
+            filter_htgh: this.state.filterHtgh.trim(),
+            filter_delivery_type: this.state.filterDeliveryType,
+            filter_tag_ids: this.state.filterTagIds.join(','),
+        });
+        window.open(`/hlv_sale_delivery_planning/export_excel?${params.toString()}`, '_blank');
+    }
 }
 
 registry.category("actions").add("hlv_sale_delivery_planning.dashboard", DeliveryPlannerDashboard);
