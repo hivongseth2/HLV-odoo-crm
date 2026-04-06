@@ -189,16 +189,6 @@
                         </table>
                     </div>
                 </div>
-                                                <i class="fa fa-arrow-right me-1"></i>
-                                                <t t-esc="this.formatQty(sug.suggested_qty)"/>
-                                            </span>
-                                        </td>
-                                    </tr>
-                                </t>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
 
                 <!-- Đơn Mua (PO) trong drawer -->
                 <div t-if="state.selectedOrder.pos and state.selectedOrder.pos.length > 0">
