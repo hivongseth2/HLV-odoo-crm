@@ -132,6 +132,58 @@
                     </tbody>
                 </table>
 
+                <!-- Đề xuất chuyển kho -->
+                <div t-if="state.selectedOrder.transfer_suggestions and state.selectedOrder.transfer_suggestions.length > 0"
+                     class="mb-4">
+                    <h6 class="text-muted text-uppercase small mb-3">
+                        <i class="fa fa-exchange me-1" title="Đề xuất chuyển kho"></i> Đề Xuất Chuyển Kho
+                    </h6>
+                    <div class="alert alert-warning border-warning bg-warning bg-opacity-10 p-3 shadow-sm">
+                        <div class="small text-muted mb-2">
+                            <i class="fa fa-info-circle me-1"></i>
+                            Các sản phẩm thiếu có thể chuyển từ kho khác (chỉ tính hàng chưa bị giữ bởi đơn khác)
+                        </div>
+                        <table class="table table-sm table-bordered table-hover text-center align-middle bg-white mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="text-start">Sản phẩm</th>
+                                    <th width="100">Từ kho</th>
+                                    <th width="70">Khả dụng</th>
+                                    <th width="70">Thiếu</th>
+                                    <th width="90">Đề xuất</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="state.selectedOrder.transfer_suggestions" t-as="sug" t-key="sug_index">
+                                    <tr>
+                                        <td class="text-start small">
+                                            <t t-esc="sug.product_name"/>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info bg-opacity-25 text-dark">
+                                                <i class="fa fa-building me-1"></i>
+                                                <t t-esc="sug.from_warehouse_name"/>
+                                            </span>
+                                        </td>
+                                        <td class="text-success fw-bold">
+                                            <t t-esc="this.formatQty(sug.available_qty)"/>
+                                        </td>
+                                        <td class="text-danger fw-bold">
+                                            <t t-esc="this.formatQty(sug.shortage)"/>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-warning text-dark fw-bold">
+                                                <i class="fa fa-arrow-right me-1"></i>
+                                                <t t-esc="this.formatQty(sug.suggested_qty)"/>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- Đơn Mua (PO) trong drawer -->
                 <div t-if="state.selectedOrder.pos and state.selectedOrder.pos.length > 0">
                     <h6 class="text-muted text-uppercase small mb-3">
