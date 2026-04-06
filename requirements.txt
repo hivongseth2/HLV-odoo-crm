@@ -25,3 +25,4 @@ jsonschema
 PyMuPDF
 markdown2
 requests
+pgvector
