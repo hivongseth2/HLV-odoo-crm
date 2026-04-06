@@ -1,0 +1,31 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+#	* llm_openai
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 18.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-01-01 00:00+0000\n"
+"PO-Revision-Date: 2025-01-01 00:00+0000\n"
+"Last-Translator: HLV Team\n"
+"Language-Team: Vietnamese\n"
+"Language: vi_VN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. module: llm_openai
+#: selection:llm.provider,service:
+msgid "OpenAI"
+msgstr "OpenAI"
+
+#. module: llm_openai
+#: model:llm.publisher,name:llm_openai.llm_publisher_openai
+msgid "OpenAI"
+msgstr "OpenAI"
+
+#. module: llm_openai
+#: model:llm.publisher,description:llm_openai.llm_publisher_openai
+msgid "OpenAI is an artificial intelligence research organization. Founded in 2015, OpenAI's mission is to ensure that artificial general intelligence benefits all of humanity. The company is known for developing the GPT series of language models."
+msgstr "OpenAI là tổ chức nghiên cứu trí tuệ nhân tạo. Được thành lập năm 2015, sứ mệnh của OpenAI là đảm bảo trí tuệ nhân tạo tổng quát mang lại lợi ích cho toàn nhân loại. Công ty nổi tiếng với việc phát triển dòng mô hình ngôn ngữ GPT."

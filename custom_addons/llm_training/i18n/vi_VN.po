@@ -1,0 +1,316 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+#	* llm_training
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 18.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-01-01 00:00+0000\n"
+"PO-Revision-Date: 2025-01-01 00:00+0000\n"
+"Last-Translator: HLV Team\n"
+"Language-Team: Vietnamese\n"
+"Language: vi_VN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. module: llm_training
+#: model:llm.training.dataset,_description
+msgid "LLM Training Dataset"
+msgstr "Bộ dữ liệu huấn luyện AI"
+
+#. module: llm_training
+#: model:llm.training.dataset,field_description:llm_training.field_llm_training_dataset__file_ids
+msgid "Dataset Files"
+msgstr "Tệp dữ liệu"
+
+#. module: llm_training
+#: model:llm.training.dataset,help:llm_training.field_llm_training_dataset__file_ids
+msgid "JSON files containing training examples"
+msgstr "Tệp JSON chứa ví dụ huấn luyện"
+
+#. module: llm_training
+#: model:llm.training.dataset,field_description:llm_training.field_llm_training_dataset__job_ids
+msgid "Training Jobs"
+msgstr "Công việc huấn luyện"
+
+#. module: llm_training
+#: model:llm.training.dataset,field_description:llm_training.field_llm_training_dataset__example_count
+msgid "Number of Examples"
+msgstr "Số ví dụ"
+
+#. module: llm_training
+#: model:llm.training.dataset,field_description:llm_training.field_llm_training_dataset__file_count
+msgid "Number of Files"
+msgstr "Số tệp"
+
+#. module: llm_training
+#: model:llm.training.job,_description
+msgid "LLM Fine-tuning Job"
+msgstr "Công việc tinh chỉnh AI"
+
+#. module: llm_training
+#: model:llm.training.job,field_description:llm_training.field_llm_training_job__provider_id
+msgid "LLM Provider"
+msgstr "Nhà cung cấp AI"
+
+#. module: llm_training
+#: model:llm.training.job,field_description:llm_training.field_llm_training_job__base_model_id
+msgid "Base Model"
+msgstr "Mô hình cơ sở"
+
+#. module: llm_training
+#: model:llm.training.job,field_description:llm_training.field_llm_training_job__trained_model_name
+msgid "Trained Model Name"
+msgstr "Tên mô hình đã huấn luyện"
+
+#. module: llm_training
+#: model:llm.training.job,help:llm_training.field_llm_training_job__trained_model_name
+msgid "Name of the fine-tuned model"
+msgstr "Tên mô hình đã tinh chỉnh"
+
+#. module: llm_training
+#: selection:llm.training.job,state:
+msgid "Draft"
+msgstr "Nháp"
+
+#. module: llm_training
+#: selection:llm.training.job,state:
+msgid "Validating"
+msgstr "Đang xác thực"
+
+#. module: llm_training
+#: selection:llm.training.job,state:
+msgid "Preparing"
+msgstr "Đang chuẩn bị"
+
+#. module: llm_training
+#: selection:llm.training.job,state:
+msgid "Queued"
+msgstr "Đang xếp hàng"
+
+#. module: llm_training
+#: selection:llm.training.job,state:
+msgid "Training"
+msgstr "Đang huấn luyện"
+
+#. module: llm_training
+#: selection:llm.training.job,state:
+msgid "Completed"
+msgstr "Hoàn thành"
+
+#. module: llm_training
+#: selection:llm.training.job,state:
+msgid "Failed"
+msgstr "Thất bại"
+
+#. module: llm_training
+#: selection:llm.training.job,state:
+msgid "Cancelled"
+msgstr "Đã hủy"
+
+#. module: llm_training
+#: model:llm.training.job,field_description:llm_training.field_llm_training_job__state
+msgid "Status"
+msgstr "Trạng thái"
+
+#. module: llm_training
+#: model:llm.training.job,field_description:llm_training.field_llm_training_job__hyperparameters
+msgid "Hyperparameters"
+msgstr "Siêu tham số"
+
+#. module: llm_training
+#: model:llm.training.job,help:llm_training.field_llm_training_job__hyperparameters
+msgid "Training hyperparameters (epochs, batch size, etc.)"
+msgstr "Siêu tham số huấn luyện (số epoch, kích thước batch, v.v.)"
+
+#. module: llm_training
+#: model:llm.training.job,field_description:llm_training.field_llm_training_job__dataset_ids
+msgid "Datasets"
+msgstr "Bộ dữ liệu"
+
+#. module: llm_training
+#: model:llm.training.job,field_description:llm_training.field_llm_training_job__external_job_id
+msgid "External Job ID"
+msgstr "ID công việc bên ngoài"
+
+#. module: llm_training
+#: model:llm.training.job,help:llm_training.field_llm_training_job__external_job_id
+msgid "ID of the job on the provider's system"
+msgstr "ID công việc trên hệ thống nhà cung cấp"
+
+#. module: llm_training
+#: model:llm.training.job,field_description:llm_training.field_llm_training_job__training_metrics
+msgid "Training Metrics"
+msgstr "Chỉ số huấn luyện"
+
+#. module: llm_training
+#: model:llm.training.job,help:llm_training.field_llm_training_job__training_metrics
+msgid "Metrics from the training job (loss, accuracy, etc.)"
+msgstr "Chỉ số từ công việc huấn luyện (loss, accuracy, v.v.)"
+
+#. module: llm_training
+#: model:llm.training.job,field_description:llm_training.field_llm_training_job__training_logs
+msgid "Training Logs"
+msgstr "Nhật ký huấn luyện"
+
+#. module: llm_training
+#: model:llm.training.job,help:llm_training.field_llm_training_job__training_logs
+msgid "Logs from the training process"
+msgstr "Nhật ký từ quá trình huấn luyện"
+
+#. module: llm_training
+#: model:llm.training.job,field_description:llm_training.field_llm_training_job__estimated_cost
+msgid "Estimated Cost"
+msgstr "Chi phí ước tính"
+
+#. module: llm_training
+#: model:llm.training.job,help:llm_training.field_llm_training_job__estimated_cost
+msgid "Estimated cost of the training job in USD"
+msgstr "Chi phí ước tính công việc huấn luyện (USD)"
+
+#. module: llm_training
+#: model:llm.training.job,field_description:llm_training.field_llm_training_job__final_cost
+msgid "Final Cost"
+msgstr "Chi phí cuối cùng"
+
+#. module: llm_training
+#: model:llm.training.job,help:llm_training.field_llm_training_job__final_cost
+msgid "Final cost of the training job in USD"
+msgstr "Chi phí cuối cùng công việc huấn luyện (USD)"
+
+#. module: llm_training
+#: model:llm.training.job,field_description:llm_training.field_llm_training_job__resulting_model_id
+msgid "Resulting Model"
+msgstr "Mô hình kết quả"
+
+#. module: llm_training
+#: model:llm.training.job,help:llm_training.field_llm_training_job__resulting_model_id
+msgid "The fine-tuned model created by this job"
+msgstr "Mô hình tinh chỉnh được tạo bởi công việc này"
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.llm_training_dataset_form_view
+msgid "Validate"
+msgstr "Xác thực"
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.llm_training_dataset_form_view
+msgid "Dataset Name"
+msgstr "Tên bộ dữ liệu"
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.llm_training_dataset_form_view
+msgid "Description"
+msgstr "Mô tả"
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.llm_training_dataset_form_view
+msgid "Dataset description..."
+msgstr "Mô tả bộ dữ liệu..."
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.llm_training_dataset_form_view
+msgid "Dataset Files"
+msgstr "Tệp dữ liệu"
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.llm_training_dataset_form_view
+msgid "Upload Dataset Files"
+msgstr "Tải lên tệp dữ liệu"
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.llm_training_dataset_search_view
+msgid "Archived"
+msgstr "Đã lưu trữ"
+
+#. module: llm_training
+#: model:ir.actions.act_window,name:llm_training.action_llm_training_datasets
+msgid "LLM Training Datasets"
+msgstr "Bộ dữ liệu huấn luyện AI"
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.action_llm_training_datasets
+msgid "Create your first training dataset!"
+msgstr "Tạo bộ dữ liệu huấn luyện đầu tiên!"
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.action_llm_training_datasets
+msgid "Upload JSON/JSONL files with training examples to fine-tune LLM models."
+msgstr "Tải lên tệp JSON/JSONL chứa ví dụ huấn luyện để tinh chỉnh mô hình AI."
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.llm_training_job_form_view
+msgid "Submit"
+msgstr "Gửi"
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.llm_training_job_form_view
+msgid "Check Status"
+msgstr "Kiểm tra trạng thái"
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.llm_training_job_form_view
+msgid "Cancel"
+msgstr "Hủy"
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.llm_training_job_form_view
+msgid "Job Name"
+msgstr "Tên công việc"
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.llm_training_job_form_view
+msgid "Job description..."
+msgstr "Mô tả công việc..."
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.llm_training_job_form_view
+msgid "Results"
+msgstr "Kết quả"
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.llm_training_job_search_view
+msgid "In Progress"
+msgstr "Đang xử lý"
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.llm_training_job_search_view
+msgid "Group By"
+msgstr "Nhóm theo"
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.llm_training_job_search_view
+msgid "Provider"
+msgstr "Nhà cung cấp"
+
+#. module: llm_training
+#: model:ir.actions.act_window,name:llm_training.action_llm_training_jobs
+msgid "LLM Training Jobs"
+msgstr "Công việc huấn luyện AI"
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.action_llm_training_jobs
+msgid "Create your first training job!"
+msgstr "Tạo công việc huấn luyện đầu tiên!"
+
+#. module: llm_training
+#: model_terms:ir.ui.view,arch_db:llm_training.action_llm_training_jobs
+msgid "Configure fine-tuning jobs to train custom LLM models."
+msgstr "Cấu hình công việc tinh chỉnh để huấn luyện mô hình AI tùy chỉnh."
+
+#. module: llm_training
+#: model:ir.ui.menu,name:llm_training.menu_llm_training
+msgid "Training"
+msgstr "Huấn luyện"
+
+#. module: llm_training
+#: model:ir.ui.menu,name:llm_training.menu_llm_training_datasets
+msgid "Datasets"
+msgstr "Bộ dữ liệu"
+
+#. module: llm_training
+#: model:ir.ui.menu,name:llm_training.menu_llm_training_jobs
+msgid "Jobs"
+msgstr "Công việc"
