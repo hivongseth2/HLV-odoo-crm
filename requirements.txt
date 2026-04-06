@@ -26,3 +26,4 @@ PyMuPDF
 markdown2
 requests
 pgvector
+beautifulsoup4

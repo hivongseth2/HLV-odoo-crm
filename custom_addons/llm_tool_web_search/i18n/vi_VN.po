@@ -1,0 +1,56 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+#	* llm_tool_web_search
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 18.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-01-01 00:00+0000\n"
+"PO-Revision-Date: 2025-01-01 00:00+0000\n"
+"Last-Translator: HLV Team\n"
+"Language-Team: Vietnamese\n"
+"Language: vi_VN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. module: llm_tool_web_search
+#: model:llm.web.search.site,_description
+msgid "Website được phép tìm kiếm"
+msgstr "Website được phép tìm kiếm"
+
+#. module: llm_tool_web_search
+#: model:llm.web.search.site,field_description:name
+msgid "Website Name"
+msgstr "Tên website"
+
+#. module: llm_tool_web_search
+#: model:llm.web.search.site,field_description:url
+msgid "Base URL"
+msgstr "URL gốc"
+
+#. module: llm_tool_web_search
+#: model:llm.web.search.site,field_description:description
+msgid "Description"
+msgstr "Mô tả"
+
+#. module: llm_tool_web_search
+#: model:ir.actions.act_window,name:action_web_search_sites
+msgid "Search Websites"
+msgstr "Website tìm kiếm"
+
+#. module: llm_tool_web_search
+#: model:ir.ui.menu,name:menu_web_search_sites
+msgid "Search Websites"
+msgstr "Website tìm kiếm"
+
+#. module: llm_tool_web_search
+#: model_terms:ir.ui.view,arch_db:view_web_search_site_form
+msgid "Add a website for AI search!"
+msgstr "Thêm website cho AI tìm kiếm!"
+
+#. module: llm_tool_web_search
+#: selection:llm.tool,implementation:
+msgid "Web Search"
+msgstr "Tìm kiếm Web"

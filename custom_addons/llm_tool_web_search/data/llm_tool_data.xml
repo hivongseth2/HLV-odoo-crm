@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo noupdate="1">
+
+    <!-- ============================================================ -->
+    <!-- Pre-configured websites -->
+    <!-- ============================================================ -->
+    <record id="site_ketnoitieudung" model="llm.web.search.site">
+        <field name="name">Kết Nối Tiêu Dùng</field>
+        <field name="url">https://www.ketnoitieudung.vn</field>
+        <field name="description">Trang thông tin sản phẩm tiêu dùng, đánh giá, so sánh sản phẩm</field>
+        <field name="sequence">1</field>
+    </record>
+
+    <record id="site_mecsu" model="llm.web.search.site">
+        <field name="name">Mecsu</field>
+        <field name="url">https://mecsu.vn</field>
+        <field name="description">Giải pháp công nghệ, thiết bị điện tử, sản phẩm Mecsu</field>
+        <field name="sequence">2</field>
+    </record>
+
+    <record id="site_visior" model="llm.web.search.site">
+        <field name="name">Visior</field>
+        <field name="url">https://visior.vn</field>
+        <field name="description">Sản phẩm và dịch vụ Visior</field>
+        <field name="sequence">3</field>
+    </record>
+
+    <!-- ============================================================ -->
+    <!-- Web Search Tool -->
+    <!-- ============================================================ -->
+    <record id="llm_tool_web_search" model="llm.tool">
+        <field name="name">web_search</field>
+        <field name="description">Tìm kiếm và trích xuất nội dung từ các website được cấu hình (ketnoitieudung.vn, mecsu.vn, visior.vn). Sử dụng khi cần tra cứu thông tin sản phẩm, bài viết, hoặc nội dung cập nhật từ các trang web của công ty.</field>
+        <field name="implementation">web_search</field>
+        <field name="active" eval="True" />
+        <field name="default" eval="False" />
+        <field name="requires_user_consent" eval="False" />
+        <field name="read_only_hint" eval="True" />
+        <field name="destructive_hint" eval="False" />
+        <field name="open_world_hint" eval="True" />
+    </record>
+
+</odoo>
