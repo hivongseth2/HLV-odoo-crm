@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- List View -->
+    <record id="view_api_namespace_list" model="ir.ui.view">
+        <field name="name">api.namespace.list</field>
+        <field name="model">api.namespace</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="description"/>
+                <field name="last_log_date"/>
+                <field name="log_count"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_api_namespace_form" model="ir.ui.view">
+        <field name="name">api.namespace.form</field>
+        <field name="model">api.namespace</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_show_logs" type="object" class="oe_stat_button" icon="fa-history">
+                            <field name="log_count" widget="statinfo" string="Logs"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Namespace Name"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="description"/>
+                            <field name="active" widget="boolean_toggle"/>
+                            <field name="last_log_date" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="log_request"/>
+                            <field name="log_response"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Configuration">
+                            <group>
+                                <field name="token" readonly="1"/>
+                                <button name="reset_token" type="object" string="Reset Token" 
+                                        class="btn-primary" confirm="Are you sure you want to reset the token?"/>
+                                <field name="spec_url" widget="url"/>
+                            </group>
+                        </page>
+                        <page string="Users">
+                            <field name="user_ids">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="login"/>
+                                    <field name="api_token"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Access">
+                            <field name="access_ids" context="{'default_namespace_id': id}" >
+                                <list>
+                                    <field name="model_id"/>
+                                    <field name="api_create" widget="boolean_toggle"/>
+                                    <field name="api_read" widget="boolean_toggle"/>
+                                    <field name="api_update" widget="boolean_toggle"/>
+                                    <field name="api_delete" widget="boolean_toggle"/>
+                                    <field name="active" widget="boolean_toggle"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_api_namespace_search" model="ir.ui.view">
+        <field name="name">api.namespace.search</field>
+        <field name="model">api.namespace</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="description"/>
+                <filter string="Active" name="active" domain="[('active', '=', True)]"/>
+                <filter string="Inactive" name="inactive" domain="[('active', '=', False)]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Active" name="groupby_active" context="{'group_by': 'active'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_api_namespace" model="ir.actions.act_window">
+        <field name="name">API Namespaces</field>
+        <field name="res_model">api.namespace</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_api_namespace_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create your first API Namespace
+            </p>
+            <p>
+                API Namespaces allow you to configure different API integrations
+                with specific access rules and logging options.
+            </p>
+        </field>
+    </record>
+</odoo>

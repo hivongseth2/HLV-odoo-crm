@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Main Menu -->
+    <menuitem id="menu_api_root"
+              name="API Configuration"
+              sequence="100"
+              groups="group_api_user"
+              web_icon="pragmatic_engineering_api,static/description/icon.png"/>
+    
+    <!-- Configuration Menu -->
+    <menuitem id="menu_api_configuration"
+              name="Configuration"
+              parent="menu_api_root"
+              sequence="10"/>
+    
+    <!-- Namespace Menu -->
+    <menuitem id="menu_api_namespace"
+              name="API Namespaces"
+              parent="menu_api_configuration"
+              action="action_api_namespace"
+              sequence="10"/>
+    
+    <!-- Access Menu -->
+    <menuitem id="menu_api_access"
+              name="API Access"
+              parent="menu_api_configuration"
+              action="action_api_access"
+              sequence="20"/>
+    
+    <!-- Logs Menu -->
+    <menuitem id="menu_api_logs"
+              name="Logs"
+              parent="menu_api_root"
+              sequence="20"/>
+    
+    <menuitem id="menu_api_log"
+              name="API Logs"
+              parent="menu_api_logs"
+              action="action_api_log"
+              sequence="10"/>
+</odoo>

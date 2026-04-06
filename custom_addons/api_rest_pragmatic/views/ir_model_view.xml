@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Extend Model Form View -->
+    <record id="view_model_form_api" model="ir.ui.view">
+        <field name="name">ir.model.form.api</field>
+        <field name="model">ir.model</field>
+        <field name="inherit_id" ref="base.view_model_form"/>
+        <field name="arch" type="xml">
+            <header position="inside">
+                <button name="%(action_api_access)d" type="action" 
+                        class="oe_stat_button" icon="fa-key"
+                        context="{'search_default_model_id': id, 'default_model_id': id}"
+                        groups="pragmatic_engineering_api.group_api_user">
+                    <field name="api_access_count" widget="statinfo" string="API Access"/>
+                </button>
+            </header>
+        </field>
+    </record>
+</odoo>

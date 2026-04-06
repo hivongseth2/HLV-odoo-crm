@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Extend User Form View -->
+    <record id="view_users_form_api" model="ir.ui.view">
+        <field name="name">res.users.form.api</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form"/>
+        <field name="arch" type="xml">
+            <notebook position="inside">
+                <page string="API Configuration" groups="pragmatic_engineering_api.group_api_user">
+                    <group>
+                        <group string="API Token">
+                            <field name="api_token" readonly="1"/>
+                            <button name="reset_api_token" type="object" 
+                                    string="Reset Token" class="btn-primary"
+                                    confirm="Are you sure you want to reset the API token?"/>
+                        </group>
+                        <group string="API Integrations">
+                            <field name="namespace_ids" widget="many2many_tags"/>
+                        </group>
+                    </group>
+                </page>
+            </notebook>
+        </field>
+    </record>
+
+    <!-- Extend User List View -->
+    <record id="view_users_tree_api" model="ir.ui.view">
+        <field name="name">res.users.tree.api</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_tree"/>
+        <field name="arch" type="xml">
+            <field name="login" position="after">
+                <field name="api_token" groups="pragmatic_engineering_api.group_api_manager"/>
+            </field>
+        </field>
+    </record>
+</odoo>

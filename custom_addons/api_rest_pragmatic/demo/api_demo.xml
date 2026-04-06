@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Demo Namespace -->
+        <record id="demo_namespace_test" model="api.namespace">
+            <field name="name">test</field>
+            <field name="description">Test API Integration</field>
+            <field name="log_request">info</field>
+            <field name="log_response">error</field>
+        </record>
+
+        <!-- Demo API Access for res.partner -->
+        <record id="demo_access_partner" model="api.access">
+            <field name="namespace_id" ref="demo_namespace_test"/>
+            <field name="model_id" ref="base.model_res_partner"/>
+            <field name="api_create">True</field>
+            <field name="api_read">True</field>
+            <field name="api_update">True</field>
+            <field name="api_delete">True</field>
+            <field name="api_public_methods">True</field>
+            <field name="public_methods">search
+search_read
+name_get
+name_search</field>
+        </record>
+
+        <!-- Demo API Access for res.users -->
+        <record id="demo_access_users" model="api.access">
+            <field name="namespace_id" ref="demo_namespace_test"/>
+            <field name="model_id" ref="base.model_res_users"/>
+            <field name="api_read">True</field>
+            <field name="api_public_methods">False</field>
+            <field name="public_methods">name_get</field>
+        </record>
+
+        <!-- Demo API Access for product.product -->
+        <record id="demo_access_product" model="api.access">
+            <field name="namespace_id" ref="demo_namespace_test"/>
+            <field name="model_id" ref="product.model_product_product"/>
+            <field name="api_create">True</field>
+            <field name="api_read">True</field>
+            <field name="api_update">True</field>
+            <field name="api_delete">False</field>
+            <field name="api_public_methods">True</field>
+        </record>
+
+        <!-- Demo Context for Partner Creation -->
+        <record id="demo_context_partner_customer" model="api.access.create.context">
+            <field name="name">customer</field>
+            <field name="description">Default context for customer creation</field>
+            <field name="model_id" ref="base.model_res_partner"/>
+            <field name="context">{"default_is_company": true, "default_customer_rank": 1}</field>
+        </record>
+
+        <record id="demo_context_partner_vendor" model="api.access.create.context">
+            <field name="name">vendor</field>
+            <field name="description">Default context for vendor creation</field>
+            <field name="model_id" ref="base.model_res_partner"/>
+            <field name="context">{"default_is_company": true, "default_supplier_rank": 1}</field>
+        </record>
+
+        <!-- Link demo contexts to partner access -->
+        <record id="demo_access_partner" model="api.access">
+            <field name="create_context_ids" eval="[(4, ref('demo_context_partner_customer')), (4, ref('demo_context_partner_vendor'))]"/>
+        </record>
+
+        <!-- Demo Export Configuration for res.partner -->
+        <record id="demo_export_partner_basic" model="ir.exports">
+            <field name="name">Partner Basic Info</field>
+            <field name="resource">res.partner</field>
+        </record>
+
+        <record id="demo_export_line_partner_id" model="ir.exports.line">
+            <field name="export_id" ref="demo_export_partner_basic"/>
+            <field name="name">id</field>
+        </record>
+
+        <record id="demo_export_line_partner_name" model="ir.exports.line">
+            <field name="export_id" ref="demo_export_partner_basic"/>
+            <field name="name">name</field>
+        </record>
+
+        <record id="demo_export_line_partner_email" model="ir.exports.line">
+            <field name="export_id" ref="demo_export_partner_basic"/>
+            <field name="name">email</field>
+        </record>
+
+        <record id="demo_export_line_partner_phone" model="ir.exports.line">
+            <field name="export_id" ref="demo_export_partner_basic"/>
+            <field name="name">phone</field>
+        </record>
+
+        <!-- Link export to access -->
+        <record id="demo_access_partner" model="api.access">
+            <field name="read_one_id" ref="demo_export_partner_basic"/>
+            <field name="read_many_id" ref="demo_export_partner_basic"/>
+        </record>
+    </data>
+</odoo>

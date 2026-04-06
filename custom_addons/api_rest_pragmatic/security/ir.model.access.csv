@@ -1,0 +1,10 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+user_access_api_log,access_api_log,model_api_log,group_api_user,1,0,1,0
+user_access_api_namespace,access_api_namespace,model_api_namespace,group_api_user,1,0,0,0
+user_access_api_access,access_api_access,model_api_access,group_api_user,1,0,0,0
+user_access_api_access_create_context,access_api_access_create_context,model_api_access_create_context,group_api_user,1,0,0,0
+
+manager_access_api_log,access_api_log,model_api_log,group_api_manager,1,1,1,1
+manager_access_api_namespace,access_api_namespace,model_api_namespace,group_api_manager,1,1,1,1
+manager_access_api_access,access_api_access,model_api_access,group_api_manager,1,1,1,1
+manager_access_api_access_create_context,access_api_access_create_context,model_api_access_create_context,group_api_manager,1,1,1,1

@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- List View -->
+    <record id="view_api_access_list" model="ir.ui.view">
+        <field name="name">api.access.list</field>
+        <field name="model">api.access</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="namespace_id"/>
+                <field name="model_id"/>
+                <field name="api_create" widget="boolean_toggle"/>
+                <field name="api_read" widget="boolean_toggle"/>
+                <field name="api_update" widget="boolean_toggle"/>
+                <field name="api_delete" widget="boolean_toggle"/>
+                <field name="api_public_methods" widget="boolean_toggle"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_api_access_form" model="ir.ui.view">
+        <field name="name">api.access.form</field>
+        <field name="model">api.access</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="namespace_id" />
+                            <field name="model_id"/>
+                            <field name="model" invisible="1"/>
+                            <field name="active" widget="boolean_toggle"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="CRUD Operations">
+                            <group>
+                                <group string="Allowed Operations">
+                                    <field name="api_create"/>
+                                    <field name="api_read"/>
+                                    <field name="api_update"/>
+                                    <field name="api_delete"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Methods">
+                            <group>
+                                <group string="Public Methods">
+                                    <field name="api_public_methods"/>
+                                    <field name="public_methods" 
+                                           placeholder="List of allowed public methods (one per line)"
+                                           invisible="api_public_methods == False"/>
+                                </group>
+                                <group string="Private Methods">
+                                    <field name="private_methods" 
+                                           placeholder="List of allowed private methods (one per line)"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Field Configuration">
+                            <group>
+                                <field name="read_one_id" 
+                                       context="{'default_resource': model,
+                                       'form_view_ref': 'pragmatic_engineering_api.view_pragmatic_ir_export_form'}"/>
+                                <field name="read_many_id"
+                                       context="{'default_resource': model,
+                                       'form_view_ref': 'pragmatic_engineering_api.view_pragmatic_ir_export_form'}"/>
+                            </group>
+                        </page>
+                        <page string="Context">
+                            <field name="create_context_ids"
+                                   context="{'default_model_id': model_id}">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="description"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_api_access_search" model="ir.ui.view">
+        <field name="name">api.access.search</field>
+        <field name="model">api.access</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="namespace_id"/>
+                <field name="model_id"/>
+                <filter string="Active" name="active" domain="[('active', '=', True)]"/>
+                <filter string="Inactive" name="inactive" domain="[('active', '=', False)]"/>
+                <separator/>
+                <filter string="Create Allowed" name="create" domain="[('api_create', '=', True)]"/>
+                <filter string="Read Allowed" name="read" domain="[('api_read', '=', True)]"/>
+                <filter string="Update Allowed" name="update" domain="[('api_update', '=', True)]"/>
+                <filter string="Delete Allowed" name="delete" domain="[('api_delete', '=', True)]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Namespace" name="groupby_namespace" context="{'group_by': 'namespace_id'}"/>
+                    <filter string="Model" name="groupby_model" context="{'group_by': 'model_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_api_access" model="ir.actions.act_window">
+        <field name="name">API Access</field>
+        <field name="res_model">api.access</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_api_access_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Configure API Access for Models
+            </p>
+            <p>
+                Define which models can be accessed via API and what operations are allowed.
+            </p>
+        </field>
+    </record>
+</odoo>
