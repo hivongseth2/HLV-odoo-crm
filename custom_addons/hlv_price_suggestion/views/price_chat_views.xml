@@ -2,122 +2,11 @@
 <odoo>
 
     <!-- ════════════════════════════════════════ -->
-    <!-- Chat Session - Form View (Chat UI)       -->
+    <!-- Client Action — Custom Chat UI           -->
     <!-- ════════════════════════════════════════ -->
-    <record id="price_chat_session_view_form" model="ir.ui.view">
-        <field name="name">price.chat.session.form</field>
-        <field name="model">price.chat.session</field>
-        <field name="arch" type="xml">
-            <form>
-                <header>
-                    <button name="action_export_excel"
-                            string="📥 Xuất Excel"
-                            type="object"
-                            class="btn-success"/>
-                </header>
-                <sheet>
-                    <group>
-                        <group>
-                            <field name="name"/>
-                            <field name="user_id" readonly="True"/>
-                        </group>
-                        <group>
-                            <field name="company_id" groups="base.group_multi_company"/>
-                            <field name="create_date" string="Ngày tạo" readonly="True"/>
-                        </group>
-                    </group>
-
-                    <separator string="💬 Hội thoại"/>
-
-                    <!-- Chat messages display -->
-                    <field name="message_ids" nolabel="1" readonly="True">
-                        <list default_order="create_date asc"
-                              decoration-info="role == 'assistant'"
-                              decoration-bf="role == 'assistant'"
-                              create="false" delete="false" edit="false">
-                            <field name="create_date" string="Thời gian" width="160px"/>
-                            <field name="role" string="Người gửi" widget="badge"
-                                   decoration-info="role == 'assistant'"
-                                   decoration-success="role == 'user'"/>
-                            <field name="content" string="Nội dung"/>
-                        </list>
-                    </field>
-
-                    <separator string="✏️ Đặt câu hỏi"/>
-
-                    <group>
-                        <field name="input_message" nolabel="1"
-                               placeholder="Ví dụ: Giá bán sản phẩm ABC nên là bao nhiêu? / So sánh giá nhập và giá bán của SP001..."
-                               widget="text"/>
-                    </group>
-                    <div>
-                        <button name="action_send_message"
-                                string="🚀 Gửi &amp; Hỏi AI"
-                                type="object"
-                                class="btn-primary btn-lg"/>
-                    </div>
-                </sheet>
-            </form>
-        </field>
-    </record>
-
-    <!-- ════════════════════════════════════════ -->
-    <!-- Chat Session - List View                 -->
-    <!-- ════════════════════════════════════════ -->
-    <record id="price_chat_session_view_list" model="ir.ui.view">
-        <field name="name">price.chat.session.list</field>
-        <field name="model">price.chat.session</field>
-        <field name="arch" type="xml">
-            <list>
-                <field name="name"/>
-                <field name="user_id"/>
-                <field name="company_id" groups="base.group_multi_company"/>
-                <field name="create_date" string="Ngày tạo"/>
-            </list>
-        </field>
-    </record>
-
-    <!-- ════════════════════════════════════════ -->
-    <!-- Chat Session - Search View               -->
-    <!-- ════════════════════════════════════════ -->
-    <record id="price_chat_session_view_search" model="ir.ui.view">
-        <field name="name">price.chat.session.search</field>
-        <field name="model">price.chat.session</field>
-        <field name="arch" type="xml">
-            <search>
-                <field name="name"/>
-                <field name="user_id"/>
-                <filter name="filter_my" string="Phiên của tôi"
-                        domain="[('user_id', '=', uid)]"/>
-                <group expand="0" string="Nhóm theo">
-                    <filter name="group_user" string="Người dùng"
-                            context="{'group_by': 'user_id'}"/>
-                    <filter name="group_date" string="Ngày tạo"
-                            context="{'group_by': 'create_date:month'}"/>
-                </group>
-            </search>
-        </field>
-    </record>
-
-    <!-- ════════════════════════════════════════ -->
-    <!-- Action                                   -->
-    <!-- ════════════════════════════════════════ -->
-    <record id="price_chat_session_action" model="ir.actions.act_window">
+    <record id="price_chat_client_action" model="ir.actions.client">
         <field name="name">AI Tư vấn giá</field>
-        <field name="res_model">price.chat.session</field>
-        <field name="view_mode">list,form</field>
-        <field name="search_view_id" ref="price_chat_session_view_search"/>
-        <field name="context">{'search_default_filter_my': 1}</field>
-        <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face">
-                Bắt đầu phiên tư vấn giá mới
-            </p>
-            <p>
-                Hỏi AI về giá bán tối ưu cho sản phẩm.
-                AI sẽ phân tích giá nhập, giá bán theo công ty, tồn kho và lượt bán
-                để đưa ra đề xuất giá kèm căn cứ cụ thể.
-            </p>
-        </field>
+        <field name="tag">price_chat_action</field>
     </record>
 
     <!-- ════════════════════════════════════════ -->
@@ -128,10 +17,10 @@
               web_icon="hlv_price_suggestion,static/description/icon.png"
               sequence="45"/>
 
-    <menuitem id="menu_price_chat_sessions"
-              name="Phiên tư vấn"
+    <menuitem id="menu_price_chat_main"
+              name="Chat tư vấn giá"
               parent="menu_price_chat_root"
-              action="price_chat_session_action"
+              action="price_chat_client_action"
               sequence="10"/>
 
 </odoo>

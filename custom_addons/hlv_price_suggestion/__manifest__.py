@@ -23,6 +23,13 @@
         'security/ir.model.access.csv',
         'views/price_chat_views.xml',
     ],
+    'assets': {
+        'web.assets_backend': [
+            'hlv_price_suggestion/static/src/scss/price_chat.scss',
+            'hlv_price_suggestion/static/src/js/price_chat.js',
+            'hlv_price_suggestion/static/src/xml/price_chat.xml',
+        ],
+    },
     'installable': True,
     'application': True,
     'auto_install': False,

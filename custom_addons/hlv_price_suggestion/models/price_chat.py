@@ -31,27 +31,27 @@ class PriceChatSession(models.Model):
         default=lambda self: self.env.company,
     )
 
-    # Input field (không lưu DB, chỉ dùng trên form)
-    input_message = fields.Text(string='Nhập câu hỏi...')
+    @api.model
+    def rpc_send_message(self, session_id, message):
+        """RPC endpoint cho OWL chat component."""
+        session = self.browse(session_id)
+        if not session.exists():
+            raise UserError(_('Phiên chat không tồn tại.'))
 
-    def action_send_message(self):
-        """Gửi câu hỏi và nhận phản hồi từ AI."""
-        self.ensure_one()
-        if not self.input_message:
-            return
-
-        user_text = self.input_message.strip()
+        user_text = (message or '').strip()
+        if not user_text:
+            raise UserError(_('Tin nhắn không được để trống.'))
 
         # Lưu tin nhắn user
         self.env['price.chat.message'].create({
-            'session_id': self.id,
+            'session_id': session.id,
             'role': 'user',
             'content': user_text,
         })
 
         # Xử lý & gọi AI
         try:
-            ai_response = self._process_question(user_text)
+            ai_response = session._process_question(user_text)
         except UserError:
             raise
         except Exception as e:
@@ -60,26 +60,16 @@ class PriceChatSession(models.Model):
 
         # Lưu tin nhắn AI
         self.env['price.chat.message'].create({
-            'session_id': self.id,
+            'session_id': session.id,
             'role': 'assistant',
             'content': ai_response,
         })
 
-        # Clear input
-        self.input_message = False
+        # Cập nhật tiêu đề phiên nếu là tin nhắn đầu
+        if session.name == _('Phiên tư vấn giá mới') and len(session.message_ids) <= 2:
+            session.name = user_text[:80]
 
-        # Cập nhật tiêu đề phiên nếu còn mặc định
-        if self.name == _('Phiên tư vấn giá mới') and len(self.message_ids) <= 2:
-            self.name = user_text[:80]
-
-    def action_export_excel(self):
-        """Xuất file Excel từ phiên chat hiện tại."""
-        self.ensure_one()
-        return {
-            'type': 'ir.actions.act_url',
-            'url': f'/price_chat/export_excel/{self.id}',
-            'target': 'new',
-        }
+        return {'ai_response': ai_response}
 
     # ────────────────────────────────────────────
     # Core AI logic
