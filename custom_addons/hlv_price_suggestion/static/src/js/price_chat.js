@@ -11,6 +11,7 @@ class PriceChatAction extends Component {
 
     setup() {
         this.orm = useService("orm");
+        this.user = useService("user");
         this.notification = useService("notification");
         this.action = useService("action");
 
@@ -34,7 +35,7 @@ class PriceChatAction extends Component {
     async _loadSessions() {
         const sessions = await this.orm.searchRead(
             "price.chat.session",
-            [["user_id", "=", this.env.services.user.userId]],
+            [["user_id", "=", this.user.userId]],
             ["id", "name", "create_date"],
             { order: "create_date desc", limit: 50 },
         );
