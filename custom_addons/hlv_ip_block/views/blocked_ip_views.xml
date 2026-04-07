@@ -151,6 +151,7 @@
             <field name="res_model">hlv.ip.block.settings</field>
             <field name="view_mode">form</field>
             <field name="target">current</field>
+            <field name="res_id" ref="hlv_ip_block.ip_block_settings_default"/>
         </record>
 
         <menuitem id="menu_ip_block_settings"

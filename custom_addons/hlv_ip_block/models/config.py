@@ -10,6 +10,14 @@ class IPBlockSettings(models.Model):
 
     name = fields.Char(default='Cấu hình mặc định', readonly=True)
 
+    @api.model
+    def create(self, vals):
+        existing = self.search([], limit=1)
+        if existing:
+            existing.write(vals)
+            return existing
+        return super().create(vals)
+
     # Rate limiting
     rate_limit_per_second = fields.Integer(
         string='Request tối đa / giây',
