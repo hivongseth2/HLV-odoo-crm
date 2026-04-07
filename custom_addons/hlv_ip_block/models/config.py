@@ -10,7 +10,7 @@ class IPBlockSettings(models.Model):
 
     name = fields.Char(default='Cấu hình mặc định', readonly=True)
 
-    # Rate limiting
+    # Rate limiting 123
     rate_limit_per_second = fields.Integer(
         string='Request tối đa / giây',
         default=5,
