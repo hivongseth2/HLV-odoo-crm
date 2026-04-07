@@ -58,3 +58,15 @@ msgstr "Thêm website cho AI tìm kiếm!"
 #, python-format
 msgid "Web Search"
 msgstr "Tìm kiếm Web"
+
+#. module: llm_tool_web_search
+#: code:addons/llm_tool_web_search/models/__init__.py:0
+#, python-format
+msgid "Hard Search"
+msgstr "Tìm kiếm chuyên sâu"
+
+#. module: llm_tool_web_search
+#: code:addons/llm_tool_web_search/models/__init__.py:0
+#, python-format
+msgid "Web Search (OpenAI built-in)"
+msgstr "Tìm kiếm Web (tích hợp OpenAI)"

@@ -26,7 +26,7 @@
     </record>
 
     <!-- ============================================================ -->
-    <!-- Web Search Tool -->
+    <!-- Hard Search Tool (crawl trực tiếp website) -->
     <!-- ============================================================ -->
     <record id="llm_tool_hard_search" model="llm.tool">
         <field name="name">hard_search</field>
@@ -34,6 +34,21 @@
         <field name="implementation">hard_search</field>
         <field name="active" eval="True" />
         <field name="default" eval="False" />
+        <field name="requires_user_consent" eval="False" />
+        <field name="read_only_hint" eval="True" />
+        <field name="destructive_hint" eval="False" />
+        <field name="open_world_hint" eval="True" />
+    </record>
+
+    <!-- ============================================================ -->
+    <!-- Web Search Tool (OpenAI built-in web search) -->
+    <!-- ============================================================ -->
+    <record id="llm_tool_web_search" model="llm.tool">
+        <field name="name">web_search</field>
+        <field name="description">Tìm kiếm trên internet sử dụng tính năng web search tích hợp sẵn của AI (OpenAI). Sử dụng khi cần tra cứu thông tin mới nhất, tin tức, giá cả thị trường, hoặc bất kỳ thông tin nào trên web. Kết quả có kèm nguồn trích dẫn.</field>
+        <field name="implementation">web_search</field>
+        <field name="active" eval="True" />
+        <field name="default" eval="True" />
         <field name="requires_user_consent" eval="False" />
         <field name="read_only_hint" eval="True" />
         <field name="destructive_hint" eval="False" />

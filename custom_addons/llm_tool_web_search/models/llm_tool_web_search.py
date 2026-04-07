@@ -58,16 +58,46 @@ CONTENT_SELECTORS = [
 ]
 
 
+# OpenAI native tool types that should NOT be formatted as function calls
+NATIVE_TOOL_IMPLEMENTATIONS = {
+    "web_search": "web_search",
+}
+
+
 class LLMToolWebSearch(models.Model):
     _inherit = "llm.tool"
 
     @api.model
     def _get_available_implementations(self):
         implementations = super()._get_available_implementations()
-        return implementations + [("hard_search", "Hard Search")]
+        return implementations + [
+            ("hard_search", "Hard Search"),
+            ("web_search", "Web Search (OpenAI built-in)"),
+        ]
+
+    def get_native_tool_config(self):
+        """Return native provider tool config for built-in tools.
+
+        Returns dict like {"type": "web_search", ...} for native tools.
+        Returns None for function-based tools (default).
+        """
+        if self.implementation == "web_search":
+            config = {"type": "web_search"}
+            # Add user location for Vietnam
+            config["user_location"] = {
+                "type": "approximate",
+                "country": "VN",
+            }
+            # Add search_context_size for better results
+            config["search_context_size"] = "medium"
+            return config
+        return None
 
     def get_input_schema(self):
         schema = super().get_input_schema()
+        if self.implementation == "web_search":
+            # Native tool - no custom schema needed, OpenAI handles it
+            return {"type": "object", "properties": {}, "required": []}
         if self.implementation == "hard_search":
             sites = self.env["llm.web.search.site"].sudo().search([("active", "=", True)])
             if sites:

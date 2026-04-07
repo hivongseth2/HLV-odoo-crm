@@ -51,8 +51,27 @@ class LLMProvider(models.Model):
 
     # OpenAI specific implementation
     def openai_format_tools(self, tools):
-        """Format tools for OpenAI"""
-        return [self._openai_format_tool(tool) for tool in tools]
+        """Format tools for OpenAI.
+
+        Handles both function-based tools and native provider tools
+        (e.g. web_search, code_interpreter).
+        Native tools are detected via get_native_tool_config().
+        """
+        formatted = []
+        for tool in tools:
+            native_config = None
+            if hasattr(tool, 'get_native_tool_config'):
+                native_config = tool.get_native_tool_config()
+            if native_config:
+                # Native provider tool - pass config as-is
+                formatted.append(native_config)
+                _logger.info("Added native tool: %s", native_config.get('type', 'unknown'))
+            else:
+                # Standard function tool
+                ft = self._openai_format_tool(tool)
+                if ft:
+                    formatted.append(ft)
+        return formatted
 
     def _openai_format_tool(self, tool):
         """Convert a tool to OpenAI format
