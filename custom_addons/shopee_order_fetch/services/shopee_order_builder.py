@@ -108,7 +108,7 @@ def find_or_create_shopee_item(env, item_data, shop):
     item_id = item_data.get('item_id', 0)
     model_id = item_data.get('model_id', 0)
     item_name = item_data.get('item_name', '')
-    model_sku = item_data.get('model_sku', '')
+    sku = item_data.get('model_sku', '') or item_data.get('item_sku', '')
 
     # 1. Tìm theo shopee.item identifier
     domain = [('shopee_item_identifier', '=', item_id)]
@@ -120,9 +120,9 @@ def find_or_create_shopee_item(env, item_data, shop):
 
     # 2. Tìm theo SKU (default_code)
     product = False
-    if model_sku:
+    if sku:
         product = env['product.product'].sudo().search(
-            [('default_code', '=', model_sku)], limit=1
+            [('default_code', '=', sku)], limit=1
         )
 
     # 3. Tìm theo tên
@@ -135,11 +135,11 @@ def find_or_create_shopee_item(env, item_data, shop):
     if not product:
         product = env['product.product'].sudo().create({
             'name': item_name or f"Shopee Item {item_id}",
-            'default_code': model_sku or '',
+            'default_code': sku or '',
             'type': 'consu',
             'sale_ok': True,
         })
-        _logger.info("Shopee: Đã tạo sản phẩm '%s' (SKU: %s)", product.name, model_sku)
+        _logger.info("Shopee: Đã tạo sản phẩm '%s' (SKU: %s)", product.name, sku)
 
     # 5. Tạo shopee.item record nếu chưa tồn tại
     if not existing_item and shop:
@@ -225,6 +225,9 @@ def create_order_from_data(env, order_data, shop, escrow_data=None):
         so_vals['shopee_shop_id'] = shop.id
     if warehouse:
         so_vals['warehouse_id'] = warehouse.id
+        
+    if escrow_data:
+        so_vals['shopee_escrow_data'] = escrow_data
 
     so = env['sale.order'].sudo().create(so_vals)
 
@@ -232,6 +235,8 @@ def create_order_from_data(env, order_data, shop, escrow_data=None):
         create_order_line(env, so, item_data, shop)
 
     if escrow_data:
+        if escrow_data.get('order_income', {}).get('items'):
+            shopee_escrow.update_order_lines_from_escrow(so, escrow_data)
         shopee_escrow.apply_escrow_voucher(so, escrow_data)
 
     try:

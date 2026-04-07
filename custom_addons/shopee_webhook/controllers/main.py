@@ -5,6 +5,7 @@ import logging
 from datetime import datetime
 from odoo import http
 from odoo.http import request
+from odoo.addons.shopee_order_fetch.services import shopee_api, shopee_order_builder, shopee_escrow
 
 _logger = logging.getLogger(__name__)
 
@@ -127,11 +128,44 @@ class ShopeeWebhookController(http.Controller):
                     # Get sale orders related to these pickings
                     orders = pickings.mapped('sale_id')
 
+            if not orders and ordersn:
+                # 3. IF ORDER STILL NOT FOUND: AUTO-FETCH FROM SHOPEE
+                _logger.info("Shopee Webhook: Order %s not found. Attempting auto-fetch...", ordersn)
+                shop_id_raw = data.get('shop_id')
+                if not shop_id_raw:
+                    _logger.warning("Shopee Webhook: missing shop_id in payload, cannot auto-fetch.")
+                else:
+                    shop = request.env['shopee.shop'].sudo().search([('shop_identifier', '=', str(shop_id_raw))], limit=1)
+                    if not shop:
+                        _logger.warning("Shopee Webhook: Shop ID %s not found in Odoo.", shop_id_raw)
+                    else:
+                        try:
+                            # Use services from shopee_order_fetch to pull full details
+                            creds = shopee_api.get_credentials_from_shop(shop)
+                            
+                            # Get full order detail
+                            status_code, body, _params = shopee_api.call_order_detail(creds, ordersn)
+                            if status_code == 200 and not body.get('error'):
+                                order_list = body.get('response', {}).get('order_list', [])
+                                if order_list:
+                                    order_data = order_list[0]
+                                    # Get escrow detail (pricing/vouchers)
+                                    escrow_data = shopee_api.call_escrow_detail(creds, ordersn)
+                                    
+                                    # Build/Create order
+                                    with request.env.cr.savepoint():
+                                        new_so = shopee_order_builder.create_order_from_data(
+                                            request.env, order_data, shop, escrow_data=escrow_data
+                                        )
+                                        orders = new_so
+                                        _logger.info("Shopee Webhook: Auto-fetched successfully: Order %s -> %s", ordersn, new_so.name)
+                                        _log_to_file(data, result=f"Auto-fetched order {ordersn}: Created {new_so.name}")
+                        except Exception as fetch_err:
+                            _logger.error("Shopee Webhook: Auto-fetch failed for %s: %s", ordersn, str(fetch_err))
+
             if not orders:
                 _logger.warning("Shopee Webhook: Order not found for identifier: %s / %s", ordersn, tracking_no)
-                # We return success code to Shopee so they VALIDATE the push, even if we don't have the order.
-                # Otherwise they might retry indefinitely.
-                return {'code': 0, 'msg': 'Order not found, but processed'}
+                return {'code': 0, 'msg': 'Order not found, even after auto-fetch attempt'}
 
             for order in orders:
                 if status:

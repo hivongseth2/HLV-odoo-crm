@@ -131,13 +131,7 @@ Nút bấm tương ứng hiển thị trong `header` của form `sale.order`, **
 | `response_optional_fields` | Char | Optional fields gửi lên API |
 | `result_display` | Text (readonly) | Hiển thị kết quả sau mỗi action |
 
-**Fields đã comment (staging/test)**:
 
-| Field | Mô tả |
-|---|---|
-| `mock_json` | JSON từ `get_order_detail` để test offline |
-| `mock_escrow_json` | JSON từ `get_escrow_detail` để test offline |
-| `sale_order_ids` | Gán thủ công `shopee_order_ref` cho đơn Odoo đã có |
 
 **Actions (production-ready)**:
 
@@ -146,12 +140,7 @@ Nút bấm tương ứng hiển thị trong `header` của form `sale.order`, **
 | `action_fetch_order` | Gọi API, hiển thị JSON kết quả. Không ghi DB. |
 | `action_fetch_and_create_order` | Gọi API, tạo `sale.order` cho mỗi mã đơn tìm thấy. |
 
-**Actions đã comment (staging/test)**:
 
-| Action | Mô tả |
-|---|---|
-| `action_update_price_from_escrow` | Cập nhật giá hàng loạt từ Escrow theo danh sách mã đơn |
-| `action_test_create_order` | Tạo đơn từ mock JSON không gọi API |
 
 ---
 

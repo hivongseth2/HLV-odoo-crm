@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_hlv_security_rule_list" model="ir.ui.view">
+        <field name="name">hlv.security.rule.list</field>
+        <field name="model">hlv.security.rule</field>
+        <field name="arch" type="xml">
+            <list string="Security Rules" decoration-danger="action == 'block'">
+                <field name="name"/>
+                <field name="rule_type"/>
+                <field name="value"/>
+                <field name="action"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_hlv_security_rule_form" model="ir.ui.view">
+        <field name="name">hlv.security.rule.form</field>
+        <field name="model">hlv.security.rule</field>
+        <field name="arch" type="xml">
+            <form string="Security Rule">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Rule Description e.g. Block Scanner IP"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="rule_type"/>
+                            <field name="value" placeholder="e.g. 1.2.3.4 or \.php$"/>
+                        </group>
+                        <group>
+                            <field name="action"/>
+                            <field name="active"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_hlv_security_rule" model="ir.actions.act_window">
+        <field name="name">Security Gateway Rules</field>
+        <field name="res_model">hlv.security.rule</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Add a new security rule to block malicious traffic.
+            </p>
+        </field>
+    </record>
+
+    <menuitem id="menu_hlv_security_root" name="Security" sequence="100" parent="base.menu_administration"/>
+    <menuitem id="menu_hlv_security_rules" name="Gateway Rules" parent="menu_hlv_security_root" action="action_hlv_security_rule" sequence="10"/>
+</odoo>
