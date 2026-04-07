@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_hlv_blocked_ip_admin,hlv.blocked.ip admin,model_hlv_blocked_ip,base.group_system,1,1,1,1
+access_hlv_blocked_ip_user,hlv.blocked.ip user,model_hlv_blocked_ip,base.group_user,1,0,0,0
