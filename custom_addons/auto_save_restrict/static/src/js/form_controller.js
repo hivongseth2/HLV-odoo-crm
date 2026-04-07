@@ -18,6 +18,11 @@ patch(FormController.prototype, {
     },
 
    beforeUnload(ev) {
+        // Force commit pending input value before checking dirty state
+        const activeEl = document.activeElement;
+        if (activeEl && this.rootRef?.el?.contains(activeEl)) {
+            activeEl.blur();
+        }
         if (this.model.root.dirty) {
             ev.preventDefault();
             ev.returnValue = '';
