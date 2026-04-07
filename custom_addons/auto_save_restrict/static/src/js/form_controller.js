@@ -16,9 +16,11 @@ patch(FormController.prototype, {
             return this._confirmSave();
         }
     },
-
-   beforeUnload() {},
-
+   beforeUnload(ev) {
+       if (super.beforeUnload) {
+           return super.beforeUnload(ev);
+       }
+   },
    async _confirmSave() {
         let _continue = true;
         await new Promise((resolve) => {
