@@ -242,6 +242,7 @@ def _extract_ip(environ):
     return '', injected
 
 
+def _is_whitelisted(ip):
     """Check if IP is in whitelist (exact or prefix match for CIDR-like)."""
     if ip in _whitelisted_ips_cache:
         return True
