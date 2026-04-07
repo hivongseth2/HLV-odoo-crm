@@ -243,9 +243,26 @@ class LLMProvider(models.Model):
             formatted_messages
         )
 
+        # Convert function tools from Chat Completions format to Responses API format
+        # Chat Completions: {"type": "function", "function": {"name": ..., "description": ..., "parameters": ...}}
+        # Responses API:    {"type": "function", "name": ..., "description": ..., "parameters": ...}
+        responses_tools = []
+        for t in formatted_tools:
+            if t.get("type") == "function" and "function" in t:
+                func = t["function"]
+                responses_tools.append({
+                    "type": "function",
+                    "name": func.get("name", ""),
+                    "description": func.get("description", ""),
+                    "parameters": func.get("parameters", {}),
+                })
+            else:
+                # Native tools (web_search, etc.) - pass as-is
+                responses_tools.append(t)
+
         params = {
             "model": model.name,
-            "tools": formatted_tools,
+            "tools": responses_tools,
         }
         if instructions:
             params["instructions"] = instructions
