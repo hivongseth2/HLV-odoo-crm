@@ -1,13 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
+        <!-- ============ BLOCKED IP ============ -->
         <!-- Tree View -->
         <record id="view_blocked_ip_tree" model="ir.ui.view">
             <field name="name">hlv.blocked.ip.tree</field>
             <field name="model">hlv.blocked.ip</field>
             <field name="arch" type="xml">
-                <list string="Danh sách IP bị chặn" editable="bottom">
+                <list string="Danh sách IP bị chặn" editable="bottom" decoration-warning="is_auto">
                     <field name="name" string="Địa chỉ IP"/>
+                    <field name="detection_type" string="Phát hiện bởi"/>
+                    <field name="is_auto" string="Tự động" column_invisible="1"/>
                     <field name="reason" string="Lý do"/>
                     <field name="active" string="Kích hoạt"/>
                     <field name="hit_count" string="Số lần chặn"/>
@@ -23,10 +26,19 @@
             <field name="arch" type="xml">
                 <form string="IP bị chặn">
                     <sheet>
+                        <div class="oe_button_box" name="button_box">
+                            <button name="toggle_active" type="object" class="oe_stat_button"
+                                    icon="fa-archive" invisible="0">
+                                <field name="active" widget="boolean_button"
+                                       options='{"terminology": "archive"}'/>
+                            </button>
+                        </div>
                         <group>
                             <group>
                                 <field name="name" string="Địa chỉ IP"/>
                                 <field name="active" string="Kích hoạt"/>
+                                <field name="detection_type" string="Phát hiện bởi"/>
+                                <field name="is_auto" string="Tự động phát hiện"/>
                             </group>
                             <group>
                                 <field name="hit_count" string="Số lần chặn"/>
@@ -43,16 +55,103 @@
 
         <!-- Action -->
         <record id="action_blocked_ip" model="ir.actions.act_window">
-            <field name="name">Chặn IP</field>
+            <field name="name">IP bị chặn</field>
             <field name="res_model">hlv.blocked.ip</field>
+            <field name="view_mode">list,form</field>
+            <field name="context">{'search_default_active': 1}</field>
+        </record>
+
+        <!-- ============ WHITELISTED IP ============ -->
+        <!-- Tree View -->
+        <record id="view_whitelisted_ip_tree" model="ir.ui.view">
+            <field name="name">hlv.whitelisted.ip.tree</field>
+            <field name="model">hlv.whitelisted.ip</field>
+            <field name="arch" type="xml">
+                <list string="Whitelist IP" editable="bottom">
+                    <field name="name" string="Địa chỉ IP / Prefix"/>
+                    <field name="note" string="Ghi chú"/>
+                </list>
+            </field>
+        </record>
+
+        <!-- Action -->
+        <record id="action_whitelisted_ip" model="ir.actions.act_window">
+            <field name="name">IP Whitelist</field>
+            <field name="res_model">hlv.whitelisted.ip</field>
             <field name="view_mode">list,form</field>
         </record>
 
         <!-- Menu -->
-        <menuitem id="menu_blocked_ip_root"
+        <menuitem id="menu_ip_block_root"
                   name="Chặn IP"
                   parent="base.menu_administration"
-                  action="action_blocked_ip"
                   sequence="100"/>
+
+        <menuitem id="menu_blocked_ip"
+                  name="IP bị chặn"
+                  parent="menu_ip_block_root"
+                  action="action_blocked_ip"
+                  sequence="10"/>
+
+        <menuitem id="menu_whitelisted_ip"
+                  name="IP Whitelist"
+                  parent="menu_ip_block_root"
+                  action="action_whitelisted_ip"
+                  sequence="20"/>
+
+        <!-- ============ SETTINGS ============ -->
+        <record id="view_ip_block_settings_form" model="ir.ui.view">
+            <field name="name">hlv.ip.block.settings.form</field>
+            <field name="model">hlv.ip.block.settings</field>
+            <field name="arch" type="xml">
+                <form string="Cấu hình chống bot">
+                    <sheet>
+                        <div class="alert alert-info" role="alert">
+                            Bot scan thường gửi <b>10+ request/giây</b> liên tục.
+                            User thật hiếm khi vượt <b>3-4 request/giây</b>.
+                            Hãy chỉnh ngưỡng phù hợp để tránh nhầm user thật.
+                        </div>
+                        <group string="Giới hạn tốc độ (Rate Limiting)">
+                            <group>
+                                <field name="rate_limit_per_second"
+                                       string="Request tối đa / giây"
+                                       help="VD: 5 = nếu IP gửi trung bình > 5 req/s trong cửa sổ thời gian thì chặn"/>
+                                <field name="rate_window"
+                                       string="Cửa sổ đo (giây)"
+                                       help="VD: 10 = đo trong 10 giây. Ngưỡng thực = rate/s × cửa sổ"/>
+                            </group>
+                            <group>
+                                <field name="effective_rate_limit"
+                                       string="Tổng request được phép / cửa sổ"
+                                       readonly="1"/>
+                            </group>
+                        </group>
+                        <group string="Phát hiện path đáng ngờ">
+                            <group>
+                                <field name="suspicious_threshold"
+                                       string="Số path lạ trước khi chặn"
+                                       help="VD: 20 = sau 20 request đến path không phải Odoo (.php, /wp-admin...) thì chặn"/>
+                                <field name="suspect_window"
+                                       string="Cửa sổ đếm path lạ (giây)"
+                                       help="Đếm trong khoảng thời gian này"/>
+                            </group>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_ip_block_settings" model="ir.actions.act_window">
+            <field name="name">Cấu hình chống bot</field>
+            <field name="res_model">hlv.ip.block.settings</field>
+            <field name="view_mode">form</field>
+            <field name="target">current</field>
+        </record>
+
+        <menuitem id="menu_ip_block_settings"
+                  name="Cấu hình"
+                  parent="menu_ip_block_root"
+                  action="action_ip_block_settings"
+                  sequence="30"/>
     </data>
 </odoo>

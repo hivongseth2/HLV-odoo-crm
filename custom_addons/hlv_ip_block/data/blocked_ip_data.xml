@@ -1,10 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data noupdate="1">
+        <!-- Pre-blocked IPs -->
         <record id="blocked_ip_34_87_32_244" model="hlv.blocked.ip">
             <field name="name">34.87.32.244</field>
             <field name="reason">Bot scan lỗ hổng bảo mật - path traversal, WordPress exploits, /etc/passwd</field>
             <field name="active" eval="True"/>
+            <field name="detection_type">manual</field>
+        </record>
+
+        <record id="blocked_ip_35_198_225_182" model="hlv.blocked.ip">
+            <field name="name">35.198.225.182</field>
+            <field name="reason">Bot scan lỗ hổng - .php, .sqlite, .sql, database.sql.zip, path traversal</field>
+            <field name="active" eval="True"/>
+            <field name="detection_type">manual</field>
+        </record>
+
+        <!-- Default settings -->
+        <record id="ip_block_settings_default" model="hlv.ip.block.settings">
+            <field name="name">Cấu hình mặc định</field>
+            <field name="rate_limit_per_second">5</field>
+            <field name="rate_window">10</field>
+            <field name="suspicious_threshold">20</field>
+            <field name="suspect_window">30</field>
+        </record>
+
+        <!-- Whitelisted IPs - Odoo.sh internal / load balancer -->
+        <record id="whitelist_odoo_sh_10" model="hlv.whitelisted.ip">
+            <field name="name">10.</field>
+            <field name="note">Odoo.sh internal network (10.x.x.x)</field>
+        </record>
+
+        <record id="whitelist_localhost" model="hlv.whitelisted.ip">
+            <field name="name">127.0.0.1</field>
+            <field name="note">Localhost</field>
+        </record>
+
+        <record id="whitelist_odoo_sh_58" model="hlv.whitelisted.ip">
+            <field name="name">58.187.190.184</field>
+            <field name="note">Office IP (from log - real user)</field>
         </record>
     </data>
 </odoo>
