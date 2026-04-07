@@ -13,16 +13,6 @@ _logger = logging.getLogger(__name__)
 # ============================================================
 CACHE_TTL = 60  # How often to refresh caches and flush counters (seconds)
 
-# Defaults - will be replaced by DB values after first cache refresh
-_cfg = {
-    'rate_limit_per_second': 5,   # Max req/s before auto-block
-    'rate_window': 10,            # Window in seconds to measure rate
-    'rate_limit': 50,             # = rate_limit_per_second * rate_window
-    'suspicious_threshold': 20,   # Suspicious path hits before auto-block
-    'suspect_window': 30,         # Window for suspicious path counting
-    'suspicious_patterns': DEFAULT_SUSPICIOUS_PATTERNS,  # From DB or default
-}
-
 # ============================================================
 # Suspicious path patterns - loaded from DB, with fallback defaults
 # ============================================================
@@ -43,6 +33,16 @@ DEFAULT_SUSPICIOUS_PATTERNS = (
     '/tmp.,/temp.,/backup.,'
     '.sql,.sqlite,.bak,.old,.7z,.rar'
 )
+
+# Defaults - will be replaced by DB values after first cache refresh
+_cfg = {
+    'rate_limit_per_second': 5,   # Max req/s before auto-block
+    'rate_window': 10,            # Window in seconds to measure rate
+    'rate_limit': 50,             # = rate_limit_per_second * rate_window
+    'suspicious_threshold': 20,   # Suspicious path hits before auto-block
+    'suspect_window': 30,         # Window for suspicious path counting
+    'suspicious_patterns': DEFAULT_SUSPICIOUS_PATTERNS,  # From DB or default
+}
 
 # Compiled regex - rebuilt when patterns change from DB
 _suspicious_regex = None
