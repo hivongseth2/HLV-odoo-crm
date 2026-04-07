@@ -1,0 +1,765 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* llm_knowledge
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 18.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-07 00:00+0000\n"
+"PO-Revision-Date: 2026-04-07 00:00+0000\n"
+"Last-Translator: HLV Team\n"
+"Language-Team: Vietnamese\n"
+"Language: vi_VN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: llm_knowledge
+#: model:ir.ui.menu,name:llm_knowledge.menu_llm_knowledge_root
+msgid "Knowledge"
+msgstr "Kiến thức"
+
+#. module: llm_knowledge
+#: model:ir.ui.menu,name:llm_knowledge.menu_llm_knowledge_collection
+msgid "Collections"
+msgstr "Bộ sưu tập"
+
+#. module: llm_knowledge
+#: model:ir.ui.menu,name:llm_knowledge.menu_llm_knowledge_document
+msgid "Documents"
+msgstr "Tài liệu"
+
+#. module: llm_knowledge
+#: model:ir.ui.menu,name:llm_knowledge.menu_llm_knowledge_chunk
+msgid "Knowledge Chunks"
+msgstr "Đoạn kiến thức"
+
+#. module: llm_knowledge
+#: model:ir.ui.menu,name:llm_knowledge.menu_llm_resource
+msgid "Resources"
+msgstr "Tài nguyên"
+
+#. module: llm_knowledge
+#: model:ir.actions.act_window,name:llm_knowledge.action_llm_knowledge_collection
+msgid "Collections"
+msgstr "Bộ sưu tập"
+
+#. module: llm_knowledge
+#: model:ir.actions.act_window,name:llm_knowledge.action_llm_knowledge_chunk
+msgid "Knowledge Chunks"
+msgstr "Đoạn kiến thức"
+
+#. module: llm_knowledge
+#: model:ir.model,name:llm_knowledge.model_llm_knowledge_collection
+msgid "Knowledge Collection for RAG"
+msgstr "Bộ sưu tập kiến thức cho RAG"
+
+#. module: llm_knowledge
+#: model:ir.model,name:llm_knowledge.model_llm_knowledge_chunk
+msgid "Document Chunk for RAG"
+msgstr "Đoạn tài liệu cho RAG"
+
+#. module: llm_knowledge
+#: model:ir.model,name:llm_knowledge.model_llm_resource
+msgid "LLM Resource for Document Management"
+msgstr "Tài nguyên AI quản lý tài liệu"
+
+#. module: llm_knowledge
+#: model:ir.model,name:llm_knowledge.model_llm_knowledge_domain
+msgid "Collection Domain Filter"
+msgstr "Bộ lọc miền bộ sưu tập"
+
+#. module: llm_knowledge
+#: model:ir.model,name:llm_knowledge.model_llm_create_rag_resource_wizard
+msgid "Create RAG Resources Wizard"
+msgstr "Trình tạo tài nguyên RAG"
+
+#. module: llm_knowledge
+#: model:ir.model,name:llm_knowledge.model_llm_upload_resource_wizard
+msgid "Upload RAG Resources Wizard"
+msgstr "Trình tải lên tài nguyên RAG"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_collection__name
+msgid "Name"
+msgstr "Tên"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_collection__description
+msgid "Description"
+msgstr "Mô tả"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_collection__active
+msgid "Active"
+msgstr "Hoạt động"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_collection__embedding_model_id
+msgid "Embedding Model"
+msgstr "Mô hình nhúng"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_collection__resource_ids
+msgid "Resources"
+msgstr "Tài nguyên"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_collection__domain_ids
+msgid "Domain Filters"
+msgstr "Bộ lọc miền"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_collection__resource_count
+msgid "Resource Count"
+msgstr "Số tài nguyên"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_collection__chunk_count
+msgid "Chunk Count"
+msgstr "Số đoạn"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_collection__chunk_ids
+msgid "Chunks (from Resources)"
+msgstr "Đoạn (từ tài nguyên)"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_collection__default_chunk_size
+msgid "Default Chunk Size"
+msgstr "Kích thước đoạn mặc định"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_collection__default_chunk_overlap
+msgid "Default Chunk Overlap"
+msgstr "Độ chồng lấp đoạn mặc định"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_collection__default_chunker
+msgid "Default Chunker"
+msgstr "Bộ chia đoạn mặc định"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_collection__default_parser
+msgid "Default Parser"
+msgstr "Bộ phân tích mặc định"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_chunk__name
+msgid "Name"
+msgstr "Tên"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_chunk__resource_id
+msgid "Resource"
+msgstr "Tài nguyên"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_chunk__sequence
+msgid "Sequence"
+msgstr "Thứ tự"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_chunk__content
+msgid "Content"
+msgstr "Nội dung"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_chunk__metadata
+msgid "Metadata"
+msgstr "Siêu dữ liệu"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_chunk__collection_ids
+msgid "Collections"
+msgstr "Bộ sưu tập"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_chunk__embedding
+msgid "Embedding"
+msgstr "Vector nhúng"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_chunk__similarity
+msgid "Similarity Score"
+msgstr "Điểm tương đồng"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_resource__name
+msgid "Name"
+msgstr "Tên"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_resource__state
+msgid "State"
+msgstr "Trạng thái"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_resource__model_id
+msgid "Related Model"
+msgstr "Mô hình liên quan"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_resource__res_model
+msgid "Model Name"
+msgstr "Tên mô hình"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_resource__res_id
+msgid "Record ID"
+msgstr "ID bản ghi"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_resource__content
+msgid "Content"
+msgstr "Nội dung"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_resource__external_url
+msgid "External URL"
+msgstr "URL bên ngoài"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_resource__lock_date
+msgid "Lock Date"
+msgstr "Ngày khóa"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_resource__kanban_state
+msgid "Kanban State"
+msgstr "Trạng thái Kanban"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_resource__collection_ids
+msgid "Collections"
+msgstr "Bộ sưu tập"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_resource__chunker
+msgid "Chunker"
+msgstr "Bộ chia đoạn"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_resource__target_chunk_size
+msgid "Target Chunk Size"
+msgstr "Kích thước đoạn mục tiêu"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_resource__target_chunk_overlap
+msgid "Chunk Overlap"
+msgstr "Độ chồng lấp đoạn"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_resource__chunk_ids
+msgid "Chunks"
+msgstr "Đoạn"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_resource__chunk_count
+msgid "Chunk Count"
+msgstr "Số đoạn"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_resource__parser
+msgid "Parser"
+msgstr "Bộ phân tích"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_resource__retriever
+msgid "Retriever"
+msgstr "Bộ truy xuất"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_domain__name
+msgid "Name"
+msgstr "Tên"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_domain__collection_id
+msgid "Collection"
+msgstr "Bộ sưu tập"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_domain__model_id
+msgid "Model"
+msgstr "Mô hình"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_domain__domain
+msgid "Domain"
+msgstr "Miền"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_domain__sequence
+msgid "Sequence"
+msgstr "Thứ tự"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_knowledge_domain__active
+msgid "Active"
+msgstr "Hoạt động"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_create_rag_resource_wizard__record_count
+msgid "Records"
+msgstr "Bản ghi"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_create_rag_resource_wizard__resource_name_template
+msgid "Resource Name Template"
+msgstr "Mẫu tên tài nguyên"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_create_rag_resource_wizard__process_immediately
+msgid "Process Immediately"
+msgstr "Xử lý ngay"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_create_rag_resource_wizard__created_resource_ids
+msgid "Created Resources"
+msgstr "Tài nguyên đã tạo"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_create_rag_resource_wizard__created_count
+msgid "Created"
+msgstr "Đã tạo"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_upload_resource_wizard__collection_id
+msgid "Collection"
+msgstr "Bộ sưu tập"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_upload_resource_wizard__file_ids
+msgid "Files"
+msgstr "Tệp"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_upload_resource_wizard__external_urls
+msgid "External URLs"
+msgstr "URL bên ngoài"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_upload_resource_wizard__process_immediately
+msgid "Process Immediately"
+msgstr "Xử lý ngay"
+
+#. module: llm_knowledge
+#: model:ir.model.fields,field_description:llm_knowledge.field_llm_upload_resource_wizard__created_count
+msgid "Created"
+msgstr "Đã tạo"
+
+#. module: llm_knowledge
+#: model:ir.model.fields.selection,name:llm_knowledge.selection__llm_resource__state__draft
+msgid "Draft"
+msgstr "Nháp"
+
+#. module: llm_knowledge
+#: model:ir.model.fields.selection,name:llm_knowledge.selection__llm_resource__state__retrieved
+msgid "Retrieved"
+msgstr "Đã truy xuất"
+
+#. module: llm_knowledge
+#: model:ir.model.fields.selection,name:llm_knowledge.selection__llm_resource__state__parsed
+msgid "Parsed"
+msgstr "Đã phân tích"
+
+#. module: llm_knowledge
+#: model:ir.model.fields.selection,name:llm_knowledge.selection__llm_resource__state__chunked
+msgid "Chunked"
+msgstr "Đã chia đoạn"
+
+#. module: llm_knowledge
+#: model:ir.model.fields.selection,name:llm_knowledge.selection__llm_resource__state__ready
+msgid "Ready"
+msgstr "Sẵn sàng"
+
+#. module: llm_knowledge
+#: model:ir.model.fields.selection,name:llm_knowledge.selection__llm_resource__kanban_state__normal
+msgid "Ready"
+msgstr "Sẵn sàng"
+
+#. module: llm_knowledge
+#: model:ir.model.fields.selection,name:llm_knowledge.selection__llm_resource__kanban_state__blocked
+msgid "Blocked"
+msgstr "Bị chặn"
+
+#. module: llm_knowledge
+#: model:ir.model.fields.selection,name:llm_knowledge.selection__llm_resource__kanban_state__done
+msgid "Done"
+msgstr "Hoàn tất"
+
+#. module: llm_knowledge
+#: model:ir.model.fields.selection,name:llm_knowledge.selection__llm_resource__chunker__default
+msgid "Default Chunker"
+msgstr "Bộ chia đoạn mặc định"
+
+#. module: llm_knowledge
+#: model:ir.model.fields.selection,name:llm_knowledge.selection__llm_resource__parser__default
+msgid "Default Parser"
+msgstr "Bộ phân tích mặc định"
+
+#. module: llm_knowledge
+#: model:ir.model.fields.selection,name:llm_knowledge.selection__llm_resource__parser__json
+msgid "JSON Parser"
+msgstr "Bộ phân tích JSON"
+
+#. module: llm_knowledge
+#: model:ir.model.fields.selection,name:llm_knowledge.selection__llm_resource__retriever__default
+msgid "Default Retriever"
+msgstr "Bộ truy xuất mặc định"
+
+#. module: llm_knowledge
+#: model:ir.model.fields.selection,name:llm_knowledge.selection__llm_resource__retriever__http
+msgid "HTTP Retriever"
+msgstr "Bộ truy xuất HTTP"
+
+#. module: llm_knowledge
+#: model:ir.model.constraint,message:llm_knowledge.constraint_llm_resource_unique_record
+msgid "A resource already exists for this record. Please use the existing resource."
+msgstr "Tài nguyên cho bản ghi này đã tồn tại. Vui lòng sử dụng tài nguyên hiện có."
+
+#. module: llm_knowledge
+#: model:ir.actions.server,name:llm_knowledge.action_mass_process_rag_resources
+msgid "Process Resources"
+msgstr "Xử lý tài nguyên"
+
+#. module: llm_knowledge
+#: model:ir.actions.server,name:llm_knowledge.action_mass_unlock_resources
+msgid "Force Unlock"
+msgstr "Mở khóa"
+
+#. module: llm_knowledge
+#: model:ir.actions.server,name:llm_knowledge.action_mass_reset_resources
+msgid "Reset Resources"
+msgstr "Đặt lại tài nguyên"
+
+#. module: llm_knowledge
+#: model:ir.actions.server,name:llm_knowledge.action_create_rag_resource_knowledge
+msgid "Create RAG Resource"
+msgstr "Tạo tài nguyên RAG"
+
+#. module: llm_knowledge
+#: model:ir.actions.server,name:llm_knowledge.action_reindex_rag_resources
+msgid "Re-index RAG Resources"
+msgstr "Lập lại chỉ mục tài nguyên RAG"
+
+#. module: llm_knowledge
+#: model:ir.actions.server,name:llm_knowledge.action_button_upload_resources_knowledge
+msgid "Upload Resources"
+msgstr "Tải lên tài nguyên"
+
+#. module: llm_knowledge
+#. odoo-python
+#: code:addons/llm_knowledge/models/llm_knowledge_collection.py:0
+#, python-format
+msgid "Collection Resources"
+msgstr "Tài nguyên bộ sưu tập"
+
+#. module: llm_knowledge
+#. odoo-python
+#: code:addons/llm_knowledge/models/llm_knowledge_collection.py:0
+#, python-format
+msgid "Resource Chunks"
+msgstr "Đoạn tài nguyên"
+
+#. module: llm_knowledge
+#. odoo-python
+#: code:addons/llm_knowledge/models/llm_resource.py:0
+#, python-format
+msgid "Referenced record not found"
+msgstr "Không tìm thấy bản ghi tham chiếu"
+
+#. module: llm_knowledge
+#. odoo-python
+#: code:addons/llm_knowledge/wizards/upload_resource_wizard.py:0
+#, python-format
+msgid "Please provide at least one file or URL"
+msgstr "Vui lòng cung cấp ít nhất một tệp hoặc URL"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_collection_form
+msgid "Sync Resources"
+msgstr "Đồng bộ tài nguyên"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_collection_form
+msgid "Upload Resources"
+msgstr "Tải lên tài nguyên"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_collection_form
+msgid "Process Resources"
+msgstr "Xử lý tài nguyên"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_collection_form
+msgid "Embed Resources"
+msgstr "Nhúng tài nguyên"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_collection_form
+msgid "Reindex Collection"
+msgstr "Lập lại chỉ mục"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_collection_form
+msgid "Resources"
+msgstr "Tài nguyên"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_collection_form
+msgid "Chunks"
+msgstr "Đoạn"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_collection_form
+msgid "Description"
+msgstr "Mô tả"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_collection_form
+msgid "Domain Filters"
+msgstr "Bộ lọc miền"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_collection_form
+msgid "Domain filters are used to automatically create RAG resources"
+msgstr "Bộ lọc miền được sử dụng để tự động tạo tài nguyên RAG"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_form
+msgid "Process"
+msgstr "Xử lý"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_form
+msgid "View"
+msgstr "Xem"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_form
+msgid "Retrieve"
+msgstr "Truy xuất"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_form
+msgid "Parse"
+msgstr "Phân tích"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_form
+msgid "Chunk"
+msgstr "Chia đoạn"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_form
+msgid "Embed"
+msgstr "Nhúng"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_form
+msgid "Process All"
+msgstr "Xử lý tất cả"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_form
+msgid "Re-index"
+msgstr "Lập lại chỉ mục"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_form
+msgid "RESET CHUNK SETTINGS"
+msgstr "ĐẶT LẠI CÀI ĐẶT ĐOẠN"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_form
+msgid "Content"
+msgstr "Nội dung"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_search
+msgid "Draft"
+msgstr "Nháp"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_search
+msgid "Retrieved"
+msgstr "Đã truy xuất"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_search
+msgid "Parsed"
+msgstr "Đã phân tích"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_search
+msgid "Chunked"
+msgstr "Đã chia đoạn"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_search
+msgid "Ready"
+msgstr "Sẵn sàng"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_search
+msgid "Locked"
+msgstr "Đã khóa"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_search
+msgid "State"
+msgstr "Trạng thái"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_search
+msgid "Model"
+msgstr "Mô hình"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_search
+msgid "Collection"
+msgstr "Bộ sưu tập"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_search
+msgid "Group By"
+msgstr "Nhóm theo"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_collection_search
+msgid "Archived"
+msgstr "Đã lưu trữ"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_collection_search
+msgid "Embedding Model"
+msgstr "Mô hình nhúng"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_chunk_search
+msgid "High Similarity (0.75)"
+msgstr "Tương đồng cao (0.75)"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_chunk_search
+msgid "Medium Similarity (0.5)"
+msgstr "Tương đồng trung bình (0.5)"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_chunk_search
+msgid "Low Similarity (0.25)"
+msgstr "Tương đồng thấp (0.25)"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_chunk_search
+msgid "Similarity Threshold"
+msgstr "Ngưỡng tương đồng"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_chunk_search
+msgid "Search Method"
+msgstr "Phương thức tìm kiếm"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_chunk_form
+msgid "Knowledge Chunk"
+msgstr "Đoạn kiến thức"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_chunk_form
+msgid "Chunk Detail"
+msgstr "Chi tiết đoạn"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_knowledge_chunk_form
+msgid "Metadata"
+msgstr "Siêu dữ liệu"
+
+#. module: llm_knowledge
+#: model_terms:ir.actions.act_window,help:llm_knowledge.action_llm_knowledge_collection
+msgid "Create your first RAG collection"
+msgstr "Tạo bộ sưu tập RAG đầu tiên"
+
+#. module: llm_knowledge
+#: model_terms:ir.actions.act_window,help:llm_knowledge.action_llm_knowledge_collection
+msgid "Collections group resources that share the same embedding model for RAG processing."
+msgstr "Bộ sưu tập nhóm các tài nguyên sử dụng cùng mô hình nhúng để xử lý RAG."
+
+#. module: llm_knowledge
+#: model_terms:ir.actions.act_window,help:llm_knowledge.action_llm_knowledge_chunk
+msgid "No knowledge chunks found"
+msgstr "Không tìm thấy đoạn kiến thức"
+
+#. module: llm_knowledge
+#: model_terms:ir.actions.act_window,help:llm_knowledge.action_llm_knowledge_chunk
+msgid "Knowledge chunks are segments of resources used for RAG (Retrieval Augmented Generation)."
+msgstr "Đoạn kiến thức là các phân đoạn tài nguyên được sử dụng cho RAG (Truy xuất tăng cường sinh)."
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_create_rag_resource_wizard_form
+msgid "Create RAG Resources"
+msgstr "Tạo tài nguyên RAG"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_create_rag_resource_wizard_form
+msgid "Create Resources"
+msgstr "Tạo tài nguyên"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_create_rag_resource_wizard_form
+msgid "View Resources"
+msgstr "Xem tài nguyên"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_create_rag_resource_wizard_form
+msgid "Close"
+msgstr "Đóng"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_upload_resource_wizard_form
+msgid "Upload RAG Resources"
+msgstr "Tải lên tài nguyên RAG"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_upload_resource_wizard_form
+msgid "Upload resources for RAG processing"
+msgstr "Tải lên tài nguyên để xử lý RAG"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_upload_resource_wizard_form
+msgid "Local Files"
+msgstr "Tệp cục bộ"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_upload_resource_wizard_form
+msgid "External URLs"
+msgstr "URL bên ngoài"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_upload_resource_wizard_form
+msgid "Upload Resources"
+msgstr "Tải lên tài nguyên"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_upload_resource_wizard_form
+msgid "View Resources"
+msgstr "Xem tài nguyên"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_upload_resource_wizard_form
+msgid "Close"
+msgstr "Đóng"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_kanban
+msgid "Edit"
+msgstr "Chỉnh sửa"
+
+#. module: llm_knowledge
+#: model_terms:ir.ui.view,arch_db:llm_knowledge.view_llm_resource_kanban
+msgid "Delete"
+msgstr "Xóa"
