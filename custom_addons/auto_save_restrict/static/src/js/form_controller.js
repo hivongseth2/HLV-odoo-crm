@@ -24,6 +24,12 @@ patch(FormController.prototype, {
         }
     },
 
+   beforeVisibilityChange() {
+        // Override: do NOT auto-save when tab loses focus / visibility changes.
+        // Original Odoo behavior calls this.model.root.save() here,
+        // which saves without user confirmation.
+    },
+
    async _confirmSave() {
         let _continue = true;
         await new Promise((resolve) => {
@@ -31,8 +37,6 @@ patch(FormController.prototype, {
                 body: _t("Would you like to save your changes?"),
                 confirm: async () => {
                     await this.save();
-                    // It doesn't make sense to do the action of the button
-                    // as the res.config.settings `execute` method will trigger a reload.
                     _continue = true;
                     resolve();
                 },
