@@ -18,10 +18,21 @@ patch(FormController.prototype, {
     },
 
    beforeUnload(ev) {
+        // Force commit pending input value before checking dirty state
+        const activeEl = document.activeElement;
+        if (activeEl && this.rootRef?.el?.contains(activeEl)) {
+            activeEl.blur();
+        }
         if (this.model.root.dirty) {
             ev.preventDefault();
             ev.returnValue = '';
         }
+    },
+
+   beforeVisibilityChange() {
+        // Override: do NOT auto-save when tab loses focus / visibility changes.
+        // Original Odoo behavior calls this.model.root.save() here,
+        // which saves without user confirmation.
     },
 
    async _confirmSave() {
@@ -31,8 +42,6 @@ patch(FormController.prototype, {
                 body: _t("Would you like to save your changes?"),
                 confirm: async () => {
                     await this.save();
-                    // It doesn't make sense to do the action of the button
-                    // as the res.config.settings `execute` method will trigger a reload.
                     _continue = true;
                     resolve();
                 },
