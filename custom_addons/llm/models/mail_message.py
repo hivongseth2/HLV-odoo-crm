@@ -54,10 +54,14 @@ SPREADSHEET_MIMETYPES = (
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 )
 
-# Office document mimetypes - NOT supported via chat API (excludes spreadsheets)
-OFFICE_MIMETYPES = (
+# Word document mimetypes - converted to plain text and sent as text content
+WORD_MIMETYPES = (
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+)
+
+# Office document mimetypes - NOT supported via chat API (only PPT left)
+OFFICE_MIMETYPES = (
     "application/vnd.ms-powerpoint",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 )
@@ -343,6 +347,8 @@ class MailMessage(models.Model):
 
         # Include spreadsheets converted to CSV
         texts.extend(self._get_spreadsheet_attachments())
+        # Include Word documents converted to text
+        texts.extend(self._get_word_attachments())
         return texts
 
     def _get_spreadsheet_attachments(self):
@@ -386,6 +392,44 @@ class MailMessage(models.Model):
             except Exception as e:
                 _logger.warning(
                     "Failed to read spreadsheet %s: %s", att.name, e
+                )
+        return texts
+
+    def _get_word_attachments(self):
+        """Get Word document attachments (docx/doc) converted to plain text."""
+        import io
+        texts = []
+        for att in self._get_attachments_by_mimetype(WORD_MIMETYPES):
+            try:
+                import docx as python_docx
+                raw_data = base64.b64decode(att.datas)
+                doc = python_docx.Document(io.BytesIO(raw_data))
+                parts = []
+                for para in doc.paragraphs:
+                    text = para.text.strip()
+                    if text:
+                        parts.append(text)
+                # Also extract tables
+                for table in doc.tables:
+                    for row in table.rows:
+                        cells = [cell.text.strip() for cell in row.cells]
+                        parts.append(" | ".join(cells))
+                content = "\n".join(parts)
+                if content:
+                    texts.append({
+                        "mimetype": "text/plain",
+                        "content": content[:50000],
+                        "name": att.name or "document.txt",
+                    })
+            except ImportError:
+                _logger.warning(
+                    "python-docx not installed. Cannot read Word file %s. "
+                    "Install with: pip install python-docx",
+                    att.name,
+                )
+            except Exception as e:
+                _logger.warning(
+                    "Failed to read Word document %s: %s", att.name, e
                 )
         return texts
 

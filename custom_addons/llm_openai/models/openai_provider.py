@@ -359,10 +359,43 @@ class LLMProvider(models.Model):
                     })
 
             elif role == "user":
-                input_items.append({
-                    "role": "user",
-                    "content": content,
-                })
+                # Convert content types for Responses API if content is a list
+                if isinstance(content, list):
+                    converted = []
+                    for part in content:
+                        if not isinstance(part, dict):
+                            converted.append(part)
+                            continue
+                        p_type = part.get("type", "")
+                        if p_type == "text":
+                            converted.append({
+                                "type": "input_text",
+                                "text": part.get("text", ""),
+                            })
+                        elif p_type == "image_url":
+                            img_url = part.get("image_url", {}).get("url", "")
+                            converted.append({
+                                "type": "input_image",
+                                "image_url": img_url,
+                            })
+                        elif p_type == "file":
+                            file_data = part.get("file", {})
+                            converted.append({
+                                "type": "input_file",
+                                "filename": file_data.get("filename", "file"),
+                                "file_data": file_data.get("file_data", ""),
+                            })
+                        else:
+                            converted.append(part)
+                    input_items.append({
+                        "role": "user",
+                        "content": converted,
+                    })
+                else:
+                    input_items.append({
+                        "role": "user",
+                        "content": content,
+                    })
 
             else:
                 if content:
