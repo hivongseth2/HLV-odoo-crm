@@ -103,6 +103,12 @@ class LLMToolRecordRetriever(models.Model):
         # Sanitize and validate domain
         domain = self._sanitize_domain(domain)
 
+        # Ensure limit is integer
+        try:
+            limit = int(limit)
+        except (ValueError, TypeError):
+            limit = 100
+
         _logger.info(
             "Executing Odoo Record Retriever with: model=%s, domain=%s, fields=%s, limit=%s",
             model, domain, fields, limit,
@@ -210,6 +216,8 @@ class LLMToolRecordRetriever(models.Model):
         if field == "id" or (
             field.endswith("_id") and operator in ("=", "!=", ">", ">=", "<", "<=")
         ):
+            if isinstance(value, (int, float)):
+                return int(value)
             if isinstance(value, str):
                 # Strip non-numeric garbage
                 cleaned = "".join(c for c in value if c.isdigit() or c == "-")
@@ -223,5 +231,17 @@ class LLMToolRecordRetriever(models.Model):
                     value, field,
                 )
                 return 0
+
+        # General type coercion: try numeric conversion for string values
+        if isinstance(value, str) and operator in ("=", "!=", ">", ">=", "<", "<="):
+            stripped = value.strip()
+            try:
+                return int(stripped)
+            except (ValueError, TypeError):
+                pass
+            try:
+                return float(stripped)
+            except (ValueError, TypeError):
+                pass
 
         return value
