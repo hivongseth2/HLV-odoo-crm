@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo noupdate="1">
+
+    <record id="llm_tool_file_export" model="llm.tool">
+        <field name="name">file_export</field>
+        <field name="description">Tạo và xuất file có thể tải xuống (xlsx hoặc csv) từ dữ liệu có cấu trúc.
+Sử dụng khi cần tạo file cho người dùng tải về, ví dụ: báo giá, danh sách sản phẩm, bảng giá, báo cáo dữ liệu.
+Truyền headers (tiêu đề cột) và rows (dữ liệu các hàng) để tạo file.
+Nếu người dùng gửi file Excel lên và yêu cầu điền thêm dữ liệu, hãy đọc dữ liệu gốc, thêm/sửa thông tin, rồi dùng tool này để xuất file mới.</field>
+        <field name="implementation">file_export</field>
+        <field name="active" eval="True" />
+        <field name="default" eval="False" />
+        <field name="read_only_hint" eval="False" />
+        <field name="destructive_hint" eval="False" />
+        <field name="open_world_hint" eval="False" />
+    </record>
+
+</odoo>
