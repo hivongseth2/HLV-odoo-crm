@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 from odoo import http
 from odoo.http import request
-from ..shopee_order_fetch.services import shopee_api, shopee_order_builder, shopee_escrow
+from odoo.addons.shopee_order_fetch.services import shopee_api, shopee_order_builder, shopee_escrow
 
 _logger = logging.getLogger(__name__)
 
