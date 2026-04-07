@@ -48,11 +48,16 @@ VIDEO_MIMETYPES = (
 )
 
 # Office document mimetypes - NOT supported via chat API
+# Spreadsheet mimetypes - converted to CSV text and sent as text content
+SPREADSHEET_MIMETYPES = (
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+)
+
+# Office document mimetypes - NOT supported via chat API (excludes spreadsheets)
 OFFICE_MIMETYPES = (
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/vnd.ms-powerpoint",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 )
@@ -317,7 +322,10 @@ class MailMessage(models.Model):
         ]
 
     def _get_text_attachments(self):
-        """Get text attachments with decoded content."""
+        """Get text attachments with decoded content.
+
+        Also includes spreadsheet files (xlsx/xls) converted to CSV text.
+        """
         texts = []
         for att in self._get_attachments_by_mimetype(TEXT_MIMETYPES):
             try:
@@ -332,6 +340,53 @@ class MailMessage(models.Model):
                 )
             except (UnicodeDecodeError, ValueError) as e:
                 _logger.warning("Failed to decode text attachment %s: %s", att.name, e)
+
+        # Include spreadsheets converted to CSV
+        texts.extend(self._get_spreadsheet_attachments())
+        return texts
+
+    def _get_spreadsheet_attachments(self):
+        """Get spreadsheet attachments (xlsx/xls) converted to CSV text."""
+        import io
+        texts = []
+        for att in self._get_attachments_by_mimetype(SPREADSHEET_MIMETYPES):
+            try:
+                import openpyxl
+                raw_data = base64.b64decode(att.datas)
+                wb = openpyxl.load_workbook(
+                    io.BytesIO(raw_data), read_only=True, data_only=True
+                )
+                parts = []
+                for sheet_name in wb.sheetnames:
+                    ws = wb[sheet_name]
+                    rows = list(ws.iter_rows(values_only=True))
+                    if not rows:
+                        continue
+                    parts.append(f"=== Sheet: {sheet_name} ===")
+                    for row in rows:
+                        cells = [
+                            str(cell) if cell is not None else ""
+                            for cell in row
+                        ]
+                        parts.append(",".join(cells))
+                wb.close()
+                content = "\n".join(parts)
+                if content:
+                    texts.append({
+                        "mimetype": "text/csv",
+                        "content": content[:50000],  # Limit to 50K chars
+                        "name": att.name or "spreadsheet.csv",
+                    })
+            except ImportError:
+                _logger.warning(
+                    "openpyxl not installed. Cannot read Excel file %s. "
+                    "Install with: pip install openpyxl",
+                    att.name,
+                )
+            except Exception as e:
+                _logger.warning(
+                    "Failed to read spreadsheet %s: %s", att.name, e
+                )
         return texts
 
     def _get_audio_attachments(self):
