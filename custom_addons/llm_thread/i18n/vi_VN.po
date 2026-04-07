@@ -28,12 +28,12 @@ msgstr "Cuộc hội thoại"
 
 #. module: llm_thread
 #: model:ir.actions.act_window,name:llm_thread.action_llm_chat
-msgid "Conversations"
-msgstr "Cuộc trò chuyện"
+msgid "Chat"
+msgstr "Trò chuyện"
 
 #. module: llm_thread
 #: model:ir.actions.act_window,name:llm_thread.llm_thread_action
-msgid "Threads"
+msgid "Chat Threads"
 msgstr "Cuộc hội thoại"
 
 #. module: llm_thread
@@ -47,9 +47,24 @@ msgid "Name"
 msgstr "Tên"
 
 #. module: llm_thread
-#: model:ir.model.fields,field_description:llm_thread.field_llm_thread__assistant_id
-msgid "Assistant"
-msgstr "Trợ lý"
+#: model:ir.model.fields,field_description:llm_thread.field_llm_thread__active
+msgid "Active"
+msgstr "Hoạt động"
+
+#. module: llm_thread
+#: model:ir.model.fields,field_description:llm_thread.field_llm_thread__title
+msgid "Title"
+msgstr "Tiêu đề"
+
+#. module: llm_thread
+#: model:ir.model.fields,field_description:llm_thread.field_llm_thread__user_id
+msgid "User"
+msgstr "Người dùng"
+
+#. module: llm_thread
+#: model:ir.model.fields,field_description:llm_thread.field_llm_thread__provider_id
+msgid "Provider"
+msgstr "Nhà cung cấp"
 
 #. module: llm_thread
 #: model:ir.model.fields,field_description:llm_thread.field_llm_thread__model_id
@@ -58,10 +73,45 @@ msgstr "Mô hình"
 
 #. module: llm_thread
 #: model:ir.model.fields,field_description:llm_thread.field_llm_thread__tool_ids
-msgid "Tools"
-msgstr "Công cụ"
+msgid "Available Tools"
+msgstr "Công cụ khả dụng"
 
 #. module: llm_thread
-#: model:ir.model.fields,field_description:llm_thread.field_llm_thread__active
-msgid "Active"
-msgstr "Hoạt động"
+#: model:ir.model.fields,field_description:llm_thread.field_llm_thread__related_model
+msgid "Related Document Model"
+msgstr "Mô hình tài liệu liên quan"
+
+#. module: llm_thread
+#: model:ir.model.fields,field_description:llm_thread.field_llm_thread__related_id
+msgid "Related Document ID"
+msgstr "ID tài liệu liên quan"
+
+#. module: llm_thread
+#: model:ir.model.fields,field_description:llm_thread.field_llm_thread__all_attachment_ids
+msgid "All Thread Attachments"
+msgstr "Tất cả tệp đính kèm"
+
+#. module: llm_thread
+#: model:ir.model.fields,field_description:llm_thread.field_llm_thread__attachment_count
+msgid "Thread Attachments"
+msgstr "Tệp đính kèm"
+
+#. module: llm_thread
+#: model:ir.model.fields,field_description:llm_thread.field_mail_message__user_vote
+msgid "User Vote"
+msgstr "Đánh giá người dùng"
+
+#. module: llm_thread
+#: model_terms:ir.ui.view,arch_db:llm_thread.llm_thread_view_form
+msgid "Chat Title"
+msgstr "Tiêu đề cuộc trò chuyện"
+
+#. module: llm_thread
+#: model_terms:ir.actions.act_window,help:llm_thread.llm_thread_action
+msgid "Create your first chat thread!"
+msgstr "Tạo cuộc trò chuyện đầu tiên!"
+
+#. module: llm_thread
+#: model_terms:ir.actions.act_window,help:llm_thread.llm_thread_action
+msgid "Start a conversation with any of your configured LLM providers."
+msgstr "Bắt đầu cuộc trò chuyện với bất kỳ nhà cung cấp AI nào đã cấu hình."
