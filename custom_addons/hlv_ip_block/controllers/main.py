@@ -130,7 +130,7 @@ def _patched_call(self, environ, start_response):
         start_response(status, headers)
         return [b'Forbidden']
 
-    return _original_dispatch(environ, start_response)
+    return _original_dispatch(self, environ, start_response)
 
 
 # Apply the patch
