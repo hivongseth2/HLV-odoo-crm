@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Tree View -->
+        <record id="view_blocked_ip_tree" model="ir.ui.view">
+            <field name="name">hlv.blocked.ip.tree</field>
+            <field name="model">hlv.blocked.ip</field>
+            <field name="arch" type="xml">
+                <list string="Danh sách IP bị chặn" editable="bottom">
+                    <field name="name" string="Địa chỉ IP"/>
+                    <field name="reason" string="Lý do"/>
+                    <field name="active" string="Kích hoạt"/>
+                    <field name="hit_count" string="Số lần chặn"/>
+                    <field name="last_hit" string="Lần cuối"/>
+                </list>
+            </field>
+        </record>
+
+        <!-- Form View -->
+        <record id="view_blocked_ip_form" model="ir.ui.view">
+            <field name="name">hlv.blocked.ip.form</field>
+            <field name="model">hlv.blocked.ip</field>
+            <field name="arch" type="xml">
+                <form string="IP bị chặn">
+                    <sheet>
+                        <group>
+                            <group>
+                                <field name="name" string="Địa chỉ IP"/>
+                                <field name="active" string="Kích hoạt"/>
+                            </group>
+                            <group>
+                                <field name="hit_count" string="Số lần chặn"/>
+                                <field name="last_hit" string="Lần chặn cuối"/>
+                            </group>
+                        </group>
+                        <group>
+                            <field name="reason" string="Lý do chặn"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- Action -->
+        <record id="action_blocked_ip" model="ir.actions.act_window">
+            <field name="name">Chặn IP</field>
+            <field name="res_model">hlv.blocked.ip</field>
+            <field name="view_mode">list,form</field>
+        </record>
+
+        <!-- Menu -->
+        <menuitem id="menu_blocked_ip_root"
+                  name="Chặn IP"
+                  parent="base.menu_administration"
+                  action="action_blocked_ip"
+                  sequence="100"/>
+    </data>
+</odoo>
