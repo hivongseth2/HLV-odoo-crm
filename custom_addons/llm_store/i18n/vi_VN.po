@@ -1,126 +1,42 @@
 # Translation of Odoo Server.
 # This file contains the translation of the following modules:
-#	* llm_store
+# 	* llm_store
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-01-01 00:00+0000\n"
-"PO-Revision-Date: 2025-01-01 00:00+0000\n"
+"POT-Creation-Date: 2026-04-07 00:00+0000\n"
+"PO-Revision-Date: 2026-04-07 00:00+0000\n"
 "Last-Translator: HLV Team\n"
 "Language-Team: Vietnamese\n"
 "Language: vi_VN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
-"Content-Transfer-Encoding: 8bit\n"
-
-
-
-#. module: llm_store
-#: code:addons/llm_store/models/__init__.py:0
-#, python-format
-msgid "LLM Vector Store"
-msgstr "Kho vector AI"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
 
 #. module: llm_store
-#: code:addons/llm_store/models/__init__.py:0
-#, python-format
-msgid "Store Metadata"
-msgstr "Thông tin kho"
-
-#. module: llm_store
-#: code:addons/llm_store/models/__init__.py:0
-#, python-format
-msgid "Vector store service not configured"
-msgstr "Dịch vụ kho vector chưa được cấu hình"
-
-#. module: llm_store
-#: code:addons/llm_store/models/__init__.py:0
-#, python-format
-msgid "Method %s not implemented for service %s"
-msgstr "Phương thức %s chưa được triển khai cho dịch vụ %s"
-
-#. module: llm_store
-#: code:addons/llm_store/models/__init__.py:0
-#, python-format
-msgid "LLM Vector Store Collection"
-msgstr "Bộ sưu tập kho vector AI"
-
-#. module: llm_store
-#: code:addons/llm_store/models/__init__.py:0
-#, python-format
-msgid "Vector Store"
-msgstr "Kho vector"
-
-#. module: llm_store
-#: code:addons/llm_store/models/__init__.py:0
-#, python-format
-msgid "Dimension of vectors in this collection"
-msgstr "Chiều của vector trong bộ sưu tập này"
-
-#. module: llm_store
-#: code:addons/llm_store/models/__init__.py:0
-#, python-format
-msgid "Number of vectors in this collection"
-msgstr "Số lượng vector trong bộ sưu tập này"
-
-#. module: llm_store
-#: code:addons/llm_store/models/__init__.py:0
-#, python-format
-msgid "Collection Metadata"
-msgstr "Thông tin bộ sưu tập"
-
-#. module: llm_store
-#: code:addons/llm_store/models/__init__.py:0
-#, python-format
-msgid "Collection names must be unique per store."
-msgstr "Tên bộ sưu tập phải là duy nhất trong mỗi kho."
-
-#. module: llm_store
-#: code:addons/llm_store/models/__init__.py:0
-#, python-format
-msgid "No store configured for this collection."
-msgstr "Chưa cấu hình kho cho bộ sưu tập này."
-
-#. module: llm_store
-#: code:addons/llm_store/models/__init__.py:0
-#, python-format
-msgid "Store Name"
-msgstr "Tên kho"
-
-#. module: llm_store
-#: code:addons/llm_store/models/__init__.py:0
-#, python-format
-msgid "Archived"
-msgstr "Đã lưu trữ"
-
-#. module: llm_store
-#: code:addons/llm_store/models/__init__.py:0
-#, python-format
-msgid "Group By"
-msgstr "Nhóm theo"
-
-#. module: llm_store
-#: code:addons/llm_store/models/__init__.py:0
-#, python-format
-msgid "Service"
-msgstr "Dịch vụ"
-
-#. module: llm_store
-#: code:addons/llm_store/models/__init__.py:0
-#, python-format
+#: model:ir.ui.menu,name:llm_store.menu_llm_store
 msgid "Vector Stores"
 msgstr "Kho vector"
 
 #. module: llm_store
-#: code:addons/llm_store/models/__init__.py:0
-#, python-format
-msgid "Create your first vector store!"
-msgstr "Tạo kho vector đầu tiên!"
+#: model:ir.actions.act_window,name:llm_store.llm_store_action
+msgid "Vector Stores"
+msgstr "Kho vector"
 
 #. module: llm_store
-#: code:addons/llm_store/models/__init__.py:0
-#, python-format
-msgid "Configure vector stores like Chroma, Qdrant, or PostgreSQL to enable vector search for RAG."
-msgstr "Cấu hình kho vector như Chroma, Qdrant, hoặc PostgreSQL để kích hoạt tìm kiếm vector cho RAG."
+#: model:ir.model,name:llm_store.model_llm_store
+msgid "LLM Vector Store"
+msgstr "Kho vector AI"
+
+#. module: llm_store
+#: model:ir.model.fields,field_description:llm_store.field_llm_store__name
+msgid "Name"
+msgstr "Tên"
+
+#. module: llm_store
+#: model:ir.model.fields,field_description:llm_store.field_llm_store__active
+msgid "Active"
+msgstr "Hoạt động"
