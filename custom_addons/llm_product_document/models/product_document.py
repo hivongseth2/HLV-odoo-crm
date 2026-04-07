@@ -54,22 +54,36 @@ class ProductDocument(models.Model):
         }
 
     def llm_get_fields(self, _record=None):
-        """Return attachment data for the parser.
+        """Return product context header + attachment content.
 
-        Only a single field is returned so the parse loop does not
-        overwrite content.  Product context is prepended *after* parsing
-        in ``LLMResource.parse()`` via ``_build_product_context_header``.
+        The base parse loop now accumulates content across fields, so
+        the product metadata header will appear before the document body
+        in the final ``resource.content``.
         """
         self.ensure_one()
         attachment = self.ir_attachment_id
+        result = []
 
+        # Product context as first field
+        header = self._build_product_context_header()
+        if header:
+            result.append({
+                "field_name": "product_context",
+                "mimetype": "text/plain",
+                "rawcontent": header,
+            })
+
+        # Actual document content from attachment
         is_markdown = (
             attachment.name
             and attachment.name.lower().endswith(".md")
             and attachment.mimetype == "application/octet-stream"
         )
-        return [{
-            "field_name": "datas",
-            "mimetype": "text/markdown" if is_markdown else attachment.mimetype,
-            "rawcontent": attachment.raw,
-        }]
+        if attachment.raw:
+            result.append({
+                "field_name": "datas",
+                "mimetype": "text/markdown" if is_markdown else attachment.mimetype,
+                "rawcontent": attachment.raw,
+            })
+
+        return result

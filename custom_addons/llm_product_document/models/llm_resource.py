@@ -1,6 +1,6 @@
 import logging
 
-from odoo import _, api, fields, models
+from odoo import api, fields, models
 
 _logger = logging.getLogger(__name__)
 
@@ -30,29 +30,3 @@ class LLMResource(models.Model):
                         if variant.exists():
                             product = variant.product_tmpl_id
             resource.product_tmpl_id = product if product.exists() else False
-
-    def parse(self):
-        """Override to prepend product context after normal parsing."""
-        result = super().parse()
-
-        # For product.document resources that were just parsed, prepend
-        # the product metadata header so embeddings include product info.
-        for resource in self.filtered(
-            lambda r: r.res_model == "product.document"
-            and r.state == "parsed"
-            and r.content
-        ):
-            try:
-                doc = self.env["product.document"].browse(resource.res_id)
-                if doc.exists():
-                    header = doc._build_product_context_header()
-                    if header:
-                        resource.write({"content": header + "\n" + resource.content})
-            except Exception as e:
-                _logger.warning(
-                    "Could not prepend product context for resource %s: %s",
-                    resource.id,
-                    e,
-                )
-
-        return result

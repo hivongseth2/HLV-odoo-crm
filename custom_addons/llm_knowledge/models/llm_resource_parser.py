@@ -56,9 +56,16 @@ class LLMResourceParser(models.Model):
                     # Call get_fields on the individual resource to ensure singleton
                     fields = resource.get_fields(record)
 
+                content_parts = []
+                success = False
                 for field in fields:
-                    # TODO: Should it be self._parse_field?
                     success = resource._parse_field(record, field)
+                    if success and resource.content:
+                        content_parts.append(resource.content)
+
+                # Combine all parsed field contents
+                if content_parts:
+                    resource.content = "\n\n".join(content_parts)
 
                 if success:
                     resource.write({"state": "parsed"})
