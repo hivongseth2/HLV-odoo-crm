@@ -64,11 +64,11 @@ class LLMToolWebSearch(models.Model):
     @api.model
     def _get_available_implementations(self):
         implementations = super()._get_available_implementations()
-        return implementations + [("web_search", "Web Search")]
+        return implementations + [("hard_search", "Hard Search")]
 
     def get_input_schema(self):
         schema = super().get_input_schema()
-        if self.implementation == "web_search":
+        if self.implementation == "hard_search":
             sites = self.env["llm.web.search.site"].sudo().search([("active", "=", True)])
             if sites:
                 site_descriptions = ", ".join(
@@ -85,7 +85,7 @@ class LLMToolWebSearch(models.Model):
     # ----------------------------------------------------------------
     # Main tool method
     # ----------------------------------------------------------------
-    def web_search_execute(
+    def hard_search_execute(
         self,
         query: str,
         site_domain: str = "",

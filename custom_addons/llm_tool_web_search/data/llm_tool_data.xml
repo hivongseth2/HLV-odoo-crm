@@ -28,10 +28,10 @@
     <!-- ============================================================ -->
     <!-- Web Search Tool -->
     <!-- ============================================================ -->
-    <record id="llm_tool_web_search" model="llm.tool">
-        <field name="name">web_search</field>
-        <field name="description">Tìm kiếm và trích xuất nội dung từ các website được cấu hình (ketnoitieudung.vn, mecsu.vn, visior.vn). Sử dụng khi cần tra cứu thông tin sản phẩm, bài viết, hoặc nội dung cập nhật từ các trang web của công ty.</field>
-        <field name="implementation">web_search</field>
+    <record id="llm_tool_hard_search" model="llm.tool">
+        <field name="name">hard_search</field>
+        <field name="description">Tìm kiếm chuyên sâu và trích xuất nội dung từ các website được cấu hình (ketnoitieudung.vn, mecsu.vn, visior.vn). Sử dụng khi cần tra cứu chi tiết sản phẩm, bài viết, hoặc nội dung cập nhật từ các trang web của công ty. Tool này crawl trực tiếp website thay vì dùng AI web search.</field>
+        <field name="implementation">hard_search</field>
         <field name="active" eval="True" />
         <field name="default" eval="False" />
         <field name="requires_user_consent" eval="False" />
