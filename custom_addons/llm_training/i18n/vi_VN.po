@@ -1,360 +1,63 @@
 # Translation of Odoo Server.
 # This file contains the translation of the following modules:
-#	* llm_training
+# 	* llm_training
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-01-01 00:00+0000\n"
-"PO-Revision-Date: 2025-01-01 00:00+0000\n"
+"POT-Creation-Date: 2026-04-07 00:00+0000\n"
+"PO-Revision-Date: 2026-04-07 00:00+0000\n"
 "Last-Translator: HLV Team\n"
 "Language-Team: Vietnamese\n"
 "Language: vi_VN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
-"Content-Transfer-Encoding: 8bit\n"
-
-
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "LLM Training Dataset"
-msgstr "Bộ dữ liệu huấn luyện AI"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
 
 #. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Dataset Files"
-msgstr "Tệp dữ liệu"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "JSON files containing training examples"
-msgstr "Tệp JSON chứa ví dụ huấn luyện"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Training Jobs"
-msgstr "Công việc huấn luyện"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Number of Examples"
-msgstr "Số ví dụ"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Number of Files"
-msgstr "Số tệp"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "LLM Fine-tuning Job"
-msgstr "Công việc tinh chỉnh AI"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "LLM Provider"
-msgstr "Nhà cung cấp AI"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Base Model"
-msgstr "Mô hình cơ sở"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Trained Model Name"
-msgstr "Tên mô hình đã huấn luyện"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Name of the fine-tuned model"
-msgstr "Tên mô hình đã tinh chỉnh"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Draft"
-msgstr "Nháp"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Validating"
-msgstr "Đang xác thực"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Preparing"
-msgstr "Đang chuẩn bị"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Queued"
-msgstr "Đang xếp hàng"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
+#: model:ir.ui.menu,name:llm_training.menu_llm_training_root
 msgid "Training"
-msgstr "Đang huấn luyện"
+msgstr "Huấn luyện"
 
 #. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Completed"
-msgstr "Hoàn thành"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Failed"
-msgstr "Thất bại"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Cancelled"
-msgstr "Đã hủy"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Status"
-msgstr "Trạng thái"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Hyperparameters"
-msgstr "Siêu tham số"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Training hyperparameters (epochs, batch size, etc.)"
-msgstr "Siêu tham số huấn luyện (số epoch, kích thước batch, v.v.)"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
+#: model:ir.ui.menu,name:llm_training.menu_llm_training_dataset
 msgid "Datasets"
 msgstr "Bộ dữ liệu"
 
 #. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "External Job ID"
-msgstr "ID công việc bên ngoài"
+#: model:ir.ui.menu,name:llm_training.menu_llm_training_job
+msgid "Jobs"
+msgstr "Tác vụ"
 
 #. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "ID of the job on the provider's system"
-msgstr "ID công việc trên hệ thống nhà cung cấp"
+#: model:ir.actions.act_window,name:llm_training.llm_training_dataset_action
+msgid "Training Datasets"
+msgstr "Bộ dữ liệu huấn luyện"
 
 #. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Training Metrics"
-msgstr "Chỉ số huấn luyện"
+#: model:ir.actions.act_window,name:llm_training.llm_training_job_action
+msgid "Training Jobs"
+msgstr "Tác vụ huấn luyện"
 
 #. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Metrics from the training job (loss, accuracy, etc.)"
-msgstr "Chỉ số từ công việc huấn luyện (loss, accuracy, v.v.)"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Training Logs"
-msgstr "Nhật ký huấn luyện"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Logs from the training process"
-msgstr "Nhật ký từ quá trình huấn luyện"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Estimated Cost"
-msgstr "Chi phí ước tính"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Estimated cost of the training job in USD"
-msgstr "Chi phí ước tính công việc huấn luyện (USD)"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Final Cost"
-msgstr "Chi phí cuối cùng"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Final cost of the training job in USD"
-msgstr "Chi phí cuối cùng công việc huấn luyện (USD)"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Resulting Model"
-msgstr "Mô hình kết quả"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "The fine-tuned model created by this job"
-msgstr "Mô hình tinh chỉnh được tạo bởi công việc này"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Validate"
-msgstr "Xác thực"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Dataset Name"
-msgstr "Tên bộ dữ liệu"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Description"
-msgstr "Mô tả"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Dataset description..."
-msgstr "Mô tả bộ dữ liệu..."
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Upload Dataset Files"
-msgstr "Tải lên tệp dữ liệu"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Archived"
-msgstr "Đã lưu trữ"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "LLM Training Datasets"
+#: model:ir.model,name:llm_training.model_llm_training_dataset
+msgid "LLM Training Dataset"
 msgstr "Bộ dữ liệu huấn luyện AI"
 
 #. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Create your first training dataset!"
-msgstr "Tạo bộ dữ liệu huấn luyện đầu tiên!"
+#: model:ir.model,name:llm_training.model_llm_training_job
+msgid "LLM Training Job"
+msgstr "Tác vụ huấn luyện AI"
 
 #. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Upload JSON/JSONL files with training examples to fine-tune LLM models."
-msgstr "Tải lên tệp JSON/JSONL chứa ví dụ huấn luyện để tinh chỉnh mô hình AI."
+#: model:ir.model.fields,field_description:llm_training.field_llm_training_dataset__name
+#: model:ir.model.fields,field_description:llm_training.field_llm_training_job__name
+msgid "Name"
+msgstr "Tên"
 
 #. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Submit"
-msgstr "Gửi"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Check Status"
-msgstr "Kiểm tra trạng thái"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Cancel"
-msgstr "Hủy"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Job Name"
-msgstr "Tên công việc"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Job description..."
-msgstr "Mô tả công việc..."
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Results"
-msgstr "Kết quả"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "In Progress"
-msgstr "Đang xử lý"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Group By"
-msgstr "Nhóm theo"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Provider"
-msgstr "Nhà cung cấp"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "LLM Training Jobs"
-msgstr "Công việc huấn luyện AI"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Create your first training job!"
-msgstr "Tạo công việc huấn luyện đầu tiên!"
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Configure fine-tuning jobs to train custom LLM models."
-msgstr "Cấu hình công việc tinh chỉnh để huấn luyện mô hình AI tùy chỉnh."
-
-#. module: llm_training
-#: code:addons/llm_training/models/__init__.py:0
-#, python-format
-msgid "Jobs"
-msgstr "Công việc"
+#: model:ir.model.fields,field_description:llm_training.field_llm_training_job__state
+msgid "State"
+msgstr "Trạng thái"
