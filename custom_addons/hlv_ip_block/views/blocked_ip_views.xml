@@ -136,6 +136,11 @@
                                        help="Đếm trong khoảng thời gian này"/>
                             </group>
                         </group>
+                        <group string="Pattern path đáng ngờ">
+                            <field name="suspicious_patterns" nolabel="1"
+                                   string="Danh sách pattern (phân cách bằng dấu phẩy)"
+                                   help="Mỗi pattern cách nhau bằng dấu phẩy. Nếu URL chứa bất kỳ pattern nào thì coi là đáng ngờ. VD: .php, /wp-admin, /etc/passwd, ../"/>
+                        </group>
                     </sheet>
                 </form>
             </field>

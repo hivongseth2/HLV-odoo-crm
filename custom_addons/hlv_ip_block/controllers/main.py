@@ -20,41 +20,46 @@ _cfg = {
     'rate_limit': 50,             # = rate_limit_per_second * rate_window
     'suspicious_threshold': 20,   # Suspicious path hits before auto-block
     'suspect_window': 30,         # Window for suspicious path counting
+    'suspicious_patterns': DEFAULT_SUSPICIOUS_PATTERNS,  # From DB or default
 }
 
 # ============================================================
-# Suspicious path patterns - Odoo NEVER serves these
+# Suspicious path patterns - loaded from DB, with fallback defaults
 # ============================================================
-SUSPICIOUS_PATTERNS = re.compile(
-    r'(?i)'
-    r'\.php|\.asp|\.aspx|\.jsp|\.cgi|\.env|\.git|\.svn|\.DS_Store'
-    r'|/etc/passwd|/etc/shadow|/proc/self'
-    r'|/wp-admin|/wp-content|/wp-includes|/wp-login|/wp-config'
-    r'|/xmlrpc\.php|/administrator|/admin\.php'
-    r'|\.\./|\.\.\\|%2e%2e|%252e'           # path traversal
-    r'|/phpmyadmin|/pma|/myadmin|/mysql'
-    r'|/shell|/cmd|/exec|/eval'
-    r'|/config\.json|/package\.json|/composer\.json'
-    r'|/\.well-known/security\.txt'
-    r'|/debug/|/console|/server-status'
-    r'|/nacos/|/actuator|/druid'
-    r'|/vendor/|/node_modules/'
-    r'|/login\.action|/struts|/solr'
-    r'|/tmp\.|/temp\.|/backup\.'
-    r'|\.sql|\.sqlite|\.db$|\.bak$|\.old$|\.zip$|\.tar|\.7z$|\.rar$'
+DEFAULT_SUSPICIOUS_PATTERNS = (
+    '.php,.asp,.aspx,.jsp,.cgi,.env,.git,.svn,.DS_Store,'
+    '/etc/passwd,/etc/shadow,/proc/self,'
+    '/wp-admin,/wp-content,/wp-includes,/wp-login,/wp-config,'
+    '/xmlrpc.php,/administrator,/admin.php,'
+    '../,..\\,%2e%2e,%252e,'
+    '/phpmyadmin,/pma,/myadmin,/mysql,'
+    '/shell,/cmd,/exec,/eval,'
+    '/config.json,/package.json,/composer.json,'
+    '/.well-known/security.txt,'
+    '/debug/,/console,/server-status,'
+    '/nacos/,/actuator,/druid,'
+    '/vendor/,/node_modules/,'
+    '/login.action,/struts,/solr,'
+    '/tmp.,/temp.,/backup.,'
+    '.sql,.sqlite,.bak,.old,.7z,.rar'
 )
 
-# Known Odoo valid path prefixes
-ODOO_VALID_PREFIXES = (
-    '/web', '/website', '/shop', '/my', '/pos', '/mail',
-    '/longpolling', '/websocket', '/base', '/report',
-    '/web/image', '/web/content', '/web/assets',
-    '/odoo', '/favicon.ico', '/robots.txt', '/sitemap.xml',
-    '/web/webclient', '/web/dataset', '/web/action',
-    '/web/session', '/web/bundle',
-    '/web/login', '/web/logout', '/web/signup',
-    '/_odoo/',
-)
+# Compiled regex - rebuilt when patterns change from DB
+_suspicious_regex = None
+_suspicious_patterns_source = None
+
+
+def _build_suspicious_regex(patterns_str):
+    """Build regex from comma-separated pattern list."""
+    global _suspicious_regex, _suspicious_patterns_source
+    if patterns_str == _suspicious_patterns_source and _suspicious_regex is not None:
+        return _suspicious_regex
+    parts = [p.strip() for p in patterns_str.split(',') if p.strip()]
+    # Escape each pattern for regex, then join with |
+    escaped = [re.escape(p) for p in parts]
+    _suspicious_regex = re.compile('(?i)' + '|'.join(escaped))
+    _suspicious_patterns_source = patterns_str
+    return _suspicious_regex
 
 # ============================================================
 # In-memory state (per worker process)
@@ -137,17 +142,20 @@ def _do_cache_refresh(force=False):
         # 1) Load settings from DB
         if _table_exists(cr, 'hlv_ip_block_settings'):
             cr.execute(
-                "SELECT rate_limit_per_second, rate_window, suspicious_threshold, suspect_window "
+                "SELECT rate_limit_per_second, rate_window, suspicious_threshold, "
+                "suspect_window, suspicious_patterns "
                 "FROM hlv_ip_block_settings ORDER BY id LIMIT 1"
             )
             row = cr.fetchone()
             if row:
-                rps, rw, st, sw = row
+                rps, rw, st, sw, sp = row
                 _cfg['rate_limit_per_second'] = rps
                 _cfg['rate_window'] = rw
                 _cfg['rate_limit'] = rps * rw
                 _cfg['suspicious_threshold'] = st
                 _cfg['suspect_window'] = sw
+                if sp:
+                    _cfg['suspicious_patterns'] = sp
 
         # 2) Insert auto-blocked IPs
         queue = list(_auto_block_queue)
@@ -255,7 +263,9 @@ def _is_whitelisted(ip):
 
 def _is_suspicious_path(path):
     """Check if the requested path is suspicious (never served by Odoo)."""
-    return bool(SUSPICIOUS_PATTERNS.search(path))
+    patterns_str = _cfg.get('suspicious_patterns', DEFAULT_SUSPICIOUS_PATTERNS)
+    regex = _build_suspicious_regex(patterns_str)
+    return bool(regex.search(path))
 
 
 def _cleanup_old_entries(tracker, window, now):

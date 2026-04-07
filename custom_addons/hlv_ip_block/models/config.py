@@ -10,7 +10,7 @@ class IPBlockSettings(models.Model):
 
     name = fields.Char(default='Cấu hình mặc định', readonly=True)
 
-    # Rate limiting 123
+    # Rate limiting
     rate_limit_per_second = fields.Integer(
         string='Request tối đa / giây',
         default=5,
@@ -35,6 +35,31 @@ class IPBlockSettings(models.Model):
         string='Cửa sổ phát hiện path lạ (giây)',
         default=30,
         help='Đếm số path lạ trong khoảng thời gian này.',
+    )
+
+    # Suspicious path patterns (comma-separated)
+    suspicious_patterns = fields.Text(
+        string='Pattern path đáng ngờ',
+        default=(
+            '.php,.asp,.aspx,.jsp,.cgi,.env,.git,.svn,.DS_Store,'
+            '/etc/passwd,/etc/shadow,/proc/self,'
+            '/wp-admin,/wp-content,/wp-includes,/wp-login,/wp-config,'
+            '/xmlrpc.php,/administrator,/admin.php,'
+            '../,..\\,%2e%2e,%252e,'
+            '/phpmyadmin,/pma,/myadmin,/mysql,'
+            '/shell,/cmd,/exec,/eval,'
+            '/config.json,/package.json,/composer.json,'
+            '/.well-known/security.txt,'
+            '/debug/,/console,/server-status,'
+            '/nacos/,/actuator,/druid,'
+            '/vendor/,/node_modules/,'
+            '/login.action,/struts,/solr,'
+            '/tmp.,/temp.,/backup.,'
+            '.sql,.sqlite,.bak,.old,.7z,.rar'
+        ),
+        help='Danh sách pattern (phân cách bằng dấu phẩy). '
+             'Nếu path chứa bất kỳ pattern nào thì coi là đáng ngờ. '
+             'VD: .php, /wp-admin, /etc/passwd, ../'
     )
 
     # Computed display
