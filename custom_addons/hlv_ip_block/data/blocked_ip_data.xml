@@ -9,13 +9,6 @@
             <field name="detection_type">manual</field>
         </record>
 
-        <record id="blocked_ip_35_198_225_182" model="hlv.blocked.ip">
-            <field name="name">35.198.225.182</field>
-            <field name="reason">Bot scan lỗ hổng - .php, .sqlite, .sql, database.sql.zip, path traversal</field>
-            <field name="active" eval="True"/>
-            <field name="detection_type">manual</field>
-        </record>
-
         <!-- Default settings -->
         <record id="ip_block_settings_default" model="hlv.ip.block.settings">
             <field name="name">Cấu hình mặc định</field>
