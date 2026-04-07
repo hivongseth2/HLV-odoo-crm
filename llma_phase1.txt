@@ -1,0 +1,1154 @@
+================================================================================
+           HƯỚNG DẪN HỆ THỐNG LLM MODULES CHO ODOO 18 - PHASE 1
+           (Data Lake / RAG Search cho AI hiểu dữ liệu)
+================================================================================
+Tác giả gốc module: Apexive Solutions LLC (https://github.com/apexive/odoo-llm)
+Phiên bản: Odoo 18.0
+Tổng hợp bởi: HLV Team
+
+================================================================================
+MỤC LỤC
+================================================================================
+1. TỔNG QUAN KIẾN TRÚC
+2. MODULE 1: llm (LLM Integration Base)
+3. MODULE 2: llm_openai (OpenAI Provider Implementation) ★ MỚI
+4. MODULE 3: llm_store (Vector Store Base)
+5. MODULE 4: llm_knowledge (RAG Knowledge Base)
+6. MODULE 5: llm_knowledge_automation (Auto-Sync)
+7. MODULE 6: llm_thread (Easy AI Chat)
+8. MODULE 7: llm_tool (Function Calling & Tool Execution)
+9. MODULE 8: llm_assistant (AI Assistant + Prompt Templates)
+10. MODULE 9: llm_tool_knowledge (RAG Tool cho Assistant)
+11. MODULE 10: llm_training (Fine-tuning Management)
+12. SƠ ĐỒ LUỒNG DỮ LIỆU TỔNG THỂ
+13. HƯỚNG DẪN TRIỂN KHAI DATA LAKE / RAG SEARCH
+14. CẤU HÌNH TỪNG BƯỚC
+
+================================================================================
+1. TỔNG QUAN KIẾN TRÚC
+================================================================================
+
+Hệ thống gồm 10 module xếp theo tầng phụ thuộc:
+
+    llm (base)
+     ├── llm_openai (OpenAI provider implementation) ★ MỚI
+     ├── llm_store (vector database)
+     │    └── llm_knowledge (RAG pipeline)
+     │         └── llm_knowledge_automation (auto-sync)
+     ├── llm_tool (function calling)
+     │    └── llm_tool_knowledge (RAG tools)
+     ├── llm_training (fine-tuning datasets & jobs)
+     │    └── llm_openai (fine-tuning via OpenAI)
+     └── llm_thread (AI chat)
+          └── llm_assistant (assistant + prompts)
+               └── llm_tool_knowledge (kết nối RAG ↔ Assistant)
+
+Mục tiêu: Biến dữ liệu Odoo (sản phẩm, đơn hàng, khách hàng, tài liệu...)
+thành knowledge base có thể tìm kiếm bằng AI thông qua semantic search (RAG).
+
+================================================================================
+2. MODULE: llm (LLM Integration Base)
+================================================================================
+Đường dẫn: custom_addons/llm/
+Version: 18.0.1.7.2
+Depends: mail, web
+
+--- MỤC ĐÍCH ---
+Module nền tảng để kết nối với các LLM provider (OpenAI, Anthropic, Ollama,
+Mistral, Replicate, FAL.ai, LiteLLM, DeepSeek, Grok...).
+
+--- CÁC MODEL ---
+
+A) llm.provider - Cấu hình Provider
+   Fields:
+   - name (Char, required, unique) : Tên provider
+   - service (Selection, required) : Loại dịch vụ
+     Giá trị: openai, anthropic, ollama, mistral, replicate, fal, litellm...
+   - api_key (Char) : API key xác thực
+   - api_base (Char) : Custom API endpoint (VD: http://localhost:11434 cho Ollama)
+   - company_id (Many2one → res.company) : Phân quyền theo công ty
+   - model_ids (One2many → llm.model) : Các model thuộc provider này
+
+   Methods quan trọng:
+   - chat(messages, model, stream, tools, prepend_messages, **kwargs)
+     → Gọi LLM để chat, hỗ trợ streaming
+   - embedding(texts, model)
+     → Tạo vector embeddings từ text
+   - generate(input_data, model, stream, **kwargs)
+     → Tạo nội dung (ảnh, text...)
+   - list_models() → Lấy danh sách model từ provider
+   - action_fetch_models() → Import model vào Odoo
+   - format_messages(messages) → Format message cho API
+   - format_tools(tools) → Format tool definition cho API
+   - _dispatch(method, *args, **kwargs)
+     → Dynamic routing: tự gọi {service}_{method}()
+     VD: openai_chat(), ollama_embedding()...
+
+B) llm.model - Model AI
+   Fields:
+   - name (Char) : Tên model (gpt-4, claude-3, llama3...)
+   - provider_id (Many2one → llm.provider) : Provider sở hữu
+   - publisher_id (Many2one → llm.publisher) : Nhà phát hành
+   - model_use (Selection) : Mục đích sử dụng
+     Giá trị: chat, embedding, completion, multimodal, generation, image_generation
+   - default (Boolean) : Model mặc định cho use case
+   - details (Json) : Metadata chi tiết
+   - parameters (Text), template (Text)
+
+C) llm.publisher - Nhà phát hành model
+   Fields: name, logo, description, official, frontier, model_ids
+
+D) mail.message - Mở rộng thêm trường LLM
+   Fields mới:
+   - llm_role (Char, indexed) : 'user' | 'assistant' | 'tool' | 'system'
+   - is_error (Boolean) : Đánh dấu lỗi, loại khỏi context gửi LLM
+   - body_json (Json) : Dữ liệu cấu trúc cho tool messages
+
+   Message Subtypes: llm.mt_user, llm.mt_assistant, llm.mt_tool, llm.mt_system
+
+--- CÁCH HOẠT ĐỘNG ---
+1. Tạo Provider → Nhập api_key + api_base
+2. Fetch Models → Provider tự load danh sách model
+3. Đánh dấu Default model cho từng use case (chat, embedding)
+4. Gọi provider.chat() hoặc provider.embedding() → Auto dispatch đến đúng service
+
+================================================================================
+3. MODULE: llm_openai (OpenAI Provider Implementation) ★ MỚI
+================================================================================
+Đường dẫn: custom_addons/llm_openai/
+Version: 18.0.1.4.0
+Depends: llm, llm_tool, llm_training
+External: openai (pip install openai)
+
+--- MỤC ĐÍCH ---
+Triển khai cụ thể OpenAI provider cho hệ thống LLM.
+Đây là module BẮT BUỘC nếu muốn dùng OpenAI (GPT-4, GPT-4o, embeddings).
+Cung cấp: chat completions, embeddings, streaming, vision/multimodal,
+function calling format, fine-tuning, và message validation.
+
+--- EXTENDS MODEL: llm.provider ---
+
+Methods OpenAI-specific (tự động dispatch qua _dispatch()):
+
+A) Client & Service:
+   - openai_get_client()
+     → Trả về OpenAI(api_key, base_url) client
+     → Hỗ trợ custom api_base cho endpoint tương thích OpenAI
+   - _get_available_services()
+     → Đăng ký ("openai", "OpenAI")
+
+B) Chat:
+   - openai_chat(messages, model, stream, tools, prepend_messages, **kwargs)
+     → Gọi client.chat.completions.create()
+     → stream=True: trả generator (từng chunk)
+     → stream=False: trả dict hoàn chỉnh
+   - _openai_process_streaming_response(response_stream)
+     → Generator yield: {"content": "chunk"} hoặc {"tool_calls": [...]}
+     → Tự lắp ghép tool_calls fragments từ stream
+   - _openai_process_non_streaming_response(response)
+     → Yield: {"content": "text"} hoặc {"tool_calls": [...]}
+
+C) Embedding:
+   - openai_embedding(texts, model)
+     → Tạo vector embeddings cho list texts
+     → Trả về list of embedding vectors
+
+D) Model Discovery:
+   - openai_models(model_id=None)
+     → Lấy danh sách model từ OpenAI API
+   - _openai_parse_model(model)
+     → Phát hiện capabilities tự động:
+     Vision/Multimodal patterns: gpt-4o, gpt-4-turbo, gpt-4.1,
+                                  gpt-4-vision, gpt-5, o1, o3
+
+E) Fine-tuning (delegate qua llm_training):
+   - openai_upload_file(file_tuple, purpose="fine-tune")
+   - openai_create_training_job(training_file_id, model_name, hyperparameters)
+   - openai_retrieve_training_job(job_id)
+   - openai_cancel_training_job(job_id)
+   - openai_start_training_job(job) → Workflow: upload → create job
+   - openai_check_training_job_status(job) → Poll + update model status
+   State mapping: validating_files→validating, running→training,
+                  succeeded→completed, failed→failed, cancelled→cancelled
+
+--- MESSAGE FORMATTING (mail.message extension) ---
+
+Method: openai_format_message()
+
+User message format:
+{
+  "role": "user",
+  "content": [
+    {"type": "text", "text": "nội dung"},
+    {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}},
+    {"type": "file", "file": {"filename": "doc.pdf", "file_data": "data:..."}},
+    {"type": "input_audio", "input_audio": {"data": "...", "format": "pcm"}}
+  ]
+}
+
+Assistant message format:
+{
+  "role": "assistant",
+  "content": "câu trả lời",
+  "tool_calls": [
+    {
+      "id": "call_123",
+      "type": "function",
+      "function": {"name": "tool_name", "arguments": "{\"param\": \"value\"}"}
+    }
+  ]
+}
+
+Tool response format:
+{
+  "role": "tool",
+  "tool_call_id": "call_123",
+  "content": "{\"result\": ...}"
+}
+
+--- ATTACHMENT HANDLING ---
+- Text files: Chèn nội dung plaintext (mọi model)
+- Images (JPEG/PNG/GIF/WebP): Base64 data URL (chỉ multimodal model)
+- PDF: Base64 file_data (chỉ multimodal model)
+- Audio (PCM): input_audio blocks (model hỗ trợ audio)
+
+--- TOOL FORMAT CHO OPENAI ---
+
+openai_format_tools(tools) → Chuyển llm.tool thành:
+{
+  "type": "function",
+  "function": {
+    "name": "tool_name",
+    "description": "mô tả tool",
+    "parameters": {
+      "type": "object",
+      "properties": {"param": {"type": "string", "description": "..."}},
+      "required": ["param"]
+    }
+  }
+}
+- Tự patch recursive schema (thêm type cho items)
+- Tool choice mặc định: "auto"
+
+--- MESSAGE VALIDATOR ---
+
+OpenAIMessageValidator class (utils/openai_message_validator.py):
+- Validate role field tồn tại trên mọi message
+- Validate content không rỗng
+- Validate tool messages có matching assistant tool_calls
+- Loại bỏ tool messages mồ côi (không có assistant tương ứng)
+- Loại bỏ user messages xen giữa tool_calls và tool responses
+- Đảm bảo sequence hợp lệ cho OpenAI API
+
+--- CẤU HÌNH ---
+1. Tạo Provider trong Odoo: service="openai"
+2. Nhập API Key: sk-xxxxxxx
+3. API Base: để trống (mặc định api.openai.com)
+   hoặc custom URL cho endpoint tương thích (Azure, local proxy...)
+4. Click "Fetch Models" → tự import tất cả model (GPT-4o, embeddings, etc.)
+5. Đánh dấu Default: chat=gpt-4o, embedding=text-embedding-3-small
+
+================================================================================
+4. MODULE: llm_store (Vector Store Base)
+================================================================================
+Đường dẫn: custom_addons/llm_store/
+Version: 18.0.1.0.0
+Depends: llm
+
+--- MỤC ĐÍCH ---
+Abstraction layer cho vector database. Hỗ trợ nhiều backend:
+- Qdrant (production, high-performance)
+- pgvector (PostgreSQL extension)
+- ChromaDB (development/embedded)
+
+--- CÁC MODEL ---
+
+A) llm.store - Vector Store Configuration
+   Fields:
+   - name (Char, required) : Tên store
+   - service (Selection, required) : qdrant | pgvector | chroma
+   - connection_uri (Char) : Địa chỉ kết nối
+   - api_key (Char) : API key
+   - metadata (Json) : Config bổ sung
+
+   Methods quan trọng:
+   - create_collection(collection_id, dimension, metadata)
+   - delete_collection(collection_id)
+   - list_collections()
+   - collection_exists(name)
+   - _insert_vectors(collection_id, vectors, metadata, ids)
+   - _delete_vectors(collection_id, ids)
+   - _search_vectors(collection_id, query_vector, limit, filter)
+   - sanitize_collection_name(name) → Chuẩn hóa tên collection
+   - get_santized_collection_name(collection_id)
+     → Tạo tên: odoo_{db_name}_{collection_id}
+   - _dispatch(method, *args, **kwargs)
+     → Dynamic routing đến provider cụ thể
+
+B) llm.store.collection (Abstract)
+   Fields:
+   - name (Char, required) : Tên collection
+   - store_id (Many2one → llm.store, required) : Parent store
+   - dimension (Integer) : Chiều embedding vector
+   - vector_count (Integer) : Số vector đã lưu
+   - metadata (Json), description (Text)
+
+   Methods:
+   - insert_vectors(vectors, metadata, ids)
+   - search_vectors(query_vector, limit, filter)
+   - delete_vectors(ids)
+   - refresh_stats()
+
+--- KIẾN TRÚC ---
+Application → llm.store.collection → llm.store (dispatcher) → Provider impl → DB
+
+================================================================================
+5. MODULE: llm_knowledge (RAG Knowledge Base) ★ QUAN TRỌNG NHẤT
+================================================================================
+Đường dẫn: custom_addons/llm_knowledge/
+Version: 18.0.1.1.0
+Depends: llm, llm_store
+External: requests, markdownify, PyMuPDF, numpy
+
+--- MỤC ĐÍCH ---
+Hệ thống RAG (Retrieval-Augmented Generation) hoàn chỉnh:
+- Xử lý tài liệu (PDF, web, text, Odoo records)
+- Chunking (chia nhỏ)
+- Embedding (vector hóa)
+- Semantic search (tìm kiếm ngữ nghĩa)
+
+--- CÁC MODEL ---
+
+A) llm.resource - Tài liệu nguồn
+   Fields:
+   - name (Char, required)
+   - model_id (Many2one → ir.model) : Model Odoo liên quan
+   - res_model (Char) : Tên model
+   - res_id (Integer) : ID record
+   - content (Text) : Nội dung markdown
+   - collection_ids (Many2many → llm.knowledge.collection)
+   - state (Selection) : Trạng thái pipeline
+     Giá trị: draft → retrieved → parsed → chunked → ready
+   - chunker (Selection) : Phương thức chia chunk (default: "default")
+   - target_chunk_size (Integer, default=200) : Kích thước chunk (tokens)
+   - target_chunk_overlap (Integer, default=20) : Overlap giữa chunks
+   - parser (Selection) : Phương thức parse (default, json)
+   - retriever (Selection) : Phương thức lấy dữ liệu (default, http)
+   - chunk_ids (One2many → llm.knowledge.chunk)
+   - lock_date (Datetime) : Lock xử lý concurrent
+
+   Methods pipeline:
+   - process_resource() : Chạy toàn bộ pipeline từ state hiện tại
+   - retrieve() → retrieved : Lấy nội dung từ nguồn
+     + retrieve_default() : No-op
+     + retrieve_http() : Fetch URL, follow redirect, meta refresh
+   - parse() → parsed : Chuyển đổi sang markdown
+     + _parse_pdf() : PyMuPDF, OCR text + images
+     + _parse_html() : HTML → Markdown (markdownify)
+     + _parse_text() : Plaintext passthrough
+     + _parse_image() : Image reference
+     + parse_json() : Odoo record → JSON/Markdown
+   - chunk() → chunked : Chia nhỏ document
+     + _chunk_default() : Sentence-based chunking
+       - Tách câu theo regex (.!? boundaries)
+       - Ước tính tokens (1 token ≈ 4 ký tự)
+       - Sliding window với overlap
+   - embed() → ready : Tạo vector trong store
+
+B) llm.knowledge.collection - Bộ sưu tập Knowledge
+   Inherits: llm.store.collection, mail.thread
+   Fields:
+   - name (Char, required, tracked)
+   - description (Text)
+   - embedding_model_id (Many2one → llm.model, required)
+     → BẮT BUỘC chỉ định model embedding (text-embedding-ada-002, etc)
+   - resource_ids (Many2many → llm.resource)
+   - domain_ids (One2many → llm.knowledge.domain)
+   - resource_count, chunk_count (computed)
+   - default_chunk_size (Integer, default=200)
+   - default_chunk_overlap (Integer, default=20)
+   - default_chunker, default_parser (Selection)
+
+   Methods:
+   - sync_resources() : Đồng bộ resource theo domain filter
+   - process_resources() : Chạy pipeline cho tất cả resource
+   - reindex_collection() : Xóa + tạo lại vector store
+   - _initialize_store() : Khởi tạo vector store
+
+C) llm.knowledge.chunk - Mảnh dữ liệu đã chia
+   Fields:
+   - name (computed) : "{resource_name} - Chunk {sequence}"
+   - resource_id (Many2one → llm.resource, cascade)
+   - sequence (Integer)
+   - content (Text, required) : Nội dung chunk
+   - metadata (Json) : Metadata bổ sung
+   - collection_ids (Many2many, related từ resource)
+   - embedding (Char, virtual) : Input cho vector search
+   - similarity (Float, computed) : Điểm tương đồng
+
+   Methods (VECTOR SEARCH):
+   - search() : Override để hỗ trợ vector search
+   - _search_embedding() : Custom search handler
+   - _vector_search_aggregate() : Search across nhiều collection
+   - _generate_embeddings_for_collections() : Tạo embedding
+
+D) llm.knowledge.domain - Bộ lọc tự động
+   Fields:
+   - collection_id (Many2one → llm.knowledge.collection)
+   - model_id (Many2one → ir.model) : Model mục tiêu
+   - domain (Char, default="[]") : Domain filter expression
+   - active (Boolean)
+
+--- PIPELINE RAG ---
+
+  Nguồn dữ liệu (PDF/URL/Odoo Record)
+         ↓
+  [1. RETRIEVE] Lấy nội dung thô
+         ↓
+  [2. PARSE] Chuyển sang Markdown
+         ↓
+  [3. CHUNK] Chia thành đoạn nhỏ (200 tokens, overlap 20)
+         ↓
+  [4. EMBED] Tạo vector embedding qua LLM model
+         ↓
+  [5. STORE] Lưu vector vào Qdrant/pgvector/Chroma
+         ↓
+  [SEARCH] Semantic search: query → embedding → similarity search
+
+--- WIZARDS ---
+
+A) CreateRAGResourceWizard
+   - Tạo resource từ record Odoo đã chọn
+   - Template: {record_name}, {model_name}, {id}
+   - Có thể process ngay
+
+B) UploadResourceWizard
+   - Upload file hoặc nhập URL
+   - Template: {filename}, {collection}, {index}
+   - Hỗ trợ multi-file
+
+================================================================================
+6. MODULE: llm_knowledge_automation (Auto-Sync Knowledge)
+================================================================================
+Đường dẫn: custom_addons/llm_knowledge_automation/
+Version: 18.0.1.0.0
+Depends: llm_knowledge, base_automation
+
+--- MỤC ĐÍCH ---
+Tự động đồng bộ knowledge base khi dữ liệu Odoo thay đổi.
+"Set and forget" - không cần sync thủ công.
+
+--- CÁCH HOẠT ĐỘNG ---
+
+Mở rộng 2 model:
+
+A) base.automation - Thêm action type "llm_update"
+   Fields mới:
+   - state: Thêm giá trị "llm_update"
+   - llm_collection_id (Many2one → llm.knowledge.collection)
+   - llm_auto_process (Boolean, default=True)
+
+   Method: _process_llm_update(records)
+   1. Lọc record theo domain filter
+   2. Tìm llm.resource theo (model_id, res_id)
+   3. Nếu tồn tại → thêm vào collection
+   4. Nếu chưa có → tạo resource mới
+   5. Nếu llm_auto_process=True → chạy process_resource()
+   6. Record không match → xóa khỏi collection
+
+B) llm.knowledge.collection - Thêm auto-sync
+   Fields mới:
+   - automated_sync (Boolean) : Bật auto-sync
+   - automation_ids (One2many → base.automation)
+   - auto_process_resources (Boolean, default=True)
+
+   Method: sync_automated_actions()
+   - Tạo 3 automation cho mỗi domain filter:
+     + on_create : Mọi record mới → tự thêm vào knowledge
+     + on_write  : Record thay đổi → kiểm tra domain, thêm/xóa
+     + on_unlink : Record bị xóa → xóa khỏi knowledge
+
+--- LUỒNG TỰ ĐỘNG ---
+
+  Domain Filter (trong collection)
+       ↓
+  sync_automated_actions() → Tạo base.automation records
+       ↓
+  Trigger: Record được tạo/sửa/xóa trong Odoo
+       ↓
+  _process_llm_update() → Tạo/cập nhật/xóa llm.resource
+       ↓
+  [Nếu auto_process] → process_resource() (full RAG pipeline)
+       ↓
+  Knowledge Base luôn cập nhật!
+
+VÍ DỤ:
+- Domain filter: model=product.product, domain=[('sale_ok','=',True)]
+- Khi thêm sản phẩm mới có sale_ok=True → auto tạo resource → auto embed
+- Khi sửa sản phẩm thành sale_ok=False → auto xóa khỏi collection
+
+================================================================================
+7. MODULE: llm_thread (Easy AI Chat)
+================================================================================
+Đường dẫn: custom_addons/llm_thread/
+Version: 18.0.1.4.5
+Depends: base, mail, web, llm, llm_tool
+External: emoji, markdown2
+
+--- MỤC ĐÍCH ---
+Giao diện chat AI tích hợp vào Odoo, sử dụng hệ thống mail.thread.
+Hỗ trợ streaming, tool calling, multimodal.
+
+--- MODEL CHÍNH: llm.thread ---
+Inherits: mail.thread
+
+Fields:
+- name (Char) : Tên thread (auto-generated)
+- user_id (Many2one → res.users) : Chủ sở hữu
+- provider_id (Many2one → llm.provider, required) : LLM provider
+- model_id (Many2one → llm.model) : Model chat
+- model (Char) : Model Odoo liên quan (VD: sale.order)
+- res_id (Many2oneReference) : Record liên quan
+- tool_ids (Many2many → llm.tool) : Tools khả dụng cho thread
+- active (Boolean)
+
+Methods:
+- message_post(llm_role, body_json, is_error, **kwargs)
+  → Override: tự set subtype, markdown→HTML, email_from theo AI
+- message_post_from_stream(stream)
+  → Streaming response: tạo message → cập nhật real-time
+- generate(user_message_body, attachment_ids)
+  → Orchestrator: lock → post user msg → validate → generate response
+- generate_messages(last_message)
+  → Placeholder, override bởi llm_assistant
+- _get_context_messages(limit=25)
+  → Lấy 25 message gần nhất làm context (loại is_error)
+- get_context(base_context)
+  → Build context dict với related record info
+- _generation_lock() : PostgreSQL advisory lock chống concurrent
+
+--- CONTROLLER: /llm/thread/generate (SSE) ---
+Streaming endpoint:
+- Input: thread_id, message, attachment_ids
+- Output: Server-Sent Events
+  + message_create : Message mới tạo
+  + message_chunk  : Chunk streaming
+  + message_update : Update cuối cùng
+  + done / error   : Kết thúc
+
+--- FRONTEND ---
+Components (JS/XML/SCSS):
+- llm_chat_container : Container chat chính
+- llm_thread_header : Header với provider/model/tool selection
+- llm_related_record : Liên kết với record Odoo
+- llm_tool_message : Hiển thị kết quả tool
+- Patches: composer, thread, chatter, message patches
+
+================================================================================
+8. MODULE: llm_tool (Function Calling & Tool Execution)
+================================================================================
+Đường dẫn: custom_addons/llm_tool/
+Version: 18.0.4.1.2
+Depends: base, mail, llm
+External: pydantic>=2.0.0, mcp
+
+--- MỤC ĐÍCH ---
+Framework cho AI gọi hàm (function calling) và tương tác với Odoo database.
+
+--- MODEL CHÍNH: llm.tool ---
+Inherits: mail.thread
+
+Fields:
+- name (Char, required, unique) : Tên tool
+- description (Text, required) : Mô tả gửi cho LLM
+- implementation (Selection, required) : Loại implementation
+  Giá trị:
+  + function : Python method có decorator @llm_tool
+  + odoo_record_retriever : Truy vấn record
+  + odoo_record_creator : Tạo record
+  + odoo_record_updater : Cập nhật record
+  + odoo_record_unlinker : Xóa record
+  + odoo_model_inspector : Xem cấu trúc model
+  + odoo_model_method_executor : Chạy method bất kỳ
+- input_schema (Text) : JSON Schema cho parameters
+- requires_user_consent (Boolean) : Cần xác nhận user
+- default (Boolean) : Include trong mọi LLM request
+- MCP Annotations:
+  + read_only_hint, idempotent_hint, destructive_hint, open_world_hint
+
+Methods:
+- execute(parameters) : Validate + chạy tool
+- get_input_schema() : Lấy/generate JSON schema
+- get_tool_definition() : MCP-compatible definition
+- _register_hook() : Scan @llm_tool decorators khi startup
+- _sync_tools_to_db() : Đồng bộ decorator → DB records
+
+--- CÁC TOOL CÓ SẴN (Built-in) ---
+
+1. odoo_record_retriever
+   - Input: model, domain, fields, limit
+   - Output: Danh sách record dicts
+   - VD: Tìm tất cả sale.order có state='sale'
+
+2. odoo_record_creator
+   - Input: model, fields, records
+   - Output: ID + display_name records đã tạo
+
+3. odoo_record_updater
+   - Input: model, domain, values, limit(default=1)
+   - Output: Số record đã update
+
+4. odoo_record_unlinker
+   - Input: model, domain, limit(default=1)
+   - Output: Thông tin record đã xóa
+
+5. odoo_model_inspector
+   - Input: model name, filters
+   - Output: Fields, methods, inheritance info
+
+6. odoo_model_method_executor
+   - Input: model, method, record_ids, args, kwargs
+   - Output: Kết quả method
+
+--- TOOL EXECUTION FLOW ---
+LLM Response (function_calls)
+  → Mail Message (llm_role="assistant", body_json chứa tool_calls)
+  → post_tool_call() → Tạo tool message (status="requested")
+  → execute_tool_call() → status="executing"
+  → tool.execute(arguments) → Validate + chạy
+  → status="completed" hoặc "error"
+  → Kết quả trả về cho LLM tiếp tục conversation
+
+--- DECORATOR @llm_tool ---
+Dùng trong model bất kỳ:
+
+  from odoo.addons.llm_tool.tools import llm_tool
+
+  class SaleOrder(models.Model):
+      _inherit = 'sale.order'
+
+      @llm_tool(name="get_order_total", description="Get order total")
+      def get_total(self, order_id: int) -> dict:
+          order = self.browse(order_id)
+          return {"total": order.amount_total}
+
+→ Tool tự đăng ký vào DB khi Odoo khởi động
+
+================================================================================
+9. MODULE: llm_assistant (AI Assistant + Prompt Templates)
+================================================================================
+Đường dẫn: custom_addons/llm_assistant/
+Version: 18.0.1.5.4
+Depends: base, mail, web, llm, llm_thread, llm_tool, web_json_editor
+External: jinja2, pyyaml, jsonschema
+
+--- MỤC ĐÍCH ---
+Tạo AI assistant có vai trò, mục tiêu, tools riêng.
+Quản lý prompt template có thể tái sử dụng.
+
+--- CÁC MODEL ---
+
+A) llm.assistant - Cấu hình Assistant
+   Fields:
+   - name (Char, required) : Tên assistant
+   - code (Char, unique) : Mã kỹ thuật (VD: "knowledge_bot")
+   - provider_id (Many2one → llm.provider)
+   - model_id (Many2one → llm.model)
+   - prompt_id (Many2one → llm.prompt, required) : Prompt template
+   - tool_ids (Many2many → llm.tool) : Tools cho assistant
+   - tool_calls_max (Integer, default=5) : Max tool calls liên tiếp
+   - default_values (Text) : JSON chứa giá trị mặc định cho prompt
+   - has_dynamic_defaults (Boolean) : Cho phép Jinja2 expressions
+   - is_public (Boolean) : Công khai cho mọi user
+   - allowed_group_ids (Many2many → res.groups) : Phân quyền
+   - res_model (Char) : Model liên quan
+   - is_default (Boolean) : Assistant mặc định
+
+   Methods:
+   - get_evaluated_default_values(context) : Render Jinja2 defaults
+   - get_assistant_values(thread) : Lấy giá trị cho thread cụ thể
+   - get_assistant_by_code(code) : Tìm assistant theo code
+
+B) llm.prompt - Template Prompt
+   Fields:
+   - name (Char, required, unique) : Tên prompt
+   - template (Text, required) : Nội dung template
+   - format (Selection) : text | yaml | json
+   - arguments_json (Text) : JSON Schema cho arguments
+   - category_id (Many2one → llm.prompt.category)
+   - tag_ids (Many2many → llm.prompt.tag)
+
+   Methods:
+   - get_messages(arguments) : Render template → list messages
+     1. Fill defaults
+     2. Validate arguments
+     3. Render Jinja2 template
+     4. Parse format (text/yaml/json)
+     5. Return [{role, content: [{type, text}]}]
+   - auto_detect_arguments() : Tìm {{variable}} trong template
+
+C) llm.prompt.category - Danh mục phân cấp
+D) llm.prompt.tag - Tag với màu sắc
+
+--- MỞ RỘNG llm.thread ---
+Fields thêm:
+- assistant_id (Many2one → llm.assistant)
+- prompt_id (Many2one → llm.prompt)
+
+Methods (override):
+- generate_messages() : Core generation loop thực tế
+  1. Lấy message history
+  2. Lấy prepend messages (system prompt từ prompt template)
+  3. Gọi provider.chat() với tools
+  4. Xử lý streaming response
+  5. Nếu có tool_calls → execute → gọi lại LLM
+  6. Lặp tối đa tool_calls_max lần
+- set_assistant(assistant_id) : Set assistant + cập nhật provider/model/tools
+
+--- VÍ DỤ PROMPT TEMPLATE ---
+
+Format YAML:
+```yaml
+- type: system
+  content: |
+    Bạn là trợ lý bán hàng của HLV.
+    Vai trò: {{ role }}
+    Mục tiêu: {{ goal }}
+    Hướng dẫn: {{ instructions }}
+- type: user
+  content: "{{ user_input }}"
+```
+
+Format Text:
+```
+Bạn là trợ lý AI cho hệ thống quản lý kho HLV.
+Ngôn ngữ: {{ language }}
+Nhiệm vụ: {{ task }}
+```
+
+================================================================================
+10. MODULE: llm_tool_knowledge (RAG Tool cho Assistant)
+================================================================================
+Đường dẫn: custom_addons/llm_tool_knowledge/
+Version: 18.0.1.0.1
+Depends: llm_knowledge, llm_tool, llm_assistant
+
+--- MỤC ĐÍCH ---
+Cầu nối giữa RAG knowledge base và AI assistant.
+Cho phép assistant tìm kiếm ngữ nghĩa trong knowledge base.
+
+--- MODEL: LLMToolKnowledgeRetriever ---
+Extends: llm.tool
+
+Implementation: "knowledge_retriever"
+
+Method chính: knowledge_retriever_execute()
+Parameters:
+- query (str, required) : Nội dung tìm kiếm
+- collection_id (int, required) : ID collection cần search
+- top_k (int, default=5) : Max chunks mỗi resource
+- top_n (int, default=3) : Max resource khác nhau
+- similarity_cutoff (float, default=0.5) : Ngưỡng similarity
+
+Luồng xử lý:
+1. Validate collection tồn tại
+2. Tính search_limit = top_n * top_k * 2
+3. Gọi chunk.search(args=[("embedding","=",query)], ...)
+   → Tự động tạo embedding từ query → similarity search
+4. Group chunks theo resource
+5. Chọn top_n resource có similarity cao nhất
+6. Mỗi resource lấy top_k chunks
+7. Return kết quả:
+
+Output format:
+{
+  "query": "search text",
+  "collection": "Tên collection",
+  "collection_id": 123,
+  "results": [
+    {
+      "content": "Nội dung chunk...",
+      "resource_name": "Tên tài liệu",
+      "resource_id": 456,
+      "chunk_id": 789,
+      "similarity": 0.9523,
+      "similarity_percentage": "95%"
+    }
+  ],
+  "total_chunks": 5,
+  "embedding_model": "text-embedding-ada-002"
+}
+
+--- PRE-CONFIGURED ASSISTANT: Knowledge Bot ---
+- Role: Knowledge Assistant
+- Luôn search knowledge base TRƯỚC khi trả lời
+- Trích dẫn nguồn từ knowledge base
+- KHÔNG trả lời từ kiến thức chung nếu KB không có
+- Tools: odoo_record_retriever + knowledge_retriever
+
+================================================================================
+11. MODULE: llm_training (Fine-tuning Management)
+================================================================================
+Đường dẫn: custom_addons/llm_training/
+Version: 18.0.1.0.0
+Depends: base, mail, llm, web_json_editor
+
+--- MỤC ĐÍCH ---
+Quản lý datasets và jobs fine-tuning cho LLM models.
+Cho phép tạo model AI riêng từ dữ liệu doanh nghiệp.
+
+--- CÁC MODEL ---
+
+A) llm.training.dataset - Dataset fine-tuning
+   Fields:
+   - name (Char, required) : Tên dataset
+   - description (Text) : Mô tả
+   - attachment_ids (Many2many → ir.attachment) : File JSONL training
+   - job_ids (Many2many → llm.training.job) : Jobs liên quan
+   - example_count (Integer, computed) : Số training examples
+   - file_count (Integer, computed) : Số file đính kèm
+
+   Methods:
+   - validate_dataset()
+     → Validate format JSONL (mỗi dòng = 1 JSON object)
+     → Return: {valid, message, example_count}
+   - _get_combined_content_bytes()
+     → Gộp tất cả attachment thành 1 byte stream
+
+B) llm.training.job - Job fine-tuning
+   Fields:
+   - name (Char, required)
+   - provider_id (Many2one → llm.provider, required)
+   - base_model_id (Many2one → llm.model, required) : Model gốc để fine-tune
+   - dataset_ids (Many2many → llm.training.dataset, required)
+   - state (Selection) : Trạng thái job
+     Giá trị: draft → validating → preparing → queued → training → completed
+                                                                 → failed
+                                                                 → cancelled
+   - hyperparameters (Json) : Cấu hình (epochs, batch_size, learning_rate...)
+   - trained_model_name (Char) : Tên model sau fine-tune
+   - external_job_id (Char) : Job ID từ provider
+   - training_metrics (Json) : Metrics (loss, accuracy...)
+   - training_logs (Text) : Logs
+   - estimated_cost (Float, computed) : Chi phí ước tính (USD)
+   - final_cost (Float) : Chi phí thực tế
+   - result_model_id (Many2one → llm.model) : Model đã fine-tune
+
+   Methods:
+   - action_submit() → Gửi job lên provider
+   - _submit() → Validate datasets → upload file → create job
+   - action_check_status() → Poll trạng thái từ provider
+   - action_cancel() → Hủy job
+   - update_training_metrics(metrics) → Cập nhật metrics
+
+C) llm.provider - Mở rộng thêm methods:
+   - upload_file(file_tuple, purpose) → Upload training data
+   - create_training_job(file_id, model, hyperparams) → Tạo job
+   - retrieve_training_job(job_id) → Lấy thông tin job
+   - cancel_training_job(job_id) → Hủy job
+   - start_training_job(job) → Bắt đầu training
+   - check_training_job_status(job) → Kiểm tra status
+   - validate_datasets(job) → Validate datasets
+
+--- LUỒNG FINE-TUNING ---
+
+  1. TẠO DATASET
+     → Upload file JSONL (format OpenAI)
+     → Validate format
+     → Kiểm tra example_count
+
+  2. TẠO JOB
+     → Chọn provider (OpenAI)
+     → Chọn base model (gpt-4o-mini)
+     → Chọn datasets
+     → Cấu hình hyperparameters
+
+  3. SUBMIT
+     → Upload combined dataset lên provider
+     → Provider tạo training job
+     → Nhận external_job_id
+
+  4. MONITOR
+     → Poll status định kỳ
+     → Xem metrics (loss, accuracy)
+
+  5. HOÀN THÀNH
+     → Model mới tạo trong Odoo
+     → Có thể dùng model fine-tuned cho chat
+
+--- VÍ DỤ JSONL FORMAT ---
+{"messages":[{"role":"system","content":"Bạn là trợ lý HLV"},{"role":"user","content":"Giá sản phẩm X?"},{"role":"assistant","content":"Sản phẩm X giá 100k"}]}
+{"messages":[{"role":"system","content":"Bạn là trợ lý HLV"},{"role":"user","content":"Còn hàng Y không?"},{"role":"assistant","content":"Còn 50 chiếc trong kho"}]}
+
+--- CHI PHÍ ƯỚC TÍNH ---
+- GPT-4 fine-tune: ~$0.03/1K tokens
+- GPT-3.5/GPT-4o-mini: ~$0.008/1K tokens
+- 1000 examples × ~200 tokens = 200K tokens ≈ $1.6 - $6
+
+================================================================================
+12. SƠ ĐỒ LUỒNG DỮ LIỆU TỔNG THỂ
+================================================================================
+
+┌─────────────────────────────────────────────────────────────┐
+│                    DỮ LIỆU NGUỒN                           │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐      │
+│  │ Products │ │  Orders  │ │ Partners │ │ PDF/URLs │      │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘      │
+└───────┼─────────────┼───────────┼─────────────┼────────────┘
+        │             │           │             │
+        ▼             ▼           ▼             ▼
+┌─────────────────────────────────────────────────────────────┐
+│              llm_knowledge_automation                       │
+│  Domain Filters → base.automation (on_create/write/unlink) │
+│  → Tự động tạo/cập nhật/xóa resource khi data thay đổi   │
+└────────────────────────┬────────────────────────────────────┘
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    llm_knowledge                            │
+│  ┌──────────┐    ┌──────────┐    ┌──────────┐             │
+│  │ RETRIEVE │ →  │  PARSE   │ →  │  CHUNK   │             │
+│  │ (fetch)  │    │ (→ MD)   │    │ (split)  │             │
+│  └──────────┘    └──────────┘    └────┬─────┘             │
+│                                       ▼                    │
+│                                  ┌──────────┐             │
+│                                  │  EMBED   │             │
+│                                  │(vectorize)│             │
+│                                  └────┬─────┘             │
+└───────────────────────────────────────┼────────────────────┘
+                                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      llm_store                              │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                 │
+│  │  Qdrant  │  │ pgvector │  │ ChromaDB │                 │
+│  └──────────┘  └──────────┘  └──────────┘                 │
+│  Vector Storage + Similarity Search                        │
+└───────────────────────────────────────┬────────────────────┘
+                                        ▲
+                                        │ search
+┌───────────────────────────────────────┼────────────────────┐
+│                 llm_tool_knowledge                          │
+│  knowledge_retriever tool → semantic search → results     │
+└───────────────────────────────────────┬────────────────────┘
+                                        ▲
+                                        │ tool_call
+┌───────────────────────────────────────┼────────────────────┐
+│                  llm_assistant                              │
+│  Assistant + Prompt → generate_messages()                  │
+│  → provider.chat(messages, tools) → streaming response    │
+│  → tool_calls → execute → results → tiếp tục chat        │
+└───────────────────────────────────────┬────────────────────┘
+                                        ▲
+                                        │
+┌───────────────────────────────────────┼────────────────────┐
+│                   llm_thread                                │
+│  User Chat UI ↔ SSE Streaming ↔ LLM Provider              │
+└───────────────────────────────────────┬────────────────────┘
+                                        │
+┌───────────────────────────────────────┼────────────────────┐
+│              llm_openai (Provider Layer)                    │
+│  OpenAI API ← format messages/tools → client.chat()       │
+│  Streaming ← chunk assembly → tool_calls validation       │
+│  Multimodal: images, PDF, audio → base64 encoding         │
+│  Fine-tuning: llm_training → upload → train → new model   │
+└─────────────────────────────────────────────────────────────┘
+
+================================================================================
+13. HƯỚNG DẪN TRIỂN KHAI DATA LAKE / RAG SEARCH
+================================================================================
+
+CHIẾN LƯỢC: Sử dụng các module có sẵn để xây dựng Data Lake cho AI.
+
+--- BƯỚC 1: CÀI ĐẶT DEPENDENCIES ---
+
+pip install requests markdownify PyMuPDF numpy pydantic>=2.0.0 mcp
+pip install jinja2 pyyaml jsonschema emoji markdown2
+pip install openai
+
+Vector store (chọn 1):
+- Qdrant: docker run -p 6333:6333 qdrant/qdrant
+- pgvector: PostgreSQL với extension pgvector
+- ChromaDB: pip install chromadb
+
+--- BƯỚC 2: CÀI MODULE THEO THỨ TỰ ---
+
+1. llm                    (base)
+2. llm_openai             (OpenAI provider) ★
+3. llm_store              (vector store)
+4. llm_tool               (function calling)
+5. llm_training           (fine-tuning management)
+6. llm_thread             (chat UI)
+7. llm_knowledge          (RAG pipeline)
+8. llm_assistant          (assistant config)
+9. llm_knowledge_automation (auto-sync)
+10. llm_tool_knowledge    (RAG tool)
+
+--- BƯỚC 3: CẤU HÌNH PROVIDER ---
+
+Trong Odoo: Settings → LLM → Providers
+1. Tạo Provider:
+   - Name: "OpenAI" (hoặc Ollama, Anthropic...)
+   - Service: openai
+   - API Key: sk-xxxxxxx
+   - API Base: (để trống nếu dùng API chính thức)
+2. Click "Fetch Models"
+3. Chọn Model mặc định:
+   - Chat: gpt-4 hoặc gpt-4o
+   - Embedding: text-embedding-ada-002 hoặc text-embedding-3-small
+
+--- BƯỚC 4: CẤU HÌNH VECTOR STORE ---
+
+Trong Odoo: Settings → LLM → Vector Stores
+1. Tạo Store:
+   - Name: "Qdrant Production"
+   - Service: qdrant
+   - Connection URI: http://localhost:6333
+   - API Key: (nếu có)
+
+--- BƯỚC 5: TẠO KNOWLEDGE COLLECTION ---
+
+Trong Odoo: LLM → Knowledge → Collections
+1. Tạo Collection:
+   - Name: "Sản phẩm HLV"
+   - Store: Qdrant Production
+   - Embedding Model: text-embedding-ada-002
+   - Chunk Size: 200 (tokens)
+   - Chunk Overlap: 20 (tokens)
+
+2. Thêm Domain Filters:
+   - Model: product.product
+   - Domain: [('sale_ok','=',True)]
+
+   - Model: product.template
+   - Domain: [('active','=',True)]
+
+3. Click "Sync Resources" → Tạo resource cho mỗi record match domain
+4. Click "Process Resources" → Chạy full pipeline (retrieve→parse→chunk→embed)
+
+--- BƯỚC 6: BẬT AUTO-SYNC ---
+
+Trong Collection:
+- Bật "Automated Sync" = True
+- Bật "Auto Process Resources" = True
+- Click "Sync Automated Actions"
+→ Tự tạo automation cho on_create/on_write/on_unlink
+
+--- BƯỚC 7: TẠO ASSISTANT ---
+
+Trong Odoo: LLM → Assistants
+1. Tạo Prompt Template:
+   - Name: "HLV Knowledge Assistant"
+   - Format: text
+   - Template:
+     "Bạn là trợ lý AI của HLV. Sử dụng knowledge base để trả lời câu hỏi
+      về sản phẩm, đơn hàng, kho hàng. Luôn trích dẫn nguồn."
+
+2. Tạo Assistant:
+   - Name: "HLV Bot"
+   - Code: "hlv_bot"
+   - Provider: OpenAI
+   - Model: gpt-4
+   - Prompt: HLV Knowledge Assistant
+   - Tools: knowledge_retriever, odoo_record_retriever
+   - Tool Calls Max: 5
+
+--- BƯỚC 8: SỬ DỤNG ---
+
+1. Mở chat: LLM → Chat → New
+2. Chọn Assistant: HLV Bot
+3. Hỏi: "Sản phẩm nào bán chạy nhất?" hoặc "Cho tôi thông tin về SKU X"
+4. Bot sẽ:
+   a) Gọi knowledge_retriever → semantic search trong collection
+   b) Lấy chunks liên quan
+   c) Tổng hợp và trả lời với trích dẫn nguồn
+
+================================================================================
+14. CẤU HÌNH TỪNG BƯỚC CHO DATA LAKE
+================================================================================
+
+--- CÁC COLLECTION NÊN TẠO ---
+
+1. "Sản phẩm" (product.product, product.template)
+   - Domain: [('active','=',True)]
+   - Chunk size: 200
+
+2. "Đơn hàng" (sale.order)
+   - Domain: [('state','in',['sale','done'])]
+   - Chunk size: 300
+
+3. "Khách hàng" (res.partner)
+   - Domain: [('customer_rank','>',0)]
+   - Chunk size: 200
+
+4. "Kho hàng" (stock.picking, stock.move.line)
+   - Domain: [('state','=','done')]
+   - Chunk size: 250
+
+5. "Tài liệu nội bộ" (ir.attachment)
+   - Domain: [('mimetype','in',['application/pdf','text/plain'])]
+   - Chunk size: 200
+
+--- CUSTOM LLM FIELDS CHO MODEL ---
+
+Để tối ưu dữ liệu gửi vào RAG, override method trên model:
+
+class ProductProduct(models.Model):
+    _inherit = 'product.product'
+
+    def llm_get_fields(self):
+        """Chỉ định fields nào đưa vào knowledge base"""
+        return {
+            'name': self.name,
+            'default_code': self.default_code,
+            'list_price': self.list_price,
+            'description': self.description_sale or '',
+            'categ_id': self.categ_id.name,
+            'qty_available': self.qty_available,
+            'barcode': self.barcode or '',
+        }
+
+--- PERFORMANCE TIPS ---
+
+1. Dùng Qdrant cho production (nhanh hơn pgvector nhiều lần)
+2. Chunk size 200-300 tokens là tối ưu cho hầu hết use case
+3. Overlap 10-20% chunk size
+4. Dùng text-embedding-3-small thay text-embedding-ada-002 (rẻ hơn, tốt hơn)
+5. Batch process: Xử lý resource theo batch, không chạy hết 1 lúc
+6. Auto-sync nên bật cho data thay đổi thường xuyên
+7. Reindex khi thay đổi embedding model
+
+--- TỔNG CHI PHÍ ƯỚC TÍNH (OpenAI) ---
+
+Embedding:
+- text-embedding-3-small: $0.02/1M tokens
+- 10,000 sản phẩm × ~200 tokens = 2M tokens ≈ $0.04
+
+Chat:
+- gpt-4o: $2.50/1M input, $10/1M output
+- Mỗi query RAG ≈ 2000 tokens input ≈ $0.005/query
+
+→ Rất kinh tế cho knowledge base quy mô vừa.
+
+================================================================================
+KẾT LUẬN
+================================================================================
+
+Hệ thống 10 LLM modules cung cấp đầy đủ infrastructure cho:
+✓ Kết nối đa provider AI (OpenAI, Ollama, Anthropic...)
+✓ OpenAI provider đầy đủ (chat, embedding, vision, audio, fine-tuning)
+✓ Vector database (Qdrant, pgvector, Chroma)
+✓ RAG pipeline hoàn chỉnh (retrieve → parse → chunk → embed → search)
+✓ Auto-sync data thay đổi
+✓ Function calling (AI tương tác database)
+✓ Chat UI tích hợp với streaming
+✓ Assistant có thể cấu hình role/goal/tools
+✓ Fine-tuning model từ dữ liệu doanh nghiệp
+✓ Message validation & multimodal support
+
+→ Đủ để xây dựng Data Lake / RAG Search cho AI hiểu dữ liệu Odoo.
+
+Bước tiếp theo (Phase 2):
+- Custom prompt templates cho từng use case HLV
+- Custom tools cho domain cụ thể (bán hàng, kho, giao hàng)
+- Fine-tune chunk strategies cho từng loại dữ liệu
+- Monitoring và analytics cho RAG performance
+================================================================================
