@@ -1,29 +1,42 @@
 /** @odoo-module */
 import { FormController } from "@web/views/form/form_controller";
 import { patch } from "@web/core/utils/patch";
-import { useSetupAction } from "@web/search/action_hook";
 import { _t } from "@web/core/l10n/translation";
 import { SettingsConfirmationDialog } from "@web/webclient/settings_form_view/settings_confirmation_dialog";
+import { onMounted, onWillUnmount } from "@odoo/owl";
+
 patch(FormController.prototype, {
 /* Patch FormController to restrict auto save in form views */
    setup(){
       super.setup(...arguments);
+      this._hasPendingInput = false;
+      onMounted(() => {
+          this.__onFormInput = (ev) => {
+              if (this.rootRef?.el?.contains(ev.target)) {
+                  this._hasPendingInput = true;
+              }
+          };
+          document.addEventListener('input', this.__onFormInput, true);
+      });
+      onWillUnmount(() => {
+          document.removeEventListener('input', this.__onFormInput, true);
+      });
+   },
+
+   async save(...args) {
+       this._hasPendingInput = false;
+       return super.save(...args);
    },
 
    async beforeLeave() {
         const dirty = await this.model.root.isDirty();
-        if (dirty) {
+        if (dirty || this._hasPendingInput) {
             return this._confirmSave();
         }
     },
 
    beforeUnload(ev) {
-        // Force commit pending input value before checking dirty state
-        const activeEl = document.activeElement;
-        if (activeEl && this.rootRef?.el?.contains(activeEl)) {
-            activeEl.blur();
-        }
-        if (this.model.root.dirty) {
+        if (this.model.root.dirty || this._hasPendingInput) {
             ev.preventDefault();
             ev.returnValue = '';
         }
