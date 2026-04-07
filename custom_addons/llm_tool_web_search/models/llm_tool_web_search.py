@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 from typing import Any
@@ -37,19 +38,35 @@ NOISE_SELECTORS = [
     ".comment", ".comments",
     "#menu", "#nav", "#sidebar", "#footer", "#header",
     "[role='navigation']", "[role='banner']", "[role='complementary']",
+    # Review forms & rating widgets
+    ".review-form", ".write-review", ".rating-form",
+    ".star-rating", ".rating-stars",
+    "form[action*='review']", "form[action*='comment']",
+    # Related/similar products
+    ".products-related", ".same-price", ".similar-products",
+    ".product-slider", ".owl-carousel",
+    # Footer widgets
+    ".footer-widget", ".newsletter", ".subscribe",
+    ".hotline", ".contact-info-footer",
 ]
 
 # Selectors ưu tiên cho nội dung chính (theo thứ tự ưu tiên)
 CONTENT_SELECTORS = [
-    # Product detail pages (e-commerce)
+    # Product detail pages (e-commerce) - Vietnamese sites
     ".product-detail", ".product-info", ".product-content",
     ".product-description", ".product_detail", ".product_info",
     "#product-detail", "#product-info",
+    ".detail-product", ".chi-tiet-san-pham",
+    ".product-detail-content", ".product-detail-info",
+    ".product-tab-content",
+    # Common e-commerce patterns
     ".woocommerce-product-details__short-description",
     ".woocommerce-Tabs-panel", ".tab-content",
+    "[itemprop='description']",
     # Article / Blog
     "article", ".post-content", ".entry-content", ".article-content",
     ".post-body", ".article-body", ".blog-content",
+    ".kn-article", ".article-detail", ".news-detail",
     # Generic content
     "main", "[role='main']",
     ".main-content", ".page-content", "#main-content",
@@ -182,16 +199,23 @@ class LLMToolWebSearch(models.Model):
         # Limit results
         unique_results = unique_results[:max_results]
 
-        # Fetch full content for each result
+        # Fetch full content for each result (skip PDFs & non-HTML)
         enriched_results = []
         for result in unique_results:
-            content = self._fetch_page_content(result["url"])
+            url = result["url"]
+            # Skip PDF/doc/image files - can't extract useful text
+            if re.search(r'\.(pdf|doc|docx|xls|xlsx|ppt|zip|rar|png|jpg|jpeg|gif)$',
+                         url, re.IGNORECASE):
+                continue
+            content = self._fetch_page_content(url)
+            if not content:
+                content = result.get("snippet", "")
             enriched_results.append({
                 "title": result.get("title", ""),
-                "url": result["url"],
+                "url": url,
                 "source_site": result.get("source_site", ""),
                 "snippet": result.get("snippet", ""),
-                "content": content[:4000] if content else result.get("snippet", ""),
+                "content": content[:8000],
             })
 
         return {
@@ -300,11 +324,16 @@ class LLMToolWebSearch(models.Model):
     def _search_on_site(self, query, site, max_results):
         """Try the site's built-in search (common patterns: ?s=, ?q=, /search?q=)."""
         results = []
+        base = site['url'].rstrip('/')
         search_paths = [
-            f"{site['url'].rstrip('/')}/?s={quote_plus(query)}",
-            f"{site['url'].rstrip('/')}/search?q={quote_plus(query)}",
-            f"{site['url'].rstrip('/')}/tim-kiem?q={quote_plus(query)}",
-            f"{site['url'].rstrip('/')}/search?keyword={quote_plus(query)}",
+            f"{base}/?s={quote_plus(query)}",
+            f"{base}/site?s={quote_plus(query)}",
+            f"{base}/search?q={quote_plus(query)}",
+            f"{base}/tim-kiem?q={quote_plus(query)}",
+            f"{base}/search?keyword={quote_plus(query)}",
+            f"{base}/san-pham?q={quote_plus(query)}",
+            f"{base}/san-pham.html?query={quote_plus(query)}",
+            f"{base}/tim-kiem.html?q={quote_plus(query)}",
         ]
 
         for search_url in search_paths:
@@ -408,31 +437,46 @@ class LLMToolWebSearch(models.Model):
             for comment in soup.find_all(string=lambda t: isinstance(t, Comment)):
                 comment.extract()
 
-            # 2. Extract page title
+            # 2. Extract JSON-LD structured data (product info, article, etc.)
+            structured_data = self._extract_json_ld(soup)
+
+            # 3. Extract page title
             title = ""
             title_tag = soup.find("title")
             if title_tag:
                 title = title_tag.get_text(strip=True)
+            # Also try og:title
+            og_title = soup.find("meta", attrs={"property": "og:title"})
+            if og_title and og_title.get("content"):
+                title = og_title.get("content", title)
 
-            # 3. Extract meta description
+            # 4. Extract meta description
             meta_desc = ""
             meta = soup.find("meta", attrs={"name": "description"})
             if meta:
                 meta_desc = meta.get("content", "")
+            # Also try og:description
+            og_desc = soup.find("meta", attrs={"property": "og:description"})
+            if og_desc and og_desc.get("content"):
+                meta_desc = og_desc.get("content", meta_desc)
 
-            # 4. Try to find product price (e-commerce)
+            # 5. Try to find product price (e-commerce)
             price_text = self._extract_price(soup)
 
-            # 5. Find main content using selectors
+            # 6. Extract product specs table
+            specs_text = self._extract_specs_table(soup)
+
+            # 7. Find main content using selectors
             main_el = None
             for selector in CONTENT_SELECTORS:
-                main_el = soup.select_one(selector)
-                if main_el:
-                    # Verify it has substantial text (not just nav)
-                    text = main_el.get_text(strip=True)
-                    if len(text) > 100:
+                candidates = soup.select(selector)
+                for candidate in candidates:
+                    text = candidate.get_text(strip=True)
+                    # Pick the one with the most content
+                    if len(text) > 200:
+                        if main_el is None or len(text) > len(main_el.get_text(strip=True)):
+                            main_el = candidate
                         break
-                    main_el = None
 
             if not main_el:
                 main_el = soup.body
@@ -440,21 +484,29 @@ class LLMToolWebSearch(models.Model):
             if not main_el:
                 return meta_desc or ""
 
-            # 6. Remove remaining noise inside main content
-            for tag in main_el.find_all(["ul", "div"]):
+            # 8. Remove remaining noise inside main content
+            for tag in main_el.find_all(["ul", "div", "section"]):
                 # Remove lists that look like navigation menus (many links, short text)
                 links = tag.find_all("a")
                 if len(links) > 5:
                     total_text = tag.get_text(strip=True)
                     link_text = " ".join(a.get_text(strip=True) for a in links)
                     # If >70% of text is links, it's probably a menu
-                    if len(link_text) > len(total_text) * 0.7:
+                    if total_text and len(link_text) > len(total_text) * 0.7:
                         tag.decompose()
 
-            # 7. Extract text
+            # Remove review/rating forms, related products, footer-like sections
+            for sel in [".write-review", ".review-form", ".rating-form",
+                        "form", ".same-price", ".product-slider",
+                        ".related-products", ".products-related",
+                        ".owl-carousel", ".slick-slider"]:
+                for tag in main_el.select(sel):
+                    tag.decompose()
+
+            # 9. Extract text
             text = main_el.get_text(separator="\n", strip=True)
 
-            # 8. Clean up
+            # 10. Clean up
             lines = text.split("\n")
             clean_lines = []
             for line in lines:
@@ -467,13 +519,16 @@ class LLMToolWebSearch(models.Model):
                 # Skip lines that are just ">" or "|" separators
                 if re.match(r'^[\s>|/\\•·→←]+$', line):
                     continue
+                # Skip repeated image/star rating noise
+                if re.match(r'^(\d+\s+sao|sao|Chưa đánh giá|Đã bán:)$', line):
+                    continue
                 clean_lines.append(line)
 
             content = "\n".join(clean_lines)
             # Remove excessive duplicate newlines
             content = re.sub(r'\n{3,}', '\n\n', content)
 
-            # 9. Prepend useful metadata
+            # 11. Prepend useful metadata
             parts = []
             if title:
                 parts.append(f"Tiêu đề: {title}")
@@ -481,6 +536,10 @@ class LLMToolWebSearch(models.Model):
                 parts.append(f"Giá: {price_text}")
             if meta_desc:
                 parts.append(f"Mô tả: {meta_desc}")
+            if structured_data:
+                parts.append(f"Thông tin có cấu trúc: {structured_data}")
+            if specs_text:
+                parts.append(f"Thông số kỹ thuật:\n{specs_text}")
             if parts:
                 content = "\n".join(parts) + "\n---\n" + content
 
@@ -506,6 +565,75 @@ class LLMToolWebSearch(models.Model):
                 # Must contain digits to be a real price
                 if re.search(r'\d', price):
                     return price[:100]
+        return ""
+
+    def _extract_json_ld(self, soup):
+        """Extract JSON-LD structured data (Product, Article, etc.)."""
+        try:
+            for script in soup.find_all("script", type="application/ld+json"):
+                text = script.get_text(strip=True)
+                if not text:
+                    continue
+                data = json.loads(text)
+                # Handle @graph array
+                items = data if isinstance(data, list) else [data]
+                if isinstance(data, dict) and "@graph" in data:
+                    items = data["@graph"]
+
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    item_type = item.get("@type", "")
+                    if item_type in ("Product", "IndividualProduct"):
+                        parts = []
+                        if item.get("name"):
+                            parts.append(f"Tên: {item['name']}")
+                        if item.get("description"):
+                            desc = item["description"]
+                            # Strip HTML from description
+                            if "<" in desc:
+                                desc = BeautifulSoup(desc, "html.parser").get_text(strip=True)
+                            parts.append(f"Mô tả: {desc[:500]}")
+                        if item.get("sku"):
+                            parts.append(f"SKU: {item['sku']}")
+                        if item.get("brand"):
+                            brand = item["brand"]
+                            if isinstance(brand, dict):
+                                brand = brand.get("name", "")
+                            parts.append(f"Thương hiệu: {brand}")
+                        offers = item.get("offers", {})
+                        if isinstance(offers, dict):
+                            if offers.get("price"):
+                                parts.append(f"Giá: {offers['price']} {offers.get('priceCurrency', '')}")
+                        elif isinstance(offers, list):
+                            for o in offers[:3]:
+                                if o.get("price"):
+                                    parts.append(f"Giá: {o['price']} {o.get('priceCurrency', '')}")
+                        return " | ".join(parts)
+        except Exception:
+            pass
+        return ""
+
+    def _extract_specs_table(self, soup):
+        """Extract product specification tables."""
+        specs = []
+        # Common spec table selectors
+        for sel in ["table", ".specifications", ".spec-table",
+                    ".product-attributes", ".product-specs",
+                    ".chi-tiet-ky-thuat", ".thong-so"]:
+            for table in soup.select(sel):
+                rows = table.find_all("tr")
+                if not rows:
+                    continue
+                for row in rows:
+                    cells = row.find_all(["td", "th"])
+                    if len(cells) >= 2:
+                        key = cells[0].get_text(strip=True)
+                        val = cells[1].get_text(strip=True)
+                        if key and val and len(key) < 80:
+                            specs.append(f"  {key}: {val}")
+                if specs:
+                    return "\n".join(specs[:30])  # Max 30 spec rows
         return ""
 
     # ----------------------------------------------------------------
