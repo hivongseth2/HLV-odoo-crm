@@ -58,28 +58,37 @@ class ShopeeEscrowDetailWizard(models.TransientModel):
             'order_income': '2. CHI TIẾT THU NHẬP (ORDER INCOME)',
         }
 
+        # List of keys to strictly ignore
+        ignore_keys = ['items', 'tenure_info_list', 'error', 'message', 'request_id', 'return_order_sn_list', 'buyer_user_name', 'order_sn']
+
         html = '<table class="table table-bordered table-sm" style="width: 100%; margin-bottom: 0;">'
 
         def render_dict_to_rows(data_dict, title):
             if not data_dict:
                 return ""
+
+            # Filter criterion: Hide if value is 0, 0.0 or empty string
+            filtered_data = {
+                k: v for k, v in data_dict.items() 
+                if k not in ignore_keys 
+                and not isinstance(v, (dict, list))
+                and v != 0 and v != 0.0 and v != ""
+            }
+            
+            if not filtered_data:
+                return ""
+
             res = f'''<thead class="bg-light">
                 <tr><th colspan="2" style="font-size: 1.1em; color: #333; padding-top: 10px; border-top: 2px solid #dee2e6;">{title}</th></tr>
             </thead>
             <tbody>'''
             
-            # Sort keys to put main amounts at the top if they exist
-            sorted_keys = sorted(data_dict.keys(), key=lambda x: x not in ['escrow_amount', 'buyer_total_amount', 'cost_of_goods_sold'])
+            sorted_keys = sorted(filtered_data.keys(), key=lambda x: x not in ['escrow_amount', 'buyer_total_amount', 'cost_of_goods_sold'])
             
             for k in sorted_keys:
-                v = data_dict[k]
+                v = filtered_data[k]
                 name = key_map.get(k, k)
-                
-                # Format Value
-                if isinstance(v, (dict, list)):
-                    v_str = f'<pre style="margin-bottom:0; font-size: 0.85em; white-space: pre-wrap;">{json.dumps(v, ensure_ascii=False, indent=2)}</pre>'
-                else:
-                    v_str = f_vnd(v)
+                v_str = f_vnd(v)
 
                 # Special styling for main results
                 row_style = ""
@@ -104,7 +113,7 @@ class ShopeeEscrowDetailWizard(models.TransientModel):
             html += render_dict_to_rows(income_info, key_map['order_income'])
 
         # 3. Other fields at root level
-        root_fields = {k: v for k, v in escrow_data.items() if k not in ['buyer_payment_info', 'order_income', 'error', 'message', 'request_id']}
+        root_fields = {k: v for k, v in escrow_data.items() if k not in ['buyer_payment_info', 'order_income'] and k not in ignore_keys}
         if root_fields:
             html += render_dict_to_rows(root_fields, "3. THÔNG TIN KHÁC (OTHERS)")
 
