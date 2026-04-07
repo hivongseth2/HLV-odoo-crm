@@ -48,7 +48,7 @@
             <p class="o_view_nocontent_smiling_face">
                 Add a new security rule to block malicious traffic.
             </p>
-        </p>
+        </field>
     </record>
 
     <menuitem id="menu_hlv_security_root" name="Security" sequence="100" parent="base.menu_administration"/>
