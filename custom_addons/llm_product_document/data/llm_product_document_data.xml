@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <!-- System parameter to store the product document collection ID.
+             Set automatically on first sync if a collection named
+             "Tài liệu sản phẩm" exists. -->
+        <record id="config_product_doc_collection" model="ir.config_parameter">
+            <field name="key">llm_product_document.collection_id</field>
+            <field name="value">0</field>
+        </record>
+
+    </data>
+</odoo>
