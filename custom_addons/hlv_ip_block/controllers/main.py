@@ -1,4 +1,6 @@
 import logging
+import time
+from collections import defaultdict
 from odoo import http
 from odoo.http import request
 
@@ -8,6 +10,9 @@ _logger = logging.getLogger(__name__)
 _blocked_ips_cache = set()
 _cache_timestamp = 0
 CACHE_TTL = 60  # Refresh cache every 60 seconds
+
+# In-memory hit counters - flushed to DB together with cache refresh
+_hit_counters = defaultdict(int)
 
 
 class IPBlockMiddleware(http.Controller):
@@ -63,9 +68,7 @@ _original_dispatch = http.root.__class__.__call__
 
 def _patched_call(self, environ, start_response):
     """Intercept requests and block IPs before Odoo processes them."""
-    import time
-
-    global _blocked_ips_cache, _cache_timestamp
+    global _blocked_ips_cache, _cache_timestamp, _hit_counters
 
     # Get remote IP from environ
     ip = environ.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
@@ -74,38 +77,9 @@ def _patched_call(self, environ, start_response):
     if not ip:
         ip = environ.get('REMOTE_ADDR', '')
 
-    # Refresh cache if needed
+    # Refresh cache + flush hit counters periodically
     now = time.time()
     if now - _cache_timestamp > CACHE_TTL:
-        try:
-            db_name = None
-            # Try to get db name from environ or config
-            import odoo
-            if odoo.tools.config['db_name']:
-                db_name = odoo.tools.config['db_name']
-            elif odoo.tools.config.get('dbfilter'):
-                db_name = None  # Can't determine
-
-            if db_name:
-                from odoo.sql_db import db_connect
-                cr = db_connect(db_name).cursor()
-                try:
-                    cr.execute(
-                        "SELECT 1 FROM information_schema.tables WHERE table_name = 'hlv_blocked_ip'"
-                    )
-                    if cr.fetchone():
-                        cr.execute("SELECT name FROM hlv_blocked_ip WHERE active = TRUE")
-                        _blocked_ips_cache = {row[0] for row in cr.fetchall()}
-                    _cache_timestamp = now
-                finally:
-                    cr.close()
-        except Exception:
-            _cache_timestamp = now  # Don't retry immediately on error
-
-    # Check if IP is blocked
-    if ip and ip in _blocked_ips_cache:
-        _logger.warning("Blocked request from IP: %s - Path: %s", ip, environ.get('PATH_INFO', '/'))
-        # Update hit count asynchronously (best effort)
         try:
             import odoo
             db_name = odoo.tools.config['db_name']
@@ -114,21 +88,45 @@ def _patched_call(self, environ, start_response):
                 cr = db_connect(db_name).cursor()
                 try:
                     cr.execute(
-                        "UPDATE hlv_blocked_ip SET hit_count = hit_count + 1, "
-                        "last_hit = NOW() AT TIME ZONE 'UTC' WHERE name = %s AND active = TRUE",
-                        (ip,)
+                        "SELECT 1 FROM information_schema.tables WHERE table_name = 'hlv_blocked_ip'"
                     )
-                    cr.commit()
+                    if cr.fetchone():
+                        # Flush accumulated hit counters to DB
+                        counters_to_flush = dict(_hit_counters)
+                        _hit_counters.clear()
+                        for blocked_ip, count in counters_to_flush.items():
+                            if count > 0:
+                                cr.execute(
+                                    "UPDATE hlv_blocked_ip SET hit_count = hit_count + %s, "
+                                    "last_hit = NOW() AT TIME ZONE 'UTC' "
+                                    "WHERE name = %s AND active = TRUE",
+                                    (count, blocked_ip)
+                                )
+                        cr.commit()
+
+                        # Refresh cache
+                        cr.execute("SELECT name FROM hlv_blocked_ip WHERE active = TRUE")
+                        _blocked_ips_cache = {row[0] for row in cr.fetchall()}
+                    _cache_timestamp = now
                 finally:
                     cr.close()
         except Exception:
-            pass
+            _cache_timestamp = now
 
-        # Return 403 Forbidden
-        status = '403 Forbidden'
-        headers = [('Content-Type', 'text/plain')]
+    # Check if IP is blocked
+    if ip and ip in _blocked_ips_cache:
+        _logger.warning("Blocked request from IP: %s - Path: %s", ip, environ.get('PATH_INFO', '/'))
+        # Increment in-memory counter (no DB hit)
+        _hit_counters[ip] += 1
+
+        # Redirect to google.com
+        status = '302 Found'
+        headers = [
+            ('Location', 'https://www.google.com'),
+            ('Content-Type', 'text/html'),
+        ]
         start_response(status, headers)
-        return [b'Forbidden']
+        return [b'<html><body>Redirecting...</body></html>']
 
     return _original_dispatch(self, environ, start_response)
 
