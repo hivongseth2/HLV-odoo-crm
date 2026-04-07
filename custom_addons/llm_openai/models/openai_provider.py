@@ -207,6 +207,14 @@ class LLMProvider(models.Model):
         if tools:
             formatted_tools = self.format_tools(tools)
             if formatted_tools:
+                # Check if any tools require the Responses API (e.g. web_search)
+                has_native = any(
+                    t.get("type") != "function" for t in formatted_tools
+                )
+                if has_native:
+                    return self._openai_chat_via_responses(
+                        formatted_messages, model, formatted_tools, stream, **kwargs
+                    )
                 params["tools"] = formatted_tools
                 # OpenAI-specific: tool_choice param (Ollama doesn't support this)
                 params["tool_choice"] = kwargs.get("tool_choice", "auto")
@@ -219,6 +227,223 @@ class LLMProvider(models.Model):
             return self._openai_process_non_streaming_response(response)
         return self._openai_process_streaming_response(response)
 
+    # ----------------------------------------------------------------
+    # Responses API (for native tools like web_search)
+    # ----------------------------------------------------------------
+    def _openai_chat_via_responses(
+        self, formatted_messages, model, formatted_tools, stream, **kwargs
+    ):
+        """Use OpenAI Responses API when native tools (web_search) are present.
+
+        The Chat Completions API only supports tool type 'function'.
+        Native tools like 'web_search' require the Responses API.
+        Falls back to Chat Completions (without native tools) if SDK too old.
+        """
+        instructions, input_items = self._openai_convert_to_responses_input(
+            formatted_messages
+        )
+
+        params = {
+            "model": model.name,
+            "tools": formatted_tools,
+        }
+        if instructions:
+            params["instructions"] = instructions
+        if input_items:
+            params["input"] = input_items
+
+        tool_choice = kwargs.get("tool_choice", "auto")
+        if tool_choice:
+            params["tool_choice"] = tool_choice
+
+        native_types = [
+            t.get("type") for t in formatted_tools if t.get("type") != "function"
+        ]
+        _logger.info("Using Responses API (native tools: %s)", native_types)
+
+        try:
+            if stream:
+                response_stream = self.client.responses.create(**params, stream=True)
+                return self._openai_process_responses_stream(response_stream)
+            else:
+                response = self.client.responses.create(**params)
+                return self._openai_process_responses_result(response)
+        except AttributeError:
+            _logger.warning(
+                "client.responses not available. "
+                "Upgrade openai SDK: pip install --upgrade openai. "
+                "Falling back to Chat Completions without native tools."
+            )
+            function_tools = [
+                t for t in formatted_tools if t.get("type") == "function"
+            ]
+            fallback_params = {
+                "model": model.name,
+                "stream": stream,
+                "messages": formatted_messages,
+            }
+            if function_tools:
+                fallback_params["tools"] = function_tools
+                fallback_params["tool_choice"] = tool_choice
+            response = self.client.chat.completions.create(**fallback_params)
+            if not stream:
+                return self._openai_process_non_streaming_response(response)
+            return self._openai_process_streaming_response(response)
+
+    def _openai_convert_to_responses_input(self, formatted_messages):
+        """Convert Chat Completions messages to Responses API format.
+
+        Returns:
+            (instructions, input_items) tuple.
+            instructions: combined system/developer messages (str or None)
+            input_items: list of Responses API input items
+        """
+        instructions_parts = []
+        input_items = []
+
+        for msg in formatted_messages:
+            role = msg.get("role")
+            content = msg.get("content", "")
+
+            if role in ("system", "developer"):
+                if isinstance(content, list):
+                    text = " ".join(
+                        c.get("text", "")
+                        for c in content
+                        if isinstance(c, dict) and c.get("type") == "text"
+                    )
+                else:
+                    text = content or ""
+                if text:
+                    instructions_parts.append(text)
+
+            elif role == "tool":
+                input_items.append({
+                    "type": "function_call_output",
+                    "call_id": msg.get("tool_call_id", ""),
+                    "output": content if isinstance(content, str) else json.dumps(content),
+                })
+
+            elif role == "assistant":
+                tool_calls = msg.get("tool_calls", [])
+                if tool_calls:
+                    for tc in tool_calls:
+                        func = tc.get("function", {})
+                        input_items.append({
+                            "type": "function_call",
+                            "call_id": tc.get("id", ""),
+                            "name": func.get("name", ""),
+                            "arguments": func.get("arguments", "{}"),
+                        })
+                if content:
+                    input_items.append({
+                        "role": "assistant",
+                        "content": content,
+                    })
+
+            elif role == "user":
+                input_items.append({
+                    "role": "user",
+                    "content": content,
+                })
+
+            else:
+                if content:
+                    input_items.append({
+                        "role": "user",
+                        "content": content if isinstance(content, str) else str(content),
+                    })
+
+        instructions = "\n\n".join(instructions_parts) if instructions_parts else None
+        return instructions, input_items
+
+    def _openai_process_responses_result(self, response):
+        """Process Responses API non-streaming result to standard format."""
+        result = {}
+
+        text_parts = []
+        for item in response.output:
+            if getattr(item, "type", None) == "message":
+                for content_part in getattr(item, "content", []):
+                    if getattr(content_part, "type", None) == "output_text":
+                        text = getattr(content_part, "text", "")
+                        if text:
+                            text_parts.append(text)
+
+        if text_parts:
+            result["content"] = "\n".join(text_parts)
+
+        tool_calls = []
+        for item in response.output:
+            if getattr(item, "type", None) == "function_call":
+                tool_calls.append({
+                    "id": getattr(item, "call_id", "") or str(uuid.uuid4()),
+                    "type": "function",
+                    "function": {
+                        "name": getattr(item, "name", ""),
+                        "arguments": getattr(item, "arguments", "{}"),
+                    },
+                })
+
+        if tool_calls:
+            result["tool_calls"] = tool_calls
+
+        if not result:
+            _logger.warning("Responses API returned no content or tool calls.")
+
+        return result
+
+    def _openai_process_responses_stream(self, response_stream):
+        """Process Responses API streaming response, yielding standard chunks."""
+        function_calls = {}
+
+        try:
+            for event in response_stream:
+                event_type = getattr(event, "type", "")
+
+                if event_type == "response.output_text.delta":
+                    delta = getattr(event, "delta", "")
+                    if delta:
+                        yield {"content": delta}
+
+                elif event_type == "response.output_item.added":
+                    item = getattr(event, "item", None)
+                    if item and getattr(item, "type", "") == "function_call":
+                        idx = getattr(event, "output_index", 0)
+                        function_calls[idx] = {
+                            "call_id": getattr(item, "call_id", "") or str(uuid.uuid4()),
+                            "name": getattr(item, "name", ""),
+                            "arguments": "",
+                        }
+
+                elif event_type == "response.function_call_arguments.delta":
+                    idx = getattr(event, "output_index", 0)
+                    delta = getattr(event, "delta", "")
+                    if idx in function_calls and delta:
+                        function_calls[idx]["arguments"] += delta
+
+                elif event_type == "response.completed":
+                    if function_calls:
+                        tool_calls = []
+                        for idx in sorted(function_calls.keys()):
+                            fc = function_calls[idx]
+                            tool_calls.append({
+                                "id": fc["call_id"],
+                                "type": "function",
+                                "function": {
+                                    "name": fc["name"],
+                                    "arguments": fc["arguments"],
+                                },
+                            })
+                        yield {"tool_calls": tool_calls}
+
+        except Exception as e:
+            _logger.exception("Error processing Responses API stream")
+            yield {"error": f"Error processing Responses API stream: {e}"}
+
+    # ----------------------------------------------------------------
+    # Chat Completions response processing
+    # ----------------------------------------------------------------
     def _openai_process_non_streaming_response(self, response):
         """Processes OpenAI non-streamed response and returns ONE standardized dict."""
         _logger.info("Processing non-streaming OpenAI response.")
