@@ -7,6 +7,7 @@
         <field name="arch" type="xml">
             <form string="Đề nghị trả hàng bán">
                 <header>
+                    <!-- Original:
                     <button
                         name="button_submit"
                         string="Xử lý trả đơn bán"
@@ -14,8 +15,17 @@
                         class="oe_highlight"
                         invisible="state != 'draft'"
                     />
+                    -->
+                    <button
+                        name="button_submit"
+                        string="Xác nhận để hoàn thành"
+                        type="object"
+                        class="oe_highlight"
+                        invisible="state != 'draft'"
+                    />
 
 
+                    <!-- Original:
                     <button
                         name="button_reject"
                         string="Từ chối"
@@ -30,13 +40,36 @@
                         invisible="state not in ('return_sale', 'rejected', 'return_purchase')"
                         groups="return_sale_request.group_return_sale_request_manager"
                     />
+                    -->
+                    <button
+                        name="button_reject"
+                        string="Từ chối"
+                        type="object"
+                        invisible="state != 'draft'"
+                        groups="return_sale_request.group_return_sale_request_manager"
+                    />
+                    <button
+                        name="button_draft"
+                        string="Đặt về nháp"
+                        type="object"
+                        invisible="state not in ('done', 'rejected')"
+                        groups="return_sale_request.group_return_sale_request_manager"
+                    />
+                    <!-- Original:
                     <field
                         name="state"
                         widget="statusbar"
                         statusbar_visible="draft,return_sale,return_purchase,done"
                     />
+                    -->
+                    <field
+                        name="state"
+                        widget="statusbar"
+                        statusbar_visible="draft,done"
+                    />
                 </header>
                 <sheet>
+                    <!-- 
                     <div class="oe_button_box" name="button_box">
                         <button
                             type="object"
@@ -57,6 +90,7 @@
                             <field name="picking_out_count" widget="statinfo" string="Xuất NCC" />
                         </button>
                     </div>
+                    -->
                     <div class="oe_title">
                         <label for="name" string="Mã đề nghị" />
                         <h1>
@@ -135,11 +169,20 @@
                 <field name="vendor_id" optional="show" />
                 <field name="total_amount" />
                 <field name="return_reason" optional="hide" />
+                <!-- Original:
                 <field
                     name="state"
                     widget="badge"
                     decoration-info="state == 'draft'"
                     decoration-warning="state in ('return_sale', 'return_purchase')"
+                    decoration-success="state == 'done'"
+                    decoration-danger="state == 'rejected'"
+                />
+                -->
+                <field
+                    name="state"
+                    widget="badge"
+                    decoration-info="state == 'draft'"
                     decoration-success="state == 'done'"
                     decoration-danger="state == 'rejected'"
                 />
@@ -159,6 +202,8 @@
                 <field name="vendor_id" />
                 <separator />
                 <filter name="state_draft" string="Nháp" domain="[('state', '=', 'draft')]" />
+                <filter name="state_done" string="Hoàn thành" domain="[('state', '=', 'done')]" />
+                <!-- 
                 <filter
                     name="state_return_sale"
                     string="Xử lý trả đơn bán"
@@ -169,7 +214,7 @@
                     string="Xử lý trả hàng mua"
                     domain="[('state', '=', 'return_purchase')]"
                 />
-                <filter name="state_done" string="Hoàn thành" domain="[('state', '=', 'done')]" />
+                -->
                 <separator />
                 <group expand="0" string="Nhóm theo">
                     <filter

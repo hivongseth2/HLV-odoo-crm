@@ -11,8 +11,8 @@ _logger = logging.getLogger(__name__)
 
 _STATES = [
     ("draft", "Nháp"),
-    ("return_sale", "Xử lý trả đơn bán"),
-    ("return_purchase", "Xử lý trả hàng mua"),
+    # ("return_sale", "Xử lý trả đơn bán"),
+    # ("return_purchase", "Xử lý trả hàng mua"),
     ("done", "Hoàn thành"),
     ("rejected", "Từ chối"),
 ]
@@ -214,23 +214,24 @@ class ReturnSaleRequest(models.Model):
 
     # ==================== Workflow Actions ====================
     def button_submit(self):
-        """Gửi duyệt (Start processing)"""
-        self._auto_start_processing(force=True)
+        """Xác nhận đề nghị (Hoàn thành) - Đã comment quy trình kho theo yêu cầu"""
+        # self._auto_start_processing(force=True)
+        self.write({"state": "done"})
 
-    def button_approve(self):
-        """Deprecated - Same as button_submit now"""
-        self.button_submit()
+    # def button_approve(self):
+    #     """Deprecated - Same as button_submit now"""
+    #     self.button_submit()
 
-    def button_confirm_incoming(self):
-        """Xác nhận hoàn thành nhập kho và chuyển bước tiếp theo
-        - Nếu có NCC: tạo phiếu xuất NCC -> chuyển sang 'return_purchase'
-        - Nếu không có NCC: hoàn thành luôn -> chuyển sang 'done'
-        """
-        self._process_after_incoming_done(check_done=True)
+    # def button_confirm_incoming(self):
+    #     """Xác nhận hoàn thành nhập kho và chuyển bước tiếp theo
+    #     - Nếu có NCC: tạo phiếu xuất NCC -> chuyển sang 'return_purchase'
+    #     - Nếu không có NCC: hoàn thành luôn -> chuyển sang 'done'
+    #     """
+    #     self._process_after_incoming_done(check_done=True)
 
-    def button_done(self):
-        """Hoàn thành (sau khi xuất trả NCC)"""
-        self._process_after_outgoing_done(check_done=True)
+    # def button_done(self):
+    #     """Hoàn thành (sau khi xuất trả NCC)"""
+    #     self._process_after_outgoing_done(check_done=True)
 
     def button_reject(self):
         """Từ chối"""
@@ -238,150 +239,148 @@ class ReturnSaleRequest(models.Model):
 
     def button_draft(self):
         """Đặt về nháp"""
-        for rec in self:
-            # Xử lý xóa phiếu nhập/xuất nếu có thể
-            pickings = rec.picking_in_id | rec.picking_out_id
-            for picking in pickings:
-                if picking.state not in ('done', 'cancel'):
-                    picking.action_cancel()
-                if picking.state == 'cancel':
-                    picking.unlink()
-            
-            # Kiểm tra lại xem còn phiếu không
-            if rec.picking_in_id.exists() or rec.picking_out_id.exists():
-                raise UserError(_("Không thể đặt về nháp khi đã có phiếu kho (đã hoàn thành hoặc không thể xóa)."))
+        # for rec in self:
+        #     # Xử lý xóa phiếu nhập/xuất nếu có thể
+        #     pickings = rec.picking_in_id | rec.picking_out_id
+        #     for picking in pickings:
+        #         if picking.state not in ('done', 'cancel'):
+        #             picking.action_cancel()
+        #         if picking.state == 'cancel':
+        #             picking.unlink()
+        #     
+        #     # Kiểm tra lại xem còn phiếu không
+        #     if rec.picking_in_id.exists() or rec.picking_out_id.exists():
+        #         raise UserError(_("Không thể đặt về nháp khi đã có phiếu kho (đã hoàn thành hoặc không thể xóa)."))
                  
         self.write({"state": "draft"})
 
     def _auto_start_processing(self, force=False):
-        """Auto start workflow: draft -> return_sale and create incoming picking."""
+        """Chỉ chuyển trạng thái sang Hoàn thành (Đã comment logic kho)"""
         for rec in self:
-            if rec.state in ("done", "rejected"):
-                continue
             if rec.state == "draft":
-                rec.state = "return_sale"
-            if not rec.line_ids:
-                if force:
-                    raise UserError(_("Vui lòng thêm ít nhất một dòng sản phẩm."))
-                continue
-            if rec.state == "return_sale" and not rec.picking_in_id:
-                rec._create_incoming_picking()
+                rec.state = "done"
 
     def _process_after_incoming_done(self, check_done=False):
-        """Move workflow after incoming picking is done."""
-        for rec in self:
-            if check_done and (not rec.picking_in_id or rec.picking_in_id.state != "done"):
-                raise UserError(_("Phiếu nhập kho chưa hoàn thành."))
-            if not rec.picking_in_id or rec.picking_in_id.state != "done":
-                continue
-            if rec.state not in ("draft", "return_sale", "return_purchase"):
-                continue
-            if rec.vendor_id and rec._has_vendor_return_lines():
-                if not rec.picking_out_id:
-                    rec._create_outgoing_picking()
-                rec.state = "return_purchase"
-            else:
-                rec.state = "done"
+        pass
+        # """Move workflow after incoming picking is done."""
+        # for rec in self:
+        #     if check_done and (not rec.picking_in_id or rec.picking_in_id.state != "done"):
+        #         raise UserError(_("Phiếu nhập kho chưa hoàn thành."))
+        #     if not rec.picking_in_id or rec.picking_in_id.state != "done":
+        #         continue
+        #     if rec.state not in ("draft", "return_sale", "return_purchase"):
+        #         continue
+        #     if rec.vendor_id and rec._has_vendor_return_lines():
+        #         if not rec.picking_out_id:
+        #             rec._create_outgoing_picking()
+        #         rec.state = "return_purchase"
+        #     else:
+        #         rec.state = "done"
 
     def _process_after_outgoing_done(self, check_done=False):
-        """Move workflow to done after outgoing picking is done."""
-        for rec in self:
-            if check_done and (not rec.picking_out_id or rec.picking_out_id.state != "done"):
-                raise UserError(_("Phiếu xuất NCC chưa hoàn thành."))
-            if not rec.picking_out_id or rec.picking_out_id.state != "done":
-                continue
-            if rec.state != "done":
-                rec.state = "done"
+        pass
+        # """Move workflow to done after outgoing picking is done."""
+        # for rec in self:
+        #     if check_done and (not rec.picking_out_id or rec.picking_out_id.state != "done"):
+        #         raise UserError(_("Phiếu xuất NCC chưa hoàn thành."))
+        #     if not rec.picking_out_id or rec.picking_out_id.state != "done":
+        #         continue
+        #     if rec.state != "done":
+        #         rec.state = "done"
 
     # ==================== Stock Picking Creation ====================
     def _create_incoming_picking(self):
-        """Tạo phiếu nhập kho từ Customer về Warehouse"""
-        self.ensure_one()
-        if self.picking_in_id:
-            return self.picking_in_id
-        if not self.line_ids:
-            raise UserError(_("Không có dòng sản phẩm để tạo phiếu nhập kho."))
-        if not self.warehouse_id:
-            raise UserError(_("Không xác định được kho."))
-        
-        picking_type = self.warehouse_id.in_type_id
-        if not picking_type:
-            raise UserError(_("Không tìm thấy loại phiếu nhập kho."))
-
-        customer_location = self.env.ref("stock.stock_location_customers")
-        
-        picking_vals = {
-            "partner_id": self.partner_id.id,
-            "picking_type_id": picking_type.id,
-            "location_id": customer_location.id,
-            "location_dest_id": self.warehouse_id.lot_stock_id.id,
-            "origin": self.name,
-            "move_type": "direct",
-        }
-        picking = self.env["stock.picking"].create(picking_vals)
-        
-        # Tạo stock moves từ lines
-        for line in self.line_ids:
-            self.env["stock.move"].create({
-                "name": line.product_id.name,
-                "product_id": line.product_id.id,
-                "product_uom_qty": line.product_qty,
-                "product_uom": line.product_uom_id.id,
-                "picking_id": picking.id,
-                "location_id": customer_location.id,
-                "location_dest_id": self.warehouse_id.lot_stock_id.id,
-            })
-        
-        picking.action_confirm()
-        self.picking_in_id = picking
-        _logger.info("Đã tạo phiếu nhập kho %s cho đề nghị %s", picking.name, self.name)
-        return picking
+        """Đã comment logic tạo phiếu nhập kho"""
+        return False
+        # """Tạo phiếu nhập kho từ Customer về Warehouse"""
+        # self.ensure_one()
+        # if self.picking_in_id:
+        #     return self.picking_in_id
+        # if not self.line_ids:
+        #     raise UserError(_("Không có dòng sản phẩm để tạo phiếu nhập kho."))
+        # if not self.warehouse_id:
+        #     raise UserError(_("Không xác định được kho."))
+        # 
+        # picking_type = self.warehouse_id.in_type_id
+        # if not picking_type:
+        #     raise UserError(_("Không tìm thấy loại phiếu nhập kho."))
+        # 
+        # customer_location = self.env.ref("stock.stock_location_customers")
+        # 
+        # picking_vals = {
+        #     "partner_id": self.partner_id.id,
+        #     "picking_type_id": picking_type.id,
+        #     "location_id": customer_location.id,
+        #     "location_dest_id": self.warehouse_id.lot_stock_id.id,
+        #     "origin": self.name,
+        #     "move_type": "direct",
+        # }
+        # picking = self.env["stock.picking"].create(picking_vals)
+        # 
+        # # Tạo stock moves từ lines
+        # for line in self.line_ids:
+        #     self.env["stock.move"].create({
+        #         "name": line.product_id.name,
+        #         "product_id": line.product_id.id,
+        #         "product_uom_qty": line.product_qty,
+        #         "product_uom": line.product_uom_id.id,
+        #         "picking_id": picking.id,
+        #         "location_id": customer_location.id,
+        #         "location_dest_id": self.warehouse_id.lot_stock_id.id,
+        #     })
+        # 
+        # picking.action_confirm()
+        # self.picking_in_id = picking
+        # _logger.info("Đã tạo phiếu nhập kho %s cho đề nghị %s", picking.name, self.name)
+        # return picking
 
     def _create_outgoing_picking(self):
-        """Tạo phiếu xuất kho về NCC"""
-        self.ensure_one()
-        if self.picking_out_id:
-            return self.picking_out_id
-        if not self.line_ids:
-            raise UserError(_("Không có dòng sản phẩm để tạo phiếu xuất kho."))
-        if not self.warehouse_id or not self.vendor_id:
-            return # Skip if no vendor or warehouse
-        if not self._has_vendor_return_lines():
-            return False
-        
-        picking_type = self.warehouse_id.out_type_id
-        if not picking_type:
-            raise UserError(_("Không tìm thấy loại phiếu xuất kho."))
-
-        supplier_location = self.env.ref("stock.stock_location_suppliers")
-        
-        picking_vals = {
-            "partner_id": self.vendor_id.id,
-            "picking_type_id": picking_type.id,
-            "location_id": self.warehouse_id.lot_stock_id.id,
-            "location_dest_id": supplier_location.id,
-            "origin": self.name,
-            "move_type": "direct",
-        }
-        picking = self.env["stock.picking"].create(picking_vals)
-        
-        # Tạo stock moves từ lines có số lượng trả NCC
-        return_lines = self.line_ids.filtered(lambda l: (l.return_to_vendor_qty or 0.0) > 0)
-        for line in return_lines:
-            self.env["stock.move"].create({
-                "name": line.product_id.name,
-                "product_id": line.product_id.id,
-                "product_uom_qty": line.return_to_vendor_qty,
-                "product_uom": line.product_uom_id.id,
-                "picking_id": picking.id,
-                "location_id": self.warehouse_id.lot_stock_id.id,
-                "location_dest_id": supplier_location.id,
-            })
-        
-        picking.action_confirm()
-        self.picking_out_id = picking
-        _logger.info("Đã tạo phiếu xuất NCC %s cho đề nghị %s", picking.name, self.name)
-        return picking
+        """Đã comment logic tạo phiếu xuất NCC"""
+        return False
+        # """Tạo phiếu xuất kho về NCC"""
+        # self.ensure_one()
+        # if self.picking_out_id:
+        #     return self.picking_out_id
+        # if not self.line_ids:
+        #     raise UserError(_("Không có dòng sản phẩm để tạo phiếu xuất kho."))
+        # if not self.warehouse_id or not self.vendor_id:
+        #     return # Skip if no vendor or warehouse
+        # if not self._has_vendor_return_lines():
+        #     return False
+        # 
+        # picking_type = self.warehouse_id.out_type_id
+        # if not picking_type:
+        #     raise UserError(_("Không tìm thấy loại phiếu xuất kho."))
+        # 
+        # supplier_location = self.env.ref("stock.stock_location_suppliers")
+        # 
+        # picking_vals = {
+        #     "partner_id": self.vendor_id.id,
+        #     "picking_type_id": picking_type.id,
+        #     "location_id": self.warehouse_id.lot_stock_id.id,
+        #     "location_dest_id": supplier_location.id,
+        #     "origin": self.name,
+        #     "move_type": "direct",
+        # }
+        # picking = self.env["stock.picking"].create(picking_vals)
+        # 
+        # # Tạo stock moves từ lines có số lượng trả NCC
+        # return_lines = self.line_ids.filtered(lambda l: (l.return_to_vendor_qty or 0.0) > 0)
+        # for line in return_lines:
+        #     self.env["stock.move"].create({
+        #         "name": line.product_id.name,
+        #         "product_id": line.product_id.id,
+        #         "product_uom_qty": line.return_to_vendor_qty,
+        #         "product_uom": line.product_uom_id.id,
+        #         "picking_id": picking.id,
+        #         "location_id": self.warehouse_id.lot_stock_id.id,
+        #         "location_dest_id": supplier_location.id,
+        #     })
+        # 
+        # picking.action_confirm()
+        # self.picking_out_id = picking
+        # _logger.info("Đã tạo phiếu xuất NCC %s cho đề nghị %s", picking.name, self.name)
+        # return picking
 
     def _has_vendor_return_lines(self):
         self.ensure_one()
@@ -609,10 +608,8 @@ class ReturnSaleRequest(models.Model):
                 existing._sync_lines_from_misa(product_codes_text, detail_data)
                 existing._set_total_from_summary({"Total": total_amount})
 
-            if existing.state in ("draft", "return_sale"):
+            if existing.state == "draft":
                 existing._auto_start_processing()
-            existing._process_after_incoming_done(check_done=False)
-            existing._process_after_outgoing_done(check_done=False)
                 
             return {"ok": True, "action": "updated", "res_id": existing.id, "name": existing.name}
         else:
@@ -628,8 +625,6 @@ class ReturnSaleRequest(models.Model):
                 new_record._set_total_from_summary({"Total": total_amount})
 
             new_record._auto_start_processing()
-            new_record._process_after_incoming_done(check_done=False)
-            new_record._process_after_outgoing_done(check_done=False)
                 
             return {"ok": True, "action": "created", "res_id": new_record.id, "name": new_record.name}
 
