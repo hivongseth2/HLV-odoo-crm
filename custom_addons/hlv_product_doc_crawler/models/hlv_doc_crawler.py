@@ -193,13 +193,44 @@ class HlvDocCrawler(models.Model):
             }
         )
 
+    def _ensure_product_document_pdf(self, product, sku, pdf_bytes):
+        """Tạo hoặc cập nhật product.document (file .pdf) từ bytes PDF tải về."""
+        attachment_name = f"{sku}_web.pdf"
+        encoded = base64.b64encode(pdf_bytes).decode()
+
+        existing = self.env["product.document"].search(
+            [
+                ("res_model", "=", "product.template"),
+                ("res_id", "=", product.id),
+                ("name", "=", attachment_name),
+            ],
+            limit=1,
+        )
+        if existing:
+            existing.ir_attachment_id.write(
+                {"datas": encoded, "mimetype": "application/pdf"}
+            )
+            return existing
+
+        return self.env["product.document"].create(
+            {
+                "name": attachment_name,
+                "datas": encoded,
+                "mimetype": "application/pdf",
+                "res_model": "product.template",
+                "res_id": product.id,
+            }
+        )
+
     def _product_has_crawler_document(self, product):
-        """Kiểm tra sản phẩm đã có tài liệu từ crawler (file *_web.md)."""
+        """Kiểm tra sản phẩm đã có tài liệu từ crawler (file *_web.md hoặc *_web.pdf)."""
         return bool(self.env["product.document"].search(
             [
                 ("res_model", "=", "product.template"),
                 ("res_id", "=", product.id),
+                "|",
                 ("name", "=like", "%_web.md"),
+                ("name", "=like", "%_web.pdf"),
             ],
             limit=1,
         ))
@@ -294,9 +325,9 @@ class HlvDocCrawler(models.Model):
     # ─── GPT QC helper ────────────────────────────────────────────────────────
 
     def _get_gpt_api_key(self):
-        """Lấy OpenAI API key từ cấu hình ai_sales_support hoặc ir.config_parameter."""
+        """Lấy OpenAI API key từ ir.config_parameter (key: openai.api_key)."""
         ICP = self.env["ir.config_parameter"].sudo()
-        return ICP.get_param("ai_sales_support.chatgpt_api_key", "")
+        return ICP.get_param("openai.api_key", "")
 
     def _run_gpt_qc(self, odoo_name, candidate_name):
         """Chạy GPT QC scoring nếu được bật. Trả về dict hoặc None."""
@@ -304,7 +335,7 @@ class HlvDocCrawler(models.Model):
             return None
         api_key = self._get_gpt_api_key()
         if not api_key:
-            _logger.warning("GPT QC bật nhưng thiếu API key (ai_sales_support.chatgpt_api_key)")
+            _logger.warning("GPT QC bật nhưng thiếu API key (openai.api_key)")
             return None
         return gpt_qc_score(
             api_key, odoo_name, candidate_name,
