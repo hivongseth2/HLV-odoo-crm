@@ -279,6 +279,14 @@ class JTCreateOrderWizard(models.TransientModel):
             # Call J&T API
             result = JTApiUtils.search_address(auth_token, self.receiver_address)
             
+            # Rule: If API fails or returns no data, clear the fields to force manual user check
+            if result.get('code') != 1 or not result.get('data'):
+                _logger.warning("J&T Address Search returned no results for: %s", self.receiver_address)
+                self.receiver_prov_id = False
+                self.receiver_city_id = False
+                self.receiver_area_id = False
+                return
+
             if result.get('code') == 1 and result.get('data'):
                 data = result['data'][0]  # Take first result
                 
@@ -401,6 +409,10 @@ class JTCreateOrderWizard(models.TransientModel):
                 
         except Exception as e:
             _logger.error("Error parsing address via J&T API: %s", e)
+            # Clear on exception too for safety
+            self.receiver_prov_id = False
+            self.receiver_city_id = False
+            self.receiver_area_id = False
             
 
 
