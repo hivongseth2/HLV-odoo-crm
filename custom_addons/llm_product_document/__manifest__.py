@@ -11,7 +11,7 @@ Mỗi resource sẽ được liên kết trực tiếp với sản phẩm, giúp
 thuộc về sản phẩm nào khi truy xuất kiến thức.
     """,
     "author": "HLV",
-    "depends": ["llm_knowledge", "product"],
+    "depends": ["llm_knowledge", "llm_tool_knowledge", "product"],
     "data": [
         "views/llm_resource_views.xml",
         "views/product_template_views.xml",

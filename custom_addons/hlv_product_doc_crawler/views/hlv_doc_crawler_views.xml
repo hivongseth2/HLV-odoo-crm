@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ══ Form view ══════════════════════════════════════════════════════ -->
+    <record id="view_hlv_doc_crawler_form" model="ir.ui.view">
+        <field name="name">hlv.doc.crawler.form</field>
+        <field name="model">hlv.doc.crawler</field>
+        <field name="arch" type="xml">
+            <form string="Crawler Tài liệu Sản phẩm">
+                <header>
+                    <button name="action_run" type="object"
+                            string="▶ Chạy Crawler"
+                            class="btn-primary"
+                            invisible="state == 'running'"/>
+                    <button name="action_clear_logs" type="object"
+                            string="Xóa log" class="btn-secondary"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="idle,running,done"/>
+                </header>
+                <sheet>
+                    <!-- Stat buttons -->
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_found" type="object"
+                                class="oe_stat_button" icon="fa-check-circle"
+                                invisible="found_count == 0">
+                            <field name="found_count" widget="statinfo"
+                                   string="Tìm thấy"/>
+                        </button>
+                        <button name="action_view_not_found" type="object"
+                                class="oe_stat_button" icon="fa-question-circle"
+                                invisible="not_found_count == 0">
+                            <field name="not_found_count" widget="statinfo"
+                                   string="Không thấy"/>
+                        </button>
+                        <button name="action_view_errors" type="object"
+                                class="oe_stat_button" icon="fa-times-circle"
+                                invisible="error_count == 0">
+                            <field name="error_count" widget="statinfo"
+                                   string="Lỗi"/>
+                        </button>
+                    </div>
+
+                    <group>
+                        <group string="Cấu hình nguồn dữ liệu">
+                            <field name="name"/>
+                            <field name="source"/>
+                            <field name="wc_domain"/>
+                            <field name="wc_key"/>
+                            <field name="wc_secret" password="True"/>
+                        </group>
+                        <group string="Cấu hình batch">
+                            <field name="skip"/>
+                            <field name="limit"/>
+                            <field name="last_run" readonly="True"/>
+                        </group>
+                    </group>
+
+                    <group string="Tích hợp RAG">
+                        <field name="auto_index"/>
+                        <field name="collection_id"
+                               invisible="not auto_index"/>
+                    </group>
+
+                    <separator string="Kết quả chi tiết"/>
+                    <field name="line_ids" mode="list" nolabel="1">
+                        <list
+                            decoration-success="status == 'found'"
+                            decoration-warning="status == 'not_found'"
+                            decoration-danger="status == 'error'"
+                            string="Kết quả">
+                            <field name="run_date"/>
+                            <field name="sku"/>
+                            <field name="product_id"/>
+                            <field name="status" widget="badge"/>
+                            <field name="wc_url" widget="url" optional="show"/>
+                            <field name="document_id" optional="show"/>
+                            <field name="resource_id" optional="show"/>
+                            <field name="error_msg" optional="hide"/>
+                        </list>
+                    </field>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ══ List view ══════════════════════════════════════════════════════ -->
+    <record id="view_hlv_doc_crawler_list" model="ir.ui.view">
+        <field name="name">hlv.doc.crawler.list</field>
+        <field name="model">hlv.doc.crawler</field>
+        <field name="arch" type="xml">
+            <list string="Crawler Tài liệu Sản phẩm">
+                <field name="name"/>
+                <field name="source"/>
+                <field name="skip"/>
+                <field name="limit"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'done'"
+                       decoration-warning="state == 'running'"
+                       decoration-muted="state == 'idle'"/>
+                <field name="last_run"/>
+                <field name="found_count"/>
+                <field name="not_found_count"/>
+                <field name="error_count"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ══ Action ═════════════════════════════════════════════════════════ -->
+    <record id="action_hlv_doc_crawler" model="ir.actions.act_window">
+        <field name="name">Crawler Tài liệu</field>
+        <field name="res_model">hlv.doc.crawler</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- ══ Menu ═══════════════════════════════════════════════════════════ -->
+    <menuitem id="menu_hlv_doc_crawler"
+              name="Crawler Tài liệu"
+              parent="llm.menu_llm_root"
+              action="action_hlv_doc_crawler"
+              sequence="90"/>
+
+</odoo>
