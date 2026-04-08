@@ -38,7 +38,12 @@ class SaleOrder(models.Model):
                     _logger.info("Shopee: Hủy picking %s (state=%s)", picking.name, picking.state)
                     picking.sudo().action_cancel()
                 order.sudo().action_cancel()
-                _logger.info("Shopee: Đã hủy đơn bán hàng %s thành công.", order.name)
+                # action_cancel() có thể trả về wizard dict thay vì thực sự hủy
+                # → kiểm tra state thực tế và force write nếu cần
+                if order.state != 'cancel':
+                    _logger.warning("Shopee: action_cancel() không hủy được đơn %s (state=%s), force write state.", order.name, order.state)
+                    order.sudo().write({'state': 'cancel'})
+                _logger.info("Shopee: Đã hủy đơn bán hàng %s thành công (state=%s).", order.name, order.state)
             except Exception as e:
                 _logger.error("Shopee: Không thể hủy đơn %s: %s", order.name, str(e), exc_info=True)
 
