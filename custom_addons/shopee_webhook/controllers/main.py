@@ -178,7 +178,7 @@ class ShopeeWebhookController(http.Controller):
                     if str(push_code) == '3' and status in ['CANCELLED', 'Đã hủy', 'Đã Hủy']:
                         if order.state not in ('cancel', 'done'):
                             try:
-                                order.action_cancel()
+                                order._action_cancel()
                                 _logger.info("Shopee Webhook: Auto-cancelled Order %s due to Shopee CANCELLED status", order.name)
                                 _log_to_file(data, result=f"Auto-cancelled {order.name}")
                             except Exception as cancel_err:
