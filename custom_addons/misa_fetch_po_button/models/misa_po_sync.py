@@ -1,4 +1,4 @@
-from odoo import models, fields, api, _
+from odoo import models, fields, api, _, Command
 import logging
 from datetime import datetime, timezone
 import uuid
@@ -328,13 +328,13 @@ class MisaPOSync(models.TransientModel):
         result = self._sync_po_core(self.po_code, delete_when_missing=True)
 
         title_map = {
-            'created': '✅ Tạo mới thành công',
-            'updated': '🔄 Cập nhật thành công',
-            'deleted': '🗑️ Đã xoá',
-            'not_found': 'ℹ️ Không tìm thấy',
+            'created': _('✅ Tạo mới thành công'),
+            'updated': _('🔄 Cập nhật thành công'),
+            'deleted': _('🗑️ Đã xoá'),
+            'not_found': _('ℹ️ Không tìm thấy'),
         }
         notif_type = 'success' if result.get('ok') else ('warning' if result.get('action') in ('deleted', 'not_found') else 'danger')
-        title = title_map.get(result.get('action'), 'Thông báo')
+        title = title_map.get(result.get('action'), _('Thông báo'))
 
         return {
             'type': 'ir.actions.client',
@@ -361,14 +361,14 @@ class MisaPOSync(models.TransientModel):
                 return {
                     'ok': False, 
                     'error': 'cannot_delete', 
-                    'message': f'Không thể xóa {po_code} vì có invoice đã ghi sổ'
+                    'message': _('Không thể xóa %s vì có invoice đã ghi sổ') % po_code
                 }
             
             if any(pick.state == 'done' for pick in odoo_po.picking_ids):
                 return {
                     'ok': False, 
                     'error': 'cannot_delete', 
-                    'message': f'Không thể xóa {po_code} vì có phiếu nhập đã hoàn thành'
+                    'message': _('Không thể xóa %s vì có phiếu nhập đã hoàn thành') % po_code
                 }
             
             _logger.info("🔧 Bắt đầu xóa PO %s (state=%s)", po_code, odoo_po.state)
@@ -466,7 +466,7 @@ class MisaPOSync(models.TransientModel):
                             odoo_po.with_context(force_delete=True).write({'state': 'cancel'})
                             _logger.info("    ✓ Đã force cancel PO bằng write")
                         except Exception as e3:
-                            return {'ok': False, 'error': 'cancel_failed', 'message': f'Không thể cancel PO: {e3}'}
+                            return {'ok': False, 'error': 'cancel_failed', 'message': _('Không thể cancel PO: %s') % str(e3)}
             
             # Refresh cache
             self.env.invalidate_all()
@@ -524,16 +524,11 @@ class MisaPOSync(models.TransientModel):
                 return {'ok': True}
             except Exception as e:
                 _logger.error("❌ Lỗi khi unlink PO (state=%s): %s", odoo_po.state, e)
-                
-                # Fallback cuối: Thử xóa trực tiếp bằng SQL (unsafe nhưng đảm bảo xóa được)
-                try:
-                    _logger.warning("  ⚠️ Thử xóa trực tiếp bằng SQL...")
-                    self.env.cr.execute("DELETE FROM purchase_order WHERE id = %s", (odoo_po.id,))
-                    _logger.info("✅ Đã xóa PO %s bằng SQL!", po_code)
-                    return {'ok': True}
-                except Exception as sql_err:
-                    _logger.error("❌ Lỗi xóa bằng SQL: %s", sql_err)
-                    return {'ok': False, 'error': 'unlink_failed', 'message': f'Không thể unlink: {e}'}
+                return {
+                    'ok': False, 
+                    'error': 'unlink_failed', 
+                    'message': _('Không thể xóa đơn hàng via ORM: %s. Vui lòng kiểm tra các bản ghi liên quan (Hóa đơn, Phiếu kho).') % str(e)
+                }
             
         except Exception as e:
             _logger.exception("❌ Lỗi tổng thể khi xoá PO %s: %s", po_code, e)
@@ -595,12 +590,12 @@ class MisaPOSync(models.TransientModel):
         )
 
         if detail_res.status_code != 200:
-            raise models.UserError(f"❌ Không lấy được chi tiết PO {refno}")
+            raise models.UserError(_("❌ Không lấy được chi tiết PO %s") % refno)
 
         lines = detail_res.json().get("Data", {}).get("PageData", [])
         
         if not lines:
-            raise models.UserError(f"⚠️ Đơn {refno} không có chi tiết sản phẩm")
+            raise models.UserError(_("⚠️ Đơn %s không có chi tiết sản phẩm") % refno)
 
         # stock_code = lines[0].get("stock_code", "").strip().replace(" ", "").upper()
         stock_code = lines[0].get("custom_field5", "").strip()
@@ -622,20 +617,20 @@ class MisaPOSync(models.TransientModel):
             }
 
         if stock_code not in stock_mapping:
-            raise models.UserError(f"📛 Kho {stock_code} không được hỗ trợ")
+            raise models.UserError(_("📛 Kho %s không được hỗ trợ") % stock_code)
 
         location_name = stock_mapping[stock_code]
         location = self.env['stock.location'].search([('complete_name', '=', location_name)], limit=1)
 
         if not location:
-            raise models.UserError(f"❌ Không tìm thấy location {location_name}")
+            raise models.UserError(_("❌ Không tìm thấy location %s") % location_name)
 
         warehouse = self.env['stock.warehouse'].search([
             ('view_location_id', '=', location.location_id.id)
         ], limit=1)
 
         if not warehouse:
-            raise models.UserError(f"❌ Không tìm thấy warehouse cho {stock_code}")
+            raise models.UserError(_("❌ Không tìm thấy warehouse cho %s") % stock_code)
 
         picking_type = warehouse.in_type_id
 
@@ -676,8 +671,8 @@ class MisaPOSync(models.TransientModel):
             
             po_rec = odoo_po
             total_lines = len(lines)
-            message = f'🔄 Đã đồng bộ: {refno} ({total_lines} dòng)'
-            title = '🔄 Cập nhật thành công'
+            message = _('🔄 Đã đồng bộ: %s (%s dòng)') % (refno, total_lines)
+            title = _('🔄 Cập nhật thành công')
         else:
             _logger.info("✅ Tạo mới PO %s từ MISA", refno)
             po_vals = {
@@ -696,8 +691,8 @@ class MisaPOSync(models.TransientModel):
             # Skip Zalo notification during creation (because no lines yet)
             po_rec = self.env["purchase.order"].with_context(skip_zalo_po_create=True).create(po_vals)
             total_lines = len(lines)
-            message = f'✅ Đã tạo: {refno} ({total_lines} dòng)'
-            title = '✅ Tạo mới thành công'
+            message = _('✅ Đã tạo: %s (%s dòng)') % (refno, total_lines)
+            title = _('✅ Tạo mới thành công')
 
         for line in lines:
             code = line.get("inventory_item_code", "unknown_code").strip()
@@ -728,7 +723,7 @@ class MisaPOSync(models.TransientModel):
                 "product_qty": qty_base,
                 "product_uom": product.uom_id.id,
                 "price_unit": price_base,
-                "taxes_id": [(6, 0, tax_ids)],
+                "taxes_id": [Command.set(tax_ids)],
                 "date_planned": planned_naive_utc or fields.Datetime.now(),
             }
             
@@ -778,7 +773,7 @@ class MisaPOSync(models.TransientModel):
         - Có trong MISA + Không có trong Odoo + create_when_missing=False → NOT_ALLOWED
         """
         if not po_code or not po_code.strip():
-            return {'ok': False, 'error': 'missing_po_code', 'message': '⚠️ Thiếu mã đơn hàng'}
+            return {'ok': False, 'error': 'missing_po_code', 'message': _('⚠️ Thiếu mã đơn hàng')}
 
         po_code = po_code.strip()
 
@@ -814,13 +809,13 @@ class MisaPOSync(models.TransientModel):
                             'action': 'deleted',
                             'name': po_code,
                             'res_id': None,
-                            'detail': f'Đơn {po_code} đã xoá (không tồn tại trong MISA)'
+                            'detail': _('Đơn %s đã xoá (không tồn tại trong MISA)') % po_code
                         }
                     else:
                         return {
                             'ok': False,
                             'error': delete_result.get('error', 'delete_failed'),
-                            'message': delete_result.get('message', 'Không thể xóa PO')
+                            'message': delete_result.get('message', _('Không thể xóa PO'))
                         }
                 else:
                     return {
@@ -828,7 +823,7 @@ class MisaPOSync(models.TransientModel):
                         'action': 'orphaned',
                         'name': po_code,
                         'res_id': odoo_po.id,
-                        'detail': f'Đơn {po_code} tồn tại trong Odoo nhưng không còn trong MISA'
+                        'detail': _('Đơn %s tồn tại trong Odoo nhưng không còn trong MISA') % po_code
                     }
             else:
                 return {
@@ -836,7 +831,7 @@ class MisaPOSync(models.TransientModel):
                     'action': 'not_found',
                     'name': po_code,
                     'res_id': None,
-                    'detail': f'Không tìm thấy {po_code} trong MISA'
+                    'detail': _('Không tìm thấy %s trong MISA') % po_code
                 }
         
         # ===== CASE 2: Có trong MISA =====
@@ -848,7 +843,7 @@ class MisaPOSync(models.TransientModel):
                     'error': 'create_not_allowed',
                     'name': po_code,
                     'res_id': None,
-                    'detail': f'Không cho phép tạo mới đơn {po_code} (create_when_missing=False)'
+                    'detail': _('Không cho phép tạo mới đơn %s (create_when_missing=False)') % po_code
                 }
             
             try:
@@ -867,7 +862,7 @@ class MisaPOSync(models.TransientModel):
                     'action': 'updated' if existed else 'created',
                     'res_id': after_po.id if after_po else None,
                     'name': after_po.name if after_po else po_code,
-                    'detail': f'Đã {"cập nhật" if existed else "tạo mới"} đơn {po_code} từ MISA'}
+                    'detail': _('Đã %s đơn %s từ MISA') % (_('cập nhật') if existed else _('tạo mới'), po_code)}
             except Exception as e:
                 _logger.exception("❌ Lỗi upsert PO %s: %s", po_code, e)
                 return {
@@ -888,7 +883,7 @@ class PurchaseOrder(models.Model):
         """
         po_code = (str(po_code or '')).strip()
         if not po_code:
-            return {'ok': False, 'error': 'missing_po_code', 'message': 'Thiếu mã đơn hàng'}
+            return {'ok': False, 'error': 'missing_po_code', 'message': _('Thiếu mã đơn hàng')}
         
         try:
             sync_wizard = self.env['misa.po.sync'].sudo().create({'po_code': po_code})
