@@ -335,7 +335,8 @@ class HlvDocCrawler(models.Model):
     def _mecsu_parse_listing(self, html):
         """Phân tích trang danh sách sản phẩm MecSu, trả về list {name, sku, url}.
 
-        Hoạt động cả khi server render SSR lẫn khi trả về HTML tĩnh (không JS).
+        Tên sản phẩm được lấy từ URL slug (/chi-tiet/{ten-slug}.{id}) vì link text
+        thường chỉ là mã số ngắn (0043188) không dùng được để tính điểm.
         """
         try:
             from bs4 import BeautifulSoup
@@ -357,24 +358,28 @@ class HlvDocCrawler(models.Model):
             if full_url in seen_urls:
                 continue
 
-            name = a_tag.get_text(strip=True)
-            if not name or len(name) < 5:
+            # Lấy tên từ slug URL: /chi-tiet/bulong-thep-den-8-8-din933-m10x100.0054038
+            # → "bulong thep den 8.8 din933 m10x100"
+            slug_part = href.split("/chi-tiet/")[-1]
+            # Bỏ .{numeric-id} ở cuối
+            slug_clean = re.sub(r'\.[0-9]+$', '', slug_part)
+            # Chuyển hyphen thành space, chuẩn hóa số với dấu chấm
+            # "bulong-thep-den-8-8-din933-m10x100" → "bulong thep den 8.8 din933 m10x100"
+            name_from_slug = slug_clean.replace("-", " ")
+            # Hợp nhất các cụm số kiểu "8 8" → "8.8", "10 9" → "10.9" (do dấu chấm bị đổi thành hyphen)
+            name_from_slug = re.sub(r'\b(\d+) (\d)\b', r'\1.\2', name_from_slug)
+
+            # Dùng tên từ slug nếu đủ dài, không thì thử link text
+            link_text = a_tag.get_text(strip=True)
+            if len(name_from_slug) >= 8:
+                name = name_from_slug
+            elif link_text and len(link_text) >= 8:
+                name = link_text
+            else:
                 continue
 
-            # Tìm mã sản phẩm gần thẻ liên kết này
-            sku = ""
-            # Search within parent element text
-            container = a_tag.parent
-            if container:
-                parent_text = container.get_text(" ", strip=True)
-                m = re.search(
-                    r"(?:Mã\s+sản\s+phẩm|MPN)[:\s]+([A-Z0-9][A-Z0-9\-]+)", parent_text
-                )
-                if m:
-                    sku = m.group(1)
-
             seen_urls.add(full_url)
-            results.append({"name": name, "sku": sku, "url": full_url})
+            results.append({"name": name, "sku": "", "url": full_url})
 
         return results
 
@@ -491,9 +496,10 @@ class HlvDocCrawler(models.Model):
         def _do_search(query, label):
             for page in range(1, max_pages + 1):
                 try:
+                    # Mecsu dùng ?keyword= (không phải ?q=), xác nhận từ referrer thực tế
                     url = (
                         f"{MECSU_BASE}/site"
-                        f"?q={urllib.parse.quote(query)}&view=table"
+                        f"?keyword={urllib.parse.quote(query)}"
                         + (f"&page={page}" if page > 1 else "")
                     )
                     html = self._mecsu_get(url)
