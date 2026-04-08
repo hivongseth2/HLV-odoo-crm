@@ -480,52 +480,45 @@ class HlvDocCrawler(models.Model):
         return " ".join(words[-3:]) if len(words) >= 2 else odoo_name
 
     def _mecsu_search_rpc(self, search_term, limit=20):
-        """Tìm sản phẩm mecsu qua Odoo JSON-RPC API (không bị SPA/JS block).
+        """Tìm sản phẩm mecsu qua AJAX filter endpoint (không bị SPA/JS block).
 
-        mecsu.vn chạy trên Odoo → endpoint /web/dataset/call_kw có thể dùng public.
-        Trả về list {name, sku, url}.
+        mecsu.vn dùng endpoint /site/filter trả về JSON {"success":true,"content":"<html>"}
+        với sản phẩm đã render sẵn — xác nhận từ browser DevTools network tab.
         """
         try:
-            payload = {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "call",
-                "params": {
-                    "model": "product.template",
-                    "method": "search_read",
-                    "args": [[
-                        ["website_published", "=", True],
-                        ["name", "ilike", search_term],
-                    ]],
-                    "kwargs": {
-                        "fields": ["name", "website_url"],
-                        "limit": limit,
-                    },
-                },
+            params = {
+                "cat": "1",
+                "k": search_term,
+                "is_applied": "1",
+                "only_part_web_sellable": "true",
+                "instock": "false",
+                "atts": "",
+                "brand": "",
+                "origin": "",
             }
-            resp = requests.post(
-                f"{MECSU_BASE}/web/dataset/call_kw",
-                json=payload,
-                headers={**self._mecsu_headers(), "Content-Type": "application/json"},
+            resp = requests.get(
+                f"{MECSU_BASE}/site/filter",
+                params=params,
+                headers={
+                    **self._mecsu_headers(),
+                    "x-requested-with": "XMLHttpRequest",
+                    "Accept": "application/json, text/javascript, */*; q=0.01",
+                },
                 timeout=25,
             )
+            resp.raise_for_status()
             data = resp.json()
-            if data.get("error"):
-                _logger.warning("MecSu RPC error: %s", data["error"])
+            if not data.get("success"):
+                _logger.warning("MecSu /site/filter không thành công: %s", data)
                 return []
-            results = data.get("result") or []
-            candidates = []
-            for item in results:
-                url = (item.get("website_url") or "").strip()
-                if not url:
-                    continue
-                if not url.startswith("http"):
-                    url = MECSU_BASE + url
-                candidates.append({"name": item.get("name", ""), "sku": "", "url": url})
-            _logger.info("MecSu RPC '%s' → %d kết quả", search_term, len(candidates))
-            return candidates
+            html_content = data.get("content") or ""
+            _logger.info(
+                "MecSu /site/filter '%s' → count=%s, content=%d bytes",
+                search_term, data.get("count"), len(html_content),
+            )
+            return self._mecsu_parse_listing(html_content)
         except Exception as e:
-            _logger.warning("MecSu RPC search('%s') thất bại: %s", search_term, e)
+            _logger.warning("MecSu /site/filter('%s') thất bại: %s", search_term, e)
             return []
 
     def _mecsu_search_html(self, query, label, max_pages, candidates, seen_urls):
@@ -563,7 +556,7 @@ class HlvDocCrawler(models.Model):
         seen_urls = set()
         tech_query = self._extract_search_terms(odoo_name)
 
-        # ── Chiến lược 1: Odoo JSON-RPC (ưu tiên) ─────────────────────────────
+        # ── Chiến lược 1: /site/filter AJAX endpoint (ưu tiên) ───────────────
         rpc_query = tech_query if (tech_query and tech_query.lower() != (odoo_name or "").lower()) else odoo_name
         if rpc_query:
             rpc_results = self._mecsu_search_rpc(rpc_query)
@@ -572,7 +565,7 @@ class HlvDocCrawler(models.Model):
                     seen_urls.add(item["url"])
                     candidates.append(item)
 
-        # Nếu RPC không đủ → thêm search bằng tên đầy đủ qua RPC
+        # Nếu /site/filter không đủ → thêm search bằng tên đầy đủ
         if len(candidates) < 3 and odoo_name and odoo_name != rpc_query:
             for item in self._mecsu_search_rpc(odoo_name):
                 if item["url"] not in seen_urls:
@@ -581,7 +574,7 @@ class HlvDocCrawler(models.Model):
 
         # ── Chiến lược 2: HTML scraping fallback ──────────────────────────────
         if not candidates:
-            _logger.info("MecSu RPC trả về 0 → thử HTML scraping")
+            _logger.info("MecSu /site/filter trả về 0 → thử HTML scraping")
             if tech_query and tech_query.lower() != (odoo_name or "").lower():
                 self._mecsu_search_html(tech_query, "tech", max_pages, candidates, seen_urls)
             if odoo_name and len(candidates) < 3:
