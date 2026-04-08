@@ -41,6 +41,12 @@ export class DeliveryPlannerDashboard extends Component {
             filterNeedTransfer: false,
             showCompleted: false,
 
+            // HTGH presets (lưu localStorage)
+            htghPresets: JSON.parse(localStorage.getItem('hlv_htgh_presets') || 'null') || [
+                { label: 'Hãng VC', value: 'ghn,cpn,chuy\u1ec3n ph\u00e1t nhanh,giao h\u00e0ng nhanh,j&t' },
+                { label: 'Tr\u1eeb h\u00e3ng VC', value: '!ghn,!cpn,!chuy\u1ec3n ph\u00e1t nhanh,!giao h\u00e0ng nhanh,!j&t' },
+            ],
+
             // Stats
             dashboardStats: { total: 0, ready: 0, partial: 0, out_of_stock: 0 },
 
@@ -770,6 +776,20 @@ export class DeliveryPlannerDashboard extends Component {
             this.state.filterDeliveryType !== "all" ||
             this.state.filterTagIds.length > 0 ||
             this.state.showCompleted;
+    }
+
+    saveHtghPreset() {
+        const val = this.state.filterHtgh.trim();
+        if (!val) return;
+        const label = prompt('Tên gợi ý:', val.slice(0, 30));
+        if (!label) return;
+        this.state.htghPresets = [...this.state.htghPresets, { label, value: val }];
+        localStorage.setItem('hlv_htgh_presets', JSON.stringify(this.state.htghPresets));
+    }
+
+    removeHtghPreset(idx) {
+        this.state.htghPresets = this.state.htghPresets.filter((_, i) => i !== idx);
+        localStorage.setItem('hlv_htgh_presets', JSON.stringify(this.state.htghPresets));
     }
 
     countTransferWarehouses(so) {

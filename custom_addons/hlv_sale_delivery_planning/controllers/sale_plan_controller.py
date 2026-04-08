@@ -207,11 +207,11 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
     </select></div>
   <div class="col-md-2"><label class="form-label small mb-0">Mã NV MISA</label><input id="f-saler" class="form-control form-control-sm" placeholder="VD: NV001"/></div>
   <div class="col-md-3"><label class="form-label small mb-0">HTGH <small class="text-secondary fw-normal">(phẩy=OR, !=loại trừ)</small></label>
-    <input id="f-htgh" class="form-control form-control-sm" placeholder="VD: ghn,cpn hoặc !ghn,!j&amp;t"/>
-    <div class="mt-1 d-flex flex-wrap gap-1">
-      <button type="button" class="btn btn-outline-secondary border-0 px-2 py-0" style="font-size:.72rem" onclick="document.getElementById('f-htgh').value='ghn,cpn,chuyển phát nhanh,giao hàng nhanh,j&amp;t';"><i class="fa fa-truck me-1"></i>Hãng VC</button>
-      <button type="button" class="btn btn-outline-secondary border-0 px-2 py-0" style="font-size:.72rem" onclick="document.getElementById('f-htgh').value='!ghn,!cpn,!chuyển phát nhanh,!giao hàng nhanh,!j&amp;t';"><i class="fa fa-ban me-1"></i>Trừ hãng VC</button>
+    <div class="input-group input-group-sm">
+      <input id="f-htgh" class="form-control" placeholder="VD: ghn,cpn hoặc !ghn,!j&amp;t"/>
+      <button type="button" class="btn btn-outline-secondary" id="btn-htgh-save" title="Lưu làm gợi ý"><i class="fa fa-plus"></i></button>
     </div>
+    <div id="htgh-presets" class="mt-1 d-flex flex-wrap gap-1"></div>
   </div>
   <div class="col-md-2"><label class="form-label small mb-0">Loại vận chuyển</label>
     <select id="f-dtype" class="form-select form-select-sm">
@@ -725,6 +725,53 @@ $('f-show-completed').addEventListener('change',function(){S.kanbanColPageSize={
 $('f-q').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();S.kanbanColPageSize={};load(false);}});
 $('f-saler').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();S.kanbanColPageSize={};load(false);}});
 $('f-htgh').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();S.kanbanColPageSize={};load(false);}});
+
+// HTGH presets (localStorage)
+var HTGH_LS_KEY='hlv_htgh_presets';
+var defaultHtghPresets=[
+  {label:'Hãng VC',value:'ghn,cpn,chuyển phát nhanh,giao hàng nhanh,j&t'},
+  {label:'Trừ hãng VC',value:'!ghn,!cpn,!chuyển phát nhanh,!giao hàng nhanh,!j&t'},
+];
+function loadHtghPresets(){
+  try{return JSON.parse(localStorage.getItem(HTGH_LS_KEY))||defaultHtghPresets;}
+  catch(e){return defaultHtghPresets;}
+}
+function saveHtghPresetsLS(arr){
+  localStorage.setItem(HTGH_LS_KEY,JSON.stringify(arr));
+}
+function renderHtghPresets(){
+  var container=$('htgh-presets');
+  if(!container)return;
+  var presets=loadHtghPresets();
+  container.innerHTML='';
+  presets.forEach(function(p,idx){
+    var span=document.createElement('span');
+    span.className='badge border d-inline-flex align-items-center gap-1 px-2 py-1';
+    span.style.cssText='font-size:.72rem;background:#f8f9fa;color:#495057;border-color:#dee2e6;cursor:default';
+    var lbl=document.createElement('span');
+    lbl.style.cursor='pointer';
+    lbl.title=p.value;
+    lbl.textContent=p.label;
+    lbl.addEventListener('click',function(){$('f-htgh').value=p.value;S.kanbanColPageSize={};load(false);});
+    var del=document.createElement('i');
+    del.className='fa fa-times ms-1';
+    del.style.cssText='cursor:pointer;opacity:.5';
+    del.title='Xóa gợi ý này';
+    del.addEventListener('click',function(){
+      var arr=loadHtghPresets();arr.splice(idx,1);saveHtghPresetsLS(arr);renderHtghPresets();
+    });
+    span.appendChild(lbl);span.appendChild(del);
+    container.appendChild(span);
+  });
+}
+$('btn-htgh-save').addEventListener('click',function(){
+  var val=$('f-htgh').value.trim();
+  if(!val)return;
+  var label=prompt('Tên gợi ý:',val.slice(0,30));
+  if(!label)return;
+  var arr=loadHtghPresets();arr.push({label:label,value:val});saveHtghPresetsLS(arr);renderHtghPresets();
+});
+renderHtghPresets();
 $('btn-load-more').addEventListener('click',function(){load(true);});
 $('btn-refresh').addEventListener('click',function(){S.kanbanColPageSize={};load(false);});
 $('btn-export-excel').addEventListener('click',function(){
