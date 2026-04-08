@@ -100,6 +100,8 @@
                                    invisible="not use_gpt_qc"/>
                             <field name="gpt_qc_threshold"
                                    invisible="not use_gpt_qc"/>
+                            <field name="gpt_qc_all_candidates"
+                                   invisible="not use_gpt_qc"/>
                         </group>
                     </group>
 

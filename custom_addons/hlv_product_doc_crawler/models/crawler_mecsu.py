@@ -327,33 +327,38 @@ class HlvDocCrawlerMecSu(models.Model):
         # Lấy PDF URL trước khi decompose tags
         pdf_url = self._mecsu_extract_pdf_url(soup)
 
-        for tag in soup.find_all(["script", "style", "nav", "footer"]):
-            tag.decompose()
+        # Xóa hoàn toàn các phần không liên quan đến nội dung sản phẩm
+        _JUNK_SELECTORS = [
+            "script", "style", "nav", "footer", "header",
+            ".breadcrumb", ".social-share", ".share",
+            ".related", ".product__related", ".similar",
+            ".contact", ".hotline", ".phone", ".email",
+            ".banner", ".advertisement", ".ads",
+            ".cookie", ".popup", ".modal",
+            "[class*='footer']", "[class*='header']",
+            "[class*='contact']", "[class*='social']",
+            "[class*='share']", "[class*='related']",
+            "[class*='sidebar']", "[class*='widget']",
+        ]
+        for sel in _JUNK_SELECTORS:
+            for tag in soup.select(sel):
+                tag.decompose()
 
         lines = []
 
+        # Tiêu đề
         h1 = soup.find("h1")
         title = h1.get_text(strip=True) if h1 else ""
         if title:
             lines.append(f"# {title}")
             lines.append("")
 
-        mpn_m = re.search(r"MPN[:\s]+([A-Z0-9][A-Z0-9\-]+)", html)
-        if mpn_m:
-            lines.append(f"**Mã sản phẩm (MecSu MPN):** {mpn_m.group(1)}")
-
-        lines.append(f"**Nguồn:** {url}")
-        lines.append("")
-
-        if pdf_url:
-            lines.append(f"**Tài liệu kỹ thuật (PDF):** {pdf_url}")
-            lines.append("")
-
+        # Bảng thông số kỹ thuật (lấy bảng có >= 3 hàng 2 cột)
         for tbl in soup.find_all("table"):
             rows = []
             for tr in tbl.find_all("tr"):
                 cells = [
-                    td.get_text(strip=True)
+                    td.get_text(separator=" ", strip=True)
                     for td in tr.find_all(["td", "th"])
                 ]
                 if len(cells) >= 2 and cells[0] and cells[1]:
@@ -362,6 +367,38 @@ class HlvDocCrawlerMecSu(models.Model):
                 lines.append("## Thông số kỹ thuật")
                 lines.extend(rows)
                 lines.append("")
+                break
+
+        # Mô tả sản phẩm — tìm div/section chứa mô tả dài
+        _DESC_SELECTORS = [
+            ".product__description", ".product-description",
+            ".description", ".product__content", ".product-content",
+            "[class*='description']", "[class*='content']",
+        ]
+        for sel in _DESC_SELECTORS:
+            desc_el = soup.select_one(sel)
+            if desc_el:
+                desc_text = desc_el.get_text(separator="\n", strip=True)
+                # Lọc bỏ các dòng rác: email, phone, URL, quảng cáo
+                clean_lines = []
+                for ln in desc_text.splitlines():
+                    ln = ln.strip()
+                    if not ln:
+                        continue
+                    # Bỏ dòng chứa thông tin liên hệ / URL website
+                    if re.search(
+                        r'(\bwww\.|http|@|028\.|0[3-9]\d{8}|'
+                        r'more product|email:|phone:|hotline|'
+                        r'mecsu\.vn|sales@)',
+                        ln, re.IGNORECASE
+                    ):
+                        continue
+                    clean_lines.append(ln)
+                desc_clean = "\n".join(clean_lines).strip()
+                if len(desc_clean) > 80:
+                    lines.append("## Mô tả sản phẩm")
+                    lines.append(desc_clean)
+                    lines.append("")
                 break
 
         return pdf_url, ("\n".join(lines) if lines else "")
@@ -394,63 +431,83 @@ class HlvDocCrawlerMecSu(models.Model):
         if score_log:
             top = sorted(score_log, reverse=True)[:3]
             _logger.info(
-                "MecSu [%s] SKU=%s | top scores: %s",
+                "MecSu [%s] SKU=%s | top token scores: %s",
                 self.name, sku,
                 "; ".join(f"{s:.2f} – {n}" for s, n in top),
             )
 
-        if not best or not candidates:
+        if not candidates:
             line.write({
                 "status": "not_found",
                 "error_msg": f"Query: '{tech_query}' | 0 ứng viên",
             })
             return False
 
-        # ─── GPT QC mode: bỏ qua threshold token, để GPT quyết định ────────
+        # ─── GPT QC mode ──────────────────────────────────────────────────────
         if self.use_gpt_qc:
-            gpt_result = self._run_gpt_qc(product.name, best.get("name", ""))
-            if not gpt_result:
-                # GPT lỗi (thiếu key, timeout...) → fallback về token threshold
-                _logger.warning(
-                    "MecSu [%s] SKU=%s: GPT QC lỗi, fallback token threshold",
-                    self.name, sku,
-                )
-                threshold = self.mecsu_similarity_threshold or 0.65
-                if best_score < threshold:
-                    line.write({
-                        "status": "not_found",
-                        "error_msg": (
-                            f"GPT lỗi + token thấp: {best_score:.2f} – {best['name'][:50]}"
-                        ),
-                    })
-                    return False
-            else:
-                gpt_score = gpt_result["score"]
-                gpt_reason = gpt_result.get("reason", "")
+            gpt_threshold = self.gpt_qc_threshold or 0.6
+            best_gpt_score = 0.0
+            best_gpt_reason = ""
+
+            # Nếu không bật gpt_qc_all_candidates → chỉ gửi ứng viên token-best
+            to_check = candidates if self.gpt_qc_all_candidates else ([best] if best else [])
+
+            for candidate in to_check:
+                gpt_result = self._run_gpt_qc(product.name, candidate.get("name", ""))
+                if gpt_result is None:
+                    # GPT lỗi hoàn toàn (thiếu key) → dừng sớm, fallback token
+                    _logger.warning(
+                        "MecSu [%s] SKU=%s: GPT QC lỗi, fallback token threshold",
+                        self.name, sku,
+                    )
+                    threshold = self.mecsu_similarity_threshold or 0.65
+                    if best_score < threshold:
+                        line.write({
+                            "status": "not_found",
+                            "error_msg": f"GPT lỗi + token thấp: {best_score:.2f} – {(best or {}).get('name','?')[:50]}",
+                        })
+                        return False
+                    # best đã được tính bằng token score ở trên → dùng luôn
+                    break
+
+                g_score = gpt_result["score"]
+                g_reason = gpt_result.get("reason", "")
                 _logger.info(
-                    "MecSu [%s] SKU=%s GPT QC: %.2f – %s",
-                    self.name, sku, gpt_score, gpt_reason,
+                    "MecSu [%s] SKU=%s GPT QC [%s]: %.2f – %s",
+                    self.name, sku, candidate.get("name", "")[:40], g_score, g_reason,
                 )
-                if gpt_score < (self.gpt_qc_threshold or 0.6):
-                    line.write({
-                        "status": "not_found",
-                        "error_msg": (
-                            f"GPT reject: {gpt_score:.2f} ({gpt_reason}) | "
-                            f"Token: {best_score:.2f} – {best['name'][:50]}"
-                        ),
-                        "match_score": best_score,
-                        "wc_url": best["url"],
-                    })
-                    return False
+                if g_score > best_gpt_score:
+                    best_gpt_score = g_score
+                    best_gpt_reason = g_reason
+                    best = candidate
+
+                # Tìm được ứng viên rất tốt → dừng sớm
+                if best_gpt_score >= 0.9:
+                    break
+
+            if best is None or best_gpt_score < gpt_threshold:
+                line.write({
+                    "status": "not_found",
+                    "error_msg": (
+                        f"GPT reject tất cả {len(candidates)} ứng viên | "
+                        f"Cao nhất: {best_gpt_score:.2f} – {best_gpt_reason}"
+                    ),
+                    "match_score": best_gpt_score,
+                })
+                return False
+
+            # Ghi lại GPT score vào best_score để hiển thị
+            best_score = best_gpt_score
+
         else:
             # ─── Chế độ token score thuần ─────────────────────────────────
             threshold = self.mecsu_similarity_threshold or 0.65
-            if best_score < threshold:
+            if not best or best_score < threshold:
                 line.write({
                     "status": "not_found",
                     "error_msg": (
                         f"Query: '{tech_query}' | {len(candidates)} ứng viên"
-                        f" | Cao nhất: {best_score:.2f} – {best['name'][:50]}"
+                        + (f" | Cao nhất: {best_score:.2f} – {best['name'][:50]}" if best else "")
                     ),
                 })
                 return False

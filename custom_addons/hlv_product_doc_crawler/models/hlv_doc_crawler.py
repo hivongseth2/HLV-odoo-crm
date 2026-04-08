@@ -118,6 +118,12 @@ class HlvDocCrawler(models.Model):
         help="Điểm GPT tối thiểu để giữ kết quả. "
              "Nếu GPT chấm thấp hơn ngưỡng → đánh dấu not_found.",
     )
+    gpt_qc_all_candidates = fields.Boolean(
+        default=False,
+        string="Gửi tất cả ứng viên cho GPT",
+        help="Bật: GPT chấm tất cả ứng viên rồi chọn tốt nhất (chính xác hơn, tốn token hơn).\n"
+             "Tắt: chỉ gửi ứng viên có token score cao nhất (tiết kiệm token).",
+    )
 
     # === Tích hợp RAG ===
     auto_index = fields.Boolean(
