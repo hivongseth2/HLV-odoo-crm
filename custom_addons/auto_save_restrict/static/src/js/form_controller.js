@@ -17,7 +17,7 @@ patch(FormController.prototype, {
             this._formInDialog = !!this.rootRef?.el?.closest(".o_dialog");
 
             if (!this._formInDialog) {
-                // Track real user input inside form sheet
+                // Set _userTyping when user actually types in form sheet
                 this.__onUserInput = (ev) => {
                     if (!ev.isTrusted) return;
                     const sheet = this.rootRef?.el?.querySelector(".o_form_sheet, .o_form_sheet_bg");
@@ -27,21 +27,15 @@ patch(FormController.prototype, {
                 };
                 document.addEventListener("input", this.__onUserInput, true);
 
-                // Watch for Odoo removing o_form_dirty (native save/discard)
-                // When that happens, clear _userTyping too
-                const formEl = this.rootRef?.el;
-                if (formEl) {
-                    this.__classObserver = new MutationObserver((mutations) => {
-                        for (const m of mutations) {
-                            if (m.attributeName === "class") {
-                                if (!formEl.classList.contains("o_form_dirty")) {
-                                    this._userTyping = false;
-                                }
-                            }
-                        }
-                    });
-                    this.__classObserver.observe(formEl, { attributes: true, attributeFilter: ["class"] });
-                }
+                // Clear _userTyping when input loses focus (blur/focusout)
+                // After focus out, Odoo's model.root.dirty takes over as source of truth
+                this.__onFormFocusOut = (ev) => {
+                    const sheet = this.rootRef?.el?.querySelector(".o_form_sheet, .o_form_sheet_bg");
+                    if (sheet && sheet.contains(ev.target)) {
+                        this._userTyping = false;
+                    }
+                };
+                document.addEventListener("focusout", this.__onFormFocusOut, true);
             }
         });
 
@@ -49,8 +43,8 @@ patch(FormController.prototype, {
             if (this.__onUserInput) {
                 document.removeEventListener("input", this.__onUserInput, true);
             }
-            if (this.__classObserver) {
-                this.__classObserver.disconnect();
+            if (this.__onFormFocusOut) {
+                document.removeEventListener("focusout", this.__onFormFocusOut, true);
             }
         });
     },
@@ -78,9 +72,9 @@ patch(FormController.prototype, {
         if (this._formInDialog) {
             return;
         }
-        const formEl = this.rootRef?.el;
-        const cssDirty = formEl && formEl.classList.contains("o_form_dirty");
-        if (cssDirty || this._userTyping) {
+        // dirty = model has pending changes (set after Odoo processes input)
+        // _userTyping = user is currently typing in input (before blur/model update)
+        if (this.model.root.dirty || this._userTyping) {
             ev.preventDefault();
             ev.returnValue = "";
         }
