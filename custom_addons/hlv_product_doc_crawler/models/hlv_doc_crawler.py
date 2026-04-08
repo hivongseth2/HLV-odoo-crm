@@ -1,17 +1,15 @@
 import base64
 import logging
 import re
-import urllib.parse
 
-import requests
 from markdownify import markdownify as md
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
-_logger = logging.getLogger(__name__)
+from .crawler_scoring import gpt_qc_score
 
-MECSU_BASE = "https://mecsu.vn"
+_logger = logging.getLogger(__name__)
 
 
 class HlvDocCrawler(models.Model):
@@ -89,6 +87,38 @@ class HlvDocCrawler(models.Model):
         help="Số giây chờ giữa mỗi trang khi bật Tự động chuyển trang. Tối thiểu 1 giây.",
     )
 
+    # === Override: chạy lại SP đã có tài liệu ===
+    override_existing = fields.Boolean(
+        default=False,
+        string="Chạy lại SP đã có tài liệu",
+        help="Nếu bật, sẽ crawl lại và ghi đè tài liệu cho cả những sản phẩm đã có. "
+             "Nếu tắt, bỏ qua sản phẩm đã có product.document từ crawler.",
+    )
+
+    # === GPT QC Scoring ===
+    use_gpt_qc = fields.Boolean(
+        default=False,
+        string="Dùng GPT chấm điểm QC",
+        help="Sau khi matching bằng thuật toán, dùng GPT kiểm tra lại kết quả. "
+             "Giúp giảm false positive (sản phẩm khớp sai).",
+    )
+    gpt_model = fields.Selection(
+        [
+            ("gpt-4o-mini", "GPT-4o Mini (rẻ, nhanh)"),
+            ("gpt-3.5-turbo", "GPT-3.5 Turbo"),
+            ("gpt-4o", "GPT-4o"),
+        ],
+        default="gpt-4o-mini",
+        string="Model GPT",
+        help="Model GPT dùng để chấm điểm QC. Khuyến nghị gpt-4o-mini (rẻ nhất, đủ tốt).",
+    )
+    gpt_qc_threshold = fields.Float(
+        default=0.6,
+        string="Ngưỡng GPT QC",
+        help="Điểm GPT tối thiểu để giữ kết quả. "
+             "Nếu GPT chấm thấp hơn ngưỡng → đánh dấu not_found.",
+    )
+
     # === Tích hợp RAG ===
     auto_index = fields.Boolean(
         default=True,
@@ -123,23 +153,7 @@ class HlvDocCrawler(models.Model):
             rec.not_found_count = len(lines.filtered(lambda l: l.status == "not_found"))
             rec.error_count = len(lines.filtered(lambda l: l.status == "error"))
 
-    # ─── WC API ───────────────────────────────────────────────────────────────
-
-    def _wc_get(self, path):
-        """Gọi WooCommerce REST API (query-param auth)."""
-        self.ensure_one()
-        if not self.wc_key or not self.wc_secret:
-            raise UserError(_("Thiếu Consumer Key / Consumer Secret."))
-        sep = "&" if "?" in path else "?"
-        url = (
-            f"{self.wc_domain.rstrip('/')}/wp-json/wc/v3{path}"
-            f"{sep}consumer_key={self.wc_key}&consumer_secret={self.wc_secret}"
-        )
-        resp = requests.get(url, timeout=30)
-        resp.raise_for_status()
-        return resp.json()
-
-    # ─── Helpers xây dựng nội dung ────────────────────────────────────────────
+    # ─── Shared helpers ───────────────────────────────────────────────────────
 
     def _clean_html(self, html_content):
         """Xóa script/style và chuyển HTML → markdown."""
@@ -149,45 +163,6 @@ class HlvDocCrawler(models.Model):
             r"<(script|style)[^>]*>.*?</\1>", "", html_content, flags=re.DOTALL
         )
         return md(clean, heading_style="ATX", bullets="-", strip=["img"]).strip()
-
-    def _build_product_markdown(self, wc_product):
-        """Xây dựng tài liệu markdown từ dữ liệu WC API."""
-        lines = [f"# {wc_product.get('name', '')}"]
-        lines.append("")
-        lines.append(f"**SKU:** {wc_product.get('sku', '')}")
-
-        if wc_product.get("categories"):
-            cats = ", ".join(c["name"] for c in wc_product["categories"])
-            lines.append(f"**Danh mục:** {cats}")
-
-        if wc_product.get("permalink"):
-            lines.append(f"**Trang sản phẩm:** {wc_product['permalink']}")
-
-        if wc_product.get("short_description"):
-            text = self._clean_html(wc_product["short_description"])
-            if text:
-                lines.append("\n## Mô tả ngắn\n")
-                lines.append(text)
-
-        if wc_product.get("description"):
-            text = self._clean_html(wc_product["description"])
-            if text:
-                lines.append("\n## Mô tả chi tiết\n")
-                lines.append(text)
-
-        if wc_product.get("attributes"):
-            attrs = [
-                f"- **{a['name']}:** {', '.join(a.get('options', []))}"
-                for a in wc_product["attributes"]
-                if a.get("options")
-            ]
-            if attrs:
-                lines.append("\n## Thông số kỹ thuật\n")
-                lines.extend(attrs)
-
-        return "\n".join(lines)
-
-    # ─── Helpers tạo/cập nhật bản ghi ─────────────────────────────────────────
 
     def _ensure_product_document(self, product, sku, content):
         """Tạo hoặc cập nhật product.document (file .md) cho sản phẩm."""
@@ -218,6 +193,17 @@ class HlvDocCrawler(models.Model):
             }
         )
 
+    def _product_has_crawler_document(self, product):
+        """Kiểm tra sản phẩm đã có tài liệu từ crawler (file *_web.md)."""
+        return bool(self.env["product.document"].search(
+            [
+                ("res_model", "=", "product.template"),
+                ("res_id", "=", product.id),
+                ("name", "=like", "%_web.md"),
+            ],
+            limit=1,
+        ))
+
     def _get_rag_collection(self):
         """Trả về collection RAG (ưu tiên cấu hình, sau đó auto-discover)."""
         if self.collection_id:
@@ -242,7 +228,6 @@ class HlvDocCrawler(models.Model):
             vals = {}
             if collection and collection.id not in existing.collection_ids.ids:
                 vals["collection_ids"] = [(4, collection.id)]
-            # Reset về draft để nội dung mới được lập chỉ mục lại
             vals["state"] = "draft"
             existing.write(vals)
             return existing
@@ -286,14 +271,9 @@ class HlvDocCrawler(models.Model):
         return True
 
     def _build_search_domain(self):
-        """Tạo ORM domain bao gồm cả keyword filters.
-
-        Filter trước khi phân trang để offset/limit hoạt động chính xác
-        — tránh tình trạng một trang 0 sản phẩm sau khi lọc.
-        """
+        """Tạo ORM domain bao gồm cả keyword filters."""
         domain = [("default_code", "!=", False), ("default_code", "!=", "")]
 
-        # Include: khớp ít nhất 1 từ khóa tìm kiếm (trong tên HOẶC mã SP)
         include = self._parse_keywords(self.search_keywords)
         if include:
             parts = [
@@ -305,355 +285,36 @@ class HlvDocCrawler(models.Model):
                 combined_inc = ["|"] + combined_inc + part
             domain += combined_inc
 
-        # Exclude: loại sản phẩm khớp bất kỳ từ khóa từ chối
         exclude = self._parse_keywords(self.exclude_keywords)
         for kw in exclude:
-            # NOT (name ilike kw OR code ilike kw)  =  (name NOT ilike kw AND code NOT ilike kw)
             domain += [("name", "not ilike", kw), ("default_code", "not ilike", kw)]
 
         return domain
 
-    # ─── MecSu crawler ────────────────────────────────────────────────────────
+    # ─── GPT QC helper ────────────────────────────────────────────────────────
 
-    def _mecsu_headers(self):
-        return {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
-            ),
-            "Accept-Language": "vi-VN,vi;q=0.9,en;q=0.8",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        }
+    def _get_gpt_api_key(self):
+        """Lấy OpenAI API key từ cấu hình ai_sales_support hoặc ir.config_parameter."""
+        ICP = self.env["ir.config_parameter"].sudo()
+        return ICP.get_param("ai_sales_support.chatgpt_api_key", "")
 
-    def _mecsu_get(self, url):
-        """Lấy HTML từ một URL của mecsu.vn."""
-        resp = requests.get(url, headers=self._mecsu_headers(), timeout=25)
-        resp.raise_for_status()
-        return resp.text
+    def _run_gpt_qc(self, odoo_name, candidate_name):
+        """Chạy GPT QC scoring nếu được bật. Trả về dict hoặc None."""
+        if not self.use_gpt_qc:
+            return None
+        api_key = self._get_gpt_api_key()
+        if not api_key:
+            _logger.warning("GPT QC bật nhưng thiếu API key (ai_sales_support.chatgpt_api_key)")
+            return None
+        return gpt_qc_score(
+            api_key, odoo_name, candidate_name,
+            model=self.gpt_model or "gpt-4o-mini",
+        )
 
-    def _mecsu_parse_listing(self, html):
-        """Phân tích trang danh sách sản phẩm MecSu, trả về list {name, sku, url}.
-
-        Tên sản phẩm được lấy từ URL slug (/chi-tiet/{ten-slug}.{id}) vì link text
-        thường chỉ là mã số ngắn (0043188) không dùng được để tính điểm.
-        """
-        try:
-            from bs4 import BeautifulSoup
-        except ImportError:
-            _logger.warning("Thư viện bs4 chưa cài — không phân tích được HTML MecSu.")
-            return []
-
-        soup = BeautifulSoup(html, "html.parser")
-        seen_urls = set()
-        results = []
-
-        all_chi_tiet = [a["href"] for a in soup.find_all("a", href=True) if "/chi-tiet/" in a["href"]]
-        _logger.info("MecSu parse_listing: HTML=%d bytes, chi-tiet raw links=%d", len(html), len(all_chi_tiet))
-
-        for a_tag in soup.find_all("a", href=True):
-            href = a_tag["href"]
-            if "/chi-tiet/" not in href:
-                continue
-            full_url = (
-                href if href.startswith("http") else f"{MECSU_BASE}{href}"
-            )
-            if full_url in seen_urls:
-                continue
-
-            # Lấy tên từ slug URL: /chi-tiet/bulong-thep-den-8-8-din933-m10x100.0054038
-            # → "bulong thep den 8.8 din933 m10x100"
-            slug_part = href.split("/chi-tiet/")[-1]
-            # Bỏ .{numeric-id} ở cuối
-            slug_clean = re.sub(r'\.[0-9]+$', '', slug_part)
-            # Chuyển hyphen thành space, chuẩn hóa số với dấu chấm
-            # "bulong-thep-den-8-8-din933-m10x100" → "bulong thep den 8.8 din933 m10x100"
-            name_from_slug = slug_clean.replace("-", " ")
-            # Hợp nhất các cụm số kiểu "8 8" → "8.8", "10 9" → "10.9" (do dấu chấm bị đổi thành hyphen)
-            name_from_slug = re.sub(r'\b(\d+) (\d)\b', r'\1.\2', name_from_slug)
-
-            # Dùng tên từ slug nếu đủ dài, không thì thử link text
-            link_text = a_tag.get_text(strip=True)
-            if len(name_from_slug) >= 8:
-                name = name_from_slug
-            elif link_text and len(link_text) >= 8:
-                name = link_text
-            else:
-                continue
-
-            seen_urls.add(full_url)
-            results.append({"name": name, "sku": "", "url": full_url})
-
-        return results
-
-    # Mapping loại sản phẩm: keyword Odoo → keywords MecSu tương đương
-    _MECSU_TYPE_MAP = {
-        "bu lông": ["bulong", "bu long"],
-        "bulong": ["bulong", "bu long"],
-        "lục giác chìm": ["luc giac chim"],
-        "lục giác": ["luc giac"],
-        "ốc vít": ["oc vit", "vit"],
-        "đai ốc": ["dai oc"],
-        "vòng đệm": ["vong dem", "long den"],
-        "long đen": ["long den"],
-        "lông đền": ["long den"],
-        "ty ren": ["ty ren", "guzong"],
-        "guzong": ["guzong", "ty ren"],
-    }
-
-    def _mecsu_score(self, odoo_code, odoo_name, candidate):
-        """Tính điểm tương đồng giữa sản phẩm Odoo và kết quả MecSu (0.0–1.0).
-
-        Token-overlap trên: loại SP (0.8) + kích thước (1.0) + grade (0.6) + vật liệu (0.3).
-        Penalty mạnh nếu sai loại sản phẩm.
-        """
-        cand_name = (candidate.get("name") or "").lower()
-        odoo_norm = (odoo_name or "").lower()
-
-        # ─── 0. Loại sản phẩm ────────────────────────────────────────────────
-        # Tìm loại SP từ tên Odoo và kiểm tra trong tên ứng viên
-        type_score = 0.0
-        type_found = False
-        for odoo_kw, mecsu_kws in self._MECSU_TYPE_MAP.items():
-            if odoo_kw in odoo_norm:
-                type_found = True
-                if any(k in cand_name for k in mecsu_kws):
-                    type_score = 0.8
-                else:
-                    type_score = -0.5  # penalty mạnh: sai loại SP
-                break
-
-        # ─── 1. Token kỹ thuật ───────────────────────────────────────────────
-        token_rules = [
-            (1.0, re.compile(r'm\d+(?:[x×]\d+(?:\.\d+)?)?', re.IGNORECASE)),
-            (0.6, re.compile(r'\b(?:4\.8|5\.6|8\.8|10\.9|12\.9|a2-70|a4-80|a2|a4)\b', re.IGNORECASE)),
-            (0.4, re.compile(r'(?:din|iso)\s*\d+', re.IGNORECASE)),
-        ]
-        tokens = []
-        for weight, pattern in token_rules:
-            for m in pattern.finditer(odoo_norm):
-                t = m.group(0).lower().replace(" ", "").replace("×", "x")
-                tokens.append((weight, t))
-
-        # ─── 2. Vật liệu ─────────────────────────────────────────────────────
-        material_odoo = None
-        if any(k in odoo_norm for k in ("ss304", "304", "inox304")):
-            material_odoo = "304"
-        elif "316" in odoo_norm or "ss316" in odoo_norm:
-            material_odoo = "316"
-        elif any(k in odoo_norm for k in ("thép đen", " đen", "carbon", "black", "mạ kẽm")):
-            material_odoo = "black"
-        elif "inox" in odoo_norm:
-            material_odoo = "inox_generic"
-
-        if not tokens and not material_odoo and not type_found:
-            from difflib import SequenceMatcher
-            return SequenceMatcher(None, odoo_norm, cand_name).ratio() * 0.6
-
-        # ─── 3. Tính điểm ────────────────────────────────────────────────────
-        total_w = sum(w for w, _ in tokens)
-        match_w = 0.0
-        for weight, token in tokens:
-            if token in cand_name:
-                match_w += weight
-
-        mat_score = 0.0
-        if material_odoo:
-            total_w += 0.3
-            if material_odoo == "304":
-                mat_score = 0.3 if any(k in cand_name for k in ("304",)) else (0.1 if "inox" in cand_name else -0.1)
-            elif material_odoo == "316":
-                mat_score = 0.3 if "316" in cand_name else -0.1
-            elif material_odoo == "black":
-                mat_score = 0.3 if any(k in cand_name for k in ("đen", "carbon", "kẽm", "zinc", "den")) else -0.1
-            elif material_odoo == "inox_generic":
-                mat_score = 0.3 if "inox" in cand_name else -0.05
-
-        if type_found:
-            total_w += 0.8
-
-        raw = match_w + max(-0.5, mat_score) + type_score
-        return max(0.0, min(1.0, raw / max(total_w, 0.001)))
-
-    def _extract_search_terms(self, odoo_name):
-        """Trích xuất cụm từ kỹ thuật tốt nhất để search mecsu.vn.
-
-        Ưu tiên: kích thước (M16x50) > tiêu chuẩn (DIN933) > cấp độ bền (8.8).
-        Tránh dùng tên tiếng Việt thuần vì MecSu hay dùng cách viết khác.
-        """
-        if not odoo_name:
-            return odoo_name or ""
-
-        parts = []
-
-        # Kích thước M16x50
-        dims = re.findall(r'M\d+(?:[x×]\d+(?:\.\d+)?)?', odoo_name, re.IGNORECASE)
-        parts.extend(d.upper() for d in dims[:2])
-
-        # Tiêu chuẩn DIN/ISO
-        standards = re.findall(r'(?:DIN|ISO)\s*\d+', odoo_name, re.IGNORECASE)
-        parts.extend(s.upper().replace(" ", "") for s in standards[:1])
-
-        # Cấp độ bền
-        grades = re.findall(r'\b(?:4\.8|8\.8|10\.9|12\.9)\b', odoo_name)
-        parts.extend(grades[:1])
-
-        if parts:
-            return " ".join(parts)  # e.g. "M16x50 8.8"  hoặc  "M16x50 DIN933"
-
-        # Fallback: lấy 3 từ cuối (thường chứa spec quan trọng hơn từ đầu)
-        words = [w for w in odoo_name.split() if len(w) > 1]
-        return " ".join(words[-3:]) if len(words) >= 2 else odoo_name
-
-    def _mecsu_search_via_popup(self, query):
-        """Tìm sản phẩm mecsu: GET /site?keyword= → popup button → quick-view → chi-tiet URL.
-
-        Đây là flow đã được xác nhận hoạt động từ hlv_product_crawler/crawler_parsers.py:
-        - Trang /site?keyword= SSR các popup button (a.mecsu-button-popup-lg)
-        - Mỗi button chứa value="/product-quick-view/..." (server-side endpoint)
-        - Quick-view page trả về HTML có link /chi-tiet/...
-        """
-        try:
-            from bs4 import BeautifulSoup
-        except ImportError:
-            return []
-
-        try:
-            url = f"{MECSU_BASE}/site?keyword={urllib.parse.quote(query)}"
-            html = self._mecsu_get(url)
-        except Exception as e:
-            _logger.warning("MecSu get /site?keyword=%s: %s", query, e)
-            return []
-
-        soup = BeautifulSoup(html, "html.parser")
-        popup_btns = soup.select('a.mecsu-button-popup-lg[title="Thông số kỹ thuật"]')
-        _logger.info("MecSu /site?keyword=%s → %d popup buttons", query, len(popup_btns))
-
-        candidates = []
-        seen_urls = set()
-        for btn in popup_btns[:15]:
-            quick_view_path = btn.get("value", "")
-            if not quick_view_path or "product-quick-view" not in quick_view_path:
-                continue
-            quick_view_url = MECSU_BASE + quick_view_path
-            try:
-                qv_html = self._mecsu_get(quick_view_url)
-                qv_soup = BeautifulSoup(qv_html, "html.parser")
-                for link in qv_soup.select('a[href*="/chi-tiet/"]'):
-                    href = link.get("href", "")
-                    if not href:
-                        continue
-                    full_url = href if href.startswith("http") else MECSU_BASE + href
-                    if full_url in seen_urls:
-                        continue
-                    # Lấy tên từ slug: /chi-tiet/bulong-thep-den-8-8-din933-m10x100.0054038
-                    slug = href.split("/chi-tiet/")[-1]
-                    slug_clean = re.sub(r"\.\d+$", "", slug)
-                    name = slug_clean.replace("-", " ")
-                    name = re.sub(r"\b(\d+) (\d)\b", r"\1.\2", name)
-                    seen_urls.add(full_url)
-                    candidates.append({"name": name, "url": full_url, "sku": ""})
-                    break  # 1 chi-tiet per quick-view
-            except Exception as e:
-                _logger.warning("MecSu quick-view %s: %s", quick_view_url, e)
-
-        return candidates
-
-    def _mecsu_search(self, odoo_code, odoo_name, max_pages=2):
-        """Tìm kiếm sản phẩm trên mecsu.vn qua popup button → quick-view flow."""
-        candidates = []
-        seen_urls = set()
-        tech_query = self._extract_search_terms(odoo_name)
-
-        def _add(items):
-            for item in items:
-                if item["url"] not in seen_urls:
-                    seen_urls.add(item["url"])
-                    candidates.append(item)
-
-        # Chiến lược 1: technical terms (M10X100 8.8)
-        if tech_query and tech_query.lower() != (odoo_name or "").lower():
-            _add(self._mecsu_search_via_popup(tech_query))
-
-        # Chiến lược 2: tên đầy đủ
-        if odoo_name and len(candidates) < 3:
-            _add(self._mecsu_search_via_popup(odoo_name))
-
-        # Chiến lược 3: 3 từ cuối
-        if not candidates and odoo_name:
-            words = odoo_name.split()
-            if len(words) > 3:
-                _add(self._mecsu_search_via_popup(" ".join(words[-3:])))
-
-        return candidates
-
-
-    def _mecsu_fetch_detail(self, url):
-        """Lấy trang chi tiết sản phẩm MecSu và dựng nội dung markdown."""
-        try:
-            html = self._mecsu_get(url)
-        except Exception as e:
-            _logger.warning("MecSu fetch detail failed: %s — %s", url, e)
-            return ""
-
-        try:
-            from bs4 import BeautifulSoup
-        except ImportError:
-            # Fallback: dùng regex đơn giản
-            return self._clean_html(html)
-
-        soup = BeautifulSoup(html, "html.parser")
-
-        # Xóa phần không cần thiết
-        for tag in soup.find_all(["script", "style", "nav", "footer"]):
-            tag.decompose()
-
-        lines = []
-
-        # Tiêu đề sản phẩm
-        h1 = soup.find("h1")
-        title = h1.get_text(strip=True) if h1 else ""
-        if title:
-            lines.append(f"# {title}")
-            lines.append("")
-
-        # MPN / mã sản phẩm MecSu
-        mpn_m = re.search(r"MPN[:\s]+([A-Z0-9][A-Z0-9\-]+)", html)
-        if mpn_m:
-            lines.append(f"**Mã sản phẩm (MecSu MPN):** {mpn_m.group(1)}")
-
-        lines.append(f"**Nguồn:** {url}")
-        lines.append("")
-
-        # Bảng thông số kỹ thuật (lấy bảng đầu tiên có ít nhất 3 hàng)
-        for tbl in soup.find_all("table"):
-            rows = []
-            for tr in tbl.find_all("tr"):
-                cells = [
-                    td.get_text(strip=True)
-                    for td in tr.find_all(["td", "th"])
-                ]
-                if len(cells) >= 2 and cells[0] and cells[1]:
-                    rows.append(f"- **{cells[0]}:** {cells[1]}")
-            if len(rows) >= 3:
-                lines.append("## Thông số kỹ thuật")
-                lines.extend(rows)
-                lines.append("")
-                break
-
-        # PDF datasheet nếu có
-        pdf_link = soup.find("a", href=re.compile(r"\.pdf$", re.I))
-        if pdf_link:
-            pdf_href = pdf_link["href"]
-            if not pdf_href.startswith("http"):
-                pdf_href = f"{MECSU_BASE}{pdf_href}"
-            lines.append(f"**Tài liệu kỹ thuật (PDF):** {pdf_href}")
-            lines.append("")
-
-        return "\n".join(lines) if lines else ""
+    # ─── Processing dispatch ──────────────────────────────────────────────────
 
     def _process_page(self, products, collection, max_count=None):
-        """Xử lý một trang sản phẩm. Trả về số sản phẩm đã thực sự xử lý (qua filter)."""
+        """Xử lý một trang sản phẩm. Trả về số sản phẩm đã thực sự xử lý."""
         Line = self.env["hlv.doc.crawler.line"]
         processed = 0
 
@@ -661,8 +322,15 @@ class HlvDocCrawler(models.Model):
             if max_count is not None and processed >= max_count:
                 break
 
-            # Bộ lọc từ khóa (fallback — domain đã lọc ở ORM, check lại cho chắc)
             if not self._product_matches_filters(product):
+                continue
+
+            # Skip sản phẩm đã có tài liệu nếu không bật override
+            if not self.override_existing and self._product_has_crawler_document(product):
+                _logger.info(
+                    "Crawler [%s] SKU=%s: đã có tài liệu, bỏ qua (override=False)",
+                    self.name, product.default_code,
+                )
                 continue
 
             sku = product.default_code
@@ -677,102 +345,9 @@ class HlvDocCrawler(models.Model):
             )
             try:
                 if self.source == "hoanglongvu":
-                    wc_data = self._wc_get(f"/products?sku={sku}&per_page=5")
-                    if not wc_data:
-                        line.write({"status": "not_found"})
-                        continue
-
-                    wc_product = wc_data[0]
-                    content = self._build_product_markdown(wc_product)
-                    doc = self._ensure_product_document(product, sku, content)
-
-                    resource = None
-                    if self.auto_index or collection:
-                        resource = self._ensure_resource(doc, collection)
-                        if self.auto_index:
-                            resource.process_resource()
-
-                    line.write(
-                        {
-                            "status": "found",
-                            "wc_url": wc_product.get("permalink", ""),
-                            "document_id": doc.ir_attachment_id.id,
-                            "resource_id": resource.id if resource else False,
-                        }
-                    )
-
+                    self._process_wc_product(product, sku, line, collection)
                 elif self.source == "mecsu":
-                    tech_query = self._extract_search_terms(product.name)
-                    _logger.info(
-                        "MecSu [%s] SKU=%s | query='%s' | name='%s'",
-                        self.name, sku, tech_query, product.name,
-                    )
-                    candidates = self._mecsu_search(sku, product.name)
-                    _logger.info(
-                        "MecSu [%s] SKU=%s | %d ứng viên",
-                        self.name, sku, len(candidates),
-                    )
-
-                    # Tính điểm và chọn ứng viên tốt nhất
-                    best = None
-                    best_score = 0.0
-                    score_log = []
-                    for candidate in candidates:
-                        score = self._mecsu_score(sku, product.name, candidate)
-                        score_log.append((score, candidate.get("name", "")[:60]))
-                        if score > best_score:
-                            best_score = score
-                            best = candidate
-
-                    if score_log:
-                        top = sorted(score_log, reverse=True)[:3]
-                        _logger.info(
-                            "MecSu [%s] SKU=%s | top scores: %s",
-                            self.name, sku,
-                            "; ".join(f"{s:.2f} – {n}" for s, n in top),
-                        )
-
-                    threshold = self.mecsu_similarity_threshold or 0.65
-                    if not best or best_score < threshold:
-                        debug_msg = (
-                            f"Query: '{tech_query}' | {len(candidates)} ứng viên"
-                            + (f" | Cao nhất: {best_score:.2f} – {best['name'][:50]}" if best else " | 0 ứng viên")
-                        )
-                        line.write({"status": "not_found", "error_msg": debug_msg})
-                        continue
-
-                    content = self._mecsu_fetch_detail(best["url"])
-                    if not content:
-                        line.write(
-                            {
-                                "status": "error",
-                                "error_msg": "Không lấy được nội dung trang chi tiết MecSu",
-                                "wc_url": best["url"],
-                                "match_score": best_score,
-                            }
-                        )
-                        continue
-
-                    doc = self._ensure_product_document(
-                        product, f"{sku}_mecsu", content
-                    )
-
-                    resource = None
-                    if self.auto_index or collection:
-                        resource = self._ensure_resource(doc, collection)
-                        if self.auto_index:
-                            resource.process_resource()
-
-                    line.write(
-                        {
-                            "status": "found",
-                            "wc_url": best["url"],
-                            "match_score": best_score,
-                            "document_id": doc.ir_attachment_id.id,
-                            "resource_id": resource.id if resource else False,
-                        }
-                    )
-
+                    self._process_mecsu_product(product, sku, line, collection)
                 else:
                     line.write(
                         {"status": "error", "error_msg": "Nguồn dữ liệu không được hỗ trợ"}
@@ -787,8 +362,10 @@ class HlvDocCrawler(models.Model):
 
         return processed
 
+    # ─── Actions ──────────────────────────────────────────────────────────────
+
     def action_run(self):
-        """Chạy crawler bắt đầu từ skip hiện tại. Nếu bật auto_next_page, tự động chạy hết."""
+        """Chạy crawler bắt đầu từ skip hiện tại."""
         import time as _time
 
         self.ensure_one()
@@ -812,7 +389,6 @@ class HlvDocCrawler(models.Model):
             if not products:
                 break
 
-            # Check max_products ceiling across pages
             remaining = None
             if self.use_max_products:
                 remaining = self.max_products - total_processed
@@ -823,18 +399,15 @@ class HlvDocCrawler(models.Model):
             total_processed += page_processed
             total_pages += 1
 
-            # Commit progress so UI shows partial results
             self._cr.commit()
 
-            # Stop conditions
             if not self.auto_next_page:
                 break
             if len(products) < self.limit:
-                break  # last page
+                break
             if self.use_max_products and total_processed >= self.max_products:
                 break
 
-            # Advance to next page
             current_skip += self.limit
             self.write({"skip": current_skip})
             self._cr.commit()

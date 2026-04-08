@@ -66,6 +66,7 @@
                             <field name="use_max_products"/>
                             <field name="max_products"
                                    invisible="not use_max_products"/>
+                            <field name="override_existing"/>
                             <field name="auto_next_page"/>
                             <field name="page_delay"
                                    invisible="not auto_next_page"/>
@@ -90,6 +91,16 @@
                         <field name="auto_index"/>
                         <field name="collection_id"
                                invisible="not auto_index"/>
+                    </group>
+
+                    <group string="GPT QC Scoring">
+                        <group>
+                            <field name="use_gpt_qc"/>
+                            <field name="gpt_model"
+                                   invisible="not use_gpt_qc"/>
+                            <field name="gpt_qc_threshold"
+                                   invisible="not use_gpt_qc"/>
+                        </group>
                     </group>
 
                     <separator string="Kết quả chi tiết"/>
