@@ -3,7 +3,7 @@ import { FormController } from "@web/views/form/form_controller";
 import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
 import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
-import { onMounted } from "@odoo/owl";
+import { onMounted, onWillUnmount } from "@odoo/owl";
 
 patch(FormController.prototype, {
 
@@ -11,10 +11,32 @@ patch(FormController.prototype, {
         super.setup(...arguments);
         this._formInDialog = false;
         this._leaveDecisionMade = false;
+        this._userTyping = false;
 
         onMounted(() => {
             this._formInDialog = !!this.rootRef?.el?.closest(".o_dialog");
+            if (!this._formInDialog) {
+                this.__onUserInput = (ev) => {
+                    // Only real user input (isTrusted), only inside form sheet
+                    if (!ev.isTrusted) return;
+                    const sheet = this.rootRef?.el?.querySelector(".o_form_sheet, .o_form_sheet_bg");
+                    if (sheet && sheet.contains(ev.target)) {
+                        this._userTyping = true;
+                    }
+                };
+                document.addEventListener("input", this.__onUserInput, true);
+            }
         });
+        onWillUnmount(() => {
+            if (this.__onUserInput) {
+                document.removeEventListener("input", this.__onUserInput, true);
+            }
+        });
+    },
+
+    async save(...args) {
+        this._userTyping = false;
+        return super.save(...args);
     },
 
     async beforeLeave() {
@@ -35,11 +57,10 @@ patch(FormController.prototype, {
         if (this._formInDialog) {
             return;
         }
-        // Use synchronous dirty check for beforeUnload
-        // model.root.dirty is the sync flag in Odoo 18
+        // Sync check: model dirty OR user is still typing in an input
         const rec = this.model.root;
-        const dirty = rec.dirty || rec._isDirty || (typeof rec.isDirty === "boolean" && rec.isDirty);
-        if (dirty) {
+        const modelDirty = rec.dirty || rec._isDirty;
+        if (modelDirty || this._userTyping) {
             ev.preventDefault();
             ev.returnValue = "";
         }
@@ -62,6 +83,7 @@ patch(FormController.prototype, {
                     confirm: async () => {
                         handled = true;
                         this._leaveDecisionMade = true;
+                        this._userTyping = false;
                         await this.save();
                         _continue = true;
                         resolve();
@@ -70,6 +92,7 @@ patch(FormController.prototype, {
                     cancel: async () => {
                         handled = true;
                         this._leaveDecisionMade = true;
+                        this._userTyping = false;
                         await this.model.root.discard();
                         _continue = true;
                         resolve();
