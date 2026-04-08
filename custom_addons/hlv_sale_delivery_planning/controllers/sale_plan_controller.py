@@ -232,6 +232,12 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
       <label class="form-check-label small fw-bold" for="f-need-transfer"><i class="fa fa-exchange text-danger me-1"></i>Cần chuyển kho</label>
     </div>
   </div>
+  <div class="col-md-2 d-flex align-items-end">
+    <div class="form-check form-switch mb-1">
+      <input class="form-check-input" type="checkbox" id="f-show-completed">
+      <label class="form-check-label small fw-bold" for="f-show-completed"><i class="fa fa-check-circle text-success me-1"></i>Hiện đơn đã giao</label>
+    </div>
+  </div>
 </div></div>
 <!-- View toggle -->
 <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
@@ -346,6 +352,7 @@ function load(append){
     po_date_from:gv('f-po-date-from'),po_date_to:gv('f-po-date-to'),
     po_status:gv('f-po-status'),saler_code:gv('f-saler'),
     htgh:gv('f-htgh'),delivery_type:gv('f-dtype'),tag_ids:getTagIds(),
+    show_completed:$('f-show-completed').checked,
     limit:lim,offset:offset};
   fetch('/api/sale_plan/data',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({jsonrpc:'2.0',method:'call',params:body})})
@@ -701,12 +708,14 @@ function clearAll(){
   ['f-wh','f-stk','f-pack','f-po-status','f-dtype'].forEach(function(id){var e=$(id);if(e)e.value='all';});
   $('f-del').value='pending_partial';
   var ft=$('f-tag');if(ft){Array.from(ft.options).forEach(function(o){o.selected=false;});}
+  $('f-show-completed').checked=false;
   S.kanbanColPageSize={};
   load(false);
 }
 
 $('btn-filter').addEventListener('click',function(){S.kanbanColPageSize={};load(false);});
 $('f-need-transfer').addEventListener('change',function(){render();});
+$('f-show-completed').addEventListener('change',function(){S.kanbanColPageSize={};load(false);});
 $('f-q').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();S.kanbanColPageSize={};load(false);}});
 $('f-saler').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();S.kanbanColPageSize={};load(false);}});
 $('f-htgh').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();S.kanbanColPageSize={};load(false);}});
@@ -719,7 +728,8 @@ $('btn-export-excel').addEventListener('click',function(){
     filter_date_from:gv('f-date-from'),filter_date_to:gv('f-date-to'),
     filter_po_date_from:gv('f-po-date-from'),filter_po_date_to:gv('f-po-date-to'),
     filter_po_status:gv('f-po-status'),filter_saler_code:gv('f-saler'),
-    filter_htgh:gv('f-htgh'),filter_delivery_type:gv('f-dtype'),filter_tag_ids:getTagIds()
+    filter_htgh:gv('f-htgh'),filter_delivery_type:gv('f-dtype'),filter_tag_ids:getTagIds(),
+    show_completed:$('f-show-completed').checked?'1':''
   });
   window.open('/api/sale_plan/export_excel?'+params.toString(),'_blank');
 });
@@ -841,7 +851,7 @@ class SalePlanPublicController(http.Controller):
                            stock_status='all', packing_status='all',
                            date_from='', date_to='', po_date_from='', po_date_to='',
                            po_status='all', saler_code='', htgh='', delivery_type='all',
-                           tag_ids='', limit=250, offset=0, **kwargs):
+                           tag_ids='', limit=250, offset=0, show_completed=False, **kwargs):
         if not request.session.get(SESSION_KEY_OK):
             return {'status': 'error', 'message': 'Unauthorized'}
         try:
@@ -862,6 +872,7 @@ class SalePlanPublicController(http.Controller):
                 filter_tag_ids=tag_ids,
                 limit=int(limit),
                 offset=int(offset),
+                show_completed=bool(show_completed),
             )
             return {'status': 'success', 'data': result}
         except Exception as e:
@@ -938,6 +949,7 @@ class SalePlanPublicController(http.Controller):
                 filter_htgh=kwargs.get('filter_htgh', ''),
                 filter_delivery_type=kwargs.get('filter_delivery_type', 'all'),
                 filter_tag_ids=kwargs.get('filter_tag_ids', ''),
+                show_completed=bool(kwargs.get('show_completed', '')),
                 limit=100000,
                 offset=0,
             )

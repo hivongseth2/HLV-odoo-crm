@@ -7,6 +7,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
     def _calculate_po_and_stock_status(
         self, sales, po_date_from, po_date_to, po_status,
         filter_delivery_status, filter_stock_status, filter_packing_status,
+        show_completed=False,
     ):
         """
         Lọc SO theo PO (nếu có filter PO), tính stock_status và packing_status
@@ -127,12 +128,14 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         for so in sales:
             # --- Loại bỏ đơn đã xử lý xong (không còn picking nào active) ---
             # Đặc biệt: đơn trả hàng — tất cả pickings done/cancel, không cần hiển thị.
-            active_pickings = so.picking_ids.filtered(
-                lambda p: p.state not in ('done', 'cancel')
-            )
-            if so.picking_ids and not active_pickings:
-                # Tất cả pickings đã done/cancel → không còn gì để xử lý
-                continue
+            # Trừ khi user bật show_completed để xem đơn đã giao.
+            if not show_completed:
+                active_pickings = so.picking_ids.filtered(
+                    lambda p: p.state not in ('done', 'cancel')
+                )
+                if so.picking_ids and not active_pickings:
+                    # Tất cả pickings đã done/cancel → không còn gì để xử lý
+                    continue
 
             has_pending = False
             has_delivered = False
