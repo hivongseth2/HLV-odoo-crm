@@ -1,11 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import logging
 from odoo import models, fields, api
-
-_logger = logging.getLogger(__name__)
-
-SHOPEE_CANCELLED_STATUSES = {'CANCELLED', 'Đã hủy', 'Đã Hủy'}
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
@@ -13,41 +8,25 @@ class SaleOrder(models.Model):
     shopee_order_status = fields.Char(string='Shopee Order Status', help="Status received from Shopee Webhook (e.g. PROCESSED, COMPLETED)")
 
     def write(self, vals):
-        new_status = vals.get('shopee_order_status')
-        orders_to_cancel = self.env['sale.order']
-
-        if new_status in SHOPEE_CANCELLED_STATUSES:
-            for order in self:
-                # Gửi thông báo Zalo TSN nếu trạng thái mới thay đổi
-                if order.shopee_order_status not in SHOPEE_CANCELLED_STATUSES:
-                    try:
-                        order._notify_warehouse_tsn()
-                    except Exception as e:
-                        _logger.error("Failed to notify TSN warehouse for order %s: %s", order.name, str(e))
-                # Hủy đơn nếu chưa cancel (không phụ thuộc shopee_order_status cũ)
-                if order.state != 'cancel':
-                    orders_to_cancel |= order
-
-        result = super(SaleOrder, self).write(vals)
-
-        # Hủy đơn sau khi đã write shopee_order_status thành công
-        for order in orders_to_cancel:
-            try:
-                _logger.info("Shopee: Bắt đầu hủy đơn %s (state=%s)", order.name, order.state)
-                for picking in order.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel')):
-                    _logger.info("Shopee: Hủy picking %s (state=%s)", picking.name, picking.state)
-                    picking.sudo().action_cancel()
-                order.sudo().action_cancel()
-                # action_cancel() có thể trả về wizard dict thay vì thực sự hủy
-                # → kiểm tra state thực tế và force write nếu cần
-                if order.state != 'cancel':
-                    _logger.warning("Shopee: action_cancel() không hủy được đơn %s (state=%s), force write state.", order.name, order.state)
-                    order.sudo().write({'state': 'cancel'})
-                _logger.info("Shopee: Đã hủy đơn bán hàng %s thành công (state=%s).", order.name, order.state)
-            except Exception as e:
-                _logger.error("Shopee: Không thể hủy đơn %s: %s", order.name, str(e), exc_info=True)
-
-        return result
+        # Notify warehouse TSN if shopee_order_status changes to CANCELLED
+        status = vals.get('shopee_order_status')
+        if status:
+            # Check both mapped and unmapped status
+            is_cancelled = False
+            if status in ['CANCELLED', 'Đã hủy', 'Đã Hủy']:
+                is_cancelled = True
+            
+            if is_cancelled:
+                for order in self:
+                    if order.shopee_order_status not in ['CANCELLED', 'Đã hủy', 'Đã Hủy']:
+                        try:
+                            order._notify_warehouse_tsn()
+                        except Exception as e:
+                            import logging
+                            _logger = logging.getLogger(__name__)
+                            _logger.error("Failed to notify TSN warehouse for order %s: %s", order.name, str(e))
+        
+        return super(SaleOrder, self).write(vals)
 
     def _notify_warehouse_tsn(self):
         """

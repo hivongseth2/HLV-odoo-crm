@@ -1,12 +1,11 @@
-from odoo import http, fields
+# -*- coding: utf-8 -*-
+import json
+import os
+import logging
+from datetime import datetime
+from odoo import http
 from odoo.http import request
 from odoo.addons.shopee_order_fetch.services import shopee_api, shopee_order_builder, shopee_escrow
-import hmac
-import hashlib
-import json
-import logging
-import os
-from datetime import datetime
 
 _logger = logging.getLogger(__name__)
 
@@ -44,53 +43,155 @@ class ShopeeWebhookController(http.Controller):
     @http.route('/shopee/webhook/delivery', type='json', auth='public', methods=['POST'], csrf=False)
     def shopee_delivery_webhook(self, **kwargs):
         """
-        Rule 1: Authentication & Rule 4: Asynchronous Processing
+        Endpoint to receive Shopee delivery status updates.
+        Expected payload format (based on common Shopee pushes - Subject to verification):
+        {
+            "data": {
+                "ordersn": "ORDER_ID",
+                "status": "STATUS",
+                ...
+            },
+            ...
+        }
         """
         try:
-            # 1. Get raw body for signature verification
-            raw_data = request.httprequest.get_data()
-            data = json.loads(raw_data)
+            # Get JSON data from request
+            data = request.get_json_data()
             _logger.info("Received Shopee Webhook Data: %s", json.dumps(data))
+
+            # Ghi vào file log persistent (log trước khi xử lý)
+            _log_to_file(data)
+
+            if not data:
+                 return {'code': 1, 'msg': 'Empty payload'}
+
+            # The payload structure usually has a 'data' key or matches generic format.
+            # Adjust these keys based on actual Shopee documentation if needed.
+            # Assuming 'ordersn' is the key for Order SN (Shopee Order Ref).
             
-            # Rule 1: Signature Verification (Shopee V2)
-            # URL format: host/path?timestamp=...&sign=...
-            # But webhooks often send signature in Authorization header or as a param
-            # For Shopee V2 Webhooks, the signature is a HMAC-SHA256 of (URL + body)
+            # Helper to find value recursively if structure is unknown or nested
+            def find_value(json_obj, key):
+                if isinstance(json_obj, dict):
+                    if key in json_obj:
+                        return json_obj[key]
+                    for k, v in json_obj.items():
+                        res = find_value(v, key)
+                        if res: return res
+                elif isinstance(json_obj, list):
+                    for item in json_obj:
+                        res = find_value(item, key)
+                        if res: return res
+                return None
+
+            # Try to grab 'ordersn' (Order SN) and 'status' (Delivery Status)
+            # Possible keys for order ID: 'ordersn', 'order_sn'
+            ordersn = find_value(data, 'ordersn') or find_value(data, 'order_sn')
             
-            auth_header = request.httprequest.headers.get('Authorization')
-            shop_id = data.get('shop_id')
+            # Possible keys for status: 'status', 'tracking_status', 'logistics_status'
+            status = find_value(data, 'status') or find_value(data, 'tracking_status') or find_value(data, 'logistics_status')
+
+            # Thêm logic mapping tiếng Việt đối với push mechanism code 3 theo yêu cầu
+            push_code = data.get('code')
+            if str(push_code) == '3' and status:
+                status_mapping = {
+                    'UNPAID': 'Chưa thanh toán',
+                    'READY_TO_SHIP': 'Chờ lấy hàng',
+                    'PROCESSED': 'Đã xử lý',
+                    'SHIPPED': 'Đang giao',
+                    'COMPLETED': 'Hoàn thành',
+                    'IN_CANCEL': 'Chờ xác nhận hủy',
+                    'CANCELLED': 'Đã hủy',
+                    'RETRY_SHIP': 'Giao lại',
+                    'TO_CONFIRM_RECEIVE': 'Đã nhận hàng',
+                    'TO_RETURN': 'Đang trả hàng'
+                }
+                status = status_mapping.get(str(status).upper(), status)
+
+            # Possible keys for tracking number: 'tracking_no', 'tracking_number'
+            tracking_no = find_value(data, 'tracking_no') or find_value(data, 'tracking_number')
+
+            if not ordersn and not tracking_no:
+                _logger.warning("Shopee Webhook: Could not find 'ordersn' or 'tracking_no' in payload.")
+                return {'code': 2, 'msg': 'Missing identifier'}
+
+            # Find the Sale Order
+            orders = request.env['sale.order'].sudo()
+            if ordersn:
+                # 1. Try finding by Shopee Order Ref (Mã đơn hàng)
+                orders = request.env['sale.order'].sudo().search([('shopee_order_ref', '=', ordersn)])
             
-            if shop_id:
-                shop = request.env['shopee.shop'].sudo().search([('shop_identifier', '=', str(shop_id))], limit=1)
-                if shop and shop.account_id and shop.account_id.partner_key:
-                    partner_key = shop.account_id.partner_key
-                    # Construct base string: request_url + raw_body
-                    full_url = request.httprequest.url
-                    base_string = full_url + raw_data.decode('utf-8')
-                    
-                    expected_sign = hmac.new(
-                        partner_key.encode('utf-8'),
-                        base_string.encode('utf-8'),
-                        hashlib.sha256
-                    ).hexdigest()
-                    
-                    # Note: If Shopee sends sign in a different way, adjust here.
-                    # Commonly for webhooks they might just send a token or check against public key.
-                    # If auth_header exists, we check it.
-                    if auth_header and auth_header != expected_sign:
-                         _logger.warning("Shopee Webhook Rule 1: Invalid Signature for shop %s", shop_id)
-                         # return {'code': 401, 'msg': 'Unauthorized'} # Strictly return 401
-            
-            # Save to Log and process immediately
-            log = request.env['shopee.webhook.log'].sudo().create({
-                'payload': json.dumps(data)
-            })
-            log.process_webhook()
+            if not orders and tracking_no:
+                # 2. If not found by Order Ref, try finding by Tracking Number (Mã vận đơn) in Stock Picking
+                # Note: carrier_tracking_ref is on stock.picking
+                pickings = request.env['stock.picking'].sudo().search([('carrier_tracking_ref', '=', tracking_no)])
+                if pickings:
+                    # Get sale orders related to these pickings
+                    orders = pickings.mapped('sale_id')
+
+            if not orders and ordersn:
+                # 3. IF ORDER STILL NOT FOUND: AUTO-FETCH FROM SHOPEE
+                _logger.info("Shopee Webhook: Order %s not found. Attempting auto-fetch...", ordersn)
+                shop_id_raw = data.get('shop_id')
+                if not shop_id_raw:
+                    _logger.warning("Shopee Webhook: missing shop_id in payload, cannot auto-fetch.")
+                else:
+                    shop = request.env['shopee.shop'].sudo().search([('shop_identifier', '=', str(shop_id_raw))], limit=1)
+                    if not shop:
+                        _logger.warning("Shopee Webhook: Shop ID %s not found in Odoo.", shop_id_raw)
+                    else:
+                        try:
+                            # Use services from shopee_order_fetch to pull full details
+                            creds = shopee_api.get_credentials_from_shop(shop)
+                            
+                            # Get full order detail
+                            status_code, body, _params = shopee_api.call_order_detail(creds, ordersn)
+                            if status_code == 200 and not body.get('error'):
+                                order_list = body.get('response', {}).get('order_list', [])
+                                if order_list:
+                                    order_data = order_list[0]
+                                    # Get escrow detail (pricing/vouchers)
+                                    escrow_data = shopee_api.call_escrow_detail(creds, ordersn)
+                                    
+                                    # Build/Create order
+                                    with request.env.cr.savepoint():
+                                        new_so = shopee_order_builder.create_order_from_data(
+                                            request.env, order_data, shop, escrow_data=escrow_data
+                                        )
+                                        orders = new_so
+                                        _logger.info("Shopee Webhook: Auto-fetched successfully: Order %s -> %s", ordersn, new_so.name)
+                                        _log_to_file(data, result=f"Auto-fetched order {ordersn}: Created {new_so.name}")
+                        except Exception as fetch_err:
+                            _logger.error("Shopee Webhook: Auto-fetch failed for %s: %s", ordersn, str(fetch_err))
+
+            if not orders:
+                _logger.warning("Shopee Webhook: Order not found for identifier: %s / %s", ordersn, tracking_no)
+                return {'code': 0, 'msg': 'Order not found, even after auto-fetch attempt'}
+
+            for order in orders:
+                if status:
+                    old_status = order.shopee_order_status
+                    order.write({'shopee_order_status': status})
+                    _logger.info("Shopee Webhook: Updated Order %s status from '%s' to '%s'", order.name, old_status, status)
+                    _log_to_file(data, result=f"Updated {order.name}: {old_status} -> {status}")
+
+                    # Auto-cancel order when Shopee status is CANCELLED (code 3)
+                    if str(push_code) == '3' and status in ['CANCELLED', 'Đã hủy', 'Đã Hủy']:
+                        if order.state not in ('cancel', 'done'):
+                            try:
+                                order.action_cancel()
+                                _logger.info("Shopee Webhook: Auto-cancelled Order %s due to Shopee CANCELLED status", order.name)
+                                _log_to_file(data, result=f"Auto-cancelled {order.name}")
+                            except Exception as cancel_err:
+                                _logger.error("Shopee Webhook: Failed to cancel Order %s: %s", order.name, str(cancel_err))
+                                _log_to_file(data, result=f"Cancel FAILED for {order.name}: {str(cancel_err)}")
+                else:
+                    _logger.info("Shopee Webhook: No status update found in payload for Order %s", order.name)
 
             return {'code': 0, 'msg': 'success'}
 
         except Exception as e:
-            _logger.error("Error processing Shopee Webhook (Log phase): %s", str(e), exc_info=True)
+            _logger.error("Error processing Shopee Webhook: %s", str(e), exc_info=True)
+            _log_to_file(data if 'data' in dir() else {}, result=f"ERROR: {str(e)}")
             return {'code': 3, 'msg': str(e)}
 
     @http.route('/shopee/webhook/logs', type='http', auth='user', methods=['GET'])
