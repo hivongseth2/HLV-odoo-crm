@@ -39,6 +39,7 @@ export class DeliveryPlannerDashboard extends Component {
             filterDeliveryType: "all",
             filterTagIds: [],
             filterNeedTransfer: false,
+            showCompleted: false,
 
             // Stats
             dashboardStats: { total: 0, ready: 0, partial: 0, out_of_stock: 0 },
@@ -100,6 +101,7 @@ export class DeliveryPlannerDashboard extends Component {
                     filter_htgh: this.state.filterHtgh.trim(),
                     filter_delivery_type: this.state.filterDeliveryType,
                     filter_tag_ids: this.state.filterTagIds.join(','),
+                    show_completed: this.state.showCompleted,
                     // Kanban tải theo batch, không phân trang backend
                     limit: isKanban ? this.state.kanbanBatchSize : this.state.itemsPerPage,
                     offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
@@ -766,7 +768,8 @@ export class DeliveryPlannerDashboard extends Component {
             this.state.filterSalerCode ||
             this.state.filterHtgh ||
             this.state.filterDeliveryType !== "all" ||
-            this.state.filterTagIds.length > 0;
+            this.state.filterTagIds.length > 0 ||
+            this.state.showCompleted;
     }
 
     countTransferWarehouses(so) {
@@ -792,6 +795,7 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.filterDeliveryType = "all";
         this.state.filterTagIds = [];
         this.state.filterNeedTransfer = false;
+        this.state.showCompleted = false;
         this.state.currentPage = 1;
         this.fetchData();
     }
@@ -812,6 +816,7 @@ export class DeliveryPlannerDashboard extends Component {
             filter_htgh: this.state.filterHtgh.trim(),
             filter_delivery_type: this.state.filterDeliveryType,
             filter_tag_ids: this.state.filterTagIds.join(','),
+            show_completed: this.state.showCompleted ? '1' : '',
         });
         window.open(`/hlv_sale_delivery_planning/export_excel?${params.toString()}`, '_blank');
     }
