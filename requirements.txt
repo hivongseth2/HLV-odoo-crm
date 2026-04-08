@@ -18,6 +18,7 @@ google-ads>=24.0.0
 # ====== LLM Modules ======
 mcp
 markdownify
+beautifulsoup4
 emoji
 pydantic>=2.0.0
 jinja2

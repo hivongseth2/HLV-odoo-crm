@@ -32,8 +32,6 @@ class ProductDocument(models.Model):
             lines.append(f"**Barcode:** {product.barcode}")
         if product.categ_id:
             lines.append(f"**Danh mục:** {product.categ_id.complete_name}")
-        if product.list_price:
-            lines.append(f"**Giá bán:** {product.list_price:,.0f}")
         lines.append("")
         return "\n".join(lines)
 

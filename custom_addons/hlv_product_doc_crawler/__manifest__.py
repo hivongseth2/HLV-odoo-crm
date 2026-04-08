@@ -14,6 +14,7 @@ Hỗ trợ cấu hình skip/limit để xử lý 50k+ sản phẩm theo batch nh
     """,
     "author": "HLV",
     "depends": ["llm_product_document", "product"],
+    "external_dependencies": {"python": ["requests", "bs4"]},
     "data": [
         "security/ir.model.access.csv",
         "views/hlv_doc_crawler_views.xml",

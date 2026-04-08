@@ -12,6 +12,11 @@
                             string="▶ Chạy Crawler"
                             class="btn-primary"
                             invisible="state == 'running'"/>
+                    <button name="action_next_page" type="object"
+                            string="▶▶ Next trang"
+                            class="btn-secondary"
+                            invisible="state == 'running'"
+                            confirm="Sẽ tăng skip thêm limit và chạy trang tiếp theo. Tiếp tục?"/>
                     <button name="action_clear_logs" type="object"
                             string="Xóa log" class="btn-secondary"/>
                     <field name="state" widget="statusbar"
@@ -44,14 +49,40 @@
                         <group string="Cấu hình nguồn dữ liệu">
                             <field name="name"/>
                             <field name="source"/>
-                            <field name="wc_domain"/>
-                            <field name="wc_key"/>
-                            <field name="wc_secret" password="True"/>
+                            <!-- Hoàng Long Vũ (WooCommerce) -->
+                            <field name="wc_domain"
+                                   invisible="source != 'hoanglongvu'"/>
+                            <field name="wc_key"
+                                   invisible="source != 'hoanglongvu'"/>
+                            <field name="wc_secret" password="True"
+                                   invisible="source != 'hoanglongvu'"/>
+                            <!-- MecSu -->
+                            <field name="mecsu_similarity_threshold"
+                                   invisible="source != 'mecsu'"/>
                         </group>
                         <group string="Cấu hình batch">
                             <field name="skip"/>
                             <field name="limit"/>
+                            <field name="use_max_products"/>
+                            <field name="max_products"
+                                   invisible="not use_max_products"/>
+                            <field name="auto_next_page"/>
+                            <field name="page_delay"
+                                   invisible="not auto_next_page"/>
                             <field name="last_run" readonly="True"/>
+                        </group>
+                    </group>
+
+                    <group string="Bộ lọc từ khóa">
+                        <group>
+                            <field name="search_keywords"
+                                   string="Từ khóa tìm kiếm"
+                                   placeholder="bao tay&#10;gang tay&#10;(mỗi dòng 1 từ khóa — để trống = crawl tất cả)"/>
+                        </group>
+                        <group>
+                            <field name="exclude_keywords"
+                                   string="Từ khóa loại bỏ"
+                                   placeholder="test&#10;sample&#10;(sản phẩm chứa các từ này sẽ bị bỏ qua)"/>
                         </group>
                     </group>
 
@@ -73,9 +104,11 @@
                             <field name="product_id"/>
                             <field name="status" widget="badge"/>
                             <field name="wc_url" widget="url" optional="show"/>
+                            <field name="match_score" optional="show"
+                                   string="Tương đồng"/>
                             <field name="document_id" optional="show"/>
                             <field name="resource_id" optional="show"/>
-                            <field name="error_msg" optional="hide"/>
+                            <field name="error_msg" optional="show"/>
                         </list>
                     </field>
                 </sheet>
@@ -93,6 +126,8 @@
                 <field name="source"/>
                 <field name="skip"/>
                 <field name="limit"/>
+                <field name="use_max_products" optional="hide"/>
+                <field name="max_products" optional="hide"/>
                 <field name="state" widget="badge"
                        decoration-success="state == 'done'"
                        decoration-warning="state == 'running'"
