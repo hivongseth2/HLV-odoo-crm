@@ -110,11 +110,23 @@ class ShopeeWebhookLog(models.Model):
                 self.write({'state': 'failed', 'error_message': f'Order not found: {ordersn} / {tracking_no}'})
                 return
 
+            CANCELLED_STATUSES = {'CANCELLED', 'Đã hủy', 'Đã Hủy'}
+
             for order in orders:
                 if status:
                     # Rule 2: Whitelisted status write
                     order.write({'shopee_order_status': status})
-                
+
+                if status in CANCELLED_STATUSES and order.state not in ('cancel', 'draft'):
+                    try:
+                        # Hủy các picking chưa hoàn thành trước khi hủy đơn
+                        for picking in order.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel')):
+                            picking.action_cancel()
+                        order.action_cancel()
+                        _logger.info("Shopee Webhook: Đã hủy đơn bán hàng %s do nhận trạng thái CANCELLED từ Shopee.", order.name)
+                    except Exception as cancel_err:
+                        _logger.error("Shopee Webhook: Không thể hủy đơn %s: %s", order.name, str(cancel_err))
+
             self.write({'state': 'processed', 'error_message': False})
 
         except Exception as e:
