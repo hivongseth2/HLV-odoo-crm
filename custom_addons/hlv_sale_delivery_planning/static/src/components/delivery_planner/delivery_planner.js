@@ -43,8 +43,8 @@ export class DeliveryPlannerDashboard extends Component {
 
             // HTGH presets (lưu localStorage)
             htghPresets: JSON.parse(localStorage.getItem('hlv_htgh_presets') || 'null') || [
-                { label: 'Hãng VC', value: 'ghn,cpn,chuy\u1ec3n ph\u00e1t nhanh,giao h\u00e0ng nhanh,j&t' },
-                { label: 'Tr\u1eeb h\u00e3ng VC', value: '!ghn,!cpn,!chuy\u1ec3n ph\u00e1t nhanh,!giao h\u00e0ng nhanh,!j&t' },
+                { label: 'Hãng VC', value: 'ghn,cpn,chuy\u1ec3n ph\u00e1t nhanh,giao h\u00e0ng nhanh,j&t,jnt' },
+                { label: 'Tự giao', value: '!ghn,!cpn,!chuy\u1ec3n ph\u00e1t nhanh,!giao h\u00e0ng nhanh,!j&t,!jnt' },
             ],
 
             // Stats
