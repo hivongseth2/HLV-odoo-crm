@@ -44,11 +44,23 @@ class HlvDocCrawler(models.Model):
              "1.0 = SKU khớp chính xác. Mặc định 0.65 (khớp tên tương đối).",
     )
 
+    # === Bộ lọc từ khóa ===
+    search_keywords = fields.Text(
+        string="Từ khóa tìm kiếm",
+        help="Chỉ crawl sản phẩm có tên hoặc mã chứa ít nhất một trong các từ khóa này.\n"
+             "Mỗi từ khóa một dòng (hoặc phân cách bằng dấu phẩy). Để trống = crawl tất cả.",
+    )
+    exclude_keywords = fields.Text(
+        string="Từ khóa loại bỏ",
+        help="Bỏ qua sản phẩm có tên hoặc mã chứa bất kỳ từ khóa nào ở đây.\n"
+             "Mỗi từ khóa một dòng (hoặc phân cách bằng dấu phẩy).",
+    )
+
     # === Cấu hình batch ===
     skip = fields.Integer(
         default=0,
         string="Bỏ qua (skip)",
-        help="Số sản phẩm bỏ qua từ đầu danh sách (offset)",
+        help="Số sản phẩm bỏ qua từ đầu danh sách (offset). Tự động tăng khi dùng Next trang.",
     )
     limit = fields.Integer(
         default=30,
@@ -64,6 +76,17 @@ class HlvDocCrawler(models.Model):
         default=100,
         string="Số sản phẩm tối đa",
         help="Dừng sau khi đã xử lý đủ số lượng này (bất kể tìm thấy hay không)",
+    )
+    auto_next_page = fields.Boolean(
+        default=False,
+        string="Tự động chuyển trang",
+        help="Tự động chạy hết tất cả sản phẩm theo từng trang (skip tăng dần theo limit) "
+             "cho đến khi không còn sản phẩm nào hoặc đạt giới hạn tối đa.",
+    )
+    page_delay = fields.Integer(
+        default=3,
+        string="Nghỉ giữa trang (giây)",
+        help="Số giây chờ giữa mỗi trang khi bật Tự động chuyển trang. Tối thiểu 1 giây.",
     )
 
     # === Tích hợp RAG ===
@@ -239,7 +262,28 @@ class HlvDocCrawler(models.Model):
             }
         )
 
-    # ─── Action chính ──────────────────────────────────────────────────────────
+    # ─── Filter helpers ───────────────────────────────────────────────────────
+
+    def _parse_keywords(self, text):
+        """Tách text dạng CSV / newline thành list từ khóa đã lowercase."""
+        if not text:
+            return []
+        items = re.split(r"[,\n]+", text)
+        return [k.strip().lower() for k in items if k.strip()]
+
+    def _product_matches_filters(self, product):
+        """Trả về True nếu sản phẩm qua được cả 2 bộ lọc từ khóa."""
+        combined = f"{(product.name or '')} {(product.default_code or '')}".lower()
+
+        include = self._parse_keywords(self.search_keywords)
+        if include and not any(kw in combined for kw in include):
+            return False
+
+        exclude = self._parse_keywords(self.exclude_keywords)
+        if exclude and any(kw in combined for kw in exclude):
+            return False
+
+        return True
 
     # ─── MecSu crawler ────────────────────────────────────────────────────────
 
@@ -457,24 +501,19 @@ class HlvDocCrawler(models.Model):
 
         return "\n".join(lines) if lines else ""
 
-    def action_run(self):
-        """Chạy crawler cho batch được cấu hình."""
-        self.ensure_one()
-        self.write({"state": "running", "last_run": fields.Datetime.now()})
-
-        products = self.env["product.template"].search(
-            [("default_code", "!=", False), ("default_code", "!=", "")],
-            offset=self.skip,
-            limit=self.limit,
-        )
-
-        collection = self._get_rag_collection()
+    def _process_page(self, products, collection, max_count=None):
+        """Xử lý một trang sản phẩm. Trả về số sản phẩm đã thực sự xử lý (qua filter)."""
         Line = self.env["hlv.doc.crawler.line"]
         processed = 0
 
         for product in products:
-            if self.use_max_products and processed >= self.max_products:
+            if max_count is not None and processed >= max_count:
                 break
+
+            # Bộ lọc từ khóa
+            if not self._product_matches_filters(product):
+                continue
+
             sku = product.default_code
             line = Line.create(
                 {
@@ -572,6 +611,60 @@ class HlvDocCrawler(models.Model):
             finally:
                 processed += 1
 
+        return processed
+
+    def action_run(self):
+        """Chạy crawler bắt đầu từ skip hiện tại. Nếu bật auto_next_page, tự động chạy hết."""
+        import time as _time
+
+        self.ensure_one()
+        self.write({"state": "running", "last_run": fields.Datetime.now()})
+        self._cr.commit()
+
+        collection = self._get_rag_collection()
+        current_skip = self.skip
+        total_processed = 0
+        total_pages = 0
+
+        while True:
+            products = self.env["product.template"].search(
+                [("default_code", "!=", False), ("default_code", "!=", "")],
+                offset=current_skip,
+                limit=self.limit,
+            )
+            if not products:
+                break
+
+            # Check max_products ceiling across pages
+            remaining = None
+            if self.use_max_products:
+                remaining = self.max_products - total_processed
+                if remaining <= 0:
+                    break
+
+            page_processed = self._process_page(products, collection, remaining)
+            total_processed += page_processed
+            total_pages += 1
+
+            # Commit progress so UI shows partial results
+            self._cr.commit()
+
+            # Stop conditions
+            if not self.auto_next_page:
+                break
+            if len(products) < self.limit:
+                break  # last page
+            if self.use_max_products and total_processed >= self.max_products:
+                break
+
+            # Advance to next page
+            current_skip += self.limit
+            self.write({"skip": current_skip})
+            self._cr.commit()
+
+            delay = max(1, self.page_delay or 1)
+            _time.sleep(delay)
+
         self.write({"state": "done"})
         return {
             "type": "ir.actions.client",
@@ -579,10 +672,11 @@ class HlvDocCrawler(models.Model):
             "params": {
                 "title": _("Crawler hoàn thành"),
                 "message": _(
-                    "Đã xử lý %d sản phẩm  |  Tìm thấy: %d  |  Không tìm thấy: %d  |  Lỗi: %d"
+                    "Tổng %d trang  |  Xử lý: %d SP  |  Tìm thấy: %d  |  Không tìm thấy: %d  |  Lỗi: %d"
                 )
                 % (
-                    len(products),
+                    total_pages,
+                    total_processed,
                     self.found_count,
                     self.not_found_count,
                     self.error_count,
@@ -591,6 +685,12 @@ class HlvDocCrawler(models.Model):
                 "sticky": True,
             },
         }
+
+    def action_next_page(self):
+        """Tăng skip thêm limit rồi chạy trang tiếp theo."""
+        self.ensure_one()
+        self.write({"skip": self.skip + self.limit})
+        return self.action_run()
 
     def action_clear_logs(self):
         """Xóa toàn bộ log của lần chạy này."""
