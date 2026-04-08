@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Add product column to resource list view -->
+    <record id="view_llm_resource_tree_product" model="ir.ui.view">
+        <field name="name">llm.resource.tree.product</field>
+        <field name="model">llm.resource</field>
+        <field name="inherit_id" ref="llm_knowledge.view_llm_resource_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="product_tmpl_id" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Add product field to resource form view -->
+    <record id="view_llm_resource_form_product" model="ir.ui.view">
+        <field name="name">llm.resource.form.product</field>
+        <field name="model">llm.resource</field>
+        <field name="inherit_id" ref="llm_knowledge.view_llm_resource_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='model_id']" position="after">
+                <field name="product_tmpl_id" readonly="1"
+                       invisible="not product_tmpl_id"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Add product filter to resource search view -->
+    <record id="view_llm_resource_search_product" model="ir.ui.view">
+        <field name="name">llm.resource.search.product</field>
+        <field name="model">llm.resource</field>
+        <field name="inherit_id" ref="llm_knowledge.view_llm_resource_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[@name='group_by_collection']" position="after">
+                <filter name="group_by_product" string="Sản phẩm"
+                        context="{'group_by': 'product_tmpl_id'}"/>
+            </xpath>
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="product_tmpl_id"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
