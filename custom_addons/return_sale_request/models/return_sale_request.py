@@ -217,6 +217,106 @@ class ReturnSaleRequest(models.Model):
         """Xác nhận đề nghị (Hoàn thành) - Đã comment quy trình kho theo yêu cầu"""
         # self._auto_start_processing(force=True)
         self.write({"state": "done"})
+        for rec in self:
+            try:
+                rec._send_zns_notification()
+            except Exception as e:
+                _logger.exception("Lỗi khi gửi thông báo Zalo cho đề nghị %s: %s", rec.name, e)
+
+    def _send_zns_notification(self):
+        """Gửi thông báo Zalo cho kho khi đề nghị trả hàng được xác nhận (Done).
+
+        Lấy recipients theo kho từ incoming_warehouse_mapping_text của config,
+        fallback về incoming_recipient_user_id nếu không có mapping riêng.
+        """
+        self.ensure_one()
+
+        config = self.env["hlv.zalo.stock.notification"].sudo()._get_active_config()
+        if not config:
+            _logger.info("Zalo: Không tìm thấy config active, bỏ qua gửi thông báo cho %s", self.name)
+            return
+
+        # Xác định warehouse_code từ warehouse_id
+        warehouse_code = self.warehouse_id.code if self.warehouse_id else None
+
+        # Lấy danh sách recipients theo kho
+        recipient_user_ids = []
+        if warehouse_code:
+            recipient_user_ids = config.get_recipients_for_incoming_warehouse(warehouse_code)
+
+        # Fallback về global incoming recipient
+        if not recipient_user_ids and config.incoming_recipient_user_id:
+            recipient_user_ids = [config.incoming_recipient_user_id]
+
+        if not recipient_user_ids:
+            _logger.warning(
+                "Zalo: Không có recipient nào được cấu hình cho kho '%s' (đề nghị %s)",
+                warehouse_code, self.name
+            )
+            return
+
+        # Khử trùng
+        recipient_user_ids = list(dict.fromkeys(str(u).strip() for u in recipient_user_ids if u))
+
+        # Build nội dung tin nhắn
+        message = self._format_zns_return_message()
+
+        # Lấy access token
+        try:
+            access_token = config.get_valid_access_token()
+            if not access_token:
+                _logger.error("Zalo: Không có access_token hợp lệ, bỏ qua gửi thông báo cho %s", self.name)
+                return
+        except Exception as e:
+            _logger.exception("Zalo: Lỗi lấy access_token cho %s: %s", self.name, e)
+            return
+
+        _logger.info(
+            "Zalo Return Notification: Gửi thông báo cho đề nghị %s, kho=%s, recipients=%s",
+            self.name, warehouse_code, recipient_user_ids
+        )
+
+        for uid in recipient_user_ids:
+            try:
+                result = config.send_notification_message(uid, message)
+                if result and result.get("error") == 0:
+                    _logger.info("✓ Zalo: Gửi thành công tới %s cho đề nghị %s", uid, self.name)
+                else:
+                    _logger.error(
+                        "✗ Zalo: Gửi thất bại tới %s cho đề nghị %s. Kết quả: %s",
+                        uid, self.name, result
+                    )
+            except Exception as e:
+                _logger.exception("✗ Zalo: Exception khi gửi tới %s cho đề nghị %s: %s", uid, self.name, e)
+
+    def _format_zns_return_message(self):
+        """Tạo nội dung tin nhắn Zalo cho đề nghị trả hàng."""
+        self.ensure_one()
+
+        partner_name = self.partner_id.name if self.partner_id else "(chưa có)"
+        sale_order_name = self.sale_order_id.name if self.sale_order_id else "(chưa có)"
+        warehouse_name = self.warehouse_id.name if self.warehouse_id else "(chưa có)"
+        date_str = self.date.strftime("%d/%m/%Y") if self.date else ""
+
+        message = f"🔔 ĐỀ NGHỊ TRẢ HÀNG XÁC NHẬN\n"
+        message += f"  • Mã đề nghị: {self.name}\n"
+        message += f"  • Ngày: {date_str}\n"
+        message += f"  • Đơn hàng gốc: {sale_order_name}\n"
+        message += f"  • Khách hàng: {partner_name}\n"
+        message += f"  • Kho: {warehouse_name}\n"
+
+        if self.line_ids:
+            message += "\n📦 Sản phẩm trả:\n"
+            for line in self.line_ids:
+                product_name = line.product_id.display_name if line.product_id else "?"
+                qty = line.product_qty
+                uom = line.product_uom_id.name if line.product_uom_id else ""
+                message += f"  • {product_name}: {qty:g} {uom}\n"
+
+        if self.return_reason:
+            message += f"\n📝 Lý do: {self.return_reason}\n"
+
+        return message
 
     # def button_approve(self):
     #     """Deprecated - Same as button_submit now"""
