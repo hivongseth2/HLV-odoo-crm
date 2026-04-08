@@ -353,41 +353,103 @@ class HlvDocCrawler(models.Model):
     def _mecsu_score(self, odoo_code, odoo_name, candidate):
         """Tính điểm tương đồng giữa sản phẩm Odoo và kết quả MecSu (0.0–1.0).
 
-        Ưu tiên khớp SKU chính xác trước, sau đó so tên bằng SequenceMatcher.
+        Dùng token-overlap trên thông số kỹ thuật (kích thước, cấp độ bền, vật liệu)
+        thay vì so sánh toàn chuỗi — vì tên tiếng Việt giữa Odoo và MecSu thường khác nhau.
         """
-        from difflib import SequenceMatcher
+        cand_name = (candidate.get("name") or "").lower()
+        odoo_norm = (odoo_name or "").lower()
 
-        cand_sku = (candidate.get("sku") or "").upper().strip()
-        odoo_code_norm = (odoo_code or "").upper().strip()
+        # ─── Trích xuất token kỹ thuật từ tên Odoo ───────────────────────────
+        # (weight, pattern, normalize_fn)
+        token_rules = [
+            # Kích thước kiểu M16x50, M8x1.25, Ø25, Ф32
+            (1.0, re.compile(r'm\d+(?:[x×]\d+(?:\.\d+)?)?(?:\s*(?:ren\s*lửng|rl))?', re.IGNORECASE)),
+            # Độ bền / cấp độ: 8.8, 10.9, 12.9, 4.8, A2, A4
+            (0.6, re.compile(r'\b(?:4\.8|5\.6|8\.8|10\.9|12\.9|a2-70|a4-80|a2|a4)\b', re.IGNORECASE)),
+            # Tiêu chuẩn DIN/ISO
+            (0.4, re.compile(r'(?:din|iso)\s*\d+', re.IGNORECASE)),
+            # Chiều dài độc lập (ví dụ: 50mm, 100mm)
+            (0.3, re.compile(r'\b\d{2,4}\s*mm\b', re.IGNORECASE)),
+        ]
 
-        # Khớp SKU: MecSu sku thường có dạng BRAND-ORIGINAL_CODE
-        if odoo_code_norm and cand_sku:
-            if cand_sku == odoo_code_norm:
-                return 1.0
-            if cand_sku.endswith("-" + odoo_code_norm):
-                return 1.0
-            if odoo_code_norm in cand_sku:
-                return 0.92
+        tokens = []  # list of (weight, norm_text)
+        for weight, pattern in token_rules:
+            for m in pattern.finditer(odoo_norm):
+                t = m.group(0).lower().replace(" ", "").replace("×", "x")
+                tokens.append((weight, t))
 
-        # Khớp tên sản phẩm
-        odoo_norm = (odoo_name or "").lower().strip()
-        cand_norm = (candidate.get("name") or "").lower().strip()
-        if not odoo_norm or not cand_norm:
-            return 0.0
+        # Vật liệu (dùng nhóm riêng vì tên khác nhau nhiều)
+        material_odoo = None
+        if any(k in odoo_norm for k in ("ss304", "304", "inox", "inox304")):
+            material_odoo = "304"
+        elif any(k in odoo_norm for k in ("316", "inox316", "ss316")):
+            material_odoo = "316"
+        elif any(k in odoo_norm for k in ("thép đen", "đen", "carbon", "black", "mạ kẽm", "ma kem")):
+            material_odoo = "black"
 
-        ratio = SequenceMatcher(None, odoo_norm, cand_norm).ratio()
+        if not tokens and not material_odoo:
+            # Không có token kỹ thuật → dùng SequenceMatcher đơn giản (hàng phi tiêu chuẩn)
+            from difflib import SequenceMatcher
+            return SequenceMatcher(None, odoo_norm, cand_name).ratio() * 0.6
 
-        # Bonus: nếu Odoo code xuất hiện trong tên MecSu
-        if odoo_code_norm and odoo_code_norm.lower() in cand_norm:
-            ratio = min(1.0, ratio + 0.2)
+        # ─── Tính điểm khớp token ─────────────────────────────────────────────
+        total_w = sum(w for w, _ in tokens)
+        match_w = 0.0
+        for weight, token in tokens:
+            if token in cand_name:
+                match_w += weight
 
-        return ratio
+        # Điểm vật liệu (bonus/penalty nhẹ — không penalty nặng vì MecSu hay bỏ qua)
+        mat_score = 0.0
+        if material_odoo:
+            if material_odoo == "304":
+                mat_score = 0.3 if any(k in cand_name for k in ("304", "inox", "ss304")) else -0.05
+            elif material_odoo == "316":
+                mat_score = 0.3 if "316" in cand_name else -0.05
+            elif material_odoo == "black":
+                mat_score = 0.3 if any(k in cand_name for k in ("đen", "carbon", "zinc", "kẽm")) else -0.05
+            total_w += 0.3
+
+        token_ratio = (match_w + max(0.0, mat_score)) / max(total_w, 0.001)
+        return min(1.0, token_ratio)
+
+    def _extract_search_terms(self, odoo_name):
+        """Trích xuất cụm từ kỹ thuật tốt nhất để search mecsu.vn.
+
+        Ưu tiên: kích thước (M16x50) > tiêu chuẩn (DIN933) > cấp độ bền (8.8).
+        Tránh dùng tên tiếng Việt thuần vì MecSu hay dùng cách viết khác.
+        """
+        if not odoo_name:
+            return odoo_name or ""
+
+        parts = []
+
+        # Kích thước M16x50
+        dims = re.findall(r'M\d+(?:[x×]\d+(?:\.\d+)?)?', odoo_name, re.IGNORECASE)
+        parts.extend(d.upper() for d in dims[:2])
+
+        # Tiêu chuẩn DIN/ISO
+        standards = re.findall(r'(?:DIN|ISO)\s*\d+', odoo_name, re.IGNORECASE)
+        parts.extend(s.upper().replace(" ", "") for s in standards[:1])
+
+        # Cấp độ bền
+        grades = re.findall(r'\b(?:4\.8|8\.8|10\.9|12\.9)\b', odoo_name)
+        parts.extend(grades[:1])
+
+        if parts:
+            return " ".join(parts)  # e.g. "M16x50 8.8"  hoặc  "M16x50 DIN933"
+
+        # Fallback: lấy 3 từ cuối (thường chứa spec quan trọng hơn từ đầu)
+        words = [w for w in odoo_name.split() if len(w) > 1]
+        return " ".join(words[-3:]) if len(words) >= 2 else odoo_name
 
     def _mecsu_search(self, odoo_code, odoo_name, max_pages=2):
         """Tìm kiếm sản phẩm trên mecsu.vn.
 
-        Thử search theo SKU trước, sau đó theo tên nếu chưa đủ kết quả.
-        Trả về list ứng viên {name, sku, url}.
+        Chiến lược:
+        1. Search bằng cụm thông số kỹ thuật (M16x50 8.8) — hiệu quả nhất với mecsu
+        2. Search bằng tên đầy đủ làm phương án dự phòng
+        Không dùng mã SKU nội bộ Odoo vì mecsu dùng mã riêng hoàn toàn khác.
         """
         candidates = []
         seen_urls = set()
@@ -398,13 +460,12 @@ class HlvDocCrawler(models.Model):
                     seen_urls.add(item["url"])
                     candidates.append(item)
 
-        # Chiến lược 1: tìm theo mã SKU
-        if odoo_code:
+        def _do_search(query, label):
             for page in range(1, max_pages + 1):
                 try:
                     url = (
                         f"{MECSU_BASE}/site"
-                        f"?q={urllib.parse.quote(odoo_code)}&view=table"
+                        f"?q={urllib.parse.quote(query)}&view=table"
                         + (f"&page={page}" if page > 1 else "")
                     )
                     html = self._mecsu_get(url)
@@ -413,27 +474,23 @@ class HlvDocCrawler(models.Model):
                     if not page_items:
                         break
                 except Exception as e:
-                    _logger.warning("MecSu search(code=%s, page=%d): %s", odoo_code, page, e)
+                    _logger.warning("MecSu search(%s=%s, page=%d): %s", label, query, page, e)
                     break
 
-        # Chiến lược 2: tìm theo 3-4 từ đầu tên nếu chưa có đủ ứng viên
+        # Chiến lược 1: thông số kỹ thuật (dimension/grade) — chính xác nhất
+        tech_query = self._extract_search_terms(odoo_name)
+        if tech_query and tech_query.lower() != (odoo_name or "").lower():
+            _do_search(tech_query, "tech")
+
+        # Chiến lược 2: tên đầy đủ nếu chưa đủ ứng viên
         if odoo_name and len(candidates) < 5:
-            short_name = " ".join(odoo_name.split()[:4])
-            for page in range(1, max_pages + 1):
-                try:
-                    url = (
-                        f"{MECSU_BASE}/site"
-                        f"?q={urllib.parse.quote(short_name)}&view=table"
-                        + (f"&page={page}" if page > 1 else "")
-                    )
-                    html = self._mecsu_get(url)
-                    page_items = self._mecsu_parse_listing(html)
-                    _add_unique(page_items)
-                    if not page_items:
-                        break
-                except Exception as e:
-                    _logger.warning("MecSu search(name=%s, page=%d): %s", short_name, page, e)
-                    break
+            _do_search(odoo_name, "name")
+
+        # Chiến lược 3: tên rút gọn 3-4 từ cuối nếu vẫn chưa có kết quả
+        if not candidates and odoo_name:
+            words = odoo_name.split()
+            if len(words) > 3:
+                _do_search(" ".join(words[-3:]), "tail")
 
         return candidates
 
