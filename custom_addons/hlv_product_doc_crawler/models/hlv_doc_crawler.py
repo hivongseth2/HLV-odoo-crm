@@ -137,10 +137,6 @@ class HlvDocCrawler(models.Model):
             cats = ", ".join(c["name"] for c in wc_product["categories"])
             lines.append(f"**Danh mục:** {cats}")
 
-        price = wc_product.get("regular_price") or wc_product.get("price")
-        if price:
-            lines.append(f"**Giá niêm yết:** {price}")
-
         if wc_product.get("permalink"):
             lines.append(f"**Trang sản phẩm:** {wc_product['permalink']}")
 
@@ -430,11 +426,6 @@ class HlvDocCrawler(models.Model):
         mpn_m = re.search(r"MPN[:\s]+([A-Z0-9][A-Z0-9\-]+)", html)
         if mpn_m:
             lines.append(f"**Mã sản phẩm (MecSu MPN):** {mpn_m.group(1)}")
-
-        # Giá bán
-        price_m = re.search(r"([\d.,]+\s*đ\s*/\s*\w+)", html)
-        if price_m:
-            lines.append(f"**Giá:** {price_m.group(1)}")
 
         lines.append(f"**Nguồn:** {url}")
         lines.append("")
