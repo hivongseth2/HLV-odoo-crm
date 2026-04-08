@@ -24,7 +24,8 @@ patch(FormController.prototype, {
             this._leaveDecisionMade = false;
             return;
         }
-        if (this.model.root.isDirty) {
+        const dirty = await this.model.root.isDirty();
+        if (dirty) {
             return this._confirmSave();
         }
     },
@@ -33,7 +34,7 @@ patch(FormController.prototype, {
         if (this._formInDialog) {
             return;
         }
-        if (this.model.root.isDirty) {
+        if (this.model.root.dirty) {
             ev.preventDefault();
             ev.returnValue = "";
         }
@@ -50,9 +51,9 @@ patch(FormController.prototype, {
             this.dialogService.add(
                 ConfirmationDialog,
                 {
-                    title: _t("Thay đổi chưa được lưu"),
-                    body: _t("Bạn có muốn lưu các thay đổi của mình không?"),
-                    confirmLabel: _t("Lưu"),
+                    title: _t("Thay \u0111\u1ed5i ch\u01b0a \u0111\u01b0\u1ee3c l\u01b0u"),
+                    body: _t("B\u1ea1n c\u00f3 mu\u1ed1n l\u01b0u c\u00e1c thay \u0111\u1ed5i c\u1ee7a m\u00ecnh kh\u00f4ng?"),
+                    confirmLabel: _t("L\u01b0u"),
                     confirm: async () => {
                         handled = true;
                         this._leaveDecisionMade = true;
@@ -60,7 +61,7 @@ patch(FormController.prototype, {
                         _continue = true;
                         resolve();
                     },
-                    cancelLabel: _t("Huỷ bỏ"),
+                    cancelLabel: _t("Hu\u1ef7 b\u1ecf"),
                     cancel: async () => {
                         handled = true;
                         this._leaveDecisionMade = true;
