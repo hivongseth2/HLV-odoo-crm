@@ -2,74 +2,126 @@
 import { FormController } from "@web/views/form/form_controller";
 import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
-import { SettingsConfirmationDialog } from "@web/webclient/settings_form_view/settings_confirmation_dialog";
+import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { onMounted, onWillUnmount } from "@odoo/owl";
 
 patch(FormController.prototype, {
-/* Patch FormController to restrict auto save in form views */
-   setup(){
-      super.setup(...arguments);
-      this._hasPendingInput = false;
-      onMounted(() => {
-          this.__onFormInput = (ev) => {
-              if (this.rootRef?.el?.contains(ev.target)) {
-                  this._hasPendingInput = true;
-              }
-          };
-          document.addEventListener('input', this.__onFormInput, true);
-      });
-      onWillUnmount(() => {
-          document.removeEventListener('input', this.__onFormInput, true);
-      });
-   },
 
-   async save(...args) {
-       this._hasPendingInput = false;
-       return super.save(...args);
-   },
+    setup() {
+        super.setup(...arguments);
+        this._formInDialog = false;
+        this._leaveDecisionMade = false;
+        this._userTyping = false;
 
-   async beforeLeave() {
+        onMounted(() => {
+            this._formInDialog = !!this.rootRef?.el?.closest(".o_dialog");
+
+            if (!this._formInDialog) {
+                // Set _userTyping when user actually types in form sheet
+                this.__onUserInput = (ev) => {
+                    if (!ev.isTrusted) return;
+                    const sheet = this.rootRef?.el?.querySelector(".o_form_sheet, .o_form_sheet_bg");
+                    if (sheet && sheet.contains(ev.target)) {
+                        this._userTyping = true;
+                    }
+                };
+                document.addEventListener("input", this.__onUserInput, true);
+
+                // Clear _userTyping when input loses focus (blur/focusout)
+                // After focus out, Odoo's model.root.dirty takes over as source of truth
+                this.__onFormFocusOut = (ev) => {
+                    const sheet = this.rootRef?.el?.querySelector(".o_form_sheet, .o_form_sheet_bg");
+                    if (sheet && sheet.contains(ev.target)) {
+                        this._userTyping = false;
+                    }
+                };
+                document.addEventListener("focusout", this.__onFormFocusOut, true);
+            }
+        });
+
+        onWillUnmount(() => {
+            if (this.__onUserInput) {
+                document.removeEventListener("input", this.__onUserInput, true);
+            }
+            if (this.__onFormFocusOut) {
+                document.removeEventListener("focusout", this.__onFormFocusOut, true);
+            }
+        });
+    },
+
+    async save(...args) {
+        this._userTyping = false;
+        return super.save(...args);
+    },
+
+    async beforeLeave() {
+        if (this._formInDialog) {
+            return;
+        }
+        if (this._leaveDecisionMade) {
+            this._leaveDecisionMade = false;
+            return;
+        }
         const dirty = await this.model.root.isDirty();
-        if (dirty || this._hasPendingInput) {
+        if (dirty) {
             return this._confirmSave();
         }
     },
 
-   beforeUnload(ev) {
-        if (this.model.root.dirty || this._hasPendingInput) {
+    beforeUnload(ev) {
+        if (this._formInDialog) {
+            return;
+        }
+        // dirty = model has pending changes (set after Odoo processes input)
+        // _userTyping = user is currently typing in input (before blur/model update)
+        if (this.model.root.dirty || this._userTyping) {
             ev.preventDefault();
-            ev.returnValue = '';
+            ev.returnValue = "";
         }
     },
 
-   beforeVisibilityChange() {
-        // Override: do NOT auto-save when tab loses focus / visibility changes.
-        // Original Odoo behavior calls this.model.root.save() here,
-        // which saves without user confirmation.
+    beforeVisibilityChange() {
+        // do NOT auto-save when tab loses focus
     },
 
-   async _confirmSave() {
+    async _confirmSave() {
         let _continue = true;
         await new Promise((resolve) => {
-            this.dialogService.add(SettingsConfirmationDialog, {
-                body: _t("Would you like to save your changes?"),
-                confirm: async () => {
-                    await this.save();
-                    _continue = true;
-                    resolve();
+            let handled = false;
+            this.dialogService.add(
+                ConfirmationDialog,
+                {
+                    title: _t("Thay \u0111\u1ed5i ch\u01b0a \u0111\u01b0\u1ee3c l\u01b0u"),
+                    body: _t("B\u1ea1n c\u00f3 mu\u1ed1n l\u01b0u c\u00e1c thay \u0111\u1ed5i c\u1ee7a m\u00ecnh kh\u00f4ng?"),
+                    confirmLabel: _t("L\u01b0u"),
+                    confirm: async () => {
+                        handled = true;
+                        this._leaveDecisionMade = true;
+                        this._userTyping = false;
+                        await this.save();
+                        _continue = true;
+                        resolve();
+                    },
+                    cancelLabel: _t("Hu\u1ef7 b\u1ecf"),
+                    cancel: async () => {
+                        handled = true;
+                        this._leaveDecisionMade = true;
+                        this._userTyping = false;
+                        await this.model.root.discard();
+                        _continue = true;
+                        resolve();
+                    },
                 },
-                cancel: async () => {
-                    await this.model.root.discard();
-                    await this.model.root.save();
-                    _continue = true;
-                    resolve();
-                },
-                stayHere: () => {
-                    _continue = false;
-                    resolve();
-                },
-            });
+                {
+                    onClose: () => {
+                        if (!handled) {
+                            _continue = false;
+                            resolve();
+                        }
+                    },
+                }
+            );
         });
         return _continue;
-    }
+    },
 });

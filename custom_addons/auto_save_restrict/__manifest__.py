@@ -36,10 +36,6 @@
     'assets': {
         'web.assets_backend': [
             'auto_save_restrict/static/src/js/form_controller.js',
-            'auto_save_restrict/static/src/js/list_controller.js',
-            'auto_save_restrict/static/src/js/list_renderer.js',
-            'auto_save_restrict/static/src/js/view_button.js',
-
         ],
     },
     'images': ['static/description/banner.jpg'],
