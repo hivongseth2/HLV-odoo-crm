@@ -479,67 +479,117 @@ class HlvDocCrawler(models.Model):
         words = [w for w in odoo_name.split() if len(w) > 1]
         return " ".join(words[-3:]) if len(words) >= 2 else odoo_name
 
+    def _mecsu_search_rpc(self, search_term, limit=20):
+        """Tìm sản phẩm mecsu qua Odoo JSON-RPC API (không bị SPA/JS block).
+
+        mecsu.vn chạy trên Odoo → endpoint /web/dataset/call_kw có thể dùng public.
+        Trả về list {name, sku, url}.
+        """
+        try:
+            payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "call",
+                "params": {
+                    "model": "product.template",
+                    "method": "search_read",
+                    "args": [[
+                        ["website_published", "=", True],
+                        ["name", "ilike", search_term],
+                    ]],
+                    "kwargs": {
+                        "fields": ["name", "website_url"],
+                        "limit": limit,
+                    },
+                },
+            }
+            resp = requests.post(
+                f"{MECSU_BASE}/web/dataset/call_kw",
+                json=payload,
+                headers={**self._mecsu_headers(), "Content-Type": "application/json"},
+                timeout=25,
+            )
+            data = resp.json()
+            if data.get("error"):
+                _logger.warning("MecSu RPC error: %s", data["error"])
+                return []
+            results = data.get("result") or []
+            candidates = []
+            for item in results:
+                url = (item.get("website_url") or "").strip()
+                if not url:
+                    continue
+                if not url.startswith("http"):
+                    url = MECSU_BASE + url
+                candidates.append({"name": item.get("name", ""), "sku": "", "url": url})
+            _logger.info("MecSu RPC '%s' → %d kết quả", search_term, len(candidates))
+            return candidates
+        except Exception as e:
+            _logger.warning("MecSu RPC search('%s') thất bại: %s", search_term, e)
+            return []
+
+    def _mecsu_search_html(self, query, label, max_pages, candidates, seen_urls):
+        """Tìm sản phẩm mecsu qua HTML scraping (fallback khi RPC không hoạt động)."""
+        for page in range(1, max_pages + 1):
+            url = (
+                f"{MECSU_BASE}/site"
+                f"?keyword={urllib.parse.quote(query)}"
+                + (f"&page={page}" if page > 1 else "")
+            )
+            try:
+                _logger.info("MecSu HTML GET %s", url)
+                html = self._mecsu_get(url)
+                _logger.info("MecSu HTML GET → %d bytes | snippet: %s", len(html), html[:200].replace("\n", " "))
+                page_items = self._mecsu_parse_listing(html)
+                _logger.info("MecSu HTML parse(%s=%s, page=%d) → %d items", label, query, page, len(page_items))
+                for item in page_items:
+                    if item["url"] not in seen_urls:
+                        seen_urls.add(item["url"])
+                        candidates.append(item)
+                if not page_items:
+                    break
+            except Exception as e:
+                _logger.error("MecSu HTML search(%s=%s) Lỗi: %s", label, query, e, exc_info=True)
+                break
+
     def _mecsu_search(self, odoo_code, odoo_name, max_pages=2):
         """Tìm kiếm sản phẩm trên mecsu.vn.
 
         Chiến lược:
-        1. Search bằng cụm thông số kỹ thuật (M16x50 8.8) — hiệu quả nhất với mecsu
-        2. Search bằng tên đầy đủ làm phương án dự phòng
-        Không dùng mã SKU nội bộ Odoo vì mecsu dùng mã riêng hoàn toàn khác.
+        1. Odoo JSON-RPC API (primary) — không bị SPA block, trả về JSON sạch
+        2. HTML scraping (fallback) — dùng khi RPC không hoạt động
         """
         candidates = []
         seen_urls = set()
+        tech_query = self._extract_search_terms(odoo_name)
 
-        def _add_unique(items):
-            for item in items:
+        # ── Chiến lược 1: Odoo JSON-RPC (ưu tiên) ─────────────────────────────
+        rpc_query = tech_query if (tech_query and tech_query.lower() != (odoo_name or "").lower()) else odoo_name
+        if rpc_query:
+            rpc_results = self._mecsu_search_rpc(rpc_query)
+            for item in rpc_results:
                 if item["url"] not in seen_urls:
                     seen_urls.add(item["url"])
                     candidates.append(item)
 
-        def _do_search(query, label):
-            for page in range(1, max_pages + 1):
-                # Mecsu dùng ?keyword= (không phải ?q=), xác nhận từ referrer thực tế
-                url = (
-                    f"{MECSU_BASE}/site"
-                    f"?keyword={urllib.parse.quote(query)}"
-                    + (f"&page={page}" if page > 1 else "")
-                )
-                try:
-                    _logger.info("MecSu GET %s", url)
-                    html = self._mecsu_get(url)
-                    _logger.info(
-                        "MecSu GET %s → %d bytes",
-                        url, len(html),
-                    )
-                    page_items = self._mecsu_parse_listing(html)
-                    _logger.info(
-                        "MecSu parse(%s=%s, page=%d) → %d items",
-                        label, query, page, len(page_items),
-                    )
-                    _add_unique(page_items)
-                    if not page_items:
-                        break
-                except Exception as e:
-                    _logger.error(
-                        "MecSu search(%s=%s, page=%d) URL=%s Lỗi: %s",
-                        label, query, page, url, e, exc_info=True,
-                    )
-                    break
+        # Nếu RPC không đủ → thêm search bằng tên đầy đủ qua RPC
+        if len(candidates) < 3 and odoo_name and odoo_name != rpc_query:
+            for item in self._mecsu_search_rpc(odoo_name):
+                if item["url"] not in seen_urls:
+                    seen_urls.add(item["url"])
+                    candidates.append(item)
 
-        # Chiến lược 1: thông số kỹ thuật (dimension/grade) — chính xác nhất
-        tech_query = self._extract_search_terms(odoo_name)
-        if tech_query and tech_query.lower() != (odoo_name or "").lower():
-            _do_search(tech_query, "tech")
-
-        # Chiến lược 2: tên đầy đủ nếu chưa đủ ứng viên
-        if odoo_name and len(candidates) < 5:
-            _do_search(odoo_name, "name")
-
-        # Chiến lược 3: tên rút gọn 3-4 từ cuối nếu vẫn chưa có kết quả
-        if not candidates and odoo_name:
-            words = odoo_name.split()
-            if len(words) > 3:
-                _do_search(" ".join(words[-3:]), "tail")
+        # ── Chiến lược 2: HTML scraping fallback ──────────────────────────────
+        if not candidates:
+            _logger.info("MecSu RPC trả về 0 → thử HTML scraping")
+            if tech_query and tech_query.lower() != (odoo_name or "").lower():
+                self._mecsu_search_html(tech_query, "tech", max_pages, candidates, seen_urls)
+            if odoo_name and len(candidates) < 3:
+                self._mecsu_search_html(odoo_name, "name", max_pages, candidates, seen_urls)
+            if not candidates and odoo_name:
+                words = odoo_name.split()
+                if len(words) > 3:
+                    self._mecsu_search_html(" ".join(words[-3:]), "tail", max_pages, candidates, seen_urls)
 
         return candidates
 
