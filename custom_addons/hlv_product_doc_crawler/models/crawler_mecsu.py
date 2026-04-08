@@ -270,20 +270,62 @@ class HlvDocCrawlerMecSu(models.Model):
 
     # ─── MecSu detail page ────────────────────────────────────────────────────
 
+    def _mecsu_extract_pdf_url(self, soup):
+        """Tìm URL PDF 'Tài liệu tham khảo' từ trang chi tiết MecSu.
+
+        Ưu tiên: img[alt='PDF Icon'] → parent a[href] → link kết thúc .pdf
+        """
+        # Ưu tiên: tìm img PDF Icon rồi lấy href của thẻ a cha
+        img = soup.find("img", attrs={"alt": "PDF Icon"})
+        if img:
+            parent_a = img.find_parent("a", href=True)
+            if parent_a:
+                href = parent_a["href"]
+                if not href.startswith("http"):
+                    href = f"{MECSU_BASE}{href}"
+                return href
+
+        # Fallback: bất kỳ link nào kết thúc .pdf
+        pdf_a = soup.find("a", href=re.compile(r"\.pdf(\?.*)?$", re.I))
+        if pdf_a:
+            href = pdf_a["href"]
+            if not href.startswith("http"):
+                href = f"{MECSU_BASE}{href}"
+            return href
+
+        return None
+
+    def _mecsu_download_pdf(self, pdf_url):
+        """Tải PDF từ mecsu.vn. Trả về bytes hoặc None nếu lỗi."""
+        try:
+            resp = requests.get(pdf_url, headers=self._mecsu_headers(), timeout=30)
+            resp.raise_for_status()
+            return resp.content
+        except Exception as e:
+            _logger.warning("MecSu download PDF failed: %s — %s", pdf_url, e)
+            return None
+
     def _mecsu_fetch_detail(self, url):
-        """Lấy trang chi tiết sản phẩm MecSu và dựng nội dung markdown."""
+        """Lấy trang chi tiết MecSu. Trả về (pdf_url, markdown_str).
+
+        pdf_url: URL file PDF 'Tài liệu tham khảo' nếu có, ngược lại None.
+        markdown_str: nội dung markdown từ bảng thông số (dùng khi không có PDF).
+        """
         try:
             html = self._mecsu_get(url)
         except Exception as e:
             _logger.warning("MecSu fetch detail failed: %s — %s", url, e)
-            return ""
+            return None, ""
 
         try:
             from bs4 import BeautifulSoup
         except ImportError:
-            return self._clean_html(html)
+            return None, self._clean_html(html)
 
         soup = BeautifulSoup(html, "html.parser")
+
+        # Lấy PDF URL trước khi decompose tags
+        pdf_url = self._mecsu_extract_pdf_url(soup)
 
         for tag in soup.find_all(["script", "style", "nav", "footer"]):
             tag.decompose()
@@ -303,6 +345,10 @@ class HlvDocCrawlerMecSu(models.Model):
         lines.append(f"**Nguồn:** {url}")
         lines.append("")
 
+        if pdf_url:
+            lines.append(f"**Tài liệu kỹ thuật (PDF):** {pdf_url}")
+            lines.append("")
+
         for tbl in soup.find_all("table"):
             rows = []
             for tr in tbl.find_all("tr"):
@@ -318,15 +364,7 @@ class HlvDocCrawlerMecSu(models.Model):
                 lines.append("")
                 break
 
-        pdf_link = soup.find("a", href=re.compile(r"\.pdf$", re.I))
-        if pdf_link:
-            pdf_href = pdf_link["href"]
-            if not pdf_href.startswith("http"):
-                pdf_href = f"{MECSU_BASE}{pdf_href}"
-            lines.append(f"**Tài liệu kỹ thuật (PDF):** {pdf_href}")
-            lines.append("")
-
-        return "\n".join(lines) if lines else ""
+        return pdf_url, ("\n".join(lines) if lines else "")
 
     # ─── MecSu processing ─────────────────────────────────────────────────────
 
@@ -361,38 +399,85 @@ class HlvDocCrawlerMecSu(models.Model):
                 "; ".join(f"{s:.2f} – {n}" for s, n in top),
             )
 
-        threshold = self.mecsu_similarity_threshold or 0.65
-        if not best or best_score < threshold:
-            debug_msg = (
-                f"Query: '{tech_query}' | {len(candidates)} ứng viên"
-                + (f" | Cao nhất: {best_score:.2f} – {best['name'][:50]}" if best else " | 0 ứng viên")
-            )
-            line.write({"status": "not_found", "error_msg": debug_msg})
+        if not best or not candidates:
+            line.write({
+                "status": "not_found",
+                "error_msg": f"Query: '{tech_query}' | 0 ứng viên",
+            })
             return False
 
-        # GPT QC: kiểm tra lại bằng GPT nếu bật
-        gpt_result = self._run_gpt_qc(product.name, best.get("name", ""))
-        if gpt_result:
-            gpt_score = gpt_result["score"]
-            gpt_reason = gpt_result.get("reason", "")
-            _logger.info(
-                "MecSu [%s] SKU=%s GPT QC: %.2f – %s",
-                self.name, sku, gpt_score, gpt_reason,
-            )
-            if gpt_score < (self.gpt_qc_threshold or 0.6):
+        # ─── GPT QC mode: bỏ qua threshold token, để GPT quyết định ────────
+        if self.use_gpt_qc:
+            gpt_result = self._run_gpt_qc(product.name, best.get("name", ""))
+            if not gpt_result:
+                # GPT lỗi (thiếu key, timeout...) → fallback về token threshold
+                _logger.warning(
+                    "MecSu [%s] SKU=%s: GPT QC lỗi, fallback token threshold",
+                    self.name, sku,
+                )
+                threshold = self.mecsu_similarity_threshold or 0.65
+                if best_score < threshold:
+                    line.write({
+                        "status": "not_found",
+                        "error_msg": (
+                            f"GPT lỗi + token thấp: {best_score:.2f} – {best['name'][:50]}"
+                        ),
+                    })
+                    return False
+            else:
+                gpt_score = gpt_result["score"]
+                gpt_reason = gpt_result.get("reason", "")
+                _logger.info(
+                    "MecSu [%s] SKU=%s GPT QC: %.2f – %s",
+                    self.name, sku, gpt_score, gpt_reason,
+                )
+                if gpt_score < (self.gpt_qc_threshold or 0.6):
+                    line.write({
+                        "status": "not_found",
+                        "error_msg": (
+                            f"GPT reject: {gpt_score:.2f} ({gpt_reason}) | "
+                            f"Token: {best_score:.2f} – {best['name'][:50]}"
+                        ),
+                        "match_score": best_score,
+                        "wc_url": best["url"],
+                    })
+                    return False
+        else:
+            # ─── Chế độ token score thuần ─────────────────────────────────
+            threshold = self.mecsu_similarity_threshold or 0.65
+            if best_score < threshold:
                 line.write({
                     "status": "not_found",
                     "error_msg": (
-                        f"GPT QC reject: {gpt_score:.2f} ({gpt_reason}) | "
-                        f"Token: {best_score:.2f} – {best['name'][:50]}"
+                        f"Query: '{tech_query}' | {len(candidates)} ứng viên"
+                        f" | Cao nhất: {best_score:.2f} – {best['name'][:50]}"
                     ),
-                    "match_score": best_score,
-                    "wc_url": best["url"],
                 })
                 return False
 
-        content = self._mecsu_fetch_detail(best["url"])
-        if not content:
+        pdf_url, content = self._mecsu_fetch_detail(best["url"])
+
+        if pdf_url:
+            # Ưu tiên PDF gốc của MecSu ("Tài liệu tham khảo")
+            pdf_bytes = self._mecsu_download_pdf(pdf_url)
+            if pdf_bytes:
+                _logger.info("MecSu [%s] SKU=%s: dùng PDF %s (%d bytes)",
+                             self.name, sku, pdf_url, len(pdf_bytes))
+                doc = self._ensure_product_document_pdf(product, f"{sku}_mecsu", pdf_bytes)
+            else:
+                # PDF download fail → fallback markdown
+                if not content:
+                    line.write({
+                        "status": "error",
+                        "error_msg": f"PDF download failed: {pdf_url}",
+                        "wc_url": best["url"],
+                        "match_score": best_score,
+                    })
+                    return False
+                doc = self._ensure_product_document(product, f"{sku}_mecsu", content)
+        elif content:
+            doc = self._ensure_product_document(product, f"{sku}_mecsu", content)
+        else:
             line.write(
                 {
                     "status": "error",
@@ -402,10 +487,6 @@ class HlvDocCrawlerMecSu(models.Model):
                 }
             )
             return False
-
-        doc = self._ensure_product_document(
-            product, f"{sku}_mecsu", content
-        )
 
         resource = None
         if self.auto_index or collection:
