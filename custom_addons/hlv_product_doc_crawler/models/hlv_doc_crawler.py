@@ -348,6 +348,9 @@ class HlvDocCrawler(models.Model):
         seen_urls = set()
         results = []
 
+        all_chi_tiet = [a["href"] for a in soup.find_all("a", href=True) if "/chi-tiet/" in a["href"]]
+        _logger.info("MecSu parse_listing: HTML=%d bytes, chi-tiet raw links=%d", len(html), len(all_chi_tiet))
+
         for a_tag in soup.find_all("a", href=True):
             href = a_tag["href"]
             if "/chi-tiet/" not in href:
@@ -495,20 +498,32 @@ class HlvDocCrawler(models.Model):
 
         def _do_search(query, label):
             for page in range(1, max_pages + 1):
+                # Mecsu dùng ?keyword= (không phải ?q=), xác nhận từ referrer thực tế
+                url = (
+                    f"{MECSU_BASE}/site"
+                    f"?keyword={urllib.parse.quote(query)}"
+                    + (f"&page={page}" if page > 1 else "")
+                )
                 try:
-                    # Mecsu dùng ?keyword= (không phải ?q=), xác nhận từ referrer thực tế
-                    url = (
-                        f"{MECSU_BASE}/site"
-                        f"?keyword={urllib.parse.quote(query)}"
-                        + (f"&page={page}" if page > 1 else "")
-                    )
+                    _logger.info("MecSu GET %s", url)
                     html = self._mecsu_get(url)
+                    _logger.info(
+                        "MecSu GET %s → %d bytes",
+                        url, len(html),
+                    )
                     page_items = self._mecsu_parse_listing(html)
+                    _logger.info(
+                        "MecSu parse(%s=%s, page=%d) → %d items",
+                        label, query, page, len(page_items),
+                    )
                     _add_unique(page_items)
                     if not page_items:
                         break
                 except Exception as e:
-                    _logger.warning("MecSu search(%s=%s, page=%d): %s", label, query, page, e)
+                    _logger.error(
+                        "MecSu search(%s=%s, page=%d) URL=%s Lỗi: %s",
+                        label, query, page, url, e, exc_info=True,
+                    )
                     break
 
         # Chiến lược 1: thông số kỹ thuật (dimension/grade) — chính xác nhất
