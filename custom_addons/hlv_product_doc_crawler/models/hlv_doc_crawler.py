@@ -272,7 +272,7 @@ class HlvDocCrawler(models.Model):
         return [k.strip().lower() for k in items if k.strip()]
 
     def _product_matches_filters(self, product):
-        """Trả về True nếu sản phẩm qua được cả 2 bộ lọc từ khóa."""
+        """Fallback Python filter (dự phòng cho ORM domain)."""
         combined = f"{(product.name or '')} {(product.default_code or '')}".lower()
 
         include = self._parse_keywords(self.search_keywords)
@@ -284,6 +284,34 @@ class HlvDocCrawler(models.Model):
             return False
 
         return True
+
+    def _build_search_domain(self):
+        """Tạo ORM domain bao gồm cả keyword filters.
+
+        Filter trước khi phân trang để offset/limit hoạt động chính xác
+        — tránh tình trạng một trang 0 sản phẩm sau khi lọc.
+        """
+        domain = [("default_code", "!=", False), ("default_code", "!=", "")]
+
+        # Include: khớp ít nhất 1 từ khóa tìm kiếm (trong tên HOẶC mã SP)
+        include = self._parse_keywords(self.search_keywords)
+        if include:
+            parts = [
+                ["|", ("name", "ilike", kw), ("default_code", "ilike", kw)]
+                for kw in include
+            ]
+            combined_inc = parts[0]
+            for part in parts[1:]:
+                combined_inc = ["|"] + combined_inc + part
+            domain += combined_inc
+
+        # Exclude: loại sản phẩm khớp bất kỳ từ khóa từ chối
+        exclude = self._parse_keywords(self.exclude_keywords)
+        for kw in exclude:
+            # NOT (name ilike kw OR code ilike kw)  =  (name NOT ilike kw AND code NOT ilike kw)
+            domain += [("name", "not ilike", kw), ("default_code", "not ilike", kw)]
+
+        return domain
 
     # ─── MecSu crawler ────────────────────────────────────────────────────────
 
@@ -567,7 +595,7 @@ class HlvDocCrawler(models.Model):
             if max_count is not None and processed >= max_count:
                 break
 
-            # Bộ lọc từ khóa
+            # Bộ lọc từ khóa (fallback — domain đã lọc ở ORM, check lại cho chắc)
             if not self._product_matches_filters(product):
                 continue
 
@@ -608,20 +636,43 @@ class HlvDocCrawler(models.Model):
                     )
 
                 elif self.source == "mecsu":
+                    tech_query = self._extract_search_terms(product.name)
+                    _logger.info(
+                        "MecSu [%s] SKU=%s | query='%s' | name='%s'",
+                        self.name, sku, tech_query, product.name,
+                    )
                     candidates = self._mecsu_search(sku, product.name)
+                    _logger.info(
+                        "MecSu [%s] SKU=%s | %d ứng viên",
+                        self.name, sku, len(candidates),
+                    )
 
                     # Tính điểm và chọn ứng viên tốt nhất
                     best = None
                     best_score = 0.0
+                    score_log = []
                     for candidate in candidates:
                         score = self._mecsu_score(sku, product.name, candidate)
+                        score_log.append((score, candidate.get("name", "")[:60]))
                         if score > best_score:
                             best_score = score
                             best = candidate
 
+                    if score_log:
+                        top = sorted(score_log, reverse=True)[:3]
+                        _logger.info(
+                            "MecSu [%s] SKU=%s | top scores: %s",
+                            self.name, sku,
+                            "; ".join(f"{s:.2f} – {n}" for s, n in top),
+                        )
+
                     threshold = self.mecsu_similarity_threshold or 0.65
                     if not best or best_score < threshold:
-                        line.write({"status": "not_found"})
+                        debug_msg = (
+                            f"Query: '{tech_query}' | {len(candidates)} ứng viên"
+                            + (f" | Cao nhất: {best_score:.2f} – {best['name'][:50]}" if best else " | 0 ứng viên")
+                        )
+                        line.write({"status": "not_found", "error_msg": debug_msg})
                         continue
 
                     content = self._mecsu_fetch_detail(best["url"])
@@ -683,9 +734,12 @@ class HlvDocCrawler(models.Model):
         total_processed = 0
         total_pages = 0
 
+        search_domain = self._build_search_domain()
+        _logger.info("Crawler [%s] domain: %s", self.name, search_domain)
+
         while True:
             products = self.env["product.template"].search(
-                [("default_code", "!=", False), ("default_code", "!=", "")],
+                search_domain,
                 offset=current_skip,
                 limit=self.limit,
             )

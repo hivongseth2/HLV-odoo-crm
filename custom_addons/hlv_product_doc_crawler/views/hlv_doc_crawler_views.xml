@@ -108,7 +108,7 @@
                                    string="Tương đồng"/>
                             <field name="document_id" optional="show"/>
                             <field name="resource_id" optional="show"/>
-                            <field name="error_msg" optional="hide"/>
+                            <field name="error_msg" optional="show"/>
                         </list>
                     </field>
                 </sheet>
