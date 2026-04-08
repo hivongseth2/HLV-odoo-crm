@@ -9,3 +9,4 @@ __pycache__/
 .agent/
 custom_addons/google_ads_automation/doc
 .clinerules/
+CLAUDE.md
