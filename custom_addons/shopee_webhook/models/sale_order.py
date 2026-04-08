@@ -33,12 +33,14 @@ class SaleOrder(models.Model):
         # Hủy đơn sau khi đã write shopee_order_status thành công
         for order in orders_to_cancel:
             try:
+                _logger.info("Shopee: Bắt đầu hủy đơn %s (state=%s)", order.name, order.state)
                 for picking in order.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel')):
-                    picking.action_cancel()
-                order.action_cancel()
-                _logger.info("Shopee: Đã hủy đơn bán hàng %s do trạng thái Shopee chuyển sang hủy.", order.name)
+                    _logger.info("Shopee: Hủy picking %s (state=%s)", picking.name, picking.state)
+                    picking.sudo().action_cancel()
+                order.sudo().action_cancel()
+                _logger.info("Shopee: Đã hủy đơn bán hàng %s thành công.", order.name)
             except Exception as e:
-                _logger.error("Shopee: Không thể hủy đơn %s: %s", order.name, str(e))
+                _logger.error("Shopee: Không thể hủy đơn %s: %s", order.name, str(e), exc_info=True)
 
         return result
 
