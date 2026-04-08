@@ -729,8 +729,8 @@ $('f-htgh').addEventListener('keydown',function(e){if(e.key==='Enter'){e.prevent
 // HTGH presets (localStorage)
 var HTGH_LS_KEY='hlv_htgh_presets';
 var defaultHtghPresets=[
-  {label:'Hãng VC',value:'ghn,cpn,chuyển phát nhanh,giao hàng nhanh,j&t,jnt'},
-  {label:'Tự giao',value:'!ghn,!cpn,!chuyển phát nhanh,!giao hàng nhanh,!j&t,!jnt'},
+  {label:'Hãng VC',value:'ghn,cpn,chuyển phát nhanh,giao hàng nhanh,j&t,jnt,viettel post,ems,lalamove,viettelpost'},
+  {label:'Tự giao',value:'!ghn,!cpn,!chuyển phát nhanh,!giao hàng nhanh,!j&t,!jnt,!viettel post,!ems,!lalamove,!viettelpost'},
 ];
 function loadHtghPresets(){
   try{return JSON.parse(localStorage.getItem(HTGH_LS_KEY))||defaultHtghPresets;}
