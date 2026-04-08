@@ -81,10 +81,11 @@ class ShopeeWebhookController(http.Controller):
                          _logger.warning("Shopee Webhook Rule 1: Invalid Signature for shop %s", shop_id)
                          # return {'code': 401, 'msg': 'Unauthorized'} # Strictly return 401
             
-            # Rule 4: Save to Log and return 200 immediately
-            request.env['shopee.webhook.log'].sudo().create({
+            # Save to Log and process immediately
+            log = request.env['shopee.webhook.log'].sudo().create({
                 'payload': json.dumps(data)
             })
+            log.process_webhook()
 
             return {'code': 0, 'msg': 'success'}
 
