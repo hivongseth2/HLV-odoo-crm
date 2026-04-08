@@ -26,6 +26,12 @@ class HlvDocCrawlerLine(models.Model):
         readonly=True,
     )
     wc_url = fields.Char(string="URL sản phẩm", readonly=True)
+    match_score = fields.Float(
+        string="Độ tương đồng",
+        readonly=True,
+        digits=(4, 2),
+        help="Điểm tương đồng MecSu (1.0 = khớp SKU chính xác, 0.65+ = chấp nhận được)",
+    )
     error_msg = fields.Text(string="Chi tiết lỗi", readonly=True)
     document_id = fields.Many2one(
         "ir.attachment", string="File tài liệu", readonly=True

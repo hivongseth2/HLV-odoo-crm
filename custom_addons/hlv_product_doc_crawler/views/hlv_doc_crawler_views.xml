@@ -44,9 +44,16 @@
                         <group string="Cấu hình nguồn dữ liệu">
                             <field name="name"/>
                             <field name="source"/>
-                            <field name="wc_domain"/>
-                            <field name="wc_key"/>
-                            <field name="wc_secret" password="True"/>
+                            <!-- Hoàng Long Vũ (WooCommerce) -->
+                            <field name="wc_domain"
+                                   invisible="source != 'hoanglongvu'"/>
+                            <field name="wc_key"
+                                   invisible="source != 'hoanglongvu'"/>
+                            <field name="wc_secret" password="True"
+                                   invisible="source != 'hoanglongvu'"/>
+                            <!-- MecSu -->
+                            <field name="mecsu_similarity_threshold"
+                                   invisible="source != 'mecsu'"/>
                         </group>
                         <group string="Cấu hình batch">
                             <field name="skip"/>
@@ -76,6 +83,8 @@
                             <field name="product_id"/>
                             <field name="status" widget="badge"/>
                             <field name="wc_url" widget="url" optional="show"/>
+                            <field name="match_score" optional="show"
+                                   string="Tương đồng"/>
                             <field name="document_id" optional="show"/>
                             <field name="resource_id" optional="show"/>
                             <field name="error_msg" optional="hide"/>
