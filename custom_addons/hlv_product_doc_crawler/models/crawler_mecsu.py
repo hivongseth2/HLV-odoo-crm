@@ -457,49 +457,51 @@ class HlvDocCrawlerMecSu(models.Model):
 
         pdf_url, content = self._mecsu_fetch_detail(best["url"])
 
-        if pdf_url:
-            # Ưu tiên PDF gốc của MecSu ("Tài liệu tham khảo")
-            pdf_bytes = self._mecsu_download_pdf(pdf_url)
-            if pdf_bytes:
-                _logger.info("MecSu [%s] SKU=%s: dùng PDF %s (%d bytes)",
-                             self.name, sku, pdf_url, len(pdf_bytes))
-                doc = self._ensure_product_document_pdf(product, f"{sku}_mecsu", pdf_bytes)
-            else:
-                # PDF download fail → fallback markdown
-                if not content:
-                    line.write({
-                        "status": "error",
-                        "error_msg": f"PDF download failed: {pdf_url}",
-                        "wc_url": best["url"],
-                        "match_score": best_score,
-                    })
-                    return False
-                doc = self._ensure_product_document(product, f"{sku}_mecsu", content)
-        elif content:
-            doc = self._ensure_product_document(product, f"{sku}_mecsu", content)
-        else:
-            line.write(
-                {
-                    "status": "error",
-                    "error_msg": "Không lấy được nội dung trang chi tiết MecSu",
-                    "wc_url": best["url"],
-                    "match_score": best_score,
-                }
-            )
+        if not pdf_url and not content:
+            line.write({
+                "status": "error",
+                "error_msg": "Không lấy được nội dung trang chi tiết MecSu",
+                "wc_url": best["url"],
+                "match_score": best_score,
+            })
             return False
 
+        # Lưu markdown specs (luôn lưu nếu có)
+        doc_md = None
+        if content:
+            doc_md = self._ensure_product_document(product, f"{sku}_mecsu", content)
+
+        # Lưu PDF (luôn lưu nếu có, song song với markdown)
+        doc_pdf = None
+        if pdf_url:
+            pdf_bytes = self._mecsu_download_pdf(pdf_url)
+            if pdf_bytes:
+                _logger.info("MecSu [%s] SKU=%s: lưu PDF %s (%d bytes)",
+                             self.name, sku, pdf_url, len(pdf_bytes))
+                doc_pdf = self._ensure_product_document_pdf(product, f"{sku}_mecsu", pdf_bytes)
+            else:
+                _logger.warning("MecSu [%s] SKU=%s: PDF download failed %s",
+                                self.name, sku, pdf_url)
+
+        # Dùng PDF làm resource chính (nếu có), ngược lại dùng markdown
+        doc_primary = doc_pdf or doc_md
+
+        # Index cả 2 nếu auto_index
         resource = None
         if self.auto_index or collection:
-            resource = self._ensure_resource(doc, collection)
-            if self.auto_index:
-                resource.process_resource()
+            for doc in filter(None, [doc_md, doc_pdf]):
+                r = self._ensure_resource(doc, collection)
+                if self.auto_index:
+                    r.process_resource()
+                if doc is doc_primary:
+                    resource = r
 
         line.write(
             {
                 "status": "found",
                 "wc_url": best["url"],
                 "match_score": best_score,
-                "document_id": doc.ir_attachment_id.id,
+                "document_id": doc_primary.ir_attachment_id.id,
                 "resource_id": resource.id if resource else False,
             }
         )
