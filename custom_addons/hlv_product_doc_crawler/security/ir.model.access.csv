@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_hlv_doc_crawler,hlv.doc.crawler,model_hlv_doc_crawler,base.group_system,1,1,1,1
+access_hlv_doc_crawler_line,hlv.doc.crawler.line,model_hlv_doc_crawler_line,base.group_system,1,1,1,1

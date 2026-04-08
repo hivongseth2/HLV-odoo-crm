@@ -18,14 +18,14 @@
         </field>
     </record>
 
-    <!-- Server action to sync from product list/form -->
+    <!-- Server action appears in Action menu on the Documents list page -->
     <record id="action_sync_product_docs_to_knowledge" model="ir.actions.server">
-        <field name="name">Đồng bộ tài liệu → AI Knowledge</field>
-        <field name="model_id" ref="product.model_product_template"/>
-        <field name="binding_model_id" ref="product.model_product_template"/>
-        <field name="binding_view_types">list,form</field>
+        <field name="name">Đồng bộ → AI Knowledge</field>
+        <field name="model_id" ref="product.model_product_document"/>
+        <field name="binding_model_id" ref="product.model_product_document"/>
+        <field name="binding_view_types">list</field>
         <field name="state">code</field>
-        <field name="code">action = records.action_sync_product_documents()</field>
+        <field name="code">action = records.action_sync_and_index()</field>
     </record>
 
 </odoo>
