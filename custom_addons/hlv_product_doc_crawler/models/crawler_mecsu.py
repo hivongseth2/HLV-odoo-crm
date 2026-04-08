@@ -174,11 +174,45 @@ class HlvDocCrawlerMecSu(models.Model):
 
     # ─── MecSu search ────────────────────────────────────────────────────────
 
-    def _extract_search_terms(self, odoo_name):
-        """Trích xuất cụm từ kỹ thuật tốt nhất để search mecsu.vn."""
-        if not odoo_name:
-            return odoo_name or ""
+    # Từ khóa nhận diện sản phẩm là máy/thiết bị (không phải phụ kiện ren)
+    _TOOL_KEYWORDS_RE = re.compile(
+        r'(?:máy|khoan|mài|cắt|siết|vặn|bắn|router|sander|grinder|blower'
+        r'|drill|saw|impact|driver|milwaukee|makita|bosch|dewalt|hitachi|metabo'
+        r'|hộp\s*số|tay\s*cầm|đầu\s*kẹp|đầu\s*vặn|pin\s*sạc)',
+        re.IGNORECASE,
+    )
 
+    def _extract_tool_query(self, odoo_name):
+        """Trích query cho máy/thiết bị điện: nền pin + mã model."""
+        parts = []
+
+        # Nền pin Milwaukee/Makita: M18, M12, M28, M36 (đứng độc lập, không kèm 'x')
+        platform = re.search(r'\bM(12|18|28|36)\b(?!\s*[×x]\d)', odoo_name)
+        if platform:
+            parts.append(platform.group(0))
+
+        # Mã model: 2+ chữ HOA + số (FPD3-0, HD18JS, C18C, AGV18...)
+        # Loại trừ: DIN, ISO, SS304, thương hiệu và chính nền pin vừa lấy
+        _EXCLUDED = {
+            'DIN', 'ISO', 'SS304', 'SS316', 'A270', 'A480',
+            'MILWAUKEE', 'MAKITA', 'BOSCH', 'DEWALT', 'HITACHI', 'METABO',
+            'BARE', 'KIT',
+        }
+        platform_str = platform.group(0) if platform else ""
+        for code in re.findall(r'\b([A-Z][A-Z0-9]{2,}(?:-[0-9A-Z]+)*)\b', odoo_name):
+            if code not in _EXCLUDED and code != platform_str:
+                parts.append(code)
+                break  # 1 mã model là đủ
+
+        if parts:
+            return " ".join(parts)
+
+        # Fallback: 4 từ cuối
+        words = [w for w in odoo_name.split() if len(w) > 1]
+        return " ".join(words[-4:]) if len(words) >= 4 else odoo_name
+
+    def _extract_fastener_query(self, odoo_name):
+        """Trích query cho bu lông/ốc vít: kích thước + tiêu chuẩn + cấp bền."""
         parts = []
 
         dims = re.findall(r'M\d+(?:[x×]\d+(?:\.\d+)?)?', odoo_name, re.IGNORECASE)
@@ -195,6 +229,14 @@ class HlvDocCrawlerMecSu(models.Model):
 
         words = [w for w in odoo_name.split() if len(w) > 1]
         return " ".join(words[-3:]) if len(words) >= 2 else odoo_name
+
+    def _extract_search_terms(self, odoo_name):
+        """Dispatch: máy/thiết bị → _extract_tool_query, phụ kiện ren → _extract_fastener_query."""
+        if not odoo_name:
+            return ""
+        if self._TOOL_KEYWORDS_RE.search(odoo_name):
+            return self._extract_tool_query(odoo_name)
+        return self._extract_fastener_query(odoo_name)
 
     def _mecsu_search_via_popup(self, query):
         """Tìm sản phẩm mecsu: GET /site?keyword= → popup button → quick-view → chi-tiet URL."""
@@ -248,6 +290,7 @@ class HlvDocCrawlerMecSu(models.Model):
         candidates = []
         seen_urls = set()
         tech_query = self._extract_search_terms(odoo_name)
+        is_tool = bool(self._TOOL_KEYWORDS_RE.search(odoo_name or ""))
 
         def _add(items):
             for item in items:
@@ -255,16 +298,26 @@ class HlvDocCrawlerMecSu(models.Model):
                     seen_urls.add(item["url"])
                     candidates.append(item)
 
+        # Chiến lược 1: tech query (M18 FPD3-0 hoặc M16x50 8.8)
         if tech_query and tech_query.lower() != (odoo_name or "").lower():
             _add(self._mecsu_search_via_popup(tech_query))
 
-        if odoo_name and len(candidates) < 3:
-            _add(self._mecsu_search_via_popup(odoo_name))
+        if is_tool:
+            # Chiến lược 2 máy: chỉ mã model (FPD3-0) không kèm nền pin
+            model_only = re.sub(r'^M(?:12|18|28|36)\s*', '', tech_query).strip()
+            if model_only and model_only != tech_query and len(candidates) < 3:
+                _add(self._mecsu_search_via_popup(model_only))
+        else:
+            # Chiến lược 2 bu lông: tên đầy đủ
+            if odoo_name and len(candidates) < 3:
+                _add(self._mecsu_search_via_popup(odoo_name))
 
+        # Chiến lược 3: fallback 3-4 từ cuối
         if not candidates and odoo_name:
             words = odoo_name.split()
-            if len(words) > 3:
-                _add(self._mecsu_search_via_popup(" ".join(words[-3:])))
+            tail = " ".join(words[-4:]) if is_tool else " ".join(words[-3:])
+            if len(words) > (4 if is_tool else 3):
+                _add(self._mecsu_search_via_popup(tail))
 
         return candidates
 
