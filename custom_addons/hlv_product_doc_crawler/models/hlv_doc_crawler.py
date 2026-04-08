@@ -479,112 +479,88 @@ class HlvDocCrawler(models.Model):
         words = [w for w in odoo_name.split() if len(w) > 1]
         return " ".join(words[-3:]) if len(words) >= 2 else odoo_name
 
-    def _mecsu_search_rpc(self, search_term, limit=20):
-        """Tìm sản phẩm mecsu qua AJAX filter endpoint (không bị SPA/JS block).
+    def _mecsu_search_via_popup(self, query):
+        """Tìm sản phẩm mecsu: GET /site?keyword= → popup button → quick-view → chi-tiet URL.
 
-        mecsu.vn dùng endpoint /site/filter trả về JSON {"success":true,"content":"<html>"}
-        với sản phẩm đã render sẵn — xác nhận từ browser DevTools network tab.
+        Đây là flow đã được xác nhận hoạt động từ hlv_product_crawler/crawler_parsers.py:
+        - Trang /site?keyword= SSR các popup button (a.mecsu-button-popup-lg)
+        - Mỗi button chứa value="/product-quick-view/..." (server-side endpoint)
+        - Quick-view page trả về HTML có link /chi-tiet/...
         """
         try:
-            params = {
-                "cat": "1",
-                "k": search_term,
-                "is_applied": "1",
-                "only_part_web_sellable": "true",
-                "instock": "false",
-                "atts": "",
-                "brand": "",
-                "origin": "",
-            }
-            resp = requests.get(
-                f"{MECSU_BASE}/site/filter",
-                params=params,
-                headers={
-                    **self._mecsu_headers(),
-                    "x-requested-with": "XMLHttpRequest",
-                    "Accept": "application/json, text/javascript, */*; q=0.01",
-                },
-                timeout=25,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            if not data.get("success"):
-                _logger.warning("MecSu /site/filter không thành công: %s", data)
-                return []
-            html_content = data.get("content") or ""
-            _logger.info(
-                "MecSu /site/filter '%s' → count=%s, content=%d bytes",
-                search_term, data.get("count"), len(html_content),
-            )
-            return self._mecsu_parse_listing(html_content)
-        except Exception as e:
-            _logger.warning("MecSu /site/filter('%s') thất bại: %s", search_term, e)
+            from bs4 import BeautifulSoup
+        except ImportError:
             return []
 
-    def _mecsu_search_html(self, query, label, max_pages, candidates, seen_urls):
-        """Tìm sản phẩm mecsu qua HTML scraping (fallback khi RPC không hoạt động)."""
-        for page in range(1, max_pages + 1):
-            url = (
-                f"{MECSU_BASE}/site"
-                f"?keyword={urllib.parse.quote(query)}"
-                + (f"&page={page}" if page > 1 else "")
-            )
+        try:
+            url = f"{MECSU_BASE}/site?keyword={urllib.parse.quote(query)}"
+            html = self._mecsu_get(url)
+        except Exception as e:
+            _logger.warning("MecSu get /site?keyword=%s: %s", query, e)
+            return []
+
+        soup = BeautifulSoup(html, "html.parser")
+        popup_btns = soup.select('a.mecsu-button-popup-lg[title="Thông số kỹ thuật"]')
+        _logger.info("MecSu /site?keyword=%s → %d popup buttons", query, len(popup_btns))
+
+        candidates = []
+        seen_urls = set()
+        for btn in popup_btns[:15]:
+            quick_view_path = btn.get("value", "")
+            if not quick_view_path or "product-quick-view" not in quick_view_path:
+                continue
+            quick_view_url = MECSU_BASE + quick_view_path
             try:
-                _logger.info("MecSu HTML GET %s", url)
-                html = self._mecsu_get(url)
-                _logger.info("MecSu HTML GET → %d bytes | snippet: %s", len(html), html[:200].replace("\n", " "))
-                page_items = self._mecsu_parse_listing(html)
-                _logger.info("MecSu HTML parse(%s=%s, page=%d) → %d items", label, query, page, len(page_items))
-                for item in page_items:
-                    if item["url"] not in seen_urls:
-                        seen_urls.add(item["url"])
-                        candidates.append(item)
-                if not page_items:
-                    break
+                qv_html = self._mecsu_get(quick_view_url)
+                qv_soup = BeautifulSoup(qv_html, "html.parser")
+                for link in qv_soup.select('a[href*="/chi-tiet/"]'):
+                    href = link.get("href", "")
+                    if not href:
+                        continue
+                    full_url = href if href.startswith("http") else MECSU_BASE + href
+                    if full_url in seen_urls:
+                        continue
+                    # Lấy tên từ slug: /chi-tiet/bulong-thep-den-8-8-din933-m10x100.0054038
+                    slug = href.split("/chi-tiet/")[-1]
+                    slug_clean = re.sub(r"\.\d+$", "", slug)
+                    name = slug_clean.replace("-", " ")
+                    name = re.sub(r"\b(\d+) (\d)\b", r"\1.\2", name)
+                    seen_urls.add(full_url)
+                    candidates.append({"name": name, "url": full_url, "sku": ""})
+                    break  # 1 chi-tiet per quick-view
             except Exception as e:
-                _logger.error("MecSu HTML search(%s=%s) Lỗi: %s", label, query, e, exc_info=True)
-                break
+                _logger.warning("MecSu quick-view %s: %s", quick_view_url, e)
+
+        return candidates
 
     def _mecsu_search(self, odoo_code, odoo_name, max_pages=2):
-        """Tìm kiếm sản phẩm trên mecsu.vn.
-
-        Chiến lược:
-        1. Odoo JSON-RPC API (primary) — không bị SPA block, trả về JSON sạch
-        2. HTML scraping (fallback) — dùng khi RPC không hoạt động
-        """
+        """Tìm kiếm sản phẩm trên mecsu.vn qua popup button → quick-view flow."""
         candidates = []
         seen_urls = set()
         tech_query = self._extract_search_terms(odoo_name)
 
-        # ── Chiến lược 1: /site/filter AJAX endpoint (ưu tiên) ───────────────
-        rpc_query = tech_query if (tech_query and tech_query.lower() != (odoo_name or "").lower()) else odoo_name
-        if rpc_query:
-            rpc_results = self._mecsu_search_rpc(rpc_query)
-            for item in rpc_results:
+        def _add(items):
+            for item in items:
                 if item["url"] not in seen_urls:
                     seen_urls.add(item["url"])
                     candidates.append(item)
 
-        # Nếu /site/filter không đủ → thêm search bằng tên đầy đủ
-        if len(candidates) < 3 and odoo_name and odoo_name != rpc_query:
-            for item in self._mecsu_search_rpc(odoo_name):
-                if item["url"] not in seen_urls:
-                    seen_urls.add(item["url"])
-                    candidates.append(item)
+        # Chiến lược 1: technical terms (M10X100 8.8)
+        if tech_query and tech_query.lower() != (odoo_name or "").lower():
+            _add(self._mecsu_search_via_popup(tech_query))
 
-        # ── Chiến lược 2: HTML scraping fallback ──────────────────────────────
-        if not candidates:
-            _logger.info("MecSu /site/filter trả về 0 → thử HTML scraping")
-            if tech_query and tech_query.lower() != (odoo_name or "").lower():
-                self._mecsu_search_html(tech_query, "tech", max_pages, candidates, seen_urls)
-            if odoo_name and len(candidates) < 3:
-                self._mecsu_search_html(odoo_name, "name", max_pages, candidates, seen_urls)
-            if not candidates and odoo_name:
-                words = odoo_name.split()
-                if len(words) > 3:
-                    self._mecsu_search_html(" ".join(words[-3:]), "tail", max_pages, candidates, seen_urls)
+        # Chiến lược 2: tên đầy đủ
+        if odoo_name and len(candidates) < 3:
+            _add(self._mecsu_search_via_popup(odoo_name))
+
+        # Chiến lược 3: 3 từ cuối
+        if not candidates and odoo_name:
+            words = odoo_name.split()
+            if len(words) > 3:
+                _add(self._mecsu_search_via_popup(" ".join(words[-3:])))
 
         return candidates
+
 
     def _mecsu_fetch_detail(self, url):
         """Lấy trang chi tiết sản phẩm MecSu và dựng nội dung markdown."""
