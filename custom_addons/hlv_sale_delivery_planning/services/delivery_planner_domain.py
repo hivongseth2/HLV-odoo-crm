@@ -39,7 +39,26 @@ class DeliveryPlannerServiceDomain(models.AbstractModel):
             domain += [('x_studio_misa_saler_code', 'ilike', filter_saler_code)]
 
         if filter_htgh:
-            domain += [('x_studio_htgh', 'ilike', filter_htgh)]
+            # Hỗ trợ nhiều keyword phân tách bằng dấu phẩy.
+            # Prefix "!" = NOT LIKE (loại trừ).
+            # VD: "ghn,cpn" → chứa "ghn" HOẶC "cpn"
+            # VD: "!ghn,!cpn" → KHÔNG chứa "ghn" VÀ KHÔNG chứa "cpn"
+            # VD: "ghn,!j&t" → chứa "ghn" VÀ KHÔNG chứa "j&t"
+            keywords = [k.strip() for k in filter_htgh.split(',') if k.strip()]
+            include_kws = [k for k in keywords if not k.startswith('!')]
+            exclude_kws = [k[1:] for k in keywords if k.startswith('!') and len(k) > 1]
+
+            if include_kws:
+                if len(include_kws) == 1:
+                    domain += [('x_studio_htgh', 'ilike', include_kws[0])]
+                else:
+                    # OR giữa các keyword include
+                    domain += ['|'] * (len(include_kws) - 1)
+                    for kw in include_kws:
+                        domain += [('x_studio_htgh', 'ilike', kw)]
+
+            for kw in exclude_kws:
+                domain += [('x_studio_htgh', 'not ilike', kw)]
 
         if filter_delivery_type and filter_delivery_type != 'all':
             domain += [('x_studio_delivery_type', '=', filter_delivery_type)]

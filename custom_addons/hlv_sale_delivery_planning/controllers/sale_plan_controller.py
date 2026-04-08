@@ -206,7 +206,13 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
       <option value="unpacked">Có hàng chưa đóng gói</option><option value="fully_packed">Đã đóng gói đủ</option>
     </select></div>
   <div class="col-md-2"><label class="form-label small mb-0">Mã NV MISA</label><input id="f-saler" class="form-control form-control-sm" placeholder="VD: NV001"/></div>
-  <div class="col-md-2"><label class="form-label small mb-0">HTGH</label><input id="f-htgh" class="form-control form-control-sm" placeholder="VD: NHờ KHO..."/></div>
+  <div class="col-md-3"><label class="form-label small mb-0">HTGH <small class="text-secondary fw-normal">(phẩy=OR, !=loại trừ)</small></label>
+    <input id="f-htgh" class="form-control form-control-sm" placeholder="VD: ghn,cpn hoặc !ghn,!j&amp;t"/>
+    <div class="mt-1 d-flex flex-wrap gap-1">
+      <button type="button" class="btn btn-outline-secondary border-0 px-2 py-0" style="font-size:.72rem" onclick="document.getElementById('f-htgh').value='ghn,cpn,chuyển phát nhanh,giao hàng nhanh,j&amp;t';"><i class="fa fa-truck me-1"></i>Hãng VC</button>
+      <button type="button" class="btn btn-outline-secondary border-0 px-2 py-0" style="font-size:.72rem" onclick="document.getElementById('f-htgh').value='!ghn,!cpn,!chuyển phát nhanh,!giao hàng nhanh,!j&amp;t';"><i class="fa fa-ban me-1"></i>Trừ hãng VC</button>
+    </div>
+  </div>
   <div class="col-md-2"><label class="form-label small mb-0">Loại vận chuyển</label>
     <select id="f-dtype" class="form-select form-select-sm">
       <option value="all">Tất cả</option>

@@ -235,16 +235,30 @@
                 </div>
             </div>
             <!-- HTGH -->
-            <div class="col-md-2">
-                <label class="form-label small fw-bold text-muted mb-1">HTGH</label>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted mb-1">HTGH
+                    <small class="fw-normal text-secondary">(phẩy = OR, !từ = loại trừ)</small>
+                </label>
                 <div class="input-group">
                     <span class="input-group-text bg-light px-2">
                         <i class="fa fa-info-circle text-secondary"></i>
                     </span>
                     <input type="text" class="form-control px-2"
-                           placeholder="Hình thức giao hàng..."
+                           placeholder="VD: ghn,cpn hoặc !ghn,!j&amp;t"
                            t-model="state.filterHtgh"
                            t-on-keyup="onSearchKeyup"/>
+                </div>
+                <div class="mt-1 d-flex flex-wrap gap-1">
+                    <button class="btn btn-outline-secondary border-0 px-2 py-0"
+                            style="font-size:.72rem"
+                            t-on-click="() => { this.state.filterHtgh = 'ghn,cpn,chuyển phát nhanh,giao hàng nhanh,j&amp;t'; this.onFilterChange(); }">
+                        <i class="fa fa-truck me-1"></i>Hãng vận chuyển
+                    </button>
+                    <button class="btn btn-outline-secondary border-0 px-2 py-0"
+                            style="font-size:.72rem"
+                            t-on-click="() => { this.state.filterHtgh = '!ghn,!cpn,!chuyển phát nhanh,!giao hàng nhanh,!j&amp;t'; this.onFilterChange(); }">
+                        <i class="fa fa-ban me-1"></i>Trừ hãng VC
+                    </button>
                 </div>
             </div>
             <!-- Loại vận chuyển -->
