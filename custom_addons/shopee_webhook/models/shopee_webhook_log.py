@@ -52,6 +52,8 @@ class ShopeeWebhookLog(models.Model):
             status = find_value(data, 'status') or find_value(data, 'tracking_status') or find_value(data, 'logistics_status')
             tracking_no = find_value(data, 'tracking_no') or find_value(data, 'tracking_number')
 
+            _logger.info("Shopee Webhook process: ordersn=%s status=%s tracking_no=%s", ordersn, status, tracking_no)
+
             push_code = data.get('code')
             if str(push_code) == '3' and status:
                 status_mapping = {
@@ -76,6 +78,7 @@ class ShopeeWebhookLog(models.Model):
             orders = SaleOrder
             if ordersn:
                 orders = SaleOrder.search([('shopee_order_ref', '=', ordersn)])
+                _logger.info("Shopee Webhook: tìm theo shopee_order_ref=%s → %s đơn", ordersn, len(orders))
             
             if not orders and tracking_no:
                 pickings = self.env['stock.picking'].sudo().search([('carrier_tracking_ref', '=', tracking_no)])

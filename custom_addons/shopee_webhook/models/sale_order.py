@@ -18,16 +18,15 @@ class SaleOrder(models.Model):
 
         if new_status in SHOPEE_CANCELLED_STATUSES:
             for order in self:
-                # Chỉ xử lý nếu trạng thái thực sự thay đổi sang hủy
+                # Gửi thông báo Zalo TSN nếu trạng thái mới thay đổi
                 if order.shopee_order_status not in SHOPEE_CANCELLED_STATUSES:
-                    # Gửi thông báo Zalo TSN
                     try:
                         order._notify_warehouse_tsn()
                     except Exception as e:
                         _logger.error("Failed to notify TSN warehouse for order %s: %s", order.name, str(e))
-                    # Đánh dấu để hủy sau khi write xong (bỏ qua đơn đã cancel rồi)
-                    if order.state != 'cancel':
-                        orders_to_cancel |= order
+                # Hủy đơn nếu chưa cancel (không phụ thuộc shopee_order_status cũ)
+                if order.state != 'cancel':
+                    orders_to_cancel |= order
 
         result = super(SaleOrder, self).write(vals)
 
