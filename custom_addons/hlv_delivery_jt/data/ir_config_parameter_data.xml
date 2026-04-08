@@ -6,5 +6,9 @@
             <field name="key">jnt_apiAccount</field>
             <field name="value">669375073659916329</field>
         </record> -->
+        <record id="jt_webhook_key_param" model="ir.config_parameter">
+            <field name="key">jt.webhook.key</field>
+            <field name="value"></field>
+        </record>
     </data>
 </odoo>

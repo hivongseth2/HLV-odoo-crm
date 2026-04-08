@@ -7,6 +7,8 @@
     "depends": ["stock", "base", "hlv_delivery_jt"],
     "data": [
         "security/ir.model.access.csv",
+        "data/ir_config_parameter_token.xml",
+        "data/ir_cron_data.xml",
         "views/res_config_settings_views.xml",
         "views/stock_picking_views.xml",
         "views/stock_warehouse_views.xml",

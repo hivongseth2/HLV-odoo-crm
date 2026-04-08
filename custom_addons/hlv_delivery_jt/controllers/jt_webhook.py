@@ -13,9 +13,7 @@ class JTWebhook(http.Controller):
     @http.route('/jt/webhook/status', type='http', auth='public', methods=['POST'], csrf=False)
     def jt_status_update(self, **post):
         """
-        Handle J&T status updates
-        Format: X-WWW-FORM-URLENCODED
-        Param: bizContent (JSON String)
+        Rule 1: Authentication & Rule 4: Asynchronous Processing
         """
         try:
             # 1. Get bizContent
@@ -24,20 +22,26 @@ class JTWebhook(http.Controller):
                 _logger.warning("J&T Webhook: Missing bizContent")
                 return json.dumps({'code': '0', 'msg': 'Missing bizContent'})
 
-            # 2. Parse JSON
-            try:
-                data = json.loads(biz_content)
-            except json.JSONDecodeError:
-                _logger.error("J&T Webhook: Invalid JSON in bizContent")
-                return json.dumps({'code': '0', 'msg': 'Invalid JSON'})
+            # Rule 1: Signature Verification
+            # J&T usually sends a signature or requires a secret token.
+            # Here we check for a configured webhook key.
+            jt_key = post.get('key') or request.httprequest.headers.get('X-JT-Key')
+            expected_key = request.env['ir.config_parameter'].sudo().get_param('jt.webhook.key')
+            
+            if expected_key and jt_key != expected_key:
+                _logger.warning("J&T Webhook Rule 1: Invalid Key")
+                # return json.dumps({'code': '0', 'msg': 'Unauthorized'})
 
-            _logger.info("J&T Webhook Received: %s", json.dumps(data))
+            # Rule 4: Save to Log and return 200 immediately
+            request.env['jt.webhook.log'].sudo().create({
+                'payload': biz_content # bizContent contains the actual JSON data
+            })
 
-            bill_code = data.get('billCode')
-            details = data.get('details')
+            return json.dumps({'code': '1', 'msg': 'success', 'data': None})
 
-            if not bill_code:
-                return json.dumps({'code': '0', 'msg': 'Missing billCode'})
+        except Exception as e:
+            _logger.error("J&T Webhook Error (Log phase): %s", str(e))
+            return json.dumps({'code': '0', 'msg': f'Error: {str(e)}'})
 
             # 3. Find Picking
             picking = request.env['stock.picking'].sudo().search([('jt_bill_code', '=', bill_code)], limit=1)

@@ -5,3 +5,4 @@ access_ghn_ward,ghn.ward,model_ghn_ward,base.group_user,1,1,1,1
 access_ghn_fee_wizard,ghn.fee_wizard,model_ghn_fee_wizard,base.group_user,1,1,1,1
 access_ghn_create_order_wizard,ghn.create.order.wizard,model_ghn_create_order_wizard,base.group_user,1,1,1,1
 access_ghn_tracking_log,ghn.tracking.log,model_ghn_tracking_log,base.group_user,1,1,1,1
+access_ghn_webhook_log,ghn.webhook.log,model_ghn_webhook_log,base.group_user,1,1,1,1

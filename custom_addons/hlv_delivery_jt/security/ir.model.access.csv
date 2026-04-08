@@ -7,3 +7,4 @@ access_jnt_ward,jnt.ward,model_jnt_ward,base.group_user,1,1,1,1
 access_jt_cancel_order_wizard,jt.cancel.order.wizard,model_jt_cancel_order_wizard,base.group_user,1,1,1,1
 access_jt_tracking_log,jt.tracking.log,model_jt_tracking_log,base.group_user,1,1,1,1
 access_delivery_sender_address,delivery.sender.address,model_delivery_sender_address,base.group_user,1,1,1,1
+access_jt_webhook_log,jt.webhook.log,model_jt_webhook_log,base.group_user,1,1,1,1
