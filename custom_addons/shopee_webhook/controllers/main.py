@@ -173,6 +173,17 @@ class ShopeeWebhookController(http.Controller):
                     order.write({'shopee_order_status': status})
                     _logger.info("Shopee Webhook: Updated Order %s status from '%s' to '%s'", order.name, old_status, status)
                     _log_to_file(data, result=f"Updated {order.name}: {old_status} -> {status}")
+
+                    # Auto-cancel order when Shopee status is CANCELLED (code 3)
+                    if str(push_code) == '3' and status in ['CANCELLED', 'Đã hủy', 'Đã Hủy']:
+                        if order.state not in ('cancel', 'done'):
+                            try:
+                                order.action_cancel()
+                                _logger.info("Shopee Webhook: Auto-cancelled Order %s due to Shopee CANCELLED status", order.name)
+                                _log_to_file(data, result=f"Auto-cancelled {order.name}")
+                            except Exception as cancel_err:
+                                _logger.error("Shopee Webhook: Failed to cancel Order %s: %s", order.name, str(cancel_err))
+                                _log_to_file(data, result=f"Cancel FAILED for {order.name}: {str(cancel_err)}")
                 else:
                     _logger.info("Shopee Webhook: No status update found in payload for Order %s", order.name)
 
