@@ -386,68 +386,94 @@ class HlvDocCrawler(models.Model):
 
         return results
 
+    # Mapping loại sản phẩm: keyword Odoo → keywords MecSu tương đương
+    _MECSU_TYPE_MAP = {
+        "bu lông": ["bulong", "bu long"],
+        "bulong": ["bulong", "bu long"],
+        "lục giác chìm": ["luc giac chim"],
+        "lục giác": ["luc giac"],
+        "ốc vít": ["oc vit", "vit"],
+        "đai ốc": ["dai oc"],
+        "vòng đệm": ["vong dem", "long den"],
+        "long đen": ["long den"],
+        "lông đền": ["long den"],
+        "ty ren": ["ty ren", "guzong"],
+        "guzong": ["guzong", "ty ren"],
+    }
+
     def _mecsu_score(self, odoo_code, odoo_name, candidate):
         """Tính điểm tương đồng giữa sản phẩm Odoo và kết quả MecSu (0.0–1.0).
 
-        Dùng token-overlap trên thông số kỹ thuật (kích thước, cấp độ bền, vật liệu)
-        thay vì so sánh toàn chuỗi — vì tên tiếng Việt giữa Odoo và MecSu thường khác nhau.
+        Token-overlap trên: loại SP (0.8) + kích thước (1.0) + grade (0.6) + vật liệu (0.3).
+        Penalty mạnh nếu sai loại sản phẩm.
         """
         cand_name = (candidate.get("name") or "").lower()
         odoo_norm = (odoo_name or "").lower()
 
-        # ─── Trích xuất token kỹ thuật từ tên Odoo ───────────────────────────
-        # (weight, pattern, normalize_fn)
-        token_rules = [
-            # Kích thước kiểu M16x50, M8x1.25, Ø25, Ф32
-            (1.0, re.compile(r'm\d+(?:[x×]\d+(?:\.\d+)?)?(?:\s*(?:ren\s*lửng|rl))?', re.IGNORECASE)),
-            # Độ bền / cấp độ: 8.8, 10.9, 12.9, 4.8, A2, A4
-            (0.6, re.compile(r'\b(?:4\.8|5\.6|8\.8|10\.9|12\.9|a2-70|a4-80|a2|a4)\b', re.IGNORECASE)),
-            # Tiêu chuẩn DIN/ISO
-            (0.4, re.compile(r'(?:din|iso)\s*\d+', re.IGNORECASE)),
-            # Chiều dài độc lập (ví dụ: 50mm, 100mm)
-            (0.3, re.compile(r'\b\d{2,4}\s*mm\b', re.IGNORECASE)),
-        ]
+        # ─── 0. Loại sản phẩm ────────────────────────────────────────────────
+        # Tìm loại SP từ tên Odoo và kiểm tra trong tên ứng viên
+        type_score = 0.0
+        type_found = False
+        for odoo_kw, mecsu_kws in self._MECSU_TYPE_MAP.items():
+            if odoo_kw in odoo_norm:
+                type_found = True
+                if any(k in cand_name for k in mecsu_kws):
+                    type_score = 0.8
+                else:
+                    type_score = -0.5  # penalty mạnh: sai loại SP
+                break
 
-        tokens = []  # list of (weight, norm_text)
+        # ─── 1. Token kỹ thuật ───────────────────────────────────────────────
+        token_rules = [
+            (1.0, re.compile(r'm\d+(?:[x×]\d+(?:\.\d+)?)?', re.IGNORECASE)),
+            (0.6, re.compile(r'\b(?:4\.8|5\.6|8\.8|10\.9|12\.9|a2-70|a4-80|a2|a4)\b', re.IGNORECASE)),
+            (0.4, re.compile(r'(?:din|iso)\s*\d+', re.IGNORECASE)),
+        ]
+        tokens = []
         for weight, pattern in token_rules:
             for m in pattern.finditer(odoo_norm):
                 t = m.group(0).lower().replace(" ", "").replace("×", "x")
                 tokens.append((weight, t))
 
-        # Vật liệu (dùng nhóm riêng vì tên khác nhau nhiều)
+        # ─── 2. Vật liệu ─────────────────────────────────────────────────────
         material_odoo = None
-        if any(k in odoo_norm for k in ("ss304", "304", "inox", "inox304")):
+        if any(k in odoo_norm for k in ("ss304", "304", "inox304")):
             material_odoo = "304"
-        elif any(k in odoo_norm for k in ("316", "inox316", "ss316")):
+        elif "316" in odoo_norm or "ss316" in odoo_norm:
             material_odoo = "316"
-        elif any(k in odoo_norm for k in ("thép đen", "đen", "carbon", "black", "mạ kẽm", "ma kem")):
+        elif any(k in odoo_norm for k in ("thép đen", " đen", "carbon", "black", "mạ kẽm")):
             material_odoo = "black"
+        elif "inox" in odoo_norm:
+            material_odoo = "inox_generic"
 
-        if not tokens and not material_odoo:
-            # Không có token kỹ thuật → dùng SequenceMatcher đơn giản (hàng phi tiêu chuẩn)
+        if not tokens and not material_odoo and not type_found:
             from difflib import SequenceMatcher
             return SequenceMatcher(None, odoo_norm, cand_name).ratio() * 0.6
 
-        # ─── Tính điểm khớp token ─────────────────────────────────────────────
+        # ─── 3. Tính điểm ────────────────────────────────────────────────────
         total_w = sum(w for w, _ in tokens)
         match_w = 0.0
         for weight, token in tokens:
             if token in cand_name:
                 match_w += weight
 
-        # Điểm vật liệu (bonus/penalty nhẹ — không penalty nặng vì MecSu hay bỏ qua)
         mat_score = 0.0
         if material_odoo:
-            if material_odoo == "304":
-                mat_score = 0.3 if any(k in cand_name for k in ("304", "inox", "ss304")) else -0.05
-            elif material_odoo == "316":
-                mat_score = 0.3 if "316" in cand_name else -0.05
-            elif material_odoo == "black":
-                mat_score = 0.3 if any(k in cand_name for k in ("đen", "carbon", "zinc", "kẽm")) else -0.05
             total_w += 0.3
+            if material_odoo == "304":
+                mat_score = 0.3 if any(k in cand_name for k in ("304",)) else (0.1 if "inox" in cand_name else -0.1)
+            elif material_odoo == "316":
+                mat_score = 0.3 if "316" in cand_name else -0.1
+            elif material_odoo == "black":
+                mat_score = 0.3 if any(k in cand_name for k in ("đen", "carbon", "kẽm", "zinc", "den")) else -0.1
+            elif material_odoo == "inox_generic":
+                mat_score = 0.3 if "inox" in cand_name else -0.05
 
-        token_ratio = (match_w + max(0.0, mat_score)) / max(total_w, 0.001)
-        return min(1.0, token_ratio)
+        if type_found:
+            total_w += 0.8
+
+        raw = match_w + max(-0.5, mat_score) + type_score
+        return max(0.0, min(1.0, raw / max(total_w, 0.001)))
 
     def _extract_search_terms(self, odoo_name):
         """Trích xuất cụm từ kỹ thuật tốt nhất để search mecsu.vn.
