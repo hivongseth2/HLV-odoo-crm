@@ -51,6 +51,9 @@
                         <group string="Cấu hình batch">
                             <field name="skip"/>
                             <field name="limit"/>
+                            <field name="use_max_products"/>
+                            <field name="max_products"
+                                   invisible="not use_max_products"/>
                             <field name="last_run" readonly="True"/>
                         </group>
                     </group>
@@ -93,6 +96,8 @@
                 <field name="source"/>
                 <field name="skip"/>
                 <field name="limit"/>
+                <field name="use_max_products" optional="hide"/>
+                <field name="max_products" optional="hide"/>
                 <field name="state" widget="badge"
                        decoration-success="state == 'done'"
                        decoration-warning="state == 'running'"

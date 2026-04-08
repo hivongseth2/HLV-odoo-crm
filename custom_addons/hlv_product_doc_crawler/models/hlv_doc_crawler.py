@@ -44,6 +44,16 @@ class HlvDocCrawler(models.Model):
         string="Giới hạn xử lý (limit)",
         help="Số sản phẩm xử lý tối đa mỗi lần chạy (nên ≤ 50 khi bật RAG)",
     )
+    use_max_products = fields.Boolean(
+        default=False,
+        string="Giới hạn tổng số sản phẩm",
+        help="Bật để giới hạn tổng số sản phẩm xử lý trong toàn bộ session (dùng để test)",
+    )
+    max_products = fields.Integer(
+        default=100,
+        string="Số sản phẩm tối đa",
+        help="Dừng sau khi đã xử lý đủ số lượng này (bất kể tìm thấy hay không)",
+    )
 
     # === Tích hợp RAG ===
     auto_index = fields.Boolean(
@@ -237,8 +247,11 @@ class HlvDocCrawler(models.Model):
 
         collection = self._get_rag_collection()
         Line = self.env["hlv.doc.crawler.line"]
+        processed = 0
 
         for product in products:
+            if self.use_max_products and processed >= self.max_products:
+                break
             sku = product.default_code
             line = Line.create(
                 {
@@ -278,6 +291,8 @@ class HlvDocCrawler(models.Model):
                     "Crawler [%s] SKU=%s: %s", self.name, sku, e, exc_info=True
                 )
                 line.write({"status": "error", "error_msg": str(e)[:500]})
+            finally:
+                processed += 1
 
         self.write({"state": "done"})
         return {
