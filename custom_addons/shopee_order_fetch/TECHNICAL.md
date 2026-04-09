@@ -93,11 +93,13 @@ Tạo toàn bộ `sale.order` và records liên quan từ dữ liệu Shopee.
 |---|---|
 | `find_or_create_partner(env, order_data)` | Tạo/tìm `res.partner` theo `buyer_username`. Trả `(partner, delivery_address)`. |
 | `find_or_create_delivery_address(env, parent, addr)` | Tạo `res.partner` type=delivery. Bỏ qua nếu tất cả field là `****`. |
-| `find_or_create_shopee_item(env, item_data, shop)` | Map Shopee item → `product.product`. Thứ tự: shopee.item ID → SKU → tên → tạo mới. |
+| `find_or_create_shopee_item(env, item_data, shop)` | Map Shopee item → `product.product`. Thứ tự: shopee.item ID → SKU → tên → tạo mới. **Sản phẩm tạo mới** luôn có `is_storable=True` để kích hoạt theo dõi tồn kho. |
 | `create_order_line(env, so, item_data, shop)` | Tạo `sale.order.line` từ item. |
 | `create_order_from_data(env, order_data, shop, escrow_data)` | Orchestrator: gọi các hàm trên theo thứ tự, trả `sale.order`. |
 
 **Kho mặc định**: `DEFAULT_WAREHOUSE_CODE = 'TSN'`. Đổi ở đây nếu cần.
+
+**⚠️ Lưu ý khi tạo product mới**: Luôn đặt `is_storable=True` để kích hoạt theo dõi tồn kho. Nếu không, sản phẩm sẽ không xuất hiện trong các bước picking/scanning vạch khác.
 
 ---
 

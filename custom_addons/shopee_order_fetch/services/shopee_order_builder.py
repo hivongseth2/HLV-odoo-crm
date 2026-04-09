@@ -138,6 +138,7 @@ def find_or_create_shopee_item(env, item_data, shop):
             'default_code': sku or '',
             'type': 'consu',
             'sale_ok': True,
+            'is_storable': True,
         })
         _logger.info("Shopee: Đã tạo sản phẩm '%s' (SKU: %s)", product.name, sku)
 
