@@ -206,7 +206,13 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
       <option value="unpacked">Có hàng chưa đóng gói</option><option value="fully_packed">Đã đóng gói đủ</option>
     </select></div>
   <div class="col-md-2"><label class="form-label small mb-0">Mã NV MISA</label><input id="f-saler" class="form-control form-control-sm" placeholder="VD: NV001"/></div>
-  <div class="col-md-2"><label class="form-label small mb-0">HTGH</label><input id="f-htgh" class="form-control form-control-sm" placeholder="VD: NHờ KHO..."/></div>
+  <div class="col-md-3"><label class="form-label small mb-0">HTGH <small class="text-secondary fw-normal">(phẩy=OR, !=loại trừ)</small></label>
+    <div class="input-group input-group-sm">
+      <input id="f-htgh" class="form-control" placeholder="VD: ghn,cpn hoặc !ghn,!j&amp;t"/>
+      <button type="button" class="btn btn-outline-secondary" id="btn-htgh-save" title="Lưu làm gợi ý"><i class="fa fa-plus"></i></button>
+    </div>
+    <div id="htgh-presets" class="mt-1 d-flex flex-wrap gap-1"></div>
+  </div>
   <div class="col-md-2"><label class="form-label small mb-0">Loại vận chuyển</label>
     <select id="f-dtype" class="form-select form-select-sm">
       <option value="all">Tất cả</option>
@@ -230,6 +236,12 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
     <div class="form-check form-switch mb-1">
       <input class="form-check-input" type="checkbox" id="f-need-transfer">
       <label class="form-check-label small fw-bold" for="f-need-transfer"><i class="fa fa-exchange text-danger me-1"></i>Cần chuyển kho</label>
+    </div>
+  </div>
+  <div class="col-md-2 d-flex align-items-end">
+    <div class="form-check form-switch mb-1">
+      <input class="form-check-input" type="checkbox" id="f-show-completed">
+      <label class="form-check-label small fw-bold" for="f-show-completed"><i class="fa fa-check-circle text-success me-1"></i>Hiện đơn đã giao</label>
     </div>
   </div>
 </div></div>
@@ -346,6 +358,7 @@ function load(append){
     po_date_from:gv('f-po-date-from'),po_date_to:gv('f-po-date-to'),
     po_status:gv('f-po-status'),saler_code:gv('f-saler'),
     htgh:gv('f-htgh'),delivery_type:gv('f-dtype'),tag_ids:getTagIds(),
+    show_completed:$('f-show-completed').checked,
     limit:lim,offset:offset};
   fetch('/api/sale_plan/data',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({jsonrpc:'2.0',method:'call',params:body})})
@@ -701,15 +714,64 @@ function clearAll(){
   ['f-wh','f-stk','f-pack','f-po-status','f-dtype'].forEach(function(id){var e=$(id);if(e)e.value='all';});
   $('f-del').value='pending_partial';
   var ft=$('f-tag');if(ft){Array.from(ft.options).forEach(function(o){o.selected=false;});}
+  $('f-show-completed').checked=false;
   S.kanbanColPageSize={};
   load(false);
 }
 
 $('btn-filter').addEventListener('click',function(){S.kanbanColPageSize={};load(false);});
 $('f-need-transfer').addEventListener('change',function(){render();});
+$('f-show-completed').addEventListener('change',function(){S.kanbanColPageSize={};load(false);});
 $('f-q').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();S.kanbanColPageSize={};load(false);}});
 $('f-saler').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();S.kanbanColPageSize={};load(false);}});
 $('f-htgh').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();S.kanbanColPageSize={};load(false);}});
+
+// HTGH presets (localStorage)
+var HTGH_LS_KEY='hlv_htgh_presets';
+var defaultHtghPresets=[
+  {label:'Hãng VC',value:'ghn,cpn,chuyển phát nhanh,giao hàng nhanh,j&t,jnt,viettel post,ems,lalamove,viettelpost'},
+  {label:'Tự giao',value:'!ghn,!cpn,!chuyển phát nhanh,!giao hàng nhanh,!j&t,!jnt,!viettel post,!ems,!lalamove,!viettelpost'},
+];
+function loadHtghPresets(){
+  try{return JSON.parse(localStorage.getItem(HTGH_LS_KEY))||defaultHtghPresets;}
+  catch(e){return defaultHtghPresets;}
+}
+function saveHtghPresetsLS(arr){
+  localStorage.setItem(HTGH_LS_KEY,JSON.stringify(arr));
+}
+function renderHtghPresets(){
+  var container=$('htgh-presets');
+  if(!container)return;
+  var presets=loadHtghPresets();
+  container.innerHTML='';
+  presets.forEach(function(p,idx){
+    var span=document.createElement('span');
+    span.className='badge border d-inline-flex align-items-center gap-1 px-2 py-1';
+    span.style.cssText='font-size:.72rem;background:#f8f9fa;color:#495057;border-color:#dee2e6;cursor:default';
+    var lbl=document.createElement('span');
+    lbl.style.cursor='pointer';
+    lbl.title=p.value;
+    lbl.textContent=p.label;
+    lbl.addEventListener('click',function(){$('f-htgh').value=p.value;S.kanbanColPageSize={};load(false);});
+    var del=document.createElement('i');
+    del.className='fa fa-times ms-1';
+    del.style.cssText='cursor:pointer;opacity:.5';
+    del.title='Xóa gợi ý này';
+    del.addEventListener('click',function(){
+      var arr=loadHtghPresets();arr.splice(idx,1);saveHtghPresetsLS(arr);renderHtghPresets();
+    });
+    span.appendChild(lbl);span.appendChild(del);
+    container.appendChild(span);
+  });
+}
+$('btn-htgh-save').addEventListener('click',function(){
+  var val=$('f-htgh').value.trim();
+  if(!val)return;
+  var label=prompt('Tên gợi ý:',val.slice(0,30));
+  if(!label)return;
+  var arr=loadHtghPresets();arr.push({label:label,value:val});saveHtghPresetsLS(arr);renderHtghPresets();
+});
+renderHtghPresets();
 $('btn-load-more').addEventListener('click',function(){load(true);});
 $('btn-refresh').addEventListener('click',function(){S.kanbanColPageSize={};load(false);});
 $('btn-export-excel').addEventListener('click',function(){
@@ -719,7 +781,8 @@ $('btn-export-excel').addEventListener('click',function(){
     filter_date_from:gv('f-date-from'),filter_date_to:gv('f-date-to'),
     filter_po_date_from:gv('f-po-date-from'),filter_po_date_to:gv('f-po-date-to'),
     filter_po_status:gv('f-po-status'),filter_saler_code:gv('f-saler'),
-    filter_htgh:gv('f-htgh'),filter_delivery_type:gv('f-dtype'),filter_tag_ids:getTagIds()
+    filter_htgh:gv('f-htgh'),filter_delivery_type:gv('f-dtype'),filter_tag_ids:getTagIds(),
+    show_completed:$('f-show-completed').checked?'1':''
   });
   window.open('/api/sale_plan/export_excel?'+params.toString(),'_blank');
 });
@@ -841,7 +904,7 @@ class SalePlanPublicController(http.Controller):
                            stock_status='all', packing_status='all',
                            date_from='', date_to='', po_date_from='', po_date_to='',
                            po_status='all', saler_code='', htgh='', delivery_type='all',
-                           tag_ids='', limit=250, offset=0, **kwargs):
+                           tag_ids='', limit=250, offset=0, show_completed=False, **kwargs):
         if not request.session.get(SESSION_KEY_OK):
             return {'status': 'error', 'message': 'Unauthorized'}
         try:
@@ -862,6 +925,7 @@ class SalePlanPublicController(http.Controller):
                 filter_tag_ids=tag_ids,
                 limit=int(limit),
                 offset=int(offset),
+                show_completed=bool(show_completed),
             )
             return {'status': 'success', 'data': result}
         except Exception as e:
@@ -938,6 +1002,7 @@ class SalePlanPublicController(http.Controller):
                 filter_htgh=kwargs.get('filter_htgh', ''),
                 filter_delivery_type=kwargs.get('filter_delivery_type', 'all'),
                 filter_tag_ids=kwargs.get('filter_tag_ids', ''),
+                show_completed=bool(kwargs.get('show_completed', '')),
                 limit=100000,
                 offset=0,
             )

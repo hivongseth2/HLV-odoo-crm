@@ -76,6 +76,13 @@
                    t-on-click="() => { state.filterStockStatus = 'all'; this.fetchData(); }"></i>
             </span>
 
+            <span t-if="state.showCompleted"
+                  class="badge text-bg-success d-flex align-items-center gap-2 p-2 rounded-pill">
+                Hiện đơn đã giao
+                <i class="fa fa-times cursor-pointer ms-1" title="Xóa"
+                   t-on-click="() => { state.showCompleted = false; this.onFilterChange(); }"></i>
+            </span>
+
             <button class="btn btn-sm btn-outline-danger border-0 fw-bold ms-auto" t-on-click="resetFilters">
                 <i class="fa fa-trash-o me-1" title="Xóa tất cả"></i> Xóa tất cả bộ lọc
             </button>
@@ -86,10 +93,12 @@
          Thanh công cụ lọc (Filter Toolbar)
          ================================================================ -->
     <t t-name="hlv_sale_delivery_planning.FilterToolbar">
-        <div class="row g-3 mb-4 bg-white p-3 rounded shadow-sm border align-items-end">
+        <div class="row g-3 mb-4 bg-white p-3 rounded shadow-sm border align-items-end"
+             style="padding-bottom: 40px !important;">
             <!-- Tìm kiếm -->
             <div class="col-md-3">
-                <label class="form-label small fw-bold text-muted mb-1">Tìm Kiếm</label>
+                <label class="form-label small fw-bold text-muted mb-1"
+                       style="min-height:34px; display:flex; align-items:flex-end;">Tìm Kiếm</label>
                 <div class="input-group">
                     <span class="input-group-text bg-light px-2 cursor-pointer" t-on-click="onFilterChange">
                         <i class="fa fa-search text-primary" title="Tìm kiếm"></i>
@@ -103,7 +112,8 @@
 
             <!-- Kho Cung Cấp -->
             <div class="col-md-2">
-                <label class="form-label small fw-bold text-muted mb-1">Kho Cung Cấp</label>
+                <label class="form-label small fw-bold text-muted mb-1"
+                       style="min-height:34px; display:flex; align-items:flex-end;">Kho Cung Cấp</label>
                 <div class="input-group">
                     <span class="input-group-text bg-light"><i class="fa fa-building text-muted" title="Kho"></i></span>
                     <select class="form-select" t-model="state.filterWarehouseId" t-on-change="onFilterChange">
@@ -117,7 +127,8 @@
 
             <!-- Ngày Hẹn Giao SO -->
             <div class="col-md-3">
-                <label class="form-label small fw-bold text-muted mb-1">Ngày Hẹn Giao (Bán hàng)</label>
+                <label class="form-label small fw-bold text-muted mb-1"
+                       style="min-height:34px; display:flex; align-items:flex-end;">Ngày Hẹn Giao (Bán hàng)</label>
                 <div class="input-group">
                     <span class="input-group-text bg-light px-2" title="Từ Ngày">
                         <i class="fa fa-calendar text-primary"></i>
@@ -132,7 +143,8 @@
 
             <!-- Tiến Độ Giao -->
             <div class="col-md-2">
-                <label class="form-label small fw-bold text-muted mb-1">Tiến Độ Giao</label>
+                <label class="form-label small fw-bold text-muted mb-1"
+                       style="min-height:34px; display:flex; align-items:flex-end;">Tiến Độ Giao</label>
                 <div class="input-group">
                     <span class="input-group-text bg-light px-2">
                         <i class="fa fa-truck text-primary" title="Tiến độ giao"></i>
@@ -150,7 +162,8 @@
 
             <!-- Tình Trạng Kho -->
             <div class="col-md-2">
-                <label class="form-label small fw-bold text-muted mb-1">Tình Trạng Kho</label>
+                <label class="form-label small fw-bold text-muted mb-1"
+                       style="min-height:34px; display:flex; align-items:flex-end;">Tình Trạng Kho</label>
                 <div class="input-group">
                     <span class="input-group-text bg-light px-2">
                         <i class="fa fa-cubes text-warning" title="Tình trạng kho"></i>
@@ -167,7 +180,8 @@
 
             <!-- Đóng Gói -->
             <div class="col-md-2">
-                <label class="form-label small fw-bold text-muted mb-1">Đóng Gói</label>
+                <label class="form-label small fw-bold text-muted mb-1"
+                       style="min-height:34px; display:flex; align-items:flex-end;">Đóng Gói</label>
                 <div class="input-group">
                     <span class="input-group-text bg-light px-2">
                         <i class="fa fa-cube text-info" title="Đóng gói"></i>
@@ -184,7 +198,8 @@
 
             <!-- Ngày Hẹn Nhận PO -->
             <div class="col-md-3">
-                <label class="form-label small fw-bold text-muted mb-1">Ngày Hẹn Nhận (Mua hàng)</label>
+                <label class="form-label small fw-bold text-muted mb-1"
+                       style="min-height:34px; display:flex; align-items:flex-end;">Ngày Hẹn Nhận (Mua hàng)</label>
                 <div class="input-group">
                     <span class="input-group-text bg-light px-2" title="Từ Ngày">
                         <i class="fa fa-calendar-o text-info"></i>
@@ -199,7 +214,8 @@
 
             <!-- Trạng Thái PO -->
             <div class="col-md-3 mt-md-0 mt-3">
-                <label class="form-label small fw-bold text-muted mb-1">Trạng Thái (Mua hàng)</label>
+                <label class="form-label small fw-bold text-muted mb-1"
+                       style="min-height:34px; display:flex; align-items:flex-end;">Trạng Thái (Mua hàng)</label>
                 <div class="input-group">
                     <span class="input-group-text bg-light px-2">
                         <i class="fa fa-file-text-o text-info" title="Hồ sơ"></i>
@@ -216,7 +232,8 @@
 
             <!-- Mã NV MISA -->
             <div class="col-md-2">
-                <label class="form-label small fw-bold text-muted mb-1">Mã NV MISA</label>
+                <label class="form-label small fw-bold text-muted mb-1"
+                       style="min-height:34px; display:flex; align-items:flex-end;">Mã NV MISA</label>
                 <div class="input-group">
                     <span class="input-group-text bg-light px-2">
                         <i class="fa fa-id-badge text-info" title="Mã nhân viên"></i>
@@ -227,34 +244,70 @@
                            t-on-keyup="onSearchKeyup"/>
                 </div>
             </div>
-            <!-- HTGH -->
-            <div class="col-md-2">
-                <label class="form-label small fw-bold text-muted mb-1">HTGH</label>
+
+            <!-- HTGH — chips dùng position:absolute để không làm cao cột -->
+            <div class="col-md-3" style="position: relative;">
+                <label class="form-label small fw-bold text-muted mb-1"
+                       style="min-height:34px; display:flex; align-items:flex-end;">HTGH
+                    <small class="fw-normal text-secondary ms-1">(phẩy=OR, !=loại trừ)</small>
+                </label>
                 <div class="input-group">
                     <span class="input-group-text bg-light px-2">
                         <i class="fa fa-info-circle text-secondary"></i>
                     </span>
                     <input type="text" class="form-control px-2"
-                           placeholder="Hình thức giao hàng..."
+                           placeholder="VD: ghn,cpn hoặc !ghn,!j&amp;t"
                            t-model="state.filterHtgh"
                            t-on-keyup="onSearchKeyup"/>
+                    <button class="btn btn-outline-secondary px-2" type="button"
+                            title="Lưu giá trị hiện tại làm gợi ý"
+                            t-on-click="saveHtghPreset">
+                        <i class="fa fa-plus"></i>
+                    </button>
+                </div>
+                <!-- chips nằm ngoài flow, không ảnh hưởng chiều cao cột -->
+                <div class="d-flex flex-wrap gap-1"
+                     style="position:absolute; top:100%; left:0; right:0; padding-top:4px; z-index:20;">
+                    <t t-foreach="state.htghPresets" t-as="preset" t-key="preset_index">
+                        <span class="badge border d-inline-flex align-items-center gap-1 px-2 py-1"
+                              style="font-size:.72rem; background:#f8f9fa; color:#495057; border-color:#dee2e6!important; cursor:default; white-space:nowrap;">
+                            <span class="cursor-pointer"
+                                  t-on-click="() => { this.state.filterHtgh = preset.value; this.onFilterChange(); }"
+                                  t-att-title="preset.value">
+                                <t t-esc="preset.label"/>
+                            </span>
+                            <i class="fa fa-times ms-1"
+                               style="cursor:pointer; opacity:.5"
+                               title="Xóa gợi ý này"
+                               t-on-click="() => this.removeHtghPreset(preset_index)"></i>
+                        </span>
+                    </t>
                 </div>
             </div>
+
             <!-- Loại vận chuyển -->
             <div class="col-md-2">
-                <label class="form-label small fw-bold text-muted mb-1">Loại vận chuyển</label>
-                <select class="form-select" t-model="state.filterDeliveryType" t-on-change="fetchData">
-                    <option value="all">Tất cả</option>
-                    <option value="HLV vận chuyển">HLV vận chuyển</option>
-                    <option value="GHN">GHN</option>
-                    <option value="J&amp;T">J&amp;T</option>
-                </select>
+                <label class="form-label small fw-bold text-muted mb-1"
+                       style="min-height:34px; display:flex; align-items:flex-end;">Loại vận chuyển</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light px-2">
+                        <i class="fa fa-car text-secondary"></i>
+                    </span>
+                    <select class="form-select px-1" t-model="state.filterDeliveryType" t-on-change="fetchData">
+                        <option value="all">Tất cả</option>
+                        <option value="HLV vận chuyển">HLV vận chuyển</option>
+                        <option value="GHN">GHN</option>
+                        <option value="J&amp;T">J&amp;T</option>
+                    </select>
+                </div>
             </div>
+
             <!-- Tags multi-select -->
             <div class="col-md-3">
-                <label class="form-label small fw-bold text-muted mb-1">
+                <label class="form-label small fw-bold text-muted mb-1"
+                       style="min-height:34px; display:flex; align-items:flex-end;">
                     <i class="fa fa-tags me-1"></i> Tags
-                    <small class="text-muted fw-normal">(Ctrl/⌘ chọn nhiều)</small>
+                    <small class="text-muted fw-normal ms-1">(Ctrl/⌘ chọn nhiều)</small>
                 </label>
                 <select multiple="multiple" class="form-select"
                         style="min-height:38px; max-height:110px;"
@@ -267,6 +320,7 @@
                     </t>
                 </select>
             </div>
+
             <!-- Cần chuyển kho -->
             <div class="col-md-2 d-flex align-items-end">
                 <div class="form-check form-switch mb-2">
@@ -276,6 +330,19 @@
                            t-on-change="(ev) => { this.state.filterNeedTransfer = ev.target.checked; }"/>
                     <label class="form-check-label small fw-bold" for="filterNeedTransfer">
                         <i class="fa fa-exchange text-danger me-1"></i>Cần chuyển kho
+                    </label>
+                </div>
+            </div>
+
+            <!-- Hiện đơn đã giao -->
+            <div class="col-md-2 d-flex align-items-end">
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" role="switch"
+                           id="filterShowCompleted"
+                           t-att-checked="state.showCompleted"
+                           t-on-change="(ev) => { this.state.showCompleted = ev.target.checked; this.onFilterChange(); }"/>
+                    <label class="form-check-label small fw-bold" for="filterShowCompleted">
+                        <i class="fa fa-check-circle text-success me-1"></i>Hiện đơn đã giao
                     </label>
                 </div>
             </div>

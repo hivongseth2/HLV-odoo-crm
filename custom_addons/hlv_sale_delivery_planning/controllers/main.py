@@ -210,6 +210,7 @@ class DeliveryPlannerController(http.Controller):
                 filter_htgh=kwargs.get('filter_htgh', ''),
                 filter_delivery_type=kwargs.get('filter_delivery_type', 'all'),
                 filter_tag_ids=kwargs.get('filter_tag_ids', ''),
+                show_completed=bool(kwargs.get('show_completed', '')),
                 limit=100000,
                 offset=0,
             )

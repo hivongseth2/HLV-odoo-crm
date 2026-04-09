@@ -39,6 +39,13 @@ export class DeliveryPlannerDashboard extends Component {
             filterDeliveryType: "all",
             filterTagIds: [],
             filterNeedTransfer: false,
+            showCompleted: false,
+
+            // HTGH presets (lưu localStorage)
+            htghPresets: JSON.parse(localStorage.getItem('hlv_htgh_presets') || 'null') || [
+                { label: 'Hãng VC', value: 'ghn,cpn,chuy\u1ec3n ph\u00e1t nhanh,giao h\u00e0ng nhanh,j&t,jnt' },
+                { label: 'Tự giao', value: '!ghn,!cpn,!chuy\u1ec3n ph\u00e1t nhanh,!giao h\u00e0ng nhanh,!j&t,!jnt' },
+            ],
 
             // Stats
             dashboardStats: { total: 0, ready: 0, partial: 0, out_of_stock: 0 },
@@ -100,6 +107,7 @@ export class DeliveryPlannerDashboard extends Component {
                     filter_htgh: this.state.filterHtgh.trim(),
                     filter_delivery_type: this.state.filterDeliveryType,
                     filter_tag_ids: this.state.filterTagIds.join(','),
+                    show_completed: this.state.showCompleted,
                     // Kanban tải theo batch, không phân trang backend
                     limit: isKanban ? this.state.kanbanBatchSize : this.state.itemsPerPage,
                     offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
@@ -766,7 +774,22 @@ export class DeliveryPlannerDashboard extends Component {
             this.state.filterSalerCode ||
             this.state.filterHtgh ||
             this.state.filterDeliveryType !== "all" ||
-            this.state.filterTagIds.length > 0;
+            this.state.filterTagIds.length > 0 ||
+            this.state.showCompleted;
+    }
+
+    saveHtghPreset() {
+        const val = this.state.filterHtgh.trim();
+        if (!val) return;
+        const label = prompt('Tên gợi ý:', val.slice(0, 30));
+        if (!label) return;
+        this.state.htghPresets = [...this.state.htghPresets, { label, value: val }];
+        localStorage.setItem('hlv_htgh_presets', JSON.stringify(this.state.htghPresets));
+    }
+
+    removeHtghPreset(idx) {
+        this.state.htghPresets = this.state.htghPresets.filter((_, i) => i !== idx);
+        localStorage.setItem('hlv_htgh_presets', JSON.stringify(this.state.htghPresets));
     }
 
     countTransferWarehouses(so) {
@@ -792,6 +815,7 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.filterDeliveryType = "all";
         this.state.filterTagIds = [];
         this.state.filterNeedTransfer = false;
+        this.state.showCompleted = false;
         this.state.currentPage = 1;
         this.fetchData();
     }
@@ -812,6 +836,7 @@ export class DeliveryPlannerDashboard extends Component {
             filter_htgh: this.state.filterHtgh.trim(),
             filter_delivery_type: this.state.filterDeliveryType,
             filter_tag_ids: this.state.filterTagIds.join(','),
+            show_completed: this.state.showCompleted ? '1' : '',
         });
         window.open(`/hlv_sale_delivery_planning/export_excel?${params.toString()}`, '_blank');
     }
