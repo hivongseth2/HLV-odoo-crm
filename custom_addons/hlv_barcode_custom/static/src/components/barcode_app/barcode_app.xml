@@ -15,16 +15,10 @@
             <span t-esc="state.feedback_message"/>
         </div>
 
-        <!-- Error Popup -->
+        <!-- Popups -->
         <t t-if="state.error_popup" t-call="hlv_barcode_custom.error_popup"/>
-
-        <!-- Product Search Popup -->
         <t t-if="state.search_popup" t-call="hlv_barcode_custom.search_popup"/>
-
-        <!-- Numpad Popup -->
         <t t-if="state.numpad_popup" t-call="hlv_barcode_custom.numpad_popup"/>
-
-        <!-- Camera Overlay -->
         <t t-if="state.camera_active" t-call="hlv_barcode_custom.camera_overlay"/>
 
         <!-- VIEWS -->
@@ -37,37 +31,40 @@
 <!-- ==================== HOME VIEW ==================== -->
 <t t-name="hlv_barcode_custom.home_view">
     <div class="hlv-bc-home">
+        <!-- Brand Header -->
         <div class="hlv-bc-home-header">
-            <div class="hlv-bc-logo">📦</div>
-            <h1>HLV Barcode</h1>
-            <p>Quản lý kho hàng thông minh</p>
+            <div class="hlv-bc-brand">
+                <div class="hlv-bc-brand-icon">📦</div>
+                <span class="hlv-bc-brand-name">HLV Barcode</span>
+            </div>
+            <div class="hlv-bc-home-subtitle">Quản lý kho hàng thông minh</div>
         </div>
 
-        <!-- Global Search Bar -->
-        <div class="hlv-bc-global-search">
-            <div class="hlv-bc-input-wrap">
+        <!-- Search Bar -->
+        <div class="hlv-bc-search-bar">
+            <div class="hlv-bc-search-wrap">
+                <span class="hlv-bc-search-icon">🔍</span>
                 <input type="text"
                        t-ref="barcodeInput"
-                       class="hlv-bc-barcode-input"
-                       placeholder="🔍 Quét mã phiếu hoặc mã sản phẩm..."
+                       placeholder="Quét mã phiếu hoặc mã sản phẩm..."
                        t-att-value="state.barcode_value"
                        t-on-input="onBarcodeInput"
                        t-on-keydown="onBarcodeKeydown"
                        autocomplete="off"/>
                 <button t-if="state.config.camera_enabled"
                         class="hlv-bc-btn-camera"
-                        t-on-click="toggleCamera">
-                    📷
-                </button>
+                        t-on-click="toggleCamera">📷</button>
             </div>
         </div>
 
-        <!-- Menu Cards - Dynamic from DB -->
+        <!-- Menu Cards -->
         <div class="hlv-bc-menu-grid">
             <t t-foreach="state.picking_types" t-as="pt" t-key="pt.id">
                 <div t-attf-class="hlv-bc-menu-card hlv-bc-card-{{pt.code}}"
                      t-on-click="() => this.openPickingTypeList(pt)">
-                    <div class="hlv-bc-card-icon"><t t-esc="getPickingTypeIcon(pt.code)"/></div>
+                    <div class="hlv-bc-card-icon-wrap">
+                        <t t-esc="getPickingTypeIcon(pt.code)"/>
+                    </div>
                     <div class="hlv-bc-card-title"><t t-esc="pt.name"/></div>
                     <div class="hlv-bc-card-desc"><t t-esc="pt.warehouse_name"/></div>
                     <div t-if="pt.count > 0" class="hlv-bc-card-badge">
@@ -78,9 +75,9 @@
 
             <div class="hlv-bc-menu-card hlv-bc-card-inventory"
                  t-on-click="goToInventoryCheck">
-                <div class="hlv-bc-card-icon">📊</div>
+                <div class="hlv-bc-card-icon-wrap">📊</div>
                 <div class="hlv-bc-card-title">Kiểm Kê Kho</div>
-                <div class="hlv-bc-card-desc">Inventory Adjustment</div>
+                <div class="hlv-bc-card-desc">INVENTORY</div>
             </div>
         </div>
     </div>
@@ -89,15 +86,52 @@
 <!-- ==================== PICKING LIST VIEW ==================== -->
 <t t-name="hlv_barcode_custom.picking_list_view">
     <div class="hlv-bc-picking-list">
-        <!-- Header -->
-        <div class="hlv-bc-header">
-            <button class="hlv-bc-btn-back" t-on-click="goHome">← Quay lại</button>
-            <h2>
-                <t t-if="state.picking_type_filter"
-                   t-esc="getPickingTypeIcon(state.picking_type_filter.code)"/>
-                <t t-if="state.picking_type_filter"
-                   t-esc="state.picking_type_filter.name"/>
-            </h2>
+        <!-- Navbar -->
+        <div class="hlv-bc-navbar">
+            <button class="hlv-bc-nav-back" t-on-click="goHome">←</button>
+            <div>
+                <div class="hlv-bc-nav-title" t-if="state.picking_type_filter"
+                     t-esc="state.picking_type_filter.name"/>
+                <div class="hlv-bc-nav-subtitle" t-if="state.picking_type_filter"
+                     t-esc="getPickingTypeCodeLabel(state.picking_type_filter.code)"/>
+            </div>
+        </div>
+
+        <!-- Type info card -->
+        <div class="hlv-bc-type-header">
+            <div class="hlv-bc-type-card">
+                <div class="hlv-bc-type-icon" t-if="state.picking_type_filter">
+                    <t t-esc="getPickingTypeIcon(state.picking_type_filter.code)"/>
+                </div>
+                <div class="hlv-bc-type-info">
+                    <div class="hlv-bc-type-name" t-if="state.picking_type_filter"
+                         t-esc="state.picking_type_filter.name"/>
+                    <div class="hlv-bc-type-code" t-if="state.picking_type_filter"
+                         t-esc="getPickingTypeCodeLabel(state.picking_type_filter.code)"/>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search in list -->
+        <div class="hlv-bc-scan-input-area">
+            <div class="hlv-bc-scan-input-wrap">
+                <span class="hlv-bc-scan-input-icon">🔍</span>
+                <input type="text"
+                       t-ref="barcodeInput"
+                       placeholder="Quét mã phiếu để mở nhanh..."
+                       t-att-value="state.barcode_value"
+                       t-on-input="onBarcodeInput"
+                       t-on-keydown="onBarcodeKeydown"
+                       autocomplete="off"/>
+            </div>
+        </div>
+
+        <!-- List title -->
+        <div class="hlv-bc-list-title">
+            <span class="hlv-bc-list-label">Danh sách Phiếu</span>
+            <span class="hlv-bc-list-count" t-if="state.pickings.length > 0">
+                <t t-esc="state.pickings.length"/> phiếu
+            </span>
         </div>
 
         <!-- Picking Cards -->
@@ -109,29 +143,33 @@
                 </div>
             </t>
             <t t-foreach="state.pickings" t-as="p" t-key="p.id">
-                <div class="hlv-bc-picking-card"
-                     t-on-click="() => this.openPicking(p.id)">
-                    <div class="hlv-bc-picking-card-header">
-                        <span class="hlv-bc-picking-name" t-esc="p.name"/>
+                <div class="hlv-bc-picking-card">
+                    <div class="hlv-bc-pick-header">
+                        <span class="hlv-bc-pick-name" t-esc="p.name"/>
                         <span t-attf-class="hlv-bc-state-badge hlv-bc-state-{{p.state}}"
-                              t-esc="p.state"/>
+                              t-esc="p.state_label || p.state"/>
                     </div>
-                    <div class="hlv-bc-picking-card-body">
-                        <div t-if="p.origin" class="hlv-bc-picking-origin">
-                            <span class="hlv-bc-label">Nguồn:</span>
-                            <span t-esc="p.origin"/>
+                    <div class="hlv-bc-pick-meta">
+                        <div t-if="p.scheduled_date" class="hlv-bc-pick-meta-item">
+                            📅 <span t-esc="p.scheduled_date.substring(0,10)"/>
                         </div>
-                        <div t-if="p.partner_name" class="hlv-bc-picking-partner">
-                            <span class="hlv-bc-label">Đối tác:</span>
-                            <span t-esc="p.partner_name"/>
+                        <div t-if="p.partner_name" class="hlv-bc-pick-meta-item">
+                            👤 <span t-esc="p.partner_name"/>
                         </div>
-                        <div class="hlv-bc-picking-locations">
-                            <span t-esc="p.location_name"/> → <span t-esc="p.location_dest_name"/>
+                        <div t-if="p.location_dest_name" class="hlv-bc-pick-meta-item">
+                            📍 <span t-esc="p.location_dest_name"/>
                         </div>
-                        <div class="hlv-bc-picking-meta">
-                            <span><t t-esc="p.move_count"/> sản phẩm</span>
-                            <span t-if="p.has_packages">📦 Có kiện hàng</span>
-                        </div>
+                    </div>
+                    <div t-if="p.priority === '1'" class="hlv-bc-priority-badge"
+                         style="margin-top:8px;">
+                        ‼ Ưu tiên cao
+                    </div>
+                    <div class="hlv-bc-pick-action">
+                        <button class="hlv-bc-btn-start"
+                                t-on-click="() => this.openPicking(p.id)">
+                            <t t-if="p.state === 'assigned'">Bắt đầu</t>
+                            <t t-else="">Tiếp tục</t>
+                        </button>
                     </div>
                 </div>
             </t>
@@ -142,48 +180,54 @@
 <!-- ==================== SCANNING VIEW ==================== -->
 <t t-name="hlv_barcode_custom.scanning_view">
     <div class="hlv-bc-scanning">
-        <!-- Header -->
-        <div class="hlv-bc-scan-header">
-            <div class="hlv-bc-scan-header-top">
-                <button class="hlv-bc-btn-back" t-on-click="goHome">← Quay lại</button>
-                <div class="hlv-bc-scan-title">
-                    <span class="hlv-bc-picking-badge" t-esc="state.picking.name"/>
-                    <span class="hlv-bc-picking-type-label" t-esc="state.picking.picking_type_name"/>
+        <!-- Navbar -->
+        <div class="hlv-bc-navbar">
+            <button class="hlv-bc-nav-back" t-on-click="goBackFromScan">←</button>
+            <div>
+                <div class="hlv-bc-nav-title" t-esc="state.picking.name"/>
+            </div>
+        </div>
+
+        <!-- Picking Info Card -->
+        <div class="hlv-bc-scan-pick-info">
+            <div class="hlv-bc-scan-pick-card">
+                <div class="hlv-bc-scan-pick-top">
+                    <span class="hlv-bc-scan-pick-type" t-esc="state.picking.picking_type_name"/>
+                    <span t-if="state.picking.priority === '1'" class="hlv-bc-priority-badge">‼ Ưu tiên cao</span>
+                </div>
+                <div class="hlv-bc-scan-pick-name" t-esc="state.picking.name"/>
+                <div class="hlv-bc-scan-pick-details">
+                    <div class="hlv-bc-detail-chip">
+                        <div class="hlv-bc-detail-label">Khu vực</div>
+                        <div class="hlv-bc-detail-value" t-esc="state.picking.location_name"/>
+                    </div>
+                    <div class="hlv-bc-detail-chip">
+                        <div class="hlv-bc-detail-label">Trạng thái</div>
+                        <div class="hlv-bc-detail-value" t-esc="state.picking.state"/>
+                    </div>
                 </div>
             </div>
-            <div class="hlv-bc-scan-header-info">
-                <span t-esc="state.picking.location_name"/> → <span t-esc="state.picking.location_dest_name"/>
-            </div>
-            <div t-if="state.picking.origin" class="hlv-bc-scan-header-origin">
-                Nguồn: <span t-esc="state.picking.origin"/>
-                <t t-if="state.picking.partner_name"> | <span t-esc="state.picking.partner_name"/></t>
-            </div>
         </div>
 
-        <!-- Scan Input -->
-        <div class="hlv-bc-scan-input-area">
-            <div class="hlv-bc-input-wrap">
-                <input type="text"
-                       t-ref="barcodeInput"
-                       class="hlv-bc-barcode-input"
-                       placeholder="🔍 Quét mã vạch sản phẩm..."
-                       t-att-value="state.barcode_value"
-                       t-on-input="onBarcodeInput"
-                       t-on-keydown="onBarcodeKeydown"
-                       autocomplete="off"/>
-                <button t-if="state.config.camera_enabled"
-                        class="hlv-bc-btn-camera"
-                        t-on-click="toggleCamera">
-                    📷
-                </button>
-            </div>
+        <!-- Location scan prompt (if needed) -->
+        <div t-if="state.location_scan_pending"
+             t-attf-class="hlv-bc-location-prompt {{state.scanned_location ? 'hlv-bc-location-prompt-success' : ''}}">
+            <span class="hlv-bc-loc-prompt-icon">📍</span>
+            <span class="hlv-bc-loc-prompt-text">
+                <t t-if="state.location_scan_type === 'source'">Quét vị trí nguồn</t>
+                <t t-else="">Quét vị trí đích</t>
+            </span>
+            <span t-if="state.scanned_location" class="hlv-bc-loc-prompt-value"
+                  t-esc="state.scanned_location"/>
         </div>
 
-        <!-- Progress Bar -->
-        <div class="hlv-bc-progress-bar">
-            <div class="hlv-bc-progress-info">
-                <span><t t-esc="getDoneLines()"/> / <t t-esc="state.lines.length"/> dòng hoàn tất</span>
-                <span><t t-esc="getTotalScanned().toFixed(1)"/> / <t t-esc="getTotalDemand().toFixed(1)"/> tổng SL</span>
+        <!-- Progress -->
+        <div class="hlv-bc-progress-section">
+            <div class="hlv-bc-progress-header">
+                <span class="hlv-bc-progress-label">Tiến trình quét</span>
+                <span class="hlv-bc-progress-count">
+                    <t t-esc="getDoneLines()"/> / <t t-esc="state.lines.length"/> sản phẩm
+                </span>
             </div>
             <div class="hlv-bc-progress-track">
                 <div class="hlv-bc-progress-fill"
@@ -191,71 +235,94 @@
             </div>
         </div>
 
+        <!-- Scan Input -->
+        <div class="hlv-bc-scan-input-area">
+            <div class="hlv-bc-scan-input-wrap">
+                <span class="hlv-bc-scan-input-icon">
+                    <t t-if="state.location_scan_pending">📍</t>
+                    <t t-else="">📷</t>
+                </span>
+                <input type="text"
+                       t-ref="barcodeInput"
+                       t-att-placeholder="getScanPlaceholder()"
+                       t-att-value="state.barcode_value"
+                       t-on-input="onBarcodeInput"
+                       t-on-keydown="onBarcodeKeydown"
+                       autocomplete="off"/>
+                <button t-if="state.config.camera_enabled"
+                        class="hlv-bc-btn-camera"
+                        t-on-click="toggleCamera">📷</button>
+            </div>
+        </div>
+
+        <!-- Product List Title -->
+        <div class="hlv-bc-product-list-title">
+            <span class="hlv-bc-pl-label">Danh sách sản phẩm</span>
+        </div>
+
         <!-- Product Lines -->
         <div class="hlv-bc-product-list">
             <t t-foreach="state.lines" t-as="line" t-key="line.move_id">
                 <div t-attf-class="hlv-bc-product-row hlv-bc-row-{{getLineStatus(line)}} {{state.last_scanned_move_id === line.move_id ? 'hlv-bc-row-flash' : ''}}">
-                    <!-- Left color indicator -->
-                    <div t-attf-class="hlv-bc-row-indicator hlv-bc-indicator-{{getLineStatus(line)}}"/>
+                    <div class="hlv-bc-row-main">
+                        <!-- Product Image -->
+                        <div class="hlv-bc-row-img">
+                            <img t-if="line.product_image"
+                                 t-att-src="getProductImageUrl(line.product_id)"
+                                 alt=""/>
+                            <span t-else="" class="hlv-bc-row-img-placeholder">📦</span>
+                        </div>
 
-                    <div class="hlv-bc-row-content">
                         <!-- Product Info -->
                         <div class="hlv-bc-row-info">
-                            <div class="hlv-bc-product-name">
-                                <t t-esc="line.product_name"/>
+                            <div class="hlv-bc-product-name" t-esc="line.product_name"/>
+                            <div t-if="line.product_default_code" class="hlv-bc-product-sku">
+                                SKU: <t t-esc="line.product_default_code"/>
                             </div>
-                            <div t-if="line.product_barcode" class="hlv-bc-product-code">
-                                <span t-esc="line.product_barcode"/>
-                            </div>
-                            <!-- BOM Kit Info -->
-                            <div t-if="line.is_bom_component" class="hlv-bc-bom-info">
-                                🧩 Thuộc Combo/Kit: <strong t-esc="line.bom_kit_product"/>
-                            </div>
-                            <!-- Location Info -->
-                            <div class="hlv-bc-row-location">
-                                📍 <t t-esc="line.location_name || ''"/>
+                            <div t-attf-class="hlv-bc-row-status status-{{getLineStatus(line)}}">
+                                <t t-if="getLineStatus(line) === 'done'">✓ Thành công</t>
+                                <t t-elif="getLineStatus(line) === 'partial'">● Đang chờ quét</t>
+                                <t t-else="">○ Chờ quét</t>
                             </div>
                         </div>
 
-                        <!-- Quantity Section -->
-                        <div class="hlv-bc-row-qty">
-                            <div class="hlv-bc-qty-display"
-                                 t-on-click="() => this.openNumpad(line.move_id)">
-                                <span class="hlv-bc-qty-done" t-esc="(line.quantity_done || 0).toFixed(line.is_decimal ? 2 : 0)"/>
+                        <!-- Quantity -->
+                        <div class="hlv-bc-row-qty"
+                             t-on-click="() => this.openNumpad(line.move_id)">
+                            <div class="hlv-bc-qty-display">
+                                <span class="hlv-bc-qty-done-val"
+                                      t-esc="(line.quantity_done || 0).toFixed(line.is_decimal ? 1 : 0)"/>
                                 <span class="hlv-bc-qty-sep">/</span>
-                                <span class="hlv-bc-qty-demand" t-esc="line.demand.toFixed(line.is_decimal ? 2 : 0)"/>
-                                <span class="hlv-bc-qty-uom" t-esc="line.uom_name"/>
+                                <span t-esc="line.demand.toFixed(line.is_decimal ? 1 : 0)"/>
                             </div>
-
-                            <!-- Quantity Buttons -->
-                            <div class="hlv-bc-qty-buttons">
-                                <button class="hlv-bc-btn-qty hlv-bc-btn-minus"
-                                        t-on-click="() => this.decrementQty(line.move_id)">
-                                    −1
-                                </button>
-                                <button class="hlv-bc-btn-qty hlv-bc-btn-plus"
-                                        t-on-click="() => this.incrementQty(line.move_id)">
-                                    +1
-                                </button>
-                                <!-- Decimal buttons for decimal UoM -->
-                                <t t-if="line.is_decimal">
-                                    <button class="hlv-bc-btn-qty hlv-bc-btn-decimal-minus"
-                                            t-on-click="() => this.decrementDecimal(line.move_id)">
-                                        −<t t-esc="state.config.decimal_step"/>
-                                    </button>
-                                    <button class="hlv-bc-btn-qty hlv-bc-btn-decimal-plus"
-                                            t-on-click="() => this.incrementDecimal(line.move_id)">
-                                        +<t t-esc="state.config.decimal_step"/>
-                                    </button>
-                                </t>
+                            <div t-attf-class="hlv-bc-qty-status-text"
+                                 t-att-style="getLineStatus(line) === 'done' ? 'color:#059669' : getLineStatus(line) === 'partial' ? 'color:#4f46e5' : 'color:#94a3b8'">
+                                <t t-esc="line.uom_name"/>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Progress mini-bar -->
-                    <div class="hlv-bc-row-progress">
-                        <div class="hlv-bc-row-progress-fill"
-                             t-attf-style="width: {{getLineProgress(line)}}%"/>
+                    <!-- Location info -->
+                    <div class="hlv-bc-row-location-info">
+                        📍 <t t-esc="line.location_name"/> → <t t-esc="line.location_dest_name"/>
+                    </div>
+
+                    <!-- Quick +/- buttons -->
+                    <div class="hlv-bc-row-actions">
+                        <button class="hlv-bc-btn-qty hlv-bc-btn-minus"
+                                t-on-click="() => this.decrementQty(line.move_id)">−1</button>
+                        <button class="hlv-bc-btn-qty hlv-bc-btn-plus"
+                                t-on-click="() => this.incrementQty(line.move_id)">+1</button>
+                        <t t-if="line.is_decimal">
+                            <button class="hlv-bc-btn-qty hlv-bc-btn-minus"
+                                    t-on-click="() => this.decrementDecimal(line.move_id)">
+                                −<t t-esc="state.config.decimal_step"/>
+                            </button>
+                            <button class="hlv-bc-btn-qty hlv-bc-btn-plus"
+                                    t-on-click="() => this.incrementDecimal(line.move_id)">
+                                +<t t-esc="state.config.decimal_step"/>
+                            </button>
+                        </t>
                     </div>
                 </div>
             </t>
@@ -263,17 +330,21 @@
             <t t-if="state.lines.length === 0">
                 <div class="hlv-bc-empty">
                     <span class="hlv-bc-empty-icon">📋</span>
-                    <p>Không có dòng sản phẩm nào trong phiếu</p>
+                    <p>Không có dòng sản phẩm nào</p>
                 </div>
             </t>
         </div>
 
-        <!-- Bottom Action Bar -->
+        <!-- Bottom Bar -->
         <div class="hlv-bc-bottom-bar">
-            <button class="hlv-bc-btn-validate"
-                    t-on-click="validatePicking">
-                ✓ Xác Nhận Phiếu
+            <button t-attf-class="hlv-bc-btn-validate {{!isAllDone() ? 'disabled' : ''}}"
+                    t-on-click="validatePicking"
+                    t-att-disabled="!isAllDone()">
+                ⚙ Xác nhận hoàn tất
             </button>
+            <div t-if="!isAllDone()" class="hlv-bc-validate-hint">
+                Quét tất cả mặt hàng để hoàn tất
+            </div>
         </div>
     </div>
 </t>
@@ -299,54 +370,47 @@
                 <button class="hlv-bc-btn-close" t-on-click="closeSearchPopup">✕</button>
             </div>
 
-            <div class="hlv-bc-search-product">
-                <div class="hlv-bc-search-product-info">
-                    <div class="hlv-bc-search-product-img">
-                        <img t-if="state.search_popup.product.has_image"
-                             t-att-src="getProductImageUrl(state.search_popup.product.id)"
-                             alt="Product"/>
-                        <span t-else="">📦</span>
-                    </div>
-                    <div>
-                        <div class="hlv-bc-search-product-name" t-esc="state.search_popup.product.name"/>
-                        <div t-if="state.search_popup.product.default_code" class="hlv-bc-search-product-code">
-                            Mã: <t t-esc="state.search_popup.product.default_code"/>
-                        </div>
-                        <div t-if="state.search_popup.product.barcode" class="hlv-bc-search-product-barcode">
-                            Barcode: <t t-esc="state.search_popup.product.barcode"/>
-                        </div>
-                        <div t-if="state.search_popup.product.is_bom_component" class="hlv-bc-bom-info">
-                            🧩 Thuộc Combo/Kit: <strong t-esc="state.search_popup.product.bom_kit_name"/>
-                        </div>
-                    </div>
+            <div class="hlv-bc-search-product-info">
+                <div class="hlv-bc-search-product-img">
+                    <img t-if="state.search_popup.product.has_image"
+                         t-att-src="getProductImageUrl(state.search_popup.product.id)" alt=""/>
+                    <span t-else="">📦</span>
                 </div>
-
-                <div class="hlv-bc-search-total">
-                    <span class="hlv-bc-total-label">Tổng tồn kho:</span>
-                    <span class="hlv-bc-total-value">
-                        <t t-esc="state.search_popup.product.total_qty.toFixed(2)"/>
-                        <t t-esc="state.search_popup.product.uom_name"/>
-                    </span>
+                <div>
+                    <div class="hlv-bc-search-product-name" t-esc="state.search_popup.product.name"/>
+                    <div t-if="state.search_popup.product.default_code" class="hlv-bc-search-product-code">
+                        SKU: <t t-esc="state.search_popup.product.default_code"/>
+                    </div>
+                    <div t-if="state.search_popup.product.barcode" class="hlv-bc-search-product-barcode">
+                        Barcode: <t t-esc="state.search_popup.product.barcode"/>
+                    </div>
+                    <div t-if="state.search_popup.product.is_bom_component" class="hlv-bc-bom-info">
+                        🧩 Combo/Kit: <strong t-esc="state.search_popup.product.bom_kit_name"/>
+                    </div>
                 </div>
             </div>
 
-            <!-- Location Breakdown -->
-            <div class="hlv-bc-search-locations">
-                <div class="hlv-bc-search-locations-title">Chi tiết theo vị trí:</div>
-                <t t-if="state.search_popup.locations.length === 0">
-                    <div class="hlv-bc-empty-small">Không có tồn kho tại vị trí nào.</div>
-                </t>
-                <t t-foreach="state.search_popup.locations" t-as="loc" t-key="loc.location_id">
-                    <div class="hlv-bc-loc-row">
-                        <span class="hlv-bc-loc-name" t-esc="loc.location_name"/>
-                        <div class="hlv-bc-loc-qtys">
-                            <span class="hlv-bc-loc-qty">SL: <t t-esc="loc.quantity.toFixed(2)"/></span>
-                            <span class="hlv-bc-loc-reserved">Đã đặt: <t t-esc="loc.reserved.toFixed(2)"/></span>
-                            <span class="hlv-bc-loc-available">Khả dụng: <t t-esc="loc.available.toFixed(2)"/></span>
-                        </div>
-                    </div>
-                </t>
+            <div class="hlv-bc-search-total">
+                <span class="hlv-bc-total-label">Tổng tồn kho:</span>
+                <span class="hlv-bc-total-value">
+                    <t t-esc="state.search_popup.product.total_qty.toFixed(2)"/>
+                    <t t-esc="state.search_popup.product.uom_name"/>
+                </span>
             </div>
+
+            <div class="hlv-bc-search-locations-title">Chi tiết theo vị trí:</div>
+            <t t-if="state.search_popup.locations.length === 0">
+                <div style="font-size:14px;color:#94a3b8;text-align:center;padding:16px;">Không có tồn kho.</div>
+            </t>
+            <t t-foreach="state.search_popup.locations" t-as="loc" t-key="loc.location_id">
+                <div class="hlv-bc-loc-row">
+                    <span class="hlv-bc-loc-name" t-esc="loc.location_name"/>
+                    <div class="hlv-bc-loc-qtys">
+                        <span class="hlv-bc-loc-qty"><t t-esc="loc.quantity.toFixed(1)"/></span>
+                        <span class="hlv-bc-loc-available"><t t-esc="loc.available.toFixed(1)"/> khả dụng</span>
+                    </div>
+                </div>
+            </t>
         </div>
     </div>
 </t>

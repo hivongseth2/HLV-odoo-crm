@@ -42,4 +42,25 @@
             </xpath>
         </field>
     </record>
+
+    <!-- Picking Type Form: Barcode Scan Config -->
+    <record id="view_picking_type_form_barcode_config" model="ir.ui.view">
+        <field name="name">stock.picking.type.form.barcode.config</field>
+        <field name="model">stock.picking.type</field>
+        <field name="inherit_id" ref="stock.view_picking_type_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form//sheet" position="inside">
+                <separator string="Cấu hình Quét Barcode"/>
+                <group>
+                    <group>
+                        <field name="barcode_scan_source"/>
+                        <field name="barcode_scan_dest"/>
+                    </group>
+                    <group>
+                        <field name="barcode_require_product_scan"/>
+                    </group>
+                </group>
+            </xpath>
+        </field>
+    </record>
 </odoo>

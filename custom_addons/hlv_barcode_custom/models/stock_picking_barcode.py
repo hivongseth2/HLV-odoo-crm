@@ -42,6 +42,9 @@ class StockPickingBarcode(models.Model):
                 'code': pt.code,
                 'count': count,
                 'warehouse_name': pt.warehouse_id.name or '',
+                'scan_source': pt.barcode_scan_source or 'no',
+                'scan_dest': pt.barcode_scan_dest or 'no',
+                'require_product_scan': pt.barcode_require_product_scan,
             })
         return result
 
@@ -65,6 +68,7 @@ class StockPickingBarcode(models.Model):
                 'picking_type_code': p.picking_type_code,
                 'picking_type_name': p.picking_type_id.name or '',
                 'state': p.state,
+                'state_label': dict(p._fields['state'].selection).get(p.state, p.state),
                 'scheduled_date': fields.Datetime.to_string(p.scheduled_date) if p.scheduled_date else '',
                 'location_id': p.location_id.id,
                 'location_name': p.location_id.complete_name or p.location_id.name,
@@ -72,14 +76,29 @@ class StockPickingBarcode(models.Model):
                 'location_dest_name': p.location_dest_id.complete_name or p.location_dest_id.name,
                 'move_count': len(p.move_ids),
                 'has_packages': bool(p.move_line_ids.filtered(lambda ml: ml.package_id)),
+                'priority': p.priority or '0',
+                'user_name': p.user_id.name or '',
             })
         return result
 
     def get_picking_detail(self):
         """Get detailed picking data with move lines for barcode scanning."""
         self.ensure_one()
+        pt = self.picking_type_id
+        # Determine scan config
+        scan_source = pt.barcode_scan_source or 'no'
+        scan_dest = pt.barcode_scan_dest or 'no'
+        require_product_scan = pt.barcode_require_product_scan
+
+        # Check if source location is transit (Inter-warehouse transit)
+        source_is_transit = self.location_id.usage == 'transit'
+
+        # For internal transfers from transit → override scan_source to 'no'
+        if self.picking_type_code == 'internal' and source_is_transit:
+            scan_source = 'no'
+
         lines = []
-        for ml in self.move_ids:
+        for ml in self.move_ids.filtered(lambda m: m.state not in ('done', 'cancel')):
             # Check if product is a BOM Kit component
             bom_info = self._get_bom_kit_info(ml.product_id)
             lines.append({
@@ -102,6 +121,8 @@ class StockPickingBarcode(models.Model):
                 'bom_kit_name': bom_info.get('kit_name', ''),
                 'bom_kit_product': bom_info.get('kit_product', ''),
                 'is_bom_component': bom_info.get('is_component', False),
+                'source_scanned': False,
+                'dest_scanned': False,
             })
         return {
             'id': self.id,
@@ -109,14 +130,21 @@ class StockPickingBarcode(models.Model):
             'origin': self.origin or '',
             'partner_name': self.partner_id.name or '',
             'picking_type_code': self.picking_type_code,
-            'picking_type_name': self.picking_type_id.name or '',
+            'picking_type_name': pt.name or '',
             'state': self.state,
+            'priority': self.priority or '0',
             'location_id': self.location_id.id,
             'location_name': self.location_id.complete_name or self.location_id.name,
             'location_dest_id': self.location_dest_id.id,
             'location_dest_name': self.location_dest_id.complete_name or self.location_dest_id.name,
+            'source_is_transit': source_is_transit,
             'lines': lines,
             'config': self._get_barcode_config(),
+            'scan_config': {
+                'scan_source': scan_source,
+                'scan_dest': scan_dest,
+                'require_product_scan': require_product_scan,
+            },
         }
 
     def _get_bom_kit_info(self, product):
@@ -154,6 +182,17 @@ class StockPickingBarcode(models.Model):
         if picking.state not in ('assigned', 'confirmed', 'waiting'):
             return {'status': 'error', 'message': _('Phiếu ở trạng thái không hợp lệ: %s') % picking.state}
 
+        # Check if barcode is a location
+        location = self.env['stock.location'].search([('barcode', '=', barcode)], limit=1)
+        if location:
+            return {
+                'status': 'location',
+                'location_id': location.id,
+                'location_name': location.complete_name or location.name,
+                'location_barcode': location.barcode,
+                'location_usage': location.usage,
+            }
+
         # Try to find product by barcode or default_code
         product = self._find_product_by_barcode(barcode)
         if not product:
@@ -161,10 +200,6 @@ class StockPickingBarcode(models.Model):
             package = self.env['stock.quant.package'].search([('name', '=', barcode)], limit=1)
             if package and picking.picking_type_code == 'internal':
                 return self._handle_package_scan(picking, package)
-            # Check if it's a location barcode
-            location = self.env['stock.location'].search([('barcode', '=', barcode)], limit=1)
-            if location:
-                return {'status': 'location', 'location_id': location.id, 'location_name': location.complete_name or location.name}
             return {'status': 'not_found', 'barcode': barcode, 'message': _('Không tìm thấy sản phẩm với mã: %s') % barcode}
 
         # Dispatch by picking type
