@@ -1,0 +1,119 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* llm_pgvector
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 18.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-07 00:00+0000\n"
+"PO-Revision-Date: 2026-04-07 00:00+0000\n"
+"Last-Translator: HLV Team\n"
+"Language-Team: Vietnamese\n"
+"Language: vi_VN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: llm_pgvector
+#: model:ir.ui.menu,name:llm_pgvector.menu_llm_knowledge_chunk_embedding
+msgid "Chunk Embeddings"
+msgstr "Vector nhúng đoạn"
+
+#. module: llm_pgvector
+#: model:ir.actions.act_window,name:llm_pgvector.action_llm_knowledge_chunk_embedding
+msgid "Chunk Embeddings"
+msgstr "Vector nhúng đoạn"
+
+#. module: llm_pgvector
+#: model:ir.model,name:llm_pgvector.model_llm_knowledge_chunk_embedding
+msgid "Vector Embedding for Knowledge Chunks"
+msgstr "Vector nhúng cho đoạn kiến thức"
+
+#. module: llm_pgvector
+#: model:ir.model.fields,field_description:llm_pgvector.field_llm_knowledge_chunk_embedding__chunk_id
+msgid "Chunk"
+msgstr "Đoạn"
+
+#. module: llm_pgvector
+#: model:ir.model.fields,field_description:llm_pgvector.field_llm_knowledge_chunk_embedding__collection_ids
+msgid "Collections"
+msgstr "Bộ sưu tập"
+
+#. module: llm_pgvector
+#: model:ir.model.fields,field_description:llm_pgvector.field_llm_knowledge_chunk_embedding__embedding_model_id
+msgid "Embedding Model"
+msgstr "Mô hình nhúng"
+
+#. module: llm_pgvector
+#: model:ir.model.fields,field_description:llm_pgvector.field_llm_knowledge_chunk_embedding__embedding
+msgid "Vector Embedding"
+msgstr "Vector nhúng"
+
+#. module: llm_pgvector
+#: model:ir.model.fields,field_description:llm_pgvector.field_llm_store__pgvector_index_method
+msgid "Index Method"
+msgstr "Phương thức lập chỉ mục"
+
+#. module: llm_pgvector
+#: model:ir.model.fields.selection,name:llm_pgvector.selection__llm_store__service__pgvector
+msgid "PGVector"
+msgstr "PGVector"
+
+#. module: llm_pgvector
+#: model:ir.model.fields.selection,name:llm_pgvector.selection__llm_store__pgvector_index_method__ivfflat
+msgid "IVFFlat (faster search)"
+msgstr "IVFFlat (tìm kiếm nhanh hơn)"
+
+#. module: llm_pgvector
+#: model:ir.model.fields.selection,name:llm_pgvector.selection__llm_store__pgvector_index_method__hnsw
+msgid "HNSW (balanced)"
+msgstr "HNSW (cân bằng)"
+
+#. module: llm_pgvector
+#: model:ir.model.constraint,message:llm_pgvector.constraint_llm_knowledge_chunk_embedding_unique_chunk_model
+msgid "A chunk can only have one embedding per embedding model"
+msgstr "Một đoạn chỉ có thể có một vector nhúng cho mỗi mô hình nhúng"
+
+#. module: llm_pgvector
+#. odoo-python
+#: code:addons/llm_pgvector/models/llm_store_pgvector.py:0
+#, python-format
+msgid "Must provide chunk IDs matching the vectors"
+msgstr "Phải cung cấp ID đoạn khớp với các vector"
+
+#. module: llm_pgvector
+#: model_terms:ir.ui.view,arch_db:llm_pgvector.view_llm_knowledge_chunk_embedding_form
+msgid "Knowledge Chunk Embedding"
+msgstr "Vector nhúng đoạn kiến thức"
+
+#. module: llm_pgvector
+#: model_terms:ir.ui.view,arch_db:llm_pgvector.view_llm_knowledge_chunk_embedding_form
+msgid "Embedding Data"
+msgstr "Dữ liệu vector nhúng"
+
+#. module: llm_pgvector
+#: model_terms:ir.ui.view,arch_db:llm_pgvector.view_llm_knowledge_chunk_embedding_search
+msgid "Embedding Model"
+msgstr "Mô hình nhúng"
+
+#. module: llm_pgvector
+#: model_terms:ir.ui.view,arch_db:llm_pgvector.view_llm_knowledge_chunk_embedding_search
+msgid "Resource"
+msgstr "Tài nguyên"
+
+#. module: llm_pgvector
+#: model_terms:ir.ui.view,arch_db:llm_pgvector.view_llm_knowledge_chunk_embedding_search
+msgid "Group By"
+msgstr "Nhóm theo"
+
+#. module: llm_pgvector
+#: model_terms:ir.actions.act_window,help:llm_pgvector.action_llm_knowledge_chunk_embedding
+msgid "No chunk embeddings found"
+msgstr "Không tìm thấy vector nhúng đoạn"
+
+#. module: llm_pgvector
+#: model_terms:ir.actions.act_window,help:llm_pgvector.action_llm_knowledge_chunk_embedding
+msgid "Chunk embeddings store vector representations of knowledge chunks for semantic search."
+msgstr "Vector nhúng đoạn lưu trữ biểu diễn vector của đoạn kiến thức để tìm kiếm ngữ nghĩa."

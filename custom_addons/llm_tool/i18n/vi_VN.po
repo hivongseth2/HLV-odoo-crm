@@ -1,0 +1,386 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* llm_tool
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 18.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-07 00:00+0000\n"
+"PO-Revision-Date: 2026-04-07 00:00+0000\n"
+"Last-Translator: HLV Team\n"
+"Language-Team: Vietnamese\n"
+"Language: vi_VN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: llm_tool
+#: model:ir.ui.menu,name:llm_tool.menu_llm_tool
+msgid "Tools"
+msgstr "Công cụ"
+
+#. module: llm_tool
+#: model:ir.ui.menu,name:llm_tool.menu_llm_tool_consent_config
+msgid "Tool Consent"
+msgstr "Đồng ý công cụ"
+
+#. module: llm_tool
+#: model:ir.actions.act_window,name:llm_tool.action_llm_tool
+msgid "LLM Tools"
+msgstr "Công cụ AI"
+
+#. module: llm_tool
+#: model:ir.actions.act_window,name:llm_tool.action_llm_tool_consent_config
+msgid "Tool Consent Configurations"
+msgstr "Cấu hình đồng ý công cụ"
+
+#. module: llm_tool
+#: model:ir.model,name:llm_tool.model_llm_tool
+msgid "LLM Tool"
+msgstr "Công cụ AI"
+
+#. module: llm_tool
+#: model:ir.model,name:llm_tool.model_llm_tool_consent_config
+msgid "LLM Tool Consent Configuration"
+msgstr "Cấu hình đồng ý công cụ AI"
+
+#. module: llm_tool
+#: model:ir.model.fields,field_description:llm_tool.field_llm_tool__name
+msgid "Name"
+msgstr "Tên"
+
+#. module: llm_tool
+#: model:ir.model.fields,field_description:llm_tool.field_llm_tool__description
+msgid "Description"
+msgstr "Mô tả"
+
+#. module: llm_tool
+#: model:ir.model.fields,field_description:llm_tool.field_llm_tool__active
+msgid "Active"
+msgstr "Hoạt động"
+
+#. module: llm_tool
+#: model:ir.model.fields,field_description:llm_tool.field_llm_tool__input_schema
+msgid "Input Schema"
+msgstr "Lược đồ đầu vào"
+
+#. module: llm_tool
+#: model:ir.model.fields,field_description:llm_tool.field_llm_tool__title
+msgid "Title"
+msgstr "Tiêu đề"
+
+#. module: llm_tool
+#: model:ir.model.fields,field_description:llm_tool.field_llm_tool__read_only_hint
+msgid "Read Only"
+msgstr "Chỉ đọc"
+
+#. module: llm_tool
+#: model:ir.model.fields,field_description:llm_tool.field_llm_tool__idempotent_hint
+msgid "Idempotent"
+msgstr "Lũy đẳng"
+
+#. module: llm_tool
+#: model:ir.model.fields,field_description:llm_tool.field_llm_tool__destructive_hint
+msgid "Destructive"
+msgstr "Hủy hoại"
+
+#. module: llm_tool
+#: model:ir.model.fields,field_description:llm_tool.field_llm_tool__open_world_hint
+msgid "Open World"
+msgstr "Mở rộng"
+
+#. module: llm_tool
+#: model:ir.model.fields,field_description:llm_tool.field_llm_tool__implementation
+msgid "Implementation"
+msgstr "Phương thức"
+
+#. module: llm_tool
+#: model:ir.model.fields,field_description:llm_tool.field_llm_tool__server_action_id
+msgid "Related Server Action"
+msgstr "Hành động máy chủ liên quan"
+
+#. module: llm_tool
+#: model:ir.model.fields,field_description:llm_tool.field_llm_tool__decorator_model
+msgid "Decorator Model"
+msgstr "Mô hình trang trí"
+
+#. module: llm_tool
+#: model:ir.model.fields,field_description:llm_tool.field_llm_tool__decorator_method
+msgid "Decorator Method"
+msgstr "Phương thức trang trí"
+
+#. module: llm_tool
+#: model:ir.model.fields,field_description:llm_tool.field_llm_tool__requires_user_consent
+msgid "Requires User Consent"
+msgstr "Yêu cầu sự đồng ý"
+
+#. module: llm_tool
+#: model:ir.model.fields,field_description:llm_tool.field_llm_tool__default
+msgid "Default"
+msgstr "Mặc định"
+
+#. module: llm_tool
+#: model:ir.model.fields,field_description:llm_tool.field_llm_tool__auto_update
+msgid "Auto Update"
+msgstr "Tự động cập nhật"
+
+#. module: llm_tool
+#: model:ir.model.fields,field_description:llm_tool.field_llm_tool_consent_config__tool_description_message
+msgid "Tool Description Consent Message"
+msgstr "Thông báo đồng ý mô tả công cụ"
+
+#. module: llm_tool
+#: model:ir.model.fields,field_description:llm_tool.field_llm_tool_consent_config__system_message_template
+msgid "System Message Template"
+msgstr "Mẫu tin nhắn hệ thống"
+
+#. module: llm_tool
+#: model:ir.model.fields.selection,name:llm_tool.selection__llm_tool__implementation__function
+msgid "Function"
+msgstr "Hàm"
+
+#. module: llm_tool
+#: model:ir.model.fields.selection,name:llm_tool.selection__llm_tool__implementation__odoo_model_inspector
+msgid "Odoo Comprehensive Model Inspector"
+msgstr "Thanh tra mô hình Odoo"
+
+#. module: llm_tool
+#: model:ir.model.fields.selection,name:llm_tool.selection__llm_tool__implementation__odoo_model_method_executor
+msgid "Odoo Model Method Executor"
+msgstr "Thực thi phương thức mô hình Odoo"
+
+#. module: llm_tool
+#: model:ir.model.fields.selection,name:llm_tool.selection__llm_tool__implementation__odoo_record_creator
+msgid "Odoo Record Creator"
+msgstr "Tạo bản ghi Odoo"
+
+#. module: llm_tool
+#: model:ir.model.fields.selection,name:llm_tool.selection__llm_tool__implementation__odoo_record_retriever
+msgid "Odoo Record Retriever"
+msgstr "Truy vấn bản ghi Odoo"
+
+#. module: llm_tool
+#: model:ir.model.fields.selection,name:llm_tool.selection__llm_tool__implementation__odoo_record_unlinker
+msgid "Odoo Record Unlinker"
+msgstr "Xóa bản ghi Odoo"
+
+#. module: llm_tool
+#: model:ir.model.fields.selection,name:llm_tool.selection__llm_tool__implementation__odoo_record_updater
+msgid "Odoo Record Updater"
+msgstr "Cập nhật bản ghi Odoo"
+
+#. module: llm_tool
+#: model:ir.actions.server,name:llm_tool.action_reset_input_schema
+msgid "Reset Input Schema"
+msgstr "Đặt lại lược đồ đầu vào"
+
+#. module: llm_tool
+#: model:ir.actions.server,name:llm_tool.action_server_sync_tools
+msgid "Sync Tools"
+msgstr "Đồng bộ công cụ"
+
+#. module: llm_tool
+#: model:ir.model.constraint,message:llm_tool.constraint_llm_tool_unique_decorator
+msgid "A tool for this model and method combination already exists!"
+msgstr "Công cụ cho tổ hợp mô hình và phương thức này đã tồn tại!"
+
+#. module: llm_tool
+#: model:ir.model.constraint,message:llm_tool.constraint_llm_tool_unique_name
+msgid "A tool with this name already exists! Tool names must be unique."
+msgstr "Công cụ với tên này đã tồn tại! Tên công cụ phải là duy nhất."
+
+#. module: llm_tool
+#. odoo-python
+#: code:addons/llm_tool/models/llm_tool.py:0
+#, python-format
+msgid "Implementation method %(method)s not found"
+msgstr "Không tìm thấy phương thức thực thi %(method)s"
+
+#. module: llm_tool
+#. odoo-python
+#: code:addons/llm_tool/models/llm_tool.py:0
+#, python-format
+msgid "Nothing to sync"
+msgstr "Không có gì để đồng bộ"
+
+#. module: llm_tool
+#. odoo-python
+#: code:addons/llm_tool/models/llm_tool.py:0
+#, python-format
+msgid "Tool registry is empty. Restart the server first."
+msgstr "Danh sách công cụ trống. Hãy khởi động lại máy chủ trước."
+
+#. module: llm_tool
+#. odoo-python
+#: code:addons/llm_tool/models/llm_tool.py:0
+#, python-format
+msgid "Already in sync"
+msgstr "Đã đồng bộ"
+
+#. module: llm_tool
+#. odoo-python
+#: code:addons/llm_tool/models/llm_tool.py:0
+#, python-format
+msgid "All tools are up to date."
+msgstr "Tất cả công cụ đã được cập nhật."
+
+#. module: llm_tool
+#. odoo-python
+#: code:addons/llm_tool/models/llm_tool.py:0
+#, python-format
+msgid "Tools synced"
+msgstr "Đã đồng bộ công cụ"
+
+#. module: llm_tool
+#. odoo-python
+#: code:addons/llm_tool/models/llm_tool_consent_config.py:0
+#, python-format
+msgid "Only one configuration can be active at a time."
+msgstr "Chỉ có thể kích hoạt một cấu hình tại một thời điểm."
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_form
+msgid "LLM Tool"
+msgstr "Công cụ AI"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_search
+msgid "Search LLM Tools"
+msgstr "Tìm kiếm công cụ AI"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_form
+msgid "Description"
+msgstr "Mô tả"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_form
+msgid "Input Schema"
+msgstr "Lược đồ đầu vào"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_form
+msgid "Technical Info"
+msgstr "Thông tin kỹ thuật"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_form
+msgid "Basic Configuration"
+msgstr "Cấu hình cơ bản"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_form
+msgid "Tool Annotations"
+msgstr "Chú thích công cụ"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_form
+msgid "Status"
+msgstr "Trạng thái"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_form
+msgid "About the Input Schema:"
+msgstr "Về lược đồ đầu vào:"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_form
+msgid "This JSON schema defines the parameters accepted by this tool..."
+msgstr "Lược đồ JSON này định nghĩa các tham số được chấp nhận bởi công cụ này..."
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_form
+msgid "Function Tool Information:"
+msgstr "Thông tin công cụ hàm:"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_form
+msgid "This tool is automatically linked to a Python method decorated with @llm_tool."
+msgstr "Công cụ này được tự động liên kết với phương thức Python sử dụng @llm_tool."
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_search
+msgid "Default Tools"
+msgstr "Công cụ mặc định"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_search
+msgid "Active"
+msgstr "Hoạt động"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_search
+msgid "Read-Only"
+msgstr "Chỉ đọc"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_search
+msgid "Requires Consent"
+msgstr "Yêu cầu đồng ý"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_search
+msgid "Implementation"
+msgstr "Phương thức"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_search
+msgid "Group By"
+msgstr "Nhóm theo"
+
+#. module: llm_tool
+#: model_terms:ir.actions.act_window,help:llm_tool.action_llm_tool
+msgid "Create a new LLM Tool"
+msgstr "Tạo công cụ AI mới"
+
+#. module: llm_tool
+#: model_terms:ir.actions.act_window,help:llm_tool.action_llm_tool
+msgid "Define tools that LLM models can use to interact with Odoo."
+msgstr "Định nghĩa các công cụ mà mô hình AI có thể sử dụng để tương tác với Odoo."
+
+#. module: llm_tool
+#: model_terms:ir.actions.act_window,help:llm_tool.action_llm_tool_consent_config
+msgid "Create a new Tool Consent Configuration"
+msgstr "Tạo cấu hình đồng ý công cụ mới"
+
+#. module: llm_tool
+#: model_terms:ir.actions.act_window,help:llm_tool.action_llm_tool_consent_config
+msgid "Configure messages for tools that require user consent. Only one configuration can be active at a time."
+msgstr "Cấu hình tin nhắn cho các công cụ yêu cầu sự đồng ý. Chỉ có thể kích hoạt một cấu hình tại một thời điểm."
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_consent_config_form
+msgid "LLM Tool Consent Configuration"
+msgstr "Cấu hình đồng ý công cụ AI"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_consent_config_form
+msgid "Tool Description"
+msgstr "Mô tả công cụ"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_consent_config_form
+msgid "System Message"
+msgstr "Tin nhắn hệ thống"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_consent_config_search
+msgid "Search LLM Tool Consent Configurations"
+msgstr "Tìm kiếm cấu hình đồng ý công cụ AI"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_consent_config_search
+msgid "Active Configuration"
+msgstr "Cấu hình đang hoạt động"
+
+#. module: llm_tool
+#: model_terms:ir.ui.view,arch_db:llm_tool.view_llm_tool_consent_config_search
+msgid "Inactive Configurations"
+msgstr "Cấu hình không hoạt động"
+
+#. module: llm_tool
+#: model:llm.tool.consent.config,name:llm_tool.llm_tool_consent_config_default
+msgid "Default Configuration"
+msgstr "Cấu hình mặc định"

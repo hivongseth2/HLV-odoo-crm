@@ -1,0 +1,454 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* llm_assistant
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 18.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-07 00:00+0000\n"
+"PO-Revision-Date: 2026-04-07 00:00+0000\n"
+"Last-Translator: HLV Team\n"
+"Language-Team: Vietnamese\n"
+"Language: vi_VN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: llm_assistant
+#: model:ir.ui.menu,name:llm_assistant.menu_llm_assistant
+msgid "Assistants"
+msgstr "Trợ lý"
+
+#. module: llm_assistant
+#: model:ir.ui.menu,name:llm_assistant.llm_prompt_menu
+msgid "Prompts"
+msgstr "Câu lệnh mẫu"
+
+#. module: llm_assistant
+#: model:ir.ui.menu,name:llm_assistant.llm_prompt_configuration_menu
+msgid "Prompts Configuration"
+msgstr "Cấu hình câu lệnh"
+
+#. module: llm_assistant
+#: model:ir.ui.menu,name:llm_assistant.llm_prompt_category_menu
+msgid "Categories"
+msgstr "Danh mục"
+
+#. module: llm_assistant
+#: model:ir.ui.menu,name:llm_assistant.llm_prompt_tag_menu
+msgid "Tags"
+msgstr "Thẻ"
+
+#. module: llm_assistant
+#: model:ir.actions.act_window,name:llm_assistant.action_llm_assistant
+msgid "Assistants"
+msgstr "Trợ lý"
+
+#. module: llm_assistant
+#: model:ir.actions.act_window,name:llm_assistant.llm_prompt_action
+msgid "Prompts"
+msgstr "Câu lệnh mẫu"
+
+#. module: llm_assistant
+#: model:ir.actions.act_window,name:llm_assistant.llm_prompt_category_action
+msgid "Prompt Categories"
+msgstr "Danh mục câu lệnh"
+
+#. module: llm_assistant
+#: model:ir.actions.act_window,name:llm_assistant.llm_prompt_tag_action
+msgid "Prompt Tags"
+msgstr "Thẻ câu lệnh"
+
+#. module: llm_assistant
+#: model:ir.model,name:llm_assistant.model_llm_assistant
+msgid "LLM Assistant"
+msgstr "Trợ lý AI"
+
+#. module: llm_assistant
+#: model:ir.model,name:llm_assistant.model_llm_prompt
+msgid "LLM Prompt"
+msgstr "Câu lệnh mẫu AI"
+
+#. module: llm_assistant
+#: model:ir.model,name:llm_assistant.model_llm_prompt_category
+msgid "LLM Prompt Category"
+msgstr "Danh mục câu lệnh AI"
+
+#. module: llm_assistant
+#: model:ir.model,name:llm_assistant.model_llm_prompt_tag
+msgid "LLM Prompt Tag"
+msgstr "Thẻ câu lệnh AI"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__name
+msgid "Name"
+msgstr "Tên"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__description
+msgid "Description"
+msgstr "Mô tả"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__active
+msgid "Active"
+msgstr "Hoạt động"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__provider_id
+msgid "Provider"
+msgstr "Nhà cung cấp"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__model_id
+msgid "Model"
+msgstr "Mô hình"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__tool_ids
+msgid "Preferred Tools"
+msgstr "Công cụ ưa thích"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__system_prompt
+msgid "System Prompt Preview"
+msgstr "Xem trước lệnh hệ thống"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__public
+msgid "Public"
+msgstr "Công khai"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__allowed_group_ids
+msgid "Allowed Groups"
+msgstr "Nhóm được phép"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__code
+msgid "Code"
+msgstr "Mã"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__is_default
+msgid "Is Default"
+msgstr "Mặc định"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__prompt_template_id
+msgid "Prompt Template"
+msgstr "Mẫu câu lệnh"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__category_id
+msgid "Category"
+msgstr "Danh mục"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__tag_ids
+msgid "Tags"
+msgstr "Thẻ"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__default_values
+msgid "Default Values"
+msgstr "Giá trị mặc định"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__max_tool_calls
+msgid "Max Tool Calls"
+msgstr "Số lần gọi công cụ tối đa"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__thread_count
+msgid "Thread Count"
+msgstr "Số cuộc hội thoại"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__thread_ids
+msgid "Threads"
+msgstr "Cuộc hội thoại"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__template
+msgid "Template"
+msgstr "Mẫu"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_assistant__template_format
+msgid "Template Format"
+msgstr "Định dạng mẫu"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_prompt__name
+msgid "Prompt Name"
+msgstr "Tên câu lệnh"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_prompt__template
+msgid "Template"
+msgstr "Mẫu"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_prompt__format
+msgid "Format"
+msgstr "Định dạng"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_prompt__arguments_schema
+msgid "Arguments Schema"
+msgstr "Lược đồ tham số"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_prompt__usage_count
+msgid "Usage Count"
+msgstr "Số lần sử dụng"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_prompt__last_used
+msgid "Last Used"
+msgstr "Sử dụng lần cuối"
+
+#. module: llm_assistant
+#: model:ir.model.fields.selection,name:llm_assistant.selection__llm_prompt__format__text
+msgid "Text"
+msgstr "Văn bản"
+
+#. module: llm_assistant
+#: model:ir.model.fields.selection,name:llm_assistant.selection__llm_prompt__format__yaml
+msgid "YAML"
+msgstr "YAML"
+
+#. module: llm_assistant
+#: model:ir.model.fields.selection,name:llm_assistant.selection__llm_prompt__format__json
+msgid "JSON"
+msgstr "JSON"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_prompt_category__name
+msgid "Category Name"
+msgstr "Tên danh mục"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_prompt_category__parent_id
+msgid "Parent Category"
+msgstr "Danh mục cha"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_prompt_category__child_ids
+msgid "Child Categories"
+msgstr "Danh mục con"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_prompt_tag__name
+msgid "Tag Name"
+msgstr "Tên thẻ"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_prompt_tag__color
+msgid "Color"
+msgstr "Màu"
+
+#. module: llm_assistant
+#: model:ir.model.fields,field_description:llm_assistant.field_llm_thread__assistant_id
+msgid "Assistant"
+msgstr "Trợ lý"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_assistant_form
+msgid "Configuration"
+msgstr "Cấu hình"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_assistant_form
+msgid "Tools"
+msgstr "Công cụ"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_assistant_form
+msgid "Preview"
+msgstr "Xem trước"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_assistant_form
+msgid "Related Threads"
+msgstr "Cuộc hội thoại liên quan"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_assistant_form
+msgid "Assistant Name"
+msgstr "Tên trợ lý"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_assistant_form
+msgid "Select tools for this assistant..."
+msgstr "Chọn công cụ cho trợ lý này..."
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_assistant_form
+msgid "Reset Defaults"
+msgstr "Đặt lại mặc định"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_assistant_form
+msgid "Edit Template in Prompt"
+msgstr "Chỉnh sửa mẫu trong câu lệnh"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_assistant_search
+msgid "Search Assistants"
+msgstr "Tìm kiếm trợ lý"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_assistant_search
+msgid "Public"
+msgstr "Công khai"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_assistant_search
+msgid "Private"
+msgstr "Riêng tư"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_assistant_search
+msgid "Default"
+msgstr "Mặc định"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_assistant_search
+msgid "Text Templates"
+msgstr "Mẫu văn bản"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_assistant_search
+msgid "YAML Templates"
+msgstr "Mẫu YAML"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_assistant_search
+msgid "JSON Templates"
+msgstr "Mẫu JSON"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_assistant_search
+msgid "Archived"
+msgstr "Đã lưu trữ"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_assistant_search
+msgid "Group By"
+msgstr "Nhóm theo"
+
+#. module: llm_assistant
+#: model_terms:ir.actions.act_window,help:llm_assistant.action_llm_assistant
+msgid "Create your first AI Assistant!"
+msgstr "Tạo trợ lý AI đầu tiên!"
+
+#. module: llm_assistant
+#: model_terms:ir.actions.act_window,help:llm_assistant.action_llm_assistant
+msgid "Assistants can be configured with specific roles, goals, and tools to enhance your AI interactions."
+msgstr "Trợ lý có thể được cấu hình với vai trò, mục tiêu và công cụ cụ thể để nâng cao tương tác AI."
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_prompt_form
+msgid "Auto-detect Arguments"
+msgstr "Tự động phát hiện tham số"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_prompt_form
+msgid "Test Prompt"
+msgstr "Kiểm tra câu lệnh"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_prompt_form
+msgid "Arguments"
+msgstr "Tham số"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_prompt_search
+msgid "Search Prompts"
+msgstr "Tìm kiếm câu lệnh"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_prompt_search
+msgid "Text Format"
+msgstr "Định dạng văn bản"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_prompt_search
+msgid "YAML Format"
+msgstr "Định dạng YAML"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_prompt_search
+msgid "JSON Format"
+msgstr "Định dạng JSON"
+
+#. module: llm_assistant
+#: model_terms:ir.actions.act_window,help:llm_assistant.llm_prompt_action
+msgid "Create your first prompt template"
+msgstr "Tạo mẫu câu lệnh đầu tiên"
+
+#. module: llm_assistant
+#: model_terms:ir.actions.act_window,help:llm_assistant.llm_prompt_action
+msgid "Prompt templates help you create reusable messages for LLM interactions with support for text, YAML, and JSON formats."
+msgstr "Mẫu câu lệnh giúp tạo tin nhắn tái sử dụng cho tương tác AI, hỗ trợ định dạng văn bản, YAML và JSON."
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_prompt_category_form
+msgid "Prompt Category"
+msgstr "Danh mục câu lệnh"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_prompt_category_search
+msgid "Search Categories"
+msgstr "Tìm kiếm danh mục"
+
+#. module: llm_assistant
+#: model_terms:ir.ui.view,arch_db:llm_assistant.view_llm_prompt_tag_search
+msgid "Search Prompt Tags"
+msgstr "Tìm kiếm thẻ câu lệnh"
+
+#. module: llm_assistant
+#: model:llm.prompt.category,name:llm_assistant.prompt_category_general
+msgid "General"
+msgstr "Chung"
+
+#. module: llm_assistant
+#: model:llm.prompt.category,name:llm_assistant.prompt_category_technical
+msgid "Technical"
+msgstr "Kỹ thuật"
+
+#. module: llm_assistant
+#: model:llm.prompt.category,name:llm_assistant.prompt_category_business
+msgid "Business"
+msgstr "Kinh doanh"
+
+#. module: llm_assistant
+#: model:llm.prompt.category,name:llm_assistant.prompt_category_creative
+msgid "Creative"
+msgstr "Sáng tạo"
+
+#. module: llm_assistant
+#. odoo-python
+#: code:addons/llm_assistant/models/llm_prompt_category.py:0
+#, python-format
+msgid "Error! You cannot create recursive categories."
+msgstr "Lỗi! Không thể tạo danh mục đệ quy."
+
+#. module: llm_assistant
+#: model:ir.model.constraint,message:llm_assistant.constraint_llm_assistant_unique_code
+msgid "Assistant code must be unique."
+msgstr "Mã trợ lý phải là duy nhất."
+
+#. module: llm_assistant
+#: model:ir.model.constraint,message:llm_assistant.constraint_llm_prompt_unique_name
+msgid "The prompt name must be unique."
+msgstr "Tên câu lệnh phải là duy nhất."
+
+#. module: llm_assistant
+#: model:ir.model.constraint,message:llm_assistant.constraint_llm_prompt_tag_unique_name
+msgid "Tag name already exists!"
+msgstr "Tên thẻ đã tồn tại!"

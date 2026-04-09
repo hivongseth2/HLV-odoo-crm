@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+
+    <!-- ============================================================ -->
+    <!-- Tree View -->
+    <!-- ============================================================ -->
+    <record id="view_web_search_site_tree" model="ir.ui.view">
+        <field name="name">llm.web.search.site.tree</field>
+        <field name="model">llm.web.search.site</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="sequence" widget="handle" />
+                <field name="name" />
+                <field name="url" widget="url" />
+                <field name="description" />
+                <field name="active" />
+            </list>
+        </field>
+    </record>
+
+    <!-- ============================================================ -->
+    <!-- Form View -->
+    <!-- ============================================================ -->
+    <record id="view_web_search_site_form" model="ir.ui.view">
+        <field name="name">llm.web.search.site.form</field>
+        <field name="model">llm.web.search.site</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name" string="Tên website" />
+                        <h1><field name="name" placeholder="VD: Kết Nối Tiêu Dùng" /></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="url" widget="url" placeholder="https://www.example.com" />
+                            <field name="active" />
+                        </group>
+                        <group>
+                            <field name="sequence" />
+                        </group>
+                    </group>
+                    <group>
+                        <field name="description" placeholder="Mô tả ngắn nội dung website để AI hiểu ngữ cảnh..." />
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ============================================================ -->
+    <!-- Action + Menu -->
+    <!-- ============================================================ -->
+    <record id="action_web_search_sites" model="ir.actions.act_window">
+        <field name="name">Website tìm kiếm</field>
+        <field name="res_model">llm.web.search.site</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Thêm website cho AI tìm kiếm!
+            </p>
+            <p>Cấu hình các trang web mà AI assistant được phép tìm kiếm và đọc nội dung.</p>
+        </field>
+    </record>
+
+    <menuitem
+        id="menu_web_search_sites"
+        name="Website tìm kiếm"
+        parent="llm.menu_llm_config"
+        action="action_web_search_sites"
+        sequence="30"
+    />
+
+</odoo>

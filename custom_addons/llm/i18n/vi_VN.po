@@ -1,0 +1,387 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* llm
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 18.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-07 00:00+0000\n"
+"PO-Revision-Date: 2026-04-07 00:00+0000\n"
+"Last-Translator: HLV Team\n"
+"Language-Team: Vietnamese\n"
+"Language: vi_VN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: llm
+#: model:ir.ui.menu,name:llm.menu_llm_root
+msgid "LLM"
+msgstr "Trợ lý AI"
+
+#. module: llm
+#: model:ir.ui.menu,name:llm.menu_llm_config
+msgid "Configuration"
+msgstr "Cấu hình"
+
+#. module: llm
+#: model:ir.ui.menu,name:llm.menu_llm_provider
+msgid "Providers"
+msgstr "Nhà cung cấp"
+
+#. module: llm
+#: model:ir.ui.menu,name:llm.menu_llm_publisher
+msgid "Publishers"
+msgstr "Nhà phát hành"
+
+#. module: llm
+#: model:ir.ui.menu,name:llm.menu_llm_model
+msgid "Models"
+msgstr "Mô hình"
+
+#. module: llm
+#: model:ir.actions.act_window,name:llm.llm_model_action
+msgid "LLM Models"
+msgstr "Mô hình AI"
+
+#. module: llm
+#: model:ir.actions.act_window,name:llm.llm_provider_action
+msgid "LLM Providers"
+msgstr "Nhà cung cấp AI"
+
+#. module: llm
+#: model:ir.actions.act_window,name:llm.llm_publisher_action
+msgid "LLM Publishers"
+msgstr "Nhà phát hành AI"
+
+#. module: llm
+#: model:ir.model,name:llm.model_llm_provider
+msgid "LLM Provider"
+msgstr "Nhà cung cấp AI"
+
+#. module: llm
+#: model:ir.model,name:llm.model_llm_publisher
+msgid "LLM Publisher"
+msgstr "Nhà phát hành AI"
+
+#. module: llm
+#: model:ir.model,name:llm.model_llm_model
+msgid "LLM Model"
+msgstr "Mô hình AI"
+
+#. module: llm
+#: model:ir.model.fields,field_description:llm.field_llm_provider__name
+#: model:ir.model.fields,field_description:llm.field_llm_publisher__name
+#: model:ir.model.fields,field_description:llm.field_llm_model__name
+msgid "Name"
+msgstr "Tên"
+
+#. module: llm
+#: model:ir.model.fields,field_description:llm.field_llm_provider__active
+#: model:ir.model.fields,field_description:llm.field_llm_model__active
+msgid "Active"
+msgstr "Hoạt động"
+
+#. module: llm
+#: model:ir.model.fields,field_description:llm.field_llm_provider__api_key
+msgid "Api Key"
+msgstr "Khóa API"
+
+#. module: llm
+#: model:ir.model.fields,field_description:llm.field_llm_provider__api_base
+msgid "Api Base"
+msgstr "URL API"
+
+#. module: llm
+#: model:ir.model.fields,field_description:llm.field_llm_provider__company_id
+msgid "Company"
+msgstr "Công ty"
+
+#. module: llm
+#: model:ir.model.fields,field_description:llm.field_llm_provider__model_ids
+#: model:ir.model.fields,field_description:llm.field_llm_publisher__model_ids
+msgid "Models"
+msgstr "Mô hình"
+
+#. module: llm
+#: model:ir.model.fields,field_description:llm.field_llm_model__model_use
+msgid "Model Use"
+msgstr "Mục đích sử dụng"
+
+#. module: llm
+#: model:ir.model.fields,field_description:llm.field_llm_model__provider_id
+msgid "Provider"
+msgstr "Nhà cung cấp"
+
+#. module: llm
+#: model:ir.model.fields,field_description:llm.field_llm_model__publisher_id
+msgid "Publisher"
+msgstr "Nhà phát hành"
+
+#. module: llm
+#: model:ir.model.fields,field_description:llm.field_llm_publisher__publisher_metadata
+msgid "Publisher Metadata"
+msgstr "Thông tin nhà phát hành"
+
+#. module: llm
+#: model:ir.model.fields.selection,name:llm.selection__llm_model__model_use__chat
+msgid "Chat"
+msgstr "Trò chuyện"
+
+#. module: llm
+#: model:ir.model.fields.selection,name:llm.selection__llm_model__model_use__embedding
+msgid "Embedding"
+msgstr "Nhúng văn bản"
+
+#. module: llm
+#: model:ir.model.fields.selection,name:llm.selection__llm_model__model_use__completion
+msgid "Completion"
+msgstr "Hoàn thành văn bản"
+
+#. module: llm
+#: model:ir.model.fields.selection,name:llm.selection__llm_model__model_use__multimodal
+msgid "Multimodal"
+msgstr "Đa phương thức"
+
+#. module: llm
+#: model:ir.model.fields.selection,name:llm.selection__llm_model__model_use__generation
+msgid "Generic binary generation"
+msgstr "Tạo dữ liệu nhị phân"
+
+#. module: llm
+#: model:ir.model.fields.selection,name:llm.selection__llm_model__model_use__image_generation
+msgid "Image Generation"
+msgstr "Tạo hình ảnh"
+
+#. module: llm
+#: model_terms:ir.ui.view,arch_db:llm.llm_provider_view_form
+msgid "Fetch Models"
+msgstr "Lấy danh sách mô hình"
+
+#. module: llm
+#: model_terms:ir.ui.view,arch_db:llm.llm_provider_view_form
+msgid "Provider Name"
+msgstr "Tên nhà cung cấp"
+
+#. module: llm
+#: model_terms:ir.ui.view,arch_db:llm.llm_model_view_form
+msgid "Fetch This Model Update"
+msgstr "Cập nhật mô hình này"
+
+#. module: llm
+#: model_terms:ir.ui.view,arch_db:llm.llm_model_view_form
+msgid "Fetch the latest information for this specific model from the provider."
+msgstr "Lấy thông tin mới nhất cho mô hình này từ nhà cung cấp."
+
+#. module: llm
+#: model_terms:ir.ui.view,arch_db:llm.llm_model_view_form
+msgid "Model Name"
+msgstr "Tên mô hình"
+
+#. module: llm
+#: model_terms:ir.ui.view,arch_db:llm.llm_model_view_search
+msgid "Default Models"
+msgstr "Mô hình mặc định"
+
+#. module: llm
+#: model_terms:ir.ui.view,arch_db:llm.llm_model_view_search
+msgid "Archived"
+msgstr "Đã lưu trữ"
+
+#. module: llm
+#: model_terms:ir.ui.view,arch_db:llm.llm_model_view_search
+#: model_terms:ir.ui.view,arch_db:llm.llm_publisher_view_search
+msgid "Group By"
+msgstr "Nhóm theo"
+
+#. module: llm
+#: model_terms:ir.ui.view,arch_db:llm.llm_model_view_search
+msgid "Usage"
+msgstr "Mục đích"
+
+#. module: llm
+#: model_terms:ir.ui.view,arch_db:llm.llm_publisher_view_form
+msgid "Description"
+msgstr "Mô tả"
+
+#. module: llm
+#: model_terms:ir.ui.view,arch_db:llm.llm_publisher_view_search
+msgid "Official Publishers"
+msgstr "Nhà phát hành chính thức"
+
+#. module: llm
+#: model_terms:ir.ui.view,arch_db:llm.llm_publisher_view_search
+msgid "Frontier AI"
+msgstr "AI tiên phong"
+
+#. module: llm
+#: model_terms:ir.actions.act_window,help:llm.llm_provider_action
+msgid "Create your first LLM provider!"
+msgstr "Tạo nhà cung cấp AI đầu tiên!"
+
+#. module: llm
+#: model_terms:ir.actions.act_window,help:llm.llm_provider_action
+msgid "Configure providers like OpenAI, Anthropic, or Ollama to enable AI features."
+msgstr "Cấu hình nhà cung cấp như OpenAI, Anthropic hoặc Ollama để bật tính năng AI."
+
+#. module: llm
+#: model_terms:ir.actions.act_window,help:llm.llm_publisher_action
+msgid "Create your first LLM publisher!"
+msgstr "Tạo nhà phát hành AI đầu tiên!"
+
+#. module: llm
+#: model_terms:ir.actions.act_window,help:llm.llm_publisher_action
+msgid "Add publishers like OpenAI, Anthropic, Meta, Google, etc."
+msgstr "Thêm nhà phát hành như OpenAI, Anthropic, Meta, Google..."
+
+#. module: llm
+#: model_terms:ir.actions.act_window,help:llm.llm_model_action
+msgid "No models found!"
+msgstr "Không tìm thấy mô hình!"
+
+#. module: llm
+#: model_terms:ir.actions.act_window,help:llm.llm_model_action
+msgid "Models will be automatically created when you configure a provider."
+msgstr "Mô hình sẽ tự động được tạo khi bạn cấu hình nhà cung cấp."
+
+#. module: llm
+#: model_terms:ir.ui.view,arch_db:llm.view_fetch_models_wizard
+msgid "Import Selected Models"
+msgstr "Nhập mô hình đã chọn"
+
+#. module: llm
+#: model_terms:ir.ui.view,arch_db:llm.view_fetch_models_wizard
+msgid "Cancel"
+msgstr "Hủy"
+
+#. module: llm
+#: model:ir.model,name:llm.model_fetch_models_wizard
+msgid "Import LLM Models"
+msgstr "Nhập mô hình AI"
+
+#. module: llm
+#: model:ir.model,name:llm.model_fetch_models_wizard_line
+msgid "LLM Model Import Line"
+msgstr "Dòng nhập mô hình AI"
+
+#. module: llm
+#: model:ir.model.fields,field_description:llm.field_fetch_models_wizard_line__model_name
+msgid "Model Name"
+msgstr "Tên mô hình"
+
+#. module: llm
+#: model:ir.model.fields,field_description:llm.field_fetch_models_wizard__models_found
+msgid "Models Found"
+msgstr "Mô hình tìm thấy"
+
+#. module: llm
+#: model:ir.model.fields,field_description:llm.field_fetch_models_wizard__new_models
+msgid "New Models"
+msgstr "Mô hình mới"
+
+#. module: llm
+#: model:ir.model.fields,field_description:llm.field_fetch_models_wizard__modified_models
+msgid "Modified Models"
+msgstr "Mô hình đã thay đổi"
+
+#. module: llm
+#: model:ir.model.fields.selection,name:llm.selection__fetch_models_wizard_line__status__new
+msgid "New"
+msgstr "Mới"
+
+#. module: llm
+#: model:ir.model.fields.selection,name:llm.selection__fetch_models_wizard_line__status__existing
+msgid "Existing"
+msgstr "Đã tồn tại"
+
+#. module: llm
+#: model:ir.model.fields.selection,name:llm.selection__fetch_models_wizard_line__status__modified
+msgid "Modified"
+msgstr "Đã thay đổi"
+
+#. module: llm
+#. odoo-python
+#: code:addons/llm/wizards/fetch_models_wizard.py:0
+#, python-format
+msgid "Please select at least one model to import."
+msgstr "Vui lòng chọn ít nhất một mô hình để nhập."
+
+#. module: llm
+#. odoo-python
+#: code:addons/llm/wizards/fetch_models_wizard.py:0
+#, python-format
+msgid "Success"
+msgstr "Thành công"
+
+#. module: llm
+#. odoo-python
+#: code:addons/llm/wizards/fetch_models_wizard.py:0
+#, python-format
+msgid "%d models have been imported/updated."
+msgstr "%d mô hình đã được nhập/cập nhật."
+
+#. module: llm
+#: model:ir.model.constraint,message:llm.constraint_fetch_models_wizard_line_unique_model_per_wizard
+msgid "Each model can only be listed once per import."
+msgstr "Mỗi mô hình chỉ được liệt kê một lần trong mỗi lần nhập."
+
+#. module: llm
+#. odoo-python
+#: code:addons/llm/models/llm_provider.py:0
+#, python-format
+msgid "Provider service not configured"
+msgstr "Dịch vụ nhà cung cấp chưa được cấu hình"
+
+#. module: llm
+#. odoo-python
+#: code:addons/llm/models/llm_provider.py:0
+#, python-format
+msgid "The provider name must be unique (case-insensitive)."
+msgstr "Tên nhà cung cấp phải là duy nhất (không phân biệt hoa thường)."
+
+#. module: llm
+#: model:ir.model.fields,field_description:llm.field_mail_message__llm_role
+msgid "LLM Role"
+msgstr "Vai trò AI"
+
+#. module: llm
+#: model:ir.model.fields.selection,name:llm.selection__mail_message__llm_role__user
+msgid "User"
+msgstr "Người dùng"
+
+#. module: llm
+#: model:ir.model.fields.selection,name:llm.selection__mail_message__llm_role__assistant
+msgid "Assistant"
+msgstr "Trợ lý"
+
+#. module: llm
+#: model:ir.model.fields.selection,name:llm.selection__mail_message__llm_role__system
+msgid "System"
+msgstr "Hệ thống"
+
+#. module: llm
+#: model:ir.model.fields.selection,name:llm.selection__mail_message__llm_role__tool
+msgid "Tool"
+msgstr "Công cụ"
+
+#. module: llm
+#: model:mail.message.subtype,name:llm.mt_llm_tool
+msgid "LLM Tool"
+msgstr "Công cụ AI"
+
+#. module: llm
+#: model:mail.message.subtype,name:llm.mt_llm_user
+msgid "LLM User"
+msgstr "Người dùng AI"
+
+#. module: llm
+#: model:mail.message.subtype,name:llm.mt_llm_assistant
+msgid "LLM Assistant"
+msgstr "Trợ lý AI"
+
+#. module: llm
+#: model:mail.message.subtype,name:llm.mt_llm_system
+msgid "LLM System"
+msgstr "Hệ thống AI"
