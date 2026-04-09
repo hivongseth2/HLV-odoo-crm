@@ -23,10 +23,35 @@ class StockPickingBarcode(models.Model):
         }
 
     @api.model
-    def get_barcode_pickings(self, picking_type_code=None):
+    def get_barcode_picking_types(self):
+        """Get all active picking types for the barcode menu."""
+        types = self.env['stock.picking.type'].search([
+            ('code', 'in', ['incoming', 'outgoing', 'internal']),
+            ('active', '=', True),
+        ], order='sequence asc')
+        result = []
+        for pt in types:
+            # Count ready pickings
+            count = self.search_count([
+                ('picking_type_id', '=', pt.id),
+                ('state', 'in', ['assigned', 'confirmed', 'waiting']),
+            ])
+            result.append({
+                'id': pt.id,
+                'name': pt.name,
+                'code': pt.code,
+                'count': count,
+                'warehouse_name': pt.warehouse_id.name or '',
+            })
+        return result
+
+    @api.model
+    def get_barcode_pickings(self, picking_type_id=None, picking_type_code=None):
         """Get list of pickings ready for barcode scanning."""
         domain = [('state', 'in', ['assigned', 'confirmed', 'waiting'])]
-        if picking_type_code:
+        if picking_type_id:
+            domain.append(('picking_type_id', '=', picking_type_id))
+        elif picking_type_code:
             domain.append(('picking_type_code', '=', picking_type_code))
 
         pickings = self.search(domain, order='scheduled_date asc, id asc', limit=100)
@@ -425,6 +450,58 @@ class StockPickingBarcode(models.Model):
             'quantity_done': new_quantity,
             'demand': move.product_uom_qty,
             'message': _('✓ Cập nhật: %s → %.2f %s') % (move.product_id.name, new_quantity, move.product_uom.name),
+        }
+
+    @api.model
+    def find_picking_by_barcode(self, barcode):
+        """
+        Find a picking by its name (reference number).
+        This is the main entry point: user scans a picking barcode → system opens it.
+        """
+        picking = self.search([
+            ('name', '=', barcode),
+            ('state', 'in', ['assigned', 'confirmed', 'waiting']),
+        ], limit=1)
+        if not picking:
+            # Try partial match (e.g. user scans without prefix)
+            picking = self.search([
+                ('name', 'ilike', barcode),
+                ('state', 'in', ['assigned', 'confirmed', 'waiting']),
+            ], limit=1)
+        if picking:
+            return {
+                'status': 'found',
+                'picking_id': picking.id,
+                'picking_name': picking.name,
+                'picking_type_name': picking.picking_type_id.name or '',
+                'picking_type_code': picking.picking_type_code,
+            }
+        return {'status': 'not_found'}
+
+    @api.model
+    def scan_barcode_global(self, barcode):
+        """
+        Global scan from home screen.
+        Priority: 1) Find picking by name  2) Find product for stock info
+        """
+        # 1. Try to find a picking
+        picking_result = self.find_picking_by_barcode(barcode)
+        if picking_result.get('status') == 'found':
+            picking_result['scan_type'] = 'picking'
+            return picking_result
+
+        # 2. Try to find a product for stock lookup
+        product = self._find_product_by_barcode(barcode)
+        if product:
+            return {
+                'status': 'found',
+                'scan_type': 'product',
+                'barcode': barcode,
+            }
+
+        return {
+            'status': 'not_found',
+            'message': _('Không tìm thấy phiếu hoặc sản phẩm với mã: %s') % barcode,
         }
 
     @api.model

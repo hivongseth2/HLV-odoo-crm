@@ -49,7 +49,7 @@
                 <input type="text"
                        t-ref="barcodeInput"
                        class="hlv-bc-barcode-input"
-                       placeholder="🔍 Quét mã vạch tra cứu sản phẩm..."
+                       placeholder="🔍 Quét mã phiếu hoặc mã sản phẩm..."
                        t-att-value="state.barcode_value"
                        t-on-input="onBarcodeInput"
                        t-on-keydown="onBarcodeKeydown"
@@ -62,28 +62,19 @@
             </div>
         </div>
 
-        <!-- Menu Cards -->
+        <!-- Menu Cards - Dynamic from DB -->
         <div class="hlv-bc-menu-grid">
-            <div class="hlv-bc-menu-card hlv-bc-card-incoming"
-                 t-on-click="() => this.openPickingList('incoming')">
-                <div class="hlv-bc-card-icon">📥</div>
-                <div class="hlv-bc-card-title">Nhập Kho</div>
-                <div class="hlv-bc-card-desc">Receipts</div>
-            </div>
-
-            <div class="hlv-bc-menu-card hlv-bc-card-outgoing"
-                 t-on-click="() => this.openPickingList('outgoing')">
-                <div class="hlv-bc-card-icon">📤</div>
-                <div class="hlv-bc-card-title">Xuất Kho</div>
-                <div class="hlv-bc-card-desc">Delivery Orders</div>
-            </div>
-
-            <div class="hlv-bc-menu-card hlv-bc-card-internal"
-                 t-on-click="() => this.openPickingList('internal')">
-                <div class="hlv-bc-card-icon">🔄</div>
-                <div class="hlv-bc-card-title">Chuyển Vị Trí</div>
-                <div class="hlv-bc-card-desc">Internal Transfers</div>
-            </div>
+            <t t-foreach="state.picking_types" t-as="pt" t-key="pt.id">
+                <div t-attf-class="hlv-bc-menu-card hlv-bc-card-{{pt.code}}"
+                     t-on-click="() => this.openPickingTypeList(pt)">
+                    <div class="hlv-bc-card-icon"><t t-esc="getPickingTypeIcon(pt.code)"/></div>
+                    <div class="hlv-bc-card-title"><t t-esc="pt.name"/></div>
+                    <div class="hlv-bc-card-desc"><t t-esc="pt.warehouse_name"/></div>
+                    <div t-if="pt.count > 0" class="hlv-bc-card-badge">
+                        <t t-esc="pt.count"/>
+                    </div>
+                </div>
+            </t>
 
             <div class="hlv-bc-menu-card hlv-bc-card-inventory"
                  t-on-click="goToInventoryCheck">
@@ -102,8 +93,10 @@
         <div class="hlv-bc-header">
             <button class="hlv-bc-btn-back" t-on-click="goHome">← Quay lại</button>
             <h2>
-                <t t-esc="getPickingTypeIcon(state.picking_type_filter)"/>
-                <t t-esc="getPickingTypeLabel(state.picking_type_filter)"/>
+                <t t-if="state.picking_type_filter"
+                   t-esc="getPickingTypeIcon(state.picking_type_filter.code)"/>
+                <t t-if="state.picking_type_filter"
+                   t-esc="state.picking_type_filter.name"/>
             </h2>
         </div>
 

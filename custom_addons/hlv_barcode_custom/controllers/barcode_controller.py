@@ -34,10 +34,23 @@ class BarcodeCustomController(http.Controller):
         """Global product search endpoint."""
         return request.env['stock.picking'].search_product_global(barcode)
 
+    @http.route('/hlv_barcode_custom/scan_global', type='json', auth='user')
+    def scan_global(self, barcode):
+        """Global scan from home: find picking or product."""
+        return request.env['stock.picking'].scan_barcode_global(barcode)
+
+    @http.route('/hlv_barcode_custom/get_picking_types', type='json', auth='user')
+    def get_picking_types(self):
+        """Get operation types for menu."""
+        return request.env['stock.picking'].get_barcode_picking_types()
+
     @http.route('/hlv_barcode_custom/get_pickings', type='json', auth='user')
-    def get_pickings(self, picking_type_code=None):
+    def get_pickings(self, picking_type_id=None, picking_type_code=None):
         """Get pickings list for barcode interface."""
-        return request.env['stock.picking'].get_barcode_pickings(picking_type_code)
+        return request.env['stock.picking'].get_barcode_pickings(
+            picking_type_id=picking_type_id,
+            picking_type_code=picking_type_code,
+        )
 
     @http.route('/hlv_barcode_custom/get_picking_detail', type='json', auth='user')
     def get_picking_detail(self, picking_id):

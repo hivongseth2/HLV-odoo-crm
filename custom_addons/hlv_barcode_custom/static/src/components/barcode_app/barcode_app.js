@@ -23,12 +23,15 @@ export class HlvBarcodeApp extends Component {
         this._audioCtx = null;
 
         this.state = useState({
-            // View: home | picking_list | scanning | product_search
+            // View: home | picking_list | scanning
             view: 'home',
             is_loading: false,
 
+            // Operation types (loaded from DB)
+            picking_types: [],
+
             // Picking list
-            picking_type_filter: null, // 'incoming', 'outgoing', 'internal'
+            picking_type_filter: null, // { id, name, code }
             pickings: [],
 
             // Current picking
@@ -88,9 +91,15 @@ export class HlvBarcodeApp extends Component {
     // =============== CONFIG ===============
     async _loadConfig() {
         try {
-            const config = await rpc('/hlv_barcode_custom/get_config', {});
+            const [config, pickingTypes] = await Promise.all([
+                rpc('/hlv_barcode_custom/get_config', {}),
+                rpc('/hlv_barcode_custom/get_picking_types', {}),
+            ]);
             if (config) {
                 Object.assign(this.state.config, config);
+            }
+            if (pickingTypes) {
+                this.state.picking_types = pickingTypes;
             }
         } catch (e) {
             console.warn('Failed to load barcode config:', e);
@@ -140,20 +149,24 @@ export class HlvBarcodeApp extends Component {
         this.state.pickings = [];
         this.state.picking_type_filter = null;
         this._clearFeedback();
+        // Reload picking types to get fresh counts
+        rpc('/hlv_barcode_custom/get_picking_types', {}).then(types => {
+            if (types) this.state.picking_types = types;
+        }).catch(() => {});
     }
 
-    async openPickingList(type) {
-        this.state.picking_type_filter = type;
+    async openPickingTypeList(pickingType) {
+        this.state.picking_type_filter = pickingType;
         this.state.is_loading = true;
         this.state.view = 'picking_list';
         try {
             const pickings = await rpc('/hlv_barcode_custom/get_pickings', {
-                picking_type_code: type,
+                picking_type_id: pickingType.id,
             });
             this.state.pickings = pickings || [];
         } catch (e) {
             this.state.pickings = [];
-            this._showError(_t('Lỗi tải danh sách phiếu'), e.message || String(e));
+            this._showError('Lỗi tải danh sách phiếu', e.message || String(e));
         }
         this.state.is_loading = false;
     }
@@ -204,13 +217,36 @@ export class HlvBarcodeApp extends Component {
         this._lastScannedCode = barcode;
         this._lastScanTime = now;
 
-        // If we're in scanning view with a picking, scan on that picking
         if (this.state.view === 'scanning' && this.state.picking) {
+            // Inside a picking → scan products
             await this._scanOnPicking(barcode);
         } else {
-            // Global product search
-            await this._searchProduct(barcode);
+            // Home or picking list → try to find a picking first, then product
+            await this._scanGlobal(barcode);
         }
+    }
+
+    async _scanGlobal(barcode) {
+        this.state.is_loading = true;
+        try {
+            const result = await rpc('/hlv_barcode_custom/scan_global', { barcode });
+
+            if (result.status === 'found' && result.scan_type === 'picking') {
+                // Found a picking → open it directly
+                this._playSound('success');
+                await this.openPicking(result.picking_id);
+            } else if (result.status === 'found' && result.scan_type === 'product') {
+                // Found a product → show stock info popup
+                await this._searchProduct(barcode);
+            } else {
+                this._showErrorPopup(result.message || `Không tìm thấy phiếu hoặc sản phẩm: ${barcode}`);
+                this._playSound('error');
+            }
+        } catch (e) {
+            this._showErrorPopup(e.message || String(e));
+            this._playSound('error');
+        }
+        this.state.is_loading = false;
     }
 
     async _scanOnPicking(barcode) {
@@ -410,7 +446,7 @@ export class HlvBarcodeApp extends Component {
                 // Go back to picking list after 2s
                 setTimeout(() => {
                     if (this.state.picking_type_filter) {
-                        this.openPickingList(this.state.picking_type_filter);
+                        this.openPickingTypeList(this.state.picking_type_filter);
                     } else {
                         this.goHome();
                     }
@@ -594,15 +630,6 @@ export class HlvBarcodeApp extends Component {
     }
 
     // =============== HELPERS ===============
-    getPickingTypeLabel(code) {
-        const labels = {
-            incoming: 'Nhập Kho',
-            outgoing: 'Xuất Kho',
-            internal: 'Chuyển Vị Trí',
-        };
-        return labels[code] || code;
-    }
-
     getPickingTypeIcon(code) {
         const icons = {
             incoming: '📥',

@@ -217,6 +217,7 @@ $hlv-radius-full: 9999px;
     cursor: pointer;
     transition: transform 0.15s, box-shadow 0.15s;
     border-left: 4px solid transparent;
+    position: relative;
 
     &:active {
         transform: scale(0.97);
@@ -234,6 +235,23 @@ $hlv-radius-full: 9999px;
     .hlv-bc-card-desc {
         font-size: 13px;
         color: $hlv-gray-500;
+    }
+
+    .hlv-bc-card-badge {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: $hlv-red;
+        color: $hlv-white;
+        border-radius: 12px;
+        min-width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 0 6px;
     }
 
     &.hlv-bc-card-incoming {

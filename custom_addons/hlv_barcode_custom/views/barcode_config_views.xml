@@ -7,7 +7,7 @@
         <field name="inherit_id" ref="base.res_config_settings_view_form"/>
         <field name="arch" type="xml">
             <xpath expr="//form" position="inside">
-                <app data-string="HLV Barcode" string="HLV Barcode" groups="stock.group_stock_manager">
+                <app data-string="HLV Barcode" string="HLV Barcode" name="hlv_barcode_custom" groups="stock.group_stock_manager">
                     <block title="Cấu hình Máy quét Barcode" name="barcode_custom_settings">
                         <setting id="barcode_auto_focus_setting" string="Tự động Focus ô quét"
                                  help="Ô input quét mã vạch luôn được focus tự động, sẵn sàng cho máy quét cứng">
