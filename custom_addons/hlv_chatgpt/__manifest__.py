@@ -4,7 +4,7 @@
     'summary': 'Chat AI Multi-Agent (Router + Specialists) sử dụng Prompt ID',
     'author': 'HLV',
     # im_livechat + mail: bridge Live Chat (website widget) -> hlv_chatgpt -> auto-reply back to the livechat channel
-    'depends': ['base', 'product', 'stock', 'mail', 'im_livechat'],
+    'depends': ['base', 'product', 'stock', 'mail', 'im_livechat', 'misa_crm_tool'],
     'data': [
         'security/ir.model.access.csv',
         'views/im_livechat_channel_view.xml',

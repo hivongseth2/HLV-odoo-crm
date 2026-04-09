@@ -19,108 +19,8 @@ except ImportError:
 # --- CONSTANTS ---
 VECTOR_STORE_IDS = ["vs_69328ab5789081918759b56def1c641a"]
 
-TOOLS_SCHEMA = [
-    {
-      "type": "function",
-      "description": "Search to see if a product already exists in the system using its name before creating a new one.",
-      "name": "search_product_misa",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Product name or keyword to search for (e.g., Khoan FPD3, Bulong M12)"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "additionalProperties": False
-      },
-      "strict": True
-    },
-    {
-      "type": "function",
-      "description": "Tạo sản phẩm mới vào hệ thống. CHỈ GỌI KHI NGƯỜI DÙNG ĐÃ XÁC NHẬN 'OK' HOẶC 'ĐỒNG Ý'.",
-      "name": "create_product_misa",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string",
-            "description": "Mã sản phẩm (Viết liền, in hoa, không dấu, VD: MAYKHOAN01)"
-          },
-          "name": {
-            "type": "string",
-            "description": "Tên sản phẩm chuẩn hóa đầy đủ (VD: Máy khoan Pin Milwaukee FPD3)"
-          },
-          "price": {
-            "type": "number",
-            "description": "Giá bán đề xuất (VNĐ). Để mặc định là  0."
-          },
-          "price_pu": {
-            "type": "number",
-            "description": "Gía mua VND. Nếu không được cung cấp để mặc định 0đ"
-          },
-          "tax": {
-            "type": "number",
-            "description": "Thuế VAT (thường là 8 hoặc 10)"
-          },
-          "unit": {
-            "type": "string",
-            "description": "Đơn vị tính (Cái, Bộ, Hộp, Chai...)"
-          },
-          "category": {
-            "type": "string",
-            "description": "Tên nhóm hàng (Lấy từ file category.json)"
-          },
-          "category_id": {
-            "type": "integer",
-            "description": "ID định danh của nhóm hàng (QUAN TRỌNG: Phải tra cứu chính xác số ID từ file category.json tương ứng với tên nhóm)"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "goods",
-              "service",
-              "finished_product"
-            ],
-            "description": "Loại hàng hóa (Mặc định là 'goods')"
-          }
-        },
-        "required": [
-          "code",
-          "name",
-          "price",
-          "tax",
-          "unit",
-          "category",
-          "category_id",
-          "type",
-          "price_pu"
-        ],
-        "additionalProperties": False
-      },
-      "strict": True
-    },
-    {
-      "type": "function",
-      "description": "Lấy tên chính xác của nhóm sản phẩm từ ID. Dùng để kiểm tra (double check) ID nhóm.",
-      "name": "get_category_info",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "category_id": {
-            "type": "string",
-            "description": "ID của nhóm sản phẩm (Ví dụ: 52, guid...)"
-          }
-        },
-        "required": [
-          "category_id"
-        ]
-      },
-      "strict": False
-    },
+# Built-in (non-MISA) tool schemas — MISA tools loaded dynamically from misa.crm.tools
+BUILTIN_TOOLS = [
     {
       "type": "file_search",
       "vector_store_ids": VECTOR_STORE_IDS
@@ -137,24 +37,6 @@ TOOLS_SCHEMA = [
         "timezone": None
       }
     },
-    {
-      "type": "function",
-      "description": "Tìm kiếm ID nhóm sản phẩm theo tên. Dùng khi người dùng yêu cầu nhóm cụ thể hoặc check nhóm.",
-      "name": "search_category_misa",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Tên nhóm cần tìm (VD: Vật tư khí nén, Bảo hộ lao động...)"
-          }
-        },
-        "required": [
-          "name"
-        ]
-      },
-      "strict": False
-    }
 ]
 
 class HlvChatgptSession(models.Model):
@@ -285,6 +167,11 @@ class HlvChatgptSession(models.Model):
         except Exception as e:
             _logger.warning("Summary update skipped due to error: %s", e)
 
+    def _get_tools_schema(self):
+        """Merge MISA CRM tool schemas (from registry) with built-in tools."""
+        misa_schemas = self.env['misa.crm.tools'].sudo().get_all_schemas()
+        return misa_schemas + BUILTIN_TOOLS
+
     def _run_gpt_prompt_workflow(self, client, user_query, prompt_id, image_url=False):
         """
         Workflow xử lý chính với client.responses.create:
@@ -362,7 +249,7 @@ class HlvChatgptSession(models.Model):
                         "id": prompt_id,
                     },
                     input=input_messages,
-                    tools=TOOLS_SCHEMA, # Định nghĩa lại Tool schema để server biết tool nào khả dụng
+                    tools=self._get_tools_schema(),
                 )
             except Exception as e:
                 _logger.error("API Call Error: %s", str(e))
@@ -447,16 +334,8 @@ class HlvChatgptSession(models.Model):
                     _logger.info("⚡ Tool Call: %s | Args: %s", fname, str(args))
                     tool_result_str = ""
 
-                    if fname == "search_product_misa":
-                        tool_result_str = self._execute_search_misa(args)
-                    elif fname == "create_product_misa":
-                        tool_result_str = self._execute_create_misa(args)
-                    elif fname == "get_category_info":
-                        tool_result_str = self._execute_get_category_info(args)
-                    elif fname == "search_category_misa":
-                        tool_result_str = self._execute_search_category_misa(args)
-                    else:
-                        tool_result_str = json.dumps({"error": f"Function {fname} chưa được hỗ trợ"})
+                    # Dispatch through misa.crm.tools registry
+                    tool_result_str = self.env['misa.crm.tools'].sudo().execute(fname, args)
                     
                     # Append Tool Output (biến tấu thành User role vì API Responses không chịu tool_calls input)
                     input_messages.append({
