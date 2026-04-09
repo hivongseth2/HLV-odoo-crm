@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Client Action for the Barcode App -->
+    <record id="action_hlv_barcode_custom_app" model="ir.actions.client">
+        <field name="name">HLV Barcode</field>
+        <field name="tag">hlv_barcode_custom_app</field>
+        <field name="target">fullscreen</field>
+    </record>
+
+    <!-- Root Menu -->
+    <menuitem id="menu_hlv_barcode_custom_root"
+              name="HLV Barcode"
+              action="action_hlv_barcode_custom_app"
+              web_icon="hlv_barcode_custom,static/description/icon.png"
+              sequence="5"
+              groups="stock.group_stock_user"/>
+</odoo>

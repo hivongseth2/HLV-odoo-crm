@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Settings View -->
+    <record id="res_config_settings_view_form_barcode_custom" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.hlv.barcode.custom</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="HLV Barcode" string="HLV Barcode" groups="stock.group_stock_manager">
+                    <block title="Cấu hình Máy quét Barcode" name="barcode_custom_settings">
+                        <setting id="barcode_auto_focus_setting" string="Tự động Focus ô quét"
+                                 help="Ô input quét mã vạch luôn được focus tự động, sẵn sàng cho máy quét cứng">
+                            <field name="barcode_auto_focus"/>
+                        </setting>
+                        <setting id="barcode_strict_delivery_setting" string="Chặn cứng phiếu xuất"
+                                 help="Không cho phép quét sản phẩm/số lượng vượt kế hoạch trên phiếu xuất">
+                            <field name="barcode_strict_delivery"/>
+                        </setting>
+                        <setting id="barcode_camera_setting" string="Cho phép quét bằng Camera"
+                                 help="Bật nút Camera để quét mã vạch bằng camera thiết bị">
+                            <field name="barcode_camera_enabled"/>
+                        </setting>
+                    </block>
+                    <block title="Âm thanh &amp; Phản hồi" name="barcode_feedback_settings">
+                        <setting id="barcode_sound_success_setting" string="Âm thanh khi quét thành công"
+                                 help="Phát tiếng beep ngắn khi quét mã vạch thành công">
+                            <field name="barcode_sound_success"/>
+                        </setting>
+                        <setting id="barcode_sound_error_setting" string="Âm thanh khi quét lỗi"
+                                 help="Phát tiếng cảnh báo khi quét mã sai hoặc vượt số lượng">
+                            <field name="barcode_sound_error"/>
+                        </setting>
+                    </block>
+                    <block title="Số lượng thập phân" name="barcode_decimal_settings">
+                        <setting id="barcode_decimal_step_setting" string="Bước nhảy thập phân"
+                                 help="Giá trị bước nhảy cho nút +/- thập phân (VD: 0.1 cho kg)">
+                            <field name="barcode_decimal_step"/>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+</odoo>

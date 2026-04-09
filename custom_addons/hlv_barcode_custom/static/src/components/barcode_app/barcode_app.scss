@@ -1,0 +1,1127 @@
+// HLV Custom Barcode - Professional Warehouse UI
+// Mobile-first, touch-optimized, fullscreen app
+
+// ============ VARIABLES ============
+$hlv-blue: #2563eb;
+$hlv-blue-dark: #1d4ed8;
+$hlv-green: #16a34a;
+$hlv-green-light: #dcfce7;
+$hlv-red: #dc2626;
+$hlv-red-light: #fee2e2;
+$hlv-amber: #d97706;
+$hlv-amber-light: #fef3c7;
+$hlv-gray-50: #f9fafb;
+$hlv-gray-100: #f3f4f6;
+$hlv-gray-200: #e5e7eb;
+$hlv-gray-300: #d1d5db;
+$hlv-gray-500: #6b7280;
+$hlv-gray-700: #374151;
+$hlv-gray-900: #111827;
+$hlv-white: #ffffff;
+$hlv-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+$hlv-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.12);
+$hlv-shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.2);
+$hlv-radius-sm: 8px;
+$hlv-radius-md: 12px;
+$hlv-radius-lg: 18px;
+$hlv-radius-full: 9999px;
+
+// ============ ROOT APP ============
+.hlv-bc-app {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1050;
+    background: $hlv-gray-50;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    color: $hlv-gray-900;
+    -webkit-tap-highlight-color: transparent;
+}
+
+// ============ LOADING ============
+.hlv-bc-loading {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: $hlv-white;
+    font-size: 16px;
+    backdrop-filter: blur(4px);
+}
+
+.hlv-bc-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-top-color: $hlv-white;
+    border-radius: 50%;
+    animation: hlv-spin 0.8s linear infinite;
+}
+
+@keyframes hlv-spin {
+    to { transform: rotate(360deg); }
+}
+
+// ============ TOAST FEEDBACK ============
+.hlv-bc-toast {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    right: 16px;
+    z-index: 9998;
+    padding: 12px 16px;
+    border-radius: $hlv-radius-sm;
+    font-weight: 600;
+    font-size: 14px;
+    text-align: center;
+    box-shadow: $hlv-shadow-md;
+    animation: hlv-slide-down 0.3s ease;
+
+    &.hlv-bc-toast-success {
+        background: $hlv-green;
+        color: $hlv-white;
+    }
+
+    &.hlv-bc-toast-error {
+        background: $hlv-red;
+        color: $hlv-white;
+    }
+}
+
+@keyframes hlv-slide-down {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+// ============ HOME VIEW ============
+.hlv-bc-home {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.hlv-bc-home-header {
+    background: linear-gradient(135deg, $hlv-blue 0%, #7c3aed 100%);
+    color: $hlv-white;
+    padding: 40px 24px 32px;
+    text-align: center;
+
+    .hlv-bc-logo {
+        font-size: 48px;
+        margin-bottom: 8px;
+    }
+
+    h1 {
+        font-size: 28px;
+        font-weight: 700;
+        margin: 0 0 4px;
+    }
+
+    p {
+        font-size: 14px;
+        opacity: 0.85;
+        margin: 0;
+    }
+}
+
+.hlv-bc-global-search {
+    padding: 16px 16px 0;
+    margin-top: -16px;
+}
+
+.hlv-bc-input-wrap {
+    display: flex;
+    gap: 8px;
+    background: $hlv-white;
+    border: 2px solid $hlv-gray-200;
+    border-radius: $hlv-radius-md;
+    padding: 4px;
+    box-shadow: $hlv-shadow-sm;
+    transition: border-color 0.2s;
+
+    &:focus-within {
+        border-color: $hlv-blue;
+        box-shadow: 0 0 0 3px rgba($hlv-blue, 0.15);
+    }
+}
+
+.hlv-bc-barcode-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    padding: 12px 14px;
+    font-size: 16px;
+    background: transparent;
+    min-width: 0;
+}
+
+.hlv-bc-btn-camera {
+    background: $hlv-blue;
+    border: none;
+    border-radius: $hlv-radius-sm;
+    padding: 8px 14px;
+    font-size: 20px;
+    cursor: pointer;
+    color: $hlv-white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+    &:active {
+        background: $hlv-blue-dark;
+    }
+}
+
+.hlv-bc-menu-grid {
+    padding: 20px 16px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+
+    @media (min-width: 600px) {
+        grid-template-columns: 1fr 1fr 1fr;
+    }
+}
+
+.hlv-bc-menu-card {
+    background: $hlv-white;
+    border-radius: $hlv-radius-md;
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    box-shadow: $hlv-shadow-sm;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    border-left: 4px solid transparent;
+
+    &:active {
+        transform: scale(0.97);
+    }
+
+    .hlv-bc-card-icon {
+        font-size: 36px;
+    }
+
+    .hlv-bc-card-title {
+        font-size: 18px;
+        font-weight: 700;
+    }
+
+    .hlv-bc-card-desc {
+        font-size: 13px;
+        color: $hlv-gray-500;
+    }
+
+    &.hlv-bc-card-incoming {
+        border-left-color: $hlv-green;
+    }
+
+    &.hlv-bc-card-outgoing {
+        border-left-color: $hlv-blue;
+    }
+
+    &.hlv-bc-card-internal {
+        border-left-color: $hlv-amber;
+    }
+}
+
+// ============ PICKING LIST VIEW ============
+.hlv-bc-picking-list {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.hlv-bc-header {
+    background: $hlv-white;
+    padding: 12px 16px;
+    border-bottom: 1px solid $hlv-gray-200;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+
+    h2 {
+        font-size: 18px;
+        font-weight: 700;
+        margin: 0;
+    }
+}
+
+.hlv-bc-btn-back {
+    background: none;
+    border: 1px solid $hlv-gray-300;
+    border-radius: $hlv-radius-sm;
+    padding: 8px 14px;
+    font-size: 14px;
+    cursor: pointer;
+    color: $hlv-gray-700;
+    flex-shrink: 0;
+
+    &:active {
+        background: $hlv-gray-100;
+    }
+}
+
+.hlv-bc-picking-cards {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.hlv-bc-picking-card {
+    background: $hlv-white;
+    border-radius: $hlv-radius-md;
+    box-shadow: $hlv-shadow-sm;
+    overflow: hidden;
+    cursor: pointer;
+    transition: box-shadow 0.15s;
+
+    &:active {
+        box-shadow: $hlv-shadow-md;
+    }
+}
+
+.hlv-bc-picking-card-header {
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: $hlv-gray-50;
+    border-bottom: 1px solid $hlv-gray-100;
+}
+
+.hlv-bc-picking-name {
+    font-weight: 700;
+    font-size: 16px;
+    color: $hlv-blue;
+}
+
+.hlv-bc-state-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: $hlv-radius-full;
+    text-transform: uppercase;
+
+    &.hlv-bc-state-assigned { background: $hlv-green-light; color: $hlv-green; }
+    &.hlv-bc-state-confirmed { background: $hlv-amber-light; color: $hlv-amber; }
+    &.hlv-bc-state-waiting { background: $hlv-gray-100; color: $hlv-gray-500; }
+}
+
+.hlv-bc-picking-card-body {
+    padding: 12px 16px;
+    font-size: 13px;
+    color: $hlv-gray-700;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.hlv-bc-label {
+    font-weight: 600;
+    color: $hlv-gray-500;
+    margin-right: 4px;
+}
+
+.hlv-bc-picking-locations {
+    font-weight: 600;
+    color: $hlv-gray-900;
+}
+
+.hlv-bc-picking-meta {
+    display: flex;
+    gap: 12px;
+    margin-top: 4px;
+    color: $hlv-gray-500;
+    font-size: 12px;
+}
+
+// ============ SCANNING VIEW ============
+.hlv-bc-scanning {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.hlv-bc-scan-header {
+    background: $hlv-white;
+    padding: 10px 16px;
+    border-bottom: 1px solid $hlv-gray-200;
+    flex-shrink: 0;
+}
+
+.hlv-bc-scan-header-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.hlv-bc-scan-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.hlv-bc-picking-badge {
+    background: $hlv-blue;
+    color: $hlv-white;
+    padding: 3px 10px;
+    border-radius: $hlv-radius-full;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.hlv-bc-picking-type-label {
+    font-size: 13px;
+    color: $hlv-gray-500;
+}
+
+.hlv-bc-scan-header-info,
+.hlv-bc-scan-header-origin {
+    font-size: 12px;
+    color: $hlv-gray-500;
+    margin-top: 4px;
+}
+
+.hlv-bc-scan-input-area {
+    padding: 10px 16px;
+    background: $hlv-white;
+    border-bottom: 1px solid $hlv-gray-200;
+    flex-shrink: 0;
+}
+
+// ============ PROGRESS BAR ============
+.hlv-bc-progress-bar {
+    padding: 8px 16px;
+    background: $hlv-white;
+    border-bottom: 1px solid $hlv-gray-200;
+    flex-shrink: 0;
+}
+
+.hlv-bc-progress-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: $hlv-gray-500;
+    margin-bottom: 6px;
+}
+
+.hlv-bc-progress-track {
+    height: 6px;
+    background: $hlv-gray-200;
+    border-radius: $hlv-radius-full;
+    overflow: hidden;
+}
+
+.hlv-bc-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, $hlv-blue, $hlv-green);
+    border-radius: $hlv-radius-full;
+    transition: width 0.3s ease;
+}
+
+// ============ PRODUCT LIST ============
+.hlv-bc-product-list {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.hlv-bc-product-row {
+    background: $hlv-white;
+    border-radius: $hlv-radius-md;
+    box-shadow: $hlv-shadow-sm;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: box-shadow 0.2s;
+
+    &.hlv-bc-row-flash {
+        animation: hlv-row-flash 1.2s ease;
+    }
+}
+
+@keyframes hlv-row-flash {
+    0%, 100% { box-shadow: $hlv-shadow-sm; }
+    20% { box-shadow: 0 0 0 3px rgba($hlv-green, 0.5), $hlv-shadow-md; }
+    50% { box-shadow: 0 0 0 3px rgba($hlv-green, 0.3), $hlv-shadow-md; }
+}
+
+.hlv-bc-row-indicator {
+    height: 4px;
+    width: 100%;
+
+    &.hlv-bc-indicator-done { background: $hlv-green; }
+    &.hlv-bc-indicator-partial { background: $hlv-amber; }
+    &.hlv-bc-indicator-pending { background: $hlv-gray-300; }
+}
+
+.hlv-bc-row-content {
+    padding: 10px 12px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.hlv-bc-row-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.hlv-bc-product-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: $hlv-gray-900;
+    word-break: break-word;
+}
+
+.hlv-bc-product-code {
+    font-size: 12px;
+    color: $hlv-gray-500;
+    margin-top: 2px;
+}
+
+.hlv-bc-bom-info {
+    font-size: 12px;
+    color: #7c3aed;
+    margin-top: 4px;
+    padding: 3px 8px;
+    background: #f3e8ff;
+    border-radius: $hlv-radius-sm;
+    display: inline-block;
+}
+
+.hlv-bc-row-location {
+    font-size: 11px;
+    color: $hlv-gray-500;
+    margin-top: 4px;
+}
+
+// Quantity section
+.hlv-bc-row-qty {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+}
+
+.hlv-bc-qty-display {
+    display: flex;
+    align-items: baseline;
+    gap: 3px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: $hlv-radius-sm;
+    transition: background 0.15s;
+
+    &:active {
+        background: $hlv-gray-100;
+    }
+}
+
+.hlv-bc-qty-done {
+    font-size: 20px;
+    font-weight: 700;
+    color: $hlv-blue;
+}
+
+.hlv-bc-qty-sep {
+    font-size: 14px;
+    color: $hlv-gray-300;
+}
+
+.hlv-bc-qty-demand {
+    font-size: 14px;
+    color: $hlv-gray-500;
+}
+
+.hlv-bc-qty-uom {
+    font-size: 11px;
+    color: $hlv-gray-500;
+    margin-left: 2px;
+}
+
+.hlv-bc-qty-buttons {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.hlv-bc-btn-qty {
+    border: 1px solid $hlv-gray-300;
+    background: $hlv-white;
+    border-radius: $hlv-radius-sm;
+    padding: 6px 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    min-width: 36px;
+    text-align: center;
+
+    &:active {
+        background: $hlv-gray-100;
+    }
+
+    &.hlv-bc-btn-plus {
+        background: $hlv-green-light;
+        color: $hlv-green;
+        border-color: $hlv-green;
+    }
+
+    &.hlv-bc-btn-minus {
+        background: $hlv-red-light;
+        color: $hlv-red;
+        border-color: $hlv-red;
+    }
+
+    &.hlv-bc-btn-decimal-plus {
+        background: #dbeafe;
+        color: $hlv-blue;
+        border-color: $hlv-blue;
+        font-size: 11px;
+    }
+
+    &.hlv-bc-btn-decimal-minus {
+        background: #fef3c7;
+        color: $hlv-amber;
+        border-color: $hlv-amber;
+        font-size: 11px;
+    }
+}
+
+// Row progress bar
+.hlv-bc-row-progress {
+    height: 3px;
+    background: $hlv-gray-100;
+}
+
+.hlv-bc-row-progress-fill {
+    height: 100%;
+    background: $hlv-green;
+    transition: width 0.3s ease;
+}
+
+// Row states
+.hlv-bc-row-done {
+    .hlv-bc-qty-done { color: $hlv-green; }
+}
+
+.hlv-bc-row-partial {
+    .hlv-bc-qty-done { color: $hlv-amber; }
+}
+
+// ============ BOTTOM BAR ============
+.hlv-bc-bottom-bar {
+    padding: 12px 16px;
+    background: $hlv-white;
+    border-top: 1px solid $hlv-gray-200;
+    flex-shrink: 0;
+    display: flex;
+}
+
+.hlv-bc-btn-validate {
+    flex: 1;
+    background: $hlv-green;
+    color: $hlv-white;
+    border: none;
+    border-radius: $hlv-radius-md;
+    padding: 14px 20px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+
+    &:active {
+        background: darken($hlv-green, 10%);
+    }
+}
+
+// ============ OVERLAYS & DIALOGS ============
+.hlv-bc-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9990;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    backdrop-filter: blur(4px);
+}
+
+// Error dialog
+.hlv-bc-error-dialog {
+    background: $hlv-white;
+    border-radius: $hlv-radius-lg;
+    padding: 32px 24px 24px;
+    max-width: 360px;
+    width: 100%;
+    text-align: center;
+    box-shadow: $hlv-shadow-lg;
+    animation: hlv-popup-in 0.25s ease;
+    border-top: 4px solid $hlv-red;
+}
+
+@keyframes hlv-popup-in {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.hlv-bc-error-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+}
+
+.hlv-bc-error-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: $hlv-red;
+    margin-bottom: 8px;
+}
+
+.hlv-bc-error-message {
+    font-size: 15px;
+    color: $hlv-gray-700;
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.hlv-bc-btn-close-error {
+    background: $hlv-red;
+    color: $hlv-white;
+    border: none;
+    border-radius: $hlv-radius-sm;
+    padding: 12px 32px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:active {
+        background: darken($hlv-red, 10%);
+    }
+}
+
+// ============ SEARCH POPUP ============
+.hlv-bc-search-dialog {
+    background: $hlv-white;
+    border-radius: $hlv-radius-lg;
+    max-width: 440px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: $hlv-shadow-lg;
+    animation: hlv-popup-in 0.25s ease;
+}
+
+.hlv-bc-search-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid $hlv-gray-200;
+
+    h3 {
+        font-size: 17px;
+        font-weight: 700;
+        margin: 0;
+    }
+}
+
+.hlv-bc-btn-close {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px 8px;
+    color: $hlv-gray-500;
+}
+
+.hlv-bc-search-product {
+    padding: 16px 20px;
+    border-bottom: 1px solid $hlv-gray-200;
+}
+
+.hlv-bc-search-product-info {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+}
+
+.hlv-bc-search-product-img {
+    width: 64px;
+    height: 64px;
+    border-radius: $hlv-radius-sm;
+    background: $hlv-gray-100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+
+    img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    span {
+        font-size: 28px;
+    }
+}
+
+.hlv-bc-search-product-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: $hlv-gray-900;
+}
+
+.hlv-bc-search-product-code,
+.hlv-bc-search-product-barcode {
+    font-size: 13px;
+    color: $hlv-gray-500;
+    margin-top: 2px;
+}
+
+.hlv-bc-search-total {
+    margin-top: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: $hlv-blue;
+    border-radius: $hlv-radius-sm;
+    color: $hlv-white;
+}
+
+.hlv-bc-total-label {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.hlv-bc-total-value {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.hlv-bc-search-locations {
+    padding: 12px 20px 16px;
+}
+
+.hlv-bc-search-locations-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: $hlv-gray-500;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.hlv-bc-loc-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    border-bottom: 1px solid $hlv-gray-100;
+
+    &:last-child {
+        border-bottom: none;
+    }
+}
+
+.hlv-bc-loc-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: $hlv-gray-900;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.hlv-bc-loc-qtys {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    font-size: 12px;
+}
+
+.hlv-bc-loc-qty { color: $hlv-gray-900; font-weight: 600; }
+.hlv-bc-loc-reserved { color: $hlv-amber; }
+.hlv-bc-loc-available { color: $hlv-green; font-weight: 600; }
+
+.hlv-bc-empty-small {
+    padding: 12px;
+    text-align: center;
+    color: $hlv-gray-500;
+    font-size: 13px;
+}
+
+// ============ NUMPAD POPUP ============
+.hlv-bc-numpad-dialog {
+    background: $hlv-white;
+    border-radius: $hlv-radius-lg;
+    max-width: 320px;
+    width: 100%;
+    box-shadow: $hlv-shadow-lg;
+    animation: hlv-popup-in 0.25s ease;
+    overflow: hidden;
+}
+
+.hlv-bc-numpad-header {
+    padding: 16px 20px;
+    background: $hlv-gray-50;
+    border-bottom: 1px solid $hlv-gray-200;
+
+    h3 {
+        font-size: 15px;
+        font-weight: 700;
+        margin: 0 0 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
+.hlv-bc-numpad-demand {
+    font-size: 13px;
+    color: $hlv-gray-500;
+}
+
+.hlv-bc-numpad-display {
+    padding: 12px 16px;
+}
+
+.hlv-bc-numpad-input {
+    width: 100%;
+    text-align: right;
+    font-size: 32px;
+    font-weight: 700;
+    border: 2px solid $hlv-gray-200;
+    border-radius: $hlv-radius-sm;
+    padding: 10px 14px;
+    color: $hlv-blue;
+    background: $hlv-gray-50;
+}
+
+.hlv-bc-numpad-keys {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    padding: 4px 16px 8px;
+}
+
+.hlv-bc-numpad-key {
+    background: $hlv-gray-50;
+    border: 1px solid $hlv-gray-200;
+    border-radius: $hlv-radius-sm;
+    padding: 14px;
+    font-size: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.1s;
+
+    &:active {
+        background: $hlv-gray-200;
+    }
+
+    &.hlv-bc-key-clear {
+        background: $hlv-red-light;
+        color: $hlv-red;
+        border-color: $hlv-red;
+    }
+
+    &.hlv-bc-key-backspace {
+        background: $hlv-amber-light;
+        color: $hlv-amber;
+        border-color: $hlv-amber;
+    }
+
+    &.hlv-bc-key-confirm {
+        background: $hlv-green;
+        color: $hlv-white;
+        border-color: $hlv-green;
+        font-size: 24px;
+    }
+}
+
+.hlv-bc-btn-cancel-numpad {
+    display: block;
+    width: 100%;
+    background: none;
+    border: none;
+    border-top: 1px solid $hlv-gray-200;
+    padding: 14px;
+    font-size: 15px;
+    color: $hlv-gray-500;
+    cursor: pointer;
+
+    &:active {
+        background: $hlv-gray-50;
+    }
+}
+
+// ============ CAMERA OVERLAY ============
+.hlv-bc-camera-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9995;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+}
+
+.hlv-bc-camera-header {
+    background: rgba(0, 0, 0, 0.7);
+    color: $hlv-white;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    z-index: 2;
+}
+
+.hlv-bc-btn-close-camera {
+    background: $hlv-red;
+    color: $hlv-white;
+    border: none;
+    border-radius: $hlv-radius-sm;
+    padding: 8px 16px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.hlv-bc-camera-viewport {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+
+    video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+}
+
+.hlv-bc-scan-frame {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 260px;
+    height: 160px;
+    border: 2px solid rgba(255, 255, 255, 0.6);
+    border-radius: 12px;
+
+    &::before,
+    &::after {
+        content: '';
+        position: absolute;
+        width: 30px;
+        height: 30px;
+        border: 3px solid $hlv-green;
+    }
+
+    &::before {
+        top: -3px;
+        left: -3px;
+        border-right: none;
+        border-bottom: none;
+        border-radius: 8px 0 0 0;
+    }
+
+    &::after {
+        bottom: -3px;
+        right: -3px;
+        border-left: none;
+        border-top: none;
+        border-radius: 0 0 8px 0;
+    }
+}
+
+.hlv-bc-scan-line {
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background: $hlv-green;
+    box-shadow: 0 0 8px $hlv-green;
+    animation: hlv-scan-move 2s ease-in-out infinite;
+}
+
+@keyframes hlv-scan-move {
+    0%, 100% { top: 10%; }
+    50% { top: 90%; }
+}
+
+// ============ EMPTY STATE ============
+.hlv-bc-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    color: $hlv-gray-500;
+
+    .hlv-bc-empty-icon {
+        font-size: 48px;
+        margin-bottom: 12px;
+        opacity: 0.5;
+    }
+
+    p {
+        font-size: 15px;
+        margin: 0;
+    }
+}

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Default Configuration Parameters -->
+        <record id="hlv_barcode_auto_focus" model="ir.config_parameter">
+            <field name="key">hlv_barcode_custom.auto_focus</field>
+            <field name="value">True</field>
+        </record>
+        <record id="hlv_barcode_sound_success" model="ir.config_parameter">
+            <field name="key">hlv_barcode_custom.sound_success</field>
+            <field name="value">True</field>
+        </record>
+        <record id="hlv_barcode_sound_error" model="ir.config_parameter">
+            <field name="key">hlv_barcode_custom.sound_error</field>
+            <field name="value">True</field>
+        </record>
+        <record id="hlv_barcode_strict_delivery" model="ir.config_parameter">
+            <field name="key">hlv_barcode_custom.strict_delivery</field>
+            <field name="value">True</field>
+        </record>
+        <record id="hlv_barcode_decimal_step" model="ir.config_parameter">
+            <field name="key">hlv_barcode_custom.decimal_step</field>
+            <field name="value">0.1</field>
+        </record>
+        <record id="hlv_barcode_camera_enabled" model="ir.config_parameter">
+            <field name="key">hlv_barcode_custom.camera_enabled</field>
+            <field name="value">True</field>
+        </record>
+    </data>
+</odoo>
