@@ -84,6 +84,13 @@
                 <div class="hlv-bc-card-title">Chuyển Vị Trí</div>
                 <div class="hlv-bc-card-desc">Internal Transfers</div>
             </div>
+
+            <div class="hlv-bc-menu-card hlv-bc-card-inventory"
+                 t-on-click="goToInventoryCheck">
+                <div class="hlv-bc-card-icon">📊</div>
+                <div class="hlv-bc-card-title">Kiểm Kê Kho</div>
+                <div class="hlv-bc-card-desc">Inventory Adjustment</div>
+            </div>
         </div>
     </div>
 </t>

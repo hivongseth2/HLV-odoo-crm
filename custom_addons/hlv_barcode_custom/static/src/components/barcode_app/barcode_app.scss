@@ -247,6 +247,10 @@ $hlv-radius-full: 9999px;
     &.hlv-bc-card-internal {
         border-left-color: $hlv-amber;
     }
+
+    &.hlv-bc-card-inventory {
+        border-left-color: #7c3aed;
+    }
 }
 
 // ============ PICKING LIST VIEW ============

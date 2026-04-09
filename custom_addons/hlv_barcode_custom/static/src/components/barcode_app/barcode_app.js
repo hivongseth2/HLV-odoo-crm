@@ -2,13 +2,13 @@
 
 import { Component, useState, onWillStart, onMounted, onWillUnmount, useRef } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
+import { rpc } from "@web/core/network/rpc";
 
 export class HlvBarcodeApp extends Component {
     static template = "hlv_barcode_custom.barcode_app";
     static components = {};
 
     setup() {
-        this.rpc = useService("rpc");
         this.notification = useService("notification");
         this.action = useService("action");
 
@@ -88,7 +88,7 @@ export class HlvBarcodeApp extends Component {
     // =============== CONFIG ===============
     async _loadConfig() {
         try {
-            const config = await this.rpc('/hlv_barcode_custom/get_config', {});
+            const config = await rpc('/hlv_barcode_custom/get_config', {});
             if (config) {
                 Object.assign(this.state.config, config);
             }
@@ -147,7 +147,7 @@ export class HlvBarcodeApp extends Component {
         this.state.is_loading = true;
         this.state.view = 'picking_list';
         try {
-            const pickings = await this.rpc('/hlv_barcode_custom/get_pickings', {
+            const pickings = await rpc('/hlv_barcode_custom/get_pickings', {
                 picking_type_code: type,
             });
             this.state.pickings = pickings || [];
@@ -161,7 +161,7 @@ export class HlvBarcodeApp extends Component {
     async openPicking(pickingId) {
         this.state.is_loading = true;
         try {
-            const data = await this.rpc('/hlv_barcode_custom/get_picking_detail', {
+            const data = await rpc('/hlv_barcode_custom/get_picking_detail', {
                 picking_id: pickingId,
             });
             if (data.status === 'error') {
@@ -218,7 +218,7 @@ export class HlvBarcodeApp extends Component {
         this._clearFeedback();
 
         try {
-            const result = await this.rpc('/hlv_barcode_custom/scan', {
+            const result = await rpc('/hlv_barcode_custom/scan', {
                 picking_id: this.state.picking.id,
                 barcode: barcode,
             });
@@ -256,7 +256,7 @@ export class HlvBarcodeApp extends Component {
     async _searchProduct(barcode) {
         this.state.is_loading = true;
         try {
-            const result = await this.rpc('/hlv_barcode_custom/search_product', {
+            const result = await rpc('/hlv_barcode_custom/search_product', {
                 barcode: barcode,
             });
             if (result.status === 'found') {
@@ -281,7 +281,7 @@ export class HlvBarcodeApp extends Component {
     async _refreshPicking() {
         if (!this.state.picking) return;
         try {
-            const data = await this.rpc('/hlv_barcode_custom/get_picking_detail', {
+            const data = await rpc('/hlv_barcode_custom/get_picking_detail', {
                 picking_id: this.state.picking.id,
             });
             if (data && data.lines) {
@@ -366,7 +366,7 @@ export class HlvBarcodeApp extends Component {
 
     async _updateQuantity(moveId, newQty) {
         try {
-            const result = await this.rpc('/hlv_barcode_custom/update_quantity', {
+            const result = await rpc('/hlv_barcode_custom/update_quantity', {
                 move_id: moveId,
                 quantity: newQty,
             });
@@ -401,7 +401,7 @@ export class HlvBarcodeApp extends Component {
 
         this.state.is_loading = true;
         try {
-            const result = await this.rpc('/hlv_barcode_custom/validate_picking', {
+            const result = await rpc('/hlv_barcode_custom/validate_picking', {
                 picking_id: this.state.picking.id,
             });
             if (result.status === 'success') {
@@ -637,6 +637,10 @@ export class HlvBarcodeApp extends Component {
 
     getDoneLines() {
         return this.state.lines.filter(l => (l.quantity_done || 0) >= l.demand && l.demand > 0).length;
+    }
+
+    goToInventoryCheck() {
+        window.location.href = '/odoo/action-1678';
     }
 }
 
