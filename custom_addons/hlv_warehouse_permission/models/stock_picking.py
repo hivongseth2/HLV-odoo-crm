@@ -92,7 +92,54 @@ class StockPicking(models.Model):
         if not self.env.su:
             if self._check_picking_operation('can_confirm', _('xác nhận')):
                 return True
+        # FIX: Sanitize move.line locations trước khi validate
+        # JS barcode có thể ghi sai location_id (stale currentLocation)
+        self._hlv_sanitize_move_line_locations()
         return super().button_validate()
+
+    def _hlv_sanitize_move_line_locations(self):
+        """Trước validate, kiểm tra move.line.location_id phải là con
+        của picking.location_id. Nếu không → reset về picking header.
+        Tương tự cho location_dest_id.
+        Ngăn bug JS barcode ghi stale location gây self-transfer hoặc wrong-src.
+        """
+        for picking in self:
+            if not picking.move_line_ids:
+                continue
+            header_src_id = picking.location_id.id
+            header_dst_id = picking.location_dest_id.id
+            for ml in picking.move_line_ids:
+                vals = {}
+                # Kiểm tra source location
+                if ml.location_id.id != header_src_id:
+                    pp = getattr(ml.location_id, 'parent_path', '') or ''
+                    if f'/{header_src_id}/' not in pp:
+                        _logger.warning(
+                            'HLV Sanitize: %s line %s [%s] wrong src %s '
+                            '(not child of %s) -> reset to header',
+                            picking.name, ml.id,
+                            ml.product_id.default_code or ml.product_id.display_name,
+                            ml.location_id.complete_name,
+                            picking.location_id.complete_name,
+                        )
+                        vals['location_id'] = header_src_id
+
+                # Kiểm tra dest location
+                if ml.location_dest_id.id != header_dst_id:
+                    pp = getattr(ml.location_dest_id, 'parent_path', '') or ''
+                    if f'/{header_dst_id}/' not in pp:
+                        _logger.warning(
+                            'HLV Sanitize: %s line %s [%s] wrong dst %s '
+                            '(not child of %s) -> reset to header',
+                            picking.name, ml.id,
+                            ml.product_id.default_code or ml.product_id.display_name,
+                            ml.location_dest_id.complete_name,
+                            picking.location_dest_id.complete_name,
+                        )
+                        vals['location_dest_id'] = header_dst_id
+
+                if vals:
+                    ml.write(vals)
 
     def action_assign(self):
         if not self.env.su:
@@ -112,52 +159,41 @@ class StockPicking(models.Model):
                 return True
         return super().do_unreserve()
 
-    # ── FIX: Backorder re-reserve khi sub-location hết hàng ──────────────
+    # ── FIX: Backorder sanitize move.line locations sai ──────────────────
     def _create_backorder(self, backorder_moves=None):
-        """Override để force re-reserve khi backorder nhận sub-location hết tồn."""
+        """Override: sau khi tạo backorder, sanitize move.line locations.
+        Backorder kế thừa move.line từ phiếu gốc - nếu line có location
+        không hợp lệ (do JS barcode ghi sai trước đó), reset về header.
+        KHÔNG unreserve toàn phiếu - chỉ sửa location sai.
+        """
         backorders = super()._create_backorder(backorder_moves=backorder_moves)
         for bo in backorders:
-            self._hlv_fix_empty_sublocation_reserve(bo)
+            self._hlv_sanitize_move_line_locations_for(bo)
         return backorders
 
-    def _hlv_fix_empty_sublocation_reserve(self, backorder):
-        """Kiểm tra từng move.line của backorder. Nếu sub-location không còn
-        hàng (on_hand < reserved), force unreserve + re-assign toàn phiếu.
+    def _hlv_sanitize_move_line_locations_for(self, picking):
+        """Kiểm tra move.line locations của 1 picking.
+        Nếu location_id không phải con của picking header → reset về header.
+        Giữ nguyên reservation nếu location hợp lệ.
         """
-        needs_reassign = False
-        Quant = self.env['stock.quant']
-        for ml in backorder.move_line_ids:
-            if not ml.product_id or not ml.location_id:
-                continue
-            # Lấy quant tại sub-location hiện tại
-            quant = Quant.search([
-                ('product_id', '=', ml.product_id.id),
-                ('location_id', '=', ml.location_id.id),
-            ], limit=1)
-            on_hand = float(quant.quantity) if quant else 0.0
-            reserved_qty = 0.0
-            for f in ('quantity_product_uom', 'reserved_uom_qty'):
-                v = getattr(ml, f, None)
-                if v is not None:
-                    reserved_qty = float(v)
-                    break
-
-            if on_hand < reserved_qty - 0.001:
-                _logger.warning(
-                    'HLV Backorder fix: %s line %s [%s] sub-location %s '
-                    'on_hand=%.2f < reserved=%.2f -> force re-assign',
-                    backorder.name, ml.id,
-                    ml.product_id.default_code or ml.product_id.display_name,
-                    ml.location_id.complete_name,
-                    on_hand, reserved_qty,
-                )
-                needs_reassign = True
-                break  # 1 line lỗi → re-assign cả phiếu
-
-        if needs_reassign:
-            backorder.do_unreserve()
-            backorder.action_assign()
-            _logger.info(
-                'HLV Backorder fix: %s -> do_unreserve + action_assign done',
-                backorder.name,
-            )
+        header_src_id = picking.location_id.id
+        header_dst_id = picking.location_dest_id.id
+        for ml in picking.move_line_ids:
+            vals = {}
+            if ml.location_id.id != header_src_id:
+                pp = getattr(ml.location_id, 'parent_path', '') or ''
+                if f'/{header_src_id}/' not in pp:
+                    _logger.warning(
+                        'HLV Backorder sanitize: %s line %s [%s] wrong src %s -> reset to %s',
+                        picking.name, ml.id,
+                        ml.product_id.default_code or ml.product_id.display_name,
+                        ml.location_id.complete_name,
+                        picking.location_id.complete_name,
+                    )
+                    vals['location_id'] = header_src_id
+            if ml.location_dest_id.id != header_dst_id:
+                pp = getattr(ml.location_dest_id, 'parent_path', '') or ''
+                if f'/{header_dst_id}/' not in pp:
+                    vals['location_dest_id'] = header_dst_id
+            if vals:
+                ml.write(vals)
