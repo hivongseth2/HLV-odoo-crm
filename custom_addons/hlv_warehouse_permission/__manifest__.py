@@ -12,7 +12,7 @@
     """,
     'category': 'Inventory',
     'author': 'HLV',
-    'depends': ['stock'],
+    'depends': ['stock', 'stock_barcode'],
     'data': [
         'security/security.xml',
         'security/ir.model.access.csv',
@@ -22,6 +22,9 @@
     'assets': {
         'web.assets_backend': [
             'hlv_warehouse_permission/static/src/css/hide_inventory.css',
+        ],
+        'stock_barcode.assets_backend': [
+            'hlv_warehouse_permission/static/src/js/suppress_backorder_notification.js',
         ],
     },
     'installable': True,
