@@ -92,8 +92,8 @@ SCHEMA_UPDATE_PRODUCT = {
     "type": "function",
     "name": "update_product_misa",
     "description": (
-        "Cập nhật tên hoặc mã sản phẩm trên MISA. "
-        "Cần có misa_id của sản phẩm."
+        "Cập nhật thông tin sản phẩm trên MISA: tên, mã, giá bán cố định, "
+        "giá mua, giá bán lẻ, thuế. Cần có misa_id của sản phẩm."
     ),
     "parameters": {
         "type": "object",
@@ -104,8 +104,8 @@ SCHEMA_UPDATE_PRODUCT = {
             },
             "field": {
                 "type": "string",
-                "enum": ["name", "code"],
-                "description": "Trường cần cập nhật",
+                "enum": ["name", "code", "unit_price_fixed", "purchased_price", "unit_price", "tax"],
+                "description": "Trường cần cập nhật: name=tên, code=mã, unit_price_fixed=giá bán cố định, purchased_price=giá mua, unit_price=giá bán lẻ (gồm VAT), tax=thuế GTGT (truyền % VD: 10, 8)",
             },
             "new_value": {
                 "type": "string",

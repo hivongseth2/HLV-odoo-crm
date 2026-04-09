@@ -378,6 +378,115 @@ class MisaCrmApi(models.AbstractModel):
         }
 
     @staticmethod
+    def _update_unit_price_fixed_payload(misa_id, new_value, old_value):
+        return {
+            "FieldName": "UnitPriceFixed",
+            "PrimaryKeyName": "ID",
+            "PrimaryKeyValue": str(misa_id),
+            "Id": 9180,
+            "Value": new_value,
+            "OldValue": str(old_value),
+            "TypeControl": 35,
+            "FormLayoutID": 45,
+            "LayoutCode": "Product",
+            "Lable": "Đơn giá bán cố định",
+            "Text": "Đơn giá bán cố định",
+            "IsRequired": False,
+            "IsNotZero": False,
+            "IsSensitive": False,
+            "IsUnique": False,
+            "MaxLength": 16,
+            "CustomRoundDigit": 1,
+            "DecimalLength": 2,
+            "ComparedValue": None,
+            "ModuleType": None,
+        }
+
+    @staticmethod
+    def _update_purchased_price_payload(misa_id, new_value, old_value):
+        return {
+            "FieldName": "PurchasedPrice",
+            "PrimaryKeyName": "ID",
+            "PrimaryKeyValue": str(misa_id),
+            "Id": 2143,
+            "Value": new_value,
+            "OldValue": str(old_value),
+            "TypeControl": 35,
+            "FormLayoutID": 45,
+            "LayoutCode": "Product",
+            "Lable": "Đơn giá mua",
+            "Text": "Đơn giá mua",
+            "IsRequired": False,
+            "IsNotZero": False,
+            "IsSensitive": False,
+            "IsUnique": False,
+            "MaxLength": 16,
+            "CustomRoundDigit": 1,
+            "DecimalLength": 2,
+            "ComparedValue": None,
+            "ModuleType": None,
+        }
+
+    @staticmethod
+    def _update_unit_price_payload(misa_id, new_value, old_value):
+        return {
+            "FieldName": "UnitPrice",
+            "PrimaryKeyName": "ID",
+            "PrimaryKeyValue": str(misa_id),
+            "Id": 2141,
+            "Value": new_value,
+            "OldValue": str(old_value),
+            "TypeControl": 35,
+            "FormLayoutID": 45,
+            "LayoutCode": "Product",
+            "Lable": "Đơn giá bán lẻ (Gồm VAT)",
+            "Text": "Đơn giá bán lẻ (Gồm VAT)",
+            "IsRequired": False,
+            "IsNotZero": False,
+            "IsSensitive": False,
+            "IsUnique": False,
+            "MaxLength": 16,
+            "CustomRoundDigit": 1,
+            "DecimalLength": 2,
+            "ComparedValue": None,
+            "ModuleType": None,
+        }
+
+    def _update_tax_payload(self, misa_id, new_value, old_value):
+        """Build payload for TaxID update. new_value/old_value = tax percent."""
+        token = self._get_crm_token()
+        headers = self._crm_hdrs(token)
+        headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
+
+        new_tax_id, new_tax_text = self._find_tax_id(headers, float(new_value))
+        old_tax_id, old_tax_text = self._find_tax_id(headers, float(old_value))
+
+        return {
+            "FieldName": "TaxID",
+            "PrimaryKeyName": "ID",
+            "PrimaryKeyValue": str(misa_id),
+            "Id": 2142,
+            "Value": str(new_tax_id),
+            "OldValue": str(old_tax_id),
+            "OldText": old_tax_text,
+            "TypeControl": 5,
+            "IsCustomField": False,
+            "FormLayoutID": 45,
+            "LayoutCode": "Product",
+            "Lable": "Thuế GTGT",
+            "Text": new_tax_text,
+            "IsRequired": True,
+            "IsNotZero": False,
+            "IsUnique": False,
+            "IsValidateFormat": False,
+            "MaxLength": 255,
+            "CustomRoundDigit": 2,
+            "DecimalLength": 2,
+            "ComparedValue": None,
+            "ModuleType": None,
+        }, headers
+
+    @staticmethod
     def _empty_serial_row(sort_order):
         return {
             "SortOrder": sort_order,
@@ -691,6 +800,14 @@ class MisaCrmApi(models.AbstractModel):
             payload = self._update_name_payload(misa_id, new_value, old_value)
         elif field_type == 'code':
             payload = self._update_code_payload(misa_id, new_value, old_value)
+        elif field_type == 'unit_price_fixed':
+            payload = self._update_unit_price_fixed_payload(misa_id, new_value, old_value)
+        elif field_type == 'purchased_price':
+            payload = self._update_purchased_price_payload(misa_id, new_value, old_value)
+        elif field_type == 'unit_price':
+            payload = self._update_unit_price_payload(misa_id, new_value, old_value)
+        elif field_type == 'tax':
+            payload, headers = self._update_tax_payload(misa_id, new_value, old_value)
         else:
             return False
 
