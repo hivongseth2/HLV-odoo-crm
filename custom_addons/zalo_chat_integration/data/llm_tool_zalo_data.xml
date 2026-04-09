@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo noupdate="1">
+
+    <!-- ============================================================== -->
+    <!-- Zalo Stock & Product tools                                      -->
+    <!-- ============================================================== -->
+    <record id="llm_tool_zalo_check_stock" model="llm.tool">
+        <field name="name">zalo_check_stock</field>
+        <field name="implementation">zalo_check_stock</field>
+        <field name="description">Kiểm tra tồn kho sản phẩm theo từng kho (warehouse) trong Odoo. Truyền mã sản phẩm (default_code) hoặc tên sản phẩm. Trả về số lượng tồn kho chi tiết theo từng kho hàng.
+
+HƯỚNG DẪN SỬ DỤNG:
+- Truyền mã SP chính xác nếu có (VD: FPD3-01, BLM12)
+- Hoặc truyền tên sản phẩm (VD: Khoan Bosch, Bulong M12)
+- Kết quả trả về: tồn kho thực tế + dự kiến + chi tiết theo từng kho
+- Dùng khi khách hỏi "còn hàng không?", "tồn bao nhiêu?", "check tồn giúp em"</field>
+        <field name="input_schema">{
+  "type": "object",
+  "properties": {
+    "product": {"type": "string", "description": "Mã sản phẩm (VD: FPD3-01) hoặc tên sản phẩm"}
+  },
+  "required": ["product"]
+}</field>
+        <field name="default" eval="True" />
+        <field name="active" eval="True" />
+        <field name="read_only_hint" eval="True" />
+        <field name="destructive_hint" eval="False" />
+        <field name="requires_user_consent" eval="False" />
+    </record>
+
+    <record id="llm_tool_zalo_search_product_odoo" model="llm.tool">
+        <field name="name">zalo_search_product_odoo</field>
+        <field name="implementation">zalo_search_product_odoo</field>
+        <field name="description">Tìm kiếm sản phẩm trong hệ thống Odoo (tên, mã, alias, vector search). Trả về danh sách SP kèm giá, tồn kho, danh mục.
+
+HƯỚNG DẪN SỬ DỤNG:
+- Dùng khi cần tìm SP trong Odoo (khác với search_product_misa tìm trên MISA)
+- Hỗ trợ tìm kiếm thông minh qua: alias, vector similarity, text search
+- Kết quả trả về: ID, tên, mã, giá, danh mục, ĐVT, tồn kho theo kho
+- Dùng khi cần lấy product ID để tạo báo giá, hoặc so sánh giá/tồn</field>
+        <field name="input_schema">{
+  "type": "object",
+  "properties": {
+    "name": {"type": "string", "description": "Tên hoặc mã sản phẩm cần tìm trong Odoo"}
+  },
+  "required": ["name"]
+}</field>
+        <field name="default" eval="True" />
+        <field name="active" eval="True" />
+        <field name="read_only_hint" eval="True" />
+        <field name="destructive_hint" eval="False" />
+        <field name="requires_user_consent" eval="False" />
+    </record>
+
+    <!-- ============================================================== -->
+    <!-- Zalo Conversation tools                                         -->
+    <!-- ============================================================== -->
+    <record id="llm_tool_zalo_summarize_conversation" model="llm.tool">
+        <field name="name">zalo_summarize_conversation</field>
+        <field name="implementation">zalo_summarize_conversation</field>
+        <field name="description">Tóm tắt nội dung hội thoại Zalo bằng AI. Phân tích nhu cầu khách, sản phẩm quan tâm, thái độ và trạng thái.
+
+HƯỚNG DẪN SỬ DỤNG:
+- Truyền conversation_id (ID từ bảng zalo.chat.conversation)
+- AI sẽ đọc 50 tin nhắn gần nhất và tóm tắt
+- Kết quả: nhu cầu KH, SP quan tâm, thái độ, trạng thái (chốt/tư vấn/khiếu nại)
+- Dùng khi sale cần nắm nhanh bối cảnh hội thoại</field>
+        <field name="input_schema">{
+  "type": "object",
+  "properties": {
+    "conversation_id": {"type": "integer", "description": "ID hội thoại Zalo (zalo.chat.conversation)"}
+  },
+  "required": ["conversation_id"]
+}</field>
+        <field name="default" eval="True" />
+        <field name="active" eval="True" />
+        <field name="read_only_hint" eval="True" />
+        <field name="destructive_hint" eval="False" />
+        <field name="requires_user_consent" eval="False" />
+    </record>
+
+    <!-- ============================================================== -->
+    <!-- Zalo Sales tools                                                -->
+    <!-- ============================================================== -->
+    <record id="llm_tool_zalo_create_quote" model="llm.tool">
+        <field name="name">zalo_create_quote</field>
+        <field name="implementation">zalo_create_quote</field>
+        <field name="description">Tạo báo giá (Sale Order) trong Odoo từ danh sách sản phẩm. Tự động tìm SP theo tên/mã và tạo dòng đơn hàng.
+
+HƯỚNG DẪN SỬ DỤNG:
+- partner_id: ID khách hàng trong Odoo (res.partner)
+- products: JSON array, VD: [{"name": "Khoan FPD3", "quantity": 2, "price_unit": 500000}]
+  + name: tên hoặc mã SP (hệ thống tự tìm)
+  + quantity: số lượng (mặc định 1)
+  + price_unit: giá bán (0 = lấy bảng giá mặc định)
+- note: ghi chú cho báo giá
+- CHỈ GỌI KHI NGƯỜI DÙNG XÁC NHẬN muốn tạo báo giá</field>
+        <field name="input_schema">{
+  "type": "object",
+  "properties": {
+    "partner_id": {"type": "integer", "description": "ID khách hàng (res.partner)"},
+    "products": {"type": "string", "description": "JSON array: [{\"name\": \"Tên SP\", \"quantity\": 1, \"price_unit\": 0}]"},
+    "note": {"type": "string", "description": "Ghi chú cho báo giá (tùy chọn)"}
+  },
+  "required": ["partner_id", "products"]
+}</field>
+        <field name="default" eval="True" />
+        <field name="active" eval="True" />
+        <field name="destructive_hint" eval="False" />
+        <field name="requires_user_consent" eval="True" />
+    </record>
+
+    <record id="llm_tool_zalo_send_message" model="llm.tool">
+        <field name="name">zalo_send_message</field>
+        <field name="implementation">zalo_send_message</field>
+        <field name="description">Gửi tin nhắn văn bản tới khách hàng qua Zalo OA. Tin nhắn sẽ được gửi trực tiếp tới Zalo của khách.
+
+HƯỚNG DẪN SỬ DỤNG:
+- conversation_id: ID hội thoại Zalo (zalo.chat.conversation)
+- message: nội dung tin nhắn (text thuần, không HTML)
+- CHỈ GỌI KHI NGƯỜI DÙNG XÁC NHẬN muốn gửi tin nhắn
+- Lưu ý: tin nhắn sẽ gửi thật tới khách qua Zalo API</field>
+        <field name="input_schema">{
+  "type": "object",
+  "properties": {
+    "conversation_id": {"type": "integer", "description": "ID hội thoại Zalo (zalo.chat.conversation)"},
+    "message": {"type": "string", "description": "Nội dung tin nhắn gửi cho khách"}
+  },
+  "required": ["conversation_id", "message"]
+}</field>
+        <field name="default" eval="True" />
+        <field name="active" eval="True" />
+        <field name="destructive_hint" eval="True" />
+        <field name="requires_user_consent" eval="True" />
+    </record>
+
+</odoo>

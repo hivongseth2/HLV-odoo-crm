@@ -19,3 +19,6 @@ from . import zalo_chat_evaluation
 from . import zalo_vector_store
 from . import zalo_vector_mixin
 from . import product_product
+from . import tool_registry_zalo
+from . import tool_zalo
+from . import llm_tool_zalo

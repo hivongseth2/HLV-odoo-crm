@@ -26,11 +26,13 @@
         'contacts',
         'im_livechat',  # For Discuss chat UI
         'sale',  # For sale_order_id in evaluation
+        'llm_tool',  # For LLM tool registration
     ],
     'data': [
         'security/ir.model.access.csv',
         'data/zalo_chat_sequence.xml',
         'data/zalo_chat_cron.xml',
+        'data/llm_tool_zalo_data.xml',
         'views/assets.xml',
         'views/product_alias_views.xml',
         'views/zalo_oa_config_views.xml',
