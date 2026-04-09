@@ -932,7 +932,7 @@ $bc-radius-full: 9999px;
     position: fixed;
     bottom: 0; left: 0; right: 0;
     padding: 12px 16px;
-    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    padding-bottom: #{unquote("max(12px, env(safe-area-inset-bottom))")};
     background: $bc-white;
     border-top: 1px solid $bc-gray-200;
     z-index: 100;
