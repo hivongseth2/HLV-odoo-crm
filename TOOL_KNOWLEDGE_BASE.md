@@ -98,6 +98,9 @@ Cập nhật một trường cụ thể của sản phẩm trên MISA. Cần có
 | `purchased_price` | PurchasedPrice | Đơn giá mua | `1200000` |
 | `unit_price` | UnitPrice | Đơn giá bán lẻ (gồm VAT) | `1650000` |
 | `tax` | TaxID | Thuế GTGT (truyền % không phải ID) | `10` hoặc `8` |
+| `custom_field_16` | CustomField16 | Đơn giá mua bắt buộc | `1200000` |
+
+
 
 **Ví dụ — Cập nhật giá bán:**
 ```json

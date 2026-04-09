@@ -451,6 +451,33 @@ class MisaCrmApi(models.AbstractModel):
             "ComparedValue": None,
             "ModuleType": None,
         }
+    
+    # đơn giá mua bắt buộc của product
+    @staticmethod
+    def _update_custom_field_16_payload(misa_id, new_value, old_value):
+        return {
+            "FieldName": "CustomField16",
+            "PrimaryKeyName": "ID",
+            "PrimaryKeyValue": str(misa_id),
+            "Id": 11552,
+            "Value": new_value,
+            "OldValue": str(old_value),
+            "TypeControl": 11,
+            "FormLayoutID": 45,
+            "LayoutCode": "Product",
+            "Lable": "Đơn giá mua bắt buộc",
+            "Text": "Đơn giá mua bắt buộc",
+            "IsRequired": True,
+            "IsNotZero": False,
+            "IsCustomField": True,
+            "IsSensitive": False,
+            "IsUnique": False,
+            "MaxLength": 14,
+            "CustomRoundDigit": 1,
+            "DecimalLength": 2,
+            "ComparedValue": None,
+            "ModuleType": None,
+        }
 
     def _update_tax_payload(self, misa_id, new_value, old_value):
         """Build payload for TaxID update. new_value/old_value = tax percent."""
@@ -808,6 +835,9 @@ class MisaCrmApi(models.AbstractModel):
             payload = self._update_unit_price_payload(misa_id, new_value, old_value)
         elif field_type == 'tax':
             payload, headers = self._update_tax_payload(misa_id, new_value, old_value)
+        #đơn giá mua bắt buộc
+        elif field_type == 'custom_field_16':
+            payload = self._update_custom_field_16_payload(misa_id, new_value, old_value) 
         else:
             return False
 

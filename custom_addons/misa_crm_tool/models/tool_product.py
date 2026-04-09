@@ -104,8 +104,8 @@ SCHEMA_UPDATE_PRODUCT = {
             },
             "field": {
                 "type": "string",
-                "enum": ["name", "code", "unit_price_fixed", "purchased_price", "unit_price", "tax"],
-                "description": "Trường cần cập nhật: name=tên, code=mã, unit_price_fixed=giá bán cố định, purchased_price=giá mua, unit_price=giá bán lẻ (gồm VAT), tax=thuế GTGT (truyền % VD: 10, 8)",
+                "enum": ["name", "code", "unit_price_fixed", "purchased_price", "unit_price", "tax","custom_field_16"],
+                "description": "Trường cần cập nhật: name=tên, code=mã, unit_price_fixed=giá bán cố định, purchased_price=giá mua, unit_price=giá bán lẻ (gồm VAT), tax=thuế GTGT (truyền % VD: 10, 8), custom_field_16=Đơn giá mua bắt buộc",
             },
             "new_value": {
                 "type": "string",
