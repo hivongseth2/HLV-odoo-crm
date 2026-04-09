@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo noupdate="1">
+
+    <!-- ============================================================== -->
+    <!-- Product tools                                                   -->
+    <!-- ============================================================== -->
+    <record id="llm_tool_misa_search_product" model="llm.tool">
+        <field name="name">search_product_misa</field>
+        <field name="implementation">misa_search_product</field>
+        <field name="description">Tìm kiếm sản phẩm trong hệ thống MISA CRM theo tên hoặc mã. Dùng để kiểm tra sản phẩm đã tồn tại trước khi tạo mới.</field>
+        <field name="input_schema">{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Tên hoặc từ khóa sản phẩm (VD: Khoan FPD3, Bulong M12)"
+    }
+  },
+  "required": ["name"]
+}</field>
+        <field name="default" eval="True" />
+        <field name="active" eval="True" />
+        <field name="read_only_hint" eval="True" />
+        <field name="destructive_hint" eval="False" />
+        <field name="requires_user_consent" eval="False" />
+    </record>
+
+    <record id="llm_tool_misa_create_product" model="llm.tool">
+        <field name="name">create_product_misa</field>
+        <field name="implementation">misa_create_product</field>
+        <field name="description">Tạo sản phẩm mới vào hệ thống MISA CRM. CHỈ GỌI KHI NGƯỜI DÙNG ĐÃ XÁC NHẬN 'OK' HOẶC 'ĐỒNG Ý'. Đồng bộ cả sang Odoo.</field>
+        <field name="input_schema">{
+  "type": "object",
+  "properties": {
+    "code": {"type": "string", "description": "Mã sản phẩm (viết liền, in hoa, không dấu)"},
+    "name": {"type": "string", "description": "Tên sản phẩm chuẩn hóa đầy đủ"},
+    "price": {"type": "number", "description": "Giá bán đề xuất (VNĐ)"},
+    "price_pu": {"type": "number", "description": "Giá mua (VNĐ)"},
+    "tax": {"type": "number", "description": "Thuế VAT (8 hoặc 10)"},
+    "unit": {"type": "string", "description": "Đơn vị tính (Cái, Bộ, Hộp...)"},
+    "category": {"type": "string", "description": "Tên nhóm hàng"},
+    "category_id": {"type": "integer", "description": "ID nhóm hàng"},
+    "type": {"type": "string", "enum": ["goods", "service", "finished_product"], "description": "Loại hàng hóa"}
+  },
+  "required": ["code", "name", "price", "tax", "unit", "category", "category_id", "type", "price_pu"]
+}</field>
+        <field name="default" eval="True" />
+        <field name="active" eval="True" />
+        <field name="destructive_hint" eval="False" />
+        <field name="requires_user_consent" eval="True" />
+    </record>
+
+    <record id="llm_tool_misa_update_product" model="llm.tool">
+        <field name="name">update_product_misa</field>
+        <field name="implementation">misa_update_product</field>
+        <field name="description">Cập nhật tên hoặc mã sản phẩm trên MISA CRM. Cần có misa_id của sản phẩm.</field>
+        <field name="input_schema">{
+  "type": "object",
+  "properties": {
+    "misa_id": {"type": "string", "description": "MISA product ID (GUID)"},
+    "field": {"type": "string", "enum": ["name", "code"], "description": "Trường cần cập nhật"},
+    "new_value": {"type": "string", "description": "Giá trị mới"},
+    "old_value": {"type": "string", "description": "Giá trị cũ (để đối chứng)"}
+  },
+  "required": ["misa_id", "field", "new_value", "old_value"]
+}</field>
+        <field name="default" eval="True" />
+        <field name="active" eval="True" />
+        <field name="requires_user_consent" eval="True" />
+    </record>
+
+    <!-- ============================================================== -->
+    <!-- Category tools                                                  -->
+    <!-- ============================================================== -->
+    <record id="llm_tool_misa_get_category" model="llm.tool">
+        <field name="name">get_category_info</field>
+        <field name="implementation">misa_get_category</field>
+        <field name="description">Lấy tên chính xác của nhóm sản phẩm từ ID trên MISA CRM. Dùng để kiểm tra (double check) ID nhóm.</field>
+        <field name="input_schema">{
+  "type": "object",
+  "properties": {
+    "category_id": {"type": "string", "description": "ID của nhóm sản phẩm (VD: 52, guid...)"}
+  },
+  "required": ["category_id"]
+}</field>
+        <field name="default" eval="True" />
+        <field name="active" eval="True" />
+        <field name="read_only_hint" eval="True" />
+        <field name="destructive_hint" eval="False" />
+        <field name="requires_user_consent" eval="False" />
+    </record>
+
+    <record id="llm_tool_misa_search_category" model="llm.tool">
+        <field name="name">search_category_misa</field>
+        <field name="implementation">misa_search_category</field>
+        <field name="description">Tìm kiếm ID nhóm sản phẩm theo tên trên MISA CRM. Dùng khi người dùng yêu cầu nhóm cụ thể.</field>
+        <field name="input_schema">{
+  "type": "object",
+  "properties": {
+    "name": {"type": "string", "description": "Tên nhóm cần tìm (VD: Vật tư khí nén, Bảo hộ lao động...)"}
+  },
+  "required": ["name"]
+}</field>
+        <field name="default" eval="True" />
+        <field name="active" eval="True" />
+        <field name="read_only_hint" eval="True" />
+        <field name="destructive_hint" eval="False" />
+        <field name="requires_user_consent" eval="False" />
+    </record>
+
+    <!-- ============================================================== -->
+    <!-- Purchase tool                                                   -->
+    <!-- ============================================================== -->
+    <record id="llm_tool_misa_search_purchase" model="llm.tool">
+        <field name="name">search_purchase_voucher</field>
+        <field name="implementation">misa_search_purchase</field>
+        <field name="description">Tìm kiếm chứng từ nhập kho mua hàng trong MISA theo diễn giải. Hỗ trợ tìm nhiều mã phân cách bởi dấu phẩy (VD: 'DH1255, DH1256').</field>
+        <field name="input_schema">{
+  "type": "object",
+  "properties": {
+    "journal_memo": {"type": "string", "description": "Diễn giải hoặc mã chứng từ (VD: DH1255, PO0012)"},
+    "limit": {"type": "integer", "description": "Số kết quả tối đa (mặc định 20)"}
+  },
+  "required": ["journal_memo"]
+}</field>
+        <field name="default" eval="True" />
+        <field name="active" eval="True" />
+        <field name="read_only_hint" eval="True" />
+        <field name="destructive_hint" eval="False" />
+        <field name="requires_user_consent" eval="False" />
+    </record>
+
+</odoo>
