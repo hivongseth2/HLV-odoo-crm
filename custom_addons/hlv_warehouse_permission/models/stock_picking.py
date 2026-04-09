@@ -1,5 +1,9 @@
+import logging
+
 from odoo import models, api, _
 from odoo.exceptions import UserError
+
+_logger = logging.getLogger(__name__)
 
 SEQUENCE_CODE_LABEL = {
     'IN': 'phiếu nhập kho',
@@ -107,3 +111,53 @@ class StockPicking(models.Model):
             if self._check_picking_operation('can_edit', _('bỏ đặt trước')):
                 return True
         return super().do_unreserve()
+
+    # ── FIX: Backorder re-reserve khi sub-location hết hàng ──────────────
+    def _create_backorder(self, backorder_moves=None):
+        """Override để force re-reserve khi backorder nhận sub-location hết tồn."""
+        backorders = super()._create_backorder(backorder_moves=backorder_moves)
+        for bo in backorders:
+            self._hlv_fix_empty_sublocation_reserve(bo)
+        return backorders
+
+    def _hlv_fix_empty_sublocation_reserve(self, backorder):
+        """Kiểm tra từng move.line của backorder. Nếu sub-location không còn
+        hàng (on_hand < reserved), force unreserve + re-assign toàn phiếu.
+        """
+        needs_reassign = False
+        Quant = self.env['stock.quant']
+        for ml in backorder.move_line_ids:
+            if not ml.product_id or not ml.location_id:
+                continue
+            # Lấy quant tại sub-location hiện tại
+            quant = Quant.search([
+                ('product_id', '=', ml.product_id.id),
+                ('location_id', '=', ml.location_id.id),
+            ], limit=1)
+            on_hand = float(quant.quantity) if quant else 0.0
+            reserved_qty = 0.0
+            for f in ('quantity_product_uom', 'reserved_uom_qty'):
+                v = getattr(ml, f, None)
+                if v is not None:
+                    reserved_qty = float(v)
+                    break
+
+            if on_hand < reserved_qty - 0.001:
+                _logger.warning(
+                    'HLV Backorder fix: %s line %s [%s] sub-location %s '
+                    'on_hand=%.2f < reserved=%.2f -> force re-assign',
+                    backorder.name, ml.id,
+                    ml.product_id.default_code or ml.product_id.display_name,
+                    ml.location_id.complete_name,
+                    on_hand, reserved_qty,
+                )
+                needs_reassign = True
+                break  # 1 line lỗi → re-assign cả phiếu
+
+        if needs_reassign:
+            backorder.do_unreserve()
+            backorder.action_assign()
+            _logger.info(
+                'HLV Backorder fix: %s -> do_unreserve + action_assign done',
+                backorder.name,
+            )
