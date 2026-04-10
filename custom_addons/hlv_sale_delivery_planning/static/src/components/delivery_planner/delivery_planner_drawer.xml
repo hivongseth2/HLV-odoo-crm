@@ -230,7 +230,7 @@
                             <div class="position-relative mb-3 ms-4 cursor-pointer"
                                  t-on-click="() => this.openPicking(picking.id)">
                                 <span class="position-absolute rounded-circle"
-                                      t-att-class="picking.state == 'done' ? 'bg-success' : 'bg-primary'"
+                                      t-att-class="picking.state == 'done' ? 'bg-success' : ((picking.code === 'internal' || picking.code === 'outgoing') &amp;&amp; !picking.return_of_id &amp;&amp; !picking.printed &amp;&amp; picking.state !== 'cancel' ? 'bg-danger' : 'bg-primary')"
                                       style="width: 14px; height: 14px; left: -32px; top: 6px; border: 2px solid white;"></span>
                                 <div class="card shadow-sm border-1"
                                      t-att-class="picking.state == 'done' ? 'bg-light opacity-75' : 'bg-white border border-primary'">
@@ -246,6 +246,10 @@
                                                 <t t-esc="picking.name"/>
                                                 <span t-if="picking.printed" class="badge bg-success ms-1" style="font-size:0.6rem;">
                                                     <i class="fa fa-print me-1"></i>Đã in
+                                                </span>
+                                                <span t-elif="(picking.code === 'internal' || picking.code === 'outgoing') &amp;&amp; !picking.return_of_id &amp;&amp; picking.state !== 'cancel' &amp;&amp; picking.state !== 'done'"
+                                                      class="badge bg-danger ms-1" style="font-size:0.6rem;">
+                                                    <i class="fa fa-exclamation-circle me-1"></i>Chưa in
                                                 </span>
                                             </div>
                                             <div t-if="picking.return_of" class="small mt-1 text-danger">

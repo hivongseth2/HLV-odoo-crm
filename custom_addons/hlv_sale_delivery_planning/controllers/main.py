@@ -59,6 +59,7 @@ class DeliveryPlannerController(http.Controller):
                 lambda p: p.picking_type_code in ['outgoing', 'internal']
                           and p.state not in ['done', 'cancel']
                           and not p.return_id   # Loại bỏ phiếu trả hàng
+                          and 'PICK' in (p.picking_type_id.sequence_code or '').upper()  # Chỉ in phiếu lấy hàng (pick)
             ).sorted(key=lambda p: (p.scheduled_date or p.create_date, p.id))
 
             if not all_pickings:

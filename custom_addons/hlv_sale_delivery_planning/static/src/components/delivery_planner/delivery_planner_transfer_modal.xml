@@ -143,11 +143,13 @@
                                                         </td>
                                                         <td class="fw-semibold"><t t-esc="prod.product_name"/></td>
                                                         <td class="text-center">
-                                                            <span class="badge bg-light text-dark border small"
-                                                                  t-att-title="prod.order_names.join(', ')">
-                                                                <t t-esc="prod.order_names.length"/> đơn
-                                                                <i class="fa fa-info-circle ms-1 text-info"></i>
-                                                            </span>
+                                                            <div class="d-flex flex-wrap gap-1 justify-content-center">
+                                                                <t t-foreach="prod.order_names" t-as="oname" t-key="oname">
+                                                                    <span class="badge bg-light text-primary border small" style="font-size:0.65rem;">
+                                                                        <t t-esc="oname"/>
+                                                                    </span>
+                                                                </t>
+                                                            </div>
                                                         </td>
                                                         <td class="text-end fw-bold text-danger">
                                                             <t t-esc="this.formatQty(prod.total_qty)"/>
