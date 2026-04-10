@@ -155,12 +155,15 @@
     .kanban-custom-width {
         width: 350px;
     }
+    .text-white {
+        color: #fff !important;
+    }
     // Mỗi cột kanban: flex đều, bằng nhau
     .hlv-kanban-column {
         flex: 1 1 0%;
         min-width: 200px;
         max-width: none;
-        width: 0;
+        width:350px;
         background: rgba(255, 255, 255, 0.55);
         border-radius: 14px;
         border: 2px solid transparent;
