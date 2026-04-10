@@ -202,6 +202,8 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.kanbanColumnOrder = {};
         this.state.kanbanColPageSize = {};
         this.state.kanbanBatchSize = 200;
+        // Xóa selection khi filter thay đổi (tránh giữ đơn không còn trong view)
+        this.state.selectedSOIds = new Set();
         await this.fetchData();
     }
 
@@ -509,6 +511,7 @@ export class DeliveryPlannerDashboard extends Component {
     async onSearchKeyup(ev) {
         if (ev.key === "Enter") {
             this.state.currentPage = 1;
+            this.state.selectedSOIds = new Set();
             await this.fetchData();
         }
     }
@@ -518,6 +521,7 @@ export class DeliveryPlannerDashboard extends Component {
             .map(o => parseInt(o.value))
             .filter(v => !isNaN(v));
         this.state.currentPage = 1;
+        this.state.selectedSOIds = new Set();
         await this.fetchData();
     }
 
@@ -764,7 +768,7 @@ export class DeliveryPlannerDashboard extends Component {
             );
             this.state.transferModalData = data;
 
-            // Init selections for each warehouse
+            // Init selections for each warehouse (partner auto-applied from wh.partner_id)
             const selections = {};
             for (const wh of (data.warehouses || [])) {
                 const prodSel = {};
@@ -773,7 +777,7 @@ export class DeliveryPlannerDashboard extends Component {
                 }
                 selections[wh.warehouse_id] = {
                     selected: true,
-                    partner_id: wh.default_partner_id || '',
+                    partner_id: wh.partner_id || false,
                     products: prodSel,
                 };
             }
@@ -852,6 +856,14 @@ export class DeliveryPlannerDashboard extends Component {
         return Object.values(whSel.products || {})
             .filter(p => p.include)
             .reduce((s, p) => s + (p.qty || 0), 0);
+    }
+
+    exportTransferExcel() {
+        const selectedIds = Array.from(this.state.selectedSOIds);
+        if (!selectedIds.length) return;
+        const params = new URLSearchParams();
+        params.set('sale_order_ids', JSON.stringify(selectedIds));
+        window.open(`/hlv_sale_delivery_planning/export_transfer_excel?${params.toString()}`, '_blank');
     }
 
     async confirmCreateTransferPickings() {

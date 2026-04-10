@@ -96,25 +96,17 @@
                                         </div>
                                     </div>
 
-                                    <!-- Partner selector -->
-                                    <div class="px-4 py-3 bg-white border-bottom d-flex align-items-center gap-3 flex-wrap">
-                                        <label class="form-label mb-0 fw-bold small text-muted text-nowrap">
-                                            <i class="fa fa-user me-1"></i> Liên hệ:
-                                        </label>
-                                        <select class="form-select form-select-sm" style="max-width:380px;"
-                                                t-on-change="(ev) => this.setTransferPartner(wh.warehouse_id, ev.target.value)">
-                                            <option value="">-- Không chọn liên hệ --</option>
-                                            <t t-foreach="state.transferModalData.all_partners" t-as="p" t-key="p.id">
-                                                <option t-att-value="p.id"
-                                                        t-att-selected="sel ? sel.partner_id == p.id : wh.default_partner_id == p.id">
-                                                    <t t-esc="p.name"/>
-                                                </option>
-                                            </t>
-                                        </select>
-                                        <span t-if="wh.default_partner_id" class="badge bg-light text-dark border small">
-                                            <i class="fa fa-info-circle me-1 text-info"></i>
-                                            Gợi ý: <t t-esc="wh.default_partner_name"/>
-                                        </span>
+                                    <!-- Partner (auto-applied, read-only) -->
+                                    <div class="px-4 py-2 bg-white border-bottom d-flex align-items-center gap-2 flex-wrap">
+                                        <i class="fa fa-user text-muted"></i>
+                                        <span class="fw-bold small text-muted">Liên hệ:</span>
+                                        <t t-if="wh.partner_id">
+                                            <span class="badge bg-info text-dark px-3 py-1" style="font-size:.85rem;">
+                                                <i class="fa fa-check-circle me-1 text-success"></i>
+                                                <t t-esc="wh.partner_name"/>
+                                            </span>
+                                        </t>
+                                        <span t-else="" class="text-muted small fst-italic">Không có liên hệ</span>
                                     </div>
 
                                     <!-- Bảng báo cáo + sản phẩm -->
@@ -207,6 +199,11 @@
                         </div>
 
                         <div class="d-flex gap-2">
+                            <button class="btn btn-outline-success"
+                                    t-on-click="exportTransferExcel"
+                                    title="Xuất báo cáo chuyển kho ra Excel">
+                                <i class="fa fa-file-excel-o me-1"></i>Xuất Excel
+                            </button>
                             <button class="btn btn-outline-secondary"
                                     t-on-click="closeTransferModal">
                                 <i class="fa fa-times me-1"></i>Đóng

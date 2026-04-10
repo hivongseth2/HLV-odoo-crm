@@ -119,30 +119,31 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
         transit_location_id = transit_location.id if transit_location else False
         transit_location_name = transit_location.complete_name if transit_location else 'Inter-warehouse transit'
 
-        # Danh sách partner để user chọn
-        all_partners = self.env['res.partner'].search_read(
-            [('active', '=', True), ('is_company', '=', True)],
-            ['id', 'name'],
-            limit=500,
-            order='name asc',
-        )
-
         warehouses_data = []
         for from_wh_id, products_map in wh_product_map.items():
             wh = self.env['stock.warehouse'].browse(from_wh_id)
             if not wh.exists():
                 continue
 
-            # Ưu tiên loại hoạt động có "chuyển kho" trong tên
+            # Ưu tiên "Lệnh chuyển hàng nội bộ" — tránh chọn "Lưu kho"
             picking_type = self.env['stock.picking.type'].search([
                 ('warehouse_id', '=', from_wh_id),
                 ('code', '=', 'internal'),
-                ('name', 'ilike', 'chuyển kho'),
+                ('name', 'ilike', 'nội bộ'),
             ], limit=1)
             if not picking_type:
                 picking_type = self.env['stock.picking.type'].search([
                     ('warehouse_id', '=', from_wh_id),
                     ('code', '=', 'internal'),
+                    ('name', 'ilike', 'chuyển'),
+                ], limit=1)
+            if not picking_type:
+                # Fallback: internal nhưng loại trừ "lưu kho" và "nhập kho"
+                picking_type = self.env['stock.picking.type'].search([
+                    ('warehouse_id', '=', from_wh_id),
+                    ('code', '=', 'internal'),
+                    ('name', 'not ilike', 'lưu'),
+                    ('name', 'not ilike', 'nhập'),
                 ], limit=1)
 
             default_partner = wh.partner_id if wh.partner_id else False
@@ -159,17 +160,17 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
                 'lot_stock_id': wh.lot_stock_id.id if wh.lot_stock_id else False,
                 'lot_stock_name': wh.lot_stock_id.complete_name if wh.lot_stock_id else '',
                 'picking_type_id': picking_type.id if picking_type else False,
-                'picking_type_name': picking_type.name if picking_type else f'Phiếu chuyển kho từ {wh.name}',
+                'picking_type_name': picking_type.name if picking_type else f'Lệnh chuyển hàng nội bộ từ {wh.name}',
                 'transit_location_id': transit_location_id,
                 'transit_location_name': transit_location_name,
-                'default_partner_id': default_partner.id if default_partner else False,
-                'default_partner_name': default_partner.name if default_partner else '',
+                # Partner áp dụng cứng từ địa chỉ kho, không cần người dùng chọn
+                'partner_id': default_partner.id if default_partner else False,
+                'partner_name': default_partner.name if default_partner else '',
                 'products': products_list,
             })
 
         return {
             'warehouses': warehouses_data,
-            'all_partners': all_partners,
         }
 
     def create_transfer_pickings(self, warehouse_selections):
