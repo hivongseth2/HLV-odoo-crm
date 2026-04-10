@@ -307,10 +307,12 @@ export class HlvBarcodeApp extends Component {
                 this._showFeedback('success', result.message);
                 this._playSound('success');
                 // Update local quantity_done for the scanned move
-                if (result.move_id && result.quantity_done !== undefined) {
-                    const line = this.state.lines.find(l => l.move_id === result.move_id);
-                    if (line) {
-                        line.quantity_done = (line.quantity_done || 0) + 1;
+                if (result.move_id) {
+                    const lineIdx = this.state.lines.findIndex(l => l.move_id === result.move_id);
+                    if (lineIdx >= 0) {
+                        const updated = { ...this.state.lines[lineIdx] };
+                        updated.quantity_done = (updated.quantity_done || 0) + 1;
+                        this.state.lines[lineIdx] = updated;
                     }
                 }
                 this.state.last_scanned_move_id = result.move_id || null;
@@ -321,8 +323,18 @@ export class HlvBarcodeApp extends Component {
                 // Try global search
                 await this._searchProduct(barcode);
             } else if (result.status === 'location') {
-                // Location scanned — show as current active location
+                // Location scanned — show as current active location and update product lines
                 this.state.scanned_location = result.location_name;
+                // Update source location display on product lines that match this location's parent
+                if (result.location_id) {
+                    for (let i = 0; i < this.state.lines.length; i++) {
+                        const line = this.state.lines[i];
+                        // Update if scanned location is a child of the line's source location
+                        if (result.location_name && result.location_name.startsWith(line.location_name.split('/').slice(0, 2).join('/'))) {
+                            this.state.lines[i] = { ...line, location_name: result.location_name };
+                        }
+                    }
+                }
                 this._showFeedback('success', `📍 Vị trí: ${result.location_name}`);
                 this._playSound('success');
             } else if (result.status === 'warning') {

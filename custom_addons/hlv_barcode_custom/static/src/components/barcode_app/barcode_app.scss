@@ -31,10 +31,10 @@ $bc-shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
 $bc-shadow-md: 0 4px 6px -1px rgba(0,0,0,0.08), 0 2px 4px -2px rgba(0,0,0,0.05);
 $bc-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.04);
 $bc-shadow-card: 0 2px 8px rgba(79,70,229,0.08);
-$bc-radius-sm: 10px;
-$bc-radius-md: 14px;
-$bc-radius-lg: 20px;
-$bc-radius-xl: 24px;
+$bc-radius-sm: 4px;
+$bc-radius-md: 6px;
+$bc-radius-lg: 8px;
+$bc-radius-xl: 12px;
 $bc-radius-full: 9999px;
 
 // ============ ROOT APP ============
@@ -638,67 +638,38 @@ $bc-radius-full: 9999px;
     background: $bc-gray-50;
 }
 
-// Picking info header (inside scanning)
-.hlv-bc-scan-pick-info {
-    background: $bc-white;
-    padding: 14px 16px;
-    border-bottom: 1px solid $bc-gray-200;
+// Picking info compact bar (inside scanning)
+.hlv-bc-scan-pick-compact {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: $bc-primary-50;
+    border-bottom: 1px solid rgba(79,70,229,0.12);
+    font-size: 12px;
+    color: $bc-gray-700;
+    overflow-x: auto;
+    white-space: nowrap;
 
-    .hlv-bc-scan-pick-card {
-        background: $bc-primary-50;
-        border: 1px solid rgba(79,70,229,0.15);
-        border-radius: $bc-radius-md;
-        padding: 14px;
+    .hlv-bc-scan-pick-type {
+        font-weight: 700;
+        color: $bc-primary;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
 
-        .hlv-bc-scan-pick-top {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 6px;
+    .hlv-bc-compact-sep {
+        color: $bc-gray-400;
+    }
 
-            .hlv-bc-scan-pick-type {
-                font-size: 11px;
-                font-weight: 700;
-                color: $bc-primary;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            }
-        }
+    .hlv-bc-compact-arrow {
+        color: $bc-gray-400;
+        font-weight: 600;
+    }
 
-        .hlv-bc-scan-pick-name {
-            font-size: 20px;
-            font-weight: 800;
-            color: $bc-gray-900;
-            margin-bottom: 10px;
-        }
-
-        .hlv-bc-scan-pick-details {
-            display: flex;
-            gap: 10px;
-
-            .hlv-bc-detail-chip {
-                flex: 1;
-                background: $bc-white;
-                border-radius: $bc-radius-sm;
-                padding: 8px 12px;
-                text-align: center;
-
-                .hlv-bc-detail-label {
-                    font-size: 10px;
-                    font-weight: 600;
-                    color: $bc-gray-500;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                    margin-bottom: 2px;
-                }
-
-                .hlv-bc-detail-value {
-                    font-size: 13px;
-                    font-weight: 700;
-                    color: $bc-gray-800;
-                }
-            }
-        }
+    .hlv-bc-priority-badge {
+        color: #dc2626;
+        font-weight: 700;
     }
 }
 

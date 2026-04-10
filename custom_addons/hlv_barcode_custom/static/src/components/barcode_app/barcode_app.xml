@@ -224,25 +224,14 @@
                  t-esc="state.camera_status"/>
         </div>
 
-        <!-- Picking Info Card -->
-        <div class="hlv-bc-scan-pick-info">
-            <div class="hlv-bc-scan-pick-card">
-                <div class="hlv-bc-scan-pick-top">
-                    <span class="hlv-bc-scan-pick-type" t-esc="state.picking.picking_type_name"/>
-                    <span t-if="state.picking.priority === '1'" class="hlv-bc-priority-badge">‼ Ưu tiên cao</span>
-                </div>
-                <div class="hlv-bc-scan-pick-name" t-esc="state.picking.name"/>
-                <div class="hlv-bc-scan-pick-details">
-                    <div class="hlv-bc-detail-chip">
-                        <div class="hlv-bc-detail-label">Nguồn</div>
-                        <div class="hlv-bc-detail-value" t-esc="state.picking.location_name"/>
-                    </div>
-                    <div class="hlv-bc-detail-chip">
-                        <div class="hlv-bc-detail-label">Đích</div>
-                        <div class="hlv-bc-detail-value" t-esc="state.picking.location_dest_name"/>
-                    </div>
-                </div>
-            </div>
+        <!-- Picking Info - Compact single line -->
+        <div class="hlv-bc-scan-pick-compact">
+            <span class="hlv-bc-scan-pick-type" t-esc="state.picking.picking_type_name"/>
+            <span class="hlv-bc-compact-sep">•</span>
+            <span t-esc="state.picking.location_name"/>
+            <span class="hlv-bc-compact-arrow">→</span>
+            <span t-esc="state.picking.location_dest_name"/>
+            <span t-if="state.picking.priority === '1'" class="hlv-bc-priority-badge">‼</span>
         </div>
 
         <!-- Active location indicator -->
