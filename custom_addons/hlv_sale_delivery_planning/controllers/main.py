@@ -101,6 +101,10 @@ class DeliveryPlannerController(http.Controller):
             sale_orders.filtered(lambda s: not s.x_picking_slip_printed).write({
                 'x_picking_slip_printed': True,
             })
+            # Đánh dấu từng phiếu đã được in (để phát hiện phiếu mới chưa in sau này)
+            all_pickings.filtered(lambda p: not p.x_printed).write({
+                'x_printed': True,
+            })
 
             return {
                 'success': True,

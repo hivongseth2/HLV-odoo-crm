@@ -257,9 +257,10 @@ export class DeliveryPlannerDashboard extends Component {
                 { value: 'ready',          label: 'Đủ Hàng Xuất',    badgeClass: 'bg-success',           textClass: 'text-success',  iconClass: 'fa fa-check',          progressClass: 'bg-success' },
             ];
             case 'packing_status': return [
-                { value: 'waiting_stock',  label: 'Không Có Hàng Đóng',      badgeClass: 'bg-secondary',          textClass: 'text-secondary', iconClass: 'fa fa-hourglass-start', progressClass: 'bg-secondary' },
-                { value: 'unpacked',       label: 'Có Hàng Chưa Đóng Gói',   badgeClass: 'bg-warning text-dark',  textClass: 'text-warning',   iconClass: 'fa fa-exclamation-triangle', progressClass: 'bg-warning' },
-                { value: 'fully_packed',   label: 'Đã Đóng Gói Đủ',          badgeClass: 'bg-success',            textClass: 'text-success',   iconClass: 'fa fa-check-square-o', progressClass: 'bg-success' },
+                { value: 'waiting_stock',    label: 'Không Có Hàng Đóng',      badgeClass: 'bg-secondary',          textClass: 'text-secondary', iconClass: 'fa fa-hourglass-start', progressClass: 'bg-secondary' },
+                { value: 'unpacked',         label: 'Có Hàng Chưa Đóng Gói',   badgeClass: 'bg-warning text-dark',  textClass: 'text-warning',   iconClass: 'fa fa-exclamation-triangle', progressClass: 'bg-warning' },
+                { value: 'printed_waiting',  label: 'Đã In, Chờ Đóng Gói',     badgeClass: 'bg-info',               textClass: 'text-info',      iconClass: 'fa fa-print', progressClass: 'bg-info' },
+                { value: 'fully_packed',     label: 'Đã Đóng Gói Đủ',          badgeClass: 'bg-success',            textClass: 'text-success',   iconClass: 'fa fa-check-square-o', progressClass: 'bg-success' },
             ];
             default: return [];
         }
@@ -284,8 +285,10 @@ export class DeliveryPlannerDashboard extends Component {
             if (dim === 'packing_status') {
                 // Màn hình kiểm soát đóng gói chỉ quan tâm đơn chưa giao.
                 if (so.real_delivery_status === 'full') return false;
+                // Đã in phiếu nhưng có phiếu mới chưa in → cột riêng "Đã in, chờ đóng gói"
+                if (so.has_new_unprinted_pickings) val = 'printed_waiting';
                 // Gom nhóm để tập trung hành động: còn hàng chưa đóng = cần xử lý ngay.
-                if (val === 'partial_packed') val = 'unpacked';
+                else if (val === 'partial_packed') val = 'unpacked';
             }
             return val === colValue;
         });
@@ -457,6 +460,7 @@ export class DeliveryPlannerDashboard extends Component {
                 for (const so of this.state.saleOrders) {
                     if (selectedIds.includes(so.id)) {
                         so.picking_slip_printed = true;
+                        so.has_new_unprinted_pickings = false;
                     }
                 }
                 // Clear selections after successful print

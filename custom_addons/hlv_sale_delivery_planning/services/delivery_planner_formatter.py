@@ -319,4 +319,5 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             'transfer_suggestions': transfer_suggestions,
             'is_returned_or_stopped': so_status_dict.get('is_returned_or_stopped', False),
             'picking_slip_printed': bool(so.x_picking_slip_printed),
+            'has_new_unprinted_pickings': so_status_dict.get('has_new_unprinted_pickings', False),
         }

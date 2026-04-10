@@ -256,14 +256,14 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
     def prepare_relocation_data(self, sale_order_ids):
         """
         Chuẩn bị dữ liệu cho modal "Chuyển vị trí".
-        Mỗi đơn hàng → danh sách sản phẩm pending (chưa giao) + vị trí hiện tại.
+        Chỉ lấy sản phẩm đã được assign (có tồn kho đã giữ) từ các phiếu active.
         Trả về:
           {
             orders: [{
               sale_order_id, sale_order_name, warehouse_id, warehouse_name,
               products: [{product_id, product_name, product_code, pending_qty}]
             }],
-            dest_locations: [{id, name}],  // Các vị trí trong kho hiện tại để chọn
+            dest_locations: [{id, name}],
             default_dest_location_id: int or False,
           }
         """
@@ -286,34 +286,42 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
                 continue
             all_warehouse_ids.add(so.warehouse_id.id)
 
-            products = []
-            for line in so.order_line:
-                if line.display_type or not line.product_id:
-                    continue
-                if line.product_id.type == 'service':
-                    continue
-                pending = max(line.product_uom_qty - line.qty_delivered, 0.0)
-                if pending <= 0:
-                    continue
-                # Chỉ thêm sản phẩm chưa có trong list (gom duplicate lines)
-                existing = next((p for p in products if p['product_id'] == line.product_id.id), None)
-                if existing:
-                    existing['pending_qty'] += pending
-                else:
-                    products.append({
-                        'product_id': line.product_id.id,
-                        'product_name': line.product_id.display_name,
-                        'product_code': line.product_id.default_code or '',
-                        'pending_qty': pending,
-                    })
+            # Lấy các phiếu active (chưa done/cancel, không phải trả hàng)
+            active_pickings = so.picking_ids.filtered(
+                lambda p: p.state not in ('done', 'cancel')
+                and p.picking_type_code in ('outgoing', 'internal')
+                and not p.return_id
+            )
 
-            if products:
+            # Gom số lượng đã assign (reserved) theo sản phẩm từ các move đã giữ hàng
+            products = {}
+            for pick in active_pickings:
+                for move in pick.move_ids:
+                    if move.state not in ('assigned', 'partially_available'):
+                        continue
+                    # Số lượng đã giữ = tổng qty trên move_line_ids
+                    reserved = sum(ml.quantity for ml in move.move_line_ids)
+                    if reserved <= 0:
+                        continue
+                    pid = move.product_id.id
+                    if pid in products:
+                        products[pid]['pending_qty'] += reserved
+                    else:
+                        products[pid] = {
+                            'product_id': pid,
+                            'product_name': move.product_id.display_name,
+                            'product_code': move.product_id.default_code or '',
+                            'pending_qty': reserved,
+                        }
+
+            product_list = sorted(products.values(), key=lambda p: p['product_code'] or p['product_name'])
+            if product_list:
                 orders_data.append({
                     'sale_order_id': so.id,
                     'sale_order_name': so.name,
                     'warehouse_id': so.warehouse_id.id,
                     'warehouse_name': so.warehouse_id.name,
-                    'products': sorted(products, key=lambda p: p['product_code'] or p['product_name']),
+                    'products': product_list,
                 })
 
         # Lấy danh sách vị trí con (internal) của các kho liên quan
@@ -407,6 +415,8 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
                 }
 
                 picking = self.env['stock.picking'].create(picking_vals)
+                # Giữ hàng (reserve) cho phiếu vừa tạo — tương tự luồng in phiếu
+                picking.action_assign()
                 created.append({
                     'picking_id': picking.id,
                     'picking_name': picking.name,

@@ -214,6 +214,12 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 'real_delivery_status': real_delivery_status,
                 # Đơn trả hàng / dừng: outflow hết nhưng chưa giao đủ → hiện riêng khi show_completed
                 'is_returned_or_stopped': no_active_outflow and real_delivery_status != 'full',
+                # Đã in phiếu nhưng có phiếu mới chưa in (hàng về thêm)
+                'has_new_unprinted_pickings': (
+                    bool(so.x_picking_slip_printed)
+                    and bool(active_outflow)
+                    and any(not p.x_printed for p in active_outflow)
+                ),
             }
 
             # Giữ metadata để tổng hợp KPI theo tập đã lọc cuối cùng.
