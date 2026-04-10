@@ -140,10 +140,9 @@ class StockPickingBarcode(models.Model):
                 'product_barcode': move.product_id.barcode or '',
                 'product_default_code': move.product_id.default_code or '',
                 'product_image': True if move.product_id.image_128 else False,
-                'demand': move.product_uom_qty - move.quantity,
-                # Always start from 0 in scanning UI - actual DB qty tracked separately
+                'demand': move.product_uom_qty,
+                # Always start from 0 in scanning UI
                 'quantity_done': 0,
-                'quantity_done_db': move.quantity,
                 'uom_name': move.product_uom.name,
                 'uom_rounding': move.product_uom.rounding,
                 'is_decimal': move.product_uom.rounding < 1.0,
