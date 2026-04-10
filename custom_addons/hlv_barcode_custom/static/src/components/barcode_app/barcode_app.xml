@@ -19,7 +19,6 @@
         <t t-if="state.error_popup" t-call="hlv_barcode_custom.error_popup"/>
         <t t-if="state.search_popup" t-call="hlv_barcode_custom.search_popup"/>
         <t t-if="state.numpad_popup" t-call="hlv_barcode_custom.numpad_popup"/>
-        <t t-if="state.camera_active" t-call="hlv_barcode_custom.camera_overlay"/>
 
         <!-- VIEWS -->
         <t t-if="state.view === 'home'" t-call="hlv_barcode_custom.home_view"/>
@@ -51,35 +50,54 @@
                        t-on-input="onBarcodeInput"
                        t-on-keydown="onBarcodeKeydown"
                        autocomplete="off"/>
-                <button t-if="state.config.camera_enabled"
-                        class="hlv-bc-btn-camera"
-                        t-on-click="toggleCamera">📷</button>
             </div>
         </div>
 
-        <!-- Menu Cards -->
-        <div class="hlv-bc-menu-grid">
-            <t t-foreach="state.picking_types" t-as="pt" t-key="pt.id">
-                <div t-attf-class="hlv-bc-menu-card hlv-bc-card-{{pt.code}}"
-                     t-on-click="() => this.openPickingTypeList(pt)">
-                    <div class="hlv-bc-card-icon-wrap">
-                        <t t-esc="getPickingTypeIcon(pt.code)"/>
+        <!-- Warehouse list (when no warehouse selected) -->
+        <t t-if="!state.selected_warehouse">
+            <div class="hlv-bc-section-title">Chọn Kho</div>
+            <div class="hlv-bc-warehouse-list">
+                <t t-foreach="state.warehouses" t-as="wh" t-key="wh.warehouse_id">
+                    <div class="hlv-bc-warehouse-card"
+                         t-on-click="() => this.selectWarehouse(wh)">
+                        <div class="hlv-bc-wh-icon">🏭</div>
+                        <div class="hlv-bc-wh-info">
+                            <div class="hlv-bc-wh-name" t-esc="wh.warehouse_name"/>
+                            <div class="hlv-bc-wh-types-count">
+                                <t t-esc="wh.picking_types.length"/> hoạt động
+                            </div>
+                        </div>
+                        <div t-if="getWarehouseCount(wh) > 0" class="hlv-bc-card-badge">
+                            <t t-esc="getWarehouseCount(wh)"/>
+                        </div>
+                        <div class="hlv-bc-wh-arrow">→</div>
                     </div>
-                    <div class="hlv-bc-card-title"><t t-esc="pt.name"/></div>
-                    <div class="hlv-bc-card-desc"><t t-esc="pt.warehouse_name"/></div>
-                    <div t-if="pt.count > 0" class="hlv-bc-card-badge">
-                        <t t-esc="pt.count"/>
-                    </div>
-                </div>
-            </t>
-
-            <div class="hlv-bc-menu-card hlv-bc-card-inventory"
-                 t-on-click="goToInventoryCheck">
-                <div class="hlv-bc-card-icon-wrap">📊</div>
-                <div class="hlv-bc-card-title">Kiểm Kê Kho</div>
-                <div class="hlv-bc-card-desc">INVENTORY</div>
+                </t>
             </div>
-        </div>
+        </t>
+
+        <!-- Picking types for selected warehouse -->
+        <t t-if="state.selected_warehouse">
+            <div class="hlv-bc-wh-back-row">
+                <button class="hlv-bc-nav-back" t-on-click="goBackFromWarehouse">←</button>
+                <div class="hlv-bc-wh-back-title" t-esc="state.selected_warehouse.warehouse_name"/>
+            </div>
+            <div class="hlv-bc-menu-grid">
+                <t t-foreach="state.selected_warehouse.picking_types" t-as="pt" t-key="pt.id">
+                    <div t-attf-class="hlv-bc-menu-card hlv-bc-card-{{pt.code}}"
+                         t-on-click="() => this.openPickingTypeList(pt)">
+                        <div class="hlv-bc-card-icon-wrap">
+                            <t t-esc="getPickingTypeIcon(pt.code)"/>
+                        </div>
+                        <div class="hlv-bc-card-title"><t t-esc="pt.name"/></div>
+                        <div class="hlv-bc-card-desc"><t t-esc="getPickingTypeCodeLabel(pt.code)"/></div>
+                        <div t-if="pt.count > 0" class="hlv-bc-card-badge">
+                            <t t-esc="pt.count"/>
+                        </div>
+                    </div>
+                </t>
+            </div>
+        </t>
     </div>
 </t>
 
@@ -186,6 +204,24 @@
             <div>
                 <div class="hlv-bc-nav-title" t-esc="state.picking.name"/>
             </div>
+            <button t-if="state.config.camera_enabled"
+                    t-attf-class="hlv-bc-btn-camera-toggle {{state.camera_active ? 'active' : ''}}"
+                    t-on-click="toggleCamera">
+                <t t-if="state.camera_active">⏹ Tắt Camera</t>
+                <t t-else="">📷 Camera</t>
+            </button>
+        </div>
+
+        <!-- Embedded Camera (inline, not overlay) -->
+        <div t-if="state.camera_active" class="hlv-bc-camera-inline">
+            <div class="hlv-bc-camera-viewport">
+                <video t-ref="cameraVideo" autoplay="true" playsinline="true" muted="true"/>
+                <div class="hlv-bc-scan-frame">
+                    <div class="hlv-bc-scan-line"/>
+                </div>
+            </div>
+            <div class="hlv-bc-camera-status" t-if="state.camera_status"
+                 t-esc="state.camera_status"/>
         </div>
 
         <!-- Picking Info Card -->
@@ -198,27 +234,22 @@
                 <div class="hlv-bc-scan-pick-name" t-esc="state.picking.name"/>
                 <div class="hlv-bc-scan-pick-details">
                     <div class="hlv-bc-detail-chip">
-                        <div class="hlv-bc-detail-label">Khu vực</div>
+                        <div class="hlv-bc-detail-label">Nguồn</div>
                         <div class="hlv-bc-detail-value" t-esc="state.picking.location_name"/>
                     </div>
                     <div class="hlv-bc-detail-chip">
-                        <div class="hlv-bc-detail-label">Trạng thái</div>
-                        <div class="hlv-bc-detail-value" t-esc="state.picking.state"/>
+                        <div class="hlv-bc-detail-label">Đích</div>
+                        <div class="hlv-bc-detail-value" t-esc="state.picking.location_dest_name"/>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Location scan prompt (if needed) -->
-        <div t-if="state.location_scan_pending"
-             t-attf-class="hlv-bc-location-prompt {{state.scanned_location ? 'hlv-bc-location-prompt-success' : ''}}">
+        <!-- Active location indicator -->
+        <div t-if="state.scanned_location" class="hlv-bc-location-prompt hlv-bc-location-prompt-success">
             <span class="hlv-bc-loc-prompt-icon">📍</span>
-            <span class="hlv-bc-loc-prompt-text">
-                <t t-if="state.location_scan_type === 'source'">Quét vị trí nguồn</t>
-                <t t-else="">Quét vị trí đích</t>
-            </span>
-            <span t-if="state.scanned_location" class="hlv-bc-loc-prompt-value"
-                  t-esc="state.scanned_location"/>
+            <span class="hlv-bc-loc-prompt-text">Vị trí hiện tại:</span>
+            <span class="hlv-bc-loc-prompt-value" t-esc="state.scanned_location"/>
         </div>
 
         <!-- Progress -->
@@ -238,10 +269,7 @@
         <!-- Scan Input -->
         <div class="hlv-bc-scan-input-area">
             <div class="hlv-bc-scan-input-wrap">
-                <span class="hlv-bc-scan-input-icon">
-                    <t t-if="state.location_scan_pending">📍</t>
-                    <t t-else="">📷</t>
-                </span>
+                <span class="hlv-bc-scan-input-icon">📷</span>
                 <input type="text"
                        t-ref="barcodeInput"
                        t-att-placeholder="getScanPlaceholder()"
@@ -249,9 +277,6 @@
                        t-on-input="onBarcodeInput"
                        t-on-keydown="onBarcodeKeydown"
                        autocomplete="off"/>
-                <button t-if="state.config.camera_enabled"
-                        class="hlv-bc-btn-camera"
-                        t-on-click="toggleCamera">📷</button>
             </div>
         </div>
 
@@ -280,8 +305,8 @@
                                 SKU: <t t-esc="line.product_default_code"/>
                             </div>
                             <div t-attf-class="hlv-bc-row-status status-{{getLineStatus(line)}}">
-                                <t t-if="getLineStatus(line) === 'done'">✓ Thành công</t>
-                                <t t-elif="getLineStatus(line) === 'partial'">● Đang chờ quét</t>
+                                <t t-if="getLineStatus(line) === 'done'">✓ Hoàn thành</t>
+                                <t t-elif="getLineStatus(line) === 'partial'">● Đang quét</t>
                                 <t t-else="">○ Chờ quét</t>
                             </div>
                         </div>
@@ -295,17 +320,32 @@
                                 <span class="hlv-bc-qty-sep">/</span>
                                 <span t-esc="line.demand.toFixed(line.is_decimal ? 1 : 0)"/>
                             </div>
-                            <div t-attf-class="hlv-bc-qty-status-text"
+                            <div class="hlv-bc-qty-status-text"
                                  t-att-style="getLineStatus(line) === 'done' ? 'color:#059669' : getLineStatus(line) === 'partial' ? 'color:#4f46e5' : 'color:#94a3b8'">
                                 <t t-esc="line.uom_name"/>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Location info -->
+                    <!-- Sub-location info (from move_lines) -->
                     <div class="hlv-bc-row-location-info">
                         📍 <t t-esc="line.location_name"/> → <t t-esc="line.location_dest_name"/>
                     </div>
+                    <!-- Show all sub-locations if multiple move lines -->
+                    <t t-if="line.move_lines and line.move_lines.length > 1">
+                        <div class="hlv-bc-row-sub-locations">
+                            <t t-foreach="line.move_lines" t-as="sml" t-key="sml.id">
+                                <div class="hlv-bc-sub-loc-row">
+                                    <span class="hlv-bc-sub-loc-from" t-esc="sml.location_name"/>
+                                    <span class="hlv-bc-sub-loc-arrow">→</span>
+                                    <span class="hlv-bc-sub-loc-to" t-esc="sml.location_dest_name"/>
+                                    <span t-if="sml.lot_name" class="hlv-bc-sub-loc-lot">
+                                        Lot: <t t-esc="sml.lot_name"/>
+                                    </span>
+                                </div>
+                            </t>
+                        </div>
+                    </t>
 
                     <!-- Quick +/- buttons -->
                     <div class="hlv-bc-row-actions">
@@ -446,22 +486,6 @@
             </div>
 
             <button class="hlv-bc-btn-cancel-numpad" t-on-click="closeNumpad">Hủy</button>
-        </div>
-    </div>
-</t>
-
-<!-- ==================== CAMERA OVERLAY ==================== -->
-<t t-name="hlv_barcode_custom.camera_overlay">
-    <div class="hlv-bc-camera-overlay">
-        <div class="hlv-bc-camera-header">
-            <span t-esc="state.camera_status"/>
-            <button class="hlv-bc-btn-close-camera" t-on-click="toggleCamera">✕ Đóng</button>
-        </div>
-        <div class="hlv-bc-camera-viewport">
-            <video t-ref="cameraVideo" autoplay="true" playsinline="true" muted="true"/>
-            <div class="hlv-bc-scan-frame">
-                <div class="hlv-bc-scan-line"/>
-            </div>
         </div>
     </div>
 </t>

@@ -259,6 +259,109 @@ $bc-radius-full: 9999px;
     }
 }
 
+// Section title
+.hlv-bc-section-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: $bc-gray-700;
+    padding: 8px 16px 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+// Warehouse list
+.hlv-bc-warehouse-list {
+    padding: 0 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.hlv-bc-warehouse-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: $bc-white;
+    border-radius: $bc-radius-lg;
+    padding: 16px;
+    box-shadow: $bc-shadow-sm;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.15s;
+
+    &:active {
+        transform: scale(0.98);
+        box-shadow: $bc-shadow-xs;
+    }
+
+    .hlv-bc-wh-icon {
+        width: 44px; height: 44px;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: $bc-radius-md;
+        background: $bc-primary-light;
+        font-size: 22px;
+        flex-shrink: 0;
+    }
+
+    .hlv-bc-wh-info {
+        flex: 1;
+        min-width: 0;
+
+        .hlv-bc-wh-name {
+            font-size: 15px;
+            font-weight: 700;
+            color: $bc-gray-800;
+        }
+
+        .hlv-bc-wh-types-count {
+            font-size: 12px;
+            color: $bc-gray-400;
+            margin-top: 2px;
+        }
+    }
+
+    .hlv-bc-card-badge {
+        min-width: 28px; height: 28px;
+        border-radius: $bc-radius-full;
+        background: $bc-danger;
+        color: $bc-white;
+        font-size: 12px;
+        font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        padding: 0 8px;
+        flex-shrink: 0;
+    }
+
+    .hlv-bc-wh-arrow {
+        font-size: 18px;
+        color: $bc-gray-400;
+        flex-shrink: 0;
+    }
+}
+
+// Warehouse back row
+.hlv-bc-wh-back-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px 12px;
+
+    .hlv-bc-nav-back {
+        width: 36px; height: 36px;
+        border-radius: $bc-radius-full;
+        border: 1px solid $bc-gray-200;
+        background: $bc-white;
+        font-size: 18px;
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+    }
+
+    .hlv-bc-wh-back-title {
+        font-size: 17px;
+        font-weight: 700;
+        color: $bc-gray-800;
+    }
+}
+
 // Menu grid
 .hlv-bc-menu-grid {
     display: grid;
@@ -871,12 +974,47 @@ $bc-radius-full: 9999px;
     }
 
     .hlv-bc-row-location-info {
-        padding: 0 14px 10px;
+        padding: 0 14px 6px;
         font-size: 12px;
         color: $bc-gray-500;
         display: flex;
         align-items: center;
         gap: 4px;
+    }
+
+    .hlv-bc-row-sub-locations {
+        padding: 0 14px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+
+        .hlv-bc-sub-loc-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: $bc-gray-500;
+            background: $bc-gray-50;
+            border-radius: 6px;
+            padding: 3px 8px;
+
+            .hlv-bc-sub-loc-from {
+                font-weight: 600;
+                color: $bc-primary;
+            }
+            .hlv-bc-sub-loc-arrow {
+                color: $bc-gray-400;
+            }
+            .hlv-bc-sub-loc-to {
+                font-weight: 600;
+                color: $bc-success;
+            }
+            .hlv-bc-sub-loc-lot {
+                margin-left: auto;
+                font-style: italic;
+                color: $bc-gray-400;
+            }
+        }
     }
 
     // Expandable qty buttons
@@ -1201,40 +1339,18 @@ $bc-radius-full: 9999px;
     }
 }
 
-// ============ CAMERA OVERLAY ============
-.hlv-bc-camera-overlay {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    z-index: 9999;
+// ============ CAMERA INLINE (embedded in scanning view) ============
+.hlv-bc-camera-inline {
+    margin: 0 16px 12px;
+    border-radius: $bc-radius-md;
+    overflow: hidden;
     background: #000;
-    display: flex;
-    flex-direction: column;
-
-    .hlv-bc-camera-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 16px;
-        background: rgba(0,0,0,0.6);
-        color: $bc-white;
-        z-index: 1;
-
-        span { font-size: 15px; font-weight: 500; }
-
-        .hlv-bc-btn-close-camera {
-            padding: 6px 14px;
-            border-radius: $bc-radius-full;
-            border: 1px solid rgba(255,255,255,0.3);
-            background: transparent;
-            color: $bc-white;
-            font-size: 14px;
-            cursor: pointer;
-        }
-    }
+    position: relative;
 
     .hlv-bc-camera-viewport {
-        flex: 1;
         position: relative;
+        width: 100%;
+        height: 200px;
 
         video {
             width: 100%; height: 100%;
@@ -1245,9 +1361,9 @@ $bc-radius-full: 9999px;
             position: absolute;
             top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            width: 260px; height: 180px;
+            width: 220px; height: 140px;
             border: 2px solid rgba(79,70,229,0.6);
-            border-radius: $bc-radius-md;
+            border-radius: $bc-radius-sm;
 
             .hlv-bc-scan-line {
                 position: absolute;
@@ -1258,6 +1374,33 @@ $bc-radius-full: 9999px;
             }
         }
     }
+
+    .hlv-bc-camera-status {
+        padding: 6px 12px;
+        font-size: 12px;
+        color: $bc-gray-400;
+        text-align: center;
+        background: rgba(0,0,0,0.8);
+    }
+}
+
+.hlv-bc-btn-camera-toggle {
+    padding: 6px 12px;
+    border-radius: $bc-radius-full;
+    border: 1px solid $bc-gray-300;
+    background: $bc-white;
+    font-size: 12px;
+    font-weight: 600;
+    color: $bc-gray-600;
+    cursor: pointer;
+    white-space: nowrap;
+
+    &.active {
+        background: $bc-danger;
+        color: $bc-white;
+        border-color: $bc-danger;
+    }
+}
 }
 
 @keyframes bc-scan-anim {

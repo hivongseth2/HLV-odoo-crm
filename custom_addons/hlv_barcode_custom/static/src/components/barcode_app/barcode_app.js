@@ -27,8 +27,12 @@ export class HlvBarcodeApp extends Component {
             view: 'home',
             is_loading: false,
 
-            // Operation types (loaded from DB)
+            // Operation types grouped by warehouse
+            warehouses: [],
+            // Flat picking types for backward compat
             picking_types: [],
+            // Selected warehouse
+            selected_warehouse: null,
 
             // Picking list
             picking_type_filter: null, // { id, name, code }
@@ -105,7 +109,15 @@ export class HlvBarcodeApp extends Component {
                 Object.assign(this.state.config, config);
             }
             if (pickingTypes) {
-                this.state.picking_types = pickingTypes;
+                this.state.warehouses = pickingTypes;
+                // Build flat list for backward compat
+                const flat = [];
+                for (const wh of pickingTypes) {
+                    for (const pt of wh.picking_types) {
+                        flat.push(pt);
+                    }
+                }
+                this.state.picking_types = flat;
             }
         } catch (e) {
             console.warn('Failed to load barcode config:', e);
@@ -154,14 +166,25 @@ export class HlvBarcodeApp extends Component {
         this.state.lines = [];
         this.state.pickings = [];
         this.state.picking_type_filter = null;
+        this.state.selected_warehouse = null;
         this.state.scan_config = null;
         this.state.location_scan_pending = false;
         this.state.location_scan_type = null;
         this.state.scanned_location = null;
+        this._stopCamera();
         this._clearFeedback();
         // Reload picking types to get fresh counts
         rpc('/hlv_barcode_custom/get_picking_types', {}).then(types => {
-            if (types) this.state.picking_types = types;
+            if (types) {
+                this.state.warehouses = types;
+                const flat = [];
+                for (const wh of types) {
+                    for (const pt of wh.picking_types) {
+                        flat.push(pt);
+                    }
+                }
+                this.state.picking_types = flat;
+            }
         }).catch(() => {});
     }
 
@@ -196,10 +219,7 @@ export class HlvBarcodeApp extends Component {
             this.state.view = 'scanning';
             this.state.config = { ...this.state.config, ...data.config };
             this.state.scan_config = data.scan_config || null;
-
-            // Initialize location scanning state
-            this._initLocationScanState();
-
+            this.state.scanned_location = null;
             setTimeout(() => this._focusBarcodeInput(), 100);
         } catch (e) {
             this._showError(_t('Lỗi tải phiếu'), e.message || String(e));
@@ -207,23 +227,8 @@ export class HlvBarcodeApp extends Component {
         this.state.is_loading = false;
     }
 
-    _initLocationScanState() {
-        const cfg = this.state.scan_config;
-        this.state.scanned_location = null;
-        if (cfg && cfg.scan_source && cfg.scan_source !== 'no') {
-            // Need to scan source location first (per_group mode = scan once)
-            this.state.location_scan_pending = true;
-            this.state.location_scan_type = 'source';
-        } else if (cfg && cfg.scan_dest && cfg.scan_dest !== 'no') {
-            this.state.location_scan_pending = true;
-            this.state.location_scan_type = 'dest';
-        } else {
-            this.state.location_scan_pending = false;
-            this.state.location_scan_type = null;
-        }
-    }
-
     goBackFromScan() {
+        this._stopCamera();
         if (this.state.picking_type_filter) {
             this.openPickingTypeList(this.state.picking_type_filter);
         } else {
@@ -292,14 +297,6 @@ export class HlvBarcodeApp extends Component {
         this.state.is_loading = true;
         this._clearFeedback();
 
-        // If waiting for a location scan, handle it first
-        if (this.state.location_scan_pending) {
-            await this._handleLocationScan(barcode);
-            this.state.is_loading = false;
-            setTimeout(() => this._focusBarcodeInput(), 100);
-            return;
-        }
-
         try {
             const result = await rpc('/hlv_barcode_custom/scan', {
                 picking_id: this.state.picking.id,
@@ -309,20 +306,25 @@ export class HlvBarcodeApp extends Component {
             if (result.status === 'success' || result.status === 'package_success') {
                 this._showFeedback('success', result.message);
                 this._playSound('success');
-                // Refresh picking data
-                await this._refreshPicking();
+                // Update local quantity_done for the scanned move
+                if (result.move_id && result.quantity_done !== undefined) {
+                    const line = this.state.lines.find(l => l.move_id === result.move_id);
+                    if (line) {
+                        line.quantity_done = (line.quantity_done || 0) + 1;
+                    }
+                }
+                this.state.last_scanned_move_id = result.move_id || null;
                 if (result.move_id) {
-                    this.state.last_scanned_move_id = result.move_id;
                     setTimeout(() => { this.state.last_scanned_move_id = null; }, 1500);
                 }
-                // After scanning product in per_product mode, check if we need next location scan
-                this._checkNextLocationScan();
             } else if (result.status === 'not_found') {
                 // Try global search
                 await this._searchProduct(barcode);
             } else if (result.status === 'location') {
-                // Location scanned inside picking (user scanned location barcode)
-                this._handleLocationResult(result);
+                // Location scanned — show as current active location
+                this.state.scanned_location = result.location_name;
+                this._showFeedback('success', `📍 Vị trí: ${result.location_name}`);
+                this._playSound('success');
             } else if (result.status === 'warning') {
                 this._showFeedback('error', result.message);
                 this._playSound('error');
@@ -337,72 +339,6 @@ export class HlvBarcodeApp extends Component {
 
         this.state.is_loading = false;
         setTimeout(() => this._focusBarcodeInput(), 100);
-    }
-
-    async _handleLocationScan(barcode) {
-        try {
-            // Validate this barcode is actually a location
-            const result = await rpc('/hlv_barcode_custom/scan', {
-                picking_id: this.state.picking.id,
-                barcode: barcode,
-            });
-
-            if (result.status === 'location') {
-                this._handleLocationResult(result);
-            } else {
-                this._showErrorPopup(
-                    `Cần quét vị trí ${this.state.location_scan_type === 'source' ? 'nguồn' : 'đích'} trước. "${barcode}" không phải mã vị trí.`
-                );
-                this._playSound('error');
-            }
-        } catch (e) {
-            this._showErrorPopup(e.message || String(e));
-            this._playSound('error');
-        }
-    }
-
-    _handleLocationResult(result) {
-        const locType = this.state.location_scan_type;
-        const expectedLocId = locType === 'source'
-            ? this.state.picking.location_id
-            : this.state.picking.location_dest_id;
-        const expectedLocName = locType === 'source'
-            ? this.state.picking.location_name
-            : this.state.picking.location_dest_name;
-
-        // Validate location matches the expected source/dest
-        if (result.location_id !== expectedLocId) {
-            this._showErrorPopup(
-                `Vị trí "${result.location_name}" không đúng. Cần quét vị trí: ${expectedLocName}`
-            );
-            this._playSound('error');
-            return;
-        }
-
-        this.state.scanned_location = result.location_name;
-        this._showFeedback('success', `✓ Vị trí: ${result.location_name}`);
-        this._playSound('success');
-
-        // Move to next scan phase
-        const cfg = this.state.scan_config;
-        if (locType === 'source' && cfg.scan_dest && cfg.scan_dest !== 'no') {
-            // Source done, now need dest
-            this.state.location_scan_type = 'dest';
-            this.state.scanned_location = null;
-        } else {
-            // All location scans done
-            this.state.location_scan_pending = false;
-            this.state.location_scan_type = null;
-        }
-    }
-
-    _checkNextLocationScan() {
-        // In per_product mode: after each product scan, might need location scan again
-        const cfg = this.state.scan_config;
-        if (!cfg) return;
-        // per_product mode means scan location before every product
-        // per_group means scan location once at the start (already done)
-        // We don't re-prompt for per_group
     }
 
     async _searchProduct(barcode) {
@@ -437,6 +373,16 @@ export class HlvBarcodeApp extends Component {
                 picking_id: this.state.picking.id,
             });
             if (data && data.lines) {
+                // Preserve local quantity_done (scanned in this session), don't reset from server
+                const localQtyMap = {};
+                for (const line of this.state.lines) {
+                    localQtyMap[line.move_id] = line.quantity_done || 0;
+                }
+                for (const line of data.lines) {
+                    if (localQtyMap[line.move_id] !== undefined) {
+                        line.quantity_done = localQtyMap[line.move_id];
+                    }
+                }
                 this.state.picking = { ...this.state.picking, ...data };
                 this.state.lines = data.lines;
             }
@@ -633,10 +579,16 @@ export class HlvBarcodeApp extends Component {
             if (barcodes.length > 0) {
                 const code = barcodes[0].rawValue;
                 if (code) {
-                    this._stopCamera();
+                    // Don't stop camera - keep it embedded, just process the scan
                     this.state.barcode_value = code;
                     await this._processScan(code);
                     this.state.barcode_value = '';
+                    // Pause briefly then resume detection
+                    setTimeout(() => {
+                        if (this.state.camera_active) {
+                            this._cameraAnimFrame = requestAnimationFrame(() => this._detectLoop(video));
+                        }
+                    }, 2000);
                     return;
                 }
             }
@@ -765,17 +717,25 @@ export class HlvBarcodeApp extends Component {
     }
 
     getScanPlaceholder() {
-        if (this.state.location_scan_pending) {
-            return this.state.location_scan_type === 'source'
-                ? 'Quét mã vị trí nguồn...'
-                : 'Quét mã vị trí đích...';
-        }
-        return 'Quét mã sản phẩm hoặc kiện hàng...';
+        return 'Quét mã sản phẩm, vị trí, hoặc kiện hàng...';
     }
 
     isAllDone() {
         if (!this.state.lines.length) return false;
         return this.state.lines.every(l => (l.quantity_done || 0) >= l.demand && l.demand > 0);
+    }
+
+    // Warehouse navigation
+    selectWarehouse(wh) {
+        this.state.selected_warehouse = wh;
+    }
+
+    goBackFromWarehouse() {
+        this.state.selected_warehouse = null;
+    }
+
+    getWarehouseCount(wh) {
+        return wh.picking_types.reduce((sum, pt) => sum + (pt.count || 0), 0);
     }
 
     getLineStatus(line) {

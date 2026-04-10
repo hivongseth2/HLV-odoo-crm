@@ -24,29 +24,38 @@ class StockPickingBarcode(models.Model):
 
     @api.model
     def get_barcode_picking_types(self):
-        """Get all active picking types for the barcode menu."""
+        """Get all active picking types for the barcode menu, grouped by warehouse."""
         types = self.env['stock.picking.type'].search([
             ('code', 'in', ['incoming', 'outgoing', 'internal']),
             ('active', '=', True),
-        ], order='sequence asc')
-        result = []
+        ], order='warehouse_id asc, sequence asc')
+        warehouses = {}
         for pt in types:
+            wh_id = pt.warehouse_id.id or 0
+            wh_name = pt.warehouse_id.name or 'Khác'
+            if wh_id not in warehouses:
+                warehouses[wh_id] = {
+                    'warehouse_id': wh_id,
+                    'warehouse_name': wh_name,
+                    'picking_types': [],
+                }
             # Count ready pickings
             count = self.search_count([
                 ('picking_type_id', '=', pt.id),
                 ('state', 'in', ['assigned', 'confirmed', 'waiting']),
             ])
-            result.append({
+            warehouses[wh_id]['picking_types'].append({
                 'id': pt.id,
                 'name': pt.name,
                 'code': pt.code,
                 'count': count,
-                'warehouse_name': pt.warehouse_id.name or '',
+                'warehouse_id': wh_id,
+                'warehouse_name': wh_name,
                 'scan_source': pt.barcode_scan_source or 'no',
                 'scan_dest': pt.barcode_scan_dest or 'no',
                 'require_product_scan': pt.barcode_require_product_scan,
             })
-        return result
+        return list(warehouses.values())
 
     @api.model
     def get_barcode_pickings(self, picking_type_id=None, picking_type_code=None):
@@ -98,26 +107,52 @@ class StockPickingBarcode(models.Model):
             scan_source = 'no'
 
         lines = []
-        for ml in self.move_ids.filtered(lambda m: m.state not in ('done', 'cancel')):
+        for move in self.move_ids.filtered(lambda m: m.state not in ('done', 'cancel')):
             # Check if product is a BOM Kit component
-            bom_info = self._get_bom_kit_info(ml.product_id)
+            bom_info = self._get_bom_kit_info(move.product_id)
+
+            # Get sub-locations from move_line_ids (detailed bin/shelf locations)
+            move_lines_data = []
+            for sml in move.move_line_ids:
+                move_lines_data.append({
+                    'id': sml.id,
+                    'location_id': sml.location_id.id,
+                    'location_name': sml.location_id.complete_name or sml.location_id.name,
+                    'location_dest_id': sml.location_dest_id.id,
+                    'location_dest_name': sml.location_dest_id.complete_name or sml.location_dest_id.name,
+                    'quantity': sml.quantity,
+                    'lot_name': sml.lot_id.name if sml.lot_id else '',
+                    'package_name': sml.package_id.name if sml.package_id else '',
+                })
+
+            # Use move_line source/dest for display (sub-location detail)
+            display_location = move.location_id.complete_name or move.location_id.name
+            display_location_dest = move.location_dest_id.complete_name or move.location_dest_id.name
+            if move.move_line_ids:
+                first_sml = move.move_line_ids[0]
+                display_location = first_sml.location_id.complete_name or first_sml.location_id.name
+                display_location_dest = first_sml.location_dest_id.complete_name or first_sml.location_dest_id.name
+
             lines.append({
-                'move_id': ml.id,
-                'product_id': ml.product_id.id,
-                'product_name': ml.product_id.display_name,
-                'product_barcode': ml.product_id.barcode or '',
-                'product_default_code': ml.product_id.default_code or '',
-                'product_image': True if ml.product_id.image_128 else False,
-                'demand': ml.product_uom_qty,
-                'quantity_done': ml.quantity,
-                'uom_name': ml.product_uom.name,
-                'uom_rounding': ml.product_uom.rounding,
-                'is_decimal': ml.product_uom.rounding < 1.0,
-                'location_id': ml.location_id.id,
-                'location_name': ml.location_id.complete_name or ml.location_id.name,
-                'location_dest_id': ml.location_dest_id.id,
-                'location_dest_name': ml.location_dest_id.complete_name or ml.location_dest_id.name,
-                'lot_ids': [{'id': lot.id, 'name': lot.name} for lot in ml.lot_ids],
+                'move_id': move.id,
+                'product_id': move.product_id.id,
+                'product_name': move.product_id.display_name,
+                'product_barcode': move.product_id.barcode or '',
+                'product_default_code': move.product_id.default_code or '',
+                'product_image': True if move.product_id.image_128 else False,
+                'demand': move.product_uom_qty,
+                # Always start from 0 in scanning UI - actual DB qty tracked separately
+                'quantity_done': 0,
+                'quantity_done_db': move.quantity,
+                'uom_name': move.product_uom.name,
+                'uom_rounding': move.product_uom.rounding,
+                'is_decimal': move.product_uom.rounding < 1.0,
+                'location_id': move.location_id.id,
+                'location_name': display_location,
+                'location_dest_id': move.location_dest_id.id,
+                'location_dest_name': display_location_dest,
+                'move_lines': move_lines_data,
+                'lot_ids': [{'id': lot.id, 'name': lot.name} for lot in move.lot_ids],
                 'bom_kit_name': bom_info.get('kit_name', ''),
                 'bom_kit_product': bom_info.get('kit_product', ''),
                 'is_bom_component': bom_info.get('is_component', False),
