@@ -752,6 +752,13 @@ $bc-radius-full: 9999px;
     .hlv-bc-loc-prompt-text { color: $bc-success; }
 }
 
+.hlv-bc-location-prompt-warning {
+    background: $bc-warning-light;
+    border-bottom-color: rgba(217,119,6,0.15);
+
+    .hlv-bc-loc-prompt-text { color: $bc-warning; }
+}
+
 // Barcode scan input area
 .hlv-bc-scan-input-area {
     padding: 12px 16px;
@@ -997,9 +1004,23 @@ $bc-radius-full: 9999px;
                 color: $bc-gray-600;
                 font-size: 11px;
             }
+            .hlv-bc-sub-loc-picked {
+                font-weight: 700;
+                color: $bc-success;
+                font-size: 11px;
+                background: $bc-success-light;
+                padding: 1px 6px;
+                border-radius: $bc-radius-sm;
+            }
             .hlv-bc-sub-loc-lot {
                 font-style: italic;
                 color: $bc-gray-400;
+            }
+
+            &.hlv-bc-sub-loc-extra {
+                background: $bc-warning-light;
+                border-color: rgba(217,119,6,0.2);
+                .hlv-bc-sub-loc-from { color: $bc-warning; }
             }
         }
     }

@@ -461,14 +461,18 @@ export class HlvBarcodeApp extends Component {
                 picking_id: this.state.picking.id,
             });
             if (data && data.lines) {
-                // Preserve local quantity_done (scanned in this session), don't reset from server
-                const localQtyMap = {};
+                // Preserve local tracking (scanned in this session), don't reset from server
+                const localMap = {};
                 for (const line of this.state.lines) {
-                    localQtyMap[line.move_id] = line.quantity_done || 0;
+                    localMap[line.move_id] = {
+                        quantity_done: line.quantity_done || 0,
+                        picks_by_location: line.picks_by_location || {},
+                    };
                 }
                 for (const line of data.lines) {
-                    if (localQtyMap[line.move_id] !== undefined) {
-                        line.quantity_done = localQtyMap[line.move_id];
+                    if (localMap[line.move_id]) {
+                        line.quantity_done = localMap[line.move_id].quantity_done;
+                        line.picks_by_location = localMap[line.move_id].picks_by_location;
                     }
                 }
                 this.state.picking = { ...this.state.picking, ...data };
@@ -481,29 +485,33 @@ export class HlvBarcodeApp extends Component {
 
     // =============== QUANTITY CONTROLS (LOCAL ONLY) ===============
     incrementQty(moveId, step = 1.0) {
-        const idx = this.state.lines.findIndex(l => l.move_id === moveId);
-        if (idx < 0) return;
-        const line = this.state.lines[idx];
-        const newQty = Math.min((line.quantity_done || 0) + step, line.demand);
-        if (newQty === (line.quantity_done || 0)) {
-            this._showFeedback('error', `Đã đạt số lượng yêu cầu: ${line.demand} ${line.uom_name}`);
+        if (!this.state.scanned_location) {
+            this._showErrorPopup('Vui lòng quét vị trí nguồn trước khi thêm số lượng.');
             this._playSound('error');
             return;
         }
-        this.state.lines[idx] = { ...line, quantity_done: newQty };
-        this._showFeedback('success', `✓ ${line.product_name}: ${newQty}/${line.demand} ${line.uom_name}`);
-        this._playSound('success');
-        this.state.last_scanned_move_id = moveId;
-        setTimeout(() => { this.state.last_scanned_move_id = null; }, 1200);
+        const locId = this.state.scanned_location.id;
+        const locName = this.state.scanned_location.name;
+        const ok = this._incrementLineAtLocation(moveId, locId, locName, step);
+        if (ok) {
+            const line = this.state.lines.find(l => l.move_id === moveId);
+            this._showFeedback('success', `✓ ${line.product_name}: ${line.quantity_done}/${line.demand} ${line.uom_name} (${locName})`);
+            this._playSound('success');
+            this.state.last_scanned_move_id = moveId;
+            setTimeout(() => { this.state.last_scanned_move_id = null; }, 1200);
+        }
     }
 
     decrementQty(moveId, step = 1.0) {
-        const idx = this.state.lines.findIndex(l => l.move_id === moveId);
-        if (idx < 0) return;
-        const line = this.state.lines[idx];
-        const newQty = Math.max(0, (line.quantity_done || 0) - step);
-        this.state.lines[idx] = { ...line, quantity_done: newQty };
-        this._showFeedback('success', `${line.product_name}: ${newQty}/${line.demand} ${line.uom_name}`);
+        if (!this.state.scanned_location) {
+            this._showErrorPopup('Vui lòng quét vị trí nguồn trước.');
+            this._playSound('error');
+            return;
+        }
+        const locId = this.state.scanned_location.id;
+        this._decrementLineAtLocation(moveId, locId, step);
+        const line = this.state.lines.find(l => l.move_id === moveId);
+        this._showFeedback('success', `${line.product_name}: ${line.quantity_done}/${line.demand} ${line.uom_name}`);
         this._playSound('success');
         this.state.last_scanned_move_id = moveId;
         setTimeout(() => { this.state.last_scanned_move_id = null; }, 1200);
@@ -602,10 +610,14 @@ export class HlvBarcodeApp extends Component {
             return;
         }
 
-        // Build move_quantities from local tracking
+        // Build move_quantities from local tracking (with per-location breakdown)
         const moveQuantities = this.state.lines.map(l => ({
             move_id: l.move_id,
             quantity: l.quantity_done || 0,
+            picks_by_location: l.picks_by_location ? Object.values(l.picks_by_location).map(p => ({
+                location_id: p.id,
+                quantity: p.qty,
+            })) : [],
         }));
 
         this.state.is_loading = true;

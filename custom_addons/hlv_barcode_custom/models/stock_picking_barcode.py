@@ -469,7 +469,11 @@ class StockPickingBarcode(models.Model):
     @api.model
     def validate_picking_with_quantities(self, picking_id, move_quantities):
         """Set move quantities from frontend local tracking and validate the picking.
-        move_quantities: list of {'move_id': int, 'quantity': float}
+        move_quantities: list of {
+            'move_id': int,
+            'quantity': float,
+            'picks_by_location': [{'location_id': int, 'quantity': float}]  (optional)
+        }
         """
         picking = self.browse(picking_id)
         if not picking.exists():
@@ -481,14 +485,50 @@ class StockPickingBarcode(models.Model):
         # Apply quantities from frontend to move lines
         for mq in move_quantities:
             move = self.env['stock.move'].browse(mq.get('move_id'))
-            if move.exists() and move.picking_id.id == picking.id:
-                qty = mq.get('quantity', 0)
-                if qty > 0:
-                    # Set quantity on the move (replaces reserved qty with actual done qty)
-                    move.write({'quantity': qty})
-                else:
-                    # User didn't pick this move - set to 0 for backorder
-                    move.write({'quantity': 0})
+            if not move.exists() or move.picking_id.id != picking.id:
+                continue
+
+            qty = mq.get('quantity', 0)
+            picks = mq.get('picks_by_location', [])
+
+            if qty > 0 and picks:
+                # User provided per-location breakdown: update move_lines accordingly
+                # First, set all existing move_lines to 0
+                for sml in move.move_line_ids:
+                    sml.write({'quantity': 0})
+
+                for pick in picks:
+                    loc_id = pick.get('location_id')
+                    pick_qty = pick.get('quantity', 0)
+                    if not loc_id or pick_qty <= 0:
+                        continue
+
+                    # Find existing move_line at this location
+                    matching_sml = move.move_line_ids.filtered(
+                        lambda ml: ml.location_id.id == loc_id
+                    )
+                    if matching_sml:
+                        matching_sml[0].write({'quantity': pick_qty})
+                    else:
+                        # Create new move_line for this location
+                        self.env['stock.move.line'].create({
+                            'move_id': move.id,
+                            'picking_id': picking.id,
+                            'product_id': move.product_id.id,
+                            'product_uom_id': move.product_uom.id,
+                            'location_id': loc_id,
+                            'location_dest_id': move.location_dest_id.id,
+                            'quantity': pick_qty,
+                        })
+
+                # Update move total
+                move.write({'quantity': qty})
+            elif qty > 0:
+                # No per-location breakdown, just set total
+                move.write({'quantity': qty})
+            else:
+                # User didn't pick this move - set to 0 for backorder
+                move.write({'quantity': 0})
 
         try:
             picking.button_validate()

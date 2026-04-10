@@ -237,8 +237,12 @@
         <!-- Active location indicator -->
         <div t-if="state.scanned_location" class="hlv-bc-location-prompt hlv-bc-location-prompt-success">
             <span class="hlv-bc-loc-prompt-icon">📍</span>
-            <span class="hlv-bc-loc-prompt-text">Vị trí hiện tại:</span>
-            <span class="hlv-bc-loc-prompt-value" t-esc="state.scanned_location"/>
+            <span class="hlv-bc-loc-prompt-text">Vị trí lấy hàng:</span>
+            <span class="hlv-bc-loc-prompt-value" t-esc="state.scanned_location.name"/>
+        </div>
+        <div t-else="" class="hlv-bc-location-prompt hlv-bc-location-prompt-warning">
+            <span class="hlv-bc-loc-prompt-icon">⚠️</span>
+            <span class="hlv-bc-loc-prompt-text">Quét vị trí nguồn trước khi quét sản phẩm</span>
         </div>
 
         <!-- Progress -->
@@ -324,15 +328,32 @@
                     <t t-if="line.move_lines and line.move_lines.length > 0">
                         <div class="hlv-bc-row-sub-locations">
                             <t t-foreach="line.move_lines" t-as="sml" t-key="sml.id">
-                                <div t-attf-class="hlv-bc-sub-loc-row {{state.scanned_location and sml.location_name === state.scanned_location ? 'hlv-bc-sub-loc-active' : ''}}">
+                                <div t-attf-class="hlv-bc-sub-loc-row {{state.scanned_location and sml.location_name === state.scanned_location.name ? 'hlv-bc-sub-loc-active' : ''}}">
                                     <span class="hlv-bc-sub-loc-from" t-esc="sml.location_name"/>
                                     <span class="hlv-bc-sub-loc-arrow">→</span>
                                     <span class="hlv-bc-sub-loc-to" t-esc="sml.location_dest_name"/>
                                     <span class="hlv-bc-sub-loc-qty">
-                                        <t t-esc="sml.quantity"/> <t t-esc="line.uom_name"/>
+                                        KH: <t t-esc="sml.quantity"/> <t t-esc="line.uom_name"/>
+                                    </span>
+                                    <span t-if="getLocationPicks(line, sml.location_id) > 0" class="hlv-bc-sub-loc-picked">
+                                        ✓ <t t-esc="getLocationPicks(line, sml.location_id)"/>
                                     </span>
                                     <span t-if="sml.lot_name" class="hlv-bc-sub-loc-lot">
                                         Lot: <t t-esc="sml.lot_name"/>
+                                    </span>
+                                </div>
+                            </t>
+                        </div>
+                    </t>
+                    <!-- Show picks from locations not in the plan -->
+                    <t t-set="extraPicks" t-value="getPicksList(line).filter(p => !line.move_lines.some(ml => ml.location_id === p.id))"/>
+                    <t t-if="extraPicks.length > 0">
+                        <div class="hlv-bc-row-sub-locations">
+                            <t t-foreach="extraPicks" t-as="pick" t-key="pick.id">
+                                <div class="hlv-bc-sub-loc-row hlv-bc-sub-loc-extra">
+                                    <span class="hlv-bc-sub-loc-from" t-esc="pick.name"/>
+                                    <span class="hlv-bc-sub-loc-picked">
+                                        ✓ Lấy: <t t-esc="pick.qty"/> <t t-esc="line.uom_name"/>
                                     </span>
                                 </div>
                             </t>
