@@ -96,6 +96,7 @@
             <t t-foreach="this.kanbanColumnDefs" t-as="col" t-key="col.value">
 
                 <div class="hlv-kanban-column kanban-custom-width d-flex flex-column flex-grow-1"
+                    style="width: 350px;"
                      t-att-data-col="col.value"
                      t-on-dragover="(ev) => this.onDragOver(ev, col.value)"
                      t-on-dragleave="(ev) => this.onDragLeave(ev)"
@@ -228,12 +229,12 @@
             <!-- Ribbon "Đã in phiếu" / "Có phiếu chưa in" -->
             <div t-if="so.has_new_unprinted_pickings"
                  class="position-absolute bg-danger text-white text-center fw-bold"
-                 style="font-size:0.55rem; padding:1px 20px; top:8px; right:-22px; transform:rotate(45deg); z-index:2; letter-spacing:0.5px; box-shadow: 0 1px 3px rgba(0,0,0,.2);">
+                 style="font-size:0.55rem; padding:1px 20px; color: #fff ;top:8px; right:-22px; transform:rotate(45deg); z-index:2; letter-spacing:0.5px; box-shadow: 0 1px 3px rgba(0,0,0,.2);">
                 <i class="fa fa-exclamation-circle me-1"></i>Chưa in
             </div>
             <div t-elif="so.picking_slip_printed"
                  class="position-absolute bg-success text-white text-center fw-bold"
-                 style="font-size:0.55rem; padding:1px 20px; top:8px; right:-22px; transform:rotate(45deg); z-index:2; letter-spacing:0.5px; box-shadow: 0 1px 3px rgba(0,0,0,.2);">
+                 style="font-size:0.55rem; padding:1px 20px; top:8px; color: #fff ;right:-22px; transform:rotate(45deg); z-index:2; letter-spacing:0.5px; box-shadow: 0 1px 3px rgba(0,0,0,.2);">
                 <i class="fa fa-print me-1"></i>Đã in
             </div>
 
