@@ -320,14 +320,17 @@
                     <div class="hlv-bc-row-location-info">
                         📍 <t t-esc="line.location_name"/> → <t t-esc="line.location_dest_name"/>
                     </div>
-                    <!-- Show all sub-locations if multiple move lines -->
-                    <t t-if="line.move_lines and line.move_lines.length > 1">
+                    <!-- Show all sub-locations with planned qty -->
+                    <t t-if="line.move_lines and line.move_lines.length > 0">
                         <div class="hlv-bc-row-sub-locations">
                             <t t-foreach="line.move_lines" t-as="sml" t-key="sml.id">
-                                <div class="hlv-bc-sub-loc-row">
+                                <div t-attf-class="hlv-bc-sub-loc-row {{state.scanned_location and sml.location_name === state.scanned_location ? 'hlv-bc-sub-loc-active' : ''}}">
                                     <span class="hlv-bc-sub-loc-from" t-esc="sml.location_name"/>
                                     <span class="hlv-bc-sub-loc-arrow">→</span>
                                     <span class="hlv-bc-sub-loc-to" t-esc="sml.location_dest_name"/>
+                                    <span class="hlv-bc-sub-loc-qty">
+                                        <t t-esc="sml.quantity"/> <t t-esc="line.uom_name"/>
+                                    </span>
                                     <span t-if="sml.lot_name" class="hlv-bc-sub-loc-lot">
                                         Lot: <t t-esc="sml.lot_name"/>
                                     </span>

@@ -262,10 +262,8 @@ class StockPickingBarcode(models.Model):
     def _handle_delivery_scan(self, picking, product, location_barcode=None):
         """
         Handle scanning for Delivery Orders / Outgoing Pickings.
-        Rules:
-        1. Product must be in the picking's move lines
-        2. Cannot exceed demand quantity
-        3. Must have stock at the source location
+        Does NOT write to move.quantity — scanning is tracked locally in the frontend.
+        Only verifies stock availability and that the product is in the picking.
         """
         picking.ensure_one()
         config = picking._get_barcode_config()
@@ -281,88 +279,48 @@ class StockPickingBarcode(models.Model):
                 'message': _('Sản phẩm [%s] %s KHÔNG có trong phiếu này!') % (product.default_code or product.barcode, product.name),
             }
 
-        # Find the best move line to increment
-        target_move = None
-        for move in matching_moves:
-            remaining = move.product_uom_qty - move.quantity
-            if remaining > 0:
-                target_move = move
-                break
+        target_move = matching_moves[0]
 
-        if not target_move:
-            # Rule 2: All moves are fully done
-            if config.get('strict_delivery', True):
-                return {
-                    'status': 'error',
-                    'error_type': 'over_demand',
-                    'message': _('Sản phẩm [%s] %s đã đủ số lượng yêu cầu! Không thể quét thêm.') % (
-                        product.default_code or product.barcode, product.name),
-                }
+        # Determine source location for stock check
+        source_location = target_move.location_id
+        if location_barcode:
+            scan_location = self.env['stock.location'].search([('barcode', '=', location_barcode)], limit=1)
+            if scan_location:
+                source_location = scan_location
 
-        if target_move:
-            # Rule 3: Check stock at source location
-            source_location = target_move.location_id
-            if location_barcode:
-                scan_location = self.env['stock.location'].search([('barcode', '=', location_barcode)], limit=1)
-                if scan_location:
-                    source_location = scan_location
-
-            available_qty = self._get_available_qty(product, source_location)
-            already_scanned = target_move.quantity
-            remaining_demand = target_move.product_uom_qty - already_scanned
-
-            if available_qty <= 0:
-                return {
-                    'status': 'error',
-                    'error_type': 'no_stock',
-                    'message': _('Vị trí [%s] KHÔNG có tồn kho sản phẩm [%s] %s!') % (
-                        source_location.complete_name or source_location.name,
-                        product.default_code or '', product.name),
-                }
-
-            if available_qty < 1.0 and target_move.product_uom.rounding >= 1.0:
-                return {
-                    'status': 'error',
-                    'error_type': 'insufficient_stock',
-                    'message': _('Vị trí [%s] không đủ số lượng sản phẩm [%s] %s. Tồn: %.2f') % (
-                        source_location.complete_name or source_location.name,
-                        product.default_code or '', product.name, available_qty),
-                }
-
-            # Increment quantity
-            increment = min(1.0, remaining_demand)
-            new_qty = already_scanned + increment
-            target_move.write({'quantity': new_qty})
-
+        # Check stock at source location (including child locations)
+        available_qty = self._get_available_qty(product, source_location)
+        if available_qty <= 0:
             return {
-                'status': 'success',
-                'move_id': target_move.id,
-                'product_id': product.id,
-                'product_name': product.display_name,
-                'product_barcode': product.barcode or product.default_code or '',
-                'demand': target_move.product_uom_qty,
-                'quantity_done': new_qty,
-                'remaining': target_move.product_uom_qty - new_qty,
-                'uom_name': target_move.product_uom.name,
-                'location_name': source_location.complete_name or source_location.name,
-                'message': _('✓ %s: %.1f / %.1f %s') % (product.name, new_qty, target_move.product_uom_qty, target_move.product_uom.name),
+                'status': 'error',
+                'error_type': 'no_stock',
+                'message': _('Vị trí [%s] KHÔNG có tồn kho sản phẩm [%s] %s!') % (
+                    source_location.complete_name or source_location.name,
+                    product.default_code or '', product.name),
             }
 
-        return {'status': 'error', 'message': _('Không tìm thấy dòng phù hợp để cập nhật.')}
+        return {
+            'status': 'success',
+            'move_id': target_move.id,
+            'product_id': product.id,
+            'product_name': product.display_name,
+            'product_barcode': product.barcode or product.default_code or '',
+            'demand': target_move.product_uom_qty,
+            'uom_name': target_move.product_uom.name,
+            'location_name': source_location.complete_name or source_location.name,
+            'message': _('✓ %s: %s') % (product.name, target_move.product_uom.name),
+        }
 
     def _handle_receipt_scan(self, picking, product):
-        """Handle scanning for Receipts / Incoming Pickings."""
+        """Handle scanning for Receipts / Incoming Pickings. No DB write during scan."""
         picking.ensure_one()
 
-        # Find matching move or create new line
         matching_moves = picking.move_ids.filtered(
             lambda m: m.product_id.id == product.id and m.state not in ('done', 'cancel')
         )
 
         if matching_moves:
             target_move = matching_moves[0]
-            new_qty = target_move.quantity + 1.0
-            target_move.write({'quantity': new_qty})
             return {
                 'status': 'success',
                 'move_id': target_move.id,
@@ -370,11 +328,9 @@ class StockPickingBarcode(models.Model):
                 'product_name': product.display_name,
                 'product_barcode': product.barcode or product.default_code or '',
                 'demand': target_move.product_uom_qty,
-                'quantity_done': new_qty,
-                'remaining': max(0, target_move.product_uom_qty - new_qty),
                 'uom_name': target_move.product_uom.name,
                 'location_dest_name': picking.location_dest_id.complete_name or picking.location_dest_id.name,
-                'message': _('✓ Nhập: %s → %.1f %s') % (product.name, new_qty, target_move.product_uom.name),
+                'message': _('✓ Nhập: %s') % product.name,
             }
         else:
             # Product not in original picking - still allow for receipts
@@ -386,7 +342,7 @@ class StockPickingBarcode(models.Model):
             }
 
     def _handle_internal_scan(self, picking, product):
-        """Handle scanning for Internal Transfers."""
+        """Handle scanning for Internal Transfers. No DB write during scan."""
         picking.ensure_one()
 
         matching_moves = picking.move_ids.filtered(
@@ -395,7 +351,7 @@ class StockPickingBarcode(models.Model):
 
         if matching_moves:
             target_move = matching_moves[0]
-            # Check available stock at source
+            # Check available stock at source (including child locations)
             available_qty = self._get_available_qty(product, target_move.location_id)
             if available_qty <= 0:
                 return {
@@ -405,8 +361,6 @@ class StockPickingBarcode(models.Model):
                         target_move.location_id.complete_name or target_move.location_id.name, product.name),
                 }
 
-            new_qty = target_move.quantity + 1.0
-            target_move.write({'quantity': new_qty})
             return {
                 'status': 'success',
                 'move_id': target_move.id,
@@ -414,10 +368,8 @@ class StockPickingBarcode(models.Model):
                 'product_name': product.display_name,
                 'product_barcode': product.barcode or product.default_code or '',
                 'demand': target_move.product_uom_qty,
-                'quantity_done': new_qty,
-                'remaining': max(0, target_move.product_uom_qty - new_qty),
                 'uom_name': target_move.product_uom.name,
-                'message': _('✓ Chuyển: %s → %.1f %s') % (product.name, new_qty, target_move.product_uom.name),
+                'message': _('✓ Chuyển: %s') % product.name,
             }
         else:
             return {
@@ -434,7 +386,7 @@ class StockPickingBarcode(models.Model):
     def _handle_package_scan(self, picking, package):
         """
         Handle package barcode scan for internal transfers.
-        Adds all products inside the package to the transfer.
+        Returns product info for the package without writing to DB.
         """
         picking.ensure_one()
         quants = self.env['stock.quant'].search([
@@ -451,20 +403,16 @@ class StockPickingBarcode(models.Model):
         for quant in quants:
             product = quant.product_id
             qty = quant.quantity
-            # Find or create move for this product
             matching_moves = picking.move_ids.filtered(
                 lambda m: m.product_id.id == product.id and m.state not in ('done', 'cancel')
             )
             if matching_moves:
                 target_move = matching_moves[0]
-                new_qty = target_move.quantity + qty
-                target_move.write({'quantity': new_qty})
                 results.append({
                     'move_id': target_move.id,
                     'product_id': product.id,
                     'product_name': product.display_name,
                     'quantity_added': qty,
-                    'quantity_done': new_qty,
                 })
 
         return {
@@ -472,7 +420,7 @@ class StockPickingBarcode(models.Model):
             'package_name': package.name,
             'products_count': len(results),
             'products': results,
-            'message': _('✓ Kiện [%s]: Đã thêm %d sản phẩm vào phiếu chuyển.') % (package.name, len(results)),
+            'message': _('✓ Kiện [%s]: %d sản phẩm tìm thấy.') % (package.name, len(results)),
         }
 
     def _get_available_qty(self, product, location):
@@ -485,7 +433,8 @@ class StockPickingBarcode(models.Model):
 
     @api.model
     def update_move_quantity(self, move_id, new_quantity):
-        """Update quantity done on a specific move. Used for manual quantity input."""
+        """Validate input but do NOT write to DB - local tracking only.
+        Used to verify the quantity is valid before the frontend stores it locally."""
         move = self.env['stock.move'].browse(move_id)
         if not move.exists():
             return {'status': 'error', 'message': _('Dòng không tồn tại.')}
@@ -493,25 +442,21 @@ class StockPickingBarcode(models.Model):
         picking = move.picking_id
         config = picking._get_barcode_config()
 
-        # Validation for delivery
-        if picking.picking_type_code == 'outgoing' and config.get('strict_delivery', True):
-            if new_quantity > move.product_uom_qty:
-                return {
-                    'status': 'error',
-                    'error_type': 'over_demand',
-                    'message': _('Không được vượt quá số lượng yêu cầu: %.2f %s') % (
-                        move.product_uom_qty, move.product_uom.name),
-                }
-            # Check stock
-            available = self._get_available_qty(move.product_id, move.location_id)
-            if new_quantity > available + move.quantity:
-                return {
-                    'status': 'error',
-                    'error_type': 'insufficient_stock',
-                    'message': _('Không đủ tồn kho. Có sẵn: %.2f %s') % (available, move.product_uom.name),
-                }
+        # Validation: cannot exceed demand
+        if new_quantity > move.product_uom_qty:
+            return {
+                'status': 'error',
+                'error_type': 'over_demand',
+                'message': _('Không được vượt quá số lượng yêu cầu: %.2f %s') % (
+                    move.product_uom_qty, move.product_uom.name),
+            }
 
-        move.write({'quantity': new_quantity})
+        if new_quantity < 0:
+            return {
+                'status': 'error',
+                'message': _('Số lượng không hợp lệ.'),
+            }
+
         return {
             'status': 'success',
             'move_id': move.id,
@@ -520,6 +465,36 @@ class StockPickingBarcode(models.Model):
             'demand': move.product_uom_qty,
             'message': _('✓ Cập nhật: %s → %.2f %s') % (move.product_id.name, new_quantity, move.product_uom.name),
         }
+
+    @api.model
+    def validate_picking_with_quantities(self, picking_id, move_quantities):
+        """Set move quantities from frontend local tracking and validate the picking.
+        move_quantities: list of {'move_id': int, 'quantity': float}
+        """
+        picking = self.browse(picking_id)
+        if not picking.exists():
+            return {'status': 'error', 'message': _('Phiếu không tồn tại.')}
+
+        if picking.state not in ('assigned', 'confirmed', 'waiting'):
+            return {'status': 'error', 'message': _('Phiếu ở trạng thái không hợp lệ: %s') % picking.state}
+
+        # Apply quantities from frontend to move lines
+        for mq in move_quantities:
+            move = self.env['stock.move'].browse(mq.get('move_id'))
+            if move.exists() and move.picking_id.id == picking.id:
+                qty = mq.get('quantity', 0)
+                if qty > 0:
+                    # Set quantity on the move (replaces reserved qty with actual done qty)
+                    move.write({'quantity': qty})
+                else:
+                    # User didn't pick this move - set to 0 for backorder
+                    move.write({'quantity': 0})
+
+        try:
+            picking.button_validate()
+            return {'status': 'success', 'message': _('✓ Phiếu %s đã được xác nhận thành công!') % picking.name}
+        except Exception as e:
+            return {'status': 'error', 'message': str(e)}
 
     @api.model
     def find_picking_by_barcode(self, barcode):

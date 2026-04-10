@@ -304,17 +304,36 @@ export class HlvBarcodeApp extends Component {
             });
 
             if (result.status === 'success' || result.status === 'package_success') {
-                this._showFeedback('success', result.message);
-                this._playSound('success');
-                // Update local quantity_done for the scanned move
-                if (result.move_id) {
+                // Update local quantity_done for scanned move(s)
+                if (result.status === 'package_success' && result.products) {
+                    // Package scan: increment each product
+                    for (const p of result.products) {
+                        if (p.move_id) {
+                            const idx = this.state.lines.findIndex(l => l.move_id === p.move_id);
+                            if (idx >= 0) {
+                                const line = this.state.lines[idx];
+                                const newQty = Math.min((line.quantity_done || 0) + (p.quantity_added || 1), line.demand);
+                                this.state.lines[idx] = { ...line, quantity_done: newQty };
+                            }
+                        }
+                    }
+                } else if (result.move_id) {
                     const lineIdx = this.state.lines.findIndex(l => l.move_id === result.move_id);
                     if (lineIdx >= 0) {
-                        const updated = { ...this.state.lines[lineIdx] };
-                        updated.quantity_done = (updated.quantity_done || 0) + 1;
-                        this.state.lines[lineIdx] = updated;
+                        const line = this.state.lines[lineIdx];
+                        const newQty = Math.min((line.quantity_done || 0) + 1, line.demand);
+                        if (newQty === (line.quantity_done || 0)) {
+                            this._showFeedback('error', `${line.product_name}: Đã đạt số lượng yêu cầu ${line.demand} ${line.uom_name}`);
+                            this._playSound('error');
+                            this.state.is_loading = false;
+                            setTimeout(() => this._focusBarcodeInput(), 100);
+                            return;
+                        }
+                        this.state.lines[lineIdx] = { ...line, quantity_done: newQty };
                     }
                 }
+                this._showFeedback('success', result.message);
+                this._playSound('success');
                 this.state.last_scanned_move_id = result.move_id || null;
                 if (result.move_id) {
                     setTimeout(() => { this.state.last_scanned_move_id = null; }, 1500);
@@ -403,29 +422,44 @@ export class HlvBarcodeApp extends Component {
         }
     }
 
-    // =============== QUANTITY CONTROLS ===============
-    async incrementQty(moveId, step = 1.0) {
-        const line = this.state.lines.find(l => l.move_id === moveId);
-        if (!line) return;
-        const newQty = (line.quantity_done || 0) + step;
-        await this._updateQuantity(moveId, newQty);
+    // =============== QUANTITY CONTROLS (LOCAL ONLY) ===============
+    incrementQty(moveId, step = 1.0) {
+        const idx = this.state.lines.findIndex(l => l.move_id === moveId);
+        if (idx < 0) return;
+        const line = this.state.lines[idx];
+        const newQty = Math.min((line.quantity_done || 0) + step, line.demand);
+        if (newQty === (line.quantity_done || 0)) {
+            this._showFeedback('error', `Đã đạt số lượng yêu cầu: ${line.demand} ${line.uom_name}`);
+            this._playSound('error');
+            return;
+        }
+        this.state.lines[idx] = { ...line, quantity_done: newQty };
+        this._showFeedback('success', `✓ ${line.product_name}: ${newQty}/${line.demand} ${line.uom_name}`);
+        this._playSound('success');
+        this.state.last_scanned_move_id = moveId;
+        setTimeout(() => { this.state.last_scanned_move_id = null; }, 1200);
     }
 
-    async decrementQty(moveId, step = 1.0) {
-        const line = this.state.lines.find(l => l.move_id === moveId);
-        if (!line) return;
+    decrementQty(moveId, step = 1.0) {
+        const idx = this.state.lines.findIndex(l => l.move_id === moveId);
+        if (idx < 0) return;
+        const line = this.state.lines[idx];
         const newQty = Math.max(0, (line.quantity_done || 0) - step);
-        await this._updateQuantity(moveId, newQty);
+        this.state.lines[idx] = { ...line, quantity_done: newQty };
+        this._showFeedback('success', `${line.product_name}: ${newQty}/${line.demand} ${line.uom_name}`);
+        this._playSound('success');
+        this.state.last_scanned_move_id = moveId;
+        setTimeout(() => { this.state.last_scanned_move_id = null; }, 1200);
     }
 
-    async incrementDecimal(moveId) {
+    incrementDecimal(moveId) {
         const step = this.state.config.decimal_step || 0.1;
-        await this.incrementQty(moveId, step);
+        this.incrementQty(moveId, step);
     }
 
-    async decrementDecimal(moveId) {
+    decrementDecimal(moveId) {
         const step = this.state.config.decimal_step || 0.1;
-        await this.decrementQty(moveId, step);
+        this.decrementQty(moveId, step);
     }
 
     openNumpad(moveId) {
@@ -462,7 +496,19 @@ export class HlvBarcodeApp extends Component {
     async confirmNumpad() {
         if (!this.state.numpad_popup) return;
         const qty = parseFloat(this.state.numpad_value) || 0;
-        await this._updateQuantity(this.state.numpad_popup.move_id, qty);
+        const moveId = this.state.numpad_popup.move_id;
+        const idx = this.state.lines.findIndex(l => l.move_id === moveId);
+        if (idx >= 0) {
+            const line = this.state.lines[idx];
+            const clampedQty = Math.min(Math.max(0, qty), line.demand);
+            this.state.lines[idx] = { ...line, quantity_done: clampedQty };
+            if (clampedQty !== qty) {
+                this._showFeedback('error', `Giới hạn: ${clampedQty}/${line.demand} ${line.uom_name}`);
+            } else {
+                this._showFeedback('success', `✓ ${line.product_name}: ${clampedQty}/${line.demand} ${line.uom_name}`);
+            }
+            this._playSound('success');
+        }
         this.state.numpad_popup = null;
         this.state.numpad_value = '';
         setTimeout(() => this._focusBarcodeInput(), 100);
@@ -475,24 +521,14 @@ export class HlvBarcodeApp extends Component {
     }
 
     async _updateQuantity(moveId, newQty) {
-        try {
-            const result = await rpc('/hlv_barcode_custom/update_quantity', {
-                move_id: moveId,
-                quantity: newQty,
-            });
-            if (result.status === 'success') {
-                this._showFeedback('success', result.message);
-                this._playSound('success');
-                await this._refreshPicking();
-                this.state.last_scanned_move_id = moveId;
-                setTimeout(() => { this.state.last_scanned_move_id = null; }, 1200);
-            } else {
-                this._showErrorPopup(result.message);
-                this._playSound('error');
-            }
-        } catch (e) {
-            this._showErrorPopup(e.message || String(e));
-            this._playSound('error');
+        // Local update only — no backend call during scanning session
+        const idx = this.state.lines.findIndex(l => l.move_id === moveId);
+        if (idx >= 0) {
+            const line = this.state.lines[idx];
+            const clampedQty = Math.min(Math.max(0, newQty), line.demand);
+            this.state.lines[idx] = { ...line, quantity_done: clampedQty };
+            this._showFeedback('success', `✓ ${line.product_name}: ${clampedQty}/${line.demand} ${line.uom_name}`);
+            this._playSound('success');
         }
     }
 
@@ -509,10 +545,17 @@ export class HlvBarcodeApp extends Component {
             return;
         }
 
+        // Build move_quantities from local tracking
+        const moveQuantities = this.state.lines.map(l => ({
+            move_id: l.move_id,
+            quantity: l.quantity_done || 0,
+        }));
+
         this.state.is_loading = true;
         try {
             const result = await rpc('/hlv_barcode_custom/validate_picking', {
                 picking_id: this.state.picking.id,
+                move_quantities: moveQuantities,
             });
             if (result.status === 'success') {
                 this._showFeedback('success', result.message);

@@ -66,8 +66,15 @@ class BarcodeCustomController(http.Controller):
         return request.env['stock.picking'].update_move_quantity(move_id, quantity)
 
     @http.route('/hlv_barcode_custom/validate_picking', type='json', auth='user')
-    def validate_picking(self, picking_id):
-        """Validate / confirm a picking after scanning."""
+    def validate_picking(self, picking_id, move_quantities=None):
+        """Validate / confirm a picking after scanning.
+        move_quantities: list of {'move_id': int, 'quantity': float} from frontend local tracking.
+        """
+        if move_quantities:
+            return request.env['stock.picking'].validate_picking_with_quantities(
+                picking_id, move_quantities
+            )
+        # Fallback: validate without quantity changes
         picking = request.env['stock.picking'].browse(picking_id)
         if not picking.exists():
             return {'status': 'error', 'message': _('Phiếu không tồn tại.')}
