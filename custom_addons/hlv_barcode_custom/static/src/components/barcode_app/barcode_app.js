@@ -372,6 +372,63 @@ export class HlvBarcodeApp extends Component {
         setTimeout(() => this._focusBarcodeInput(), 100);
     }
 
+    /**
+     * Increment qty for a move at a specific location.
+     * Tracks per-location picks on the line.
+     * Returns false if at demand limit.
+     */
+    _incrementLineAtLocation(moveId, locationId, locationName, step = 1) {
+        const idx = this.state.lines.findIndex(l => l.move_id === moveId);
+        if (idx < 0) return false;
+        const line = this.state.lines[idx];
+        const currentQty = line.quantity_done || 0;
+        const newQty = Math.min(currentQty + step, line.demand);
+        if (newQty === currentQty) {
+            this._showFeedback('error', `${line.product_name}: Đã đạt số lượng yêu cầu ${line.demand} ${line.uom_name}`);
+            this._playSound('error');
+            return false;
+        }
+        // Update per-location tracking
+        const picks = { ...(line.picks_by_location || {}) };
+        const locKey = String(locationId);
+        if (!picks[locKey]) {
+            picks[locKey] = { id: locationId, name: locationName, qty: 0 };
+        }
+        picks[locKey] = { ...picks[locKey], qty: picks[locKey].qty + (newQty - currentQty) };
+        this.state.lines[idx] = { ...line, quantity_done: newQty, picks_by_location: picks };
+        return true;
+    }
+
+    /**
+     * Decrement qty for a move at the current scanned location.
+     */
+    _decrementLineAtLocation(moveId, locationId, step = 1) {
+        const idx = this.state.lines.findIndex(l => l.move_id === moveId);
+        if (idx < 0) return;
+        const line = this.state.lines[idx];
+        const picks = { ...(line.picks_by_location || {}) };
+        const locKey = String(locationId);
+        if (!picks[locKey] || picks[locKey].qty <= 0) return;
+        const decrement = Math.min(step, picks[locKey].qty);
+        picks[locKey] = { ...picks[locKey], qty: picks[locKey].qty - decrement };
+        const newQty = Math.max(0, (line.quantity_done || 0) - decrement);
+        if (picks[locKey].qty <= 0) delete picks[locKey];
+        this.state.lines[idx] = { ...line, quantity_done: newQty, picks_by_location: picks };
+    }
+
+    /** Get picks at a specific location for a line */
+    getLocationPicks(line, locationId) {
+        if (!line.picks_by_location) return 0;
+        const pick = line.picks_by_location[String(locationId)];
+        return pick ? pick.qty : 0;
+    }
+
+    /** Get all location picks for display */
+    getPicksList(line) {
+        if (!line.picks_by_location) return [];
+        return Object.values(line.picks_by_location).filter(p => p.qty > 0);
+    }
+
     async _searchProduct(barcode) {
         this.state.is_loading = true;
         try {
