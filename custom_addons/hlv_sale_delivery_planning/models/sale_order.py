@@ -12,6 +12,24 @@ class SaleOrder(models.Model):
     )
 
     @api.model
+    def prepare_transfer_modal_data(self, sale_order_ids=None):
+        """Chuẩn bị dữ liệu modal tạo phiếu luân chuyển."""
+        if not sale_order_ids:
+            return {'warehouses': [], 'all_partners': []}
+        return self.env['hlv.delivery.planner.service'].prepare_transfer_modal_data(
+            [int(x) for x in sale_order_ids]
+        )
+
+    @api.model
+    def create_transfer_pickings(self, warehouse_selections=None):
+        """Tạo phiếu luân chuyển nội bộ."""
+        if not warehouse_selections:
+            return {'created': [], 'errors': []}
+        return self.env['hlv.delivery.planner.service'].create_transfer_pickings(
+            warehouse_selections
+        )
+
+    @api.model
     def get_delivery_dashboard_data(self, search_query='', filter_warehouse_id='all', filter_delivery_status='all', filter_stock_status='all', filter_packing_status='all', filter_date_from='', filter_date_to='', filter_po_date_from='', filter_po_date_to='', filter_po_status='all', filter_saler_code='', filter_htgh='', filter_delivery_type='all', filter_tag_ids='', limit=12, offset=0, show_completed=False):
         return self.env['hlv.delivery.planner.service'].get_dashboard_data(
             search_query=search_query,

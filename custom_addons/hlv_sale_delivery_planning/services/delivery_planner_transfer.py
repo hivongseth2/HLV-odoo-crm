@@ -1,0 +1,253 @@
+from odoo import models
+
+
+class DeliveryPlannerServiceTransfer(models.AbstractModel):
+    _inherit = 'hlv.delivery.planner.service'
+
+    def prepare_transfer_modal_data(self, sale_order_ids):
+        """
+        Chuẩn bị dữ liệu cho modal tạo phiếu luân chuyển.
+        Tính các sản phẩm thiếu hàng theo đơn bán đã chọn,
+        group theo kho nguồn (source_warehouse → product).
+        Trả về:
+          {
+            warehouses: [{
+              warehouse_id, warehouse_name, warehouse_code,
+              lot_stock_id, lot_stock_name,
+              picking_type_id, picking_type_name,
+              transit_location_id, transit_location_name,
+              default_partner_id, default_partner_name,
+              products: [{product_id, product_name, product_code,
+                          total_qty, order_names, available_at_source}],
+            }],
+            all_partners: [{id, name}],
+          }
+        """
+        sale_orders = self.env['sale.order'].browse(sale_order_ids).exists()
+        if not sale_orders:
+            return {'warehouses': [], 'all_partners': []}
+
+        # { from_wh_id: { prod_id: {...} } }
+        wh_product_map = {}
+
+        for so in sale_orders:
+            if not so.warehouse_id:
+                continue
+            dest_wh_id = so.warehouse_id.id
+
+            for line in so.order_line:
+                if line.display_type or not line.product_id:
+                    continue
+                if line.product_id.type == 'service':
+                    continue
+
+                pending = max(line.product_uom_qty - line.qty_delivered, 0.0)
+                if pending <= 0:
+                    continue
+
+                # Tồn kho khả dụng tại kho đích (kho của đơn bán)
+                quants_dest = self.env['stock.quant'].sudo().search([
+                    ('product_id', '=', line.product_id.id),
+                    ('location_id', 'child_of', so.warehouse_id.lot_stock_id.id),
+                ])
+                free_dest = sum(
+                    max(float(q.quantity) - float(q.reserved_quantity), 0.0)
+                    for q in quants_dest
+                )
+                # Đã giữ cho dòng này
+                reserved = sum(
+                    line.move_ids.filtered(
+                        lambda m: m.state not in ('cancel', 'done')
+                    ).mapped('quantity')
+                )
+                effective = free_dest + reserved
+                shortage = pending - effective
+                if shortage <= 0:
+                    continue
+
+                # Tìm kho nguồn có hàng
+                remaining = shortage
+                other_warehouses = self.env['stock.warehouse'].search([('id', '!=', dest_wh_id)])
+                for wh in other_warehouses:
+                    if remaining <= 0:
+                        break
+                    quants = self.env['stock.quant'].sudo().search([
+                        ('product_id', '=', line.product_id.id),
+                        ('location_id', 'child_of', wh.lot_stock_id.id),
+                    ])
+                    available = sum(
+                        max(float(q.quantity) - float(q.reserved_quantity), 0.0)
+                        for q in quants
+                    )
+                    if available <= 0:
+                        continue
+
+                    suggest_qty = min(available, remaining)
+                    remaining -= suggest_qty
+
+                    from_wh_id = wh.id
+                    prod_id = line.product_id.id
+
+                    if from_wh_id not in wh_product_map:
+                        wh_product_map[from_wh_id] = {}
+                    if prod_id not in wh_product_map[from_wh_id]:
+                        wh_product_map[from_wh_id][prod_id] = {
+                            'product_id': prod_id,
+                            'product_name': line.product_id.display_name,
+                            'product_code': line.product_id.default_code or '',
+                            'total_qty': 0.0,
+                            'order_names': [],
+                            'available_at_source': available,
+                        }
+                    wh_product_map[from_wh_id][prod_id]['total_qty'] += suggest_qty
+                    if so.name not in wh_product_map[from_wh_id][prod_id]['order_names']:
+                        wh_product_map[from_wh_id][prod_id]['order_names'].append(so.name)
+
+        if not wh_product_map:
+            return {'warehouses': [], 'all_partners': []}
+
+        # Tìm vị trí luân chuyển (transit location)
+        transit_location = self.env['stock.location'].search([
+            ('usage', '=', 'transit'),
+            ('active', '=', True),
+        ], limit=1)
+        if not transit_location:
+            transit_location = self.env['stock.location'].search([
+                ('complete_name', 'ilike', 'transit'),
+                ('active', '=', True),
+            ], limit=1)
+        transit_location_id = transit_location.id if transit_location else False
+        transit_location_name = transit_location.complete_name if transit_location else 'Inter-warehouse transit'
+
+        # Danh sách partner để user chọn
+        all_partners = self.env['res.partner'].search_read(
+            [('active', '=', True), ('is_company', '=', True)],
+            ['id', 'name'],
+            limit=500,
+            order='name asc',
+        )
+
+        warehouses_data = []
+        for from_wh_id, products_map in wh_product_map.items():
+            wh = self.env['stock.warehouse'].browse(from_wh_id)
+            if not wh.exists():
+                continue
+
+            # Ưu tiên loại hoạt động có "chuyển kho" trong tên
+            picking_type = self.env['stock.picking.type'].search([
+                ('warehouse_id', '=', from_wh_id),
+                ('code', '=', 'internal'),
+                ('name', 'ilike', 'chuyển kho'),
+            ], limit=1)
+            if not picking_type:
+                picking_type = self.env['stock.picking.type'].search([
+                    ('warehouse_id', '=', from_wh_id),
+                    ('code', '=', 'internal'),
+                ], limit=1)
+
+            default_partner = wh.partner_id if wh.partner_id else False
+
+            products_list = sorted(
+                products_map.values(),
+                key=lambda x: x['product_code'] or x['product_name'],
+            )
+
+            warehouses_data.append({
+                'warehouse_id': from_wh_id,
+                'warehouse_name': wh.name,
+                'warehouse_code': wh.code or '',
+                'lot_stock_id': wh.lot_stock_id.id if wh.lot_stock_id else False,
+                'lot_stock_name': wh.lot_stock_id.complete_name if wh.lot_stock_id else '',
+                'picking_type_id': picking_type.id if picking_type else False,
+                'picking_type_name': picking_type.name if picking_type else f'Phiếu chuyển kho từ {wh.name}',
+                'transit_location_id': transit_location_id,
+                'transit_location_name': transit_location_name,
+                'default_partner_id': default_partner.id if default_partner else False,
+                'default_partner_name': default_partner.name if default_partner else '',
+                'products': products_list,
+            })
+
+        return {
+            'warehouses': warehouses_data,
+            'all_partners': all_partners,
+        }
+
+    def create_transfer_pickings(self, warehouse_selections):
+        """
+        Tạo phiếu luân chuyển nội bộ từ dữ liệu đã xác nhận.
+
+        warehouse_selections: list of {
+            warehouse_id: int,
+            picking_type_id: int,
+            lot_stock_id: int,
+            transit_location_id: int,
+            partner_id: int or False,
+            products: [{ product_id: int, total_qty: float }],
+        }
+
+        Returns: { created: [{ picking_id, picking_name, warehouse_name }], errors: [] }
+        """
+        created = []
+        errors = []
+
+        for sel in warehouse_selections:
+            try:
+                wh = self.env['stock.warehouse'].browse(sel['warehouse_id'])
+                picking_type = self.env['stock.picking.type'].browse(
+                    sel.get('picking_type_id') or 0
+                )
+                if not picking_type.exists():
+                    picking_type = None
+
+                location_id = sel.get('lot_stock_id') or (wh.lot_stock_id.id if wh.lot_stock_id else False)
+                location_dest_id = sel.get('transit_location_id')
+
+                if not location_dest_id:
+                    transit = self.env['stock.location'].search(
+                        [('usage', '=', 'transit'), ('active', '=', True)], limit=1
+                    )
+                    location_dest_id = transit.id if transit else False
+
+                partner_id = sel.get('partner_id') or False
+
+                move_vals = []
+                for p in sel.get('products', []):
+                    if not p.get('product_id') or not p.get('total_qty', 0):
+                        continue
+                    prod = self.env['product.product'].browse(p['product_id'])
+                    move_vals.append((0, 0, {
+                        'product_id': prod.id,
+                        'name': prod.display_name,
+                        'product_uom_qty': p['total_qty'],
+                        'product_uom': prod.uom_id.id,
+                        'location_id': location_id,
+                        'location_dest_id': location_dest_id,
+                    }))
+
+                if not move_vals:
+                    continue
+
+                picking_vals = {
+                    'location_id': location_id,
+                    'location_dest_id': location_dest_id,
+                    'partner_id': partner_id,
+                    'origin': f'HLV luân chuyển từ {wh.name}',
+                    'move_ids': move_vals,
+                }
+                if picking_type:
+                    picking_vals['picking_type_id'] = picking_type.id
+
+                picking = self.env['stock.picking'].create(picking_vals)
+
+                created.append({
+                    'picking_id': picking.id,
+                    'picking_name': picking.name,
+                    'warehouse_name': wh.name,
+                })
+            except Exception as exc:
+                errors.append({
+                    'warehouse_id': sel.get('warehouse_id'),
+                    'error': str(exc),
+                })
+
+        return {'created': created, 'errors': errors}
