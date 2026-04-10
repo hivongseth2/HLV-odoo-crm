@@ -244,6 +244,9 @@
                                                  t-att-class="picking.state == 'done' ? 'text-muted' : 'text-dark'">
                                                 <i class="fa fa-barcode text-muted me-1" title="Mã phiếu"></i>
                                                 <t t-esc="picking.name"/>
+                                                <span t-if="picking.printed" class="badge bg-success ms-1" style="font-size:0.6rem;">
+                                                    <i class="fa fa-print me-1"></i>Đã in
+                                                </span>
                                             </div>
                                             <div t-if="picking.return_of" class="small mt-1 text-danger">
                                                 <i class="fa fa-undo me-1" title="Trả hàng"></i>

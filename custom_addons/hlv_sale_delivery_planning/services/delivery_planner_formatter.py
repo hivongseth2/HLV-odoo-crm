@@ -279,6 +279,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'backorder_of': p.backorder_id.name if p.backorder_id else False,
                 'return_of_id': p.return_id.id if p.return_id else False,
                 'return_of': p.return_id.name if p.return_id else False,
+                'printed': bool(p.x_printed),
                 'videos': att_by_picking.get(p.id, []),
             })
 

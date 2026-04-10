@@ -343,6 +343,11 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
     def create_relocation_pickings(self, relocation_data):
         """
         Tạo phiếu chuyển vị trí nội bộ (1 phiếu / đơn hàng).
+        Luồng:
+          1. Unreserve các phiếu SO liên quan (để giải phóng hàng đang giữ)
+          2. Tạo phiếu chuyển vị trí + action_assign
+          3. Re-reserve lại các phiếu SO
+          4. In PDF phiếu vừa tạo
 
         relocation_data: {
             dest_location_id: int,
@@ -350,14 +355,16 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
             orders: [{ sale_order_id: int, products: [{ product_id: int, qty: float }] }],
         }
 
-        Returns: { created: [{ picking_id, picking_name, sale_order_name }], errors: [] }
+        Returns: { created: [...], errors: [], pdf_url: str|False }
         """
+        import base64
         created = []
         errors = []
+        so_pickings_to_reassign = self.env['stock.picking']  # pickings cần re-reserve sau
 
         dest_location_id = relocation_data.get('dest_location_id')
         if not dest_location_id:
-            return {'created': [], 'errors': [{'error': 'Chưa chọn vị trí đích'}]}
+            return {'created': [], 'errors': [{'error': 'Chưa chọn vị trí đích'}], 'pdf_url': False}
 
         # Lưu vị trí đích mặc định nếu user muốn
         if relocation_data.get('save_as_default'):
@@ -372,7 +379,30 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
                 if not so.exists() or not so.warehouse_id:
                     continue
 
-                # Tìm picking type "Lệnh chuyển hàng nội bộ" của kho
+                # --- 1. Unreserve phiếu SO để giải phóng hàng ---
+                product_ids_to_relocate = set()
+                for p in order_data.get('products', []):
+                    if p.get('product_id') and p.get('qty', 0) > 0:
+                        product_ids_to_relocate.add(p['product_id'])
+
+                active_so_pickings = so.picking_ids.filtered(
+                    lambda pk: pk.state not in ('done', 'cancel')
+                    and pk.picking_type_code in ('outgoing', 'internal')
+                    and not pk.return_id
+                )
+                # Chỉ unreserve các phiếu có move chứa sản phẩm cần chuyển
+                pickings_to_unreserve = active_so_pickings.filtered(
+                    lambda pk: any(
+                        m.product_id.id in product_ids_to_relocate
+                        for m in pk.move_ids
+                        if m.state in ('assigned', 'partially_available')
+                    )
+                )
+                if pickings_to_unreserve:
+                    pickings_to_unreserve.do_unreserve()
+                    so_pickings_to_reassign |= pickings_to_unreserve
+
+                # --- 2. Tạo phiếu chuyển vị trí ---
                 wh = so.warehouse_id
                 picking_type = self.env['stock.picking.type'].search([
                     ('warehouse_id', '=', wh.id),
@@ -415,7 +445,6 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
                 }
 
                 picking = self.env['stock.picking'].create(picking_vals)
-                # Giữ hàng (reserve) cho phiếu vừa tạo — tương tự luồng in phiếu
                 picking.action_assign()
                 created.append({
                     'picking_id': picking.id,
@@ -428,4 +457,42 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
                     'error': str(exc),
                 })
 
-        return {'created': created, 'errors': errors}
+        # --- 3. Re-reserve lại phiếu SO sau khi đã tạo phiếu chuyển vị trí ---
+        for pk in so_pickings_to_reassign:
+            try:
+                pk.action_assign()
+            except Exception:
+                pass  # Nếu không đủ hàng thì bỏ qua, sẽ reserve lại khi hàng về
+
+        # --- 4. In PDF phiếu vừa tạo ---
+        pdf_url = False
+        if created:
+            try:
+                all_picking_ids = [c['picking_id'] for c in created]
+                report = self.env['ir.actions.report'].sudo().search([
+                    ('name', 'ilike', 'Hoạt động lấy hàng'),
+                ], limit=1)
+                if report:
+                    pdf_content, _ = report._render_qweb_pdf(
+                        report.report_name, res_ids=all_picking_ids
+                    )
+                    if pdf_content:
+                        picking_names = ', '.join(c['picking_name'] for c in created[:5])
+                        if len(created) > 5:
+                            picking_names += f' (+{len(created) - 5})'
+                        attachment = self.env['ir.attachment'].sudo().create({
+                            'name': f'Phieu_Chuyen_Vi_Tri_{picking_names}.pdf',
+                            'type': 'binary',
+                            'datas': base64.b64encode(pdf_content).decode('utf-8'),
+                            'res_model': 'stock.picking',
+                            'res_id': False,
+                            'mimetype': 'application/pdf',
+                        })
+                        pdf_url = f'/web/content/{attachment.id}?download=true'
+            except Exception as pdf_err:
+                import logging
+                logging.getLogger(__name__).warning(
+                    'Không thể in phiếu chuyển vị trí: %s', pdf_err
+                )
+
+        return {'created': created, 'errors': errors, 'pdf_url': pdf_url}

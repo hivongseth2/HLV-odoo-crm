@@ -59,11 +59,13 @@ export function translateStockStatus(status) {
 
 export function translatePackingStatus(status) {
     const trans = {
-        waiting_stock: 'Không Có Hàng Đóng',
-        unpacked:      'Có Hàng Chưa Đóng Gói',
-        partial_packed:'Đã Đóng 1 Phần',        // backward compatibility
-        fully_packed:  'Đã Đóng Gói Đủ',
-        delivered:     'Đã Giao Đủ',
+        waiting_stock:   'Không Có Hàng Đóng',
+        unpacked:        'Có Hàng Chưa Đóng Gói',
+        partial_packed:  'Đã Đóng 1 Phần',
+        has_unprinted:   'Có Phiếu Chưa In',
+        printed_waiting: 'Đã In, Chờ Đóng Gói',
+        fully_packed:    'Đã Đóng Gói Đủ',
+        delivered:       'Đã Giao Đủ',
     };
     return trans[status] || (status ? status.toUpperCase() : '');
 }

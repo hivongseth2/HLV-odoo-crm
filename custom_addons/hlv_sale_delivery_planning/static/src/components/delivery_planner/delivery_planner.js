@@ -1238,6 +1238,10 @@ export class DeliveryPlannerDashboard extends Component {
             if (created.length) {
                 const names = created.map(c => `${c.sale_order_name}: ${c.picking_name}`).join('\n');
                 alert(`Đã tạo ${created.length} phiếu chuyển vị trí:\n${names}`);
+                // Mở PDF phiếu chuyển vị trí (nếu có)
+                if (result.pdf_url) {
+                    window.open(result.pdf_url, '_blank');
+                }
                 this.closeRelocationModal();
                 await this.fetchData();
             }

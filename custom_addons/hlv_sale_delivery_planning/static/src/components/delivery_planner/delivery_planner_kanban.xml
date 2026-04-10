@@ -174,7 +174,7 @@
         <!-- ── Cột "Trả hàng / Dừng" (chỉ hiện khi bật "Hiện đơn đã giao") ─────── -->
         <t t-if="state.showCompleted and this.returnedOrders.length > 0">
         <div class="hlv-kanban-board d-flex gap-3 overflow-auto pb-4 pt-1 pe-2">
-            <div class="hlv-kanban-column d-flex flex-column flex-grow-1" style="max-width:360px;">
+            <div class="hlv-kanban-column d-flex flex-column flex-grow-1 flex-shrink-1" style="flex-basis:0; min-width:220px;">
 
                 <!-- Column Header -->
                 <div class="hlv-kanban-col-header rounded-top px-3 py-2 mb-2" style="background: #fff0f0; border-color: #dc3545;">

@@ -245,10 +245,24 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             else:
                 delivery_ok = True
 
+            # Tính effective_packing_status bao gồm trạng thái in phiếu
+            has_new_unprinted = so_status_dict[so.id].get('has_new_unprinted_pickings', False)
+            if has_new_unprinted:
+                effective_packing = 'has_unprinted'
+            elif bool(so.x_picking_slip_printed) and packing_status not in ('delivered',):
+                effective_packing = 'printed_waiting'
+            else:
+                effective_packing = packing_status
+
+            if filter_packing_status in ('has_unprinted', 'printed_waiting'):
+                packing_ok = effective_packing == filter_packing_status
+            else:
+                packing_ok = filter_packing_status == 'all' or packing_status == filter_packing_status
+
             if (
                 delivery_ok
                 and (filter_stock_status == 'all' or stock_status == filter_stock_status)
-                and (filter_packing_status == 'all' or packing_status == filter_packing_status)
+                and packing_ok
             ):
                 matched_sale_ids.append(so.id)
 
