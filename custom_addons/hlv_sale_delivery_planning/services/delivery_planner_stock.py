@@ -126,16 +126,22 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         so_meta_dict = {}
 
         for so in sales:
-            # --- Loại bỏ đơn đã xử lý xong (không còn picking nào active) ---
-            # Đặc biệt: đơn trả hàng — tất cả pickings done/cancel, không cần hiển thị.
-            # Trừ khi user bật show_completed để xem đơn đã giao.
-            if not show_completed:
-                active_pickings = so.picking_ids.filtered(
-                    lambda p: p.state not in ('done', 'cancel')
-                )
-                if so.picking_ids and not active_pickings:
-                    # Tất cả pickings đã done/cancel → không còn gì để xử lý
-                    continue
+            # --- Phát hiện đơn "trả hàng / dừng": không còn outflow nào active ---
+            # Luồng xuất = pick/pack/out (code = internal hoặc outgoing), loại trừ phiếu nhập (incoming).
+            active_outflow = so.picking_ids.filtered(
+                lambda p: p.state not in ('done', 'cancel')
+                and p.picking_type_code in ('outgoing', 'internal')
+            )
+            has_any_outflow = any(
+                p.picking_type_code in ('outgoing', 'internal')
+                for p in so.picking_ids
+            )
+            # Đơn "trả hàng / dừng": đã từng có outflow nhưng không còn cái nào active
+            no_active_outflow = has_any_outflow and not bool(active_outflow)
+
+            # Khi không bật "hiện đơn đã giao": ẩn hoàn toàn các đơn này
+            if not show_completed and no_active_outflow:
+                continue
 
             has_pending = False
             has_delivered = False
@@ -204,6 +210,8 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 'stock_status': stock_status,
                 'packing_status': packing_status,
                 'real_delivery_status': real_delivery_status,
+                # Đơn trả hàng / dừng: outflow hết nhưng chưa giao đủ → hiện riêng khi show_completed
+                'is_returned_or_stopped': no_active_outflow and real_delivery_status != 'full',
             }
 
             # Giữ metadata để tổng hợp KPI theo tập đã lọc cuối cùng.
@@ -212,6 +220,13 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 'packing_status': packing_status,
                 'has_pending': has_pending,
             }
+
+            is_returned_or_stopped = so_status_dict[so.id]['is_returned_or_stopped']
+
+            # Đơn trả hàng/dừng: hiển thị riêng trong group "Trả hàng" khi show_completed
+            if show_completed and is_returned_or_stopped:
+                matched_sale_ids.append(so.id)
+                continue
 
             if filter_delivery_status == 'pending_partial':
                 delivery_ok = real_delivery_status in ('unshipped', 'partial')

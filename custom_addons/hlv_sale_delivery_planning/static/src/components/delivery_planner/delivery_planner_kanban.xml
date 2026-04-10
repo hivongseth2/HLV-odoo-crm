@@ -159,6 +159,50 @@
             </t>
         </div>
 
+        <!-- ── Cột "Trả hàng / Dừng" (chỉ hiện khi bật "Hiện đơn đã giao") ─────── -->
+        <t t-if="state.showCompleted and this.returnedOrders.length > 0">
+        <div class="hlv-kanban-board d-flex gap-3 overflow-auto pb-4 pt-1 pe-2">
+            <div class="hlv-kanban-column d-flex flex-column flex-grow-1" style="max-width:360px;">
+
+                <!-- Column Header -->
+                <div class="hlv-kanban-col-header rounded-top px-3 py-2 mb-2" style="background: #fff0f0; border-color: #dc3545;">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge rounded-pill fs-6 fw-bold bg-danger">
+                            <t t-esc="this.returnedOrders.length"/>
+                        </span>
+                        <span class="fw-bold small text-uppercase text-danger">
+                            Trả hàng / Dừng
+                        </span>
+                        <i class="fa fa-undo ms-auto opacity-50 text-danger" title="Trả hàng / Dừng"></i>
+                    </div>
+                    <div class="text-muted mt-1" style="font-size:0.7rem;">
+                        Đơn đã trả hàng hoặc đã dừng xử lý, không còn phiếu lấy/đóng/xuất nào active
+                    </div>
+                </div>
+
+                <!-- Cards -->
+                <div class="hlv-kanban-col-body flex-grow-1 rounded-bottom px-2 py-2">
+                    <t t-foreach="this.returnedOrdersPaged" t-as="so" t-key="so.id">
+                        <div class="hlv-kanban-card mb-2">
+                            <t t-call="hlv_sale_delivery_planning.KanbanSOCard"/>
+                        </div>
+                    </t>
+
+                    <div t-if="this.hasMoreReturnedOrders" class="text-center pt-1 pb-2">
+                        <button class="btn btn-sm btn-outline-danger w-100"
+                                style="border-style: dashed; font-size: 0.75rem;"
+                                t-on-click="loadMoreReturnedOrders">
+                            <i class="fa fa-chevron-down me-1" title="Tải thêm"></i>
+                            Tải thêm
+                            (<t t-esc="this.returnedOrders.length - state.returnedColPageSize"/> còn lại)
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        </t>
+
     </t>
 
     <!-- ================================================================

@@ -78,6 +78,9 @@ export class DeliveryPlannerDashboard extends Component {
             // Selection for printing
             selectedSOIds: new Set(),        // Set of selected sale order IDs for printing
 
+            // Returned/Stopped group paging
+            returnedColPageSize: 15,
+
             // Transfer Modal
             isTransferModalOpen: false,
             transferModalLoading: false,
@@ -202,6 +205,7 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.kanbanColumnOrder = {};
         this.state.kanbanColPageSize = {};
         this.state.kanbanBatchSize = 200;
+        this.state.returnedColPageSize = 15;
         // Xóa selection khi filter thay đổi (tránh giữ đơn không còn trong view)
         this.state.selectedSOIds = new Set();
         await this.fetchData();
@@ -264,6 +268,7 @@ export class DeliveryPlannerDashboard extends Component {
 
         const needTransfer = this.state.filterNeedTransfer;
         const base = this.state.saleOrders.filter(so => {
+            if (so.is_returned_or_stopped) return false;   // hiện riêng trong cột "Trả hàng"
             if (needTransfer && !(so.transfer_suggestions && so.transfer_suggestions.length > 0)) return false;
             let val = so[field];
             if (dim === 'delivery_status' && val === 'unshipped') val = 'pending';
@@ -311,6 +316,23 @@ export class DeliveryPlannerDashboard extends Component {
         if (this.state.isLoading || !this.hasMoreKanbanData) return;
         this.state.kanbanBatchSize += 200;
         await this.fetchData();
+    }
+
+    // --- Returned / Stopped orders group ---
+    get returnedOrders() {
+        return this.state.saleOrders.filter(so => so.is_returned_or_stopped);
+    }
+
+    get returnedOrdersPaged() {
+        return this.returnedOrders.slice(0, this.state.returnedColPageSize);
+    }
+
+    get hasMoreReturnedOrders() {
+        return this.returnedOrders.length > this.state.returnedColPageSize;
+    }
+
+    loadMoreReturnedOrders() {
+        this.state.returnedColPageSize += 15;
     }
 
     // --- Selection for Printing ---

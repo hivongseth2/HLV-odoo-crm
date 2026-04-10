@@ -315,4 +315,5 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             'x_studio_misa_saler_code': so.x_studio_misa_saler_code or '',
             'tag_ids': [[t.id, t.name, t.color] for t in so.tag_ids] if so.tag_ids else [],
             'transfer_suggestions': transfer_suggestions,
+            'is_returned_or_stopped': so_status_dict.get('is_returned_or_stopped', False),
         }
