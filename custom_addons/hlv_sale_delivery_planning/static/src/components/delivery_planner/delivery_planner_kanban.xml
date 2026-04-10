@@ -95,7 +95,7 @@
         <div class="hlv-kanban-board d-flex gap-3 overflow-auto pb-4 pt-1 pe-2">
             <t t-foreach="this.kanbanColumnDefs" t-as="col" t-key="col.value">
 
-                <div class="hlv-kanban-column d-flex flex-column flex-grow-1"
+                <div class="hlv-kanban-column kanban-custom-width d-flex flex-column flex-grow-1"
                      t-att-data-col="col.value"
                      t-on-dragover="(ev) => this.onDragOver(ev, col.value)"
                      t-on-dragleave="(ev) => this.onDragLeave(ev)"
@@ -348,10 +348,10 @@
 
                 <!-- Row 8: Pick pickings + print status -->
                 <t t-set="pickPickings" t-value="(so.pickings || []).filter(p =&gt; p.sequence_code &amp;&amp; p.sequence_code.indexOf('PICK') &gt;= 0 &amp;&amp; !p.return_of_id &amp;&amp; p.state !== 'cancel')"/>
-                <div t-if="pickPickings.length" class="mt-1 d-flex flex-wrap gap-1" style="font-size:0.62rem;">
+                <div t-if="pickPickings.length" class="mt-1 pt-1 border-top d-flex flex-wrap gap-1" style="font-size:0.62rem;">
                     <t t-foreach="pickPickings" t-as="pk" t-key="pk.id">
                         <span class="badge d-inline-flex align-items-center gap-1"
-                              t-att-class="pk.printed ? 'bg-success bg-opacity-25 text-success border border-success' : 'bg-danger bg-opacity-10 text-danger border border-danger'"
+                              t-att-class="pk.printed ? 'bg-success text-white' : 'bg-danger text-white'"
                               style="font-size:0.6rem; padding:2px 5px;"
                               t-att-title="pk.name + ' — ' + (pk.printed ? 'Đã in' : 'Chưa in')">
                             <i t-att-class="pk.printed ? 'fa fa-check-circle' : 'fa fa-exclamation-circle'"></i>

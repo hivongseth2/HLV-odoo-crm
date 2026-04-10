@@ -152,7 +152,9 @@
         width: 100%;
         flex-wrap: nowrap;
     }
-
+    .kanban-custom-width {
+        width: 350px;
+    }
     // Mỗi cột kanban: flex đều, bằng nhau
     .hlv-kanban-column {
         flex: 1 1 0%;
