@@ -11,6 +11,13 @@ class SaleOrder(models.Model):
         help='Được đánh dấu khi người dùng báo cáo đơn hàng cần hủy từ trang sale_plan',
     )
 
+    x_picking_slip_printed = fields.Boolean(
+        string='Đã in phiếu lấy hàng',
+        default=False,
+        copy=False,
+        help='Được đánh dấu tự động khi phiếu lấy hàng được in từ màn hình điều phối',
+    )
+
     @api.model
     def prepare_transfer_modal_data(self, sale_order_ids=None):
         """Chuẩn bị dữ liệu modal tạo phiếu luân chuyển."""
@@ -27,6 +34,24 @@ class SaleOrder(models.Model):
             return {'created': [], 'errors': []}
         return self.env['hlv.delivery.planner.service'].create_transfer_pickings(
             warehouse_selections
+        )
+
+    @api.model
+    def prepare_relocation_data(self, sale_order_ids=None):
+        """Chuẩn bị dữ liệu modal chuyển vị trí."""
+        if not sale_order_ids:
+            return {'orders': [], 'dest_locations': [], 'default_dest_location_id': False}
+        return self.env['hlv.delivery.planner.service'].prepare_relocation_data(
+            [int(x) for x in sale_order_ids]
+        )
+
+    @api.model
+    def create_relocation_pickings(self, relocation_data=None):
+        """Tạo phiếu chuyển vị trí nội bộ."""
+        if not relocation_data:
+            return {'created': [], 'errors': []}
+        return self.env['hlv.delivery.planner.service'].create_relocation_pickings(
+            relocation_data
         )
 
     @api.model

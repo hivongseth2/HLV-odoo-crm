@@ -62,6 +62,18 @@
                         <t t-esc="this.selectedCount"/>
                     </span>
                 </button>
+                <!-- Chuyển vị trí -->
+                <button class="btn btn-sm"
+                        t-att-class="this.selectedCount > 0 ? 'btn-info' : 'btn-outline-secondary'"
+                        t-att-disabled="this.selectedCount === 0 || state.isLoading"
+                        t-on-click="openRelocationModal"
+                        title="Chuyển vị trí sản phẩm gần khu đóng gói">
+                    <i class="fa fa-arrows me-1" title="Chuyển vị trí"></i>
+                    Chuyển vị trí
+                    <span t-if="this.selectedCount > 0" class="badge bg-white text-info ms-1">
+                        <t t-esc="this.selectedCount"/>
+                    </span>
+                </button>
                 <button t-if="this.hasMoreKanbanData"
                         class="btn btn-sm btn-outline-primary"
                         t-on-click="loadMoreKanbanBatch"
@@ -210,8 +222,16 @@
          Nhận biến `so` từ t-foreach cha (context được chia sẻ qua t-call)
          ================================================================ -->
     <t t-name="hlv_sale_delivery_planning.KanbanSOCard">
-        <div class="card border-1 shadow-sm hlv-kanban-card-inner"
+        <div class="card border-1 shadow-sm hlv-kanban-card-inner position-relative overflow-hidden"
              t-att-class="this.getSOCardColorClass(so)">
+
+            <!-- Ribbon "Đã in phiếu" -->
+            <div t-if="so.picking_slip_printed"
+                 class="position-absolute bg-success text-white text-center fw-bold"
+                 style="font-size:0.55rem; padding:1px 20px; top:8px; right:-22px; transform:rotate(45deg); z-index:2; letter-spacing:0.5px; box-shadow: 0 1px 3px rgba(0,0,0,.2);">
+                <i class="fa fa-print me-1"></i>Đã in
+            </div>
+
             <div class="card-body p-2">
 
                 <!-- Checkbox for selection -->

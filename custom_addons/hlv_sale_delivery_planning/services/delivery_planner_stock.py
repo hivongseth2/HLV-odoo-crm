@@ -128,12 +128,14 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         for so in sales:
             # --- Phát hiện đơn "trả hàng / dừng": không còn outflow nào active ---
             # Luồng xuất = pick/pack/out (code = internal hoặc outgoing), loại trừ phiếu nhập (incoming).
+            # Phiếu trả hàng (return_id != False) không tính là outflow thật — chúng chỉ đảo ngược hàng.
             active_outflow = so.picking_ids.filtered(
                 lambda p: p.state not in ('done', 'cancel')
                 and p.picking_type_code in ('outgoing', 'internal')
+                and not p.return_id  # Loại bỏ phiếu trả hàng
             )
             has_any_outflow = any(
-                p.picking_type_code in ('outgoing', 'internal')
+                p.picking_type_code in ('outgoing', 'internal') and not p.return_id
                 for p in so.picking_ids
             )
             # Đơn "trả hàng / dừng": đã từng có outflow nhưng không còn cái nào active

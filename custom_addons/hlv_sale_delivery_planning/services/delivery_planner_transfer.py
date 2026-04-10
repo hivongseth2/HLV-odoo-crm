@@ -252,3 +252,170 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
                 })
 
         return {'created': created, 'errors': errors}
+
+    def prepare_relocation_data(self, sale_order_ids):
+        """
+        Chuẩn bị dữ liệu cho modal "Chuyển vị trí".
+        Mỗi đơn hàng → danh sách sản phẩm pending (chưa giao) + vị trí hiện tại.
+        Trả về:
+          {
+            orders: [{
+              sale_order_id, sale_order_name, warehouse_id, warehouse_name,
+              products: [{product_id, product_name, product_code, pending_qty}]
+            }],
+            dest_locations: [{id, name}],  // Các vị trí trong kho hiện tại để chọn
+            default_dest_location_id: int or False,
+          }
+        """
+        sale_orders = self.env['sale.order'].browse(sale_order_ids).exists()
+        if not sale_orders:
+            return {'orders': [], 'dest_locations': [], 'default_dest_location_id': False}
+
+        # Lấy cấu hình vị trí đích mặc định (nếu có)
+        default_dest_id = int(
+            self.env['ir.config_parameter'].sudo().get_param(
+                'hlv_delivery_planning.relocation_dest_location_id', '0'
+            )
+        ) or False
+
+        orders_data = []
+        all_warehouse_ids = set()
+
+        for so in sale_orders:
+            if not so.warehouse_id:
+                continue
+            all_warehouse_ids.add(so.warehouse_id.id)
+
+            products = []
+            for line in so.order_line:
+                if line.display_type or not line.product_id:
+                    continue
+                if line.product_id.type == 'service':
+                    continue
+                pending = max(line.product_uom_qty - line.qty_delivered, 0.0)
+                if pending <= 0:
+                    continue
+                # Chỉ thêm sản phẩm chưa có trong list (gom duplicate lines)
+                existing = next((p for p in products if p['product_id'] == line.product_id.id), None)
+                if existing:
+                    existing['pending_qty'] += pending
+                else:
+                    products.append({
+                        'product_id': line.product_id.id,
+                        'product_name': line.product_id.display_name,
+                        'product_code': line.product_id.default_code or '',
+                        'pending_qty': pending,
+                    })
+
+            if products:
+                orders_data.append({
+                    'sale_order_id': so.id,
+                    'sale_order_name': so.name,
+                    'warehouse_id': so.warehouse_id.id,
+                    'warehouse_name': so.warehouse_id.name,
+                    'products': sorted(products, key=lambda p: p['product_code'] or p['product_name']),
+                })
+
+        # Lấy danh sách vị trí con (internal) của các kho liên quan
+        dest_locations = []
+        if all_warehouse_ids:
+            warehouse_locs = self.env['stock.warehouse'].browse(list(all_warehouse_ids)).mapped('lot_stock_id')
+            locations = self.env['stock.location'].search([
+                ('location_id', 'child_of', warehouse_locs.ids),
+                ('usage', '=', 'internal'),
+            ], order='complete_name')
+            dest_locations = [{'id': loc.id, 'name': loc.complete_name} for loc in locations]
+
+        return {
+            'orders': orders_data,
+            'dest_locations': dest_locations,
+            'default_dest_location_id': default_dest_id,
+        }
+
+    def create_relocation_pickings(self, relocation_data):
+        """
+        Tạo phiếu chuyển vị trí nội bộ (1 phiếu / đơn hàng).
+
+        relocation_data: {
+            dest_location_id: int,
+            save_as_default: bool,
+            orders: [{ sale_order_id: int, products: [{ product_id: int, qty: float }] }],
+        }
+
+        Returns: { created: [{ picking_id, picking_name, sale_order_name }], errors: [] }
+        """
+        created = []
+        errors = []
+
+        dest_location_id = relocation_data.get('dest_location_id')
+        if not dest_location_id:
+            return {'created': [], 'errors': [{'error': 'Chưa chọn vị trí đích'}]}
+
+        # Lưu vị trí đích mặc định nếu user muốn
+        if relocation_data.get('save_as_default'):
+            self.env['ir.config_parameter'].sudo().set_param(
+                'hlv_delivery_planning.relocation_dest_location_id',
+                str(dest_location_id),
+            )
+
+        for order_data in relocation_data.get('orders', []):
+            try:
+                so = self.env['sale.order'].browse(order_data['sale_order_id'])
+                if not so.exists() or not so.warehouse_id:
+                    continue
+
+                # Tìm picking type "Lệnh chuyển hàng nội bộ" của kho
+                wh = so.warehouse_id
+                picking_type = self.env['stock.picking.type'].search([
+                    ('warehouse_id', '=', wh.id),
+                    ('code', '=', 'internal'),
+                    ('name', 'ilike', 'nội bộ'),
+                ], limit=1)
+                if not picking_type:
+                    picking_type = self.env['stock.picking.type'].search([
+                        ('warehouse_id', '=', wh.id),
+                        ('code', '=', 'internal'),
+                        ('name', 'not ilike', 'lưu'),
+                        ('name', 'not ilike', 'nhập'),
+                    ], limit=1)
+
+                source_location_id = wh.lot_stock_id.id
+
+                move_vals = []
+                for p in order_data.get('products', []):
+                    if not p.get('product_id') or not p.get('qty', 0):
+                        continue
+                    prod = self.env['product.product'].browse(p['product_id'])
+                    move_vals.append((0, 0, {
+                        'product_id': prod.id,
+                        'name': prod.display_name,
+                        'product_uom_qty': p['qty'],
+                        'product_uom': prod.uom_id.id,
+                        'location_id': source_location_id,
+                        'location_dest_id': dest_location_id,
+                    }))
+
+                if not move_vals:
+                    continue
+
+                picking_vals = {
+                    'picking_type_id': picking_type.id if picking_type else False,
+                    'location_id': source_location_id,
+                    'location_dest_id': dest_location_id,
+                    'origin': f'{so.name} - Chuyển vị trí',
+                    'move_ids': move_vals,
+                }
+
+                picking = self.env['stock.picking'].create(picking_vals)
+                created.append({
+                    'picking_id': picking.id,
+                    'picking_name': picking.name,
+                    'sale_order_name': so.name,
+                })
+            except Exception as exc:
+                errors.append({
+                    'sale_order_id': order_data.get('sale_order_id'),
+                    'error': str(exc),
+                })
+
+        return {'created': created, 'errors': errors}

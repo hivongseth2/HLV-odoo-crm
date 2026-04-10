@@ -16,8 +16,10 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
 
         # Chỉ đề xuất chuyển kho cho sản phẩm còn nằm trong phiếu pick/pack/out đang chờ/xử lý
         # (loại bỏ sản phẩm đã giao-trả mà không còn phiếu active nào)
+        # Phiếu trả hàng (return_id) không tạo demand thật
         active_pickings = so.picking_ids.filtered(
             lambda p: p.state not in ('done', 'cancel')
+            and not p.return_id
         )
         products_with_active_demand = set()
         for pk in active_pickings:
@@ -316,4 +318,5 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             'tag_ids': [[t.id, t.name, t.color] for t in so.tag_ids] if so.tag_ids else [],
             'transfer_suggestions': transfer_suggestions,
             'is_returned_or_stopped': so_status_dict.get('is_returned_or_stopped', False),
+            'picking_slip_printed': bool(so.x_picking_slip_printed),
         }

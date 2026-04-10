@@ -56,7 +56,9 @@ class DeliveryPlannerController(http.Controller):
             ])
 
             all_pickings = linked_pickings.filtered(
-                lambda p: p.picking_type_code in ['outgoing', 'internal'] and p.state not in ['done', 'cancel']
+                lambda p: p.picking_type_code in ['outgoing', 'internal']
+                          and p.state not in ['done', 'cancel']
+                          and not p.return_id   # Loại bỏ phiếu trả hàng
             ).sorted(key=lambda p: (p.scheduled_date or p.create_date, p.id))
 
             if not all_pickings:
@@ -93,6 +95,11 @@ class DeliveryPlannerController(http.Controller):
                 'res_model': 'stock.picking',
                 'res_id': False,
                 'mimetype': 'application/pdf',
+            })
+
+            # Đánh dấu các đơn hàng đã in phiếu lấy hàng
+            sale_orders.filtered(lambda s: not s.x_picking_slip_printed).write({
+                'x_picking_slip_printed': True,
             })
 
             return {
@@ -138,6 +145,7 @@ class DeliveryPlannerController(http.Controller):
             pickings_to_reserve = linked_pickings.filtered(
                 lambda p: p.picking_type_code in ['outgoing', 'internal']
                           and p.state not in ['done', 'cancel']
+                          and not p.return_id   # Loại bỏ phiếu trả hàng
             )
 
             if not pickings_to_reserve:

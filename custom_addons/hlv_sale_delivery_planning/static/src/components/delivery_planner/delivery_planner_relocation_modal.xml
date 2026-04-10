@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ================================================================
+         Modal Chuyển Vị Trí (Relocation)
+         - Chọn vị trí đích trong kho hiện tại
+         - Chọn đơn hàng + sản phẩm cần di chuyển
+         - Tạo phiếu chuyển nội bộ theo đơn hàng
+         ================================================================ -->
+    <t t-name="hlv_sale_delivery_planning.RelocationModal">
+        <div t-if="state.isRelocationModalOpen"
+             class="modal d-block"
+             style="background: rgba(0,0,0,0.5); z-index: 1060;">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+
+                    <!-- Header -->
+                    <div class="modal-header bg-info text-white">
+                        <h5 class="modal-title">
+                            <i class="fa fa-arrows me-2"></i>
+                            Chuyển Vị Trí (gần khu vực đóng gói)
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white"
+                                t-on-click="closeRelocationModal"></button>
+                    </div>
+
+                    <!-- Body -->
+                    <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+
+                        <!-- Loading -->
+                        <div t-if="state.relocationModalLoading" class="text-center py-5">
+                            <div class="spinner-border text-info" role="status">
+                                <span class="visually-hidden">Đang tải...</span>
+                            </div>
+                            <p class="mt-2 text-muted">Đang phân tích dữ liệu...</p>
+                        </div>
+
+                        <!-- No data -->
+                        <div t-elif="!state.relocationModalData || !state.relocationModalData.orders || state.relocationModalData.orders.length === 0"
+                             class="alert alert-warning text-center py-4">
+                            <i class="fa fa-info-circle fa-2x d-block mb-2"></i>
+                            Không có sản phẩm nào cần chuyển vị trí trong các đơn đã chọn.
+                        </div>
+
+                        <!-- Main content -->
+                        <div t-else="">
+                            <!-- Destination location selector -->
+                            <div class="card mb-3 border-info">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-bold text-info">
+                                                <i class="fa fa-map-marker me-1"></i>
+                                                Vị trí đích (gần khu đóng gói)
+                                            </label>
+                                            <select class="form-select"
+                                                    t-on-change="(ev) => { this.state.relocationDestLocationId = ev.target.value; }">
+                                                <option value="">-- Chọn vị trí --</option>
+                                                <t t-foreach="state.relocationModalData.dest_locations" t-as="loc" t-key="loc.id">
+                                                    <option t-att-value="loc.id"
+                                                            t-att-selected="state.relocationDestLocationId == loc.id">
+                                                        <t t-esc="loc.name"/>
+                                                    </option>
+                                                </t>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6 mt-2 mt-md-0">
+                                            <div class="form-check mt-4">
+                                                <input type="checkbox" class="form-check-input"
+                                                       id="relocationSaveDefault"
+                                                       t-att-checked="state.relocationSaveDefault"
+                                                       t-on-change="(ev) => { this.state.relocationSaveDefault = ev.target.checked; }"/>
+                                                <label class="form-check-label small" for="relocationSaveDefault">
+                                                    Lưu làm vị trí mặc định
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Orders list -->
+                            <t t-foreach="state.relocationModalData.orders" t-as="order" t-key="order.sale_order_id">
+                                <t t-set="oSel" t-value="state.relocationOrderSelections[order.sale_order_id] || {}"/>
+                                <div class="card mb-3" t-att-class="oSel.selected ? 'border-info' : 'border-secondary opacity-50'">
+                                    <div class="card-header py-2 d-flex align-items-center gap-2"
+                                         t-att-class="oSel.selected ? 'bg-info bg-opacity-10' : 'bg-light'">
+                                        <input type="checkbox" class="form-check-input"
+                                               t-att-checked="oSel.selected"
+                                               t-on-change="(ev) => this.toggleRelocationOrder(order.sale_order_id, ev.target.checked)"/>
+                                        <span class="fw-bold text-primary">
+                                            <i class="fa fa-shopping-cart me-1"></i>
+                                            <t t-esc="order.sale_order_name"/>
+                                        </span>
+                                        <span class="badge bg-secondary ms-auto" style="font-size: 0.7rem;">
+                                            <i class="fa fa-building-o me-1"></i>
+                                            <t t-esc="order.warehouse_name"/>
+                                        </span>
+                                    </div>
+                                    <div class="card-body p-0" t-if="oSel.selected">
+                                        <table class="table table-sm table-hover mb-0 small">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th width="30" class="text-center">
+                                                        <input type="checkbox" class="form-check-input" checked="checked" disabled="disabled"/>
+                                                    </th>
+                                                    <th>Mã hàng</th>
+                                                    <th>Tên sản phẩm</th>
+                                                    <th class="text-end" width="100">SL cần</th>
+                                                    <th class="text-end" width="100">SL chuyển</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <t t-foreach="order.products" t-as="prod" t-key="prod.product_id">
+                                                    <t t-set="pSel" t-value="this.getRelocationProductSel(order.sale_order_id, prod.product_id)"/>
+                                                    <tr t-att-class="pSel and pSel.include ? '' : 'opacity-50'">
+                                                        <td class="text-center">
+                                                            <input type="checkbox" class="form-check-input"
+                                                                   t-att-checked="pSel and pSel.include"
+                                                                   t-on-change="(ev) => this.toggleRelocationProduct(order.sale_order_id, prod.product_id, ev.target.checked)"/>
+                                                        </td>
+                                                        <td class="fw-bold text-nowrap">
+                                                            <t t-esc="prod.product_code || '-'"/>
+                                                        </td>
+                                                        <td class="text-truncate" style="max-width: 300px;"
+                                                            t-att-title="prod.product_name">
+                                                            <t t-esc="prod.product_name"/>
+                                                        </td>
+                                                        <td class="text-end">
+                                                            <t t-esc="prod.pending_qty"/>
+                                                        </td>
+                                                        <td class="text-end">
+                                                            <input type="number" class="form-control form-control-sm text-end"
+                                                                   style="width: 80px; display: inline-block;"
+                                                                   t-att-value="pSel ? pSel.qty : prod.pending_qty"
+                                                                   min="0"
+                                                                   t-att-max="prod.pending_qty"
+                                                                   t-on-change="(ev) => this.setRelocationProductQty(order.sale_order_id, prod.product_id, ev.target.value)"/>
+                                                        </td>
+                                                    </tr>
+                                                </t>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </t>
+                        </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" t-on-click="closeRelocationModal">
+                            <i class="fa fa-times me-1"></i>Đóng
+                        </button>
+                        <button class="btn btn-info"
+                                t-att-disabled="state.isCreatingRelocation || !state.relocationDestLocationId"
+                                t-on-click="confirmCreateRelocationPickings">
+                            <i t-att-class="state.isCreatingRelocation ? 'fa fa-spinner fa-spin me-1' : 'fa fa-arrows me-1'"></i>
+                            <t t-if="state.isCreatingRelocation">Đang tạo...</t>
+                            <t t-else="">Tạo phiếu chuyển vị trí</t>
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </t>
+
+</templates>
