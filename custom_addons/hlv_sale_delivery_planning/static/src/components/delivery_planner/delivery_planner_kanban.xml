@@ -50,6 +50,18 @@
                         <t t-esc="this.selectedCount"/>
                     </span>
                 </button>
+                <!-- Tạo phiếu luân chuyển -->
+                <button class="btn btn-sm"
+                        t-att-class="this.selectedCount > 0 ? 'btn-warning' : 'btn-outline-secondary'"
+                        t-att-disabled="this.selectedCount === 0 || state.isLoading"
+                        t-on-click="openTransferModal"
+                        title="Tạo phiếu luân chuyển từ các đơn đã chọn">
+                    <i class="fa fa-exchange me-1" title="Luân chuyển"></i>
+                    Tạo phiếu luân chuyển
+                    <span t-if="this.selectedCount > 0" class="badge bg-white text-warning ms-1">
+                        <t t-esc="this.selectedCount"/>
+                    </span>
+                </button>
                 <button t-if="this.hasMoreKanbanData"
                         class="btn btn-sm btn-outline-primary"
                         t-on-click="loadMoreKanbanBatch"

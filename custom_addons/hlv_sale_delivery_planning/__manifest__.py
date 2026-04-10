@@ -19,6 +19,7 @@
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_drawer.xml',
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_modal.xml',
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_kanban.xml',
+            'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_transfer_modal.xml',
             # Main template
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner.xml',
             # JS utils (phải đăng ký trước main component)

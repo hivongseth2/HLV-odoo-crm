@@ -77,6 +77,13 @@ export class DeliveryPlannerDashboard extends Component {
 
             // Selection for printing
             selectedSOIds: new Set(),        // Set of selected sale order IDs for printing
+
+            // Transfer Modal
+            isTransferModalOpen: false,
+            transferModalLoading: false,
+            transferModalData: null,         // { warehouses, all_partners }
+            transferSelections: {},          // { [wh_id]: { selected, partner_id, products: {[prod_id]: {include, qty}} } }
+            isCreatingTransfer: false,
         });
 
         onWillStart(async () => {
@@ -733,6 +740,186 @@ export class DeliveryPlannerDashboard extends Component {
     closePackageDetails() {
         this.state.isPackageModalOpen = false;
         this.state.selectedPackage = null;
+    }
+
+    // ── Transfer Modal ────────────────────────────────────────────────────
+
+    async openTransferModal() {
+        if (this.selectedCount === 0) {
+            alert('Vui lòng chọn ít nhất 1 đơn hàng.');
+            return;
+        }
+        this.state.isTransferModalOpen = true;
+        this.state.transferModalLoading = true;
+        this.state.transferModalData = null;
+        this.state.transferSelections = {};
+
+        try {
+            const selectedIds = Array.from(this.state.selectedSOIds);
+            const data = await this.orm.call(
+                'sale.order',
+                'prepare_transfer_modal_data',
+                [],
+                { sale_order_ids: selectedIds }
+            );
+            this.state.transferModalData = data;
+
+            // Init selections for each warehouse
+            const selections = {};
+            for (const wh of (data.warehouses || [])) {
+                const prodSel = {};
+                for (const prod of (wh.products || [])) {
+                    prodSel[prod.product_id] = { include: true, qty: prod.total_qty };
+                }
+                selections[wh.warehouse_id] = {
+                    selected: true,
+                    partner_id: wh.default_partner_id || '',
+                    products: prodSel,
+                };
+            }
+            this.state.transferSelections = selections;
+        } catch (err) {
+            console.error('Lỗi khi tải dữ liệu luân chuyển:', err);
+            alert('Lỗi khi phân tích dữ liệu luân chuyển: ' + (err.message || ''));
+            this.state.isTransferModalOpen = false;
+        } finally {
+            this.state.transferModalLoading = false;
+        }
+    }
+
+    closeTransferModal() {
+        this.state.isTransferModalOpen = false;
+        this.state.transferModalData = null;
+        this.state.transferSelections = {};
+    }
+
+    toggleWarehouseSelection(whId, checked) {
+        if (!this.state.transferSelections[whId]) return;
+        this.state.transferSelections[whId].selected = checked;
+        // Force OWL reactivity
+        this.state.transferSelections = { ...this.state.transferSelections };
+    }
+
+    setTransferPartner(whId, partnerId) {
+        if (!this.state.transferSelections[whId]) return;
+        this.state.transferSelections[whId].partner_id = partnerId ? parseInt(partnerId) : '';
+    }
+
+    getProductSelection(whId, productId) {
+        const whSel = this.state.transferSelections[whId];
+        if (!whSel || !whSel.products) return null;
+        return whSel.products[productId] || null;
+    }
+
+    toggleProductSelection(whId, productId, checked) {
+        const whSel = this.state.transferSelections[whId];
+        if (!whSel) return;
+        if (!whSel.products[productId]) return;
+        whSel.products[productId].include = checked;
+        this.state.transferSelections = { ...this.state.transferSelections };
+    }
+
+    toggleAllProducts(whId, checked) {
+        const whSel = this.state.transferSelections[whId];
+        if (!whSel) return;
+        for (const pid of Object.keys(whSel.products)) {
+            whSel.products[pid].include = checked;
+        }
+        this.state.transferSelections = { ...this.state.transferSelections };
+    }
+
+    areAllProductsSelected(whId) {
+        const whSel = this.state.transferSelections[whId];
+        if (!whSel || !whSel.products) return false;
+        return Object.values(whSel.products).every(p => p.include);
+    }
+
+    setProductQty(whId, productId, qty) {
+        const whSel = this.state.transferSelections[whId];
+        if (!whSel || !whSel.products[productId]) return;
+        whSel.products[productId].qty = qty;
+    }
+
+    countSelectedProducts(whId) {
+        const whSel = this.state.transferSelections[whId];
+        if (!whSel) return 0;
+        return Object.values(whSel.products || {}).filter(p => p.include).length;
+    }
+
+    sumSelectedQty(whId) {
+        const whSel = this.state.transferSelections[whId];
+        if (!whSel) return 0;
+        return Object.values(whSel.products || {})
+            .filter(p => p.include)
+            .reduce((s, p) => s + (p.qty || 0), 0);
+    }
+
+    async confirmCreateTransferPickings() {
+        const data = this.state.transferModalData;
+        if (!data || !data.warehouses) return;
+
+        const warehouseSelections = [];
+        for (const wh of data.warehouses) {
+            const sel = this.state.transferSelections[wh.warehouse_id];
+            if (!sel || !sel.selected) continue;
+
+            const products = (wh.products || [])
+                .filter(prod => {
+                    const ps = sel.products[prod.product_id];
+                    return ps && ps.include && ps.qty > 0;
+                })
+                .map(prod => ({
+                    product_id: prod.product_id,
+                    total_qty: sel.products[prod.product_id].qty,
+                }));
+
+            if (!products.length) continue;
+
+            warehouseSelections.push({
+                warehouse_id: wh.warehouse_id,
+                picking_type_id: wh.picking_type_id,
+                lot_stock_id: wh.lot_stock_id,
+                transit_location_id: wh.transit_location_id,
+                partner_id: sel.partner_id || false,
+                products,
+            });
+        }
+
+        if (!warehouseSelections.length) {
+            alert('Vui lòng chọn ít nhất 1 kho và 1 sản phẩm.');
+            return;
+        }
+
+        this.state.isCreatingTransfer = true;
+        try {
+            const result = await this.orm.call(
+                'sale.order',
+                'create_transfer_pickings',
+                [],
+                { warehouse_selections: warehouseSelections }
+            );
+
+            const created = result.created || [];
+            const errors = result.errors || [];
+
+            if (created.length) {
+                const names = created.map(c => c.picking_name).join(', ');
+                const msg = `Đã tạo ${created.length} phiếu luân chuyển: ${names}`;
+                alert(msg);
+                this.closeTransferModal();
+                await this.fetchData();
+            }
+
+            if (errors.length) {
+                const errMsg = errors.map(e => `Kho ${e.warehouse_id}: ${e.error}`).join('\n');
+                alert('Lỗi khi tạo phiếu:\n' + errMsg);
+            }
+        } catch (err) {
+            console.error('Lỗi tạo phiếu luân chuyển:', err);
+            alert('Lỗi: ' + (err.message || ''));
+        } finally {
+            this.state.isCreatingTransfer = false;
+        }
     }
 
     async printPackageLabel(pack) {
