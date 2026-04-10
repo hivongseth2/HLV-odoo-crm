@@ -81,7 +81,7 @@ export class HlvBarcodeApp extends Component {
             scan_config: null, // { scan_source, scan_dest, require_product_scan }
             location_scan_pending: false, // true when waiting for a location scan
             location_scan_type: null, // 'source' | 'dest'
-            scanned_location: null, // name of last scanned location
+            scanned_location: null, // {id, name, barcode} of active source location
         });
 
         onWillStart(async () => {
@@ -298,38 +298,46 @@ export class HlvBarcodeApp extends Component {
         this._clearFeedback();
 
         try {
+            // First: check if this is a location barcode (always allow location scan)
             const result = await rpc('/hlv_barcode_custom/scan', {
                 picking_id: this.state.picking.id,
                 barcode: barcode,
+                location_barcode: this.state.scanned_location ? this.state.scanned_location.barcode : null,
             });
 
-            if (result.status === 'success' || result.status === 'package_success') {
-                // Update local quantity_done for scanned move(s)
+            if (result.status === 'location') {
+                // Location scanned — set as active source location
+                this.state.scanned_location = {
+                    id: result.location_id,
+                    name: result.location_name,
+                    barcode: result.location_barcode,
+                };
+                this._showFeedback('success', `📍 Vị trí lấy hàng: ${result.location_name}`);
+                this._playSound('success');
+            } else if (result.status === 'success' || result.status === 'package_success') {
+                // Product/package scan — require location first
+                if (!this.state.scanned_location) {
+                    this._showErrorPopup('Vui lòng quét vị trí nguồn trước khi quét sản phẩm.');
+                    this._playSound('error');
+                    this.state.is_loading = false;
+                    setTimeout(() => this._focusBarcodeInput(), 100);
+                    return;
+                }
+                const locId = this.state.scanned_location.id;
+                const locName = this.state.scanned_location.name;
+
                 if (result.status === 'package_success' && result.products) {
-                    // Package scan: increment each product
                     for (const p of result.products) {
                         if (p.move_id) {
-                            const idx = this.state.lines.findIndex(l => l.move_id === p.move_id);
-                            if (idx >= 0) {
-                                const line = this.state.lines[idx];
-                                const newQty = Math.min((line.quantity_done || 0) + (p.quantity_added || 1), line.demand);
-                                this.state.lines[idx] = { ...line, quantity_done: newQty };
-                            }
+                            this._incrementLineAtLocation(p.move_id, locId, locName, p.quantity_added || 1);
                         }
                     }
                 } else if (result.move_id) {
-                    const lineIdx = this.state.lines.findIndex(l => l.move_id === result.move_id);
-                    if (lineIdx >= 0) {
-                        const line = this.state.lines[lineIdx];
-                        const newQty = Math.min((line.quantity_done || 0) + 1, line.demand);
-                        if (newQty === (line.quantity_done || 0)) {
-                            this._showFeedback('error', `${line.product_name}: Đã đạt số lượng yêu cầu ${line.demand} ${line.uom_name}`);
-                            this._playSound('error');
-                            this.state.is_loading = false;
-                            setTimeout(() => this._focusBarcodeInput(), 100);
-                            return;
-                        }
-                        this.state.lines[lineIdx] = { ...line, quantity_done: newQty };
+                    const ok = this._incrementLineAtLocation(result.move_id, locId, locName, 1);
+                    if (!ok) {
+                        this.state.is_loading = false;
+                        setTimeout(() => this._focusBarcodeInput(), 100);
+                        return;
                     }
                 }
                 this._showFeedback('success', result.message);
@@ -339,23 +347,15 @@ export class HlvBarcodeApp extends Component {
                     setTimeout(() => { this.state.last_scanned_move_id = null; }, 1500);
                 }
             } else if (result.status === 'not_found') {
-                // Try global search
-                await this._searchProduct(barcode);
-            } else if (result.status === 'location') {
-                // Location scanned — show as current active location and update product lines
-                this.state.scanned_location = result.location_name;
-                // Update source location display on product lines that match this location's parent
-                if (result.location_id) {
-                    for (let i = 0; i < this.state.lines.length; i++) {
-                        const line = this.state.lines[i];
-                        // Update if scanned location is a child of the line's source location
-                        if (result.location_name && result.location_name.startsWith(line.location_name.split('/').slice(0, 2).join('/'))) {
-                            this.state.lines[i] = { ...line, location_name: result.location_name };
-                        }
-                    }
+                // Check if user hasn't scanned location yet
+                if (!this.state.scanned_location) {
+                    this._showErrorPopup('Vui lòng quét vị trí nguồn trước khi quét sản phẩm.');
+                    this._playSound('error');
+                    this.state.is_loading = false;
+                    setTimeout(() => this._focusBarcodeInput(), 100);
+                    return;
                 }
-                this._showFeedback('success', `📍 Vị trí: ${result.location_name}`);
-                this._playSound('success');
+                await this._searchProduct(barcode);
             } else if (result.status === 'warning') {
                 this._showFeedback('error', result.message);
                 this._playSound('error');
