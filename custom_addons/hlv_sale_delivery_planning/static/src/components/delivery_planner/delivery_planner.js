@@ -259,6 +259,7 @@ export class DeliveryPlannerDashboard extends Component {
             case 'packing_status': return [
                 { value: 'waiting_stock',    label: 'Không Có Hàng Đóng',      badgeClass: 'bg-secondary',          textClass: 'text-secondary', iconClass: 'fa fa-hourglass-start', progressClass: 'bg-secondary' },
                 { value: 'unpacked',         label: 'Có Hàng Chưa Đóng Gói',   badgeClass: 'bg-warning text-dark',  textClass: 'text-warning',   iconClass: 'fa fa-exclamation-triangle', progressClass: 'bg-warning' },
+                { value: 'has_unprinted',    label: 'Có Phiếu Chưa In',        badgeClass: 'bg-danger',             textClass: 'text-danger',    iconClass: 'fa fa-exclamation-circle', progressClass: 'bg-danger' },
                 { value: 'printed_waiting',  label: 'Đã In, Chờ Đóng Gói',     badgeClass: 'bg-info',               textClass: 'text-info',      iconClass: 'fa fa-print', progressClass: 'bg-info' },
                 { value: 'fully_packed',     label: 'Đã Đóng Gói Đủ',          badgeClass: 'bg-success',            textClass: 'text-success',   iconClass: 'fa fa-check-square-o', progressClass: 'bg-success' },
             ];
@@ -285,8 +286,10 @@ export class DeliveryPlannerDashboard extends Component {
             if (dim === 'packing_status') {
                 // Màn hình kiểm soát đóng gói chỉ quan tâm đơn chưa giao.
                 if (so.real_delivery_status === 'full') return false;
-                // Đã in phiếu nhưng có phiếu mới chưa in → cột riêng "Đã in, chờ đóng gói"
-                if (so.has_new_unprinted_pickings) val = 'printed_waiting';
+                // Đã in nhưng có phiếu mới chưa in → "Có phiếu chưa in"
+                if (so.has_new_unprinted_pickings) val = 'has_unprinted';
+                // Đã in tất cả phiếu, chờ đóng gói → "Đã in, chờ đóng gói"
+                else if (so.picking_slip_printed) val = 'printed_waiting';
                 // Gom nhóm để tập trung hành động: còn hàng chưa đóng = cần xử lý ngay.
                 else if (val === 'partial_packed') val = 'unpacked';
             }
@@ -1096,6 +1099,28 @@ export class DeliveryPlannerDashboard extends Component {
 
         try {
             const selectedIds = Array.from(this.state.selectedSOIds);
+
+            // Giữ hàng (reserve) trước khi lấy dữ liệu chuyển vị trí — giống luồng in phiếu
+            try {
+                const reserveResponse = await fetch('/hlv_sale_delivery_planning/reserve_stock', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        method: 'call',
+                        params: { sale_order_ids: selectedIds },
+                    }),
+                });
+                const reserveResult = await reserveResponse.json();
+                if (reserveResult.result) {
+                    console.log('Giữ hàng trước chuyển vị trí:', reserveResult.result.message);
+                }
+            } catch (reserveErr) {
+                console.warn('Giữ hàng thất bại, tiếp tục:', reserveErr);
+            }
             const data = await this.orm.call(
                 'sale.order',
                 'prepare_relocation_data',
