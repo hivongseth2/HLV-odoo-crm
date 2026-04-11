@@ -349,31 +349,37 @@
 
                 <!-- Row 8: Pick pickings + print status -->
                 <t t-set="pickPickings" t-value="(so.pickings || []).filter(p =&gt; p.sequence_code &amp;&amp; p.sequence_code.indexOf('PICK') &gt;= 0 &amp;&amp; !p.return_of_id &amp;&amp; p.state !== 'cancel')"/>
-                <div t-if="pickPickings.length" class="mt-1 pt-1 border-top d-flex flex-wrap gap-1" style="font-size:0.62rem;">
-                    <t t-foreach="pickPickings" t-as="pk" t-key="pk.id">
-                        <span class="badge d-inline-flex align-items-center gap-1"
-                              t-att-class="pk.printed ? 'bg-success text-white' : 'bg-danger text-white'"
-                              style="font-size:0.6rem; padding:2px 5px;"
-                              t-att-title="pk.name + ' — ' + (pk.printed ? 'Đã in' : 'Chưa in')">
-                            <i t-att-class="pk.printed ? 'fa fa-check-circle' : 'fa fa-exclamation-circle'"></i>
-                            <t t-esc="pk.name"/>
-                        </span>
-                    </t>
+                <div t-if="pickPickings.length" class="mt-1 pt-1 border-top" style="font-size:0.62rem;">
+                    <div class="text-muted fw-bold mb-1" style="font-size:0.58rem;"><i class="fa fa-print me-1"></i>Phiếu lấy hàng</div>
+                    <div class="d-flex flex-wrap gap-1">
+                        <t t-foreach="pickPickings" t-as="pk" t-key="pk.id">
+                            <span class="badge d-inline-flex align-items-center gap-1"
+                                  t-att-class="pk.printed ? 'bg-success text-white' : 'bg-danger text-white'"
+                                  style="font-size:0.6rem; padding:2px 5px;"
+                                  t-att-title="pk.name + ' — ' + (pk.printed ? 'Đã in' : 'Chưa in')">
+                                <i t-att-class="pk.printed ? 'fa fa-check-circle' : 'fa fa-exclamation-circle'"></i>
+                                <t t-esc="pk.name"/>
+                            </span>
+                        </t>
+                    </div>
                 </div>
 
                 <!-- Row 8a: Shipper status (outgoing pickings) -->
                 <t t-set="outPickings" t-value="(so.pickings || []).filter(p =&gt; p.code === 'outgoing' &amp;&amp; !p.return_of_id &amp;&amp; p.state !== 'cancel')"/>
                 <t t-set="receivedOuts" t-value="outPickings.filter(p =&gt; p.shipper_received)"/>
-                <div t-if="receivedOuts.length" class="mt-1 d-flex flex-wrap gap-1" style="font-size:0.62rem;">
-                    <t t-foreach="receivedOuts" t-as="op" t-key="op.id">
-                        <span class="badge bg-success bg-opacity-75 text-white d-inline-flex align-items-center gap-1"
-                              style="font-size:0.6rem; padding:2px 5px;"
-                              t-att-title="op.name + ' — Shipper: ' + (op.shipper_user ? op.shipper_user[1] : '?')">
-                            <i class="fa fa-motorcycle"></i>
-                            <t t-esc="op.name"/>
-                            <t t-if="op.shipper_user"> · <t t-esc="op.shipper_user[1]"/></t>
-                        </span>
-                    </t>
+                <div t-if="receivedOuts.length" class="mt-1" style="font-size:0.62rem;">
+                    <div class="text-muted fw-bold mb-1" style="font-size:0.58rem;"><i class="fa fa-motorcycle me-1"></i>Phiếu giao hàng</div>
+                    <div class="d-flex flex-wrap gap-1">
+                        <t t-foreach="receivedOuts" t-as="op" t-key="op.id">
+                            <span class="badge bg-success bg-opacity-75 text-white d-inline-flex align-items-center gap-1"
+                                  style="font-size:0.6rem; padding:2px 5px;"
+                                  t-att-title="op.name + ' — Shipper: ' + (op.shipper_user ? op.shipper_user[1] : '?')">
+                                <i class="fa fa-motorcycle"></i>
+                                <t t-esc="op.name"/>
+                                <t t-if="op.shipper_user"> · <t t-esc="op.shipper_user[1]"/></t>
+                            </span>
+                        </t>
+                    </div>
                 </div>
 
                 <!-- Row 8b: Transfer suggestion badge -->
