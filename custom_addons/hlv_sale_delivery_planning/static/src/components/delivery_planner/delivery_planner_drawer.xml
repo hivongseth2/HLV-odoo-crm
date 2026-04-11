@@ -216,6 +216,12 @@
                                     </div>
                                 </div>
                             </div>
+                            <div t-if="po.odoo_note" class="px-3 pb-2">
+                                <div class="small text-muted fst-italic border-start border-3 border-warning ps-2" style="font-size:0.75rem; white-space:pre-wrap;">
+                                    <i class="fa fa-sticky-note-o text-warning me-1" title="Ghi chú Odoo"></i>
+                                    <t t-esc="po.odoo_note"/>
+                                </div>
+                            </div>
                         </t>
                     </div>
                 </div>
