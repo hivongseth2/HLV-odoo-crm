@@ -972,3 +972,54 @@ class BarcodeShipperController(http.Controller):
         except Exception as e:
             _logger.exception("Error in scan_pick_for_receive")
             return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}
+
+    # ===== API: scan picking barcode for return tab =====
+    @http.route(
+        "/api/barcode/scan_pick_return",
+        type="json",
+        auth="user",
+        methods=["POST"],
+        csrf=False,
+    )
+    def scan_pick_for_return(self, **kwargs):
+        """Scan PICK/SO code to find related OUT pickings that shipper has received (for return)."""
+        barcode = ""
+        try:
+            access = self._check_shipper_access()
+            if not access["success"]:
+                return access
+
+            data = json.loads(request.httprequest.data.decode("utf-8"))
+            barcode = data.get("barcode", "").strip()
+            if not barcode:
+                return {"success": False, "error": "Vui lòng nhập mã vạch"}
+
+            # Tìm OUT pickings liên quan qua PICK/SO code
+            initial_outs = self._find_out_pickings_by_pick_name(barcode)
+            if not initial_outs:
+                return {"success": False, "error": f"Không tìm thấy phiếu: {barcode}"}
+
+            # Chỉ lấy phiếu đã nhận bởi shipper hiện tại, chưa trả, chưa done
+            uid = request.env.user.id
+            received = initial_outs.filtered(
+                lambda p: p.shipper_received
+                and not p.shipper_returned
+                and p.state in ("assigned", "partially_available")
+                and (p.shipper_received_by.id == uid or p.shipper_user_id.id == uid)
+            )
+            if not received:
+                return {
+                    "success": False,
+                    "error": f"Không tìm thấy phiếu nào bạn đã nhận liên quan đến {barcode}",
+                }
+
+            return {
+                "success": True,
+                "related_ids": received.ids,
+                "message": f"Tìm thấy {len(received)} phiếu liên quan",
+            }
+        except UserError as e:
+            return {"success": False, "error": str(e)}
+        except Exception as e:
+            _logger.exception("Error in scan_pick_for_return")
+            return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}

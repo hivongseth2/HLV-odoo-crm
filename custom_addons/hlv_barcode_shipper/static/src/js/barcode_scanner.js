@@ -79,6 +79,27 @@ class BarcodeShipper {
                 return msg;
             }
         });
+
+        // Auto-refocus input khi click bất kỳ đâu trên trang
+        // để người dùng luôn có thể quét barcode ngay lập tức
+        document.addEventListener('click', (e) => {
+            const target = e.target;
+            // Không refocus nếu đang click vào input, button, modal, hoặc camera
+            if (target.closest('input, textarea, button, .btn, .modal-overlay.show, .camera-section.active, select')) return;
+            this.focusCurrentInput();
+        });
+
+        // Refocus định kỳ mỗi 2 giây (safety net cho trường hợp mất focus)
+        this._refocusInterval = setInterval(() => {
+            const active = document.activeElement;
+            // Chỉ refocus nếu focus hiện tại không phải là input/textarea/button
+            if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA' && active.tagName !== 'SELECT' && !active.closest('button, .btn'))) {
+                // Không refocus nếu modal đang mở
+                if (!document.querySelector('.modal-overlay.show')) {
+                    this.focusCurrentInput();
+                }
+            }
+        }, 2000);
     }
 
     async loadSettings() {
@@ -241,7 +262,7 @@ class BarcodeShipper {
             const activeTab = document.querySelector('.tab-content.active');
             const activeStep = activeTab && activeTab.querySelector('.scan-step.active');
             const input = activeStep && activeStep.querySelector('.form-control');
-            if (input) input.focus();
+            if (input) { input.focus(); input.select(); }
         }, 100);
     }
 
@@ -539,11 +560,13 @@ class BarcodeShipper {
             } else {
                 this.showMessage('pick-result', res.error || 'Không tìm thấy', 'danger');
                 this.playSound('error');
+                this.focusCurrentInput();
             }
         } catch (e) {
             console.error(e);
             this.showMessage('pick-result', 'Lỗi kết nối, vui lòng thử lại.', 'danger');
             this.playSound('error');
+            this.focusCurrentInput();
         }
     }
 
@@ -1118,6 +1141,8 @@ class BarcodeShipper {
     closeModal(modal) {
         modal.classList.remove('show');
         document.body.style.overflow = '';
+        // Refocus input sau khi đóng modal
+        this.focusCurrentInput();
     }
 
     async apiCall(endpoint, data) {
@@ -1306,13 +1331,16 @@ class BarcodeShipper {
                             `Tìm thấy ${res.total} phiếu chứa "${query}"`, 'info');
                     }
                 }
+                this.focusCurrentInput();
             } else {
                 this.showMessage('receive-scan-result', res.error || 'Lỗi tìm kiếm', 'danger');
                 this.playSound('error');
+                this.focusCurrentInput();
             }
         } catch (e) {
             console.error(e);
             this.showMessage('receive-scan-result', 'Lỗi kết nối', 'danger');
+            this.focusCurrentInput();
         }
     }
 
@@ -1587,11 +1615,13 @@ class BarcodeShipper {
             } else {
                 this.showMessage('receive-scan-result', res.error || 'Không tìm thấy', 'danger');
                 this.playSound('error');
+                this.focusCurrentInput();
             }
         } catch (e) {
             console.error(e);
             this.showMessage('receive-scan-result', 'Lỗi kết nối server', 'danger');
             this.playSound('error');
+            this.focusCurrentInput();
         }
     }
 
@@ -1788,32 +1818,65 @@ class BarcodeShipper {
         this._updateReturnSelectAllBtn();
     }
 
-    scanReturnPicking() {
+    async scanReturnPicking() {
         const input = document.getElementById('return-scan-input');
         const barcode = (input?.value || '').trim();
         if (!barcode || !this.returnPickings) return;
-        if (input) input.value = '';
+        if (input) { input.value = ''; input.focus(); input.select(); }
 
+        // 1. Tìm trực tiếp trong danh sách đã tải (theo tên OUT hoặc SO)
         const match = this.returnPickings.find(p =>
             p.name === barcode || (p.origin && p.origin === barcode)
         );
         if (match) {
-            const card = document.getElementById(`return-pc-${match.id}`);
-            if (card && !this.returnSelectedIds.has(match.id)) {
-                this.returnSelectedIds.add(match.id);
-                card.classList.add('selected');
-                const actions = document.getElementById('return-actions');
-                if (actions) actions.style.display = 'block';
-                this._updateReturnSelectAllBtn();
+            this._selectReturnPicking(match);
+            return;
+        }
+
+        // 2. Fallback: quét mã PICK → gọi API tìm phiếu OUT liên quan
+        this.showMessage('return-result', 'Đang tìm phiếu...', 'warning');
+        try {
+            const res = await this.apiCall('/api/barcode/scan_pick_return', { barcode });
+            if (res.success && res.related_ids && res.related_ids.length > 0) {
+                let selectedCount = 0;
+                res.related_ids.forEach(id => {
+                    const p = this.returnPickings.find(rp => rp.id === id);
+                    if (p) {
+                        this._selectReturnPicking(p);
+                        selectedCount++;
+                    }
+                });
+                if (selectedCount > 0) {
+                    this.showMessage('return-result', res.message || `Đã chọn ${selectedCount} phiếu`, 'success');
+                    this.playSound('success');
+                } else {
+                    this.showMessage('return-result', 'Phiếu liên quan không nằm trong danh sách trả hàng', 'warning');
+                    this.playSound('error');
+                }
+            } else {
+                this.showMessage('return-result', res.error || `Không tìm thấy phiếu "${barcode}"`, 'danger');
+                this.playSound('error');
             }
-            // Scroll to card
-            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            this.showMessage('return-result', `Đã chọn ${match.name}`, 'success');
-            this.playSound('success');
-        } else {
+        } catch (e) {
+            console.error(e);
             this.showMessage('return-result', `Không tìm thấy phiếu "${barcode}"`, 'danger');
             this.playSound('error');
         }
+        this.focusCurrentInput();
+    }
+
+    _selectReturnPicking(p) {
+        const card = document.getElementById(`return-pc-${p.id}`);
+        if (card && !this.returnSelectedIds.has(p.id)) {
+            this.returnSelectedIds.add(p.id);
+            card.classList.add('selected');
+            const actions = document.getElementById('return-actions');
+            if (actions) actions.style.display = 'block';
+            this._updateReturnSelectAllBtn();
+        }
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        this.showMessage('return-result', `Đã chọn ${p.name}`, 'success');
+        this.playSound('success');
     }
 
     _updateReturnSelectAllBtn() {
