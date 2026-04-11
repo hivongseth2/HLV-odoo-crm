@@ -163,6 +163,12 @@
             <!-- Package Modal -->
             <t t-call="hlv_sale_delivery_planning.PackageModal"/>
 
+            <!-- Transfer Modal -->
+            <t t-call="hlv_sale_delivery_planning.TransferModal"/>
+
+            <!-- Relocation Modal -->
+            <t t-call="hlv_sale_delivery_planning.RelocationModal"/>
+
             <!-- Backdrop Drawer -->
             <div t-if="state.isDrawerOpen"
                  class="modal-backdrop fade show"

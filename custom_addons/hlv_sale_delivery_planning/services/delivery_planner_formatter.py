@@ -14,6 +14,18 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         if not so.warehouse_id:
             return []
 
+        # Chỉ đề xuất chuyển kho cho sản phẩm còn nằm trong phiếu pick/pack/out đang chờ/xử lý
+        # (loại bỏ sản phẩm đã giao-trả mà không còn phiếu active nào)
+        # Phiếu trả hàng (return_id) không tạo demand thật
+        active_pickings = so.picking_ids.filtered(
+            lambda p: p.state not in ('done', 'cancel')
+            and not p.return_id
+        )
+        products_with_active_demand = set()
+        for pk in active_pickings:
+            for mv in pk.move_ids.filtered(lambda m: m.state not in ('cancel', 'done')):
+                products_with_active_demand.add(mv.product_id.id)
+
         # Thu thập sản phẩm thiếu (group theo product_id)
         shortage_map = {}
         for line_data in so_lines_data:
@@ -21,13 +33,16 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 continue
             if line_data.get('product_type') == 'service':
                 continue
+            pid = line_data['product_id'][0]
+            # Bỏ qua sản phẩm không còn phiếu active nào (đã giao + trả hàng)
+            if pid not in products_with_active_demand:
+                continue
             pending = line_data['product_uom_qty'] - line_data['qty_delivered']
             if pending <= 0:
                 continue
             eff_stock = (line_data.get('qty_warehouse_free') or 0) + (line_data.get('qty_reserved_here') or 0)
             shortage = pending - eff_stock
             if shortage > 0:
-                pid = line_data['product_id'][0]
                 if pid in shortage_map:
                     shortage_map[pid]['shortage'] += shortage
                 else:
@@ -260,10 +275,12 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'id': p.id, 'name': p.name, 'state': p.state,
                 'type_name': p.picking_type_id.name or '',
                 'code': p.picking_type_id.code or '',
+                'sequence_code': (p.picking_type_id.sequence_code or '').upper(),
                 'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
                 'backorder_of': p.backorder_id.name if p.backorder_id else False,
                 'return_of_id': p.return_id.id if p.return_id else False,
                 'return_of': p.return_id.name if p.return_id else False,
+                'printed': bool(p.x_printed),
                 'videos': att_by_picking.get(p.id, []),
             })
 
@@ -302,4 +319,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             'x_studio_misa_saler_code': so.x_studio_misa_saler_code or '',
             'tag_ids': [[t.id, t.name, t.color] for t in so.tag_ids] if so.tag_ids else [],
             'transfer_suggestions': transfer_suggestions,
+            'is_returned_or_stopped': so_status_dict.get('is_returned_or_stopped', False),
+            'picking_slip_printed': bool(so.x_picking_slip_printed),
+            'has_new_unprinted_pickings': so_status_dict.get('has_new_unprinted_pickings', False),
         }

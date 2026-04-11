@@ -11,6 +11,49 @@ class SaleOrder(models.Model):
         help='Được đánh dấu khi người dùng báo cáo đơn hàng cần hủy từ trang sale_plan',
     )
 
+    x_picking_slip_printed = fields.Boolean(
+        string='Đã in phiếu lấy hàng',
+        default=False,
+        copy=False,
+        help='Được đánh dấu tự động khi phiếu lấy hàng được in từ màn hình điều phối',
+    )
+
+    @api.model
+    def prepare_transfer_modal_data(self, sale_order_ids=None):
+        """Chuẩn bị dữ liệu modal tạo phiếu luân chuyển."""
+        if not sale_order_ids:
+            return {'warehouses': [], 'all_partners': []}
+        return self.env['hlv.delivery.planner.service'].prepare_transfer_modal_data(
+            [int(x) for x in sale_order_ids]
+        )
+
+    @api.model
+    def create_transfer_pickings(self, warehouse_selections=None):
+        """Tạo phiếu luân chuyển nội bộ."""
+        if not warehouse_selections:
+            return {'created': [], 'errors': []}
+        return self.env['hlv.delivery.planner.service'].create_transfer_pickings(
+            warehouse_selections
+        )
+
+    @api.model
+    def prepare_relocation_data(self, sale_order_ids=None):
+        """Chuẩn bị dữ liệu modal chuyển vị trí."""
+        if not sale_order_ids:
+            return {'orders': [], 'dest_locations': [], 'default_dest_location_id': False}
+        return self.env['hlv.delivery.planner.service'].prepare_relocation_data(
+            [int(x) for x in sale_order_ids]
+        )
+
+    @api.model
+    def create_relocation_pickings(self, relocation_data=None):
+        """Tạo phiếu chuyển vị trí nội bộ."""
+        if not relocation_data:
+            return {'created': [], 'errors': []}
+        return self.env['hlv.delivery.planner.service'].create_relocation_pickings(
+            relocation_data
+        )
+
     @api.model
     def get_delivery_dashboard_data(self, search_query='', filter_warehouse_id='all', filter_delivery_status='all', filter_stock_status='all', filter_packing_status='all', filter_date_from='', filter_date_to='', filter_po_date_from='', filter_po_date_to='', filter_po_status='all', filter_saler_code='', filter_htgh='', filter_delivery_type='all', filter_tag_ids='', limit=12, offset=0, show_completed=False):
         return self.env['hlv.delivery.planner.service'].get_dashboard_data(

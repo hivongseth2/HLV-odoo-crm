@@ -56,7 +56,10 @@ class DeliveryPlannerController(http.Controller):
             ])
 
             all_pickings = linked_pickings.filtered(
-                lambda p: p.picking_type_code in ['outgoing', 'internal'] and p.state not in ['done', 'cancel']
+                lambda p: p.picking_type_code in ['outgoing', 'internal']
+                          and p.state not in ['done', 'cancel']
+                          and not p.return_id   # Loại bỏ phiếu trả hàng
+                          and 'PICK' in (p.picking_type_id.sequence_code or '').upper()  # Chỉ in phiếu lấy hàng (pick)
             ).sorted(key=lambda p: (p.scheduled_date or p.create_date, p.id))
 
             if not all_pickings:
@@ -93,6 +96,15 @@ class DeliveryPlannerController(http.Controller):
                 'res_model': 'stock.picking',
                 'res_id': False,
                 'mimetype': 'application/pdf',
+            })
+
+            # Đánh dấu các đơn hàng đã in phiếu lấy hàng
+            sale_orders.filtered(lambda s: not s.x_picking_slip_printed).write({
+                'x_picking_slip_printed': True,
+            })
+            # Đánh dấu từng phiếu đã được in (để phát hiện phiếu mới chưa in sau này)
+            all_pickings.filtered(lambda p: not p.x_printed).write({
+                'x_printed': True,
             })
 
             return {
@@ -138,6 +150,7 @@ class DeliveryPlannerController(http.Controller):
             pickings_to_reserve = linked_pickings.filtered(
                 lambda p: p.picking_type_code in ['outgoing', 'internal']
                           and p.state not in ['done', 'cancel']
+                          and not p.return_id   # Loại bỏ phiếu trả hàng
             )
 
             if not pickings_to_reserve:
@@ -342,5 +355,111 @@ class DeliveryPlannerController(http.Controller):
             _logger.error("Error exporting Excel: %s", str(e), exc_info=True)
             return request.make_response(
                 f'Lỗi khi xuất Excel: {str(e)}',
+                headers=[('Content-Type', 'text/plain; charset=utf-8')],
+            )
+
+    @http.route('/hlv_sale_delivery_planning/export_transfer_excel', type='http', auth='user', methods=['POST', 'GET'])
+    def export_transfer_excel(self, **kwargs):
+        """
+        Xuất Excel báo cáo chuyển kho từ dữ liệu modal luân chuyển.
+        Nhận JSON param: sale_order_ids (comma-separated or JSON array).
+        """
+        try:
+            import xlsxwriter
+        except ImportError:
+            from odoo.tools.misc import xlsxwriter
+
+        try:
+            import json as _json
+            raw_ids = kwargs.get('sale_order_ids', '')
+            if isinstance(raw_ids, str):
+                try:
+                    ids_list = _json.loads(raw_ids)
+                except Exception:
+                    ids_list = [int(x.strip()) for x in raw_ids.split(',') if x.strip().isdigit()]
+            else:
+                ids_list = list(raw_ids)
+
+            data = request.env['hlv.delivery.planner.service'].prepare_transfer_modal_data(ids_list)
+            warehouses = data.get('warehouses', [])
+
+            output = io.BytesIO()
+            workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+
+            hdr_fmt = workbook.add_format({
+                'bold': True, 'bg_color': '#2F75B6', 'font_color': '#FFFFFF',
+                'border': 1, 'align': 'center', 'valign': 'vcenter', 'font_size': 11,
+            })
+            wh_fmt = workbook.add_format({
+                'bold': True, 'bg_color': '#D6E4F7', 'border': 1,
+                'align': 'left', 'valign': 'vcenter', 'font_size': 11,
+            })
+            cell_fmt = workbook.add_format({'border': 1, 'valign': 'vcenter', 'font_size': 10})
+            num_fmt = workbook.add_format({'border': 1, 'valign': 'vcenter', 'font_size': 10, 'num_format': '#,##0.##'})
+            red_fmt = workbook.add_format({'border': 1, 'valign': 'vcenter', 'font_size': 10, 'font_color': '#C00000', 'bold': True, 'num_format': '#,##0.##'})
+            grn_fmt = workbook.add_format({'border': 1, 'valign': 'vcenter', 'font_size': 10, 'font_color': '#375623', 'bold': True, 'num_format': '#,##0.##'})
+            ord_fmt = workbook.add_format({'border': 1, 'valign': 'vcenter', 'font_size': 9, 'font_color': '#595959', 'text_wrap': True})
+
+            sheet = workbook.add_worksheet('Báo cáo chuyển kho')
+            sheet.set_row(0, 22)
+
+            headers = [
+                ('Kho nguồn', 16),
+                ('Mã hàng', 18),
+                ('Tên sản phẩm', 36),
+                ('Từ các đơn', 28),
+                ('Tổng yêu cầu', 14),
+                ('Tồn kho tại kho', 16),
+                ('SL đề xuất', 14),
+                ('Liên hệ', 28),
+                ('Vị trí đích', 34),
+                ('Loại hoạt động', 24),
+            ]
+
+            for col, (h, w) in enumerate(headers):
+                sheet.write(0, col, h, hdr_fmt)
+                sheet.set_column(col, col, w)
+            sheet.freeze_panes(1, 0)
+
+            row = 1
+            for wh in warehouses:
+                wh_label = f"{wh.get('warehouse_code', '')} — {wh.get('warehouse_name', '')}"
+                sheet.merge_range(row, 0, row, len(headers) - 1, wh_label, wh_fmt)
+                row += 1
+
+                for prod in wh.get('products', []):
+                    avail = prod.get('available_at_source', 0)
+                    total = prod.get('total_qty', 0)
+                    order_names = ', '.join(prod.get('order_names', []))
+
+                    sheet.write(row, 0, wh.get('warehouse_name', ''), cell_fmt)
+                    sheet.write(row, 1, prod.get('product_code', ''), cell_fmt)
+                    sheet.write(row, 2, prod.get('product_name', ''), cell_fmt)
+                    sheet.write(row, 3, order_names, ord_fmt)
+                    sheet.write(row, 4, total, red_fmt)
+                    sheet.write(row, 5, avail, grn_fmt if avail >= total else num_fmt)
+                    sheet.write(row, 6, total, num_fmt)
+                    sheet.write(row, 7, wh.get('partner_name', ''), cell_fmt)
+                    sheet.write(row, 8, wh.get('transit_location_name', ''), cell_fmt)
+                    sheet.write(row, 9, wh.get('picking_type_name', ''), cell_fmt)
+                    row += 1
+
+            workbook.close()
+            output.seek(0)
+            xlsx_data = output.read()
+
+            filename = 'Bao_cao_chuyen_kho.xlsx'
+            return request.make_response(
+                xlsx_data,
+                headers=[
+                    ('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+                    ('Content-Disposition', f'attachment; filename="{filename}"'),
+                    ('Content-Length', str(len(xlsx_data))),
+                ],
+            )
+        except Exception as e:
+            _logger.error("Error exporting transfer Excel: %s", str(e), exc_info=True)
+            return request.make_response(
+                f'Lỗi: {str(e)}',
                 headers=[('Content-Type', 'text/plain; charset=utf-8')],
             )

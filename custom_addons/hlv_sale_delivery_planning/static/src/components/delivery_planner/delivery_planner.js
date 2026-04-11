@@ -43,8 +43,8 @@ export class DeliveryPlannerDashboard extends Component {
 
             // HTGH presets (lưu localStorage)
             htghPresets: JSON.parse(localStorage.getItem('hlv_htgh_presets') || 'null') || [
-                { label: 'Hãng VC', value: 'ghn,cpn,chuy\u1ec3n ph\u00e1t nhanh,giao h\u00e0ng nhanh,j&t,jnt' },
-                { label: 'Tự giao', value: '!ghn,!cpn,!chuy\u1ec3n ph\u00e1t nhanh,!giao h\u00e0ng nhanh,!j&t,!jnt' },
+                { label: 'Hãng VC', value: 'ghn,cpn,chuy\u1ec3n ph\u00e1t nhanh,giao h\u00e0ng nhanh,j&t' },
+                { label: 'Tr\u1eeb h\u00e3ng VC', value: '!ghn,!cpn,!chuy\u1ec3n ph\u00e1t nhanh,!giao h\u00e0ng nhanh,!j&t' },
             ],
 
             // Stats
@@ -77,6 +77,25 @@ export class DeliveryPlannerDashboard extends Component {
 
             // Selection for printing
             selectedSOIds: new Set(),        // Set of selected sale order IDs for printing
+
+            // Returned/Stopped group paging
+            returnedColPageSize: 15,
+
+            // Transfer Modal
+            isTransferModalOpen: false,
+            transferModalLoading: false,
+            transferModalData: null,         // { warehouses, all_partners }
+            transferSelections: {},          // { [wh_id]: { selected, partner_id, products: {[prod_id]: {include, qty}} } }
+            isCreatingTransfer: false,
+
+            // Relocation Modal (Chuyển vị trí)
+            isRelocationModalOpen: false,
+            relocationModalLoading: false,
+            relocationModalData: null,       // { orders, dest_locations, default_dest_location_id }
+            relocationDestLocationId: null,
+            relocationSaveDefault: false,
+            relocationOrderSelections: {},   // { [so_id]: { selected, products: {[prod_id]: { include, qty }} } }
+            isCreatingRelocation: false,
         });
 
         onWillStart(async () => {
@@ -195,6 +214,9 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.kanbanColumnOrder = {};
         this.state.kanbanColPageSize = {};
         this.state.kanbanBatchSize = 200;
+        this.state.returnedColPageSize = 15;
+        // Xóa selection khi filter thay đổi (tránh giữ đơn không còn trong view)
+        this.state.selectedSOIds = new Set();
         await this.fetchData();
     }
 
@@ -235,9 +257,11 @@ export class DeliveryPlannerDashboard extends Component {
                 { value: 'ready',          label: 'Đủ Hàng Xuất',    badgeClass: 'bg-success',           textClass: 'text-success',  iconClass: 'fa fa-check',          progressClass: 'bg-success' },
             ];
             case 'packing_status': return [
-                { value: 'waiting_stock',  label: 'Không Có Hàng Đóng',      badgeClass: 'bg-secondary',          textClass: 'text-secondary', iconClass: 'fa fa-hourglass-start', progressClass: 'bg-secondary' },
-                { value: 'unpacked',       label: 'Có Hàng Chưa Đóng Gói',   badgeClass: 'bg-warning text-dark',  textClass: 'text-warning',   iconClass: 'fa fa-exclamation-triangle', progressClass: 'bg-warning' },
-                { value: 'fully_packed',   label: 'Đã Đóng Gói Đủ',          badgeClass: 'bg-success',            textClass: 'text-success',   iconClass: 'fa fa-check-square-o', progressClass: 'bg-success' },
+                { value: 'waiting_stock',    label: 'Không Có Hàng Đóng',      badgeClass: 'bg-secondary',          textClass: 'text-secondary', iconClass: 'fa fa-hourglass-start', progressClass: 'bg-secondary' },
+                { value: 'unpacked',         label: 'Có Hàng Chưa Đóng Gói',   badgeClass: 'bg-warning text-dark',  textClass: 'text-warning',   iconClass: 'fa fa-exclamation-triangle', progressClass: 'bg-warning' },
+                { value: 'has_unprinted',    label: 'Có Phiếu Chưa In',        badgeClass: 'bg-danger',             textClass: 'text-danger',    iconClass: 'fa fa-exclamation-circle', progressClass: 'bg-danger' },
+                { value: 'printed_waiting',  label: 'Đã In, Chờ Đóng Gói',     badgeClass: 'bg-info',               textClass: 'text-info',      iconClass: 'fa fa-print', progressClass: 'bg-info' },
+                { value: 'fully_packed',     label: 'Đã Đóng Gói Đủ',          badgeClass: 'bg-success',            textClass: 'text-success',   iconClass: 'fa fa-check-square-o', progressClass: 'bg-success' },
             ];
             default: return [];
         }
@@ -255,14 +279,19 @@ export class DeliveryPlannerDashboard extends Component {
 
         const needTransfer = this.state.filterNeedTransfer;
         const base = this.state.saleOrders.filter(so => {
+            if (so.is_returned_or_stopped) return false;   // hiện riêng trong cột "Trả hàng"
             if (needTransfer && !(so.transfer_suggestions && so.transfer_suggestions.length > 0)) return false;
             let val = so[field];
             if (dim === 'delivery_status' && val === 'unshipped') val = 'pending';
             if (dim === 'packing_status') {
                 // Màn hình kiểm soát đóng gói chỉ quan tâm đơn chưa giao.
                 if (so.real_delivery_status === 'full') return false;
+                // Đã in nhưng có phiếu mới chưa in → "Có phiếu chưa in"
+                if (so.has_new_unprinted_pickings) val = 'has_unprinted';
+                // Đã in tất cả phiếu, chờ đóng gói → "Đã in, chờ đóng gói"
+                else if (so.picking_slip_printed) val = 'printed_waiting';
                 // Gom nhóm để tập trung hành động: còn hàng chưa đóng = cần xử lý ngay.
-                if (val === 'partial_packed') val = 'unpacked';
+                else if (val === 'partial_packed') val = 'unpacked';
             }
             return val === colValue;
         });
@@ -302,6 +331,23 @@ export class DeliveryPlannerDashboard extends Component {
         if (this.state.isLoading || !this.hasMoreKanbanData) return;
         this.state.kanbanBatchSize += 200;
         await this.fetchData();
+    }
+
+    // --- Returned / Stopped orders group ---
+    get returnedOrders() {
+        return this.state.saleOrders.filter(so => so.is_returned_or_stopped);
+    }
+
+    get returnedOrdersPaged() {
+        return this.returnedOrders.slice(0, this.state.returnedColPageSize);
+    }
+
+    get hasMoreReturnedOrders() {
+        return this.returnedOrders.length > this.state.returnedColPageSize;
+    }
+
+    loadMoreReturnedOrders() {
+        this.state.returnedColPageSize += 15;
     }
 
     // --- Selection for Printing ---
@@ -413,6 +459,13 @@ export class DeliveryPlannerDashboard extends Component {
             // Open PDF in new tab
             if (result.result && result.result.url) {
                 window.open(result.result.url, '_blank');
+                // Đánh dấu ribbon "Đã in" trên các đơn vừa in (optimistic update)
+                for (const so of this.state.saleOrders) {
+                    if (selectedIds.includes(so.id)) {
+                        so.picking_slip_printed = true;
+                        so.has_new_unprinted_pickings = false;
+                    }
+                }
                 // Clear selections after successful print
                 this.clearAllSelections();
             }
@@ -502,6 +555,7 @@ export class DeliveryPlannerDashboard extends Component {
     async onSearchKeyup(ev) {
         if (ev.key === "Enter") {
             this.state.currentPage = 1;
+            this.state.selectedSOIds = new Set();
             await this.fetchData();
         }
     }
@@ -511,6 +565,7 @@ export class DeliveryPlannerDashboard extends Component {
             .map(o => parseInt(o.value))
             .filter(v => !isNaN(v));
         this.state.currentPage = 1;
+        this.state.selectedSOIds = new Set();
         await this.fetchData();
     }
 
@@ -735,6 +790,194 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.selectedPackage = null;
     }
 
+    // ── Transfer Modal ────────────────────────────────────────────────────
+
+    async openTransferModal() {
+        if (this.selectedCount === 0) {
+            alert('Vui lòng chọn ít nhất 1 đơn hàng.');
+            return;
+        }
+        this.state.isTransferModalOpen = true;
+        this.state.transferModalLoading = true;
+        this.state.transferModalData = null;
+        this.state.transferSelections = {};
+
+        try {
+            const selectedIds = Array.from(this.state.selectedSOIds);
+            const data = await this.orm.call(
+                'sale.order',
+                'prepare_transfer_modal_data',
+                [],
+                { sale_order_ids: selectedIds }
+            );
+            this.state.transferModalData = data;
+
+            // Init selections for each warehouse (partner auto-applied from wh.partner_id)
+            const selections = {};
+            for (const wh of (data.warehouses || [])) {
+                const prodSel = {};
+                for (const prod of (wh.products || [])) {
+                    prodSel[prod.product_id] = { include: true, qty: prod.total_qty };
+                }
+                selections[wh.warehouse_id] = {
+                    selected: true,
+                    partner_id: wh.partner_id || false,
+                    products: prodSel,
+                };
+            }
+            this.state.transferSelections = selections;
+        } catch (err) {
+            console.error('Lỗi khi tải dữ liệu luân chuyển:', err);
+            alert('Lỗi khi phân tích dữ liệu luân chuyển: ' + (err.message || ''));
+            this.state.isTransferModalOpen = false;
+        } finally {
+            this.state.transferModalLoading = false;
+        }
+    }
+
+    closeTransferModal() {
+        this.state.isTransferModalOpen = false;
+        this.state.transferModalData = null;
+        this.state.transferSelections = {};
+    }
+
+    toggleWarehouseSelection(whId, checked) {
+        if (!this.state.transferSelections[whId]) return;
+        this.state.transferSelections[whId].selected = checked;
+        // Force OWL reactivity
+        this.state.transferSelections = { ...this.state.transferSelections };
+    }
+
+    setTransferPartner(whId, partnerId) {
+        if (!this.state.transferSelections[whId]) return;
+        this.state.transferSelections[whId].partner_id = partnerId ? parseInt(partnerId) : '';
+    }
+
+    getProductSelection(whId, productId) {
+        const whSel = this.state.transferSelections[whId];
+        if (!whSel || !whSel.products) return null;
+        return whSel.products[productId] || null;
+    }
+
+    toggleProductSelection(whId, productId, checked) {
+        const whSel = this.state.transferSelections[whId];
+        if (!whSel) return;
+        if (!whSel.products[productId]) return;
+        whSel.products[productId].include = checked;
+        this.state.transferSelections = { ...this.state.transferSelections };
+    }
+
+    toggleAllProducts(whId, checked) {
+        const whSel = this.state.transferSelections[whId];
+        if (!whSel) return;
+        for (const pid of Object.keys(whSel.products)) {
+            whSel.products[pid].include = checked;
+        }
+        this.state.transferSelections = { ...this.state.transferSelections };
+    }
+
+    areAllProductsSelected(whId) {
+        const whSel = this.state.transferSelections[whId];
+        if (!whSel || !whSel.products) return false;
+        return Object.values(whSel.products).every(p => p.include);
+    }
+
+    setProductQty(whId, productId, qty) {
+        const whSel = this.state.transferSelections[whId];
+        if (!whSel || !whSel.products[productId]) return;
+        whSel.products[productId].qty = qty;
+    }
+
+    countSelectedProducts(whId) {
+        const whSel = this.state.transferSelections[whId];
+        if (!whSel) return 0;
+        return Object.values(whSel.products || {}).filter(p => p.include).length;
+    }
+
+    sumSelectedQty(whId) {
+        const whSel = this.state.transferSelections[whId];
+        if (!whSel) return 0;
+        return Object.values(whSel.products || {})
+            .filter(p => p.include)
+            .reduce((s, p) => s + (p.qty || 0), 0);
+    }
+
+    exportTransferExcel() {
+        const selectedIds = Array.from(this.state.selectedSOIds);
+        if (!selectedIds.length) return;
+        const params = new URLSearchParams();
+        params.set('sale_order_ids', JSON.stringify(selectedIds));
+        window.open(`/hlv_sale_delivery_planning/export_transfer_excel?${params.toString()}`, '_blank');
+    }
+
+    async confirmCreateTransferPickings() {
+        const data = this.state.transferModalData;
+        if (!data || !data.warehouses) return;
+
+        const warehouseSelections = [];
+        for (const wh of data.warehouses) {
+            const sel = this.state.transferSelections[wh.warehouse_id];
+            if (!sel || !sel.selected) continue;
+
+            const products = (wh.products || [])
+                .filter(prod => {
+                    const ps = sel.products[prod.product_id];
+                    return ps && ps.include && ps.qty > 0;
+                })
+                .map(prod => ({
+                    product_id: prod.product_id,
+                    total_qty: sel.products[prod.product_id].qty,
+                }));
+
+            if (!products.length) continue;
+
+            warehouseSelections.push({
+                warehouse_id: wh.warehouse_id,
+                picking_type_id: wh.picking_type_id,
+                lot_stock_id: wh.lot_stock_id,
+                transit_location_id: wh.transit_location_id,
+                partner_id: sel.partner_id || false,
+                products,
+            });
+        }
+
+        if (!warehouseSelections.length) {
+            alert('Vui lòng chọn ít nhất 1 kho và 1 sản phẩm.');
+            return;
+        }
+
+        this.state.isCreatingTransfer = true;
+        try {
+            const result = await this.orm.call(
+                'sale.order',
+                'create_transfer_pickings',
+                [],
+                { warehouse_selections: warehouseSelections }
+            );
+
+            const created = result.created || [];
+            const errors = result.errors || [];
+
+            if (created.length) {
+                const names = created.map(c => c.picking_name).join(', ');
+                const msg = `Đã tạo ${created.length} phiếu luân chuyển: ${names}`;
+                alert(msg);
+                this.closeTransferModal();
+                await this.fetchData();
+            }
+
+            if (errors.length) {
+                const errMsg = errors.map(e => `Kho ${e.warehouse_id}: ${e.error}`).join('\n');
+                alert('Lỗi khi tạo phiếu:\n' + errMsg);
+            }
+        } catch (err) {
+            console.error('Lỗi tạo phiếu luân chuyển:', err);
+            alert('Lỗi: ' + (err.message || ''));
+        } finally {
+            this.state.isCreatingTransfer = false;
+        }
+    }
+
     async printPackageLabel(pack) {
         if (!pack || !pack.picking_id) return;
 
@@ -839,6 +1082,180 @@ export class DeliveryPlannerDashboard extends Component {
             show_completed: this.state.showCompleted ? '1' : '',
         });
         window.open(`/hlv_sale_delivery_planning/export_excel?${params.toString()}`, '_blank');
+    }
+
+    // ── Relocation Modal (Chuyển vị trí) ────────────────────────────────
+
+    async openRelocationModal() {
+        if (this.selectedCount === 0) {
+            alert('Vui lòng chọn ít nhất 1 đơn hàng.');
+            return;
+        }
+        this.state.isRelocationModalOpen = true;
+        this.state.relocationModalLoading = true;
+        this.state.relocationModalData = null;
+        this.state.relocationOrderSelections = {};
+        this.state.relocationSaveDefault = false;
+
+        try {
+            const selectedIds = Array.from(this.state.selectedSOIds);
+
+            // Giữ hàng (reserve) trước khi lấy dữ liệu chuyển vị trí — giống luồng in phiếu
+            try {
+                const reserveResponse = await fetch('/hlv_sale_delivery_planning/reserve_stock', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        method: 'call',
+                        params: { sale_order_ids: selectedIds },
+                    }),
+                });
+                const reserveResult = await reserveResponse.json();
+                if (reserveResult.result) {
+                    console.log('Giữ hàng trước chuyển vị trí:', reserveResult.result.message);
+                }
+            } catch (reserveErr) {
+                console.warn('Giữ hàng thất bại, tiếp tục:', reserveErr);
+            }
+            const data = await this.orm.call(
+                'sale.order',
+                'prepare_relocation_data',
+                [],
+                { sale_order_ids: selectedIds }
+            );
+            this.state.relocationModalData = data;
+            this.state.relocationDestLocationId = data.default_dest_location_id || null;
+
+            // Init selections cho mỗi đơn
+            const selections = {};
+            for (const order of (data.orders || [])) {
+                const prodSel = {};
+                for (const prod of (order.products || [])) {
+                    prodSel[prod.product_id] = { include: true, qty: prod.pending_qty };
+                }
+                selections[order.sale_order_id] = {
+                    selected: true,
+                    products: prodSel,
+                };
+            }
+            this.state.relocationOrderSelections = selections;
+        } catch (err) {
+            console.error('Lỗi khi tải dữ liệu chuyển vị trí:', err);
+            alert('Lỗi: ' + (err.message || ''));
+            this.state.isRelocationModalOpen = false;
+        } finally {
+            this.state.relocationModalLoading = false;
+        }
+    }
+
+    closeRelocationModal() {
+        this.state.isRelocationModalOpen = false;
+        this.state.relocationModalData = null;
+        this.state.relocationOrderSelections = {};
+    }
+
+    toggleRelocationOrder(soId, checked) {
+        if (!this.state.relocationOrderSelections[soId]) return;
+        this.state.relocationOrderSelections[soId].selected = checked;
+        this.state.relocationOrderSelections = { ...this.state.relocationOrderSelections };
+    }
+
+    getRelocationProductSel(soId, productId) {
+        const oSel = this.state.relocationOrderSelections[soId];
+        if (!oSel || !oSel.products) return null;
+        return oSel.products[productId] || null;
+    }
+
+    toggleRelocationProduct(soId, productId, checked) {
+        const oSel = this.state.relocationOrderSelections[soId];
+        if (!oSel || !oSel.products[productId]) return;
+        oSel.products[productId].include = checked;
+        this.state.relocationOrderSelections = { ...this.state.relocationOrderSelections };
+    }
+
+    setRelocationProductQty(soId, productId, qty) {
+        const oSel = this.state.relocationOrderSelections[soId];
+        if (!oSel || !oSel.products[productId]) return;
+        oSel.products[productId].qty = parseFloat(qty) || 0;
+    }
+
+    async confirmCreateRelocationPickings() {
+        const destLocId = parseInt(this.state.relocationDestLocationId);
+        if (!destLocId) {
+            alert('Vui lòng chọn vị trí đích.');
+            return;
+        }
+
+        const orders = [];
+        for (const order of (this.state.relocationModalData?.orders || [])) {
+            const oSel = this.state.relocationOrderSelections[order.sale_order_id];
+            if (!oSel || !oSel.selected) continue;
+
+            const products = (order.products || [])
+                .filter(p => {
+                    const ps = oSel.products[p.product_id];
+                    return ps && ps.include && ps.qty > 0;
+                })
+                .map(p => ({
+                    product_id: p.product_id,
+                    qty: oSel.products[p.product_id].qty,
+                }));
+
+            if (!products.length) continue;
+            orders.push({
+                sale_order_id: order.sale_order_id,
+                products,
+            });
+        }
+
+        if (!orders.length) {
+            alert('Vui lòng chọn ít nhất 1 đơn hàng và sản phẩm.');
+            return;
+        }
+
+        this.state.isCreatingRelocation = true;
+        try {
+            const result = await this.orm.call(
+                'sale.order',
+                'create_relocation_pickings',
+                [],
+                {
+                    relocation_data: {
+                        dest_location_id: destLocId,
+                        save_as_default: this.state.relocationSaveDefault,
+                        orders,
+                    },
+                }
+            );
+
+            const created = result.created || [];
+            const errors = result.errors || [];
+
+            if (created.length) {
+                const names = created.map(c => `${c.sale_order_name}: ${c.picking_name}`).join('\n');
+                alert(`Đã tạo ${created.length} phiếu chuyển vị trí:\n${names}`);
+                // Mở PDF phiếu chuyển vị trí (nếu có)
+                if (result.pdf_url) {
+                    window.open(result.pdf_url, '_blank');
+                }
+                this.closeRelocationModal();
+                await this.fetchData();
+            }
+
+            if (errors.length) {
+                const errMsg = errors.map(e => e.error).join('\n');
+                alert('Lỗi:\n' + errMsg);
+            }
+        } catch (err) {
+            console.error('Lỗi tạo phiếu chuyển vị trí:', err);
+            alert('Lỗi: ' + (err.message || ''));
+        } finally {
+            this.state.isCreatingRelocation = false;
+        }
     }
 }
 

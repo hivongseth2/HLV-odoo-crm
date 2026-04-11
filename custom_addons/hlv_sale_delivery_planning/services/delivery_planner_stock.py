@@ -126,16 +126,24 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         so_meta_dict = {}
 
         for so in sales:
-            # --- Loại bỏ đơn đã xử lý xong (không còn picking nào active) ---
-            # Đặc biệt: đơn trả hàng — tất cả pickings done/cancel, không cần hiển thị.
-            # Trừ khi user bật show_completed để xem đơn đã giao.
-            if not show_completed:
-                active_pickings = so.picking_ids.filtered(
-                    lambda p: p.state not in ('done', 'cancel')
-                )
-                if so.picking_ids and not active_pickings:
-                    # Tất cả pickings đã done/cancel → không còn gì để xử lý
-                    continue
+            # --- Phát hiện đơn "trả hàng / dừng": không còn outflow nào active ---
+            # Luồng xuất = pick/pack/out (code = internal hoặc outgoing), loại trừ phiếu nhập (incoming).
+            # Phiếu trả hàng (return_id != False) không tính là outflow thật — chúng chỉ đảo ngược hàng.
+            active_outflow = so.picking_ids.filtered(
+                lambda p: p.state not in ('done', 'cancel')
+                and p.picking_type_code in ('outgoing', 'internal')
+                and not p.return_id  # Loại bỏ phiếu trả hàng
+            )
+            has_any_outflow = any(
+                p.picking_type_code in ('outgoing', 'internal') and not p.return_id
+                for p in so.picking_ids
+            )
+            # Đơn "trả hàng / dừng": đã từng có outflow nhưng không còn cái nào active
+            no_active_outflow = has_any_outflow and not bool(active_outflow)
+
+            # Khi không bật "hiện đơn đã giao": ẩn hoàn toàn các đơn này
+            if not show_completed and no_active_outflow:
+                continue
 
             has_pending = False
             has_delivered = False
@@ -204,6 +212,18 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 'stock_status': stock_status,
                 'packing_status': packing_status,
                 'real_delivery_status': real_delivery_status,
+                # Đơn trả hàng / dừng: outflow hết nhưng chưa giao đủ → hiện riêng khi show_completed
+                'is_returned_or_stopped': no_active_outflow and real_delivery_status != 'full',
+                # Đã in phiếu nhưng có phiếu pick mới chưa in (hàng về thêm)
+                'has_new_unprinted_pickings': (
+                    bool(so.x_picking_slip_printed)
+                    and bool(active_outflow)
+                    and any(
+                        not p.x_printed
+                        for p in active_outflow
+                        if 'PICK' in (p.picking_type_id.sequence_code or '').upper()
+                    )
+                ),
             }
 
             # Giữ metadata để tổng hợp KPI theo tập đã lọc cuối cùng.
@@ -212,6 +232,13 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 'packing_status': packing_status,
                 'has_pending': has_pending,
             }
+
+            is_returned_or_stopped = so_status_dict[so.id]['is_returned_or_stopped']
+
+            # Đơn trả hàng/dừng: hiển thị riêng trong group "Trả hàng" khi show_completed
+            if show_completed and is_returned_or_stopped:
+                matched_sale_ids.append(so.id)
+                continue
 
             if filter_delivery_status == 'pending_partial':
                 delivery_ok = real_delivery_status in ('unshipped', 'partial')
@@ -222,10 +249,24 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             else:
                 delivery_ok = True
 
+            # Tính effective_packing_status bao gồm trạng thái in phiếu
+            has_new_unprinted = so_status_dict[so.id].get('has_new_unprinted_pickings', False)
+            if has_new_unprinted:
+                effective_packing = 'has_unprinted'
+            elif bool(so.x_picking_slip_printed) and packing_status not in ('delivered',):
+                effective_packing = 'printed_waiting'
+            else:
+                effective_packing = packing_status
+
+            if filter_packing_status in ('has_unprinted', 'printed_waiting'):
+                packing_ok = effective_packing == filter_packing_status
+            else:
+                packing_ok = filter_packing_status == 'all' or packing_status == filter_packing_status
+
             if (
                 delivery_ok
                 and (filter_stock_status == 'all' or stock_status == filter_stock_status)
-                and (filter_packing_status == 'all' or packing_status == filter_packing_status)
+                and packing_ok
             ):
                 matched_sale_ids.append(so.id)
 

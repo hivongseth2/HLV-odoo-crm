@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ================================================================
+         Modal Tạo Phiếu Luân Chuyển + Báo Cáo Chuyển Kho
+         state.isTransferModalOpen = true/false
+         state.transferModalData = { warehouses, all_partners }
+         state.transferSelections = { [wh_id]: { selected, partner_id, products: [{product_id, qty, include}] } }
+         ================================================================ -->
+    <t t-name="hlv_sale_delivery_planning.TransferModal">
+        <div t-if="state.isTransferModalOpen"
+             class="modal show d-block" tabindex="-1"
+             style="background: rgba(0,0,0,0.55); z-index: 1070;">
+            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content shadow-lg border-0">
+
+                    <!-- Header -->
+                    <div class="modal-header bg-primary text-white py-3">
+                        <h5 class="modal-title m-0 d-flex align-items-center gap-2">
+                            <i class="fa fa-exchange"></i>
+                            Tạo Phiếu Luân Chuyển Kho
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white"
+                                t-on-click="closeTransferModal"></button>
+                    </div>
+
+                    <!-- Loading state -->
+                    <div t-if="state.transferModalLoading" class="modal-body d-flex align-items-center justify-content-center" style="min-height:200px;">
+                        <div class="text-center text-muted">
+                            <div class="spinner-border text-primary mb-3" role="status"></div>
+                            <div>Đang phân tích dữ liệu...</div>
+                        </div>
+                    </div>
+
+                    <!-- No transfer needed -->
+                    <div t-elif="!state.transferModalData or !state.transferModalData.warehouses or state.transferModalData.warehouses.length === 0"
+                         class="modal-body text-center py-5 text-muted">
+                        <i class="fa fa-check-circle-o fa-3x text-success mb-3"></i>
+                        <div class="fw-bold">Không có hàng cần luân chuyển</div>
+                        <div class="small">Các đơn đã chọn đủ hàng hoặc không tìm thấy kho nguồn phù hợp.</div>
+                    </div>
+
+                    <!-- Main content -->
+                    <div t-else="" class="modal-body p-0">
+
+                        <!-- ── Chọn kho (nếu nhiều kho) ────────────────── -->
+                        <div t-if="state.transferModalData.warehouses.length > 1"
+                             class="border-bottom bg-light px-4 py-3">
+                            <div class="fw-bold text-muted small text-uppercase mb-2">
+                                <i class="fa fa-building-o me-1"></i>
+                                Chọn kho nguồn cần tạo phiếu
+                            </div>
+                            <div class="d-flex flex-wrap gap-3">
+                                <t t-foreach="state.transferModalData.warehouses" t-as="wh" t-key="wh.warehouse_id">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox"
+                                               t-att-id="'chk-wh-' + wh.warehouse_id"
+                                               t-att-checked="state.transferSelections[wh.warehouse_id] ? state.transferSelections[wh.warehouse_id].selected : true"
+                                               t-on-change="(ev) => this.toggleWarehouseSelection(wh.warehouse_id, ev.target.checked)"/>
+                                        <label class="form-check-label fw-bold"
+                                               t-att-for="'chk-wh-' + wh.warehouse_id">
+                                            <span class="badge bg-primary me-1"><t t-esc="wh.warehouse_code"/></span>
+                                            <t t-esc="wh.warehouse_name"/>
+                                            <span class="text-muted small ms-1">(<t t-esc="wh.products.length"/> sản phẩm)</span>
+                                        </label>
+                                    </div>
+                                </t>
+                            </div>
+                        </div>
+
+                        <!-- ── Tabs kho ───────────────────────────────────── -->
+                        <div class="p-4">
+                            <t t-foreach="state.transferModalData.warehouses" t-as="wh" t-key="wh.warehouse_id">
+
+                                <!-- Skip nếu không được chọn -->
+                                <t t-set="sel" t-value="state.transferSelections[wh.warehouse_id]"/>
+                                <div t-if="!sel or sel.selected"
+                                     class="mb-4 border rounded overflow-hidden shadow-sm">
+
+                                    <!-- Tiêu đề kho -->
+                                    <div class="px-4 py-2 d-flex align-items-center gap-3 flex-wrap"
+                                         style="background: #e8f4f8; border-bottom: 1px solid #c8dde8;">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="badge bg-primary fs-6 px-3"><t t-esc="wh.warehouse_code"/></span>
+                                            <strong><t t-esc="wh.warehouse_name"/></strong>
+                                        </div>
+                                        <div class="text-muted small">
+                                            <i class="fa fa-map-marker me-1"></i>
+                                            <t t-esc="wh.lot_stock_name"/>
+                                            <i class="fa fa-long-arrow-right mx-2 text-danger"></i>
+                                            <t t-esc="wh.transit_location_name"/>
+                                        </div>
+                                        <div class="text-muted small">
+                                            <i class="fa fa-clipboard me-1"></i>
+                                            <t t-esc="wh.picking_type_name"/>
+                                        </div>
+                                    </div>
+
+                                    <!-- Partner (auto-applied, read-only) -->
+                                    <div class="px-4 py-2 bg-white border-bottom d-flex align-items-center gap-2 flex-wrap">
+                                        <i class="fa fa-user text-muted"></i>
+                                        <span class="fw-bold small text-muted">Liên hệ:</span>
+                                        <t t-if="wh.partner_id">
+                                            <span class="badge bg-info text-dark px-3 py-1" style="font-size:.85rem;">
+                                                <i class="fa fa-check-circle me-1 text-success"></i>
+                                                <t t-esc="wh.partner_name"/>
+                                            </span>
+                                        </t>
+                                        <span t-else="" class="text-muted small fst-italic">Không có liên hệ</span>
+                                    </div>
+
+                                    <!-- Bảng báo cáo + sản phẩm -->
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-hover mb-0 align-middle">
+                                            <thead class="table-light text-uppercase small fw-bold">
+                                                <tr>
+                                                    <th class="ps-3" width="30">
+                                                        <input type="checkbox" class="form-check-input"
+                                                               title="Chọn/bỏ tất cả"
+                                                               t-att-checked="this.areAllProductsSelected(wh.warehouse_id)"
+                                                               t-on-change="(ev) => this.toggleAllProducts(wh.warehouse_id, ev.target.checked)"/>
+                                                    </th>
+                                                    <th class="ps-2">Mã hàng</th>
+                                                    <th>Tên sản phẩm</th>
+                                                    <th class="text-center">Từ các đơn</th>
+                                                    <th class="text-end">Tổng yêu cầu</th>
+                                                    <th class="text-end">Tồn kho tại kho</th>
+                                                    <th class="text-end pe-3">SL tạo phiếu</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <t t-foreach="wh.products" t-as="prod" t-key="prod.product_id">
+                                                    <t t-set="prodSel" t-value="this.getProductSelection(wh.warehouse_id, prod.product_id)"/>
+                                                    <tr t-att-class="prodSel and prodSel.include ? '' : 'opacity-50 bg-light'">
+                                                        <td class="ps-3">
+                                                            <input type="checkbox"
+                                                                   class="form-check-input"
+                                                                   t-att-checked="prodSel ? prodSel.include : true"
+                                                                   t-on-change="(ev) => this.toggleProductSelection(wh.warehouse_id, prod.product_id, ev.target.checked)"/>
+                                                        </td>
+                                                        <td class="ps-2 font-monospace text-primary fw-bold small">
+                                                            <t t-esc="prod.product_code or '—'"/>
+                                                        </td>
+                                                        <td class="fw-semibold"><t t-esc="prod.product_name"/></td>
+                                                        <td class="text-center">
+                                                            <div class="d-flex flex-wrap gap-1 justify-content-center">
+                                                                <t t-foreach="prod.order_names" t-as="oname" t-key="oname">
+                                                                    <span class="badge bg-light text-primary border small" style="font-size:0.65rem;">
+                                                                        <t t-esc="oname"/>
+                                                                    </span>
+                                                                </t>
+                                                            </div>
+                                                        </td>
+                                                        <td class="text-end fw-bold text-danger">
+                                                            <t t-esc="this.formatQty(prod.total_qty)"/>
+                                                        </td>
+                                                        <td class="text-end">
+                                                            <span t-att-class="prod.available_at_source >= prod.total_qty ? 'text-success fw-bold' : 'text-warning fw-bold'">
+                                                                <t t-esc="this.formatQty(prod.available_at_source)"/>
+                                                            </span>
+                                                        </td>
+                                                        <td class="text-end pe-3">
+                                                            <input type="number" class="form-control form-control-sm text-end fw-bold"
+                                                                   style="width:90px; display:inline-block;"
+                                                                   t-att-value="prodSel ? prodSel.qty : prod.total_qty"
+                                                                   t-att-max="prod.available_at_source"
+                                                                   min="0" step="1"
+                                                                   t-att-disabled="!(prodSel ? prodSel.include : true)"
+                                                                   t-on-change="(ev) => this.setProductQty(wh.warehouse_id, prod.product_id, parseFloat(ev.target.value) || 0)"/>
+                                                        </td>
+                                                    </tr>
+                                                </t>
+                                            </tbody>
+                                            <tfoot class="table-light fw-bold">
+                                                <tr>
+                                                    <td colspan="4" class="ps-3 text-muted small">
+                                                        <t t-esc="this.countSelectedProducts(wh.warehouse_id)"/> sản phẩm được chọn
+                                                    </td>
+                                                    <td class="text-end text-danger">
+                                                        <t t-esc="this.formatQty(this.sumSelectedQty(wh.warehouse_id))"/>
+                                                    </td>
+                                                    <td/>
+                                                    <td/>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+
+                                </div>
+                            </t>
+                        </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="modal-footer d-flex justify-content-between align-items-center"
+                         t-if="!state.transferModalLoading and state.transferModalData and state.transferModalData.warehouses and state.transferModalData.warehouses.length > 0">
+
+                        <div class="text-muted small">
+                            <i class="fa fa-info-circle me-1 text-info"></i>
+                            Vị trí đích: <span class="fw-bold"><t t-esc="state.transferModalData.warehouses[0] ? state.transferModalData.warehouses[0].transit_location_name : ''"/></span>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-outline-success"
+                                    t-on-click="exportTransferExcel"
+                                    title="Xuất báo cáo chuyển kho ra Excel">
+                                <i class="fa fa-file-excel-o me-1"></i>Xuất Excel
+                            </button>
+                            <button class="btn btn-outline-secondary"
+                                    t-on-click="closeTransferModal">
+                                <i class="fa fa-times me-1"></i>Đóng
+                            </button>
+                            <button class="btn btn-primary"
+                                    t-att-disabled="state.isCreatingTransfer"
+                                    t-on-click="confirmCreateTransferPickings">
+                                <i class="fa fa-plus me-1"></i>
+                                <span t-if="!state.isCreatingTransfer">Tạo Phiếu Luân Chuyển</span>
+                                <span t-else="">
+                                    <span class="spinner-border spinner-border-sm me-1"></span>Đang tạo...
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </t>
+
+</templates>

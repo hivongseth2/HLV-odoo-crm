@@ -50,6 +50,30 @@
                         <t t-esc="this.selectedCount"/>
                     </span>
                 </button>
+                <!-- Tạo phiếu luân chuyển -->
+                <button class="btn btn-sm"
+                        t-att-class="this.selectedCount > 0 ? 'btn-warning' : 'btn-outline-secondary'"
+                        t-att-disabled="this.selectedCount === 0 || state.isLoading"
+                        t-on-click="openTransferModal"
+                        title="Tạo phiếu luân chuyển từ các đơn đã chọn">
+                    <i class="fa fa-exchange me-1" title="Luân chuyển"></i>
+                    Tạo phiếu luân chuyển
+                    <span t-if="this.selectedCount > 0" class="badge bg-white text-warning ms-1">
+                        <t t-esc="this.selectedCount"/>
+                    </span>
+                </button>
+                <!-- Chuyển vị trí -->
+                <button class="btn btn-sm"
+                        t-att-class="this.selectedCount > 0 ? 'btn-info' : 'btn-outline-secondary'"
+                        t-att-disabled="this.selectedCount === 0 || state.isLoading"
+                        t-on-click="openRelocationModal"
+                        title="Chuyển vị trí sản phẩm gần khu đóng gói">
+                    <i class="fa fa-arrows me-1" title="Chuyển vị trí"></i>
+                    Chuyển vị trí
+                    <span t-if="this.selectedCount > 0" class="badge bg-white text-info ms-1">
+                        <t t-esc="this.selectedCount"/>
+                    </span>
+                </button>
                 <button t-if="this.hasMoreKanbanData"
                         class="btn btn-sm btn-outline-primary"
                         t-on-click="loadMoreKanbanBatch"
@@ -71,7 +95,8 @@
         <div class="hlv-kanban-board d-flex gap-3 overflow-auto pb-4 pt-1 pe-2">
             <t t-foreach="this.kanbanColumnDefs" t-as="col" t-key="col.value">
 
-                <div class="hlv-kanban-column d-flex flex-column flex-grow-1"
+                <div class="hlv-kanban-column kanban-custom-width d-flex flex-column flex-grow-1"
+                    style="width: 350px;"
                      t-att-data-col="col.value"
                      t-on-dragover="(ev) => this.onDragOver(ev, col.value)"
                      t-on-dragleave="(ev) => this.onDragLeave(ev)"
@@ -147,6 +172,50 @@
             </t>
         </div>
 
+        <!-- ── Cột "Trả hàng / Dừng" (chỉ hiện khi bật "Hiện đơn đã giao") ─────── -->
+        <t t-if="state.showCompleted and this.returnedOrders.length > 0">
+        <div class="hlv-kanban-board d-flex gap-3 overflow-auto pb-4 pt-1 pe-2">
+            <div class="hlv-kanban-column d-flex flex-column flex-grow-1 flex-shrink-1">
+
+                <!-- Column Header -->
+                <div class="hlv-kanban-col-header rounded-top px-3 py-2 mb-2" style="background: #fff0f0; border-color: #dc3545;">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge rounded-pill fs-6 fw-bold bg-danger">
+                            <t t-esc="this.returnedOrders.length"/>
+                        </span>
+                        <span class="fw-bold small text-uppercase text-danger">
+                            Trả hàng / Dừng
+                        </span>
+                        <i class="fa fa-undo ms-auto opacity-50 text-danger" title="Trả hàng / Dừng"></i>
+                    </div>
+                    <div class="text-muted mt-1" style="font-size:0.7rem;">
+                        Đơn đã trả hàng hoặc đã dừng xử lý, không còn phiếu lấy/đóng/xuất nào active
+                    </div>
+                </div>
+
+                <!-- Cards -->
+                <div class="hlv-kanban-col-body flex-grow-1 rounded-bottom px-2 py-2">
+                    <t t-foreach="this.returnedOrdersPaged" t-as="so" t-key="so.id">
+                        <div class="hlv-kanban-card mb-2">
+                            <t t-call="hlv_sale_delivery_planning.KanbanSOCard"/>
+                        </div>
+                    </t>
+
+                    <div t-if="this.hasMoreReturnedOrders" class="text-center pt-1 pb-2">
+                        <button class="btn btn-sm btn-outline-danger w-100"
+                                style="border-style: dashed; font-size: 0.75rem;"
+                                t-on-click="loadMoreReturnedOrders">
+                            <i class="fa fa-chevron-down me-1" title="Tải thêm"></i>
+                            Tải thêm
+                            (<t t-esc="this.returnedOrders.length - state.returnedColPageSize"/> còn lại)
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        </t>
+
     </t>
 
     <!-- ================================================================
@@ -154,8 +223,21 @@
          Nhận biến `so` từ t-foreach cha (context được chia sẻ qua t-call)
          ================================================================ -->
     <t t-name="hlv_sale_delivery_planning.KanbanSOCard">
-        <div class="card border-1 shadow-sm hlv-kanban-card-inner"
+        <div class="card border-1 shadow-sm hlv-kanban-card-inner position-relative overflow-hidden"
              t-att-class="this.getSOCardColorClass(so)">
+
+            <!-- Ribbon "Đã in phiếu" / "Có phiếu chưa in" -->
+            <div t-if="so.has_new_unprinted_pickings"
+                 class="position-absolute bg-danger text-center fw-bold"
+                 style="font-size:0.55rem; padding:1px 20px; color: #fff ;top:8px; right:-22px; transform:rotate(45deg); z-index:2; letter-spacing:0.5px; box-shadow: 0 1px 3px rgba(0,0,0,.2);">
+                <i class="fa fa-exclamation-circle me-1"></i>Chưa in
+            </div>
+            <div t-elif="so.picking_slip_printed"
+                 class="position-absolute bg-success  text-center fw-bold"
+                 style="font-size:0.55rem; padding:1px 20px; top:8px; color: #fff ;right:-22px; transform:rotate(45deg); z-index:2; letter-spacing:0.5px; box-shadow: 0 1px 3px rgba(0,0,0,.2);">
+                <i class="fa fa-print me-1"></i>Đã in
+            </div>
+
             <div class="card-body p-2">
 
                 <!-- Checkbox for selection -->
@@ -265,7 +347,21 @@
                     </t>
                 </div>
 
-                <!-- Row 8: Transfer suggestion badge -->
+                <!-- Row 8: Pick pickings + print status -->
+                <t t-set="pickPickings" t-value="(so.pickings || []).filter(p =&gt; p.sequence_code &amp;&amp; p.sequence_code.indexOf('PICK') &gt;= 0 &amp;&amp; !p.return_of_id &amp;&amp; p.state !== 'cancel')"/>
+                <div t-if="pickPickings.length" class="mt-1 pt-1 border-top d-flex flex-wrap gap-1" style="font-size:0.62rem;">
+                    <t t-foreach="pickPickings" t-as="pk" t-key="pk.id">
+                        <span class="badge d-inline-flex align-items-center gap-1"
+                              t-att-class="pk.printed ? 'bg-success text-white' : 'bg-danger text-white'"
+                              style="font-size:0.6rem; padding:2px 5px;"
+                              t-att-title="pk.name + ' — ' + (pk.printed ? 'Đã in' : 'Chưa in')">
+                            <i t-att-class="pk.printed ? 'fa fa-check-circle' : 'fa fa-exclamation-circle'"></i>
+                            <t t-esc="pk.name"/>
+                        </span>
+                    </t>
+                </div>
+
+                <!-- Row 8b: Transfer suggestion badge -->
                 <div t-if="so.transfer_suggestions and so.transfer_suggestions.length"
                      class="mt-1" style="font-size: 0.68rem;">
                     <span class="badge bg-danger bg-opacity-75 text-white" style="font-size:0.62rem;">
