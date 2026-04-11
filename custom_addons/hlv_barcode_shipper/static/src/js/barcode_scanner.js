@@ -1372,28 +1372,9 @@ class BarcodeShipper {
             this.receiveSoGroups.flatMap(g => (g.pickings || []).map(p => p.id))
         );
 
-        // --- Section 1: "Đã chọn" --- selected pickings NOT in current search results
-        const pinnedIds = Array.from(this.receiveSelectedIds).filter(
-            id => !searchResultIds.has(id) && this.receiveAvailableData[id]?.info
-        );
-        if (pinnedIds.length > 0) {
-            const pinnedEl = document.createElement('div');
-            pinnedEl.className = 'so-group expanded';
-            pinnedEl.innerHTML = `
-                <div class="so-group-header so-group-pinned">
-                    <span class="so-name"><i class="fa fa-check-circle"></i> Đã chọn</span>
-                    <span class="so-count">${pinnedIds.length} phiếu</span>
-                </div>
-                <div class="so-group-content"></div>
-            `;
-            const pinnedContent = pinnedEl.querySelector('.so-group-content');
-            pinnedIds.forEach(id => pinnedContent.appendChild(
-                buildPickingEl(this.receiveAvailableData[id].info, 'pinned-selected')
-            ));
-            container.appendChild(pinnedEl);
-        }
+       
 
-        // --- Section 2: "Kết quả tìm kiếm" --- ALL search results, selected stay visible
+        // --- Section 1: "Kết quả tìm kiếm" --- ALL search results, selected stay visible
         if (this.receiveSoGroups.length > 0) {
             const totalInSearch = this.receiveSoGroups.reduce((s, g) => s + (g.pickings || []).length, 0);
             const searchHeader = document.createElement('div');
@@ -1425,6 +1406,28 @@ class BarcodeShipper {
             });
 
 
+        }
+        // --- Section 2: "Kết quả tìm kiếm" 
+
+
+        const pinnedIds = Array.from(this.receiveSelectedIds).filter(
+            id => !searchResultIds.has(id) && this.receiveAvailableData[id]?.info
+        );
+        if (pinnedIds.length > 0) {
+            const pinnedEl = document.createElement('div');
+            pinnedEl.className = 'so-group expanded';
+            pinnedEl.innerHTML = `
+                <div class="so-group-header so-group-pinned">
+                    <span class="so-name"><i class="fa fa-check-circle"></i> Đã chọn</span>
+                    <span class="so-count">${pinnedIds.length} phiếu</span>
+                </div>
+                <div class="so-group-content"></div>
+            `;
+            const pinnedContent = pinnedEl.querySelector('.so-group-content');
+            pinnedIds.forEach(id => pinnedContent.appendChild(
+                buildPickingEl(this.receiveAvailableData[id].info, 'pinned-selected')
+            ));
+            container.appendChild(pinnedEl);
         }
     }
 
