@@ -115,6 +115,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'date_planned': po.date_planned.strftime('%Y-%m-%d %H:%M:%S') if po.date_planned else False,
                 'partner_id': [po.partner_id.id, po.partner_id.name] if po.partner_id else False,
                 'amount_total': po.amount_total,
+                'odoo_note': po.x_studio_ghi_ch_odoo or '',
             }
             for po in pos
         ]
