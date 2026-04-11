@@ -873,6 +873,25 @@ class BarcodeShipperController(http.Controller):
                 )
                 auto_select_ids = exact.ids
 
+            # Nếu không tìm thấy exact match, thử tìm theo mã PICK
+            # (tương tự luồng giao hàng: quét PICK → tìm OUT liên quan)
+            if search_query and not auto_select_ids:
+                try:
+                    resolved_outs = self._find_out_pickings_by_pick_name(search_query)
+                    unreceived = resolved_outs.filtered(
+                        lambda p: not p.shipper_received
+                        and p.state in ("assigned", "partially_available")
+                        and p.company_id.id == request.env.company.id
+                    )
+                    if unreceived:
+                        # Merge vào kết quả nếu chưa có
+                        new_pickings = unreceived - pickings
+                        pickings = pickings | new_pickings
+                        total = len(pickings)
+                        auto_select_ids = unreceived.ids
+                except Exception:
+                    pass  # Không tìm thấy qua PICK code thì bỏ qua
+
             so_groups_map = {}
             for p in pickings:
                 group_key = p.origin or p.name
