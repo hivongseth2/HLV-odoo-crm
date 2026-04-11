@@ -67,7 +67,7 @@ class DeliveryPlannerController(http.Controller):
 
             # Fetch report by name "Hoạt động lấy hàng"
             report = request.env['ir.actions.report'].sudo().search([
-                ('name', 'ilike', 'Hoạt động lấy hàng TSN'),
+                ('name', 'ilike', 'Hoạt động lấy hàng'),
             ], limit=1)
             
             if not report:
