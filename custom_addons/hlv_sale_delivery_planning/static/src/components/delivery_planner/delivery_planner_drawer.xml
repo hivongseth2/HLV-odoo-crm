@@ -264,6 +264,11 @@
                                                 <i class="fa fa-clock-o me-1" title="Lịch giao"></i>
                                                 Lịch giao: <t t-esc="picking.scheduled_date"/>
                                             </div>
+                                            <div t-if="picking.code === 'outgoing' and picking.shipper_received"
+                                                 class="small mt-1 text-success fw-bold">
+                                                <i class="fa fa-motorcycle me-1" title="Shipper đã nhận"></i>
+                                                Shipper đã nhận<t t-if="picking.shipper_user">: <t t-esc="picking.shipper_user[1]"/></t>
+                                            </div>
                                             <div t-if="picking.videos and picking.videos.length > 0" class="mt-2 text-start">
                                                 <t t-foreach="picking.videos" t-as="video" t-key="video.id">
                                                     <span class="badge bg-danger cursor-pointer d-inline-flex align-items-center mb-1 me-1 px-2 py-1"

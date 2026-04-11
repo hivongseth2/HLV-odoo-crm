@@ -281,6 +281,13 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'return_of_id': p.return_id.id if p.return_id else False,
                 'return_of': p.return_id.name if p.return_id else False,
                 'printed': bool(p.x_printed),
+                'shipper_scanned': bool(getattr(p, 'shipper_scanned', False)),
+                'shipper_received': bool(getattr(p, 'shipper_received', False)),
+                'shipper_user': (
+                    [p.shipper_user_id.id, p.shipper_user_id.name]
+                    if getattr(p, 'shipper_user_id', False) and p.shipper_user_id
+                    else False
+                ),
                 'videos': att_by_picking.get(p.id, []),
             })
 
@@ -322,4 +329,5 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             'is_returned_or_stopped': so_status_dict.get('is_returned_or_stopped', False),
             'picking_slip_printed': bool(so.x_picking_slip_printed),
             'has_new_unprinted_pickings': so_status_dict.get('has_new_unprinted_pickings', False),
+            'has_shipper_received': so_status_dict.get('has_shipper_received', False),
         }

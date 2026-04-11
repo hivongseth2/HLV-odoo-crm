@@ -208,6 +208,13 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 # Còn phần có thể đóng nhưng chưa đóng hết.
                 packing_status = 'unpacked'
 
+            # Shipper đã nhận hàng để giao? (chỉ xét outgoing pickings)
+            has_shipper_received = any(
+                p.shipper_received and not p.shipper_returned
+                for p in active_outflow
+                if p.picking_type_code == 'outgoing'
+            )
+
             so_status_dict[so.id] = {
                 'stock_status': stock_status,
                 'packing_status': packing_status,
@@ -224,6 +231,8 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                         if 'PICK' in (p.picking_type_id.sequence_code or '').upper()
                     )
                 ),
+                # Shipper đã nhận hàng giao chưa
+                'has_shipper_received': has_shipper_received,
             }
 
             # Giữ metadata để tổng hợp KPI theo tập đã lọc cuối cùng.
@@ -249,16 +258,24 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             else:
                 delivery_ok = True
 
-            # Tính effective_packing_status bao gồm trạng thái in phiếu
+            # Tính effective_packing_status bao gồm trạng thái in phiếu + shipper
             has_new_unprinted = so_status_dict[so.id].get('has_new_unprinted_pickings', False)
-            if has_new_unprinted:
+            has_shipper = so_status_dict[so.id].get('has_shipper_received', False)
+
+            if has_shipper:
+                # Shipper đã nhận → "Đang giao" (ưu tiên cao nhất)
+                effective_packing = 'shipping'
+            elif has_new_unprinted:
                 effective_packing = 'has_unprinted'
             elif bool(so.x_picking_slip_printed) and packing_status not in ('delivered',):
                 effective_packing = 'printed_waiting'
+            elif packing_status == 'fully_packed':
+                # Đã đóng đủ nhưng shipper chưa nhận → "Đã gói, chờ nhận giao"
+                effective_packing = 'packed_waiting_ship'
             else:
                 effective_packing = packing_status
 
-            if filter_packing_status in ('has_unprinted', 'printed_waiting'):
+            if filter_packing_status in ('has_unprinted', 'printed_waiting', 'packed_waiting_ship', 'shipping'):
                 packing_ok = effective_packing == filter_packing_status
             else:
                 packing_ok = filter_packing_status == 'all' or packing_status == filter_packing_status

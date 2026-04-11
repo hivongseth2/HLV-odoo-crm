@@ -361,6 +361,21 @@
                     </t>
                 </div>
 
+                <!-- Row 8a: Shipper status (outgoing pickings) -->
+                <t t-set="outPickings" t-value="(so.pickings || []).filter(p =&gt; p.code === 'outgoing' &amp;&amp; !p.return_of_id &amp;&amp; p.state !== 'cancel')"/>
+                <t t-set="receivedOuts" t-value="outPickings.filter(p =&gt; p.shipper_received)"/>
+                <div t-if="receivedOuts.length" class="mt-1 d-flex flex-wrap gap-1" style="font-size:0.62rem;">
+                    <t t-foreach="receivedOuts" t-as="op" t-key="op.id">
+                        <span class="badge bg-success bg-opacity-75 text-white d-inline-flex align-items-center gap-1"
+                              style="font-size:0.6rem; padding:2px 5px;"
+                              t-att-title="op.name + ' — Shipper: ' + (op.shipper_user ? op.shipper_user[1] : '?')">
+                            <i class="fa fa-motorcycle"></i>
+                            <t t-esc="op.name"/>
+                            <t t-if="op.shipper_user"> · <t t-esc="op.shipper_user[1]"/></t>
+                        </span>
+                    </t>
+                </div>
+
                 <!-- Row 8b: Transfer suggestion badge -->
                 <div t-if="so.transfer_suggestions and so.transfer_suggestions.length"
                      class="mt-1" style="font-size: 0.68rem;">
