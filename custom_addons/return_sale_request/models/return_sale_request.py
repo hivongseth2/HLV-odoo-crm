@@ -713,7 +713,7 @@ class ReturnSaleRequest(models.Model):
                 
             return {"ok": True, "action": "updated", "res_id": existing.id, "name": existing.name}
         else:
-            vals["state"] = "return_sale"
+            vals["state"] = "draft"
             new_record = self.create(vals)
             
             if line_data:
