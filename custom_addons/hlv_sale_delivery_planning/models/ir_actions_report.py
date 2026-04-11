@@ -23,8 +23,17 @@ class IrActionsReport(models.Model):
             if not report:
                 return result
 
-            report_name = (report.name or '').lower()
-            if 'hoạt động lấy hàng' not in report_name:
+            # Check bằng tên dịch UI (vi_VN) hoặc fallback tên kỹ thuật
+            translated_name = (report.with_context(lang='vi_VN').name or '').lower()
+            report_technical = (report.report_name or '')
+            is_picking_report = (
+                'hoạt động lấy hàng' in translated_name
+                or (
+                    report_technical.startswith('stock.report_picking')
+                    and 'packages' not in report_technical
+                )
+            )
+            if not is_picking_report:
                 return result
 
             # Report này in cho stock.picking → đánh dấu x_printed
