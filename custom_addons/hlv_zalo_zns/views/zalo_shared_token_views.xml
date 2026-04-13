@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <menuitem id="menu_zalo_shared_token"
+        name="🔑 Shared Token"
+        parent="menu_hlv_zalo"
+        action="action_zalo_shared_token"
+        sequence="1" />
     <!-- Form view cho Zalo Shared Token -->
     <record id="view_zalo_shared_token_form" model="ir.ui.view">
         <field name="name">hlv.zalo.shared.token.form</field>
@@ -180,10 +185,6 @@ if access_token:
     </record>
 
     <!-- Menu item - Đặt ở đầu menu Zalo -->
-    <menuitem id="menu_zalo_shared_token"
-        name="🔑 Shared Token"
-        parent="menu_hlv_zalo"
-        action="action_zalo_shared_token"
-        sequence="1" />
+
 
 </odoo>
