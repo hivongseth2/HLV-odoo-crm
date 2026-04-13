@@ -263,23 +263,22 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         packing_status = so_status_dict.get('packing_status', 'unknown')
         stock_status = so_status_dict.get('stock_status', 'out_of_stock')
 
-        # --- Tìm phiếu internal/storage đang giữ hàng cho sản phẩm thiếu ---
-        shortage_product_ids = []
+        # --- Tìm phiếu internal/storage đang giữ hàng cho sản phẩm còn pending ---
+        pending_product_ids = []
         for ld in so_lines_data:
             if ld.get('product_type') == 'service' or ld.get('is_kit'):
                 continue
             if not ld.get('product_id'):
                 continue
             pending = ld['product_uom_qty'] - ld['qty_delivered']
-            eff = (ld.get('qty_warehouse_free') or 0) + (ld.get('qty_reserved_here') or 0)
-            if pending > 0 and eff < pending:
-                shortage_product_ids.append(ld['product_id'][0])
+            if pending > 0:
+                pending_product_ids.append(ld['product_id'][0])
 
         blocked_by_product = {}
-        if shortage_product_ids and so.warehouse_id:
+        if pending_product_ids and so.warehouse_id:
             # Tìm stock.move đang giữ hàng (reserved) tại kho này, KHÔNG phải của SO này
             blocking_moves = self.env['stock.move'].sudo().search([
-                ('product_id', 'in', shortage_product_ids),
+                ('product_id', 'in', pending_product_ids),
                 ('state', 'in', ('assigned', 'partially_available', 'confirmed', 'waiting')),
                 ('location_id', 'child_of', so.warehouse_id.lot_stock_id.id),
                 ('picking_id', '!=', False),
