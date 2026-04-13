@@ -83,6 +83,13 @@
                    t-on-click="() => { state.showCompleted = false; this.onFilterChange(); }"></i>
             </span>
 
+            <span t-if="state.filterNeedTransfer"
+                  class="badge text-bg-danger d-flex align-items-center gap-2 p-2 rounded-pill">
+                <i class="fa fa-exchange me-1"></i>Cần chuyển kho
+                <i class="fa fa-times cursor-pointer ms-1" title="Xóa"
+                   t-on-click="() => { state.filterNeedTransfer = false; this.onFilterChange(); }"></i>
+            </span>
+
             <button class="btn btn-sm btn-outline-danger border-0 fw-bold ms-auto" t-on-click="resetFilters">
                 <i class="fa fa-trash-o me-1" title="Xóa tất cả"></i> Xóa tất cả bộ lọc
             </button>
@@ -331,7 +338,7 @@
                     <input class="form-check-input" type="checkbox" role="switch"
                            id="filterNeedTransfer"
                            t-att-checked="state.filterNeedTransfer"
-                           t-on-change="(ev) => { this.state.filterNeedTransfer = ev.target.checked; }"/>
+                           t-on-change="(ev) => { this.state.filterNeedTransfer = ev.target.checked; this.onFilterChange(); }"/>
                     <label class="form-check-label small fw-bold" for="filterNeedTransfer">
                         <i class="fa fa-exchange text-danger me-1"></i>Cần chuyển kho
                     </label>

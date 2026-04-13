@@ -55,7 +55,7 @@ class SaleOrder(models.Model):
         )
 
     @api.model
-    def get_delivery_dashboard_data(self, search_query='', filter_warehouse_id='all', filter_delivery_status='all', filter_stock_status='all', filter_packing_status='all', filter_date_from='', filter_date_to='', filter_po_date_from='', filter_po_date_to='', filter_po_status='all', filter_saler_code='', filter_htgh='', filter_delivery_type='all', filter_tag_ids='', limit=12, offset=0, show_completed=False):
+    def get_delivery_dashboard_data(self, search_query='', filter_warehouse_id='all', filter_delivery_status='all', filter_stock_status='all', filter_packing_status='all', filter_date_from='', filter_date_to='', filter_po_date_from='', filter_po_date_to='', filter_po_status='all', filter_saler_code='', filter_htgh='', filter_delivery_type='all', filter_tag_ids='', limit=12, offset=0, show_completed=False, filter_need_transfer=False):
         return self.env['hlv.delivery.planner.service'].get_dashboard_data(
             search_query=search_query,
             filter_warehouse_id=filter_warehouse_id,
@@ -74,4 +74,5 @@ class SaleOrder(models.Model):
             limit=limit,
             offset=offset,
             show_completed=show_completed,
+            filter_need_transfer=filter_need_transfer,
         )
