@@ -127,6 +127,7 @@ export class DeliveryPlannerDashboard extends Component {
                     filter_delivery_type: this.state.filterDeliveryType,
                     filter_tag_ids: this.state.filterTagIds.join(','),
                     show_completed: this.state.showCompleted,
+                    filter_need_transfer: this.state.filterNeedTransfer,
                     // Kanban tải theo batch, không phân trang backend
                     limit: isKanban ? this.state.kanbanBatchSize : this.state.itemsPerPage,
                     offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
@@ -281,7 +282,6 @@ export class DeliveryPlannerDashboard extends Component {
         const needTransfer = this.state.filterNeedTransfer;
         const base = this.state.saleOrders.filter(so => {
             if (so.is_returned_or_stopped) return false;   // hiện riêng trong cột "Trả hàng"
-            if (needTransfer && !(so.transfer_suggestions && so.transfer_suggestions.length > 0)) return false;
             let val = so[field];
             if (dim === 'delivery_status' && val === 'unshipped') val = 'pending';
             if (dim === 'packing_status') {

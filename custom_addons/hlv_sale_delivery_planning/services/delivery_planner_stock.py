@@ -7,7 +7,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
     def _calculate_po_and_stock_status(
         self, sales, po_date_from, po_date_to, po_status,
         filter_delivery_status, filter_stock_status, filter_packing_status,
-        show_completed=False,
+        show_completed=False, filter_need_transfer=False,
     ):
         """
         Lọc SO theo PO (nếu có filter PO), tính stock_status và packing_status
@@ -151,6 +151,11 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         kit_tmpl_ids = set(kits.mapped('product_tmpl_id').ids)
 
         # --- 6. Tính stock_status + packing_status cho từng SO ---
+        # Tập warehouse IDs để kiểm tra chuyển kho nhanh (không query thêm)
+        all_warehouse_ids = set(
+            k[1] for k in product_availabilities.keys()
+        )
+
         matched_sale_ids = []
         dashboard_stats = {
             'total': 0, 'ready': 0, 'partial': 0, 'out_of_stock': 0,
@@ -219,6 +224,34 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             else:
                 stock_status = 'delivered'
 
+            # Kiểm tra nhanh: có kho khác tồn trữ sản phẩm đang thiếu không?
+            # Dùng product_availabilities đã tính sẵn → không tốn thêm query.
+            has_transfer_option = False
+            if filter_need_transfer and stock_status != 'ready':
+                dest_wh_id = so.warehouse_id.id
+                for line in so.order_line:
+                    if line.display_type or not line.product_id:
+                        continue
+                    if line.product_id.type == 'service':
+                        continue
+                    if line.product_id.product_tmpl_id.id in kit_tmpl_ids:
+                        continue
+                    pending_qty = line.product_uom_qty - line.qty_delivered
+                    if pending_qty <= 0:
+                        continue
+                    qty_at_dest = (product_availabilities.get((line.product_id.id, dest_wh_id), 0.0)
+                                   + line_reserved_qty.get(line.id, 0.0))
+                    if qty_at_dest >= pending_qty:
+                        continue  # đủ hàng tại kho đích cho dòng này
+                    # Thiếu → check kho khác
+                    for other_wh_id in all_warehouse_ids:
+                        if other_wh_id != dest_wh_id:
+                            if product_availabilities.get((line.product_id.id, other_wh_id), 0.0) > 0:
+                                has_transfer_option = True
+                                break
+                    if has_transfer_option:
+                        break
+
             # Dong bo voi logic hien thi tren card/kanban.
             if not has_storable_line:
                 real_delivery_status = 'full'
@@ -275,6 +308,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 'stock_status': stock_status,
                 'packing_status': packing_status,
                 'has_pending': has_pending,
+                'has_transfer_option': has_transfer_option,
             }
 
             is_returned_or_stopped = so_status_dict[so.id]['is_returned_or_stopped']
@@ -322,6 +356,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 delivery_ok
                 and (filter_stock_status == 'all' or stock_status == filter_stock_status)
                 and packing_ok
+                and (not filter_need_transfer or has_transfer_option)
             ):
                 matched_sale_ids.append(so.id)
 

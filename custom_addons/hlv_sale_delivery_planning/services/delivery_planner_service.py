@@ -14,7 +14,7 @@ class DeliveryPlannerService(models.AbstractModel):
         filter_po_date_from='', filter_po_date_to='', filter_po_status='all',
         limit=12, offset=0, filter_saler_code='',
         filter_htgh='', filter_delivery_type='all', filter_tag_ids='',
-        show_completed=False,
+        show_completed=False, filter_need_transfer=False,
     ):
         """
         Äiá»ƒm vÃ o chÃ­nh: tá»•ng há»£p dá»¯ liá»‡u dashboard giao hÃ ng.
@@ -38,6 +38,7 @@ class DeliveryPlannerService(models.AbstractModel):
                 sales, filter_po_date_from, filter_po_date_to,
                 filter_po_status, filter_delivery_status, filter_stock_status, filter_packing_status,
                 show_completed=show_completed,
+                filter_need_transfer=filter_need_transfer,
             )
 
         total_count = len(matched_ids)
