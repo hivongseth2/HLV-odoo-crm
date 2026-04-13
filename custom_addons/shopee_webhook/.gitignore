@@ -1,2 +1,0 @@
-# Ignore webhook log files but keep the directory
-logs/*.log
