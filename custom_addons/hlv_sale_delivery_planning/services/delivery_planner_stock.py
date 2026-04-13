@@ -165,15 +165,53 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 # Thu thập tất cả product_id đang cần check
                 all_prod_ids_for_transfer = set(k[0] for k in product_availabilities.keys())
                 if all_prod_ids_for_transfer:
+                    # 6a. Lấy free_qty tại các kho khác
+                    missing_wh_loc_map = {}  # {wh_id: lot_stock_id}
                     for wh in all_db_warehouses.filtered(lambda w: w.id in missing_wh_ids):
                         if not wh.lot_stock_id:
                             continue
+                        missing_wh_loc_map[wh.id] = wh.lot_stock_id.id
                         prods = self.env['product.product'].browse(
                             list(all_prod_ids_for_transfer)
                         ).with_context(location=wh.lot_stock_id.id)
                         for p in prods:
-                            if p.free_qty > 0:
-                                product_availabilities[(p.id, wh.id)] = p.free_qty
+                            # Lưu cả free_qty = 0 để step 6b có thể cộng internal reserved
+                            product_availabilities[(p.id, wh.id)] = p.free_qty
+
+                    # 6b. Cộng lại internal transfer reserved (giống step 2b)
+                    # vì SO ưu tiên hơn internal transfer
+                    if missing_wh_loc_map:
+                        missing_loc_to_wh = {}
+                        for w_id, loc_id in missing_wh_loc_map.items():
+                            child_locs = self.env['stock.location'].sudo().search([
+                                ('id', 'child_of', loc_id),
+                            ])
+                            for cl in child_locs:
+                                missing_loc_to_wh[cl.id] = w_id
+
+                        missing_internal_moves = self.env['stock.move'].sudo().search_read([
+                            ('product_id', 'in', list(all_prod_ids_for_transfer)),
+                            ('state', 'in', ('assigned', 'partially_available')),
+                            ('picking_id.picking_type_code', '=', 'internal'),
+                            ('picking_id.state', 'not in', ('done', 'cancel')),
+                            ('sale_line_id', '=', False),
+                        ], ['product_id', 'location_id', 'quantity'])
+
+                        for mv in missing_internal_moves:
+                            pid = mv['product_id'][0]
+                            mv_loc_id = mv['location_id'][0]
+                            w_id = missing_loc_to_wh.get(mv_loc_id)
+                            if w_id and (pid, w_id) in product_availabilities:
+                                product_availabilities[(pid, w_id)] += mv['quantity']
+
+                    # Xóa entries <= 0 tại kho khác để không gây nhiễu
+                    to_remove = [
+                        k for k in product_availabilities
+                        if k[1] in missing_wh_ids and product_availabilities[k] <= 0
+                    ]
+                    for k in to_remove:
+                        del product_availabilities[k]
+
                     all_warehouse_ids = set(k[1] for k in product_availabilities.keys())
 
         matched_sale_ids = []
