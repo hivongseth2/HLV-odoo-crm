@@ -78,6 +78,16 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                     max(float(q.quantity) - float(q.reserved_quantity), 0.0)
                     for q in quants
                 )
+                # Cộng lại qty bị giữ bởi internal transfers (SO ưu tiên hơn)
+                internal_reserved = self.env['stock.move'].sudo().search_read([
+                    ('product_id', '=', sp['product_id']),
+                    ('state', 'in', ('assigned', 'partially_available')),
+                    ('picking_id.picking_type_code', '=', 'internal'),
+                    ('picking_id.state', 'not in', ('done', 'cancel')),
+                    ('sale_line_id', '=', False),
+                    ('location_id', 'child_of', wh.lot_stock_id.id),
+                ], ['quantity'])
+                available += sum(m['quantity'] for m in internal_reserved)
                 if available > 0:
                     suggest_qty = min(available, remaining)
                     sources.append({

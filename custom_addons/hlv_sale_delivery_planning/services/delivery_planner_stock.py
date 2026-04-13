@@ -49,6 +49,41 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 for p in prods:
                     product_availabilities[(p.id, w_id)] = p.free_qty
 
+        # --- 2b. Cộng lại qty đang bị giữ bởi internal transfers (không phải SO) ---
+        # Lý do: SO ưu tiên hơn internal transfer, nên hàng bị internal giữ
+        # vẫn tính là "có hàng" cho SO (Odoo sẽ unreserve internal khi cần).
+        all_prod_ids = set()
+        wh_loc_map = {}  # {warehouse_id: lot_stock_id}
+        for w_id, prod_ids in product_qty_cache.items():
+            wh = wh_obj.browse(w_id)
+            wh_loc_map[w_id] = wh.lot_stock_id.id
+            all_prod_ids.update(prod_ids)
+
+        if all_prod_ids and wh_loc_map:
+            # Pre-cache: tất cả child locations của từng warehouse
+            loc_to_wh = {}  # {location_id: warehouse_id}
+            for w_id, loc_id in wh_loc_map.items():
+                child_locs = self.env['stock.location'].sudo().search([
+                    ('id', 'child_of', loc_id),
+                ])
+                for cl in child_locs:
+                    loc_to_wh[cl.id] = w_id
+
+            internal_moves = self.env['stock.move'].sudo().search_read([
+                ('product_id', 'in', list(all_prod_ids)),
+                ('state', 'in', ('assigned', 'partially_available')),
+                ('picking_id.picking_type_code', '=', 'internal'),
+                ('picking_id.state', 'not in', ('done', 'cancel')),
+                ('sale_line_id', '=', False),
+            ], ['product_id', 'location_id', 'quantity'])
+
+            for mv in internal_moves:
+                pid = mv['product_id'][0]
+                mv_loc_id = mv['location_id'][0]
+                w_id = loc_to_wh.get(mv_loc_id)
+                if w_id and (pid, w_id) in product_availabilities:
+                    product_availabilities[(pid, w_id)] += mv['quantity']
+
         # --- 3. Số lượng đang giữ (reserved) theo dòng SO ---
         line_reserved_qty = {}
         all_order_lines = sales.mapped('order_line').filtered(
