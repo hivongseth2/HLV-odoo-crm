@@ -151,10 +151,30 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         kit_tmpl_ids = set(kits.mapped('product_tmpl_id').ids)
 
         # --- 6. Tính stock_status + packing_status cho từng SO ---
-        # Tập warehouse IDs để kiểm tra chuyển kho nhanh (không query thêm)
-        all_warehouse_ids = set(
-            k[1] for k in product_availabilities.keys()
-        )
+        # Tập warehouse IDs để kiểm tra chuyển kho nhanh (kh&ocirc;ng query th&ecirc;m)
+        # Phải l&agrave; TẤT CẢ c&aacute;c kho, kh&ocirc;ng chỉ c&aacute;c kho trong filter,
+        # để filter_need_transfer hoạt động đ&uacute;ng khi kết hợp với filter kho.
+        all_warehouse_ids = set(k[1] for k in product_availabilities.keys())
+
+        if all_warehouse_ids:
+            # Bổ sung inventory cho c&aacute;c kho kh&aacute;c chưa c&oacute; trong product_availabilities
+            # (xảy ra khi đang filter theo 1 kho cụ thể)
+            all_db_warehouses = self.env['stock.warehouse'].search([])
+            missing_wh_ids = set(all_db_warehouses.ids) - all_warehouse_ids
+            if missing_wh_ids:
+                # Thu thập tất cả product_id đang cần check
+                all_prod_ids_for_transfer = set(k[0] for k in product_availabilities.keys())
+                if all_prod_ids_for_transfer:
+                    for wh in all_db_warehouses.filtered(lambda w: w.id in missing_wh_ids):
+                        if not wh.lot_stock_id:
+                            continue
+                        prods = self.env['product.product'].browse(
+                            list(all_prod_ids_for_transfer)
+                        ).with_context(location=wh.lot_stock_id.id)
+                        for p in prods:
+                            if p.free_qty > 0:
+                                product_availabilities[(p.id, wh.id)] = p.free_qty
+                    all_warehouse_ids = set(k[1] for k in product_availabilities.keys())
 
         matched_sale_ids = []
         dashboard_stats = {
