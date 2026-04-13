@@ -253,6 +253,59 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         packing_status = so_status_dict.get('packing_status', 'unknown')
         stock_status = so_status_dict.get('stock_status', 'out_of_stock')
 
+        # --- Tìm phiếu internal/storage đang giữ hàng cho sản phẩm thiếu ---
+        shortage_product_ids = []
+        for ld in so_lines_data:
+            if ld.get('product_type') == 'service' or ld.get('is_kit'):
+                continue
+            if not ld.get('product_id'):
+                continue
+            pending = ld['product_uom_qty'] - ld['qty_delivered']
+            eff = (ld.get('qty_warehouse_free') or 0) + (ld.get('qty_reserved_here') or 0)
+            if pending > 0 and eff < pending:
+                shortage_product_ids.append(ld['product_id'][0])
+
+        blocked_by_product = {}
+        if shortage_product_ids and so.warehouse_id:
+            # Tìm stock.move đang giữ hàng (reserved) tại kho này, KHÔNG phải của SO này
+            blocking_moves = self.env['stock.move'].sudo().search([
+                ('product_id', 'in', shortage_product_ids),
+                ('state', 'in', ('assigned', 'partially_available', 'confirmed', 'waiting')),
+                ('location_id', 'child_of', so.warehouse_id.lot_stock_id.id),
+                ('picking_id', '!=', False),
+                ('picking_id.state', 'not in', ('done', 'cancel')),
+                ('sale_line_id', '=', False),  # Không phải move từ SO (internal transfers)
+            ])
+            for mv in blocking_moves:
+                pid = mv.product_id.id
+                reserved_qty = mv.quantity  # reserved qty on the move
+                if reserved_qty <= 0:
+                    continue
+                if pid not in blocked_by_product:
+                    blocked_by_product[pid] = []
+                # Gom theo picking
+                existing = next(
+                    (b for b in blocked_by_product[pid] if b['picking_id'] == mv.picking_id.id),
+                    None,
+                )
+                if existing:
+                    existing['qty'] += reserved_qty
+                else:
+                    blocked_by_product[pid].append({
+                        'picking_id': mv.picking_id.id,
+                        'picking_name': mv.picking_id.name,
+                        'picking_type': mv.picking_id.picking_type_id.name or '',
+                        'picking_code': mv.picking_id.picking_type_id.code or '',
+                        'origin': mv.picking_id.origin or '',
+                        'state': mv.picking_id.state,
+                        'qty': reserved_qty,
+                    })
+
+        # Gắn blocking info vào từng line
+        for ld in so_lines_data:
+            pid = ld['product_id'][0] if ld.get('product_id') else False
+            ld['blocked_by'] = blocked_by_product.get(pid, [])
+
         # --- Real delivery status ---
         # Uu tien gia tri da tinh o service stock de dong bo voi filter backend.
         storable_lines = [l for l in so_lines_data if l.get('product_type') != 'service']
