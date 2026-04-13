@@ -29,6 +29,8 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
 
         # { from_wh_id: { prod_id: {...} } }
         wh_product_map = {}
+        # Kho đích cho mỗi kho nguồn (để lấy partner_id của kho nhận hàng)
+        wh_dest_map = {}  # { from_wh_id: dest_wh_id }
 
         for so in sale_orders:
             if not so.warehouse_id:
@@ -90,6 +92,7 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
 
                     if from_wh_id not in wh_product_map:
                         wh_product_map[from_wh_id] = {}
+                        wh_dest_map[from_wh_id] = dest_wh_id  # lưu kho đích
                     if prod_id not in wh_product_map[from_wh_id]:
                         wh_product_map[from_wh_id][prod_id] = {
                             'product_id': prod_id,
@@ -146,7 +149,10 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
                     ('name', 'not ilike', 'nhập'),
                 ], limit=1)
 
-            default_partner = wh.partner_id if wh.partner_id else False
+            # Partner = địa chỉ của kho ĐÍCH (nơi nhận hàng), không phải kho nguồn
+            dest_wh_id = wh_dest_map.get(from_wh_id)
+            dest_wh = self.env['stock.warehouse'].browse(dest_wh_id) if dest_wh_id else False
+            default_partner = (dest_wh.partner_id if dest_wh and dest_wh.partner_id else False)
 
             products_list = sorted(
                 products_map.values(),
