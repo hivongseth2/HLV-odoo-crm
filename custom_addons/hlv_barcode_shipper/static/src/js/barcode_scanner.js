@@ -397,7 +397,7 @@ class BarcodeShipper {
         video.setAttribute('autoplay', '');
         video.setAttribute('playsinline', '');
         video.setAttribute('muted', '');
-        video.style.cssText = 'width:100%;height:180px;max-height:200px;display:block;border-radius:8px;object-fit:cover;';
+        video.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
         readerEl.appendChild(video);
 
         // Add scan overlay with laser line
@@ -497,14 +497,13 @@ class BarcodeShipper {
     onScanSuccess(decodedText, mode) {
         if (mode === 'pick') {
             const input = document.getElementById('pick-barcode-input');
-            if (input) { input.value = decodedText; this.scanPickOrder(); this.stopCamera(); }
+            if (input) { input.value = decodedText; this.scanPickOrder(); }
         } else if (mode === 'item') {
             const input = document.getElementById('item-barcode-input');
             if (input) { input.value = decodedText; this.scanItem(); }
         } else if (mode === 'receive') {
             const input = document.getElementById('receive-barcode-input');
             if (input) input.value = decodedText;
-            this.stopCamera();
             this.searchReceivePickings(decodedText);
         } else if (mode === 'receive-detail') {
             const input = document.getElementById('receive-detail-barcode-input');
