@@ -397,7 +397,7 @@ class BarcodeShipper {
         video.setAttribute('autoplay', '');
         video.setAttribute('playsinline', '');
         video.setAttribute('muted', '');
-        video.style.cssText = 'width:100%;display:block;border-radius:8px;';
+        video.style.cssText = 'width:100%;height:180px;max-height:200px;display:block;border-radius:8px;object-fit:cover;';
         readerEl.appendChild(video);
 
         // Add scan overlay with laser line
