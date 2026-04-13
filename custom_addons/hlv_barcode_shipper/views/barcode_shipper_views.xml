@@ -123,7 +123,7 @@
                                     <div class="input-group-row" style="margin-bottom:0;">
                                         <input type="text" id="receive-barcode-input" class="form-control"
                                             placeholder="Quét mã phiếu / đơn hàng để tìm nhanh..."
-                                            autocomplete="off"/>
+                                            autocomplete="off" inputmode="none"/>
                                         <button id="receive-scan-btn" class="btn btn-secondary" title="Tìm kiếm">
                                             <i class="fa fa-search"></i>
                                         </button>
@@ -179,7 +179,7 @@
                                             <i class="fa fa-camera"></i> Quét Kiện / Sản Phẩm
                                         </button>
                                         <div class="input-group-row">
-                                            <input type="text" id="receive-detail-barcode-input" class="form-control" placeholder="Nhập mã vạch..." autocomplete="off"/>
+                                            <input type="text" id="receive-detail-barcode-input" class="form-control" placeholder="Nhập mã vạch..." autocomplete="off" inputmode="none"/>
                                             <button id="receive-detail-scan-btn" class="btn btn-secondary">
                                                 <i class="fa fa-check"></i>
                                             </button>
@@ -238,7 +238,7 @@
                                         </button>
                                         <div class="separator">hoặc nhập thủ công</div>
                                         <div class="input-group-row">
-                                            <input type="text" id="pick-barcode-input" class="form-control" placeholder="Nhập mã PICK..." autocomplete="off"/>
+                                            <input type="text" id="pick-barcode-input" class="form-control" placeholder="Nhập mã PICK..." autocomplete="off" inputmode="none"/>
                                             <button id="scan-pick-btn" class="btn btn-secondary">
                                                 <i class="fa fa-arrow-right"></i>
                                             </button>
@@ -279,7 +279,7 @@
                                             <i class="fa fa-camera"></i> Quét Kiện / Sản Phẩm
                                         </button>
                                         <div class="input-group-row">
-                                            <input type="text" id="item-barcode-input" class="form-control" placeholder="Nhập mã vạch..." autocomplete="off"/>
+                                            <input type="text" id="item-barcode-input" class="form-control" placeholder="Nhập mã vạch..." autocomplete="off" inputmode="none"/>
                                             <button id="scan-item-btn" class="btn btn-secondary">
                                                 <i class="fa fa-check"></i>
                                             </button>
@@ -347,7 +347,7 @@
                                         <div class="input-group-row" style="margin-bottom:0;">
                                             <input type="text" id="return-scan-input" class="form-control"
                                                 placeholder="Quét mã phiếu để chọn..."
-                                                autocomplete="off"/>
+                                                autocomplete="off" inputmode="none"/>
                                             <button id="return-scan-btn" class="btn btn-secondary" title="Tìm kiếm">
                                                 <i class="fa fa-search"></i>
                                             </button>
@@ -405,7 +405,7 @@
                                             <i class="fa fa-camera"></i> Quét Kiện / Sản Phẩm
                                         </button>
                                         <div class="input-group-row">
-                                            <input type="text" id="return-detail-barcode-input" class="form-control" placeholder="Nhập mã vạch..." autocomplete="off"/>
+                                            <input type="text" id="return-detail-barcode-input" class="form-control" placeholder="Nhập mã vạch..." autocomplete="off" inputmode="none"/>
                                             <button id="return-detail-scan-btn" class="btn btn-secondary">
                                                 <i class="fa fa-check"></i>
                                             </button>
