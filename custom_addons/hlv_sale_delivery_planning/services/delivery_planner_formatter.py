@@ -371,7 +371,8 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'shipper_scanned': bool(getattr(p, 'shipper_scanned', False)),
                 'shipper_received': bool(getattr(p, 'shipper_received', False)),
                 'shipper_user': (
-                    [p.shipper_user_id.id, p.shipper_user_id.name]
+                    [p.shipper_user_id.id,
+                     getattr(p.shipper_user_id, 'shipper_name', None) or p.shipper_user_id.name]
                     if getattr(p, 'shipper_user_id', False) and p.shipper_user_id
                     else False
                 ),
