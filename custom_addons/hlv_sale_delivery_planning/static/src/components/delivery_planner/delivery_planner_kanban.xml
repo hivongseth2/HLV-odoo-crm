@@ -81,10 +81,10 @@
                     <i class="fa fa-plus me-1" title="Tải thêm"></i>
                     Tải thêm 200
                 </button>
-                <span class="text-muted small">
+                <!-- <span class="text-muted small">
                     <i class="fa fa-arrows text-secondary me-1" title="Kéo thả"/>
                     Kéo thả để sắp xếp ưu tiên hoặc chuyển trạng thái
-                </span>
+                </span> -->
                 <span class="badge bg-secondary rounded-pill" title="Số đơn đang tải / tổng số đơn">
                     <i class="fa fa-database me-1"></i>
                     <t t-esc="state.saleOrders.length"/> / <t t-esc="state.totalCount"/> đơn hàng
