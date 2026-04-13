@@ -297,6 +297,7 @@ body {
   overflow: hidden;
   position: relative;
   box-shadow: var(--shadow-md);
+  max-height: 300px;
 }
 
 .camera-section.active {
@@ -306,24 +307,29 @@ body {
 .camera-reader {
   width: 100%;
   height: 250px;
+  max-height: 250px;
   background: #000;
   position: relative;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .camera-reader video {
   width: 100%;
-  height: 100%;
+  height: 250px;
+  max-height: 250px;
   object-fit: cover;
   display: block;
+  flex-shrink: 0;
 }
 
 .camera-reader canvas {
   width: 100% !important;
-  height: 100% !important;
+  height: 250px !important;
+  max-height: 250px !important;
   object-fit: cover !important;
   display: block;
 }
