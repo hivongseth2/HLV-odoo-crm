@@ -397,14 +397,14 @@ class BarcodeShipper {
         video.setAttribute('autoplay', '');
         video.setAttribute('playsinline', '');
         video.setAttribute('muted', '');
-        video.style.cssText = 'width:100%;height:250px;max-height:250px;object-fit:cover;display:block;flex-shrink:0;';
+        video.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;';
         readerEl.appendChild(video);
 
         // Add scan overlay with laser line
         const overlay = document.createElement('div');
         overlay.className = 'scan-overlay';
         overlay.innerHTML = '<div class="scan-laser"></div>';
-        readerEl.style.position = 'relative';
+        readerEl.style.cssText = 'position:relative;width:100%;height:250px;overflow:hidden;background:#000;';
         readerEl.appendChild(overlay);
 
         try {
@@ -421,8 +421,8 @@ class BarcodeShipper {
             this._cameraStream = stream;
             video.srcObject = stream;
             await video.play();
-            // Re-enforce size after play() — mobile browsers reset intrinsic size
-            video.style.cssText = 'width:100%;height:250px;max-height:250px;object-fit:cover;display:block;flex-shrink:0;';
+            // Re-enforce absolute positioning after play() — mobile resets video layout
+            video.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;';
             this.isCameraRunning = true;
             this._lastScanResult = '';
             this._lastScanTime = 0;
