@@ -81,7 +81,7 @@
                                 <i class="fa fa-shipping-fast"></i> Shipper
                             </div>
                             <div class="user-info">
-                                <i class="fa fa-user-circle"></i> <t t-esc="user.name"/>
+                                <i class="fa fa-user-circle"></i> <t t-esc="user.shipper_name or user.name"/>
                             </div>
                         </div>
 
