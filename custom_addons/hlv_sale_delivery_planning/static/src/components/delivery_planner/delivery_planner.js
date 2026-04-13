@@ -288,6 +288,8 @@ export class DeliveryPlannerDashboard extends Component {
                 if (so.real_delivery_status === 'full') return false;
                 // Đã in nhưng có phiếu mới chưa in → "Có phiếu chưa in"
                 if (so.has_new_unprinted_pickings) val = 'has_unprinted';
+                // Đã đóng gói đủ → giữ nguyên, không bị đè bởi printed_waiting
+                else if (val === 'fully_packed') { /* giữ nguyên */ }
                 // Đã in tất cả phiếu, chờ đóng gói → "Đã in, chờ đóng gói"
                 else if (so.picking_slip_printed) val = 'printed_waiting';
                 // Gom nhóm để tập trung hành động: còn hàng chưa đóng = cần xử lý ngay.
