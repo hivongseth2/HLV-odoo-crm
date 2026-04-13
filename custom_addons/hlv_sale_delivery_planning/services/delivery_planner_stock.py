@@ -253,6 +253,9 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             has_new_unprinted = so_status_dict[so.id].get('has_new_unprinted_pickings', False)
             if has_new_unprinted:
                 effective_packing = 'has_unprinted'
+            elif packing_status == 'fully_packed':
+                # Đã đóng gói đủ → giữ nguyên, không bị đè bởi printed_waiting
+                effective_packing = 'fully_packed'
             elif bool(so.x_picking_slip_printed) and packing_status not in ('delivered',):
                 effective_packing = 'printed_waiting'
             else:
