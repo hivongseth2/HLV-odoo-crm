@@ -1,9 +1,0 @@
-
-<odoo>
-  <record id="action_product_import_wizard" model="ir.actions.act_window">
-    <field name="name">Import Products from Excel</field>
-    <field name="res_model">product.import.wizard</field>
-    <field name="view_mode">form</field>
-    <field name="target">new</field>
-  </record>
-</odoo>
