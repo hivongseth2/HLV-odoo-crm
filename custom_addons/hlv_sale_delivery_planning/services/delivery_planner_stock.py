@@ -49,6 +49,41 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 for p in prods:
                     product_availabilities[(p.id, w_id)] = p.free_qty
 
+        # --- 2b. Cộng lại qty đang bị giữ bởi internal transfers (không phải SO) ---
+        # Lý do: SO ưu tiên hơn internal transfer, nên hàng bị internal giữ
+        # vẫn tính là "có hàng" cho SO (Odoo sẽ unreserve internal khi cần).
+        all_prod_ids = set()
+        wh_loc_map = {}  # {warehouse_id: lot_stock_id}
+        for w_id, prod_ids in product_qty_cache.items():
+            wh = wh_obj.browse(w_id)
+            wh_loc_map[w_id] = wh.lot_stock_id.id
+            all_prod_ids.update(prod_ids)
+
+        if all_prod_ids and wh_loc_map:
+            # Pre-cache: tất cả child locations của từng warehouse
+            loc_to_wh = {}  # {location_id: warehouse_id}
+            for w_id, loc_id in wh_loc_map.items():
+                child_locs = self.env['stock.location'].sudo().search([
+                    ('id', 'child_of', loc_id),
+                ])
+                for cl in child_locs:
+                    loc_to_wh[cl.id] = w_id
+
+            internal_moves = self.env['stock.move'].sudo().search_read([
+                ('product_id', 'in', list(all_prod_ids)),
+                ('state', 'in', ('assigned', 'partially_available')),
+                ('picking_id.picking_type_code', '=', 'internal'),
+                ('picking_id.state', 'not in', ('done', 'cancel')),
+                ('sale_line_id', '=', False),
+            ], ['product_id', 'location_id', 'quantity'])
+
+            for mv in internal_moves:
+                pid = mv['product_id'][0]
+                mv_loc_id = mv['location_id'][0]
+                w_id = loc_to_wh.get(mv_loc_id)
+                if w_id and (pid, w_id) in product_availabilities:
+                    product_availabilities[(pid, w_id)] += mv['quantity']
+
         # --- 3. Số lượng đang giữ (reserved) theo dòng SO ---
         line_reserved_qty = {}
         all_order_lines = sales.mapped('order_line').filtered(
@@ -208,6 +243,13 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 # Còn phần có thể đóng nhưng chưa đóng hết.
                 packing_status = 'unpacked'
 
+            # Shipper đã nhận hàng để giao? (chỉ xét outgoing pickings)
+            has_shipper_received = any(
+                p.shipper_received and not p.shipper_returned
+                for p in active_outflow
+                if p.picking_type_code == 'outgoing'
+            )
+
             so_status_dict[so.id] = {
                 'stock_status': stock_status,
                 'packing_status': packing_status,
@@ -224,6 +266,8 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                         if 'PICK' in (p.picking_type_id.sequence_code or '').upper()
                     )
                 ),
+                # Shipper đã nhận hàng giao chưa
+                'has_shipper_received': has_shipper_received,
             }
 
             # Giữ metadata để tổng hợp KPI theo tập đã lọc cuối cùng.
@@ -249,19 +293,27 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             else:
                 delivery_ok = True
 
-            # Tính effective_packing_status bao gồm trạng thái in phiếu
+            # Tính effective_packing_status bao gồm trạng thái in phiếu + shipper
             has_new_unprinted = so_status_dict[so.id].get('has_new_unprinted_pickings', False)
-            if has_new_unprinted:
+            has_shipper = so_status_dict[so.id].get('has_shipper_received', False)
+
+            if has_shipper:
+                # Shipper đã nhận → "Đang giao" (ưu tiên cao nhất)
+                effective_packing = 'shipping'
+            elif has_new_unprinted:
                 effective_packing = 'has_unprinted'
             elif packing_status == 'fully_packed':
                 # Đã đóng gói đủ → giữ nguyên, không bị đè bởi printed_waiting
                 effective_packing = 'fully_packed'
             elif bool(so.x_picking_slip_printed) and packing_status not in ('delivered',):
                 effective_packing = 'printed_waiting'
+            elif packing_status == 'fully_packed':
+                # Đã đóng đủ nhưng shipper chưa nhận → "Đã gói, chờ nhận giao"
+                effective_packing = 'packed_waiting_ship'
             else:
                 effective_packing = packing_status
 
-            if filter_packing_status in ('has_unprinted', 'printed_waiting'):
+            if filter_packing_status in ('has_unprinted', 'printed_waiting', 'packed_waiting_ship', 'shipping'):
                 packing_ok = effective_packing == filter_packing_status
             else:
                 packing_ok = filter_packing_status == 'all' or packing_status == filter_packing_status

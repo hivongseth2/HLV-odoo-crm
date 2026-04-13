@@ -23,6 +23,37 @@ class StockPicking(models.Model):
         "res.users", string="Shipper", help="User who scanned this picking"
     )
 
+    # === Receive fields ===
+    shipper_received = fields.Boolean(
+        string="Shipper Received",
+        default=False,
+        help="Shipper confirmed receiving this picking for delivery",
+    )
+    shipper_receive_time = fields.Datetime(
+        string="Receive Time",
+        help="When the shipper confirmed receiving this picking",
+    )
+    shipper_received_by = fields.Many2one(
+        "res.users",
+        string="Received By",
+        help="Shipper who received this picking",
+    )
+
+    # === Return fields ===
+    shipper_returned = fields.Boolean(
+        string="Shipper Returned",
+        default=False,
+        help="Shipper returned this picking back to warehouse",
+    )
+    shipper_return_time = fields.Datetime(
+        string="Return Time",
+        help="When the shipper returned this picking",
+    )
+    shipper_return_reason = fields.Char(
+        string="Return Reason",
+        help="Reason for returning this picking",
+    )
+
     scan_log_ids = fields.One2many(
         "barcode.scan.log",
         "picking_id",

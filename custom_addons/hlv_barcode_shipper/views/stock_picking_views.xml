@@ -11,6 +11,18 @@
                     <field name="partner_id"/>
                     <field name="scheduled_date"/>
                     <field name="origin"/>
+                    <field name="shipper_received" string="Đã nhận"
+                           decoration-success="shipper_received == True"
+                           decoration-muted="shipper_received == False"
+                           widget="boolean"/>
+                    <field name="shipper_received_by" string="Người nhận"/>
+                    <field name="shipper_scanned" string="Đã giao"
+                           decoration-success="shipper_scanned == True"
+                           decoration-muted="shipper_scanned == False"
+                           widget="boolean"/>
+                    <field name="shipper_returned" string="Đã trả"
+                           decoration-danger="shipper_returned == True"
+                           widget="boolean"/>
                     <field name="state"
                            decoration-info="state == 'draft'"
                            decoration-warning="state in ('waiting', 'confirmed')"

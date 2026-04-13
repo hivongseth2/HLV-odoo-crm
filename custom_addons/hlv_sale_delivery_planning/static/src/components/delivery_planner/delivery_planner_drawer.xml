@@ -8,7 +8,7 @@
     <t t-name="hlv_sale_delivery_planning.Drawer">
         <div t-if="state.isDrawerOpen"
              class="offcanvas offcanvas-end show shadow-lg" tabindex="-1"
-             style="visibility: visible; width: 680px; z-index: 1050; position: fixed; top: 0; bottom: 0; right: 0; background: white;">
+             style="visibility: visible; width: 860px; z-index: 1050; position: fixed; top: 0; bottom: 0; right: 0; background: white;">
 
             <div class="offcanvas-header bg-primary text-bg-primary p-3">
                 <h5 class="offcanvas-title m-0 text-bg-primary">
@@ -128,6 +128,36 @@
                                     <t t-else=""><t t-esc="this.formatQty(Math.max(line.product_uom_qty - line.qty_delivered - (line.qty_packed || 0) - eff_stock, 0))"/></t>
                                 </td>
                             </tr>
+                            <!-- Phiếu đang giữ hàng (blocking reservations) -->
+                            <t t-if="line.blocked_by and line.blocked_by.length > 0">
+                                <tr class="table-light">
+                                    <td colspan="6" class="text-start p-0">
+                                        <div class="px-3 py-2" style="font-size:0.75rem;">
+                                            <div class="fw-bold text-danger mb-1">
+                                                <i class="fa fa-lock me-1"></i>Đang bị giữ hàng bởi:
+                                            </div>
+                                            <t t-foreach="line.blocked_by" t-as="blk" t-key="blk.picking_id">
+                                                <div class="d-flex align-items-center gap-2 mb-1 ms-3">
+                                                    <span class="badge bg-warning text-dark" style="font-size:0.68rem; cursor:pointer;"
+                                                          t-on-click="() => this.openPicking(blk.picking_id)">
+                                                        <i class="fa fa-exchange me-1" t-if="blk.picking_code === 'internal'"></i>
+                                                        <i class="fa fa-truck me-1" t-elif="blk.picking_code === 'outgoing'"></i>
+                                                        <i class="fa fa-sign-in me-1" t-else=""></i>
+                                                        <t t-esc="blk.picking_name"/>
+                                                    </span>
+                                                    <span class="text-muted small"><t t-esc="blk.picking_type"/></span>
+                                                    <span class="badge bg-danger bg-opacity-75 text-white" style="font-size:0.65rem;">
+                                                        <t t-esc="this.formatQty(blk.qty)"/> SP
+                                                    </span>
+                                                    <span t-if="blk.origin" class="text-muted small fst-italic">
+                                                        (<t t-esc="blk.origin"/>)
+                                                    </span>
+                                                </div>
+                                            </t>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </t>
                         </t>
                     </tbody>
                 </table>
@@ -141,13 +171,13 @@
                     <div class="alert alert-warning border-warning bg-warning bg-opacity-10 p-3 shadow-sm">
                         <div class="small text-muted mb-2">
                             <i class="fa fa-info-circle me-1"></i>
-                            Các sản phẩm thiếu có thể chuyển từ kho khác (chỉ tính hàng chưa bị giữ bởi đơn khác)
+                            Các sản phẩm thiếu có thể chuyển từ kho khác (bao gồm hàng đang bị giữ bởi phiếu nội bộ)
                         </div>
                         <table class="table table-sm table-bordered table-hover text-center align-middle bg-white mb-0">
                             <thead class="table-light">
                                 <tr>
                                     <th class="text-start">Sản phẩm</th>
-                                    <th width="100">Từ kho</th>
+                                    <th width="150">Từ kho</th>
                                     <th width="70">Khả dụng</th>
                                     <th width="70">Thiếu</th>
                                     <th width="90">Đề xuất</th>
@@ -167,6 +197,23 @@
                                                     <i class="fa fa-building me-1"></i>
                                                     <t t-esc="src.from_warehouse_name"/>
                                                 </span>
+                                                <!-- Phiếu nội bộ đang giữ hàng tại kho nguồn -->
+                                                <t t-if="src.blocking_pickings and src.blocking_pickings.length">
+                                                    <div class="mt-1" style="font-size:0.68rem;">
+                                                        <t t-foreach="src.blocking_pickings" t-as="blk" t-key="blk.picking_id">
+                                                            <div class="d-flex align-items-center gap-1 justify-content-center">
+                                                                <span class="badge bg-warning text-dark" style="font-size:0.62rem; cursor:pointer;"
+                                                                      t-on-click="() => this.openPicking(blk.picking_id)">
+                                                                    <i class="fa fa-lock me-1"></i>
+                                                                    <t t-esc="blk.picking_name"/>
+                                                                </span>
+                                                                <span class="text-danger fw-bold" style="font-size:0.62rem;">
+                                                                    <t t-esc="this.formatQty(blk.qty)"/> SP
+                                                                </span>
+                                                            </div>
+                                                        </t>
+                                                    </div>
+                                                </t>
                                             </td>
                                             <td class="text-success fw-bold">
                                                 <t t-esc="this.formatQty(src.available_qty)"/>
@@ -269,6 +316,11 @@
                                             <div class="small text-muted mt-1" t-if="picking.scheduled_date">
                                                 <i class="fa fa-clock-o me-1" title="Lịch giao"></i>
                                                 Lịch giao: <t t-esc="picking.scheduled_date"/>
+                                            </div>
+                                            <div t-if="picking.code === 'outgoing' and picking.shipper_received"
+                                                 class="small mt-1 text-success fw-bold">
+                                                <i class="fa fa-motorcycle me-1" title="Shipper đã nhận"></i>
+                                                Shipper đã nhận<t t-if="picking.shipper_user">: <t t-esc="picking.shipper_user[1]"/></t>
                                             </div>
                                             <div t-if="picking.videos and picking.videos.length > 0" class="mt-2 text-start">
                                                 <t t-foreach="picking.videos" t-as="video" t-key="video.id">

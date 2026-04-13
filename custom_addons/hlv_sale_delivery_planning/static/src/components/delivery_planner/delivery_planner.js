@@ -261,7 +261,8 @@ export class DeliveryPlannerDashboard extends Component {
                 { value: 'unpacked',         label: 'Có Hàng Chưa Đóng Gói',   badgeClass: 'bg-warning text-dark',  textClass: 'text-warning',   iconClass: 'fa fa-exclamation-triangle', progressClass: 'bg-warning' },
                 { value: 'has_unprinted',    label: 'Có Phiếu Chưa In',        badgeClass: 'bg-danger',             textClass: 'text-danger',    iconClass: 'fa fa-exclamation-circle', progressClass: 'bg-danger' },
                 { value: 'printed_waiting',  label: 'Đã In, Chờ Đóng Gói',     badgeClass: 'bg-info',               textClass: 'text-info',      iconClass: 'fa fa-print', progressClass: 'bg-info' },
-                { value: 'fully_packed',     label: 'Đã Đóng Gói Đủ',          badgeClass: 'bg-success',            textClass: 'text-success',   iconClass: 'fa fa-check-square-o', progressClass: 'bg-success' },
+                { value: 'packed_waiting_ship', label: 'Đã Gói, Chờ Nhận Giao', badgeClass: 'bg-primary',           textClass: 'text-primary',   iconClass: 'fa fa-archive', progressClass: 'bg-primary' },
+                { value: 'shipping',         label: 'Đang Giao',               badgeClass: 'bg-success',            textClass: 'text-success',   iconClass: 'fa fa-motorcycle', progressClass: 'bg-success' },
             ];
             default: return [];
         }
@@ -286,12 +287,15 @@ export class DeliveryPlannerDashboard extends Component {
             if (dim === 'packing_status') {
                 // Màn hình kiểm soát đóng gói chỉ quan tâm đơn chưa giao.
                 if (so.real_delivery_status === 'full') return false;
+                // Shipper đã nhận → "Đang giao" (ưu tiên cao nhất)
+                if (so.has_shipper_received) val = 'shipping';
                 // Đã in nhưng có phiếu mới chưa in → "Có phiếu chưa in"
                 if (so.has_new_unprinted_pickings) val = 'has_unprinted';
                 // Đã đóng gói đủ → giữ nguyên, không bị đè bởi printed_waiting
                 else if (val === 'fully_packed') { /* giữ nguyên */ }
                 // Đã in tất cả phiếu, chờ đóng gói → "Đã in, chờ đóng gói"
                 else if (so.picking_slip_printed) val = 'printed_waiting';
+                // Đã đóng gói đủ nhưng shipper chưa nhận → "Đã gói, chờ nhận giao"
                 // Gom nhóm để tập trung hành động: còn hàng chưa đóng = cần xử lý ngay.
                 else if (val === 'partial_packed') val = 'unpacked';
             }

@@ -161,12 +161,14 @@ body {
 /* Input Group Row */
 .input-group-row {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 15px;
+  align-items: stretch;
 }
 
 .form-control {
   flex: 1;
+  min-width: 0;
   padding: 12px 15px;
   font-size: 1rem;
   border: 2px solid var(--border-color);
@@ -196,6 +198,7 @@ body {
   transition: all 0.2s;
   border: none;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .btn-lg {
@@ -303,8 +306,40 @@ body {
 
 .camera-reader {
   width: 100%;
-  min-height: 250px;
+  min-height: 200px;
   background: #000;
+  position: relative;
+}
+
+.camera-reader video {
+  width: 100%;
+  display: block;
+}
+
+.scan-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.scan-laser {
+  position: absolute;
+  top: 50%;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #ff3b30 20%, #ff3b30 80%, transparent);
+  box-shadow: 0 0 8px rgba(255, 59, 48, 0.6);
+  animation: scan-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes scan-pulse {
+  0%, 100% { opacity: 0.4; transform: translateY(-8px); }
+  50% { opacity: 1; transform: translateY(8px); }
 }
 
 .camera-controls {
@@ -590,3 +625,767 @@ body {
     font-size: 1rem;
   }
 }
+
+/* =========================================
+   NEW STYLES FOR SO GROUPING & ACCORDION
+   ========================================= */
+
+/* Customer Info in Header */
+.customer-info {
+  margin-top: 5px;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Accordion Container */
+.accordion-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+/* SO Group (Level 1) */
+.so-group {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.so-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  /* Larger touch target */
+  background: #f8f9fa;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid transparent;
+}
+
+/* Add active state for touch feedback instead of hover */
+.so-group-header:active {
+  background: #e9ecef;
+}
+
+.so-group.expanded .so-group-header {
+  border-bottom-color: #eee;
+  background: #fff;
+  color: var(--primary-color);
+}
+
+.so-group-pinned {
+  background: #e8f5e9 !important;
+  color: #2e7d32 !important;
+}
+.so-group-pinned .so-name {
+  color: #2e7d32;
+}
+.so-group-pinned .so-count {
+  background: #4caf50;
+}
+.receive-picking-item.pinned-selected {
+  border-left: 3px solid #4caf50;
+}
+
+.receive-picking-origin-line {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.receive-picking-origin-line i {
+  margin-right: 3px;
+  font-size: 0.7rem;
+}
+
+.receive-search-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 15px 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.so-name {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: #333;
+}
+
+.so-group.expanded .so-name {
+  color: var(--primary-color);
+}
+
+.so-count {
+  background: #6c757d;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.so-group.expanded .so-count {
+  background: var(--primary-color);
+}
+
+.so-group-content {
+  display: none;
+  padding: 10px 15px 15px 15px;
+  background: #fff;
+  border-top: 1px solid #eee;
+}
+
+.so-group.expanded .so-group-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* Removed animation for better performance on low-end devices */
+}
+
+/* OUT Item (Level 2) */
+.out-item {
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+  position: relative;
+}
+
+.out-item-header {
+  padding: 12px 15px;
+  background: #fff;
+  cursor: pointer;
+  user-select: none;
+}
+
+.out-item-header:active {
+  background: #f1f3f5;
+}
+
+/* Active Styling - High Contrast */
+.out-item.active {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 1px var(--primary-color);
+}
+
+.out-item.active .out-item-header {
+  background: #e3f2fd;
+  /* Clear active background */
+}
+
+.out-info-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.out-name {
+  font-weight: 600;
+  font-size: 1rem;
+  color: #495057;
+}
+
+.out-item.active .out-name {
+  color: var(--primary-color);
+}
+
+.out-status-badge {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #eee;
+  color: #666;
+  font-weight: 600;
+}
+
+.out-status-badge.done {
+  background: #d4edda;
+  color: #155724;
+}
+
+/* Mini Progress in OUT header */
+.out-mini-progress {
+  width: 100%;
+  height: 6px;
+  background: #e9ecef;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.out-mini-progress-fill {
+  height: 100%;
+  background: #28a745;
+  /* Simple solid color */
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+/* Content inside OUT (Level 3 - Items List) */
+.out-item-content {
+  display: none;
+  border-top: 1px solid #e3f2fd;
+  background: #fff;
+}
+
+.out-item.active .out-item-content {
+  display: block;
+}
+
+/* Selection Group Title in Modal */
+.selection-group-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 15px 0 8px 0;
+}
+
+/* =========== TAB NAVIGATION =========== */
+.tab-nav {
+  display: flex;
+  background: var(--white);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 15px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 12px 8px;
+  border: none;
+  background: var(--white);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  position: relative;
+}
+
+.tab-btn:not(:last-child) {
+  border-right: 1px solid var(--border-color);
+}
+
+.tab-btn.active {
+  color: var(--primary-color);
+  background: #eef2f7;
+}
+
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 15%;
+  width: 70%;
+  height: 3px;
+  background: var(--primary-color);
+  border-radius: 3px 3px 0 0;
+}
+
+.tab-btn i {
+  display: block;
+  font-size: 1.1rem;
+  margin-bottom: 4px;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* Return tab - card selection */
+.picking-select-card.selected {
+  border-color: var(--primary-color);
+  background: #eef2f7;
+}
+
+.picking-select-card.selected .check-circle {
+  background: var(--primary-color);
+  color: var(--white);
+}
+
+.picking-select-card .check-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: transparent;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+/* Return reason */
+.return-reason-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid var(--border-color);
+  border-radius: 10px;
+  font-size: 0.9rem;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.return-reason-input:focus {
+  border-color: var(--primary-color);
+  outline: none;
+}
+
+/* Receive today list */
+#receive-today-list {
+  margin-top: 15px;
+}
+
+#receive-today-list .section-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--primary-color);
+  margin-bottom: 8px;
+}
+
+/* Deliver received list */
+#deliver-received-list {
+  margin-bottom: 15px;
+}
+
+/* Picking Selection Card */
+/* Picking Selection Card */
+.picking-select-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px;
+  /* Larger padding for touch */
+  background: #fff;
+  border: 2px solid #eef0f3;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  min-height: 70px;
+  /* Ensure minimum click height */
+}
+
+.picking-select-card:active {
+  background-color: #f9f9f9;
+  transform: scale(0.99);
+}
+
+.picking-select-card.selected {
+  border-color: var(--primary-color);
+  background-color: #f0f7ff;
+  box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.15);
+  /* Soft glow */
+}
+
+.card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.card-name {
+  font-weight: 700;
+  font-size: 1.15rem;
+  /* Larger text */
+  color: #333;
+}
+
+.picking-select-card.selected .card-name {
+  color: var(--primary-color);
+}
+
+.card-meta {
+  font-size: 0.9rem;
+  color: #888;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Check Circle Indicator - Larger for mobile */
+.check-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  background: #fff;
+  flex-shrink: 0;
+  /* Prevent shrinking */
+  margin-left: 15px;
+}
+
+.check-circle i {
+  font-size: 1.1rem;
+  /* Larger check icon */
+  opacity: 0;
+  transform: scale(0);
+  transition: all 0.2s;
+}
+
+.picking-select-card.selected .check-circle {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  transform: scale(1.05);
+}
+
+.picking-select-card.selected .check-circle i {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Global Progress */
+.global-progress-wrapper {
+  position: sticky;
+  bottom: 0;
+  background: white;
+  /* No transparency for performance */
+  padding: 15px 20px;
+  border-top: 1px solid #dee2e6;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  margin: 0 -20px -20px -20px;
+  border-radius: 0 0 12px 12px;
+}
+
+/* Override existing items-list style */
+.out-item-content .items-list {
+  max-height: none;
+  margin-top: 0;
+  padding: 10px;
+}
+
+/* Cleaner Item Cards inside OUT */
+.out-item-content .item-card {
+  border: 1px solid #f0f0f0;
+  margin-bottom: 10px;
+  padding: 12px;
+  border-radius: 6px;
+  box-shadow: none;
+  background: #fafafa;
+}
+
+.out-item-content .item-card.scanned {
+  background: #f6ffed;
+  border-color: #b7eb8f;
+}
+
+/* Return Picking Card — now structured with header + expand */
+.return-picking-card .check-circle {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  color: transparent;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.return-picking-card.selected .check-circle {
+  background: var(--primary-color);
+  color: var(--white);
+  border-color: var(--primary-color);
+}
+
+/* ========================= RECEIVE TAB ACCORDION ========================= */
+
+.scan-bar-card {
+  background: var(--white);
+  padding: 14px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.loading-placeholder {
+  text-align: center;
+  padding: 30px 20px;
+  color: #888;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #888;
+  font-size: 0.95rem;
+}
+
+/* Receive picking item card */
+.receive-picking-item {
+  border: 1.5px solid var(--border-color);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s, background 0.2s;
+  background: var(--white);
+}
+
+.receive-picking-item.selected {
+  border-color: var(--primary-color);
+  background: #eef2f7;
+}
+
+.receive-picking-item.highlighted {
+  border-color: var(--warning-color);
+  animation: highlightPulse 0.6s ease;
+}
+
+@keyframes highlightPulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.5); }
+  70% { box-shadow: 0 0 0 8px rgba(255, 193, 7, 0); }
+  100% { box-shadow: none; }
+}
+
+.receive-picking-header {
+  display: flex;
+  align-items: center;
+  padding: 11px 12px;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.receive-picking-checkbox {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid #ccc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  flex-shrink: 0;
+  transition: all 0.2s;
+  font-size: 0.75rem;
+}
+
+.receive-picking-checkbox.checked {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #fff;
+}
+
+/* ========================= DELIVERED TAB ========================= */
+.delivered-card {
+  border: 1.5px solid var(--border-color);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  background: var(--white);
+}
+
+.receive-picking-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-color);
+}
+
+.receive-picking-meta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.receive-expand-btn {
+  background: none;
+  border: none;
+  padding: 6px 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.receive-expand-btn:hover {
+  background: var(--border-color);
+  color: var(--text-color);
+}
+
+.receive-picking-items {
+  background: #f9fafb;
+  border-top: 1px solid var(--border-color);
+  padding: 8px 12px;
+}
+
+.receive-item-row {
+  display: flex;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid #f0f0f0;
+  align-items: flex-start;
+}
+
+.receive-item-row:last-child {
+  border-bottom: none;
+}
+
+.receive-item-icon {
+  color: var(--secondary-color);
+  flex-shrink: 0;
+  font-size: 1rem;
+  padding-top: 2px;
+  width: 18px;
+  text-align: center;
+}
+
+.receive-item-name {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.receive-item-meta {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Children inside a package */
+.receive-item-children {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #e0e0e0;
+}
+
+.receive-item-child {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 0.8rem;
+  color: #555;
+}
+
+.receive-item-child-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.receive-item-child-barcode {
+  font-size: 0.72rem;
+  color: #999;
+  background: #f0f0f0;
+  border-radius: 4px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+}
+
+.receive-item-child-qty {
+  font-weight: 600;
+  color: #333;
+  flex-shrink: 0;
+}
+
+/* Sticky confirm bar */
+.sticky-confirm-bar {
+  position: sticky;
+  bottom: 0;
+  background: var(--white);
+  padding: 12px 16px;
+  display: block;
+  border-top: 1px solid var(--border-color);
+  box-shadow: 0 -3px 10px rgba(0, 0, 0, 0.08);
+  z-index: 100;
+  border-radius: 12px 12px 0 0;
+  margin: 0 -15px;
+}
+
+.sticky-confirm-bar .btn {
+  width: 100%;
+}
+
+/* Receive list footer */
+.receive-list-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 4px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.receive-list-count {
+  font-style: italic;
+}
+
+/* ========================= RETURN CARD EXPAND ========================= */
+.return-picking-card {
+  border: 1.5px solid var(--border-color);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  background: var(--white);
+  transition: border-color 0.2s;
+}
+
+.return-picking-card.selected {
+  border-color: var(--primary-color);
+  background: #eef2f7;
+}
+
+.return-card-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  cursor: pointer;
+  gap: 10px;
+}
+
+.return-expand-btn {
+  background: none;
+  border: none;
+  padding: 6px 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: background 0.15s;
+  font-size: 0.85rem;
+}
+
+.return-expand-btn:hover {
+  background: var(--border-color);
+  color: var(--text-color);
+}
+
+.return-card-items {
+  background: #f9fafb;
+  border-top: 1px solid var(--border-color);
+  padding: 8px 14px;
+}
+

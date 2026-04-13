@@ -6,7 +6,6 @@
         <menuitem id="menu_barcode_shipper_root"
                   name="Shipper Scanner"
                   sequence="50"
-                  web_icon="hlv_barcode_shipper,static/description/icon.png"
                   groups="hlv_barcode_shipper.group_shipper"/>
         
         <!-- URL action for barcode scanner -->
@@ -43,7 +42,7 @@
         <menuitem id="menu_scan_logs"
                   name="📋 Scan Logs"
                   parent="menu_shipper_management"
-                  action="action_barcode_scan_log"
+                  action="barcode_scan_log_action"
                   sequence="10"
                   groups="hlv_barcode_shipper.group_shipper_manager"/>
         

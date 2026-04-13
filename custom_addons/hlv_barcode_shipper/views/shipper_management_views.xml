@@ -1,0 +1,398 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- ================================================================
+             QUẢN LÝ GIAO NHẬN HÀNG - DÀNH CHO QUẢN LÝ
+             Giao diện tổng quan theo dõi shipper nhận / giao / trả hàng
+             ================================================================ -->
+
+        <!-- ==================== SEARCH VIEW ==================== -->
+        <record id="stock_picking_shipper_mgmt_search" model="ir.ui.view">
+            <field name="name">stock.picking.shipper.mgmt.search</field>
+            <field name="model">stock.picking</field>
+            <field name="arch" type="xml">
+                <search string="Tìm kiếm phiếu giao hàng">
+                    <field name="name" string="Mã phiếu"/>
+                    <field name="origin" string="Đơn hàng gốc"/>
+                    <field name="partner_id" string="Khách hàng"/>
+                    <field name="shipper_received_by" string="Shipper nhận"/>
+                    <field name="shipper_user_id" string="Shipper giao"/>
+
+                    <separator/>
+                    <filter name="filter_received" string="Đã nhận hàng"
+                            domain="[('shipper_received', '=', True)]"/>
+                    <filter name="filter_not_received" string="Chưa nhận"
+                            domain="[('shipper_received', '=', False)]"/>
+                    <separator/>
+                    <filter name="filter_delivered" string="Đã giao thành công"
+                            domain="[('state', '=', 'done'), ('shipper_received', '=', True)]"/>
+                    <filter name="filter_in_transit" string="Đang vận chuyển"
+                            domain="[('shipper_received', '=', True), ('shipper_returned', '=', False), ('state', '!=', 'done')]"/>
+                    <filter name="filter_returned" string="Đã trả lại"
+                            domain="[('shipper_returned', '=', True)]"/>
+                    <separator/>
+                    <filter name="filter_today" string="Hôm nay"
+                            domain="[('shipper_receive_time', '&gt;=', (context_today()).strftime('%%Y-%%m-%%d 00:00:00')),
+                                     ('shipper_receive_time', '&lt;=', (context_today()).strftime('%%Y-%%m-%%d 23:59:59'))]"/>
+                    <filter name="filter_this_week" string="Tuần này"
+                            domain="[('shipper_receive_time', '&gt;=', (context_today() - relativedelta(weeks=1)).strftime('%%Y-%%m-%%d'))]"/>
+                    <filter name="filter_this_month" string="Tháng này"
+                            domain="[('shipper_receive_time', '&gt;=', (context_today()).strftime('%%Y-%%m-01'))]"/>
+                    <separator/>
+
+                    <group expand="0" string="Nhóm theo">
+                        <filter name="group_shipper" string="Shipper nhận"
+                                context="{'group_by': 'shipper_received_by'}"/>
+                        <filter name="group_shipper_deliver" string="Shipper giao"
+                                context="{'group_by': 'shipper_user_id'}"/>
+                        <filter name="group_state" string="Trạng thái"
+                                context="{'group_by': 'state'}"/>
+                        <filter name="group_receive_date" string="Ngày nhận"
+                                context="{'group_by': 'shipper_receive_time:day'}"/>
+                        <filter name="group_partner" string="Khách hàng"
+                                context="{'group_by': 'partner_id'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <!-- ==================== LIST VIEW - TỔNG QUAN GIAO NHẬN ==================== -->
+        <record id="stock_picking_shipper_mgmt_list" model="ir.ui.view">
+            <field name="name">stock.picking.shipper.mgmt.list</field>
+            <field name="model">stock.picking</field>
+            <field name="arch" type="xml">
+                <list string="Quản lý giao nhận hàng"
+                      default_order="shipper_receive_time desc"
+                      decoration-success="state == 'done' and shipper_returned == False"
+                      decoration-danger="shipper_returned == True"
+                      decoration-warning="shipper_received == True and state != 'done' and shipper_returned == False"
+                      decoration-muted="shipper_received == False">
+                    <field name="name" string="Mã phiếu"/>
+                    <field name="origin" string="Đơn hàng"/>
+                    <field name="partner_id" string="Khách hàng"/>
+                    <field name="shipper_received_by" string="Shipper nhận"
+                           widget="many2one_avatar"/>
+                    <field name="shipper_receive_time" string="Thời gian nhận"
+                           widget="datetime"/>
+                    <field name="shipper_received" string="Đã nhận" widget="boolean"/>
+                    <field name="date_done" string="Ngày giao xong"
+                           widget="datetime" optional="show"/>
+                    <field name="shipper_returned" string="Đã trả lại" widget="boolean"/>
+                    <field name="shipper_return_time" string="Thời gian trả"
+                           widget="datetime" optional="hide"/>
+                    <field name="shipper_return_reason" string="Lý do trả"
+                           optional="hide"/>
+                    <field name="state" string="Trạng thái" widget="badge"
+                           decoration-info="state == 'draft'"
+                           decoration-warning="state in ('waiting', 'confirmed')"
+                           decoration-success="state == 'done'"
+                           decoration-primary="state == 'assigned'"
+                           decoration-muted="state == 'cancel'"/>
+                </list>
+            </field>
+        </record>
+
+        <!-- ==================== ACTION - QUẢN LÝ GIAO NHẬN ==================== -->
+        <record id="action_shipper_mgmt_picking" model="ir.actions.act_window">
+            <field name="name">Quản lý giao nhận hàng</field>
+            <field name="res_model">stock.picking</field>
+            <field name="view_mode">list,form</field>
+            <field name="view_id" ref="stock_picking_shipper_mgmt_list"/>
+            <field name="search_view_id" ref="stock_picking_shipper_mgmt_search"/>
+            <field name="domain">[
+                ('picking_type_id.code', '=', 'outgoing'),
+                ('name', 'not ilike', '/POS/'),
+                ('origin', 'not ilike', 'HOÀN TIỀN'),
+                ('origin', 'not ilike', 'Hoàn tiền'),
+                ('origin', 'not ilike', 'Shopee'),
+            ]</field>
+            <field name="context">{}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Chưa có phiếu giao nhận nào
+                </p>
+                <p>
+                    Khi shipper nhận hoặc giao hàng thông qua ứng dụng quét mã vạch,
+                    các phiếu sẽ hiển thị tại đây.
+                </p>
+            </field>
+        </record>
+
+        <!-- ==================== SEARCH VIEW - LOG QUÉT ==================== -->
+        <record id="barcode_scan_log_mgmt_search" model="ir.ui.view">
+            <field name="name">barcode.scan.log.mgmt.search</field>
+            <field name="model">barcode.scan.log</field>
+            <field name="arch" type="xml">
+                <search string="Tìm kiếm log quét">
+                    <field name="barcode" string="Mã vạch"/>
+                    <field name="user_id" string="Shipper"/>
+                    <field name="picking_id" string="Phiếu giao hàng"/>
+
+                    <separator/>
+                    <filter name="filter_pick" string="Quét PICK"
+                            domain="[('scan_type', '=', 'pick')]"/>
+                    <filter name="filter_package" string="Quét kiện"
+                            domain="[('scan_type', '=', 'package')]"/>
+                    <filter name="filter_product" string="Quét sản phẩm"
+                            domain="[('scan_type', '=', 'product')]"/>
+                    <filter name="filter_complete" string="Hoàn thành"
+                            domain="[('scan_type', '=', 'complete')]"/>
+                    <filter name="filter_receive" string="Nhận hàng"
+                            domain="[('scan_type', '=', 'receive')]"/>
+                    <filter name="filter_return" string="Trả hàng"
+                            domain="[('scan_type', '=', 'return')]"/>
+                    <separator/>
+                    <filter name="filter_success" string="Thành công"
+                            domain="[('status', '=', 'success')]"/>
+                    <filter name="filter_error" string="Lỗi"
+                            domain="[('status', '=', 'error')]"/>
+                    <separator/>
+                    <filter name="filter_today" string="Hôm nay"
+                            domain="[('scan_time', '&gt;=', (context_today()).strftime('%%Y-%%m-%%d 00:00:00')),
+                                     ('scan_time', '&lt;=', (context_today()).strftime('%%Y-%%m-%%d 23:59:59'))]"/>
+                    <filter name="filter_this_week" string="Tuần này"
+                            domain="[('scan_time', '&gt;=', (context_today() - relativedelta(weeks=1)).strftime('%%Y-%%m-%%d'))]"/>
+
+                    <group expand="0" string="Nhóm theo">
+                        <filter name="group_user" string="Shipper"
+                                context="{'group_by': 'user_id'}"/>
+                        <filter name="group_scan_type" string="Loại quét"
+                                context="{'group_by': 'scan_type'}"/>
+                        <filter name="group_status" string="Kết quả"
+                                context="{'group_by': 'status'}"/>
+                        <filter name="group_scan_date" string="Ngày quét"
+                                context="{'group_by': 'scan_time:day'}"/>
+                        <filter name="group_picking" string="Phiếu giao hàng"
+                                context="{'group_by': 'picking_id'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <!-- ==================== LIST VIEW - LOG QUÉT TIẾNG VIỆT ==================== -->
+        <record id="barcode_scan_log_mgmt_list" model="ir.ui.view">
+            <field name="name">barcode.scan.log.mgmt.list</field>
+            <field name="model">barcode.scan.log</field>
+            <field name="arch" type="xml">
+                <list string="Lịch sử quét mã vạch" default_order="scan_time desc"
+                      decoration-success="status == 'success'"
+                      decoration-danger="status == 'error'"
+                      decoration-warning="status == 'warning'">
+                    <field name="scan_time" string="Thời gian"/>
+                    <field name="user_id" string="Shipper"
+                           widget="many2one_avatar"/>
+                    <field name="barcode" string="Mã vạch"/>
+                    <field name="scan_type" string="Loại quét"/>
+                    <field name="status" string="Kết quả" widget="badge"
+                           decoration-success="status == 'success'"
+                           decoration-danger="status == 'error'"
+                           decoration-warning="status == 'warning'"/>
+                    <field name="picking_id" string="Phiếu giao hàng"/>
+                    <field name="package_id" string="Kiện hàng" optional="show"/>
+                    <field name="product_id" string="Sản phẩm" optional="show"/>
+                    <field name="message" string="Ghi chú" optional="hide"/>
+                    <field name="session_id" string="Phiên quét" optional="hide"/>
+                </list>
+            </field>
+        </record>
+
+        <!-- ==================== FORM VIEW - LOG QUÉT TIẾNG VIỆT ==================== -->
+        <record id="barcode_scan_log_mgmt_form" model="ir.ui.view">
+            <field name="name">barcode.scan.log.mgmt.form</field>
+            <field name="model">barcode.scan.log</field>
+            <field name="arch" type="xml">
+                <form string="Chi tiết quét mã vạch" create="false" edit="false">
+                    <sheet>
+                        <div class="oe_title">
+                            <h1>
+                                <field name="barcode" readonly="1"/>
+                            </h1>
+                        </div>
+                        <group>
+                            <group string="Thông tin quét">
+                                <field name="scan_type" string="Loại quét"/>
+                                <field name="scan_time" string="Thời gian quét"/>
+                                <field name="user_id" string="Người quét"
+                                       widget="many2one_avatar"/>
+                                <field name="status" string="Kết quả" widget="badge"
+                                       decoration-success="status == 'success'"
+                                       decoration-danger="status == 'error'"
+                                       decoration-warning="status == 'warning'"/>
+                                <field name="session_id" string="Mã phiên"/>
+                            </group>
+                            <group string="Liên kết">
+                                <field name="picking_id" string="Phiếu giao hàng"/>
+                                <field name="package_id" string="Kiện hàng"/>
+                                <field name="product_id" string="Sản phẩm"/>
+                            </group>
+                        </group>
+                        <group string="Ghi chú">
+                            <field name="message" nolabel="1" string=""/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- ==================== ACTION - LOG QUÉT ==================== -->
+        <record id="action_shipper_mgmt_scan_log" model="ir.actions.act_window">
+            <field name="name">Lịch sử quét mã vạch</field>
+            <field name="res_model">barcode.scan.log</field>
+            <field name="view_mode">list,form</field>
+            <field name="view_id" ref="barcode_scan_log_mgmt_list"/>
+            <field name="search_view_id" ref="barcode_scan_log_mgmt_search"/>
+            <field name="context">{}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Chưa có lịch sử quét nào
+                </p>
+                <p>
+                    Lịch sử quét mã vạch của shipper sẽ hiển thị tại đây khi họ
+                    sử dụng ứng dụng quét hàng.
+                </p>
+            </field>
+        </record>
+
+        <!-- ==================== FORM VIEW RIÊNG CHO ACTION (không inherit) ==================== -->
+        <record id="stock_picking_shipper_detail_form" model="ir.ui.view">
+            <field name="name">stock.picking.shipper.detail.form</field>
+            <field name="model">stock.picking</field>
+            <field name="arch" type="xml">
+                <form string="Chi tiết phiếu giao nhận" create="false">
+                    <header>
+                        <field name="state" string="Trạng thái" widget="statusbar"
+                               statusbar_visible="draft,confirmed,assigned,done"/>
+                    </header>
+                    <sheet>
+                        <div class="oe_title">
+                            <h1>
+                                <field name="name" readonly="1"/>
+                            </h1>
+                        </div>
+                        <group>
+                            <group string="Thông tin chung">
+                                <field name="origin" string="Đơn hàng gốc" readonly="1"/>
+                                <field name="partner_id" string="Khách hàng" readonly="1"/>
+                                <field name="scheduled_date" string="Ngày dự kiến" readonly="1"/>
+                                <field name="date_done" string="Ngày hoàn thành" readonly="1"/>
+                                <field name="picking_type_id" string="Loại phiếu" readonly="1"/>
+                            </group>
+                            <group string="Nhận hàng">
+                                <field name="shipper_received" string="Đã nhận hàng" readonly="1"/>
+                                <field name="shipper_received_by" string="Shipper nhận" readonly="1"
+                                       widget="many2one_avatar"/>
+                                <field name="shipper_receive_time" string="Thời gian nhận" readonly="1"/>
+                            </group>
+                        </group>
+                        <group>
+                            <group string="Giao hàng">
+                                <field name="shipper_scanned" string="Đã quét giao" readonly="1"/>
+                                <field name="shipper_user_id" string="Shipper giao" readonly="1"
+                                       widget="many2one_avatar"/>
+                                <field name="shipper_scan_time" string="Thời gian giao" readonly="1"/>
+                            </group>
+                            <group string="Trả hàng">
+                                <field name="shipper_returned" string="Đã trả hàng" readonly="1"/>
+                                <field name="shipper_return_time" string="Thời gian trả" readonly="1"/>
+                                <field name="shipper_return_reason" string="Lý do trả hàng" readonly="1"/>
+                            </group>
+                        </group>
+
+                        <notebook>
+                            <page string="Kiện hàng / Sản phẩm" name="items">
+                                <field name="move_line_ids" string="" readonly="1">
+                                    <list string="Chi tiết hàng hóa"
+                                          decoration-success="scanned == True"
+                                          decoration-muted="scanned == False">
+                                        <field name="product_id" string="Sản phẩm"/>
+                                        <field name="quantity" string="Số lượng"/>
+                                        <field name="product_uom_id" string="Đơn vị"/>
+                                        <field name="result_package_id" string="Kiện hàng"/>
+                                        <field name="lot_id" string="Lô/Serial" optional="show"/>
+                                        <field name="scanned" string="Đã quét" widget="boolean"/>
+                                        <field name="scanned_by" string="Người quét"
+                                               widget="many2one_avatar" optional="show"/>
+                                        <field name="scan_time" string="Thời gian quét" optional="show"/>
+                                    </list>
+                                </field>
+                            </page>
+                            <page string="Lịch sử quét" name="scan_logs">
+                                <field name="scan_log_ids" string="" readonly="1">
+                                    <list string="Lịch sử quét mã vạch" default_order="scan_time desc"
+                                          decoration-success="status == 'success'"
+                                          decoration-danger="status == 'error'"
+                                          decoration-warning="status == 'warning'">
+                                        <field name="scan_time" string="Thời gian"/>
+                                        <field name="user_id" string="Người quét"
+                                               widget="many2one_avatar"/>
+                                        <field name="barcode" string="Mã vạch"/>
+                                        <field name="scan_type" string="Loại quét"/>
+                                        <field name="status" string="Kết quả" widget="badge"
+                                               decoration-success="status == 'success'"
+                                               decoration-danger="status == 'error'"
+                                               decoration-warning="status == 'warning'"/>
+                                        <field name="package_id" string="Kiện hàng" optional="show"/>
+                                        <field name="product_id" string="Sản phẩm" optional="show"/>
+                                        <field name="message" string="Ghi chú" optional="hide"/>
+                                    </list>
+                                </field>
+                            </page>
+                        </notebook>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- ==================== ACTION VIEW MAPPINGS ==================== -->
+        <record id="action_shipper_mgmt_picking_form" model="ir.actions.act_window.view">
+            <field name="act_window_id" ref="action_shipper_mgmt_picking"/>
+            <field name="sequence">1</field>
+            <field name="view_mode">list</field>
+            <field name="view_id" ref="stock_picking_shipper_mgmt_list"/>
+        </record>
+
+        <record id="action_shipper_mgmt_picking_form_view" model="ir.actions.act_window.view">
+            <field name="act_window_id" ref="action_shipper_mgmt_picking"/>
+            <field name="sequence">2</field>
+            <field name="view_mode">form</field>
+            <field name="view_id" ref="stock_picking_shipper_detail_form"/>
+        </record>
+
+        <record id="action_shipper_mgmt_scan_log_list" model="ir.actions.act_window.view">
+            <field name="act_window_id" ref="action_shipper_mgmt_scan_log"/>
+            <field name="sequence">1</field>
+            <field name="view_mode">list</field>
+            <field name="view_id" ref="barcode_scan_log_mgmt_list"/>
+        </record>
+
+        <record id="action_shipper_mgmt_scan_log_form_view" model="ir.actions.act_window.view">
+            <field name="act_window_id" ref="action_shipper_mgmt_scan_log"/>
+            <field name="sequence">2</field>
+            <field name="view_mode">form</field>
+            <field name="view_id" ref="barcode_scan_log_mgmt_form"/>
+        </record>
+
+        <!-- ==================== MENU ITEMS - TRONG KHO HÀNG ==================== -->
+        <menuitem id="menu_shipper_mgmt_root"
+                  name="Quản lý Shipper"
+                  parent="stock.menu_stock_warehouse_mgmt"
+                  sequence="85"
+                  groups="hlv_barcode_shipper.group_shipper_manager"/>
+
+        <menuitem id="menu_shipper_mgmt_picking"
+                  name="Giao nhận hàng"
+                  parent="menu_shipper_mgmt_root"
+                  action="action_shipper_mgmt_picking"
+                  sequence="10"
+                  groups="hlv_barcode_shipper.group_shipper_manager"/>
+
+        <menuitem id="menu_shipper_mgmt_scan_log"
+                  name="Lịch sử quét mã vạch"
+                  parent="menu_shipper_mgmt_root"
+                  action="action_shipper_mgmt_scan_log"
+                  sequence="20"
+                  groups="hlv_barcode_shipper.group_shipper_manager"/>
+
+    </data>
+</odoo>
