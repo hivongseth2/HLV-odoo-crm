@@ -86,8 +86,31 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                     ('picking_id.state', 'not in', ('done', 'cancel')),
                     ('sale_line_id', '=', False),
                     ('location_id', 'child_of', wh.lot_stock_id.id),
-                ], ['quantity'])
-                available += sum(m['quantity'] for m in internal_reserved)
+                ], ['quantity', 'picking_id'])
+                internal_qty = sum(m['quantity'] for m in internal_reserved)
+                available += internal_qty
+
+                # Gom thông tin phiếu internal đang giữ
+                blocking_pickings = []
+                if internal_qty > 0:
+                    seen_pks = {}
+                    for m in internal_reserved:
+                        pk_id = m['picking_id'][0]
+                        pk_name = m['picking_id'][1]
+                        if pk_id in seen_pks:
+                            seen_pks[pk_id]['qty'] += m['quantity']
+                        else:
+                            pk_rec = self.env['stock.picking'].sudo().browse(pk_id)
+                            seen_pks[pk_id] = {
+                                'picking_id': pk_id,
+                                'picking_name': pk_name,
+                                'picking_type': pk_rec.picking_type_id.name or '',
+                                'picking_code': pk_rec.picking_type_id.code or '',
+                                'origin': pk_rec.origin or '',
+                                'qty': m['quantity'],
+                            }
+                    blocking_pickings = list(seen_pks.values())
+
                 if available > 0:
                     suggest_qty = min(available, remaining)
                     sources.append({
@@ -95,6 +118,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                         'from_warehouse_name': wh.name,
                         'available_qty': available,
                         'suggested_qty': suggest_qty,
+                        'blocking_pickings': blocking_pickings,
                     })
                     remaining -= suggest_qty
             if sources:
