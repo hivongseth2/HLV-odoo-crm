@@ -85,8 +85,12 @@
                     <i class="fa fa-arrows text-secondary me-1" title="Kéo thả"/>
                     Kéo thả để sắp xếp ưu tiên hoặc chuyển trạng thái
                 </span>
-                <span class="badge bg-secondary rounded-pill">
+                <span class="badge bg-secondary rounded-pill" title="Số đơn đang tải / tổng số đơn">
+                    <i class="fa fa-database me-1"></i>
                     <t t-esc="state.saleOrders.length"/> / <t t-esc="state.totalCount"/> đơn hàng
+                    <t t-if="state.saleOrders.length &lt; state.totalCount">
+                        <span class="ms-1 text-warning fw-bold">(chưa tải hết)</span>
+                    </t>
                 </span>
             </div>
         </div>
