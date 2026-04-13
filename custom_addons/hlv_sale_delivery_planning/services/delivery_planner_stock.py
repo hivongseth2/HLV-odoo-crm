@@ -246,15 +246,29 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
 
             # Kiểm tra nhanh: có kho khác tồn trữ sản phẩm đang thiếu không?
             # Dùng product_availabilities đã tính sẵn → không tốn thêm query.
+            # QUAN TRỌNG: phải check products_with_active_demand (giống _compute_transfer_suggestions)
+            # để đảm bảo filter "Cần chuyển kho" khớp với đề xuất trong drawer.
             has_transfer_option = False
             if filter_need_transfer and stock_status != 'ready':
                 dest_wh_id = so.warehouse_id.id
+                # Chỉ xét SP có stock move active trong picking (khớp formatter)
+                active_pks = so.picking_ids.filtered(
+                    lambda p: p.state not in ('done', 'cancel') and not p.return_id
+                )
+                products_with_demand = set()
+                for pk in active_pks:
+                    for mv in pk.move_ids:
+                        if mv.state not in ('cancel', 'done'):
+                            products_with_demand.add(mv.product_id.id)
+
                 for line in so.order_line:
                     if line.display_type or not line.product_id:
                         continue
                     if line.product_id.type == 'service':
                         continue
                     if line.product_id.product_tmpl_id.id in kit_tmpl_ids:
+                        continue
+                    if line.product_id.id not in products_with_demand:
                         continue
                     pending_qty = line.product_uom_qty - line.qty_delivered
                     if pending_qty <= 0:
