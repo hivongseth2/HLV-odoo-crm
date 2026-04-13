@@ -19,9 +19,11 @@ class DeliveryPlannerServiceDomain(models.AbstractModel):
             domain += [('warehouse_id', '=', int(filter_warehouse_id))]
 
         if search_query:
-            domain += ['|',
+            domain += ['|', '|', '|',
                        ('name', 'ilike', search_query),
-                       ('partner_id.name', 'ilike', search_query)]
+                       ('partner_id.name', 'ilike', search_query),
+                       ('order_line.product_id.name', 'ilike', search_query),
+                       ('order_line.product_id.default_code', 'ilike', search_query)]
 
         if filter_date_from:
             domain += ['|',
