@@ -96,10 +96,23 @@ export class DeliveryPlannerDashboard extends Component {
             relocationSaveDefault: false,
             relocationOrderSelections: {},   // { [so_id]: { selected, products: {[prod_id]: { include, qty }} } }
             isCreatingRelocation: false,
+
+            // Picking print menu
+            pickingReports: [],       // [{id, name, report_type}] — báo cáo có thể in cho stock.picking
+            printMenuPickingId: null, // picking.id đang hiển thị menu in
         });
 
         onWillStart(async () => {
-            await this.fetchData();
+            const [, reports] = await Promise.all([
+                this.fetchData(),
+                this.orm.searchRead(
+                    'ir.actions.report',
+                    [['model', '=', 'stock.picking'], ['binding_model_id', '!=', false]],
+                    ['id', 'name', 'report_type'],
+                    { order: 'name' }
+                )
+            ]);
+            this.state.pickingReports = reports;
         });
     }
 
@@ -620,12 +633,31 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     openPicking(pickingId) {
+        this.state.printMenuPickingId = null;
         this.actionService.doAction({
             type: "ir.actions.act_window",
             res_model: "stock.picking",
             res_id: pickingId,
             views: [[false, "form"]],
             target: "new",
+        });
+    }
+
+    togglePickingPrintMenu(ev, pickingId) {
+        ev.stopPropagation();
+        this.state.printMenuPickingId =
+            this.state.printMenuPickingId === pickingId ? null : pickingId;
+    }
+
+    async doPrintPickingReport(ev, pickingId, reportId) {
+        ev.stopPropagation();
+        this.state.printMenuPickingId = null;
+        await this.actionService.doAction(reportId, {
+            additionalContext: {
+                active_ids: [pickingId],
+                active_id: pickingId,
+                active_model: 'stock.picking',
+            }
         });
     }
 
