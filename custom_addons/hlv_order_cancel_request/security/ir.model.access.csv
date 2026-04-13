@@ -1,4 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_sale_order_cancel_request_user,sale.order.cancel.request.user,model_sale_order_cancel_request,base.group_user,1,1,1,1
-access_sale_order_cancel_request_manager,sale.order.cancel.request.manager,model_sale_order_cancel_request,sales_team.group_sale_manager,1,1,1,1
-access_sale_order_cancel_request_public,sale.order.cancel.request.public,model_sale_order_cancel_request,base.group_public,1,1,1,0
