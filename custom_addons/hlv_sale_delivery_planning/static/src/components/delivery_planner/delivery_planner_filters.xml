@@ -123,10 +123,13 @@
                        style="min-height:34px; display:flex; align-items:flex-end;">Kho Cung Cấp</label>
                 <div class="input-group">
                     <span class="input-group-text bg-light"><i class="fa fa-building text-muted" title="Kho"></i></span>
-                    <select class="form-select" t-model="state.filterWarehouseId" t-on-change="onFilterChange">
-                        <option value="all">Tất cả</option>
+                    <select class="form-select"
+                            t-on-change="(ev) => { this.state.filterWarehouseId = ev.target.value; this.onFilterChange(); }">
+                        <option value="all" t-att-selected="state.filterWarehouseId === 'all'">Tất cả</option>
                         <t t-foreach="state.warehouses" t-as="wh" t-key="wh.id">
-                            <option t-att-value="wh.id"><t t-esc="wh.name"/></option>
+                            <option t-att-value="wh.id" t-att-selected="state.filterWarehouseId == wh.id">
+                                <t t-esc="wh.name"/>
+                            </option>
                         </t>
                     </select>
                 </div>
