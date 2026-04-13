@@ -100,6 +100,7 @@ export class DeliveryPlannerDashboard extends Component {
             // Picking print menu
             pickingReports: [],       // [{id, name, report_type}] — báo cáo có thể in cho stock.picking
             printMenuPickingId: null, // picking.id đang hiển thị menu in
+            printMenuPos: null,       // { top, right } — vị trí fixed của dropdown
         });
 
         onWillStart(async () => {
@@ -645,8 +646,17 @@ export class DeliveryPlannerDashboard extends Component {
 
     togglePickingPrintMenu(ev, pickingId) {
         ev.stopPropagation();
-        this.state.printMenuPickingId =
-            this.state.printMenuPickingId === pickingId ? null : pickingId;
+        if (this.state.printMenuPickingId === pickingId) {
+            this.state.printMenuPickingId = null;
+            this.state.printMenuPos = null;
+            return;
+        }
+        const rect = ev.currentTarget.getBoundingClientRect();
+        this.state.printMenuPickingId = pickingId;
+        this.state.printMenuPos = {
+            top: rect.bottom + window.scrollY,
+            right: window.innerWidth - rect.right,
+        };
     }
 
     async doPrintPickingReport(ev, pickingId, reportId) {

@@ -8,7 +8,33 @@
     <t t-name="hlv_sale_delivery_planning.Drawer">
         <div t-if="state.isDrawerOpen"
              class="offcanvas offcanvas-end show shadow-lg" tabindex="-1"
-             style="visibility: visible; width: 860px; z-index: 1050; position: fixed; top: 0; bottom: 0; right: 0; background: white;">
+             style="visibility: visible; width: 860px; z-index: 1050; position: fixed; top: 0; bottom: 0; right: 0; background: white;"
+             t-on-click="() => { state.printMenuPickingId = null; }">
+
+            <!-- Dropdown in phiếu (fixed, thoát khỏi overflow-auto) -->
+            <div t-if="state.printMenuPickingId and state.printMenuPos"
+                 class="bg-white border rounded shadow-lg"
+                 style="position:fixed; z-index:2000; min-width:260px; max-height:340px; overflow-y:auto;"
+                 t-att-style="'position:fixed; z-index:2000; min-width:260px; max-height:340px; overflow-y:auto; top:' + state.printMenuPos.top + 'px; right:' + state.printMenuPos.right + 'px;'"
+                 t-on-click.stop="">
+                <div class="px-3 py-2 bg-light border-bottom small fw-bold text-muted">
+                    <i class="fa fa-print me-1"></i> Chọn mẫu in
+                </div>
+                <t t-foreach="state.pickingReports" t-as="report" t-key="report.id">
+                    <div class="px-3 py-2 small cursor-pointer"
+                         style="border-bottom:1px solid #f3f3f3;"
+                         t-on-click="(ev) => this.doPrintPickingReport(ev, state.printMenuPickingId, report.id)">
+                        <i class="fa fa-file-pdf-o me-2 text-danger"
+                           t-if="report.report_type === 'qweb-pdf'"></i>
+                        <i class="fa fa-file-excel-o me-2 text-success"
+                           t-elif="report.report_type === 'xlsx'"></i>
+                        <i class="fa fa-file-o me-2 text-muted" t-else=""></i>
+                        <t t-esc="report.name"/>
+                    </div>
+                </t>
+                <div t-if="!state.pickingReports.length"
+                     class="px-3 py-2 text-muted small">Không có mẫu in</div>
+            </div>
 
             <div class="offcanvas-header bg-primary text-bg-primary p-3">
                 <h5 class="offcanvas-title m-0 text-bg-primary">
@@ -331,37 +357,19 @@
                                                 </t>
                                             </div>
                                         </div>
-                                        <div class="text-end position-relative" style="min-width:90px;">
-                                            <!-- Nút in -->
-                                            <button class="btn btn-sm btn-outline-secondary px-2 py-0 mb-1 d-block w-100 text-start"
-                                                    title="Menu in phiếu"
-                                                    t-on-click="(ev) => this.togglePickingPrintMenu(ev, picking.id)">
-                                                <i class="fa fa-print me-1"></i>In
-                                            </button>
-                                            <!-- Dropdown in -->
-                                            <div t-if="state.printMenuPickingId === picking.id"
-                                                 class="position-absolute bg-white border rounded shadow-sm"
-                                                 style="right:0; top:100%; z-index:1060; min-width:240px; max-height:320px; overflow-y:auto;">
-                                                <t t-foreach="state.pickingReports" t-as="report" t-key="report.id">
-                                                    <div class="px-3 py-2 small cursor-pointer"
-                                                         style="border-bottom:1px solid #f3f3f3;"
-                                                         t-on-click="(ev) => this.doPrintPickingReport(ev, picking.id, report.id)">
-                                                        <i class="fa fa-file-pdf-o me-2 text-danger"
-                                                           t-if="report.report_type === 'qweb-pdf'"></i>
-                                                        <i class="fa fa-file-excel-o me-2 text-success"
-                                                           t-elif="report.report_type === 'xlsx'"></i>
-                                                        <i class="fa fa-file-o me-2 text-muted" t-else=""></i>
-                                                        <t t-esc="report.name"/>
-                                                    </div>
-                                                </t>
-                                                <div t-if="!state.pickingReports.length"
-                                                     class="px-3 py-2 text-muted small">Không có mẫu in</div>
-                                            </div>
+                                        <div class="d-flex flex-column align-items-end gap-1" style="min-width:90px;">
                                             <!-- Badge trạng thái -->
                                             <span class="badge"
                                                   t-att-class="this.getPickingStatusBadgeClass(picking.state)">
                                                 <t t-esc="this.translatePickingStatus(picking.state)"/>
                                             </span>
+                                            <!-- Nút in -->
+                                            <button class="btn btn-sm btn-outline-secondary px-2 py-0 w-100 text-start"
+                                                    title="Menu in phiếu"
+                                                    t-on-click="(ev) => this.togglePickingPrintMenu(ev, picking.id)">
+                                                <i class="fa fa-print me-1"></i>In
+                                                <i class="fa fa-caret-down ms-1"></i>
+                                            </button>
                                         </div>
                                     </div>
                                 </div>

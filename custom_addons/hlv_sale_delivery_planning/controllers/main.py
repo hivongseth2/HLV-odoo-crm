@@ -73,10 +73,21 @@ class DeliveryPlannerController(http.Controller):
             if not report:
                 return {'success': False, 'message': 'Không tìm thấy report template cho phiếu lấy hàng'}
 
+            picking_ids = list(all_pickings.ids)
             try:
-                # Render PDF with proper signature for Odoo 18
-                picking_ids = list(all_pickings.ids)
-                # In Odoo 18, _render_qweb_pdf needs report_ref as first arg
+                # Render từng phiếu riêng lẻ để đảm bảo mỗi phiếu ở trang riêng khi in
+                from pypdf import PdfWriter, PdfReader
+                writer = PdfWriter()
+                for pid in picking_ids:
+                    pdf_bytes, _ = report._render_qweb_pdf(report.report_name, res_ids=[pid])
+                    reader = PdfReader(io.BytesIO(pdf_bytes))
+                    for page in reader.pages:
+                        writer.add_page(page)
+                buf = io.BytesIO()
+                writer.write(buf)
+                pdf_content = buf.getvalue()
+            except ImportError:
+                # Fallback nếu pypdf không có: render ngưyên 1 lần (cũ)
                 pdf_content, _ = report._render_qweb_pdf(report.report_name, res_ids=picking_ids)
             except Exception as render_error:
                 _logger.error("Error rendering PDF: %s", str(render_error), exc_info=True)
