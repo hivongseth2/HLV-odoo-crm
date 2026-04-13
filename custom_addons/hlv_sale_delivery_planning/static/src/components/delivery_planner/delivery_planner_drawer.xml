@@ -8,7 +8,7 @@
     <t t-name="hlv_sale_delivery_planning.Drawer">
         <div t-if="state.isDrawerOpen"
              class="offcanvas offcanvas-end show shadow-lg" tabindex="-1"
-             style="visibility: visible; width: 680px; z-index: 1050; position: fixed; top: 0; bottom: 0; right: 0; background: white;">
+             style="visibility: visible; width: 860px; z-index: 1050; position: fixed; top: 0; bottom: 0; right: 0; background: white;">
 
             <div class="offcanvas-header bg-primary text-bg-primary p-3">
                 <h5 class="offcanvas-title m-0 text-bg-primary">
@@ -177,7 +177,7 @@
                             <thead class="table-light">
                                 <tr>
                                     <th class="text-start">Sản phẩm</th>
-                                    <th width="100">Từ kho</th>
+                                    <th width="150">Từ kho</th>
                                     <th width="70">Khả dụng</th>
                                     <th width="70">Thiếu</th>
                                     <th width="90">Đề xuất</th>
