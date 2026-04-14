@@ -186,6 +186,14 @@ export class DeliveryPlannerDashboard extends Component {
 
                 return so;
             });
+
+            // Đánh dấu đơn mới: misa_order_date (hoặc date_order) = hôm nay
+            const todayStr = new Date().toISOString().slice(0, 10);
+            for (const so of this.state.saleOrders) {
+                const orderDate = so.misa_order_date || (so.date_order ? so.date_order.substring(0, 10) : '');
+                so.is_new_order = orderDate === todayStr;
+            }
+
             this.state.totalCount = result.total_count || 0;
             if (this.state.warehouses.length === 0) {
                 this.state.warehouses = result.warehouses || [];
