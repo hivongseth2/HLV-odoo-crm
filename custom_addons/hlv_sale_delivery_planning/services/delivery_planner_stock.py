@@ -409,13 +409,10 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             elif has_new_unprinted:
                 effective_packing = 'has_unprinted'
             elif packing_status == 'fully_packed':
-                # Đã đóng gói đủ → giữ nguyên, không bị đè bởi printed_waiting
-                effective_packing = 'fully_packed'
+                # Đã đóng gói đủ, shipper chưa nhận → "Đã gói, chờ nhận giao"
+                effective_packing = 'packed_waiting_ship'
             elif bool(so.x_picking_slip_printed) and packing_status not in ('delivered',):
                 effective_packing = 'printed_waiting'
-            elif packing_status == 'fully_packed':
-                # Đã đóng đủ nhưng shipper chưa nhận → "Đã gói, chờ nhận giao"
-                effective_packing = 'packed_waiting_ship'
             else:
                 effective_packing = packing_status
 
