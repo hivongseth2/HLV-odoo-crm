@@ -304,7 +304,7 @@ export class DeliveryPlannerDashboard extends Component {
                 // Shipper đã nhận → "Đang giao" (ưu tiên cao nhất)
                 if (so.has_shipper_received) val = 'shipping';
                 // Đã in nhưng có phiếu mới chưa in → "Có phiếu chưa in"
-                if (so.has_new_unprinted_pickings) val = 'has_unprinted';
+                else if (so.has_new_unprinted_pickings) val = 'has_unprinted';
                 // Đã đóng gói đủ → giữ nguyên, không bị đè bởi printed_waiting
                 else if (val === 'fully_packed') { /* giữ nguyên */ }
                 // Đã in tất cả phiếu, chờ đóng gói → "Đã in, chờ đóng gói"
