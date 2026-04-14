@@ -335,18 +335,36 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 real_delivery_status = 'full'
 
             packed_qty = packed_qty_by_so.get(so.id, 0.0)
-            # "Đã đóng gói đủ" = đã đóng hết phần có thể đóng ngay tại thời điểm hiện tại.
-            # Cụ thể: so sánh số đã đóng với tổng qty có thể xuất (total_avail = min(available, pending) từng line).
-            # Đơn đã giao xong không xét vào kiểm soát đóng gói.
+            # Packing status dựa trên trạng thái phiếu kho (PACK/OUT), không còn dựa trên package.
+            # Lý do: nhiều phiếu sản phẩm không nằm trong kiện hàng nhưng đã qua bước đóng gói.
             if not has_pending:
                 packing_status = 'delivered'
             elif total_avail <= 0:
                 packing_status = 'waiting_stock'
-            elif packed_qty >= total_avail:
-                packing_status = 'fully_packed'
             else:
-                # Còn phần có thể đóng nhưng chưa đóng hết.
-                packing_status = 'unpacked'
+                # Kiểm tra trạng thái phiếu PACK và OUT
+                pack_pickings = active_outflow.filtered(
+                    lambda p: (p.picking_type_id.sequence_code or '').upper() == 'PACK'
+                )
+                out_pickings = active_outflow.filtered(
+                    lambda p: (p.picking_type_id.sequence_code or '').upper() == 'OUT'
+                )
+                # Phiếu PACK đã done (không còn trong active_outflow) → check tất cả pickings
+                done_pack = so.picking_ids.filtered(
+                    lambda p: p.state == 'done'
+                    and not p.return_id
+                    and (p.picking_type_id.sequence_code or '').upper() == 'PACK'
+                )
+                # Nếu có phiếu PACK đã done VÀ không còn phiếu PACK active → đã đóng gói xong
+                # Hoặc: không có PACK (2-step) mà PICK đã done → cũng tính là packed
+                if done_pack and not pack_pickings:
+                    packing_status = 'fully_packed'
+                elif not done_pack and not pack_pickings and not out_pickings:
+                    # Không có phiếu nào active ngoài PICK → chưa đến bước pack
+                    packing_status = 'unpacked'
+                else:
+                    # Còn phiếu PACK active → đang đóng gói
+                    packing_status = 'unpacked'
 
             # Shipper đã nhận hàng để giao? (chỉ xét outgoing pickings)
             has_shipper_received = any(
