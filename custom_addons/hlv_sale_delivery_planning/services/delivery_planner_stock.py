@@ -8,6 +8,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         self, sales, po_date_from, po_date_to, po_status,
         filter_delivery_status, filter_stock_status, filter_packing_status,
         show_completed=False, filter_need_transfer=False,
+        filter_new_orders=False,
     ):
         """
         Lọc SO theo PO (nếu có filter PO), tính stock_status và packing_status
@@ -222,6 +223,13 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         }
         so_status_dict = {}
         so_meta_dict = {}
+
+        # Tính today 1 lần ngoài vòng lặp cho filter_new_orders
+        if filter_new_orders:
+            from odoo.fields import Date as OdooDate
+            today_date = OdooDate.context_today(self)
+        else:
+            today_date = None
 
         for so in sales:
             # --- Phát hiện đơn "trả hàng / dừng": không còn outflow nào active ---
@@ -439,11 +447,19 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             else:
                 packing_ok = filter_packing_status == 'all' or packing_status == filter_packing_status
 
+            # Kiểm tra đơn hàng mới (misa_order_date hoặc date_order = hôm nay)
+            if filter_new_orders:
+                order_date = so.x_studio_misa_order_date or (so.date_order.date() if so.date_order else None)
+                is_new = order_date == today_date if order_date else False
+            else:
+                is_new = True  # Không filter → cho qua
+
             if (
                 delivery_ok
                 and (filter_stock_status == 'all' or stock_status == filter_stock_status)
                 and packing_ok
                 and (not filter_need_transfer or has_transfer_option)
+                and is_new
             ):
                 matched_sale_ids.append(so.id)
 

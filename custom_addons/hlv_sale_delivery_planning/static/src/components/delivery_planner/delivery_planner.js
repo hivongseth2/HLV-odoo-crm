@@ -39,6 +39,7 @@ export class DeliveryPlannerDashboard extends Component {
             filterDeliveryType: "all",
             filterTagIds: [],
             filterNeedTransfer: false,
+            filterNewOrders: false,
             showCompleted: false,
 
             // HTGH presets (lưu localStorage)
@@ -142,6 +143,7 @@ export class DeliveryPlannerDashboard extends Component {
                     filter_tag_ids: this.state.filterTagIds.join(','),
                     show_completed: this.state.showCompleted,
                     filter_need_transfer: this.state.filterNeedTransfer,
+                    filter_new_orders: this.state.filterNewOrders,
                     // Kanban tải theo batch, không phân trang backend
                     limit: isKanban ? this.state.kanbanBatchSize : this.state.itemsPerPage,
                     offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
@@ -1113,6 +1115,7 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.filterDeliveryType = "all";
         this.state.filterTagIds = [];
         this.state.filterNeedTransfer = false;
+        this.state.filterNewOrders = false;
         this.state.showCompleted = false;
         this.state.currentPage = 1;
         this.fetchData();

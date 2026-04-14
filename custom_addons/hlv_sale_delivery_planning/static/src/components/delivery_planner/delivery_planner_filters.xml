@@ -90,6 +90,13 @@
                    t-on-click="() => { state.filterNeedTransfer = false; this.onFilterChange(); }"></i>
             </span>
 
+            <span t-if="state.filterNewOrders"
+                  class="badge d-flex align-items-center gap-2 p-2 rounded-pill" style="background:#d63384;color:#fff;">
+                <i class="fa fa-star me-1"></i>Đơn hàng mới
+                <i class="fa fa-times cursor-pointer ms-1" title="Xóa"
+                   t-on-click="() => { state.filterNewOrders = false; this.onFilterChange(); }"></i>
+            </span>
+
             <button class="btn btn-sm btn-outline-danger border-0 fw-bold ms-auto" t-on-click="resetFilters">
                 <i class="fa fa-trash-o me-1" title="Xóa tất cả"></i> Xóa tất cả bộ lọc
             </button>
@@ -344,6 +351,19 @@
                            t-on-change="(ev) => { this.state.filterNeedTransfer = ev.target.checked; this.onFilterChange(); }"/>
                     <label class="form-check-label small fw-bold" for="filterNeedTransfer">
                         <i class="fa fa-exchange text-danger me-1"></i>Cần chuyển kho
+                    </label>
+                </div>
+            </div>
+
+            <!-- Đơn hàng mới hôm nay -->
+            <div class="col-md-2 d-flex align-items-end">
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" role="switch"
+                           id="filterNewOrders"
+                           t-att-checked="state.filterNewOrders"
+                           t-on-change="(ev) => { this.state.filterNewOrders = ev.target.checked; this.onFilterChange(); }"/>
+                    <label class="form-check-label small fw-bold" for="filterNewOrders">
+                        <i class="fa fa-star me-1" style="color:#d63384;"></i>Đơn hàng mới
                     </label>
                 </div>
             </div>

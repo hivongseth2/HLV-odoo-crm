@@ -259,12 +259,17 @@
 
                 <!-- Row 1: SO Name + Quick View -->
                 <div class="d-flex justify-content-between align-items-start mb-1 gap-1">
-                    <h6 class="card-title mb-0 text-primary cursor-pointer o_form_uri fw-bold lh-sm"
-                        style="font-size: 0.82rem;"
+                    <h6 class="card-title mb-0 cursor-pointer o_form_uri fw-bold lh-sm"
+                        t-att-style="'font-size: 0.82rem;' + (so.is_new_order ? 'color:#d63384;' : '')"
+                        t-att-class="so.is_new_order ? 'text-decoration-none' : 'text-primary'"
                         t-on-click.stop="() => this.openSaleOrder(so.id)">
-                        <i class="fa fa-shopping-cart me-1 text-muted" style="font-size:0.7rem;" title="Đơn hàng"></i>
+                        <i class="fa fa-shopping-cart me-1" style="font-size:0.7rem;"
+                           t-att-class="so.is_new_order ? 'text-danger' : 'text-muted'" title="Đơn hàng"></i>
                         <t t-esc="so.name"/>
-                        <span t-if="so.is_new_order" class="badge bg-danger ms-1" style="font-size:0.55rem; vertical-align:middle; padding:1px 4px;">MỚI</span>
+                        <small t-if="so.misa_order_date" class="text-muted fw-normal" style="font-size:0.65rem;">
+                            (<t t-esc="so.misa_order_date"/>)
+                        </small>
+                        <span t-if="so.is_new_order" class="badge bg-danger ms-1 animate__animated animate__pulse" style="font-size:0.58rem; vertical-align:middle; padding:2px 6px; letter-spacing:0.5px;">★ MỚI</span>
                     </h6>
                     <button class="btn btn-link btn-sm p-0 ms-1 text-secondary flex-shrink-0"
                             style="font-size: 0.75rem; line-height:1;"
@@ -305,14 +310,16 @@
                 <!-- Row 4: Date + Amount -->
                 <div class="d-flex justify-content-between align-items-center mt-1"
                      style="font-size: 0.72rem;">
-                    <span t-if="so.commitment_date" class="text-danger">
-                        <i class="fa fa-calendar me-1" title="Ngày hẹn giao"></i>
-                        <t t-esc="so.commitment_date.substring(0, 10)"/>
-                    </span>
-                    <span t-else="" class="text-muted">
-                        <i class="fa fa-calendar-o me-1 opacity-50" title="Không có ngày hẹn"></i>
-                        <small>Chưa hẹn</small>
-                    </span>
+                    <div class="d-flex flex-column">
+                        <span t-if="so.commitment_date" class="text-danger">
+                            <i class="fa fa-calendar me-1" title="Ngày hẹn giao"></i>
+                            <t t-esc="so.commitment_date.substring(0, 10)"/>
+                        </span>
+                        <span t-else="" class="text-muted">
+                            <i class="fa fa-calendar-o me-1 opacity-50" title="Không có ngày hẹn"></i>
+                            <small>Chưa hẹn</small>
+                        </span>
+                    </div>
                     <span class="fw-bold text-success">
                         <t t-esc="this.formatCurrency(so.amount_total)"/>
                     </span>
