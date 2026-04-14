@@ -226,7 +226,11 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
 
         # Tính today 1 lần ngoài vòng lặp cho filter_new_orders + delivered_today
         from odoo.fields import Date as OdooDate
+        from odoo.fields import Datetime as OdooDatetime
+        import pytz
         today_date = OdooDate.context_today(self)
+        # Timezone để convert date_done (UTC) sang local date
+        user_tz = pytz.timezone(self.env.context.get('tz') or self.env.user.tz or 'Asia/Ho_Chi_Minh')
 
         for so in sales:
             # --- Phát hiện đơn "trả hàng / dừng": không còn outflow nào active ---
@@ -244,8 +248,19 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             # Đơn "trả hàng / dừng": đã từng có outflow nhưng không còn cái nào active
             no_active_outflow = has_any_outflow and not bool(active_outflow)
 
+            # Tính has_delivered_today SỚM (trước no_active_outflow skip)
+            # date_done lưu UTC → convert sang timezone local trước khi so sánh ngày
+            has_delivered_today = any(
+                p.state == 'done'
+                and p.date_done
+                and p.date_done.replace(tzinfo=pytz.utc).astimezone(user_tz).date() == today_date
+                for p in so.picking_ids
+                if p.picking_type_code == 'outgoing' and not p.return_id
+            )
+
             # Khi không bật "hiện đơn đã giao": ẩn hoàn toàn các đơn này
-            if not show_completed and no_active_outflow:
+            # NGOẠI TRỪ: đơn có phiếu OUT done hôm nay → hiện trong cột "Đã giao trong ngày"
+            if not show_completed and no_active_outflow and not has_delivered_today:
                 continue
 
             has_pending = False
@@ -378,14 +393,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 if p.picking_type_code == 'outgoing'
             )
 
-            # Có phiếu OUT done hôm nay? (đơn đã giao trong ngày)
-            has_delivered_today = any(
-                p.state == 'done'
-                and p.date_done
-                and p.date_done.date() == today_date
-                for p in so.picking_ids
-                if p.picking_type_code == 'outgoing' and not p.return_id
-            )
+            # has_delivered_today đã tính ở trên (trước no_active_outflow skip)
 
             so_status_dict[so.id] = {
                 'stock_status': stock_status,
