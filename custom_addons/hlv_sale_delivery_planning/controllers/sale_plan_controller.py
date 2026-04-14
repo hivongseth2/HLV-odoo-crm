@@ -1128,7 +1128,7 @@ class SalePlanPublicController(http.Controller):
             result = []
             picking_name_map = {p.id: p.name for p in so.picking_ids}
             for msg in messages:
-                # Skip system/automated messages by body content
+                # Skip system/automated messages by body content 123
                 plain = re.sub(r'<[^>]+>', '', msg.body or '').strip()
                 has_att = bool(msg.attachment_ids)
                 if not plain and not has_att:
