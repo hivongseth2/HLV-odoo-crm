@@ -107,7 +107,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 .badge-pack-deltoday{background:#20c997;color:#fff}
 .badge-pack-shipping{background:#198754;color:#fff}
 .badge-pack-done{background:#198754;color:#fff}
-.so-card-new{background:#b5fa8517!important}
+.so-card-new{background:#e77d191c!important}
+.so-card-deltoday{background:#62b1ff30!important}
+.so-card-ready{background:#21c22f17!important}
 .badge-po-pending{background:#6c757d;color:#fff}
 .badge-po-partial{background:#0dcaf0;color:#000}
 .badge-po-full{background:#198754;color:#fff}
@@ -591,7 +593,8 @@ function renderSOCard(o){
   var rd=o.real_delivery_status||o.delivery_status;
   var reported=S.reportedIds&&S.reportedIds[o.id];
   var ep=o.effective_packing||o.packing_status;
-  var h='<div class="card so-card cursor-pointer '+bc+(reported?' opacity-75':'')+(o._is_new?' so-card-new':'')+'" data-so-id="'+o.id+'">'
+  var bgCls=o.has_delivered_today?' so-card-deltoday':(o.stock_status==='ready'?' so-card-ready':(o._is_new?' so-card-new':''));
+  var h='<div class="card so-card cursor-pointer '+bc+(reported?' opacity-75':'')+bgCls+'" data-so-id="'+o.id+'">'
     +'<div class="card-header py-2">'
     +'<div class="d-flex flex-wrap gap-1 mb-1">'
     +b(DC[rd]||'badge-del-pending',DL[rd]||rd)
