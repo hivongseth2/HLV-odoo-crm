@@ -228,7 +228,8 @@
          ================================================================ -->
     <t t-name="hlv_sale_delivery_planning.KanbanSOCard">
         <div class="card border-1 shadow-sm hlv-kanban-card-inner position-relative overflow-hidden"
-             t-att-class="this.getSOCardColorClass(so)">
+             t-att-class="this.getSOCardColorClass(so)"
+             t-att-style="so.is_new_order ? 'background:#a71d1d2e;' : ''">
 
             <!-- Ribbon "Đã in phiếu" / "Có phiếu chưa in" -->
             <div t-if="so.has_new_unprinted_pickings"

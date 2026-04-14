@@ -86,8 +86,13 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 .badge-stk-partial{background:#ffc107;color:#000}
 .badge-stk-out{background:#dc3545;color:#fff}
 .badge-pack-waiting{background:#6c757d;color:#fff}
+.badge-pack-unprinted{background:#dc3545;color:#fff}
 .badge-pack-unpacked{background:#ffc107;color:#000}
+.badge-pack-printed{background:#0dcaf0;color:#000}
+.badge-pack-packed{background:#0d6efd;color:#fff}
+.badge-pack-shipping{background:#198754;color:#fff}
 .badge-pack-done{background:#198754;color:#fff}
+.so-card-new{background:#a71d1d2e!important}
 .badge-po-pending{background:#6c757d;color:#fff}
 .badge-po-partial{background:#0dcaf0;color:#000}
 .badge-po-full{background:#198754;color:#fff}
@@ -164,17 +169,29 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 </div>
 <!-- KPI row 2 - packing -->
 <div class="row g-2 mb-3">
-  <div class="col-md-4"><div class="card kpi-pack" id="kpi-pack-waiting" data-filter="waiting_stock">
+  <div class="col-md-2"><div class="card kpi-pack" id="kpi-pack-waiting" data-filter="waiting_stock">
     <div class="kpi-pack-icon" style="background:#fed7d7;color:#c53030"><i class="fa fa-circle-xmark"></i></div>
     <div><div class="kpi-pack-label">Không có hàng đóng</div><div class="kpi-pack-val" id="kpi-pw">0</div></div>
   </div></div>
-  <div class="col-md-4"><div class="card kpi-pack" id="kpi-pack-unpacked" data-filter="unpacked">
-    <div class="kpi-pack-icon" style="background:#fefcbf;color:#b7791f"><i class="fa fa-box-open"></i></div>
-    <div><div class="kpi-pack-label">Có hàng chưa đóng gói</div><div class="kpi-pack-val" id="kpi-pu">0</div></div>
+  <div class="col-md-2"><div class="card kpi-pack" id="kpi-pack-unprinted" data-filter="has_unprinted">
+    <div class="kpi-pack-icon" style="background:#fed7d7;color:#dc3545"><i class="fa fa-print"></i></div>
+    <div><div class="kpi-pack-label">Có phiếu chưa in</div><div class="kpi-pack-val" id="kpi-pup">0</div></div>
   </div></div>
-  <div class="col-md-4"><div class="card kpi-pack" id="kpi-pack-done" data-filter="fully_packed">
-    <div class="kpi-pack-icon" style="background:#c6f6d5;color:#276749"><i class="fa fa-circle-check"></i></div>
-    <div><div class="kpi-pack-label">Đã đóng gói đủ</div><div class="kpi-pack-val" id="kpi-pf">0</div></div>
+  <div class="col-md-2"><div class="card kpi-pack" id="kpi-pack-unpacked" data-filter="unpacked">
+    <div class="kpi-pack-icon" style="background:#fefcbf;color:#b7791f"><i class="fa fa-box-open"></i></div>
+    <div><div class="kpi-pack-label">Có hàng chưa gói</div><div class="kpi-pack-val" id="kpi-pu">0</div></div>
+  </div></div>
+  <div class="col-md-2"><div class="card kpi-pack" id="kpi-pack-printed" data-filter="printed_waiting">
+    <div class="kpi-pack-icon" style="background:#d1ecf1;color:#0c5460"><i class="fa fa-print"></i></div>
+    <div><div class="kpi-pack-label">Đã in, chờ gói</div><div class="kpi-pack-val" id="kpi-pp">0</div></div>
+  </div></div>
+  <div class="col-md-2"><div class="card kpi-pack" id="kpi-pack-done" data-filter="packed_waiting_ship">
+    <div class="kpi-pack-icon" style="background:#cce5ff;color:#004085"><i class="fa fa-archive"></i></div>
+    <div><div class="kpi-pack-label">Đã gói, chờ giao</div><div class="kpi-pack-val" id="kpi-pf">0</div></div>
+  </div></div>
+  <div class="col-md-2"><div class="card kpi-pack" id="kpi-pack-shipping" data-filter="shipping">
+    <div class="kpi-pack-icon" style="background:#c6f6d5;color:#276749"><i class="fa fa-truck"></i></div>
+    <div><div class="kpi-pack-label">Đang giao</div><div class="kpi-pack-val" id="kpi-ps">0</div></div>
   </div></div>
 </div>
 <!-- Active Filters -->
@@ -203,7 +220,11 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
   <div class="col-md-2"><label class="form-label small mb-0">Đóng Gói</label>
     <select id="f-pack" class="form-select form-select-sm">
       <option value="all">Tất cả</option><option value="waiting_stock">Không có hàng đóng</option>
-      <option value="unpacked">Có hàng chưa đóng gói</option><option value="fully_packed">Đã đóng gói đủ</option>
+      <option value="has_unprinted">Có phiếu chưa in</option>
+      <option value="unpacked">Có hàng chưa đóng gói</option>
+      <option value="printed_waiting">Đã in, chờ đóng gói</option>
+      <option value="packed_waiting_ship">Đã gói, chờ nhận giao</option>
+      <option value="shipping">Đang giao</option>
     </select></div>
   <div class="col-md-2"><label class="form-label small mb-0">Mã NV MISA</label><input id="f-saler" class="form-control form-control-sm" placeholder="VD: NV001"/></div>
   <div class="col-md-3"><label class="form-label small mb-0">HTGH <small class="text-secondary fw-normal">(phẩy=OR, !=loại trừ)</small></label>
@@ -307,8 +328,8 @@ var DL={unshipped:'CHƯA GIAO',pending:'CHƯA GIAO',partial:'Giao 1 phần',full
 var DC={unshipped:'badge-del-pending',pending:'badge-del-pending',partial:'badge-del-partial',full:'badge-del-full'};
 var SL={ready:'Đủ hàng xuất',partial_ready:'Có hàng 1 phần',out_of_stock:'Không có hàng'};
 var SC={ready:'badge-stk-ready',partial_ready:'badge-stk-partial',out_of_stock:'badge-stk-out'};
-var PL={waiting_stock:'Không Có Hàng Đóng',unpacked:'Có Hàng Chưa Đóng Gói',fully_packed:'Đã Đóng Gói Đủ'};
-var PC={waiting_stock:'badge-pack-waiting',unpacked:'badge-pack-unpacked',fully_packed:'badge-pack-done'};
+var PL={waiting_stock:'Không Có Hàng Đóng',has_unprinted:'Có Phiếu Chưa In',unpacked:'Có Hàng Chưa Đóng Gói',printed_waiting:'Đã In, Chờ Đóng Gói',packed_waiting_ship:'Đã Gói, Chờ Nhận Giao',shipping:'Đang Giao',fully_packed:'Đã Đóng Gói Đủ'};
+var PC={waiting_stock:'badge-pack-waiting',has_unprinted:'badge-pack-unprinted',unpacked:'badge-pack-unpacked',printed_waiting:'badge-pack-printed',packed_waiting_ship:'badge-pack-packed',shipping:'badge-pack-shipping',fully_packed:'badge-pack-done'};
 var POL={pending:'Chưa nhận',partial:'Nhận 1 phần',full:'Đã nhận đủ'};
 var POC={pending:'badge-po-pending',partial:'badge-po-partial',full:'badge-po-full'};
 
@@ -375,6 +396,22 @@ function load(append){
     }
     S.total=d.total_count||0;
     S.stats=d.dashboard_stats||{};
+    // Compute effective_packing on each order (same logic as delivery_planner.js)
+    var today=new Date().toISOString().slice(0,10);
+    (append?d.orders||[]:S.orders).forEach(function(o){
+      var ep=o.packing_status;
+      if(o.has_shipper_received) ep='shipping';
+      else if(o.has_new_unprinted_pickings) ep='has_unprinted';
+      else if(ep==='fully_packed') ep='packed_waiting_ship';
+      else if(o.picking_slip_printed&&ep!=='delivered') ep='printed_waiting';
+      o.effective_packing=ep;
+      // Shipper name from pickings
+      o._shipper_names=[];
+      if(o.pickings){o.pickings.forEach(function(p){if(p.shipper_received&&p.shipper_user)o._shipper_names.push(p.shipper_user[1]);});}
+      // New order flag
+      var od=o.misa_order_date||(o.date_order?o.date_order.slice(0,10):'');
+      o._is_new=(od===today);
+    });
     if(d.warehouses&&!S.whLoaded){
       var sel=$('f-wh');
       d.warehouses.forEach(function(w){
@@ -402,9 +439,15 @@ function updKPI(){
   $('kpi-ready').textContent=s.ready||0;
   $('kpi-partial').textContent=s.partial||0;
   $('kpi-outstock').textContent=s.out_of_stock||0;
-  $('kpi-pw').textContent=s.packing_waiting||0;
-  $('kpi-pu').textContent=s.packing_unpacked||0;
-  $('kpi-pf').textContent=s.packing_fully||0;
+  // Count effective packing from client-side computed values
+  var epCounts={waiting_stock:0,has_unprinted:0,unpacked:0,printed_waiting:0,packed_waiting_ship:0,shipping:0};
+  S.orders.forEach(function(o){var ep=o.effective_packing;if(epCounts[ep]!==undefined)epCounts[ep]++;});
+  $('kpi-pw').textContent=epCounts.waiting_stock;
+  $('kpi-pup').textContent=epCounts.has_unprinted;
+  $('kpi-pu').textContent=epCounts.unpacked;
+  $('kpi-pp').textContent=epCounts.printed_waiting;
+  $('kpi-pf').textContent=epCounts.packed_waiting_ship;
+  $('kpi-ps').textContent=epCounts.shipping;
   // Sync active state trên KPI pack cards với filter hiện tại
   var curPack=gv('f-pack');
   document.querySelectorAll('.kpi-pack').forEach(function(el){el.classList.remove('active');});
@@ -439,8 +482,11 @@ function renderKanban(){
   var cols,gb=S.kanbanGroupBy;
   if(gb==='packing_status') cols=[
     {key:'waiting_stock',lbl:'KHÔNG CÓ HÀNG ĐÓNG',cls:'text-secondary'},
+    {key:'has_unprinted',lbl:'CÓ PHIẾU CHƯA IN',cls:'text-danger'},
     {key:'unpacked',lbl:'CÓ HÀNG CHƯA ĐÓNG GÓI',cls:'text-warning'},
-    {key:'fully_packed',lbl:'ĐÃ ĐÓNG GÓI ĐỦ',cls:'text-success'}
+    {key:'printed_waiting',lbl:'ĐÃ IN, CHỜ ĐÓNG GÓI',cls:'text-info'},
+    {key:'packed_waiting_ship',lbl:'ĐÃ GÓI, CHỜ NHẬN GIAO',cls:'text-primary'},
+    {key:'shipping',lbl:'ĐANG GIAO',cls:'text-success'}
   ];
   else if(gb==='delivery_status') cols=[
     {key:'unshipped',lbl:'CHƯA GIAO',cls:'text-secondary'},
@@ -455,7 +501,7 @@ function renderKanban(){
 
   var wrap=$('kanban-view');wrap.innerHTML='';
   cols.forEach(function(c){
-    var field=(gb==='delivery_status')?'real_delivery_status':gb;
+    var field=(gb==='delivery_status')?'real_delivery_status':(gb==='packing_status'?'effective_packing':gb);
     var needTransfer=$('f-need-transfer').checked;
     var items=S.orders.filter(function(o){
       if(needTransfer&&!(o.transfer_suggestions&&o.transfer_suggestions.length)) return false;
@@ -497,14 +543,18 @@ function renderSOCard(o){
   var bc=getCardBorderClass(o);
   var rd=o.real_delivery_status||o.delivery_status;
   var reported=S.reportedIds&&S.reportedIds[o.id];
-  var h='<div class="card so-card cursor-pointer '+bc+(reported?' opacity-75':'')+'" data-so-id="'+o.id+'">'
+  var ep=o.effective_packing||o.packing_status;
+  var h='<div class="card so-card cursor-pointer '+bc+(reported?' opacity-75':'')+(o._is_new?' so-card-new':'')+'" data-so-id="'+o.id+'">'
     +'<div class="card-header py-2">'
     +'<div class="d-flex flex-wrap gap-1 mb-1">'
     +b(DC[rd]||'badge-del-pending',DL[rd]||rd)
     +b(SC[o.stock_status]||'badge-stk-out',SL[o.stock_status]||o.stock_status)
-    +b(PC[o.packing_status]||'badge-pack-waiting',PL[o.packing_status]||o.packing_status)
+    +b(PC[ep]||'badge-pack-waiting',PL[ep]||ep)
     +'</div>'
-    +'<h6 class="text-primary fw-bold mb-0">'+esc(o.name)+'</h6>'
+    +'<h6 class="'+(o._is_new?'fw-bold mb-0':'text-primary fw-bold mb-0')+'" style="'+(o._is_new?'color:#d63384':'')+'">'+esc(o.name)
+    +(o.misa_order_date?' <small class="text-muted fw-normal" style="font-size:.65rem">('+esc(o.misa_order_date)+')</small>':'')
+    +(o._is_new?' <span class="badge" style="background:#d63384;color:#fff;font-size:.6rem">\u2605 M\u1edaI</span>':'')
+    +'</h6>'
     +'<small class="text-muted"><i class="fa fa-user"></i> '+esc(partnerName(o))+'</small>'
     +'</div><div class="card-body py-2">';
   if(o.commitment_date) h+='<small class="text-muted"><i class="fa fa-calendar"></i> '+fd(o.commitment_date)+'</small><br>';
@@ -512,11 +562,12 @@ function renderSOCard(o){
   if(o.x_studio_htgh) h+='<small class="text-muted"><i class="fa fa-info-circle me-1"></i>'+esc(o.x_studio_htgh)+'</small><br>';
   if(o.x_studio_misa_saler_code) h+='<small class="text-muted"><i class="fa fa-id-badge me-1"></i>NV: '+esc(o.x_studio_misa_saler_code)+'</small><br>';
   if(o.misa_shipping_address) h+='<small class="text-muted" style="font-size:.7rem"><i class="fa fa-map-marker me-1 text-danger"></i>'+esc(o.misa_shipping_address)+'</small><br>';
+  if(o._shipper_names&&o._shipper_names.length) h+='<small class="text-success fw-bold" style="font-size:.72rem"><i class="fa fa-motorcycle me-1"></i>T\u00e0i x\u1ebf: '+o._shipper_names.map(esc).join(', ')+'</small><br>';
   if(o.tag_ids&&o.tag_ids.length) h+='<div class="mt-1">'+o.tag_ids.map(tagBadge).join('')+'</div>';
   if(o.transfer_suggestions&&o.transfer_suggestions.length){
     var tsWhs={};o.transfer_suggestions.forEach(function(s){s.sources.forEach(function(src){tsWhs[src.from_warehouse_id]=1;});});
     var nWh=Object.keys(tsWhs).length;
-    h+='<div class="mt-1"><span class="badge bg-danger bg-opacity-75 text-white" style="font-size:.68rem"><i class="fa fa-exchange me-1"></i>Cần chuyển '+o.transfer_suggestions.length+' SP từ '+nWh+' kho khác</span></div>';
+    h+='<div class="mt-1"><span class="badge bg-danger bg-opacity-75 text-white" style="font-size:.68rem"><i class="fa fa-exchange me-1"></i>C\u1ea7n chuy\u1ec3n '+o.transfer_suggestions.length+' SP t\u1eeb '+nWh+' kho kh\u00e1c</span></div>';
   }
   h+='<div class="d-flex justify-content-between align-items-center">'
     +'<span class="fw-bold">'+fm(o.amount_total)+'</span>';
@@ -557,7 +608,7 @@ function renderList(){
       +'<td class="text-end">'+fm(o.amount_total)+'</td>'
       +'<td>'+b(DC[rd]||'',DL[rd]||'')+'</td>'
       +'<td>'+b(SC[o.stock_status]||'',SL[o.stock_status]||'')+'</td>'
-      +'<td>'+b(PC[o.packing_status]||'',PL[o.packing_status]||'')+'</td>'
+      +'<td>'+b(PC[o.effective_packing||o.packing_status]||'',PL[o.effective_packing||o.packing_status]||'')+'</td>'
       +reportCell;
     tb.appendChild(tr);
   });
@@ -568,11 +619,12 @@ function openDrawer(id){
   if(!o)return;
   $('dr-title').textContent=o.name;
   var rd=o.real_delivery_status||o.delivery_status;
+  var ep=o.effective_packing||o.packing_status;
   var h='<div class="mb-3">'
     +'<div class="d-flex flex-wrap gap-1 mb-2">'
     +b(DC[rd]||'badge-del-pending',DL[rd]||rd)
     +b(SC[o.stock_status]||'badge-stk-out',SL[o.stock_status]||o.stock_status)
-    +b(PC[o.packing_status]||'badge-pack-waiting',PL[o.packing_status]||o.packing_status)
+    +b(PC[ep]||'badge-pack-waiting',PL[ep]||ep)
     +'</div>'
     +'<div class="d-flex flex-column gap-2 mt-2 p-3 rounded" style="background:#f7fafc;border:1px solid #e2e8f0">'
     +'<div><i class="fa fa-user text-primary me-2"></i><strong>'+esc(partnerName(o))+'</strong></div>'
@@ -582,6 +634,7 @@ function openDrawer(id){
     +(o.x_studio_htgh?'<div><i class="fa fa-info-circle text-muted me-2"></i><span class="text-muted">HTGH: '+esc(o.x_studio_htgh)+'</span></div>':'')
     +(o.x_studio_misa_saler_code?'<div><i class="fa fa-id-badge text-muted me-2"></i><span class="text-muted">NV MISA: '+esc(o.x_studio_misa_saler_code)+'</span></div>':'')
     +(o.misa_shipping_address?'<div><i class="fa fa-map-marker text-muted me-2"></i><span class="text-muted">'+esc(o.misa_shipping_address)+'</span></div>':'')
+    +(o._shipper_names&&o._shipper_names.length?'<div><i class="fa fa-motorcycle text-success me-2"></i><strong class="text-success">Tài xế: '+o._shipper_names.map(esc).join(', ')+'</strong></div>':'')
     +(o.tag_ids&&o.tag_ids.length?'<div><i class="fa fa-tags text-muted me-2"></i>'+o.tag_ids.map(tagBadge).join('')+'</div>':'')
     +'</div>'
     +'</div>';
@@ -811,7 +864,7 @@ $('btn-list').addEventListener('click',function(){
   });
 });
 
-['kpi-pack-waiting','kpi-pack-unpacked','kpi-pack-done'].forEach(function(id){
+['kpi-pack-waiting','kpi-pack-unprinted','kpi-pack-unpacked','kpi-pack-printed','kpi-pack-done','kpi-pack-shipping'].forEach(function(id){
   $(id).addEventListener('click',function(){
     var f=this.dataset.filter;
     var cur=gv('f-pack');
@@ -973,6 +1026,10 @@ class SalePlanPublicController(http.Controller):
                 'fully_packed': 'Đã đóng gói đủ',
                 'unpacked': 'Có hàng chưa đóng gói',
                 'waiting_stock': 'Không có hàng đóng',
+                'has_unprinted': 'Có phiếu chưa in',
+                'printed_waiting': 'Đã in, chờ đóng gói',
+                'packed_waiting_ship': 'Đã gói, chờ nhận giao',
+                'shipping': 'Đang giao',
             },
             'delivery_status': {
                 'full': 'Hoàn thành',
