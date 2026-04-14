@@ -305,20 +305,14 @@
                 <!-- Row 4: Date + Amount -->
                 <div class="d-flex justify-content-between align-items-center mt-1"
                      style="font-size: 0.72rem;">
-                    <div class="d-flex flex-column">
-                        <span t-if="so.misa_order_date" class="text-info" style="font-size:0.65rem;">
-                            <i class="fa fa-calendar-check-o me-1" title="Ngày đơn hàng MISA"></i>
-                            <t t-esc="so.misa_order_date"/>
-                        </span>
-                        <span t-if="so.commitment_date" class="text-danger">
-                            <i class="fa fa-calendar me-1" title="Ngày hẹn giao"></i>
-                            <t t-esc="so.commitment_date.substring(0, 10)"/>
-                        </span>
-                        <span t-elif="!so.misa_order_date" class="text-muted">
-                            <i class="fa fa-calendar-o me-1 opacity-50" title="Không có ngày hẹn"></i>
-                            <small>Chưa hẹn</small>
-                        </span>
-                    </div>
+                    <span t-if="so.commitment_date" class="text-danger">
+                        <i class="fa fa-calendar me-1" title="Ngày hẹn giao"></i>
+                        <t t-esc="so.commitment_date.substring(0, 10)"/>
+                    </span>
+                    <span t-else="" class="text-muted">
+                        <i class="fa fa-calendar-o me-1 opacity-50" title="Không có ngày hẹn"></i>
+                        <small>Chưa hẹn</small>
+                    </span>
                     <span class="fw-bold text-success">
                         <t t-esc="this.formatCurrency(so.amount_total)"/>
                     </span>
