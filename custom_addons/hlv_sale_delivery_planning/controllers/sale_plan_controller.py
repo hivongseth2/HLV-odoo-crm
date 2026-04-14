@@ -1,10 +1,24 @@
 # -*- coding: utf-8 -*-
 import logging
+import re
 import time
 from collections import defaultdict
 from markupsafe import Markup
 from odoo import http
 from odoo.http import request
+
+_SKIP_MSG_RE = re.compile(
+    r'Lệnh chuyển hàng được tạo'
+    r'|lệnh chuyển hàng đã được tạo ra từ'
+    r'|Đồng bộ \(xoá .{0,5} tạo lại\) thành công'
+    r'|This transfer has been created from'
+    r'|Transfer created'
+    r'|Sales Order created'
+    r'|Quotation created'
+    r'|has been created from'
+    r'|Đơn hàng được tạo',
+    re.IGNORECASE
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -1107,10 +1121,17 @@ class SalePlanPublicController(http.Controller):
                 '&', ('model', '=', 'sale.order'), ('res_id', '=', so.id),
                 '&', ('model', '=', 'stock.picking'), ('res_id', 'in', picking_ids),
             ]
-            messages = request.env['mail.message'].sudo().search(domain, order='date desc', limit=100)
+            messages = request.env['mail.message'].sudo().search(domain, order='date desc', limit=200)
             result = []
             picking_name_map = {p.id: p.name for p in so.picking_ids}
             for msg in messages:
+                # Skip system/automated messages by body content
+                plain = re.sub(r'<[^>]+>', '', msg.body or '').strip()
+                has_att = bool(msg.attachment_ids)
+                if not plain and not has_att:
+                    continue
+                if plain and _SKIP_MSG_RE.search(plain):
+                    continue
                 attachments = []
                 for att in msg.attachment_ids:
                     attachments.append({
