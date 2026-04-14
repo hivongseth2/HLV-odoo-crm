@@ -143,6 +143,27 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 .btn-report:hover{background:#fed7d7;border-color:#c53030}
 /* Report modal */
 #report-modal{display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.5);align-items:center;justify-content:center}
+/* Messages section */
+.msg-section{margin-top:16px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
+.msg-header{padding:10px 14px;background:#f7fafc;border-bottom:1px solid #e2e8f0;cursor:pointer;display:flex;align-items:center;justify-content:between;gap:8px;font-weight:600;font-size:.9rem;color:#2d3748;user-select:none}
+.msg-header i.fa-chevron-right{transition:transform .2s;font-size:.7rem}
+.msg-header.open i.fa-chevron-right{transform:rotate(90deg)}
+.msg-list{max-height:500px;overflow-y:auto;padding:0}
+.msg-item{padding:10px 14px;border-bottom:1px solid #f0f0f0;font-size:.85rem}
+.msg-item:last-child{border-bottom:none}
+.msg-meta{display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap}
+.msg-author{font-weight:600;color:#2d3748}
+.msg-date{color:#a0aec0;font-size:.78rem}
+.msg-origin{font-size:.72rem;background:#e2e8f0;color:#4a5568;padding:1px 6px;border-radius:3px}
+.msg-body{color:#4a5568;line-height:1.5;word-break:break-word}
+.msg-body p{margin:0 0 4px}
+.msg-body img{max-width:100%;border-radius:4px;margin:4px 0}
+.msg-attachments{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.msg-att{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:4px;font-size:.8rem;color:#4a5568;text-decoration:none;transition:.15s}
+.msg-att:hover{background:#edf2f7;border-color:#a0aec0;color:#2d3748}
+.msg-att-img{width:60px;height:60px;object-fit:cover;border-radius:4px;border:1px solid #e2e8f0;cursor:pointer}
+.msg-att-img:hover{opacity:.85}
+.msg-empty{padding:20px;text-align:center;color:#a0aec0;font-size:.85rem}
 #report-modal .rmod-card{background:#fff;max-width:440px;width:90%;border-radius:4px;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,.2)}
 </style>
 </head><body>
@@ -190,13 +211,13 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
     <div class="kpi-pack-icon" style="background:#cce5ff;color:#004085"><i class="fa fa-archive"></i></div>
     <div><div class="kpi-pack-label">Đã gói, chờ giao</div><div class="kpi-pack-val" id="kpi-pf">0</div></div>
   </div></div>
-  <div style="flex:1 1 0;min-width:130px"><div class="card kpi-pack" id="kpi-pack-deltoday" data-filter="delivered_today">
-    <div class="kpi-pack-icon" style="background:#d4edda;color:#155724"><i class="fa fa-calendar-check-o"></i></div>
-    <div><div class="kpi-pack-label">Giao trong ngày</div><div class="kpi-pack-val" id="kpi-pdt">0</div></div>
-  </div></div>
   <div style="flex:1 1 0;min-width:130px"><div class="card kpi-pack" id="kpi-pack-shipping" data-filter="shipping">
     <div class="kpi-pack-icon" style="background:#c6f6d5;color:#276749"><i class="fa fa-truck"></i></div>
     <div><div class="kpi-pack-label">Đang giao</div><div class="kpi-pack-val" id="kpi-ps">0</div></div>
+  </div></div>
+  <div style="flex:1 1 0;min-width:130px"><div class="card kpi-pack" id="kpi-pack-deltoday" data-filter="delivered_today">
+    <div class="kpi-pack-icon" style="background:#d4edda;color:#155724"><i class="fa fa-calendar-check-o"></i></div>
+    <div><div class="kpi-pack-label">Đã giao trong ngày</div><div class="kpi-pack-val" id="kpi-pdt">0</div></div>
   </div></div>
 </div>
 <!-- Active Filters -->
@@ -229,8 +250,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
       <option value="unpacked">Có hàng chưa đóng gói</option>
       <option value="printed_waiting">Đã in, chờ đóng gói</option>
       <option value="packed_waiting_ship">Đã gói, chờ nhận giao</option>
-      <option value="delivered_today">Đơn giao trong ngày</option>
       <option value="shipping">Đang giao</option>
+      <option value="delivered_today">Đã giao trong ngày</option>
     </select></div>
   <div class="col-md-2"><label class="form-label small mb-0">Mã NV MISA</label><input id="f-saler" class="form-control form-control-sm" placeholder="VD: NV001"/></div>
   <div class="col-md-3"><label class="form-label small mb-0">HTGH <small class="text-secondary fw-normal">(phẩy=OR, !=loại trừ)</small></label>
@@ -334,7 +355,7 @@ var DL={unshipped:'CHƯA GIAO',pending:'CHƯA GIAO',partial:'Giao 1 phần',full
 var DC={unshipped:'badge-del-pending',pending:'badge-del-pending',partial:'badge-del-partial',full:'badge-del-full'};
 var SL={ready:'Đủ hàng xuất',partial_ready:'Có hàng 1 phần',out_of_stock:'Không có hàng'};
 var SC={ready:'badge-stk-ready',partial_ready:'badge-stk-partial',out_of_stock:'badge-stk-out'};
-var PL={waiting_stock:'Không Có Hàng Đóng',has_unprinted:'Có Phiếu Chưa In',unpacked:'Có Hàng Chưa Đóng Gói',printed_waiting:'Đã In, Chờ Đóng Gói',packed_waiting_ship:'Đã Gói, Chờ Nhận Giao',delivered_today:'Đơn Giao Trong Ngày',shipping:'Đang Giao',fully_packed:'Đã Đóng Gói Đủ'};
+var PL={waiting_stock:'Không Có Hàng Đóng',has_unprinted:'Có Phiếu Chưa In',unpacked:'Có Hàng Chưa Đóng Gói',printed_waiting:'Đã In, Chờ Đóng Gói',packed_waiting_ship:'Đã Gói, Chờ Nhận Giao',delivered_today:'Đã Giao Trong Ngày',shipping:'Đang Giao',fully_packed:'Đã Đóng Gói Đủ'};
 var PC={waiting_stock:'badge-pack-waiting',has_unprinted:'badge-pack-unprinted',unpacked:'badge-pack-unpacked',printed_waiting:'badge-pack-printed',packed_waiting_ship:'badge-pack-packed',delivered_today:'badge-pack-deltoday',shipping:'badge-pack-shipping',fully_packed:'badge-pack-done'};
 var POL={pending:'Chưa nhận',partial:'Nhận 1 phần',full:'Đã nhận đủ'};
 var POC={pending:'badge-po-pending',partial:'badge-po-partial',full:'badge-po-full'};
@@ -406,11 +427,14 @@ function load(append){
     var today=new Date().toISOString().slice(0,10);
     (append?d.orders||[]:S.orders).forEach(function(o){
       var ep=o.packing_status;
-      if(o.has_shipper_received) ep='shipping';
+      var rd=o.real_delivery_status||o.delivery_status;
+      // Đơn đã giao đủ trong ngày: ưu tiên thấp nhất, luôn hiển
+      if(rd==='full'&&o.has_delivered_today) ep='delivered_today';
+      else if(o.has_shipper_received) ep='shipping';
       else if(o.has_new_unprinted_pickings) ep='has_unprinted';
-      else if(o.has_delivered_today) ep='delivered_today';
       else if(ep==='fully_packed') ep='packed_waiting_ship';
       else if(o.picking_slip_printed&&ep!=='delivered') ep='printed_waiting';
+      else if(ep==='partial_packed') ep='unpacked';
       o.effective_packing=ep;
       // Shipper name from pickings
       o._shipper_names=[];
@@ -494,7 +518,8 @@ function renderKanban(){
     {key:'unpacked',lbl:'CÓ HÀNG CHƯA ĐÓNG GÓI',cls:'text-warning'},
     {key:'printed_waiting',lbl:'ĐÃ IN, CHỜ ĐÓNG GÓI',cls:'text-info'},
     {key:'packed_waiting_ship',lbl:'ĐÃ GÓI, CHỜ NHẬN GIAO',cls:'text-primary'},
-    {key:'shipping',lbl:'ĐANG GIAO',cls:'text-success'}
+    {key:'shipping',lbl:'ĐANG GIAO',cls:'text-success'},
+    {key:'delivered_today',lbl:'ĐÃ GIAO TRONG NGÀY',cls:'text-success'}
   ];
   else if(gb==='delivery_status') cols=[
     {key:'unshipped',lbl:'CHƯA GIAO',cls:'text-secondary'},
@@ -622,6 +647,51 @@ function renderList(){
   });
 }
 
+function loadMessages(orderId){
+  fetch('/api/sale_plan/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{order_id:orderId}})})
+  .then(function(r){return r.json();})
+  .then(function(resp){
+    var d=resp.result||{};
+    if(d.status!=='success'){$('dr-msg-list').innerHTML='<div class="msg-empty text-danger">Lỗi tải tin nhắn</div>';return;}
+    var msgs=d.messages||[];
+    var visibleMsgs=msgs.filter(function(m){return (m.body&&m.body.trim())||( m.attachments&&m.attachments.length);});
+    $('dr-msg-count').textContent=visibleMsgs.length?'('+visibleMsgs.length+')':'';
+    if(!visibleMsgs.length){$('dr-msg-list').innerHTML='<div class="msg-empty"><i class="fa fa-inbox me-1"></i> Chưa có tin nhắn</div>';return;}
+    var html='';
+    visibleMsgs.forEach(function(m){
+      html+='<div class="msg-item">';
+      html+='<div class="msg-meta">';
+      if(m.author) html+='<span class="msg-author"><i class="fa fa-user-circle me-1"></i>'+esc(m.author)+'</span>';
+      if(m.date) html+='<span class="msg-date">'+esc(m.date)+'</span>';
+      if(m.origin) html+='<span class="msg-origin"><i class="fa fa-truck me-1"></i>'+esc(m.origin)+'</span>';
+      html+='</div>';
+      if(m.body&&m.body.trim()){
+        var bodyClean=m.body.replace(/<\/?(html|head|body)[^>]*>/gi,'');
+        html+='<div class="msg-body">'+bodyClean+'</div>';
+      }
+      if(m.attachments&&m.attachments.length){
+        html+='<div class="msg-attachments">';
+        m.attachments.forEach(function(a){
+          var isImg=a.mimetype&&a.mimetype.indexOf('image/')===0;
+          var url='/api/sale_plan/attachment/'+a.id;
+          if(isImg){
+            html+='<a href="'+url+'" target="_blank"><img class="msg-att-img" src="'+url+'" alt="'+esc(a.name)+'" loading="lazy"></a>';
+          }else{
+            var sz=a.file_size>1048576?(a.file_size/1048576).toFixed(1)+'MB':(a.file_size>1024?(a.file_size/1024).toFixed(0)+'KB':a.file_size+'B');
+            html+='<a class="msg-att" href="'+url+'" target="_blank"><i class="fa fa-paperclip"></i> '+esc(a.name)+' <small>('+sz+')</small></a>';
+          }
+        });
+        html+='</div>';
+      }
+      html+='</div>';
+    });
+    $('dr-msg-list').innerHTML=html;
+  })
+  .catch(function(){
+    $('dr-msg-list').innerHTML='<div class="msg-empty text-danger">Lỗi kết nối</div>';
+  });
+}
+
 function openDrawer(id){
   var o=S.orders.find(function(x){return x.id===id;});
   if(!o)return;
@@ -701,8 +771,18 @@ function openDrawer(id){
     });
     h+='</ul>';
   }
+  h+='<div class="msg-section" id="dr-msg-section">'
+    +'<div class="msg-header open" id="dr-msg-toggle"><i class="fa fa-chevron-right me-1"></i><i class="fa fa-comments me-1"></i> Tin nhắn &amp; Tệp đính kèm <span class="text-muted ms-auto" id="dr-msg-count" style="font-weight:400;font-size:.8rem"></span></div>'
+    +'<div class="msg-list" id="dr-msg-list"><div class="msg-empty"><i class="fa fa-spinner fa-spin me-1"></i> Đang tải...</div></div>'
+    +'</div>';
   $('dr-body').innerHTML=h;
   $('dr-footer').innerHTML='Trị giá: <span class="text-primary fs-5">'+fm(o.amount_total)+'</span>';
+  $('dr-msg-toggle').onclick=function(){
+    this.classList.toggle('open');
+    var list=$('dr-msg-list');
+    list.style.display=this.classList.contains('open')?'':'none';
+  };
+  loadMessages(o.id);
   $('drawer').classList.add('open');
   $('drawer-overlay').classList.add('open');
 }
@@ -1013,6 +1093,66 @@ class SalePlanPublicController(http.Controller):
             _logger.exception('report_order error')
             return {'status': 'error', 'message': str(e)}
 
+    @http.route('/api/sale_plan/messages', type='json', auth='public', methods=['POST'])
+    def api_sale_plan_messages(self, order_id=None, **kwargs):
+        if not request.session.get(SESSION_KEY_OK):
+            return {'status': 'error', 'message': 'Unauthorized'}
+        try:
+            so = request.env['sale.order'].sudo().browse(int(order_id))
+            if not so.exists():
+                return {'status': 'error', 'message': 'Order not found'}
+            picking_ids = so.picking_ids.ids
+            domain = [
+                '|',
+                '&', ('model', '=', 'sale.order'), ('res_id', '=', so.id),
+                '&', ('model', '=', 'stock.picking'), ('res_id', 'in', picking_ids),
+            ]
+            messages = request.env['mail.message'].sudo().search(domain, order='date desc', limit=100)
+            result = []
+            picking_name_map = {p.id: p.name for p in so.picking_ids}
+            for msg in messages:
+                attachments = []
+                for att in msg.attachment_ids:
+                    attachments.append({
+                        'id': att.id,
+                        'name': att.name or '',
+                        'mimetype': att.mimetype or 'application/octet-stream',
+                        'file_size': att.file_size or 0,
+                    })
+                origin = ''
+                if msg.model == 'stock.picking':
+                    origin = picking_name_map.get(msg.res_id, '')
+                result.append({
+                    'id': msg.id,
+                    'date': msg.date.strftime('%d/%m/%Y %H:%M') if msg.date else '',
+                    'author': msg.author_id.name if msg.author_id else (msg.email_from or ''),
+                    'body': msg.body or '',
+                    'message_type': msg.message_type,
+                    'subtype': msg.subtype_id.name if msg.subtype_id else '',
+                    'origin': origin,
+                    'attachments': attachments,
+                })
+            return {'status': 'success', 'messages': result}
+        except Exception as e:
+            _logger.exception('sale_plan messages error')
+            return {'status': 'error', 'message': str(e)}
+
+    @http.route('/api/sale_plan/attachment/<int:att_id>', type='http', auth='public', methods=['GET'], csrf=False)
+    def api_sale_plan_attachment(self, att_id, **kwargs):
+        if not request.session.get(SESSION_KEY_OK):
+            return request.redirect('/sale_plan')
+        import base64
+        att = request.env['ir.attachment'].sudo().browse(att_id)
+        if not att.exists() or not att.datas:
+            return request.not_found()
+        data = base64.b64decode(att.datas)
+        headers = [
+            ('Content-Type', att.mimetype or 'application/octet-stream'),
+            ('Content-Disposition', 'inline; filename="%s"' % (att.name or 'file')),
+            ('Content-Length', len(data)),
+        ]
+        return request.make_response(data, headers)
+
     @http.route('/api/sale_plan/export_excel', type='http', auth='public', methods=['GET'], csrf=False)
     def api_export_excel(self, **kwargs):
         if not request.session.get(SESSION_KEY_OK):
@@ -1037,7 +1177,7 @@ class SalePlanPublicController(http.Controller):
                 'has_unprinted': 'Có phiếu chưa in',
                 'printed_waiting': 'Đã in, chờ đóng gói',
                 'packed_waiting_ship': 'Đã gói, chờ nhận giao',
-                'delivered_today': 'Đơn giao trong ngày',
+                'delivered_today': 'Đã giao trong ngày',
                 'shipping': 'Đang giao',
             },
             'delivery_status': {

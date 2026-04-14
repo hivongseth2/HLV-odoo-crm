@@ -439,14 +439,17 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             has_shipper = so_status_dict[so.id].get('has_shipper_received', False)
             delivered_today = so_status_dict[so.id].get('has_delivered_today', False)
 
-            if has_shipper:
+            # delivered_today: đặc biệt — chỉ áp dụng khi đơn đã giao đủ (full),
+            # với ưu tiên thấp nhất (sau shipping). Bỏ qua delivery_ok filter.
+            if real_delivery_status == 'full' and delivered_today:
+                effective_packing = 'delivered_today'
+                # Bypass delivery filter – luôn show "Đã giao trong ngày"
+                delivery_ok = True
+            elif has_shipper:
                 # Shipper đã nhận → "Đang giao" (ưu tiên cao nhất)
                 effective_packing = 'shipping'
             elif has_new_unprinted:
                 effective_packing = 'has_unprinted'
-            elif delivered_today:
-                # Đã giao (OUT done) trong ngày, còn phiếu tách lại
-                effective_packing = 'delivered_today'
             elif packing_status == 'fully_packed':
                 # Đã đóng gói đủ, shipper chưa nhận → "Đã gói, chờ nhận giao"
                 effective_packing = 'packed_waiting_ship'
