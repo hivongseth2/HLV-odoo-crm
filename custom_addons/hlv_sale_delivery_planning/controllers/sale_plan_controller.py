@@ -90,9 +90,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 .badge-pack-unpacked{background:#ffc107;color:#000}
 .badge-pack-printed{background:#0dcaf0;color:#000}
 .badge-pack-packed{background:#0d6efd;color:#fff}
+.badge-pack-deltoday{background:#20c997;color:#fff}
 .badge-pack-shipping{background:#198754;color:#fff}
 .badge-pack-done{background:#198754;color:#fff}
-.so-card-new{background:#a71d1d2e!important}
+.so-card-new{background:#b5fa8517!important}
 .badge-po-pending{background:#6c757d;color:#fff}
 .badge-po-partial{background:#0dcaf0;color:#000}
 .badge-po-full{background:#198754;color:#fff}
@@ -105,7 +106,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 .kanban-col{min-width:320px;max-width:420px;flex:1}
 .kanban-col .card-header{font-size:.85rem}
 /* Cards */
-.so-card{border-width:2px!important;transition:.1s}
+.so-card{border-width:1px!important;transition:.1s}
 .so-card:hover{box-shadow:0 3px 10px rgba(0,0,0,.1)}
 /* Drawer */
 #drawer{position:fixed;top:0;right:-820px;width:800px;height:100vh;background:#fff;
@@ -168,28 +169,32 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
   <div class="col-6 col-md-3"><div class="card kpi-main kpi-bg-out"><div class="kpi-label">Chưa có hàng / Thiếu</div><div class="kpi-val" id="kpi-outstock">0</div><i class="fa fa-xmark-circle kpi-icon"></i></div></div>
 </div>
 <!-- KPI row 2 - packing -->
-<div class="row g-2 mb-3">
-  <div class="col-md-2"><div class="card kpi-pack" id="kpi-pack-waiting" data-filter="waiting_stock">
+<div class="d-flex flex-wrap gap-2 mb-3">
+  <div style="flex:1 1 0;min-width:130px"><div class="card kpi-pack" id="kpi-pack-waiting" data-filter="waiting_stock">
     <div class="kpi-pack-icon" style="background:#fed7d7;color:#c53030"><i class="fa fa-circle-xmark"></i></div>
     <div><div class="kpi-pack-label">Không có hàng đóng</div><div class="kpi-pack-val" id="kpi-pw">0</div></div>
   </div></div>
-  <div class="col-md-2"><div class="card kpi-pack" id="kpi-pack-unprinted" data-filter="has_unprinted">
+  <div style="flex:1 1 0;min-width:130px"><div class="card kpi-pack" id="kpi-pack-unprinted" data-filter="has_unprinted">
     <div class="kpi-pack-icon" style="background:#fed7d7;color:#dc3545"><i class="fa fa-print"></i></div>
     <div><div class="kpi-pack-label">Có phiếu chưa in</div><div class="kpi-pack-val" id="kpi-pup">0</div></div>
   </div></div>
-  <div class="col-md-2"><div class="card kpi-pack" id="kpi-pack-unpacked" data-filter="unpacked">
+  <div style="flex:1 1 0;min-width:130px"><div class="card kpi-pack" id="kpi-pack-unpacked" data-filter="unpacked">
     <div class="kpi-pack-icon" style="background:#fefcbf;color:#b7791f"><i class="fa fa-box-open"></i></div>
     <div><div class="kpi-pack-label">Có hàng chưa gói</div><div class="kpi-pack-val" id="kpi-pu">0</div></div>
   </div></div>
-  <div class="col-md-2"><div class="card kpi-pack" id="kpi-pack-printed" data-filter="printed_waiting">
+  <div style="flex:1 1 0;min-width:130px"><div class="card kpi-pack" id="kpi-pack-printed" data-filter="printed_waiting">
     <div class="kpi-pack-icon" style="background:#d1ecf1;color:#0c5460"><i class="fa fa-print"></i></div>
     <div><div class="kpi-pack-label">Đã in, chờ gói</div><div class="kpi-pack-val" id="kpi-pp">0</div></div>
   </div></div>
-  <div class="col-md-2"><div class="card kpi-pack" id="kpi-pack-done" data-filter="packed_waiting_ship">
+  <div style="flex:1 1 0;min-width:130px"><div class="card kpi-pack" id="kpi-pack-done" data-filter="packed_waiting_ship">
     <div class="kpi-pack-icon" style="background:#cce5ff;color:#004085"><i class="fa fa-archive"></i></div>
     <div><div class="kpi-pack-label">Đã gói, chờ giao</div><div class="kpi-pack-val" id="kpi-pf">0</div></div>
   </div></div>
-  <div class="col-md-2"><div class="card kpi-pack" id="kpi-pack-shipping" data-filter="shipping">
+  <div style="flex:1 1 0;min-width:130px"><div class="card kpi-pack" id="kpi-pack-deltoday" data-filter="delivered_today">
+    <div class="kpi-pack-icon" style="background:#d4edda;color:#155724"><i class="fa fa-calendar-check-o"></i></div>
+    <div><div class="kpi-pack-label">Giao trong ngày</div><div class="kpi-pack-val" id="kpi-pdt">0</div></div>
+  </div></div>
+  <div style="flex:1 1 0;min-width:130px"><div class="card kpi-pack" id="kpi-pack-shipping" data-filter="shipping">
     <div class="kpi-pack-icon" style="background:#c6f6d5;color:#276749"><i class="fa fa-truck"></i></div>
     <div><div class="kpi-pack-label">Đang giao</div><div class="kpi-pack-val" id="kpi-ps">0</div></div>
   </div></div>
@@ -224,6 +229,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
       <option value="unpacked">Có hàng chưa đóng gói</option>
       <option value="printed_waiting">Đã in, chờ đóng gói</option>
       <option value="packed_waiting_ship">Đã gói, chờ nhận giao</option>
+      <option value="delivered_today">Đơn giao trong ngày</option>
       <option value="shipping">Đang giao</option>
     </select></div>
   <div class="col-md-2"><label class="form-label small mb-0">Mã NV MISA</label><input id="f-saler" class="form-control form-control-sm" placeholder="VD: NV001"/></div>
@@ -321,15 +327,15 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 <script>
 (function(){
 "use strict";
-var S={limit:250,total:0,viewMode:'kanban',kanbanGroupBy:'packing_status',
+var S={limit:100,total:0,viewMode:'kanban',kanbanGroupBy:'packing_status',
   orders:[],warehouses:[],stats:{},whLoaded:false,kanbanColPageSize:{},reportedIds:{},tagsLoaded:false};
 
 var DL={unshipped:'CHƯA GIAO',pending:'CHƯA GIAO',partial:'Giao 1 phần',full:'Đã giao đủ'};
 var DC={unshipped:'badge-del-pending',pending:'badge-del-pending',partial:'badge-del-partial',full:'badge-del-full'};
 var SL={ready:'Đủ hàng xuất',partial_ready:'Có hàng 1 phần',out_of_stock:'Không có hàng'};
 var SC={ready:'badge-stk-ready',partial_ready:'badge-stk-partial',out_of_stock:'badge-stk-out'};
-var PL={waiting_stock:'Không Có Hàng Đóng',has_unprinted:'Có Phiếu Chưa In',unpacked:'Có Hàng Chưa Đóng Gói',printed_waiting:'Đã In, Chờ Đóng Gói',packed_waiting_ship:'Đã Gói, Chờ Nhận Giao',shipping:'Đang Giao',fully_packed:'Đã Đóng Gói Đủ'};
-var PC={waiting_stock:'badge-pack-waiting',has_unprinted:'badge-pack-unprinted',unpacked:'badge-pack-unpacked',printed_waiting:'badge-pack-printed',packed_waiting_ship:'badge-pack-packed',shipping:'badge-pack-shipping',fully_packed:'badge-pack-done'};
+var PL={waiting_stock:'Không Có Hàng Đóng',has_unprinted:'Có Phiếu Chưa In',unpacked:'Có Hàng Chưa Đóng Gói',printed_waiting:'Đã In, Chờ Đóng Gói',packed_waiting_ship:'Đã Gói, Chờ Nhận Giao',delivered_today:'Đơn Giao Trong Ngày',shipping:'Đang Giao',fully_packed:'Đã Đóng Gói Đủ'};
+var PC={waiting_stock:'badge-pack-waiting',has_unprinted:'badge-pack-unprinted',unpacked:'badge-pack-unpacked',printed_waiting:'badge-pack-printed',packed_waiting_ship:'badge-pack-packed',delivered_today:'badge-pack-deltoday',shipping:'badge-pack-shipping',fully_packed:'badge-pack-done'};
 var POL={pending:'Chưa nhận',partial:'Nhận 1 phần',full:'Đã nhận đủ'};
 var POC={pending:'badge-po-pending',partial:'badge-po-partial',full:'badge-po-full'};
 
@@ -402,6 +408,7 @@ function load(append){
       var ep=o.packing_status;
       if(o.has_shipper_received) ep='shipping';
       else if(o.has_new_unprinted_pickings) ep='has_unprinted';
+      else if(o.has_delivered_today) ep='delivered_today';
       else if(ep==='fully_packed') ep='packed_waiting_ship';
       else if(o.picking_slip_printed&&ep!=='delivered') ep='printed_waiting';
       o.effective_packing=ep;
@@ -440,13 +447,14 @@ function updKPI(){
   $('kpi-partial').textContent=s.partial||0;
   $('kpi-outstock').textContent=s.out_of_stock||0;
   // Count effective packing from client-side computed values
-  var epCounts={waiting_stock:0,has_unprinted:0,unpacked:0,printed_waiting:0,packed_waiting_ship:0,shipping:0};
+  var epCounts={waiting_stock:0,has_unprinted:0,unpacked:0,printed_waiting:0,packed_waiting_ship:0,delivered_today:0,shipping:0};
   S.orders.forEach(function(o){var ep=o.effective_packing;if(epCounts[ep]!==undefined)epCounts[ep]++;});
   $('kpi-pw').textContent=epCounts.waiting_stock;
   $('kpi-pup').textContent=epCounts.has_unprinted;
   $('kpi-pu').textContent=epCounts.unpacked;
   $('kpi-pp').textContent=epCounts.printed_waiting;
   $('kpi-pf').textContent=epCounts.packed_waiting_ship;
+  $('kpi-pdt').textContent=epCounts.delivered_today;
   $('kpi-ps').textContent=epCounts.shipping;
   // Sync active state trên KPI pack cards với filter hiện tại
   var curPack=gv('f-pack');
@@ -864,7 +872,7 @@ $('btn-list').addEventListener('click',function(){
   });
 });
 
-['kpi-pack-waiting','kpi-pack-unprinted','kpi-pack-unpacked','kpi-pack-printed','kpi-pack-done','kpi-pack-shipping'].forEach(function(id){
+['kpi-pack-waiting','kpi-pack-unprinted','kpi-pack-unpacked','kpi-pack-printed','kpi-pack-done','kpi-pack-deltoday','kpi-pack-shipping'].forEach(function(id){
   $(id).addEventListener('click',function(){
     var f=this.dataset.filter;
     var cur=gv('f-pack');
@@ -1029,6 +1037,7 @@ class SalePlanPublicController(http.Controller):
                 'has_unprinted': 'Có phiếu chưa in',
                 'printed_waiting': 'Đã in, chờ đóng gói',
                 'packed_waiting_ship': 'Đã gói, chờ nhận giao',
+                'delivered_today': 'Đơn giao trong ngày',
                 'shipping': 'Đang giao',
             },
             'delivery_status': {
