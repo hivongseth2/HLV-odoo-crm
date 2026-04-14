@@ -387,12 +387,13 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 'real_delivery_status': real_delivery_status,
                 # Đơn trả hàng / dừng: outflow hết nhưng chưa giao đủ → hiện riêng khi show_completed
                 'is_returned_or_stopped': no_active_outflow and real_delivery_status != 'full',
-                # Đã in phiếu nhưng có phiếu pick mới chưa in (hàng về thêm)
+                # Đã in phiếu nhưng có phiếu pick mới chưa in VÀ có hàng (assigned).
+                # Nếu phiếu PICK chưa in nhưng chưa có hàng (confirmed/waiting) → không ưu tiên trạng thái này.
                 'has_new_unprinted_pickings': (
                     bool(so.x_picking_slip_printed)
                     and bool(active_outflow)
                     and any(
-                        not p.x_printed
+                        not p.x_printed and p.state == 'assigned'
                         for p in active_outflow
                         if 'PICK' in (p.picking_type_id.sequence_code or '').upper()
                     )
