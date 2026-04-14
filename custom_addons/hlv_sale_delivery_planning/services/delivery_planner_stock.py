@@ -224,12 +224,9 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         so_status_dict = {}
         so_meta_dict = {}
 
-        # Tính today 1 lần ngoài vòng lặp cho filter_new_orders
-        if filter_new_orders:
-            from odoo.fields import Date as OdooDate
-            today_date = OdooDate.context_today(self)
-        else:
-            today_date = None
+        # Tính today 1 lần ngoài vòng lặp cho filter_new_orders + delivered_today
+        from odoo.fields import Date as OdooDate
+        today_date = OdooDate.context_today(self)
 
         for so in sales:
             # --- Phát hiện đơn "trả hàng / dừng": không còn outflow nào active ---
@@ -381,6 +378,15 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 if p.picking_type_code == 'outgoing'
             )
 
+            # Có phiếu OUT done hôm nay? (đơn đã giao trong ngày)
+            has_delivered_today = any(
+                p.state == 'done'
+                and p.date_done
+                and p.date_done.date() == today_date
+                for p in so.picking_ids
+                if p.picking_type_code == 'outgoing' and not p.return_id
+            )
+
             so_status_dict[so.id] = {
                 'stock_status': stock_status,
                 'packing_status': packing_status,
@@ -400,6 +406,8 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 ),
                 # Shipper đã nhận hàng giao chưa
                 'has_shipper_received': has_shipper_received,
+                # Đã giao hàng (OUT done) trong ngày hôm nay
+                'has_delivered_today': has_delivered_today,
             }
 
             # Giữ metadata để tổng hợp KPI theo tập đã lọc cuối cùng.
@@ -429,12 +437,16 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             # Tính effective_packing_status bao gồm trạng thái in phiếu + shipper
             has_new_unprinted = so_status_dict[so.id].get('has_new_unprinted_pickings', False)
             has_shipper = so_status_dict[so.id].get('has_shipper_received', False)
+            delivered_today = so_status_dict[so.id].get('has_delivered_today', False)
 
             if has_shipper:
                 # Shipper đã nhận → "Đang giao" (ưu tiên cao nhất)
                 effective_packing = 'shipping'
             elif has_new_unprinted:
                 effective_packing = 'has_unprinted'
+            elif delivered_today:
+                # Đã giao (OUT done) trong ngày, còn phiếu tách lại
+                effective_packing = 'delivered_today'
             elif packing_status == 'fully_packed':
                 # Đã đóng gói đủ, shipper chưa nhận → "Đã gói, chờ nhận giao"
                 effective_packing = 'packed_waiting_ship'
@@ -443,7 +455,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             else:
                 effective_packing = packing_status
 
-            if filter_packing_status in ('has_unprinted', 'printed_waiting', 'packed_waiting_ship', 'shipping'):
+            if filter_packing_status in ('has_unprinted', 'printed_waiting', 'packed_waiting_ship', 'shipping', 'delivered_today'):
                 packing_ok = effective_packing == filter_packing_status
             else:
                 packing_ok = filter_packing_status == 'all' or packing_status == filter_packing_status

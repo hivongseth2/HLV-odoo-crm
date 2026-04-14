@@ -287,6 +287,7 @@ export class DeliveryPlannerDashboard extends Component {
                 { value: 'has_unprinted',    label: 'Có Phiếu Chưa In',        badgeClass: 'bg-danger',             textClass: 'text-danger',    iconClass: 'fa fa-exclamation-circle', progressClass: 'bg-danger' },
                 { value: 'printed_waiting',  label: 'Đã In, Chờ Đóng Gói',     badgeClass: 'bg-info',               textClass: 'text-info',      iconClass: 'fa fa-print', progressClass: 'bg-info' },
                 { value: 'packed_waiting_ship', label: 'Đã Gói, Chờ Nhận Giao', badgeClass: 'bg-primary',           textClass: 'text-primary',   iconClass: 'fa fa-archive', progressClass: 'bg-primary' },
+                { value: 'delivered_today',  label: 'Đơn Giao Trong Ngày',      badgeClass: 'bg-success bg-opacity-75', textClass: 'text-success', iconClass: 'fa fa-calendar-check-o', progressClass: 'bg-success' },
                 { value: 'shipping',         label: 'Đang Giao',               badgeClass: 'bg-success',            textClass: 'text-success',   iconClass: 'fa fa-motorcycle', progressClass: 'bg-success' },
             ];
             default: return [];
@@ -315,6 +316,8 @@ export class DeliveryPlannerDashboard extends Component {
                 if (so.has_shipper_received) val = 'shipping';
                 // Đã in nhưng có phiếu mới chưa in → "Có phiếu chưa in"
                 else if (so.has_new_unprinted_pickings) val = 'has_unprinted';
+                // Đã giao hàng (OUT done) trong ngày hôm nay
+                else if (so.has_delivered_today) val = 'delivered_today';
                 // Đã đóng gói đủ → chuyển sang cột "Đã gói, chờ nhận giao"
                 else if (val === 'fully_packed') val = 'packed_waiting_ship';
                 // Đã in tất cả phiếu, chờ đóng gói → "Đã in, chờ đóng gói"
