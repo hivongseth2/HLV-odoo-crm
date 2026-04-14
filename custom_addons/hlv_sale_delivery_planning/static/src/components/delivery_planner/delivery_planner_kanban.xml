@@ -79,7 +79,7 @@
                         t-on-click="loadMoreKanbanBatch"
                         t-att-disabled="state.isLoading">
                     <i class="fa fa-plus me-1" title="Tải thêm"></i>
-                    Tải thêm 200
+                    Tải thêm 100
                 </button>
                 <span class="text-muted small">
                     <i class="fa fa-arrows text-secondary me-1" title="Kéo thả"/>

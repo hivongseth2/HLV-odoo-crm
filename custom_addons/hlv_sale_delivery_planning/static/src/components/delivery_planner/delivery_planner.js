@@ -74,7 +74,7 @@ export class DeliveryPlannerDashboard extends Component {
             dragOverColumn: null,
             kanbanColumnOrder: {},           // { colValue: [soId, ...] } — thứ tự DnD client-side
             kanbanColPageSize: {},           // { colValue: N } — số card hiển thị mỗi cột
-            kanbanBatchSize: 200,            // số đơn tải backend cho toàn kanban
+            kanbanBatchSize: 100,            // số đơn tải backend cho toàn kanban
 
             // Selection for printing
             selectedSOIds: new Set(),        // Set of selected sale order IDs for printing
@@ -238,7 +238,7 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.currentPage = 1;
         this.state.kanbanColumnOrder = {};
         this.state.kanbanColPageSize = {};
-        this.state.kanbanBatchSize = 200;
+        this.state.kanbanBatchSize = 100;
         this.state.returnedColPageSize = 15;
         // Xóa selection khi filter thay đổi (tránh giữ đơn không còn trong view)
         this.state.selectedSOIds = new Set();
@@ -256,7 +256,7 @@ export class DeliveryPlannerDashboard extends Component {
             this.state.filterStockStatus = 'all';
             this.state.kanbanColumnOrder = {};
             this.state.kanbanColPageSize = {};
-            this.state.kanbanBatchSize = 200;
+            this.state.kanbanBatchSize = 100;
         }
         this.state.currentPage = 1;
         await this.fetchData();
@@ -363,7 +363,7 @@ export class DeliveryPlannerDashboard extends Component {
 
     async loadMoreKanbanBatch() {
         if (this.state.isLoading || !this.hasMoreKanbanData) return;
-        this.state.kanbanBatchSize += 200;
+        this.state.kanbanBatchSize += 100;
         await this.fetchData();
     }
 

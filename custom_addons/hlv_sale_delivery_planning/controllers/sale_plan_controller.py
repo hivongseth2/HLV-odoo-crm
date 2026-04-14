@@ -323,7 +323,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
     <button id="btn-kanban" class="btn btn-sm btn-primary"><i class="fa fa-th"></i> Kanban</button>
     <button id="btn-list" class="btn btn-sm btn-outline-secondary"><i class="fa fa-list"></i> Danh sách</button>
     <span class="vr"></span>
-    <button id="btn-load-more" class="btn btn-sm btn-outline-primary d-none"><i class="fa fa-plus"></i> Tải thêm 200</button>
+    <button id="btn-load-more" class="btn btn-sm btn-outline-primary d-none"><i class="fa fa-plus"></i> Tải thêm 100</button>
     <span class="badge bg-primary" style="font-size:.85rem;padding:9px 12px" id="count-info">0 / 0 đơn hàng</span>
   </div>
 </div>
@@ -415,7 +415,7 @@ function whName(o){return o.warehouse_id?o.warehouse_id[1]:'';}
 function load(append){
   showLoading();
   var offset=append?S.orders.length:0;
-  var lim=append?200:S.limit;
+  var lim=append?100:S.limit;
   var body={search:gv('f-q'),warehouse_id:gv('f-wh'),delivery_status:gv('f-del'),
     stock_status:gv('f-stk'),packing_status:gv('f-pack'),
     date_from:gv('f-date-from'),date_to:gv('f-date-to'),
@@ -510,7 +510,7 @@ function updLoadMore(){
   var remaining=S.total-S.orders.length;
   if(remaining>0){
     btn.classList.remove('d-none');
-    btn.innerHTML='<i class="fa fa-plus"></i> Tải thêm '+(remaining>=200?200:remaining);
+    btn.innerHTML='<i class="fa fa-plus"></i> Tải thêm '+(remaining>=100?100:remaining);
   } else {
     btn.classList.add('d-none');
   }
