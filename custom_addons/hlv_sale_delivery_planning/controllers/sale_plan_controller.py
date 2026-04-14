@@ -444,8 +444,8 @@ function load(append){
     (append?d.orders||[]:S.orders).forEach(function(o){
       var ep=o.packing_status;
       var rd=o.real_delivery_status||o.delivery_status;
-      // Đơn đã giao đủ trong ngày: ưu tiên thấp nhất, luôn hiển
-      if(rd==='full'&&o.has_delivered_today) ep='delivered_today';
+      // Có picking OUT done hôm nay → "Đã giao trong ngày" (kể cả partial)
+      if(o.has_delivered_today) ep='delivered_today';
       else if(o.has_shipper_received) ep='shipping';
       else if(o.has_new_unprinted_pickings) ep='has_unprinted';
       else if(ep==='fully_packed') ep='packed_waiting_ship';

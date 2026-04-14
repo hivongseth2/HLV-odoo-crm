@@ -310,8 +310,8 @@ export class DeliveryPlannerDashboard extends Component {
             let val = so[field];
             if (dim === 'delivery_status' && val === 'unshipped') val = 'pending';
             if (dim === 'packing_status') {
-                // Đơn đã giao đủ trong ngày hôm nay → luôn hiển trong cột "Đã giao trong ngày"
-                if (so.real_delivery_status === 'full' && so.has_delivered_today) {
+                // Có picking OUT done hôm nay → luôn hiển trong cột "Đã giao trong ngày" (kể cả partial)
+                if (so.has_delivered_today) {
                     val = 'delivered_today';
                 } else if (so.real_delivery_status === 'full') {
                     return false;
