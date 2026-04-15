@@ -75,13 +75,13 @@
                         <span class="o_stat_text">Điểm Loyalty</span>
                     </div>
                 </button>
-                <button type="object" class="oe_stat_button" icon="fa-trophy"
+                <div class="oe_stat_button" icon="fa-trophy"
                         invisible="not loyalty_tier_id">
                     <div class="o_stat_info">
                         <field name="loyalty_tier_id" class="o_stat_value" readonly="1"/>
                         <span class="o_stat_text">Hạng</span>
                     </div>
-                </button>
+                </div>
                 <button name="action_view_loyalty_vouchers" type="object"
                         class="oe_stat_button" icon="fa-ticket">
                     <div class="o_stat_info">

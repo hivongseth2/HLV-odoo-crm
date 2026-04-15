@@ -26,7 +26,7 @@ class ResPartner(models.Model):
     )
     loyalty_tier_id = fields.Many2one(
         'hlv.loyalty.tier', string='Hạng thành viên',
-        compute='_compute_loyalty_tier', store=True, readonly=True,
+        compute='_compute_loyalty_tier', store=False, readonly=True,
     )
 
     @api.depends('loyalty_history_ids', 'loyalty_history_ids.point_amount')
