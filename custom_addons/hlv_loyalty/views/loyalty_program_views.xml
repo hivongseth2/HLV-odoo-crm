@@ -2,8 +2,8 @@
 <odoo>
     <!-- Form View -->
     <record id="view_loyalty_program_form" model="ir.ui.view">
-        <field name="name">loyalty.program.form</field>
-        <field name="model">loyalty.program</field>
+        <field name="name">hlv.loyalty.program.form</field>
+        <field name="model">hlv.loyalty.program</field>
         <field name="arch" type="xml">
             <form string="Chương trình Loyalty">
                 <sheet>
@@ -54,8 +54,8 @@
 
     <!-- Tree View -->
     <record id="view_loyalty_program_list" model="ir.ui.view">
-        <field name="name">loyalty.program.list</field>
-        <field name="model">loyalty.program</field>
+        <field name="name">hlv.loyalty.program.list</field>
+        <field name="model">hlv.loyalty.program</field>
         <field name="arch" type="xml">
             <list string="Chương trình Loyalty">
                 <field name="name"/>
@@ -71,7 +71,7 @@
     <!-- Action -->
     <record id="action_loyalty_program" model="ir.actions.act_window">
         <field name="name">Chương trình Loyalty</field>
-        <field name="res_model">loyalty.program</field>
+        <field name="res_model">hlv.loyalty.program</field>
         <field name="view_mode">list,form</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">

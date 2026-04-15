@@ -5,8 +5,8 @@ from odoo import models, fields, api
 _logger = logging.getLogger(__name__)
 
 
-class LoyaltyHistory(models.Model):
-    _name = 'loyalty.history'
+class HlvLoyaltyHistory(models.Model):
+    _name = 'hlv.loyalty.history'
     _description = 'Lịch sử điểm Khách hàng thân thiết'
     _order = 'date desc, id desc'
     _rec_name = 'display_name'
@@ -32,7 +32,7 @@ class LoyaltyHistory(models.Model):
     # Tham chiếu chéo
     picking_id = fields.Many2one('stock.picking', string='Phiếu kho', readonly=True)
     sale_order_id = fields.Many2one('sale.order', string='Đơn bán hàng', readonly=True)
-    voucher_id = fields.Many2one('loyalty.voucher', string='Voucher', readonly=True)
+    voucher_id = fields.Many2one('hlv.loyalty.voucher', string='Voucher', readonly=True)
 
     company_id = fields.Many2one(
         'res.company', string='Chi nhánh phát sinh',

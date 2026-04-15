@@ -2,7 +2,7 @@
 <odoo>
     <record id="view_loyalty_redeem_voucher_wizard_form" model="ir.ui.view">
         <field name="name">loyalty.redeem.voucher.wizard.form</field>
-        <field name="model">loyalty.redeem.voucher.wizard</field>
+        <field name="model">hlv.loyalty.redeem.wizard</field>
         <field name="arch" type="xml">
             <form string="Đổi Voucher">
                 <group>

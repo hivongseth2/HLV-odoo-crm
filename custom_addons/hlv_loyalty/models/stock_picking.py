@@ -38,7 +38,7 @@ class StockPicking(models.Model):
             return
 
         # Tìm chương trình loyalty đang active
-        program = self.env['loyalty.program'].sudo().search([
+        program = self.env['hlv.loyalty.program'].sudo().search([
             ('active', '=', True),
         ], limit=1)
         if not program:
@@ -55,7 +55,7 @@ class StockPicking(models.Model):
             return
 
         # Kiểm tra xem phiếu này đã tích điểm chưa (tránh duplicate)
-        existing = self.env['loyalty.history'].sudo().search([
+        existing = self.env['hlv.loyalty.history'].sudo().search([
             ('picking_id', '=', self.id),
             ('transaction_type', '=', 'earn'),
         ], limit=1)
@@ -63,7 +63,7 @@ class StockPicking(models.Model):
             return
 
         # Tạo bản ghi lịch sử điểm
-        self.env['loyalty.history'].sudo().create({
+        self.env['hlv.loyalty.history'].sudo().create({
             'partner_id': partner.id,
             'point_amount': points,
             'transaction_type': 'earn',
@@ -103,7 +103,7 @@ class StockPicking(models.Model):
             return
 
         # Kiểm tra đã thu hồi chưa
-        existing = self.env['loyalty.history'].sudo().search([
+        existing = self.env['hlv.loyalty.history'].sudo().search([
             ('picking_id', '=', self.id),
             ('transaction_type', '=', 'return'),
         ], limit=1)
@@ -119,7 +119,7 @@ class StockPicking(models.Model):
         if return_amount <= 0:
             return
 
-        program = self.env['loyalty.program'].sudo().search([
+        program = self.env['hlv.loyalty.program'].sudo().search([
             ('active', '=', True),
         ], limit=1)
         if not program:
@@ -129,7 +129,7 @@ class StockPicking(models.Model):
         if points_to_deduct <= 0:
             return
 
-        self.env['loyalty.history'].sudo().create({
+        self.env['hlv.loyalty.history'].sudo().create({
             'partner_id': partner.id,
             'point_amount': -points_to_deduct,
             'transaction_type': 'return',

@@ -16,7 +16,7 @@
         <!-- Tất cả user đều đọc được chương trình -->
         <record id="loyalty_program_rule_read_all" model="ir.rule">
             <field name="name">Loyalty Program: Đọc tất cả</field>
-            <field name="model_id" ref="model_loyalty_program"/>
+            <field name="model_id" ref="model_hlv_loyalty_program"/>
             <field name="domain_force">[(1, '=', 1)]</field>
             <field name="perm_read" eval="True"/>
             <field name="perm_write" eval="False"/>
@@ -28,7 +28,7 @@
         <!-- Chỉ Loyalty Admin mới sửa/tạo/xóa chương trình -->
         <record id="loyalty_program_rule_admin" model="ir.rule">
             <field name="name">Loyalty Program: Admin Full</field>
-            <field name="model_id" ref="model_loyalty_program"/>
+            <field name="model_id" ref="model_hlv_loyalty_program"/>
             <field name="domain_force">[(1, '=', 1)]</field>
             <field name="perm_read" eval="True"/>
             <field name="perm_write" eval="True"/>
@@ -43,7 +43,7 @@
         <!-- User đọc tất cả history -->
         <record id="loyalty_history_rule_read_all" model="ir.rule">
             <field name="name">Loyalty History: Đọc tất cả</field>
-            <field name="model_id" ref="model_loyalty_history"/>
+            <field name="model_id" ref="model_hlv_loyalty_history"/>
             <field name="domain_force">[(1, '=', 1)]</field>
             <field name="perm_read" eval="True"/>
             <field name="perm_write" eval="False"/>
@@ -55,7 +55,7 @@
         <!-- Admin Full CRUD -->
         <record id="loyalty_history_rule_admin" model="ir.rule">
             <field name="name">Loyalty History: Admin Full</field>
-            <field name="model_id" ref="model_loyalty_history"/>
+            <field name="model_id" ref="model_hlv_loyalty_history"/>
             <field name="domain_force">[(1, '=', 1)]</field>
             <field name="perm_read" eval="True"/>
             <field name="perm_write" eval="True"/>
@@ -70,7 +70,7 @@
         <!-- User đọc voucher -->
         <record id="loyalty_voucher_rule_read_all" model="ir.rule">
             <field name="name">Loyalty Voucher: Đọc tất cả</field>
-            <field name="model_id" ref="model_loyalty_voucher"/>
+            <field name="model_id" ref="model_hlv_loyalty_voucher"/>
             <field name="domain_force">[(1, '=', 1)]</field>
             <field name="perm_read" eval="True"/>
             <field name="perm_write" eval="False"/>
@@ -82,7 +82,7 @@
         <!-- Salesman có thể sử dụng (write) voucher khi áp dụng vào đơn hàng -->
         <record id="loyalty_voucher_rule_salesman" model="ir.rule">
             <field name="name">Loyalty Voucher: Salesman Write</field>
-            <field name="model_id" ref="model_loyalty_voucher"/>
+            <field name="model_id" ref="model_hlv_loyalty_voucher"/>
             <field name="domain_force">[(1, '=', 1)]</field>
             <field name="perm_read" eval="True"/>
             <field name="perm_write" eval="True"/>
@@ -94,7 +94,7 @@
         <!-- Admin Full -->
         <record id="loyalty_voucher_rule_admin" model="ir.rule">
             <field name="name">Loyalty Voucher: Admin Full</field>
-            <field name="model_id" ref="model_loyalty_voucher"/>
+            <field name="model_id" ref="model_hlv_loyalty_voucher"/>
             <field name="domain_force">[(1, '=', 1)]</field>
             <field name="perm_read" eval="True"/>
             <field name="perm_write" eval="True"/>

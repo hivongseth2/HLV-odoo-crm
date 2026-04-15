@@ -6,8 +6,8 @@ from odoo.exceptions import ValidationError
 _logger = logging.getLogger(__name__)
 
 
-class LoyaltyProgram(models.Model):
-    _name = 'loyalty.program'
+class HlvLoyaltyProgram(models.Model):
+    _name = 'hlv.loyalty.program'
     _description = 'Chương trình Khách hàng thân thiết'
     _inherit = ['mail.thread', 'mail.activity.mixin']
     _rec_name = 'name'
@@ -36,7 +36,7 @@ class LoyaltyProgram(models.Model):
 
     # Voucher packages
     voucher_package_ids = fields.One2many(
-        'loyalty.voucher.package', 'program_id',
+        'hlv.loyalty.voucher.package', 'program_id',
         string='Gói đổi Voucher',
     )
 

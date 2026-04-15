@@ -50,7 +50,7 @@ class LoyaltyAPIController(http.Controller):
         limit = min(int(kwargs.get('limit', 20)), 100)
         offset = int(kwargs.get('offset', 0))
 
-        history_records = request.env['loyalty.history'].sudo().search(
+        history_records = request.env['hlv.loyalty.history'].sudo().search(
             [('partner_id', '=', partner_id)],
             limit=limit, offset=offset, order='date desc',
         )
@@ -92,7 +92,7 @@ class LoyaltyAPIController(http.Controller):
         if state_filter:
             domain.append(('state', '=', state_filter))
 
-        vouchers = request.env['loyalty.voucher'].sudo().search(domain, order='create_date desc')
+        vouchers = request.env['hlv.loyalty.voucher'].sudo().search(domain, order='create_date desc')
         data = []
         for v in vouchers:
             data.append({
@@ -132,7 +132,7 @@ class LoyaltyAPIController(http.Controller):
         if not partner.exists():
             return {'error': 'Khách hàng không tồn tại'}
 
-        package = request.env['loyalty.voucher.package'].sudo().browse(int(package_id))
+        package = request.env['hlv.loyalty.voucher.package'].sudo().browse(int(package_id))
         if not package.exists() or not package.active:
             return {'error': 'Gói Voucher không tồn tại hoặc đã ngừng'}
 
@@ -145,13 +145,13 @@ class LoyaltyAPIController(http.Controller):
         validity_days = package._get_validity_days()
         date_expiry = odoo_fields.Datetime.now() + timedelta(days=validity_days)
 
-        voucher = request.env['loyalty.voucher'].sudo().create({
+        voucher = request.env['hlv.loyalty.voucher'].sudo().create({
             'partner_id': partner.id,
             'package_id': package.id,
             'date_expiry': date_expiry,
         })
 
-        request.env['loyalty.history'].sudo().create({
+        request.env['hlv.loyalty.history'].sudo().create({
             'partner_id': partner.id,
             'point_amount': -package.points_required,
             'transaction_type': 'redeem',
@@ -186,7 +186,7 @@ class LoyaltyAPIController(http.Controller):
         if not code:
             return {'valid': False, 'error': 'Thiếu mã Voucher'}
 
-        voucher = request.env['loyalty.voucher'].sudo().search([
+        voucher = request.env['hlv.loyalty.voucher'].sudo().search([
             ('code', '=', code),
         ], limit=1)
 

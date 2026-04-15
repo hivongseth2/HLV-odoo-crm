@@ -6,15 +6,15 @@ from odoo.exceptions import ValidationError
 _logger = logging.getLogger(__name__)
 
 
-class LoyaltyVoucherPackage(models.Model):
-    _name = 'loyalty.voucher.package'
+class HlvLoyaltyVoucherPackage(models.Model):
+    _name = 'hlv.loyalty.voucher.package'
     _description = 'Gói đổi Voucher'
     _rec_name = 'name'
     _order = 'points_required asc'
 
     name = fields.Char(string='Tên gói', required=True)
     program_id = fields.Many2one(
-        'loyalty.program', string='Chương trình', required=True, ondelete='cascade',
+        'hlv.loyalty.program', string='Chương trình', required=True, ondelete='cascade',
     )
     company_id = fields.Many2one(
         'res.company', string='Công ty',

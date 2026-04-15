@@ -13,13 +13,13 @@ class ResPartner(models.Model):
         store=True, readonly=True,
     )
     loyalty_history_ids = fields.One2many(
-        'loyalty.history', 'partner_id', string='Lịch sử điểm',
+        'hlv.loyalty.history', 'partner_id', string='Lịch sử điểm',
     )
     loyalty_history_count = fields.Integer(
         string='Số giao dịch', compute='_compute_loyalty_counts',
     )
     loyalty_voucher_ids = fields.One2many(
-        'loyalty.voucher', 'partner_id', string='Voucher',
+        'hlv.loyalty.voucher', 'partner_id', string='Voucher',
     )
     loyalty_voucher_count = fields.Integer(
         string='Số Voucher', compute='_compute_loyalty_counts',
@@ -33,14 +33,14 @@ class ResPartner(models.Model):
             )
 
     def _compute_loyalty_counts(self):
-        history_data = self.env['loyalty.history'].sudo()._read_group(
+        history_data = self.env['hlv.loyalty.history'].sudo()._read_group(
             [('partner_id', 'in', self.ids)],
             ['partner_id'],
             ['__count'],
         )
         history_map = {partner.id: count for partner, count in history_data}
 
-        voucher_data = self.env['loyalty.voucher'].sudo()._read_group(
+        voucher_data = self.env['hlv.loyalty.voucher'].sudo()._read_group(
             [('partner_id', 'in', self.ids)],
             ['partner_id'],
             ['__count'],
@@ -56,7 +56,7 @@ class ResPartner(models.Model):
         return {
             'type': 'ir.actions.act_window',
             'name': 'Lịch sử điểm',
-            'res_model': 'loyalty.history',
+            'res_model': 'hlv.loyalty.history',
             'view_mode': 'list,form',
             'domain': [('partner_id', '=', self.id)],
             'context': {'default_partner_id': self.id},
@@ -67,7 +67,7 @@ class ResPartner(models.Model):
         return {
             'type': 'ir.actions.act_window',
             'name': 'Voucher của tôi',
-            'res_model': 'loyalty.voucher',
+            'res_model': 'hlv.loyalty.voucher',
             'view_mode': 'list,form',
             'domain': [('partner_id', '=', self.id)],
             'context': {'default_partner_id': self.id},
@@ -79,7 +79,7 @@ class ResPartner(models.Model):
         return {
             'type': 'ir.actions.act_window',
             'name': 'Đổi Voucher',
-            'res_model': 'loyalty.redeem.voucher.wizard',
+            'res_model': 'hlv.loyalty.redeem.wizard',
             'view_mode': 'form',
             'target': 'new',
             'context': {

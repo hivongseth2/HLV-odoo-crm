@@ -7,8 +7,8 @@ from odoo import models, fields, api
 _logger = logging.getLogger(__name__)
 
 
-class LoyaltyVoucher(models.Model):
-    _name = 'loyalty.voucher'
+class HlvLoyaltyVoucher(models.Model):
+    _name = 'hlv.loyalty.voucher'
     _description = 'Voucher Khách hàng thân thiết'
     _inherit = ['mail.thread']
     _rec_name = 'code'
@@ -24,11 +24,11 @@ class LoyaltyVoucher(models.Model):
         ondelete='restrict', index=True,
     )
     package_id = fields.Many2one(
-        'loyalty.voucher.package', string='Gói Voucher',
+        'hlv.loyalty.voucher.package', string='Gói Voucher',
         required=True, ondelete='restrict',
     )
     program_id = fields.Many2one(
-        'loyalty.program', string='Chương trình',
+        'hlv.loyalty.program', string='Chương trình',
         related='package_id.program_id', store=True, readonly=True,
     )
     company_id = fields.Many2one(

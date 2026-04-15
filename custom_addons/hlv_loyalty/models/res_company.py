@@ -6,7 +6,7 @@ class ResCompany(models.Model):
     _inherit = 'res.company'
 
     loyalty_program_id = fields.Many2one(
-        'loyalty.program', string='Chương trình Loyalty mặc định',
+        'hlv.loyalty.program', string='Chương trình Loyalty mặc định',
         help='Chương trình tích điểm mặc định cho công ty',
     )
     loyalty_allow_manual_adjust = fields.Boolean(

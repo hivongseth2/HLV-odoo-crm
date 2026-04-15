@@ -7,8 +7,8 @@ from odoo.exceptions import UserError, ValidationError
 _logger = logging.getLogger(__name__)
 
 
-class RedeemVoucherWizard(models.TransientModel):
-    _name = 'loyalty.redeem.voucher.wizard'
+class HlvRedeemVoucherWizard(models.TransientModel):
+    _name = 'hlv.loyalty.redeem.wizard'
     _description = 'Wizard Đổi Voucher'
 
     partner_id = fields.Many2one(
@@ -18,7 +18,7 @@ class RedeemVoucherWizard(models.TransientModel):
         string='Điểm hiện tại', compute='_compute_current_points',
     )
     package_id = fields.Many2one(
-        'loyalty.voucher.package', string='Gói Voucher',
+        'hlv.loyalty.voucher.package', string='Gói Voucher',
         required=True,
         domain="[('active', '=', True)]",
     )
@@ -81,14 +81,14 @@ class RedeemVoucherWizard(models.TransientModel):
         date_expiry = fields.Datetime.now() + timedelta(days=validity_days)
 
         # Tạo Voucher
-        voucher = self.env['loyalty.voucher'].sudo().create({
+        voucher = self.env['hlv.loyalty.voucher'].sudo().create({
             'partner_id': partner.id,
             'package_id': package.id,
             'date_expiry': date_expiry,
         })
 
         # Trừ điểm - tạo bản ghi lịch sử
-        self.env['loyalty.history'].sudo().create({
+        self.env['hlv.loyalty.history'].sudo().create({
             'partner_id': partner.id,
             'point_amount': -package.points_required,
             'transaction_type': 'redeem',
@@ -117,7 +117,7 @@ class RedeemVoucherWizard(models.TransientModel):
                 'sticky': True,
                 'next': {
                     'type': 'ir.actions.act_window',
-                    'res_model': 'loyalty.voucher',
+                    'res_model': 'hlv.loyalty.voucher',
                     'res_id': voucher.id,
                     'view_mode': 'form',
                     'target': 'current',

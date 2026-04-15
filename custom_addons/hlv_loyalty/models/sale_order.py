@@ -10,7 +10,7 @@ class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
     loyalty_voucher_id = fields.Many2one(
-        'loyalty.voucher', string='Voucher áp dụng',
+        'hlv.loyalty.voucher', string='Voucher áp dụng',
         copy=False, readonly=True,
     )
     loyalty_voucher_code = fields.Char(
@@ -25,7 +25,7 @@ class SaleOrder(models.Model):
         if not code:
             raise UserError('Vui lòng nhập mã Voucher!')
 
-        voucher = self.env['loyalty.voucher'].sudo().search([
+        voucher = self.env['hlv.loyalty.voucher'].sudo().search([
             ('code', '=', code),
         ], limit=1)
 
