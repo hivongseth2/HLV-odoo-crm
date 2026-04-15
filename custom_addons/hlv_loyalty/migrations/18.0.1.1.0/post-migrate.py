@@ -58,7 +58,7 @@ def migrate(cr, version):
     if affected_partner_ids:
         partners = env['res.partner'].browse(list(affected_partner_ids))
         partners._compute_loyalty_total_points()
-        partners._compute_loyalty_tier()
+        # loyalty_tier_id là store=False, tự compute khi đọc — không cần recompute thủ công
 
     _logger.info(
         "Loyalty migration done: %d history migrated, %d skipped, "
