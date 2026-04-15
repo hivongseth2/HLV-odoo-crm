@@ -100,7 +100,7 @@
                     <group>
                         <group string="Thông tin Voucher">
                             <field name="partner_id"
-                                   domain="[('customer_rank', '>', 0)]"
+                                   domain="[('customer_rank', '>', 0), ('parent_id', '=', False)]"
                                    options="{'no_create': True}"/>
                             <field name="package_id"/>
                             <field name="program_id"/>
