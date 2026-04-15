@@ -24,12 +24,27 @@ class ResPartner(models.Model):
     loyalty_voucher_count = fields.Integer(
         string='Số Voucher', compute='_compute_loyalty_counts',
     )
+    loyalty_tier_id = fields.Many2one(
+        'hlv.loyalty.tier', string='Hạng thành viên',
+        compute='_compute_loyalty_tier', store=True, readonly=True,
+    )
 
     @api.depends('loyalty_history_ids', 'loyalty_history_ids.point_amount')
     def _compute_loyalty_total_points(self):
         for partner in self:
             partner.loyalty_total_points = sum(
                 partner.loyalty_history_ids.mapped('point_amount')
+            )
+
+    @api.depends('loyalty_total_points')
+    def _compute_loyalty_tier(self):
+        tiers = self.env['hlv.loyalty.tier'].sudo().search(
+            [('active', '=', True)], order='min_points desc'
+        )
+        for partner in self:
+            pts = partner.loyalty_total_points
+            partner.loyalty_tier_id = next(
+                (t for t in tiers if pts >= t.min_points), False
             )
 
     def _compute_loyalty_counts(self):

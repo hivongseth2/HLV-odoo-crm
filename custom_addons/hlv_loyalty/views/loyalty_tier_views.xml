@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Form View -->
+    <record id="view_loyalty_tier_form" model="ir.ui.view">
+        <field name="name">hlv.loyalty.tier.form</field>
+        <field name="model">hlv.loyalty.tier</field>
+        <field name="arch" type="xml">
+            <form string="Hạng thành viên">
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1>
+                            <field name="name" placeholder="Tên hạng (vd: Đồng, Bạc, Vàng)..."/>
+                        </h1>
+                    </div>
+
+                    <!-- Preview badge -->
+                    <div class="mb-4 p-3 border text-center" style="background:#f8f9fa;">
+                        <span class="fw-bold small text-uppercase"
+                              style="letter-spacing:1px; color:#6c757d;">Preview hạng</span>
+                        <div class="mt-2">
+                            <span class="badge fs-5 px-4 py-2 fw-bold"
+                                  style="background-color: var(--badge-color, #cd7f32); color: #fff;">
+                                <i class="fa me-2"><field name="icon" nolabel="1"/></i>
+                                <field name="name" nolabel="1"/>
+                            </span>
+                        </div>
+                        <div class="text-muted small mt-2">
+                            <field name="description" nolabel="1" placeholder="Mô tả ngắn..."/>
+                        </div>
+                    </div>
+
+                    <group>
+                        <group string="Cấu hình hạng">
+                            <field name="color" widget="radio"/>
+                            <field name="icon" placeholder="fa-medal"/>
+                            <field name="description"/>
+                            <field name="sequence"/>
+                            <field name="active" widget="boolean_toggle"/>
+                        </group>
+                        <group string="Ngưỡng điểm">
+                            <field name="min_points" string="Điểm tối thiểu để đạt hạng"/>
+                            <field name="max_points" string="Điểm tối đa (để trống = không giới hạn)"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page string="Quyền lợi" name="benefits">
+                            <field name="benefit_ids">
+                                <list editable="bottom">
+                                    <field name="icon" string="Icon" placeholder="fa-check"/>
+                                    <field name="name" string="Quyền lợi"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- List View -->
+    <record id="view_loyalty_tier_list" model="ir.ui.view">
+        <field name="name">hlv.loyalty.tier.list</field>
+        <field name="model">hlv.loyalty.tier</field>
+        <field name="arch" type="xml">
+            <list string="Hạng thành viên" decoration-muted="not active">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="color" widget="badge"
+                       decoration-warning="color == 'gold'"
+                       decoration-info="color == 'silver' or color == 'platinum'"
+                       decoration-success="color == 'diamond'"/>
+                <field name="min_points" string="Từ (điểm)"/>
+                <field name="max_points" string="Đến (điểm)"/>
+                <field name="description"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_loyalty_tier" model="ir.actions.act_window">
+        <field name="name">Hạng thành viên</field>
+        <field name="res_model">hlv.loyalty.tier</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Tạo hạng thành viên đầu tiên!
+            </p>
+            <p>Ví dụ: Đồng (0đ), Bạc (1,000đ), Vàng (5,000đ), Kim cương (10,000đ)</p>
+        </field>
+    </record>
+</odoo>

@@ -53,4 +53,11 @@
               parent="menu_loyalty_config"
               action="action_loyalty_voucher_package"
               sequence="20"/>
+
+    <!-- Hạng thành viên -->
+    <menuitem id="menu_loyalty_tier"
+              name="Hạng thành viên"
+              parent="menu_loyalty_config"
+              action="action_loyalty_tier"
+              sequence="30"/>
 </odoo>
