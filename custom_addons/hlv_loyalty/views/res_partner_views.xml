@@ -1,6 +1,66 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Kế thừa Form Khách hàng - Thêm Smart Buttons & Tab Loyalty -->
+    <!-- View quản lý khách hàng tích điểm -->
+    <record id="view_loyalty_partner_list" model="ir.ui.view">
+        <field name="name">loyalty.partner.list</field>
+        <field name="model">res.partner</field>
+        <field name="arch" type="xml">
+            <list string="Khách hàng tích điểm"
+                  decoration-muted="loyalty_total_points == 0"
+                  default_order="loyalty_total_points desc">
+                <field name="name" string="Khách hàng"/>
+                <field name="parent_id" string="Công ty mẹ" optional="show"/>
+                <field name="phone" optional="show"/>
+                <field name="email" optional="hide"/>
+                <field name="loyalty_total_points" string="Điểm tích lũy" sum="Tổng"/>
+                <field name="loyalty_voucher_count" string="Voucher hiện có"/>
+                <field name="company_id" groups="base.group_multi_company" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_loyalty_partner_search" model="ir.ui.view">
+        <field name="name">loyalty.partner.search</field>
+        <field name="model">res.partner</field>
+        <field name="arch" type="xml">
+            <search string="Tìm khách hàng">
+                <field name="name"/>
+                <field name="parent_id" string="Công ty mẹ"/>
+                <field name="phone"/>
+                <filter string="Có điểm" name="filter_has_points"
+                        domain="[('loyalty_total_points', '&gt;', 0)]"/>
+                <filter string="Là công ty" name="filter_company"
+                        domain="[('is_company', '=', True)]"/>
+                <filter string="Là liên hệ" name="filter_contact"
+                        domain="[('is_company', '=', False)]"/>
+                <separator/>
+                <group expand="0" string="Nhóm theo">
+                    <filter string="Công ty mẹ" name="group_parent"
+                            context="{&#39;group_by&#39;: &#39;parent_id&#39;}"/>
+                    <filter string="Công ty (Odoo)" name="group_company"
+                            context="{&#39;group_by&#39;: &#39;company_id&#39;}"
+                            groups="base.group_multi_company"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_loyalty_partner_overview" model="ir.actions.act_window">
+        <field name="name">Khách hàng tích điểm</field>
+        <field name="res_model">res.partner</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_loyalty_partner_list"/>
+        <field name="search_view_id" ref="view_loyalty_partner_search"/>
+        <field name="domain">[('customer_rank', '&gt;', 0)]</field>
+        <field name="context">{&#39;search_default_filter_has_points&#39;: 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Chưa có khách hàng nào tích điểm.
+            </p>
+        </field>
+    </record>
+
+    <!-- Kế thừa Form Khách hàng - Thêm Smart Buttons &amp; Tab Loyalty -->
     <record id="view_partner_form_inherit_loyalty" model="ir.ui.view">
         <field name="name">res.partner.form.inherit.loyalty</field>
         <field name="model">res.partner</field>

@@ -12,6 +12,13 @@
               parent="menu_loyalty_root"
               sequence="10"/>
 
+    <!-- Khách hàng tích điểm -->
+    <menuitem id="menu_loyalty_partner_overview"
+              name="Khách hàng"
+              parent="menu_loyalty_management"
+              action="action_loyalty_partner_overview"
+              sequence="5"/>
+
     <!-- Lịch sử điểm -->
     <menuitem id="menu_loyalty_history"
               name="Lịch sử điểm"

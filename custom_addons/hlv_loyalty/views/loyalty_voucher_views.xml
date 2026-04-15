@@ -99,7 +99,9 @@
                     </div>
                     <group>
                         <group string="Thông tin Voucher">
-                            <field name="partner_id"/>
+                            <field name="partner_id"
+                                   domain="[('customer_rank', '>', 0)]"
+                                   options="{'no_create': True}"/>
                             <field name="package_id"/>
                             <field name="program_id"/>
                             <field name="company_id" groups="base.group_multi_company"/>
