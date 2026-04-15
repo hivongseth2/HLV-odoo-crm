@@ -464,6 +464,13 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 'has_shipper_received': has_shipper_received,
                 # Đã giao hàng (OUT done) trong ngày hôm nay
                 'has_delivered_today': has_delivered_today,
+                # Có phiếu PICK nào đang ASSIGNED (sẵn hàng thực sự) không
+                # (dùng để quyết định có nên ưu tiên delivered_today hay không)
+                'has_assigned_pick': any(
+                    p.state == 'assigned'
+                    for p in active_outflow
+                    if 'PICK' in (p.picking_type_id.sequence_code or '').upper()
+                ),
             }
 
             # Giữ metadata để tổng hợp KPI theo tập đã lọc cuối cùng.
@@ -511,14 +518,23 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             has_shipper = so_status_dict[so.id].get('has_shipper_received', False)
             delivered_today = so_status_dict[so.id].get('has_delivered_today', False)
 
-            # delivered_today: đặc biệt — chỉ áp dụng khi đơn đã giao đủ (full),
-            # với ưu tiên thấp nhất (sau shipping). Bỏ qua delivery_ok filter.
-            if real_delivery_status == 'full' and delivered_today:
+            # Kiểm tra có phiếu PICK nào đang ASSIGNED (sẵn hàng thực sự) không
+            has_assigned_pick = any(
+                p.state == 'assigned'
+                for p in active_outflow
+                if 'PICK' in (p.picking_type_id.sequence_code or '').upper()
+            )
+
+            # delivered_today: ưu tiên CAO NHẤT khi:
+            #   - Có phiếu OUT done hôm nay (kể cả đơn giao partial)
+            #   - VÀ không có phiếu PICK nào đang assigned sẵn hàng
+            # Lý do: nếu PICK chỉ confirmed/waiting = đợi hàng về, không cần làm gì ngay.
+            if delivered_today and (real_delivery_status == 'full' or not has_assigned_pick):
                 effective_packing = 'delivered_today'
                 # Bypass delivery filter – luôn show "Đã giao trong ngày"
                 delivery_ok = True
             elif has_shipper:
-                # Shipper đã nhận → "Đang giao" (ưu tiên cao nhất)
+                # Shipper đã nhận → "Đang giao"
                 effective_packing = 'shipping'
             elif has_new_unprinted:
                 effective_packing = 'has_unprinted'
