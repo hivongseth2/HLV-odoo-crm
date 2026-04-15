@@ -315,13 +315,14 @@ export class DeliveryPlannerDashboard extends Component {
             let val = so[field];
             if (dim === 'delivery_status' && val === 'unshipped') val = 'pending';
             if (dim === 'packing_status') {
-                // Đơn đã giao đủ trong ngày hôm nay → luôn hiển trong cột "Đã giao trong ngày"
-                if (so.real_delivery_status === 'full' && so.has_delivered_today) {
+                // delivered_today: ưu tiên CAO NHẤT
+                // - Đã giao hôm nay (kể cả partial) VÀ không có PICK nào assigned sẵn hàng
+                if (so.has_delivered_today && (so.real_delivery_status === 'full' || !so.has_assigned_pick)) {
                     val = 'delivered_today';
                 } else if (so.real_delivery_status === 'full') {
                     return false;
                 }
-                // Shipper đã nhận → "Đang giao" (ưu tiên cao nhất)
+                // Shipper đã nhận → "Đang giao"
                 else if (so.has_shipper_received) val = 'shipping';
                 // Đã in nhưng có phiếu mới chưa in → "Có phiếu chưa in"
                 else if (so.has_new_unprinted_pickings) val = 'has_unprinted';
@@ -329,7 +330,7 @@ export class DeliveryPlannerDashboard extends Component {
                 else if (val === 'fully_packed') val = 'packed_waiting_ship';
                 // Đã in tất cả phiếu, chờ đóng gói → "Đã in, chờ đóng gói"
                 else if (so.picking_slip_printed) val = 'printed_waiting';
-                // Gom nhóm để tập trung hành động: còn hàng chưa đóng = cần xử lý ngay.
+                // Gơm nhóm: còn hàng chưa đóng = cần xử lý ngay.
                 else if (val === 'partial_packed') val = 'unpacked';
             }
             return val === colValue;

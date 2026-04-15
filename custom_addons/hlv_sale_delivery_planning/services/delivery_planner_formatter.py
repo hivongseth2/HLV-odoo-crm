@@ -421,5 +421,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             'picking_slip_printed': bool(so.x_picking_slip_printed),
             'has_new_unprinted_pickings': so_status_dict.get('has_new_unprinted_pickings', False),
             'has_delivered_today': so_status_dict.get('has_delivered_today', False),
+            'has_assigned_pick': so_status_dict.get('has_assigned_pick', False),
+            'has_shipper_received': so_status_dict.get('has_shipper_received', False),
             'has_unread_message': bool(getattr(so, 'x_plan_unread_message', False)),
         }
