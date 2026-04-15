@@ -162,7 +162,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 #report-modal{display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.5);align-items:center;justify-content:center}
 /* Messages section */
 .msg-section{margin-top:16px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
-.msg-header{padding:10px 14px;background:#f7fafc;border-bottom:1px solid #e2e8f0;cursor:pointer;display:flex;align-items:center;justify-content:between;gap:8px;font-weight:600;font-size:.9rem;color:#2d3748;user-select:none}
+.msg-header{padding:10px 14px;background:#f7fafc;border-bottom:1px solid #e2e8f0;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:600;font-size:.9rem;color:#2d3748;user-select:none}
 .msg-header i.fa-chevron-right{transition:transform .2s;font-size:.7rem}
 .msg-header.open i.fa-chevron-right{transform:rotate(90deg)}
 .msg-list{max-height:500px;overflow-y:auto;padding:0}
@@ -820,17 +820,17 @@ function openDrawer(id){
   }
   h+='<div class="msg-section" id="dr-msg-section">'
     +'<div class="msg-header open" id="dr-msg-toggle"><i class="fa fa-chevron-right me-1"></i><i class="fa fa-comments me-1"></i> Tin nhắn &amp; Chat <span class="text-muted" id="dr-msg-count" style="font-weight:400;font-size:.8rem"></span>'
-    +'<button class="btn btn-sm btn-outline-secondary ms-auto px-2 py-0" onclick="event.stopPropagation();loadMessages()" title="Tải lại tin nhắn"><i class="fa fa-refresh"></i></button></div>'
+    +'<button id="dr-msg-refresh" class="btn btn-sm btn-outline-secondary ms-auto px-2 py-0" title="Tải lại tin nhắn"><i class="fa fa-refresh"></i></button></div>'
     +'<div style="padding:10px 14px 6px;border-bottom:1px solid #e2e8f0;background:#f7fafc">'
-    +'<div class="d-flex gap-2 mb-2"><input id="dr-msg-author" class="form-control form-control-sm" placeholder="Tên của bạn..." style="max-width:160px" value="'+(localStorage.getItem('hlv_msg_author')||'')+'"/>'
-    +'<input id="dr-msg-input" class="form-control form-control-sm" placeholder="Nhập tin nhắn..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();sendPublicMessage()}"/>'
-    +'<button id="dr-msg-send" class="btn btn-sm btn-primary px-3" onclick="sendPublicMessage()"><i class="fa fa-paper-plane"></i></button></div>'
+    +'<div class="d-flex gap-2 mb-2"><input id="dr-msg-author" class="form-control form-control-sm" placeholder="Tên của bạn..." style="max-width:160px" value="'+esc(localStorage.getItem('hlv_msg_author')||'')+'"/>'
+    +'<input id="dr-msg-input" class="form-control form-control-sm" placeholder="Nhập tin nhắn..."/>'
+    +'<button id="dr-msg-send" class="btn btn-sm btn-primary px-3"><i class="fa fa-paper-plane"></i></button></div>'
     +'</div>'
     +'<div class="msg-list" id="dr-msg-list"><div class="msg-empty"><i class="fa fa-spinner fa-spin me-1"></i> Đang tải...</div></div>'
     +'</div>';
   $('dr-body').innerHTML=h;
   $('dr-footer').innerHTML='Trị giá: <span class="text-primary fs-5">'+fm(o.amount_total)+'</span>';
-  $('dr-msg-toggle').onclick=function(e){
+  $('dr-msg-toggle').addEventListener('click',function(e){
     if(e.target.closest('button'))return;
     this.classList.toggle('open');
     var list=$('dr-msg-list');
@@ -838,7 +838,10 @@ function openDrawer(id){
     var isOpen=this.classList.contains('open');
     list.style.display=isOpen?'':'none';
     if(sendBox&&sendBox.style)sendBox.style.display=isOpen?'':'none';
-  };
+  });
+  $('dr-msg-refresh').addEventListener('click',function(e){e.stopPropagation();loadMessages();});
+  $('dr-msg-send').addEventListener('click',function(){sendPublicMessage();});
+  $('dr-msg-input').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();sendPublicMessage();}});
   loadMessages(o.id);
   $('drawer').classList.add('open');
   $('drawer-overlay').classList.add('open');

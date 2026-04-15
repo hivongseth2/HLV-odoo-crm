@@ -46,7 +46,7 @@
             </div>
 
             <div class="offcanvas-body p-4 text-start bg-light overflow-auto"
-                 style="height: calc(100vh - 150px);">
+                 style="height: calc(100vh - 70px); padding-bottom: 80px !important;">
 
                 <!-- Thông tin SO -->
                 <div class="row bg-white p-3 rounded shadow-sm border mb-4 mx-0">
@@ -301,9 +301,15 @@
 
                 <!-- Luồng Phiếu Xuất Kho trong drawer (timeline) -->
                 <div t-if="state.selectedOrder.pickings and state.selectedOrder.pickings.length > 0">
-                    <h6 class="text-muted text-uppercase small mb-3">
+                    <h6 class="text-muted text-uppercase small mb-3 cursor-pointer d-flex align-items-center"
+                        t-on-click="() => this.toggleSection('drawer_pickings')">
                         <i class="fa fa-sitemap me-1" title="Luồng phiếu"></i> Luồng Phiếu Xuất Kho
+                        <span class="badge bg-secondary bg-opacity-25 text-dark ms-2" style="font-size:.7rem;">
+                            <t t-esc="state.selectedOrder.pickings.length"/>
+                        </span>
+                        <i t-attf-class="fa ms-auto #{this.isSectionCollapsed('drawer_pickings') ? 'fa-chevron-right' : 'fa-chevron-down'} text-muted small"></i>
                     </h6>
+                    <div t-attf-class="#{this.isSectionCollapsed('drawer_pickings') ? 'd-none' : ''}">
                     <div class="position-relative ms-3 border-start border-2 border-primary pb-1 mb-4">
                         <t t-foreach="state.selectedOrder.pickings" t-as="picking" t-key="picking.id">
                             <div class="position-relative mb-3 ms-4 cursor-pointer"
@@ -376,6 +382,7 @@
                             </div>
                         </t>
                     </div>
+                    </div>
                 </div>
 
                 <!-- Tin nhắn & Chat -->
@@ -403,7 +410,7 @@
                         </button>
                     </div>
                     <!-- Message list -->
-                    <div style="max-height:400px;overflow-y:auto;" class="border rounded bg-white">
+                    <div style="max-height:500px;overflow-y:auto;-webkit-overflow-scrolling:touch;" class="border rounded bg-white">
                         <div t-if="state.drawerMessagesLoading" class="text-center text-muted p-3">
                             <i class="fa fa-spinner fa-spin me-1"></i> Đang tải...
                         </div>
