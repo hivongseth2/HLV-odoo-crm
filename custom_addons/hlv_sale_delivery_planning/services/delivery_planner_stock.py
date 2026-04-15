@@ -295,16 +295,23 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
 
         # FIX #3: Prefetch toàn bộ các field cần trong vòng lặp chính — batch 1 SQL mỗi field.
         # Không prefetch: mỗi so.picking_ids trong loop = 1 query riêng.
-        picking_fields = [
+        # Core fields luôn tồn tại trên stock.picking
+        picking_core_fields = [
             'state', 'picking_type_code', 'picking_type_id', 'return_id',
-            'date_done', 'sale_id', 'x_printed', 'x_shipper_received',
-            'x_shipper_user_id', 'move_ids',
+            'date_done', 'sale_id', 'move_ids',
         ]
+        # Optional fields từ module hlv_sale_delivery_planning / hlv_barcode_shipper
+        picking_optional_fields = ['x_printed', 'shipper_received', 'shipper_returned', 'shipper_received_by']
+        picking_model_fields = set(self.env['stock.picking']._fields.keys())
+        picking_safe_fields = picking_core_fields + [
+            f for f in picking_optional_fields if f in picking_model_fields
+        ]
+
         all_pickings = sales.mapped('picking_ids')
         if all_pickings:
-            all_pickings.read(picking_fields)          # batch-load vào cache
-            all_pickings.mapped('picking_type_id').read(['sequence_code', 'code'])  # prefetch type
-            # Prefetch move_ids fields nếu cần check m.state trong loop
+            all_pickings.read(picking_safe_fields)     # batch-load vào cache
+            all_pickings.mapped('picking_type_id').read(['sequence_code', 'code'])
+            # Prefetch move_ids fields để tránh lazy load trong loop
             all_pickings.mapped('move_ids').read(['state', 'product_id', 'quantity', 'product_uom_qty', 'sale_line_id'])
 
         # Prefetch order_line fields
