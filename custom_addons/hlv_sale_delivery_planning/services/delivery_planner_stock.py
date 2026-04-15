@@ -77,14 +77,36 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
 
         product_availabilities = {}
         wh_obj = self.env['stock.warehouse']
+        # FIX #2: Thay vì gọi p.free_qty (N+1 queries), batch query qua stock.quant một lần.
+        # stock.quant lưu (product_id, location_id, qty_on_hand, reserved_quantity).
+        # free_qty = sum(quantity) - sum(reserved_quantity) per (product_id, location_id).
         for w_id, prod_ids in product_qty_cache.items():
-            if prod_ids:
-                wh = wh_obj.browse(w_id)
-                loc_id = wh.lot_stock_id.id
-                prods = self.env['product.product'].browse(list(prod_ids)).with_context(location=loc_id)
-                # Odoo 18: free_qty = qty_available - reserved_quantity, scoped by location
-                for p in prods:
-                    product_availabilities[(p.id, w_id)] = p.free_qty
+            if not prod_ids:
+                continue
+            wh = wh_obj.browse(w_id)
+            loc_id = wh.lot_stock_id.id
+            # Lấy tất cả location con của kho (stock + sub-locations)
+            child_loc_ids = self.env['stock.location'].sudo().search([
+                ('id', 'child_of', loc_id), ('usage', '=', 'internal'),
+            ]).ids
+            if not child_loc_ids:
+                child_loc_ids = [loc_id]
+            quant_data = self.env['stock.quant'].sudo().read_group(
+                domain=[
+                    ('product_id', 'in', list(prod_ids)),
+                    ('location_id', 'in', child_loc_ids),
+                ],
+                fields=['product_id', 'quantity:sum', 'reserved_quantity:sum'],
+                groupby=['product_id'],
+            )
+            for row in quant_data:
+                pid = row['product_id'][0]
+                free = (row.get('quantity', 0.0) or 0.0) - (row.get('reserved_quantity', 0.0) or 0.0)
+                product_availabilities[(pid, w_id)] = max(free, 0.0)
+            # Sản phẩm không có trong quant → set = 0
+            for pid in prod_ids:
+                if (pid, w_id) not in product_availabilities:
+                    product_availabilities[(pid, w_id)] = 0.0
 
         # --- 2b. Cộng lại qty đang bị giữ bởi internal transfers (không phải SO) ---
         # Lý do: SO ưu tiên hơn internal transfer, nên hàng bị internal giữ
@@ -194,18 +216,29 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 # Thu thập tất cả product_id đang cần check
                 all_prod_ids_for_transfer = set(k[0] for k in product_availabilities.keys())
                 if all_prod_ids_for_transfer:
-                    # 6a. Lấy free_qty tại các kho khác
+                    # 6a. Lấy free_qty tại các kho khác — dùng stock.quant batch (không N+1)
                     missing_wh_loc_map = {}  # {wh_id: lot_stock_id}
                     for wh in all_db_warehouses.filtered(lambda w: w.id in missing_wh_ids):
                         if not wh.lot_stock_id:
                             continue
                         missing_wh_loc_map[wh.id] = wh.lot_stock_id.id
-                        prods = self.env['product.product'].browse(
-                            list(all_prod_ids_for_transfer)
-                        ).with_context(location=wh.lot_stock_id.id)
-                        for p in prods:
+                        child_loc_ids = self.env['stock.location'].sudo().search([
+                            ('id', 'child_of', wh.lot_stock_id.id), ('usage', '=', 'internal'),
+                        ]).ids or [wh.lot_stock_id.id]
+                        quant_rows = self.env['stock.quant'].sudo().read_group(
+                            domain=[
+                                ('product_id', 'in', list(all_prod_ids_for_transfer)),
+                                ('location_id', 'in', child_loc_ids),
+                            ],
+                            fields=['product_id', 'quantity:sum', 'reserved_quantity:sum'],
+                            groupby=['product_id'],
+                        )
+                        quant_map = {r['product_id'][0]: max(
+                            (r.get('quantity') or 0.0) - (r.get('reserved_quantity') or 0.0), 0.0
+                        ) for r in quant_rows}
+                        for pid in all_prod_ids_for_transfer:
                             # Lưu cả free_qty = 0 để step 6b có thể cộng internal reserved
-                            product_availabilities[(p.id, wh.id)] = p.free_qty
+                            product_availabilities[(pid, wh.id)] = quant_map.get(pid, 0.0)
 
                     # 6b. Cộng lại internal transfer reserved (giống step 2b)
                     # vì SO ưu tiên hơn internal transfer
@@ -259,6 +292,25 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         today_date = OdooDate.context_today(self)
         # Timezone để convert date_done (UTC) sang local date
         user_tz = pytz.timezone(self.env.context.get('tz') or self.env.user.tz or 'Asia/Ho_Chi_Minh')
+
+        # FIX #3: Prefetch toàn bộ các field cần trong vòng lặp chính — batch 1 SQL mỗi field.
+        # Không prefetch: mỗi so.picking_ids trong loop = 1 query riêng.
+        picking_fields = [
+            'state', 'picking_type_code', 'picking_type_id', 'return_id',
+            'date_done', 'sale_id', 'x_printed', 'x_shipper_received',
+            'x_shipper_user_id', 'move_ids',
+        ]
+        all_pickings = sales.mapped('picking_ids')
+        if all_pickings:
+            all_pickings.read(picking_fields)          # batch-load vào cache
+            all_pickings.mapped('picking_type_id').read(['sequence_code', 'code'])  # prefetch type
+            # Prefetch move_ids fields nếu cần check m.state trong loop
+            all_pickings.mapped('move_ids').read(['state', 'product_id', 'quantity', 'product_uom_qty', 'sale_line_id'])
+
+        # Prefetch order_line fields
+        sales.mapped('order_line').read([
+            'product_id', 'product_uom_qty', 'qty_delivered', 'display_type',
+        ])
 
         for so in sales:
             # --- Phát hiện đơn "trả hàng / dừng": không còn outflow nào active ---
