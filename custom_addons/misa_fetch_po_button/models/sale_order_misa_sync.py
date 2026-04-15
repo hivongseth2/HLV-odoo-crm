@@ -611,7 +611,7 @@ class SaleOrder(models.Model):
 
         vals_create = {
             'name': order_no,
-            'partner_id': partner.id,
+            'partner_id': shipping_id or partner.id,  # Cách B: dùng delivery contact làm KH chính, fallback về cha nếu không có con
             'origin': origin,
             'warehouse_id': old_wh.id if old_wh else False,
             'misa_id': str(misa_order_id) if misa_order_id else False,

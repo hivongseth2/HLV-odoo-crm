@@ -1122,12 +1122,12 @@ class SaleApiImportWizard(models.TransientModel):
                     group_total = sum(line_subtotal(l) for l in grouped_lines)
                     sale_vals = {
                         'name': order_ref,
-                        'partner_id': partner.id,
+                        'partner_id': delivery_contact.id,  # Cách B: delivery contact làm KH chính
                         'date_order': order_date,
                         'amount_total': group_total,
                         'commitment_date': commitment_date,
-                        'partner_shipping_id': delivery_contact.id, 
-                        'partner_invoice_id': delivery_contact.id, 
+                        'partner_shipping_id': delivery_contact.id,
+                        'partner_invoice_id': delivery_contact.id,
                         'origin':origin,
                         'warehouse_id': warehouse.id,
                         'misa_id': misa_id_str, 
@@ -1448,7 +1448,7 @@ class SaleApiImportWizard(models.TransientModel):
                         group_total = sum(line_subtotal(l) for l in grouped_lines)
                         sale_vals = {
                             'name': order_ref,
-                            'partner_id': partner.id,
+                            'partner_id': delivery_contact.id,  # Cách B: delivery contact làm KH chính
                             'date_order': order_date,
                             'partner_shipping_id': delivery_contact.id,
                             'partner_invoice_id': delivery_contact.id,
