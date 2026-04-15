@@ -1,132 +1,114 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <odoo>
 <template id="loyalty_public_layout" name="Loyalty Public Layout">
     <t t-call="web.layout">
         <t t-set="head">
+            <meta name="viewport" content="width=device-width, initial-scale=1"/>
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"/>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
             <style>
-                body { background: #f4f6f9; font-family: 'Segoe UI', sans-serif; }
-                .loyalty-hero {
-                    background: linear-gradient(135deg, #1a2342 0%, #2d3f6e 60%, #c8a415 100%);
-                    color: #fff;
-                    padding: 48px 0 36px;
-                    text-align: center;
-                }
-                .loyalty-hero h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: 1px; }
-                .loyalty-hero p { opacity: .85; font-size: 1.05rem; }
-                .search-box {
-                    background: #fff;
-                    border: 2px solid #dee2e6;
-                    padding: 32px;
-                    max-width: 560px;
-                    margin: -28px auto 0;
-                    position: relative;
-                    z-index: 2;
-                }
-                .tier-card {
-                    border: 2px solid #dee2e6;
-                    padding: 20px;
-                    text-align: center;
-                    background: #fff;
-                    transition: box-shadow .2s;
-                }
-                .tier-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.1); }
-                .tier-badge {
-                    display: inline-block;
-                    padding: 6px 18px;
-                    font-weight: 700;
-                    font-size: .85rem;
-                    letter-spacing: 1px;
-                    text-transform: uppercase;
-                    color: #fff;
-                }
-                .points-bar { height: 10px; background: #e9ecef; }
-                .points-bar-fill { height: 100%; transition: width .6s; }
-                .result-card { background: #fff; border: 2px solid #dee2e6; padding: 28px; }
-                .history-row-earn { color: #198754; }
-                .history-row-deduct { color: #dc3545; }
-                .voucher-pill {
-                    display: inline-block;
-                    border: 2px dashed #198754;
-                    padding: 8px 16px;
-                    font-family: monospace;
-                    font-size: 1.1rem;
-                    font-weight: 700;
-                    color: #198754;
-                    background: #f0fff4;
-                    margin: 4px;
-                }
+                * { box-sizing: border-box; }
+                body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; background: #f0f2f5; }
+                .lp-hero { background: linear-gradient(135deg, #0f1729 0%, #1e2d55 55%, #b8920d 100%); padding: 64px 20px 80px; text-align: center; position: relative; overflow: hidden; }
+                .lp-hero::before { content:""; position:absolute; inset:0; background:radial-gradient(circle at 70% 50%,rgba(200,160,20,.15) 0%,transparent 60%); }
+                .lp-hero h1 { font-size:clamp(1.8rem,4vw,2.8rem); font-weight:900; color:#fff; letter-spacing:1px; margin-bottom:12px; position:relative; }
+                .lp-hero p { color:rgba(255,255,255,.75); font-size:1.05rem; margin-bottom:40px; position:relative; }
+                .lp-search-wrap { max-width:580px; margin:0 auto; position:relative; }
+                .lp-search-wrap input { width:100%; padding:18px 150px 18px 20px; border:none; border-radius:50px; font-size:1rem; box-shadow:0 8px 32px rgba(0,0,0,.25); outline:none; }
+                .lp-search-wrap button { position:absolute; right:6px; top:6px; bottom:6px; padding:0 26px; background:linear-gradient(135deg,#d4a017,#e8c53a); border:none; border-radius:50px; color:#1a1a2e; font-weight:800; font-size:.95rem; cursor:pointer; }
+                .lp-search-hint { color:rgba(255,255,255,.5); font-size:.8rem; margin-top:10px; position:relative; }
+                .lp-alert { max-width:580px; margin:12px auto 0; padding:12px 18px; background:rgba(220,38,38,.15); border:1px solid rgba(220,38,38,.4); border-radius:10px; color:#fff; font-size:.9rem; }
+                .lp-section { padding:56px 20px; max-width:1100px; margin:0 auto; }
+                .lp-section-title { font-size:1rem; font-weight:700; text-transform:uppercase; letter-spacing:2px; color:#b8920d; margin-bottom:6px; }
+                .lp-section-sub { font-size:1.6rem; font-weight:800; color:#0f1729; margin-bottom:32px; }
+                .tier-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; }
+                .tier-card { background:#fff; border-radius:16px; padding:28px 20px; box-shadow:0 2px 12px rgba(0,0,0,.07); border:2px solid transparent; transition:transform .2s,box-shadow .2s; position:relative; overflow:hidden; }
+                .tier-card:hover { transform:translateY(-4px); box-shadow:0 8px 32px rgba(0,0,0,.12); }
+                .tier-card.featured { border-color:#d4a017; background:linear-gradient(145deg,#1e2d55,#0f1729); color:#fff; }
+                .tier-card.featured .tier-desc,.tier-card.featured .tier-pts,.tier-card.featured .tier-benefit { color:rgba(255,255,255,.7); }
+                .tier-badge-pill { display:inline-flex; align-items:center; gap:8px; padding:8px 20px; border-radius:50px; font-weight:800; font-size:.9rem; letter-spacing:1px; text-transform:uppercase; color:#fff; margin-bottom:16px; }
+                .tier-badge-pill img { height:22px; width:22px; object-fit:contain; }
+                .tier-pts { font-size:.85rem; margin-bottom:8px; }
+                .tier-pts strong { font-size:1.3rem; }
+                .tier-desc { font-size:.8rem; margin-bottom:16px; }
+                .tier-benefits { list-style:none; padding:0; margin:0; }
+                .tier-benefit { font-size:.82rem; color:#555; padding:4px 0; display:flex; align-items:flex-start; gap:6px; }
+                .tier-benefit i { color:#d4a017; margin-top:2px; flex-shrink:0; }
+                .featured-tag { position:absolute; top:14px; right:-22px; background:#d4a017; color:#fff; font-size:.65rem; font-weight:800; padding:4px 32px; transform:rotate(35deg); letter-spacing:1px; }
+                .lp-result-hero { background:linear-gradient(135deg,#0f1729 0%,#1e2d55 100%); padding:40px 20px 60px; }
+                .lp-member-card { max-width:900px; margin:-40px auto 0; background:#fff; border-radius:20px; box-shadow:0 12px 48px rgba(0,0,0,.15); overflow:hidden; }
+                .lp-member-head { background:linear-gradient(135deg,#1e2d55,#0f1729); padding:28px 32px; color:#fff; display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:16px; }
+                .lp-member-name { font-size:1.5rem; font-weight:800; margin-bottom:6px; }
+                .lp-member-meta { font-size:.85rem; color:rgba(255,255,255,.65); display:flex; flex-wrap:wrap; gap:12px; }
+                .lp-member-meta span { display:flex; align-items:center; gap:5px; }
+                .lp-points-box { background:rgba(212,160,23,.15); border:2px solid #d4a017; border-radius:12px; padding:14px 22px; text-align:center; min-width:140px; }
+                .lp-points-num { font-size:2.4rem; font-weight:900; color:#d4a017; line-height:1; }
+                .lp-points-lbl { font-size:.7rem; color:rgba(255,255,255,.6); text-transform:uppercase; letter-spacing:1px; margin-top:4px; }
+                .lp-member-body { padding:28px 32px; }
+                .lp-progress-wrap { background:#f8f9fa; border-radius:12px; padding:20px 24px; margin-bottom:24px; }
+                .lp-progress-bar-bg { background:#e9ecef; border-radius:99px; height:10px; overflow:hidden; margin-bottom:8px; }
+                .lp-progress-bar-fill { height:100%; border-radius:99px; transition:width .8s ease; }
+                .lp-progress-meta { display:flex; justify-content:space-between; font-size:.8rem; color:#6c757d; }
+                .lp-voucher-pill { display:inline-flex; align-items:center; gap:8px; background:#f0fff4; border:2px dashed #198754; border-radius:8px; padding:10px 16px; font-family:monospace; font-size:1rem; font-weight:700; color:#198754; margin:4px; }
+                .lp-history-table { width:100%; border-collapse:collapse; font-size:.88rem; }
+                .lp-history-table th { text-align:left; padding:10px 12px; font-size:.75rem; text-transform:uppercase; letter-spacing:.5px; color:#6c757d; border-bottom:2px solid #f0f0f0; }
+                .lp-history-table td { padding:12px; border-bottom:1px solid #f8f8f8; }
+                .badge-earn { background:#d1fae5; color:#059669; border-radius:6px; padding:3px 10px; font-size:.75rem; font-weight:700; }
+                .badge-redeem { background:#fef3c7; color:#d97706; border-radius:6px; padding:3px 10px; font-size:.75rem; font-weight:700; }
+                .badge-return { background:#fee2e2; color:#dc2626; border-radius:6px; padding:3px 10px; font-size:.75rem; font-weight:700; }
+                .badge-manual { background:#e0e7ff; color:#4f46e5; border-radius:6px; padding:3px 10px; font-size:.75rem; font-weight:700; }
+                .lp-back-btn { display:inline-flex; align-items:center; gap:6px; color:rgba(255,255,255,.75); font-size:.85rem; text-decoration:none; margin-bottom:20px; }
+                .lp-back-btn:hover { color:#fff; }
+                .lp-empty { text-align:center; color:#aaa; padding:32px 0; }
+                .lp-empty i { font-size:2.5rem; margin-bottom:12px; display:block; }
+                @media(max-width:600px){.lp-member-head{flex-direction:column;}.lp-member-body{padding:20px 16px;}.tier-grid{grid-template-columns:1fr 1fr;}}
             </style>
         </t>
         <t t-out="0"/>
     </t>
 </template>
 
-<!-- Trang chủ tra cứu -->
-<template id="loyalty_public_home" name="Tra cứu Loyalty">
+<template id="loyalty_public_home" name="Tra cuu Loyalty">
     <t t-call="hlv_loyalty.loyalty_public_layout">
-        <!-- Hero -->
-        <div class="loyalty-hero">
-            <div class="container">
-                <h1><i class="fa fa-star me-2"/>Chương trình Khách hàng thân thiết</h1>
-                <p>Tích điểm mỗi đơn hàng, đổi ưu đãi hấp dẫn</p>
-            </div>
+        <div class="lp-hero">
+            <h1>Trang tra cuu hang khach hang</h1>
+            <p>Kham pha dac quyen va hanh trinh thang hang cua ban</p>
+            <form class="lp-search-wrap" action="/loyalty/search" method="post">
+                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                <input type="text" name="keyword" autocomplete="off"
+                       placeholder="Nhap so dien thoai, email hoac ten..."
+                       t-att-value="keyword or ''"/>
+                <button type="submit">Tra cuu ngay</button>
+            </form>
+            <div class="lp-search-hint">Nhap ten cong ty, so dien thoai hoac email</div>
+            <t t-if="error"><div class="lp-alert"><t t-out="error"/></div></t>
         </div>
-
-        <div class="container py-5">
-            <!-- Search box -->
-            <div class="search-box shadow-sm mb-5">
-                <h5 class="fw-bold mb-3 text-center">Tra cứu điểm &amp; hạng thành viên</h5>
-                <form action="/loyalty/search" method="post">
-                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                    <div class="input-group">
-                        <input type="text" name="keyword" class="form-control form-control-lg"
-                               placeholder="Nhập số điện thoại hoặc email..."
-                               t-att-value="keyword or ''"/>
-                        <button type="submit" class="btn btn-warning btn-lg fw-bold px-4">
-                            <i class="fa fa-search me-1"/> Tra cứu
-                        </button>
-                    </div>
-                    <t t-if="error">
-                        <div class="alert alert-danger mt-3 mb-0">
-                            <i class="fa fa-exclamation-circle me-1"/><t t-out="error"/>
-                        </div>
-                    </t>
-                </form>
-            </div>
-
-            <!-- Bảng hạng thành viên -->
-            <h5 class="fw-bold text-uppercase mb-3"
-                style="letter-spacing:1px; color:#6c757d; border-bottom:2px solid #dee2e6; padding-bottom:8px;">
-                Các hạng thành viên
-            </h5>
-            <div class="row g-3 mb-5">
+        <div class="lp-section">
+            <div class="lp-section-title">Cap bac thanh vien</div>
+            <div class="lp-section-sub">He thong cap bac thanh vien</div>
+            <div class="tier-grid">
                 <t t-foreach="tiers" t-as="tier">
-                    <div class="col-6 col-md-3">
-                        <div class="tier-card">
-                            <div class="tier-badge mb-3"
-                                 t-att-style="'background-color:' + (tier.badge_color or '#cd7f32')">
-                                <t t-if="tier.image_url">
-                                    <img t-att-src="tier.image_url" style="height:24px; vertical-align:middle; margin-right:4px;" t-att-alt="tier.name"/>
-                                </t>
-                                <t t-else="">
-                                    <i t-att-class="'fa ' + (tier.icon or 'fa-medal') + ' me-1'"/>
-                                </t>
-                                <t t-out="tier.name"/>
-                            </div>
-                            <div class="text-muted small fw-bold mb-1">
-                                Từ <span class="text-dark"><t t-out="'{:,}'.format(tier.min_points)"/></span> điểm
-                            </div>
-                            <div class="text-muted small"><t t-out="tier.description or ''"/></div>
-                            <t t-if="tier.benefit_ids">
-                                <ul class="text-start small mt-3 mb-0 ps-3">
-                                    <t t-foreach="tier.benefit_ids" t-as="b">
-                                        <li><i t-att-class="'fa ' + (b.icon or 'fa-check') + ' text-success me-1'"/>
-                                            <t t-out="b.name"/>
-                                        </li>
-                                    </t>
-                                </ul>
+                    <t t-set="is_top" t-value="not tier.max_points"/>
+                    <div t-att-class="'tier-card' + (' featured' if is_top else '')">
+                        <t t-if="is_top"><div class="featured-tag">HOT</div></t>
+                        <div class="tier-badge-pill" t-att-style="'background:' + (tier.badge_color or '#cd7f32')">
+                            <t t-if="tier.tier_image">
+                                <img t-att-src="'/web/image/hlv.loyalty.tier/' + str(tier.id) + '/tier_image'" t-att-alt="tier.name"/>
                             </t>
+                            <t t-out="tier.name"/>
                         </div>
+                        <div class="tier-pts">Tu <strong><t t-out="'{:,}'.format(tier.min_points)"/></strong> diem</div>
+                        <div class="tier-desc"><t t-out="tier.description or ''"/></div>
+                        <t t-if="tier.benefit_ids">
+                            <ul class="tier-benefits">
+                                <t t-foreach="tier.benefit_ids" t-as="b">
+                                    <li class="tier-benefit">
+                                        <i t-att-class="'fa ' + (b.icon or 'fa-check') + ' fa-xs'"/>
+                                        <t t-out="b.name"/>
+                                    </li>
+                                </t>
+                            </ul>
+                        </t>
                     </div>
                 </t>
             </div>
@@ -134,165 +116,132 @@
     </t>
 </template>
 
-<!-- Trang kết quả -->
-<template id="loyalty_public_result" name="Kết quả tra cứu Loyalty">
+<template id="loyalty_public_result" name="Ket qua tra cuu Loyalty">
     <t t-call="hlv_loyalty.loyalty_public_layout">
-        <div class="loyalty-hero">
-            <div class="container">
-                <h1><i class="fa fa-star me-2"/>Thông tin thành viên</h1>
-                <p>Chương trình Khách hàng thân thiết</p>
+        <div class="lp-result-hero">
+            <div style="max-width:900px;margin:0 auto;padding:0 20px;">
+                <a href="/loyalty" class="lp-back-btn">&#8592; Tra cuu lai</a>
             </div>
-        </div>
-
-        <div class="container py-5">
-            <!-- Nút tra cứu lại -->
-            <div class="mb-4">
-                <a href="/loyalty" class="btn btn-outline-secondary btn-sm">
-                    <i class="fa fa-arrow-left me-1"/> Tra cứu lại
-                </a>
-            </div>
-
-            <div class="row g-4">
-                <!-- Cột trái: thông tin tổng quan -->
-                <div class="col-md-4">
-                    <div class="result-card mb-4">
-                        <h6 class="fw-bold text-uppercase small mb-3"
-                            style="letter-spacing:1px; color:#6c757d;">Khách hàng</h6>
-                        <div class="fs-5 fw-bold mb-1"><t t-out="partner.name"/></div>
-                        <div class="text-muted small mb-3">
-                            <t t-if="partner.phone">
-                                <i class="fa fa-phone me-1"/><t t-out="partner.phone"/><br/>
-                            </t>
-                            <t t-if="partner.email">
-                                <i class="fa fa-envelope me-1"/><t t-out="partner.email"/>
-                            </t>
-                        </div>
-
-                        <!-- Hạng thành viên -->
+            <div class="lp-member-card">
+                <div class="lp-member-head">
+                    <div>
                         <t t-if="partner.loyalty_tier_id">
-                        <div class="tier-badge w-100 d-block text-center py-2 mb-3"
-                                 t-att-style="'background-color:' + (partner.loyalty_tier_id.badge_color or '#cd7f32')">
-                                <t t-if="partner.loyalty_tier_id.image_url">
-                                    <img t-att-src="partner.loyalty_tier_id.image_url"
-                                         style="height:22px; vertical-align:middle; margin-right:6px;"
-                                         t-att-alt="partner.loyalty_tier_id.name"/>
+                            <div class="tier-badge-pill mb-3"
+                                 t-att-style="'background:' + (partner.loyalty_tier_id.badge_color or '#cd7f32')">
+                                <t t-if="partner.loyalty_tier_id.tier_image">
+                                    <img t-att-src="'/web/image/hlv.loyalty.tier/' + str(partner.loyalty_tier_id.id) + '/tier_image'"
+                                         t-att-alt="partner.loyalty_tier_id.name"
+                                         style="height:20px;width:20px;object-fit:contain;"/>
                                 </t>
-                                Hạng <t t-out="partner.loyalty_tier_id.name"/>
+                                Hang <t t-out="partner.loyalty_tier_id.name"/>
                             </div>
                         </t>
-
-                        <!-- Điểm to -->
-                        <div class="text-center py-3 border"
-                             style="background:#fffbea;">
-                            <div class="text-muted small fw-bold text-uppercase"
-                                 style="letter-spacing:1px;">Tổng điểm tích lũy</div>
-                            <div class="fw-bold" style="font-size:3rem; color:#d4af37; line-height:1.1">
-                                <t t-out="'{:,}'.format(partner.loyalty_total_points)"/>
-                            </div>
-                            <div class="text-muted small">điểm</div>
+                        <div class="lp-member-name"><t t-out="partner.name"/></div>
+                        <div class="lp-member-meta">
+                            <t t-if="partner.phone"><span>&#128222; <t t-out="partner.phone"/></span></t>
+                            <t t-if="partner.email"><span>&#9993; <t t-out="partner.email"/></span></t>
                         </div>
-
-                        <!-- Progress lên hạng kế -->
-                        <t t-if="next_tier">
-                            <div class="mt-3">
-                                <div class="d-flex justify-content-between small mb-1">
-                                    <span class="text-muted">Tiến đến hạng</span>
-                                    <span class="fw-bold"><t t-out="next_tier.name"/></span>
-                                </div>
-                                <div class="points-bar">
-                                    <t t-set="pct" t-value="min(100, int(partner.loyalty_total_points * 100 / next_tier.min_points)) if next_tier.min_points else 100"/>
-                                    <div class="points-bar-fill"
-                                         t-att-style="'width:' + str(pct) + '%; background:' + (next_tier.badge_color or '#cd7f32')"/>
-                                </div>
-                                <div class="text-muted small mt-1 text-end">
-                                    Cần thêm
-                                    <strong><t t-out="'{:,}'.format(next_tier.min_points - partner.loyalty_total_points)"/></strong>
-                                    điểm
-                                </div>
-                            </div>
-                        </t>
                     </div>
-
-                    <!-- Voucher đang có -->
+                    <div class="lp-points-box">
+                        <div class="lp-points-num"><t t-out="'{:,}'.format(partner.loyalty_total_points)"/></div>
+                        <div class="lp-points-lbl">Diem tich luy</div>
+                    </div>
+                </div>
+                <div class="lp-member-body">
+                    <t t-if="next_tier">
+                        <t t-set="pts" t-value="partner.loyalty_total_points"/>
+                        <t t-set="cur_min" t-value="partner.loyalty_tier_id.min_points if partner.loyalty_tier_id else 0"/>
+                        <t t-set="pct" t-value="min(100, int((pts - cur_min) * 100 / max(next_tier.min_points - cur_min, 1)))"/>
+                        <div class="lp-progress-wrap">
+                            <div style="font-size:.85rem;color:#6c757d;margin-bottom:4px;">Tien trinh hang <t t-out="next_tier.name"/></div>
+                            <div style="font-weight:700;font-size:1rem;margin-bottom:12px;">
+                                Tich luy them <strong style="color:#d4a017"><t t-out="'{:,}'.format(next_tier.min_points - pts)"/></strong> diem de thang hang
+                            </div>
+                            <div class="lp-progress-bar-bg">
+                                <div class="lp-progress-bar-fill"
+                                     t-att-style="'width:' + str(pct) + '%;background:' + (next_tier.badge_color or '#d4a017')"/>
+                            </div>
+                            <div class="lp-progress-meta">
+                                <span><t t-out="partner.loyalty_tier_id.name if partner.loyalty_tier_id else 'Chua co hang'"/> (<t t-out="'{:,}'.format(cur_min)"/>)</span>
+                                <span><t t-out="next_tier.name"/> (<t t-out="'{:,}'.format(next_tier.min_points)"/>)</span>
+                            </div>
+                        </div>
+                    </t>
                     <t t-if="active_vouchers">
-                        <div class="result-card">
-                            <h6 class="fw-bold text-uppercase small mb-3"
-                                style="letter-spacing:1px; color:#6c757d;">
-                                <i class="fa fa-ticket me-1"/>Voucher đang có
-                                (<t t-out="len(active_vouchers)"/>)
-                            </h6>
+                        <div style="font-size:.9rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6c757d;margin-bottom:12px;">
+                            Voucher dang co (<t t-out="len(active_vouchers)"/>)
+                        </div>
+                        <div class="mb-4">
                             <t t-foreach="active_vouchers" t-as="v">
-                                <div>
-                                    <span class="voucher-pill"><t t-out="v.code"/></span>
-                                    <span class="small text-muted ms-1">
-                                        <t t-if="v.discount_type == 'fixed'">
-                                            Giảm <t t-out="'{:,.0f}'.format(v.discount_value)"/> đ
-                                        </t>
-                                        <t t-else="">
-                                            Giảm <t t-out="v.discount_value"/>%
-                                        </t>
-                                        <t t-if="v.date_expiry">
-                                            · HSD: <t t-out="v.date_expiry.strftime('%d/%m/%Y')"/>
-                                        </t>
-                                    </span>
-                                </div>
+                                <span class="lp-voucher-pill"><t t-out="v.code"/></span>
+                                <span class="text-muted small">
+                                    <t t-if="v.discount_type == 'fixed'">Giam <t t-out="'{:,.0f}'.format(v.discount_value)"/>d</t>
+                                    <t t-else="">Giam <t t-out="v.discount_value"/>%</t>
+                                    <t t-if="v.date_expiry"> - HSD <t t-out="v.date_expiry.strftime('%d/%m/%Y')"/></t>
+                                </span>
                             </t>
                         </div>
                     </t>
-                </div>
-
-                <!-- Cột phải: lịch sử -->
-                <div class="col-md-8">
-                    <div class="result-card">
-                        <h6 class="fw-bold text-uppercase small mb-3"
-                            style="letter-spacing:1px; color:#6c757d;">
-                            <i class="fa fa-history me-1"/>Lịch sử điểm gần nhất
-                        </h6>
-                        <t t-if="recent_history">
-                            <table class="table table-sm table-hover">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Ngày</th>
-                                        <th>Loại</th>
-                                        <th class="text-end">Điểm</th>
-                                        <th>Mô tả</th>
-                                    </tr>
-                                </thead>
+                    <div style="font-size:.9rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6c757d;margin-bottom:12px;">
+                        Lich su diem gan nhat
+                    </div>
+                    <t t-if="recent_history">
+                        <div style="overflow-x:auto;">
+                            <table class="lp-history-table">
+                                <thead><tr><th>Ngay</th><th>Loai</th><th style="text-align:right">Diem</th><th>Mo ta</th></tr></thead>
                                 <tbody>
                                     <t t-foreach="recent_history" t-as="h">
-                                        <tr t-att-class="'history-row-earn' if h.point_amount > 0 else 'history-row-deduct'">
-                                            <td class="small"><t t-out="h.date.strftime('%d/%m/%Y')"/></td>
+                                        <tr>
+                                            <td style="color:#6c757d;white-space:nowrap"><t t-out="h.date.strftime('%d/%m/%Y')"/></td>
                                             <td>
-                                                <t t-if="h.transaction_type == 'earn'">
-                                                    <span class="badge bg-success">Tích điểm</span>
-                                                </t>
-                                                <t t-elif="h.transaction_type == 'redeem'">
-                                                    <span class="badge bg-warning text-dark">Đổi Voucher</span>
-                                                </t>
-                                                <t t-elif="h.transaction_type == 'return'">
-                                                    <span class="badge bg-danger">Hoàn hàng</span>
-                                                </t>
-                                                <t t-else="">
-                                                    <span class="badge bg-info">Thủ công</span>
-                                                </t>
+                                                <t t-if="h.transaction_type == 'earn'"><span class="badge-earn">Tich diem</span></t>
+                                                <t t-elif="h.transaction_type == 'redeem'"><span class="badge-redeem">Doi Voucher</span></t>
+                                                <t t-elif="h.transaction_type == 'return'"><span class="badge-return">Hoan hang</span></t>
+                                                <t t-else=""><span class="badge-manual">Thu cong</span></t>
                                             </td>
-                                            <td class="text-end fw-bold">
-                                                <t t-out="('+' if h.point_amount > 0 else '') + str(h.point_amount)"/>
+                                            <td t-att-style="'text-align:right;font-weight:700;color:' + ('#059669' if h.point_amount > 0 else '#dc2626')">
+                                                <t t-out="('+' if h.point_amount > 0 else '') + '{:,}'.format(h.point_amount)"/>
                                             </td>
-                                            <td class="small text-muted"><t t-out="h.description or ''"/></td>
+                                            <td style="color:#6c757d;font-size:.82rem"><t t-out="h.description or ''"/></td>
                                         </tr>
                                     </t>
                                 </tbody>
                             </table>
-                        </t>
-                        <t t-else="">
-                            <div class="text-muted text-center py-4">
-                                <i class="fa fa-inbox fa-2x mb-2 d-block"/>
-                                Chưa có giao dịch điểm nào.
-                            </div>
+                        </div>
+                    </t>
+                    <t t-else=""><div class="lp-empty"><i class="fa fa-inbox"/>Chua co giao dich diem nao.</div></t>
+                </div>
+            </div>
+        </div>
+        <div class="lp-section">
+            <div class="lp-section-title">Cap bac thanh vien</div>
+            <div class="lp-section-sub">He thong cap bac thanh vien</div>
+            <div class="tier-grid">
+                <t t-foreach="tiers" t-as="tier">
+                    <t t-set="is_current" t-value="partner.loyalty_tier_id and tier.id == partner.loyalty_tier_id.id"/>
+                    <div t-att-class="'tier-card' + (' featured' if is_current else '')">
+                        <t t-if="is_current"><div class="featured-tag">BAN</div></t>
+                        <div class="tier-badge-pill" t-att-style="'background:' + (tier.badge_color or '#cd7f32')">
+                            <t t-if="tier.tier_image">
+                                <img t-att-src="'/web/image/hlv.loyalty.tier/' + str(tier.id) + '/tier_image'"
+                                     t-att-alt="tier.name" style="height:20px;width:20px;object-fit:contain;"/>
+                            </t>
+                            <t t-out="tier.name"/>
+                        </div>
+                        <div class="tier-pts">Tu <strong><t t-out="'{:,}'.format(tier.min_points)"/></strong> diem</div>
+                        <div class="tier-desc"><t t-out="tier.description or ''"/></div>
+                        <t t-if="tier.benefit_ids">
+                            <ul class="tier-benefits">
+                                <t t-foreach="tier.benefit_ids" t-as="b">
+                                    <li class="tier-benefit">
+                                        <i t-att-class="'fa ' + (b.icon or 'fa-check') + ' fa-xs'"/>
+                                        <t t-out="b.name"/>
+                                    </li>
+                                </t>
+                            </ul>
                         </t>
                     </div>
-                </div>
+                </t>
             </div>
         </div>
     </t>
