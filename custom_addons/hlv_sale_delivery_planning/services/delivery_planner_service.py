@@ -12,13 +12,11 @@ class DeliveryPlannerService(models.AbstractModel):
         filter_delivery_status='all', filter_stock_status='all',
         filter_packing_status='all', filter_date_from='', filter_date_to='',
         filter_po_date_from='', filter_po_date_to='', filter_po_status='all',
+        filter_done_date_from='', filter_done_date_to='',
         limit=12, offset=0, filter_saler_code='',
         filter_htgh='', filter_delivery_type='all', filter_tag_ids='',
         show_completed=False, filter_need_transfer=False,        filter_new_orders=False,    ):
-        """
-        Äiá»ƒm vÃ o chÃ­nh: tá»•ng há»£p dá»¯ liá»‡u dashboard giao hÃ ng.
-        Logic chi tiáº¿t Ä‘Æ°á»£c á»§y quyá»n cho tá»«ng mixin service.
-        """
+
         domain = self._build_search_domain(
             search_query, filter_warehouse_id,
             filter_delivery_status, filter_date_from, filter_date_to,
@@ -39,6 +37,8 @@ class DeliveryPlannerService(models.AbstractModel):
                 show_completed=show_completed,
                 filter_need_transfer=filter_need_transfer,
                 filter_new_orders=filter_new_orders,
+                filter_done_date_from=filter_done_date_from,
+                filter_done_date_to=filter_done_date_to,
             )
 
         total_count = len(matched_ids)

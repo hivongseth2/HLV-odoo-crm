@@ -119,7 +119,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 .filter-chip .chip-x{background:none;border:none;color:#fff;font-size:1rem;line-height:1;padding:0 2px;cursor:pointer;opacity:.8}
 .filter-chip .chip-x:hover{opacity:1}
 /* Kanban */
-.kanban-col{min-width:320px;max-width:420px;flex:1}
+.kanban-col{min-width:320px;max-width:420px;flex:0 0 auto}
 .kanban-col .card-header{font-size:.85rem}
 /* Cards */
 .so-card{border-width:1px!important;transition:.1s}
@@ -243,8 +243,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 <div class="row g-2 mb-2">
   <div class="col-md-2"><label class="form-label small mb-0">Tìm Kiếm</label><input id="f-q" class="form-control form-control-sm" placeholder="SO / Khách hàng..."/></div>
   <div class="col-md-2"><label class="form-label small mb-0">Kho Cung Cấp</label><select id="f-wh" class="form-select form-select-sm"><option value="all">Tất cả</option></select></div>
-  <div class="col-md-1"><label class="form-label small mb-0">Giao từ</label><input type="date" id="f-date-from" class="form-control form-control-sm"/></div>
-  <div class="col-md-1"><label class="form-label small mb-0">Giao đến</label><input type="date" id="f-date-to" class="form-control form-control-sm"/></div>
+  <div class="col-md-1"><label class="form-label small mb-0">Hẹn giao từ</label><input type="date" id="f-date-from" class="form-control form-control-sm"/></div>
+  <div class="col-md-1"><label class="form-label small mb-0">Hẹn giao đến</label><input type="date" id="f-date-to" class="form-control form-control-sm"/></div>
   <div class="col-md-2"><label class="form-label small mb-0">Tiến Độ Giao</label>
     <select id="f-del" class="form-select form-select-sm">
       <option value="pending_partial" selected>Chưa giao &amp; Giao 1 phần</option>
@@ -286,6 +286,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
     </select></div>
   <div class="col-md-2"><label class="form-label small mb-0">Nhận hàng từ</label><input type="date" id="f-po-date-from" class="form-control form-control-sm"/></div>
   <div class="col-md-2"><label class="form-label small mb-0">Nhận hàng đến</label><input type="date" id="f-po-date-to" class="form-control form-control-sm"/></div>
+  <div class="col-md-1"><label class="form-label small mb-0">Hoàn thành từ</label><input type="date" id="f-done-from" class="form-control form-control-sm"/></div>
+  <div class="col-md-1"><label class="form-label small mb-0">Hoàn thành đến</label><input type="date" id="f-done-to" class="form-control form-control-sm"/></div>
   <div class="col-md-2"><label class="form-label small mb-0">Tag <small class="text-muted">(Ctrl+click chọn nhiều)</small></label><select id="f-tag" multiple class="form-select form-select-sm" style="max-height:90px"></select></div>
 
   <div class="col-md-2"><label class="form-label small mb-0">Trạng Thái (Mua hàng)</label>
@@ -420,6 +422,7 @@ function load(append){
     stock_status:gv('f-stk'),packing_status:gv('f-pack'),
     date_from:gv('f-date-from'),date_to:gv('f-date-to'),
     po_date_from:gv('f-po-date-from'),po_date_to:gv('f-po-date-to'),
+    done_date_from:gv('f-done-from'),done_date_to:gv('f-done-to'),
     po_status:gv('f-po-status'),saler_code:gv('f-saler'),
     htgh:gv('f-htgh'),delivery_type:gv('f-dtype'),tag_ids:getTagIds(),
     show_completed:$('f-show-completed').checked,
@@ -816,8 +819,10 @@ function updFilters(){
   if(gv('f-del')!=='all'){var s2=$('f-del');chips.push({k:'f-del',v:'Giao hàng: '+s2.options[s2.selectedIndex].text,reset:'all'});}
   if(gv('f-stk')!=='all'){var s3=$('f-stk');chips.push({k:'f-stk',v:'Kho: '+s3.options[s3.selectedIndex].text,reset:'all'});}
   if(gv('f-pack')!=='all'){var s4=$('f-pack');chips.push({k:'f-pack',v:'Đóng gói: '+s4.options[s4.selectedIndex].text,reset:'all'});}
-  if(gv('f-date-from')) chips.push({k:'f-date-from',v:'Giao từ: '+gv('f-date-from'),reset:''});
-  if(gv('f-date-to')) chips.push({k:'f-date-to',v:'Giao đến: '+gv('f-date-to'),reset:''});
+  if(gv('f-date-from')) chips.push({k:'f-date-from',v:'Hẹn giao từ: '+gv('f-date-from'),reset:''});
+  if(gv('f-date-to')) chips.push({k:'f-date-to',v:'Hẹn giao đến: '+gv('f-date-to'),reset:''});
+  if(gv('f-done-from')) chips.push({k:'f-done-from',v:'HT từ: '+gv('f-done-from'),reset:''});
+  if(gv('f-done-to')) chips.push({k:'f-done-to',v:'HT đến: '+gv('f-done-to'),reset:''});
   if(gv('f-po-date-from')) chips.push({k:'f-po-date-from',v:'Nhận từ: '+gv('f-po-date-from'),reset:''});
   if(gv('f-po-date-to')) chips.push({k:'f-po-date-to',v:'Nhận đến: '+gv('f-po-date-to'),reset:''});
   if(gv('f-po-status')!=='all'){var s5=$('f-po-status');chips.push({k:'f-po-status',v:'Mua hàng: '+s5.options[s5.selectedIndex].text,reset:'all'});}
@@ -938,6 +943,7 @@ $('btn-export-excel').addEventListener('click',function(){
     filter_stock_status:gv('f-stk'),filter_packing_status:gv('f-pack'),
     filter_date_from:gv('f-date-from'),filter_date_to:gv('f-date-to'),
     filter_po_date_from:gv('f-po-date-from'),filter_po_date_to:gv('f-po-date-to'),
+    filter_done_date_from:gv('f-done-from'),filter_done_date_to:gv('f-done-to'),
     filter_po_status:gv('f-po-status'),filter_saler_code:gv('f-saler'),
     filter_htgh:gv('f-htgh'),filter_delivery_type:gv('f-dtype'),filter_tag_ids:getTagIds(),
     show_completed:$('f-show-completed').checked?'1':''
@@ -1061,6 +1067,7 @@ class SalePlanPublicController(http.Controller):
     def api_sale_plan_data(self, search='', warehouse_id='all', delivery_status='all',
                            stock_status='all', packing_status='all',
                            date_from='', date_to='', po_date_from='', po_date_to='',
+                           done_date_from='', done_date_to='',
                            po_status='all', saler_code='', htgh='', delivery_type='all',
                            tag_ids='', limit=250, offset=0, show_completed=False, **kwargs):
         if not request.session.get(SESSION_KEY_OK):
@@ -1076,6 +1083,8 @@ class SalePlanPublicController(http.Controller):
                 filter_date_to=date_to,
                 filter_po_date_from=po_date_from,
                 filter_po_date_to=po_date_to,
+                filter_done_date_from=done_date_from,
+                filter_done_date_to=done_date_to,
                 filter_po_status=po_status,
                 filter_saler_code=saler_code,
                 filter_htgh=htgh,
@@ -1228,6 +1237,8 @@ class SalePlanPublicController(http.Controller):
                 filter_po_date_from=kwargs.get('filter_po_date_from', ''),
                 filter_po_date_to=kwargs.get('filter_po_date_to', ''),
                 filter_po_status=kwargs.get('filter_po_status', 'all'),
+                filter_done_date_from=kwargs.get('filter_done_date_from', ''),
+                filter_done_date_to=kwargs.get('filter_done_date_to', ''),
                 filter_saler_code=kwargs.get('filter_saler_code', ''),
                 filter_htgh=kwargs.get('filter_htgh', ''),
                 filter_delivery_type=kwargs.get('filter_delivery_type', 'all'),

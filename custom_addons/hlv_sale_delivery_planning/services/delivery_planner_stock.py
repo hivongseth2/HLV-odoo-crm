@@ -9,6 +9,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         filter_delivery_status, filter_stock_status, filter_packing_status,
         show_completed=False, filter_need_transfer=False,
         filter_new_orders=False,
+        filter_done_date_from='', filter_done_date_to='',
     ):
         """
         Lọc SO theo PO (nếu có filter PO), tính stock_status và packing_status
@@ -27,6 +28,29 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             matching_pos = self.env['purchase.order'].search_read(po_domain, ['origin'])
             origins = list(set([po['origin'] for po in matching_pos if po['origin']]))
             sales = sales.filtered(lambda s: s.name in origins)
+
+        # --- 1b. Lọc theo ngày hoàn thành (date_done của phiếu OUT) ---
+        if filter_done_date_from or filter_done_date_to:
+            import pytz
+            from datetime import datetime
+            _tz = pytz.timezone(self.env.context.get('tz') or self.env.user.tz or 'Asia/Ho_Chi_Minh')
+            picking_domain = [
+                ('picking_type_code', '=', 'outgoing'),
+                ('state', '=', 'done'),
+                ('sale_id', 'in', sales.ids),
+            ]
+            if filter_done_date_from:
+                local_from = _tz.localize(datetime.strptime(filter_done_date_from, '%Y-%m-%d'))
+                utc_from = local_from.astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
+                picking_domain.append(('date_done', '>=', utc_from))
+            if filter_done_date_to:
+                local_to = _tz.localize(datetime.strptime(filter_done_date_to, '%Y-%m-%d').replace(
+                    hour=23, minute=59, second=59))
+                utc_to = local_to.astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
+                picking_domain.append(('date_done', '<=', utc_to))
+            done_pickings = self.env['stock.picking'].search(picking_domain)
+            done_so_ids = set(done_pickings.mapped('sale_id').ids)
+            sales = sales.filtered(lambda s: s.id in done_so_ids)
 
         # --- 2. Tính tồn kho khả dụng theo kho + sản phẩm ---
         product_qty_cache = {}
