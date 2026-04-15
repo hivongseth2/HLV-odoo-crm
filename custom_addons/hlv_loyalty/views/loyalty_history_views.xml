@@ -5,15 +5,45 @@
         <field name="name">hlv.loyalty.history.form</field>
         <field name="model">hlv.loyalty.history</field>
         <field name="arch" type="xml">
-            <form string="Lịch sử điểm Loyalty" create="0">
+            <form string="Chi tiết giao dịch điểm" create="0">
                 <sheet>
+                    <!-- Banner điểm giao dịch -->
+                    <div class="row g-0 mb-4">
+                        <div class="col text-center p-4 border"
+                             style="background: #f8f9fa;">
+                            <div class="fw-bold small text-uppercase mb-1"
+                                 style="letter-spacing:1px; color:#6c757d">Loại giao dịch</div>
+                            <field name="transaction_type" widget="badge"
+                                   decoration-success="transaction_type == 'earn'"
+                                   decoration-warning="transaction_type == 'redeem'"
+                                   decoration-danger="transaction_type == 'return'"
+                                   decoration-info="transaction_type == 'manual'"
+                                   nolabel="1"/>
+                        </div>
+                        <div class="col text-center p-4 border border-start-0"
+                             style="background: #f8f9fa;">
+                            <div class="fw-bold small text-uppercase mb-1"
+                                 style="letter-spacing:1px; color:#6c757d">Biến động điểm</div>
+                            <div class="fs-2 fw-bold"
+                                 style="color: point_amount > 0 ? '#198754' : '#dc3545'">
+                                <field name="point_amount" nolabel="1"/>
+                            </div>
+                        </div>
+                        <div class="col text-center p-4 border border-start-0"
+                             style="background: #f8f9fa;">
+                            <div class="fw-bold small text-uppercase mb-1"
+                                 style="letter-spacing:1px; color:#6c757d">Ngày giao dịch</div>
+                            <div class="fs-5 fw-bold">
+                                <field name="date" nolabel="1"/>
+                            </div>
+                        </div>
+                    </div>
+
                     <group>
                         <group string="Thông tin giao dịch">
                             <field name="partner_id"/>
                             <field name="date"/>
-                            <field name="point_amount"
-                                   decoration-success="point_amount &gt; 0"
-                                   decoration-danger="point_amount &lt; 0"/>
+                            <field name="point_amount"/>
                             <field name="transaction_type" widget="badge"
                                    decoration-success="transaction_type == 'earn'"
                                    decoration-warning="transaction_type == 'redeem'"
@@ -39,7 +69,7 @@
         </field>
     </record>
 
-    <!-- Tree View -->
+    <!-- List View -->
     <record id="view_loyalty_history_list" model="ir.ui.view">
         <field name="name">hlv.loyalty.history.list</field>
         <field name="model">hlv.loyalty.history</field>
@@ -63,6 +93,31 @@
                 <field name="sale_company_id" groups="base.group_multi_company" optional="hide"/>
                 <field name="delivery_company_id" groups="base.group_multi_company" optional="hide"/>
             </list>
+        </field>
+    </record>
+
+    <!-- Graph View -->
+    <record id="view_loyalty_history_graph" model="ir.ui.view">
+        <field name="name">hlv.loyalty.history.graph</field>
+        <field name="model">hlv.loyalty.history</field>
+        <field name="arch" type="xml">
+            <graph string="Thống kê điểm Loyalty" type="bar">
+                <field name="date" type="row" interval="month"/>
+                <field name="point_amount" type="measure"/>
+            </graph>
+        </field>
+    </record>
+
+    <!-- Pivot View -->
+    <record id="view_loyalty_history_pivot" model="ir.ui.view">
+        <field name="name">hlv.loyalty.history.pivot</field>
+        <field name="model">hlv.loyalty.history</field>
+        <field name="arch" type="xml">
+            <pivot string="Phân tích điểm Loyalty" display_quantity="1">
+                <field name="partner_id" type="row"/>
+                <field name="transaction_type" type="col"/>
+                <field name="point_amount" type="measure"/>
+            </pivot>
         </field>
     </record>
 
@@ -97,7 +152,7 @@
                             context="{'group_by': 'transaction_type'}"/>
                     <filter string="Chi nhánh" name="group_company"
                             context="{'group_by': 'company_id'}"/>
-                    <filter string="Ngày" name="group_date"
+                    <filter string="Tháng" name="group_date"
                             context="{'group_by': 'date:month'}"/>
                 </group>
             </search>
@@ -108,9 +163,8 @@
     <record id="action_loyalty_history" model="ir.actions.act_window">
         <field name="name">Lịch sử điểm</field>
         <field name="res_model">hlv.loyalty.history</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list,graph,pivot,form</field>
         <field name="search_view_id" ref="view_loyalty_history_search"/>
-        <field name="context">{'search_default_group_partner': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 Chưa có giao dịch điểm nào.
@@ -118,4 +172,5 @@
             <p>Điểm sẽ được tích tự động khi giao hàng thành công.</p>
         </field>
     </record>
+</odoo>
 </odoo>

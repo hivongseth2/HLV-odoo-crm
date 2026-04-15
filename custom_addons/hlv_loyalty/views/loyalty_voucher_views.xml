@@ -1,7 +1,214 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <!-- Kanban View -->
+    <record id="view_loyalty_voucher_kanban" model="ir.ui.view">
+        <field name="name">hlv.loyalty.voucher.kanban</field>
+        <field name="model">hlv.loyalty.voucher</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="state" class="o_kanban_small_column">
+                <field name="code"/>
+                <field name="partner_id"/>
+                <field name="state"/>
+                <field name="discount_type"/>
+                <field name="discount_value"/>
+                <field name="date_expiry"/>
+                <field name="package_id"/>
+                <field name="min_order_amount"/>
+                <templates>
+                    <t t-name="card">
+                        <div class="border-bottom pb-2 mb-2 d-flex justify-content-between align-items-center">
+                            <span class="fw-bold font-monospace text-primary fs-6">
+                                <field name="code"/>
+                            </span>
+                            <field name="state" widget="badge"
+                                   decoration-success="state == 'active'"
+                                   decoration-info="state == 'used'"
+                                   decoration-muted="state == 'expired'"
+                                   decoration-danger="state == 'cancelled'"/>
+                        </div>
+                        <div class="text-muted small mb-1">
+                            <i class="fa fa-user me-1"/>
+                            <field name="partner_id"/>
+                        </div>
+                        <div class="text-muted small mb-2">
+                            <i class="fa fa-tag me-1"/>
+                            <field name="package_id"/>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-end mt-2">
+                            <div class="fw-bold text-success fs-5">
+                                <t t-if="record.discount_type.raw_value == 'fixed'">
+                                    <field name="discount_value"/> đ
+                                </t>
+                                <t t-else="">
+                                    <field name="discount_value"/>%
+                                </t>
+                            </div>
+                            <div class="text-muted small">
+                                <t t-if="record.date_expiry.raw_value">
+                                    <i class="fa fa-clock-o me-1"/>
+                                    <field name="date_expiry"/>
+                                </t>
+                            </div>
+                        </div>
+                        <t t-if="record.min_order_amount.raw_value">
+                            <div class="text-muted small mt-1 border-top pt-1">
+                                Đơn tối thiểu: <field name="min_order_amount"/> đ
+                            </div>
+                        </t>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
     <!-- Form View -->
     <record id="view_loyalty_voucher_form" model="ir.ui.view">
+        <field name="name">hlv.loyalty.voucher.form</field>
+        <field name="model">hlv.loyalty.voucher</field>
+        <field name="arch" type="xml">
+            <form string="Voucher Loyalty">
+                <header>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="active,used,expired"/>
+                </header>
+                <sheet>
+                    <!-- Header voucher code nổi bật -->
+                    <div class="row g-0 mb-4">
+                        <div class="col bg-dark text-white p-4 text-center border">
+                            <div class="fw-bold small text-uppercase mb-2"
+                                 style="letter-spacing:2px; opacity:.7">Mã Voucher</div>
+                            <div class="fs-2 fw-bold font-monospace">
+                                <field name="code" readonly="1" nolabel="1"/>
+                            </div>
+                        </div>
+                        <div class="col bg-success text-white p-4 text-center border border-start-0">
+                            <div class="fw-bold small text-uppercase mb-2"
+                                 style="letter-spacing:1px; opacity:.8">Giá trị giảm</div>
+                            <div class="fs-2 fw-bold">
+                                <field name="discount_value" readonly="1" nolabel="1"/>
+                                <t t-if="discount_type == 'percent'">%</t>
+                                <t t-else=""> đ</t>
+                            </div>
+                        </div>
+                        <div class="col bg-warning text-dark p-4 text-center border border-start-0">
+                            <div class="fw-bold small text-uppercase mb-2"
+                                 style="letter-spacing:1px; opacity:.7">Hết hạn</div>
+                            <div class="fs-4 fw-bold">
+                                <field name="date_expiry" readonly="1" nolabel="1"/>
+                            </div>
+                        </div>
+                    </div>
+
+                    <group>
+                        <group string="Thông tin Voucher">
+                            <field name="partner_id"/>
+                            <field name="package_id"/>
+                            <field name="program_id"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                        <group string="Điều kiện áp dụng">
+                            <field name="discount_type" widget="badge"
+                                   decoration-success="discount_type == 'fixed'"
+                                   decoration-info="discount_type == 'percent'"/>
+                            <field name="discount_value"/>
+                            <field name="max_discount_amount"
+                                   invisible="discount_type != 'percent'"/>
+                            <field name="min_order_amount"/>
+                            <field name="date_issued"/>
+                            <field name="date_expiry"/>
+                        </group>
+                    </group>
+
+                    <group string="Thông tin sử dụng" invisible="state != 'used'"
+                           attrs="{'class': 'bg-info-subtle border p-3'}">
+                        <group>
+                            <field name="used_sale_order_id"/>
+                            <field name="used_date"/>
+                            <field name="used_company_id" groups="base.group_multi_company"/>
+                        </group>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- List View -->
+    <record id="view_loyalty_voucher_list" model="ir.ui.view">
+        <field name="name">hlv.loyalty.voucher.list</field>
+        <field name="model">hlv.loyalty.voucher</field>
+        <field name="arch" type="xml">
+            <list string="Voucher Loyalty"
+                  decoration-muted="state == 'expired' or state == 'cancelled'"
+                  decoration-success="state == 'active'"
+                  decoration-info="state == 'used'">
+                <field name="code" widget="badge"/>
+                <field name="partner_id"/>
+                <field name="package_id"/>
+                <field name="discount_type" widget="badge"
+                       decoration-success="discount_type == 'fixed'"
+                       decoration-info="discount_type == 'percent'"/>
+                <field name="discount_value"/>
+                <field name="date_issued"/>
+                <field name="date_expiry"
+                       decoration-danger="date_expiry and date_expiry &lt; current_date and state == 'active'"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'active'"
+                       decoration-info="state == 'used'"
+                       decoration-muted="state == 'expired'"
+                       decoration-danger="state == 'cancelled'"/>
+                <field name="used_sale_order_id" optional="show"/>
+                <field name="company_id" groups="base.group_multi_company" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_loyalty_voucher_search" model="ir.ui.view">
+        <field name="name">hlv.loyalty.voucher.search</field>
+        <field name="model">hlv.loyalty.voucher</field>
+        <field name="arch" type="xml">
+            <search string="Tìm kiếm Voucher">
+                <field name="code"/>
+                <field name="partner_id"/>
+                <field name="package_id"/>
+                <filter string="Khả dụng" name="filter_active"
+                        domain="[('state', '=', 'active')]"/>
+                <filter string="Đã sử dụng" name="filter_used"
+                        domain="[('state', '=', 'used')]"/>
+                <filter string="Hết hạn" name="filter_expired"
+                        domain="[('state', '=', 'expired')]"/>
+                <separator/>
+                <filter string="Sắp hết hạn (7 ngày)" name="filter_expiring_soon"
+                        domain="[('state', '=', 'active'), ('date_expiry', '!=', False), ('date_expiry', '&lt;=', (context_today() + datetime.timedelta(days=7)).strftime('%%Y-%%m-%%d'))]"/>
+                <separator/>
+                <group expand="0" string="Nhóm theo">
+                    <filter string="Khách hàng" name="group_partner"
+                            context="{'group_by': 'partner_id'}"/>
+                    <filter string="Trạng thái" name="group_state"
+                            context="{'group_by': 'state'}"/>
+                    <filter string="Gói Voucher" name="group_package"
+                            context="{'group_by': 'package_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_loyalty_voucher" model="ir.actions.act_window">
+        <field name="name">Voucher</field>
+        <field name="res_model">hlv.loyalty.voucher</field>
+        <field name="view_mode">kanban,list,form</field>
+        <field name="search_view_id" ref="view_loyalty_voucher_search"/>
+        <field name="context">{'search_default_filter_active': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Chưa có Voucher nào được phát hành.
+            </p>
+            <p>Voucher được tạo khi khách hàng đổi điểm tích lũy.</p>
+        </field>
+    </record>
+</odoo>
         <field name="name">hlv.loyalty.voucher.form</field>
         <field name="model">hlv.loyalty.voucher</field>
         <field name="arch" type="xml">

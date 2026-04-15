@@ -7,16 +7,59 @@
         <field name="arch" type="xml">
             <form string="Gói đổi Voucher">
                 <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1>
+                            <field name="name" placeholder="Tên gói..."/>
+                        </h1>
+                    </div>
+
+                    <!-- Banner quy đổi -->
+                    <div class="row g-0 mb-4 border">
+                        <div class="col bg-warning text-dark p-4 text-center">
+                            <div class="fw-bold small text-uppercase mb-2"
+                                 style="letter-spacing:1px; opacity:.7">Cần</div>
+                            <div class="fs-2 fw-bold">
+                                <field name="points_required" nolabel="1"/>
+                            </div>
+                            <div class="small mt-1" style="opacity:.8">điểm</div>
+                        </div>
+                        <div class="col-auto d-flex align-items-center justify-content-center
+                                    px-4 bg-light border-start border-end text-muted fw-bold fs-2">
+                            →
+                        </div>
+                        <div class="col bg-success text-white p-4 text-center">
+                            <div class="fw-bold small text-uppercase mb-2"
+                                 style="letter-spacing:1px; opacity:.8">Voucher giảm</div>
+                            <div class="fs-2 fw-bold">
+                                <field name="discount_value" nolabel="1"/>
+                                <span class="fs-4">
+                                    <t t-if="discount_type == 'percent'">%</t>
+                                    <t t-else=""> đ</t>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="col bg-info text-white p-4 text-center">
+                            <div class="fw-bold small text-uppercase mb-2"
+                                 style="letter-spacing:1px; opacity:.8">Hiệu lực</div>
+                            <div class="fs-2 fw-bold">
+                                <field name="validity_days" nolabel="1"/>
+                            </div>
+                            <div class="small mt-1" style="opacity:.85">ngày</div>
+                        </div>
+                    </div>
+
                     <group>
-                        <group string="Thông tin gói">
-                            <field name="name"/>
+                        <group string="Cấu hình gói">
                             <field name="program_id"/>
                             <field name="company_id" groups="base.group_multi_company"/>
-                            <field name="active"/>
+                            <field name="active" widget="boolean_toggle"/>
                         </group>
-                        <group string="Quy đổi">
+                        <group string="Giá trị quy đổi">
                             <field name="points_required"/>
-                            <field name="discount_type"/>
+                            <field name="discount_type" widget="badge"
+                                   decoration-success="discount_type == 'fixed'"
+                                   decoration-info="discount_type == 'percent'"/>
                             <field name="discount_value"/>
                             <field name="max_discount_amount"
                                    invisible="discount_type != 'percent'"/>
@@ -34,20 +77,23 @@
         </field>
     </record>
 
-    <!-- Tree View -->
+    <!-- List View -->
     <record id="view_loyalty_voucher_package_list" model="ir.ui.view">
         <field name="name">hlv.loyalty.voucher.package.list</field>
         <field name="model">hlv.loyalty.voucher.package</field>
         <field name="arch" type="xml">
-            <list string="Gói đổi Voucher">
+            <list string="Gói đổi Voucher" decoration-muted="not active">
                 <field name="name"/>
                 <field name="program_id"/>
-                <field name="points_required"/>
-                <field name="discount_type"/>
-                <field name="discount_value"/>
-                <field name="max_discount_amount"/>
-                <field name="min_order_amount"/>
-                <field name="active"/>
+                <field name="points_required" string="Điểm cần"/>
+                <field name="discount_type" widget="badge"
+                       decoration-success="discount_type == 'fixed'"
+                       decoration-info="discount_type == 'percent'"/>
+                <field name="discount_value" string="Giá trị giảm"/>
+                <field name="max_discount_amount" optional="show"/>
+                <field name="min_order_amount" string="Đơn tối thiểu"/>
+                <field name="validity_days" string="Hiệu lực (ngày)"/>
+                <field name="active" widget="boolean_toggle"/>
             </list>
         </field>
     </record>

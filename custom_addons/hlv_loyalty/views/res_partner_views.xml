@@ -23,42 +23,76 @@
                     </div>
                 </button>
             </xpath>
-            <!-- Tab Loyalty trong Notebook -->
+
+            <!-- Tab Loyalty -->
             <xpath expr="//notebook" position="inside">
                 <page string="Loyalty" name="loyalty_tab">
-                    <group>
-                        <group string="Tổng quan">
-                            <field name="loyalty_total_points" readonly="1"/>
-                            <button name="action_open_redeem_wizard" type="object"
-                                    string="Đổi Voucher" class="btn-primary"
-                                    icon="fa-exchange"/>
-                        </group>
-                    </group>
-                    <separator string="Lịch sử điểm gần nhất"/>
+
+                    <!-- Panel tổng điểm + nút đổi -->
+                    <div class="row g-0 mb-3 border">
+                        <div class="col-auto bg-warning text-dark p-4 text-center"
+                             style="min-width: 160px;">
+                            <div class="fw-bold small text-uppercase mb-1"
+                                 style="letter-spacing:1px; opacity:.7">Điểm tích lũy</div>
+                            <div class="fw-bold" style="font-size:2.5rem; line-height:1.1">
+                                <field name="loyalty_total_points" readonly="1" nolabel="1"/>
+                            </div>
+                            <div class="small mt-1" style="opacity:.8">điểm</div>
+                        </div>
+                        <div class="col d-flex align-items-center px-4 bg-light border-start">
+                            <div>
+                                <div class="fw-bold mb-1">Đổi điểm lấy Voucher giảm giá</div>
+                                <div class="text-muted small mb-3">
+                                    Sử dụng điểm tích lũy để đổi Voucher áp dụng cho đơn hàng.
+                                </div>
+                                <button name="action_open_redeem_wizard" type="object"
+                                        string="Đổi Voucher ngay"
+                                        class="btn btn-warning fw-bold"
+                                        icon="fa-exchange"/>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Lịch sử giao dịch -->
+                    <div class="fw-bold text-uppercase small mb-2"
+                         style="letter-spacing:1px; color:#6c757d; border-bottom:2px solid #dee2e6; padding-bottom:6px;">
+                        Lịch sử giao dịch gần nhất
+                    </div>
                     <field name="loyalty_history_ids" readonly="1" nolabel="1">
                         <list create="0" delete="0" limit="10"
                               decoration-success="point_amount &gt; 0"
                               decoration-danger="point_amount &lt; 0">
-                            <field name="date"/>
+                            <field name="date" string="Ngày"/>
                             <field name="transaction_type" widget="badge"
                                    decoration-success="transaction_type == 'earn'"
                                    decoration-warning="transaction_type == 'redeem'"
-                                   decoration-danger="transaction_type == 'return'"/>
-                            <field name="point_amount"/>
-                            <field name="description"/>
-                            <field name="company_name" groups="base.group_multi_company"/>
+                                   decoration-danger="transaction_type == 'return'"
+                                   decoration-info="transaction_type == 'manual'"/>
+                            <field name="point_amount" string="Điểm" sum="Tổng"/>
+                            <field name="description" string="Mô tả"/>
+                            <field name="company_name" groups="base.group_multi_company"
+                                   string="Chi nhánh"/>
                         </list>
                     </field>
-                    <separator string="Voucher"/>
-                    <field name="loyalty_voucher_ids" readonly="1" nolabel="1">
+
+                    <!-- Voucher đang có -->
+                    <div class="fw-bold text-uppercase small mb-2 mt-3"
+                         style="letter-spacing:1px; color:#6c757d; border-bottom:2px solid #dee2e6; padding-bottom:6px;">
+                        Voucher đang có
+                    </div>
+                    <field name="loyalty_voucher_ids" readonly="1" nolabel="1"
+                           domain="[('state', '=', 'active')]">
                         <list create="0" delete="0"
                               decoration-success="state == 'active'"
                               decoration-muted="state != 'active'">
                             <field name="code" widget="badge"/>
-                            <field name="package_id"/>
-                            <field name="discount_type"/>
-                            <field name="discount_value"/>
-                            <field name="date_expiry"/>
+                            <field name="package_id" string="Gói"/>
+                            <field name="discount_type" widget="badge"
+                                   decoration-success="discount_type == 'fixed'"
+                                   decoration-info="discount_type == 'percent'"/>
+                            <field name="discount_value" string="Giá trị"/>
+                            <field name="date_expiry" string="Hết hạn"
+                                   decoration-danger="date_expiry and date_expiry &lt; current_date"/>
                             <field name="state" widget="badge"
                                    decoration-success="state == 'active'"
                                    decoration-info="state == 'used'"
