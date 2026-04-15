@@ -60,7 +60,8 @@ class HlvRedeemVoucherWizard(models.TransientModel):
     def action_redeem(self):
         """Thực hiện đổi điểm lấy Voucher."""
         self.ensure_one()
-        partner = self.partner_id
+        # Luôn dùng commercial_partner_id để tích/trừ điểm
+        partner = self.partner_id.commercial_partner_id or self.partner_id
         package = self.package_id
 
         if not package:

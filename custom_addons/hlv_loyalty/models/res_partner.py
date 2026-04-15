@@ -74,8 +74,9 @@ class ResPartner(models.Model):
         }
 
     def action_open_redeem_wizard(self):
-        """Mở wizard Đổi Voucher."""
+        """Mở wizard Đổi Voucher - luôn dùng công ty gốc."""
         self.ensure_one()
+        root_partner = self.commercial_partner_id or self
         return {
             'type': 'ir.actions.act_window',
             'name': 'Đổi Voucher',
@@ -83,6 +84,6 @@ class ResPartner(models.Model):
             'view_mode': 'form',
             'target': 'new',
             'context': {
-                'default_partner_id': self.id,
+                'default_partner_id': root_partner.id,
             },
         }

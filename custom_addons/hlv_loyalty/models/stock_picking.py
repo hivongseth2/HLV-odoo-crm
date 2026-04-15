@@ -62,9 +62,12 @@ class StockPicking(models.Model):
         if existing:
             return
 
+        # Luôn tích vào công ty gốc (commercial_partner_id)
+        root_partner = partner.commercial_partner_id or partner
+
         # Tạo bản ghi lịch sử điểm
         self.env['hlv.loyalty.history'].sudo().create({
-            'partner_id': partner.id,
+            'partner_id': root_partner.id,
             'point_amount': points,
             'transaction_type': 'earn',
             'description': f'Tích điểm đơn hàng {sale_order.name} - Phiếu {self.name}',
@@ -129,8 +132,11 @@ class StockPicking(models.Model):
         if points_to_deduct <= 0:
             return
 
+        # Luôn thu hồi từ công ty gốc
+        root_partner = partner.commercial_partner_id or partner
+
         self.env['hlv.loyalty.history'].sudo().create({
-            'partner_id': partner.id,
+            'partner_id': root_partner.id,
             'point_amount': -points_to_deduct,
             'transaction_type': 'return',
             'description': f'Thu hồi điểm do hoàn hàng phiếu {self.name}',

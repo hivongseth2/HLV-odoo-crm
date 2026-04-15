@@ -90,11 +90,13 @@ class SaleOrder(models.Model):
         if voucher.date_expiry and voucher.date_expiry < fields.Datetime.now():
             raise UserError(f'Voucher {voucher.code} đã hết hạn!')
 
-        # Kiểm tra khách hàng sở hữu
-        if voucher.partner_id != self.partner_id:
+        # Kiểm tra khách hàng sở hữu - cho phép cả công ty con dùng điểm của công ty gốc
+        order_commercial = self.partner_id.commercial_partner_id or self.partner_id
+        voucher_commercial = voucher.partner_id.commercial_partner_id or voucher.partner_id
+        if voucher_commercial != order_commercial and voucher.partner_id != self.partner_id:
             raise UserError(
                 f'Voucher {voucher.code} thuộc sở hữu của {voucher.partner_id.name}, '
-                f'không phải khách hàng trên đơn hàng ({self.partner_id.name})!'
+                f'không thể dùng cho khách hàng {self.partner_id.name}!'
             )
 
         # Kiểm tra giá trị đơn hàng tối thiểu
