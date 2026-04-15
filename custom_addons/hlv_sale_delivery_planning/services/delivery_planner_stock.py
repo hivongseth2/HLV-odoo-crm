@@ -491,9 +491,20 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             else:
                 delivery_ok = True
 
-            # NẾU USER CỐ TÌNH FILTER MỤC HOÀN THÀNH TỪ/ĐẾN THÌ OVERRIDE DELIVERY_OK
+            # NẾU USER CỐ TÌNH FILTER MỤC HOÀN THÀNH TỪ/ĐẾN
             if filter_done_date_from or filter_done_date_to:
-                delivery_ok = True
+                done_outflows = so.picking_ids.filtered(lambda p: p.state == 'done' and p.date_done)
+                if not done_outflows:
+                    delivery_ok = False
+                else:
+                    latest_done = max(done_outflows, key=lambda p: p.date_done)
+                    latest_done_str = latest_done.date_done.replace(tzinfo=pytz.utc).astimezone(user_tz).strftime('%Y-%m-%d')
+                    if filter_done_date_from and latest_done_str < filter_done_date_from:
+                        delivery_ok = False
+                    elif filter_done_date_to and latest_done_str > filter_done_date_to:
+                        delivery_ok = False
+                    else:
+                        delivery_ok = True
 
             # Tính effective_packing_status bao gồm trạng thái in phiếu + shipper
             has_new_unprinted = so_status_dict[so.id].get('has_new_unprinted_pickings', False)

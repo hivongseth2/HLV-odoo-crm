@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
 
     <!-- ================================================================
@@ -48,8 +48,11 @@
                             </button>
                             <button class="btn btn-success shadow-sm"
                                     t-on-click="exportExcel"
-                                    title="Xuất Excel theo bộ lọc hiện tại">
-                                <i class="fa fa-file-excel-o me-1"></i> Xuất Excel
+                                    t-att-title="this.selectedCount > 0 ? 'Xuất Excel các đơn đã chọn' : 'Xuất Excel theo bộ lọc hiện tại'">
+                                <i class="fa fa-file-excel-o me-1"></i> Xuất Excel 
+                                <t t-if="this.selectedCount > 0">
+                                    (<t t-esc="this.selectedCount"/>)
+                                </t>
                             </button>
                         </div>
                     </div>
