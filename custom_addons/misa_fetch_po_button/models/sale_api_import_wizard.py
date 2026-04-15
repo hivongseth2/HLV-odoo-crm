@@ -1004,36 +1004,36 @@ class SaleApiImportWizard(models.TransientModel):
        
                 # --- NEW LOGIC: Sync from MISA Account API first ---
                 partner = None
+                ident = {}
                 if account_id:
-                     partner = misa_utils._sync_customer_from_misa_account_api(account_id, sale_headers)
-                
-                if not partner:
-                     # Fallback to legacy logic (create by name)
-                     partner_name_for_so = customer_name
-                     partner = odoo_utils._get_or_create_partner(partner_name_for_so)
-                
-                try:
-                    if account_id:
+                    partner = misa_utils._sync_customer_from_misa_account_api(account_id, sale_headers)
+                    # Lấy identity sớm để dùng cho fallback (tránh gọi 2 lần)
+                    try:
                         ident = misa_utils.get_account_identity(account_id, sale_headers) or {}
+                    except Exception as _e:
+                        _logger.warning("Không lấy được account identity cho AccountID=%s: %s", account_id, _e)
+
+                if not partner:
+                    # Fallback tìm theo tên:
+                    # - Nếu tên trùng nhưng mã CRM khác → tạo mới (tránh ghi đè liên hệ của KH khác)
+                    # - Nếu chưa có mã → dùng liên hệ cũ như bình thường
+                    misa_code_preview = ident.get("account_number") or ident.get("id")
+                    partner_name_for_so = customer_name
+                    partner = odoo_utils._get_or_create_partner(
+                        partner_name_for_so, misa_code=misa_code_preview
+                    )
+
+                try:
+                    if account_id and ident:
                         commercial = partner.commercial_partner_id or partner
-
-                        vals, msg = {}, []
+                        # VAT là thông tin công ty → ghi lên cha
                         if ident.get("taxcode") and not commercial.vat:
-                            vals["vat"] = ident["taxcode"]; msg.append(f"VAT=<b>{ident['taxcode']}</b>")
-                        if ident.get("id") and not commercial.company_registry:
-                            vals["company_registry"] = ident["id"]; msg.append(f"ID công ty=<b>{ident['id']}</b>")
-                        if ident.get("account_number") and not commercial.ref:
-                            vals["ref"] = ident["account_number"]; msg.append(f"Tham chiếu=<b>{ident['account_number']}</b>")
-
-                        if vals:
-                            commercial.write(vals)
-                            commercial.message_post(body="Cập nhật từ MISA (FormDataNew): " + ", ".join(msg))
-                        else:
-                            _logger.info("Bỏ qua update đối tác %s (đã có đủ dữ liệu hoặc API rỗng).", commercial.display_name)
+                            commercial.write({"vat": ident["taxcode"]})
+                            commercial.message_post(body=f"Cập nhật từ MISA: VAT=<b>{ident['taxcode']}</b>")
                     else:
                         _logger.info("Không có AccountID trong đơn, bỏ qua cập nhật đối tác.")
                 except Exception as e:
-                    _logger.warning("Không thể cập nhật đối tác từ MISA (AccountID=%s): %s", account_id, e)
+                    _logger.warning("Không thể cập nhật VAT đối tác từ MISA (AccountID=%s): %s", account_id, e)
 
                 # ===== TẠO/GÁN ĐỊA CHỈ GIAO HÀNG (contact delivery) =====
                 _logger.info("📍 [%s] Tạo delivery contact với addr_str='%s', is_e_account=%s", 
@@ -1050,6 +1050,21 @@ class SaleApiImportWizard(models.TransientModel):
                 )
                 _logger.info("📍 [%s] Delivery contact created/found: id=%s, name='%s', street='%s'",
                             order_ref_base, delivery_contact.id, delivery_contact.name, delivery_contact.street)
+
+                # Ghi mã KH CRM vào liên hệ con (delivery contact), không ghi vào cha
+                misa_code = ident.get("account_number") or ident.get("id") if ident else None
+                if misa_code and delivery_contact:
+                    try:
+                        dc_vals = {}
+                        if not delivery_contact.ref:
+                            dc_vals['ref'] = misa_code
+                        if not delivery_contact.company_registry:
+                            dc_vals['company_registry'] = misa_code
+                        if dc_vals:
+                            delivery_contact.write(dc_vals)
+                            _logger.info("Ghi mã CRM %s vào delivery contact %s", misa_code, delivery_contact.name)
+                    except Exception as e:
+                        _logger.warning("Không ghi được mã CRM vào delivery contact: %s", e)
 
                 distinct_stocks = [s for s in lines_by_stock.keys() if s in stock_mapping]
                 if not distinct_stocks:

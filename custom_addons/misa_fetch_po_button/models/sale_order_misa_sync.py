@@ -542,42 +542,19 @@ class SaleOrder(models.Model):
         # --- NEW LOGIC: Sync from MISA Account API first ---
         account_id = data.get("AccountID") or data.get("AccountId")
         partner = None
+        misa_code = None
         if account_id:
-             partner = env['misa.api.utils']._sync_customer_from_misa_account_api(account_id, headers)
-        if not partner:
-             partner = odoo_utils._get_or_create_partner(partner_name)
-
-        # Cập nhật thông tin partner chính từ MISA (địa chỉ, phone, province...)
-        partner_vals = {}
-        billing_addr = data.get("BillingAddress")
-        partner_phone = data.get("Phone")
-        partner_province = data.get("ShippingProvinceIDText") or data.get("BillingProvinceIDText") 
-
-        if billing_addr and partner.street != billing_addr:
-            partner_vals['street'] = data.get("ShippingAddress") or billing_addr
-        if partner_phone and partner.phone != partner_phone:
-            partner_vals['phone'] = partner_phone
-        if partner_province and partner.city != partner_province:
-            partner_vals['city'] = partner_province
-            # Cập nhật state_id nếu cần
+            partner = env['misa.api.utils']._sync_customer_from_misa_account_api(account_id, headers)
+            # Lấy mã CRM dù có tìm thấy partner hay không — dùng cho fallback và ghi vào liên hệ con
             try:
-                state = env['sale.api.import.wizard']._vn_state_by_name(partner_province)
-                if state and partner.state_id != state:
-                    partner_vals['state_id'] = state.id
+                ident = env['misa.api.utils'].get_account_identity(account_id, headers) or {}
+                misa_code = ident.get("account_number") or ident.get("id")
             except Exception:
                 pass
+        if not partner:
+            partner = odoo_utils._get_or_create_partner(partner_name, misa_code=misa_code)
 
-        # Đảm bảo country là Việt Nam
-        try:
-            vn_country = env['sale.api.import.wizard']._vn_country()
-            if vn_country and partner.country_id != vn_country:
-                partner_vals['country_id'] = vn_country.id
-        except Exception:
-            pass
-
-        if partner_vals:
-            partner.write(partner_vals)
-            _logger.info("Cập nhật thông tin partner %s: %s", partner.name, partner_vals.keys())
+        # Địa chỉ/phone KHÔNG cập nhật vào liên hệ cha — ghi vào liên hệ con (delivery contact) bên dưới
 
         order_no      = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or order_no_fallback
         # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
@@ -615,6 +592,16 @@ class SaleOrder(models.Model):
                 contact_name=shipping_contact_name.strip() if shipping_contact_name else None,
                 is_e_account=(partner_name in e_accounts)
             )
+            # Ghi mã CRM vào liên hệ con (delivery contact), không ghi vào cha
+            if misa_code and delivery_contact:
+                dc_vals = {}
+                if not delivery_contact.ref:
+                    dc_vals['ref'] = misa_code
+                if not delivery_contact.company_registry:
+                    dc_vals['company_registry'] = misa_code
+                if dc_vals:
+                    delivery_contact.write(dc_vals)
+                    _logger.info("Ghi mã CRM %s vào delivery contact %s", misa_code, delivery_contact.name)
             shipping_id = delivery_contact.id
         except Exception as e:
             _logger.warning("Không set delivery contact: %s", e)

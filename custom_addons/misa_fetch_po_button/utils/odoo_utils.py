@@ -8,12 +8,31 @@ class OdooUtils(models.AbstractModel):
     _name = 'odoo.utils'
     _description = 'Odoo Utilities'
 
-    def _get_or_create_partner(self, name):
-        """Tìm hoặc tạo mới đối tác (partner) dựa trên tên."""
+    def _get_or_create_partner(self, name, misa_code=None):
+        """Tìm hoặc tạo mới đối tác (partner) dựa trên tên.
+
+        misa_code: mã KH từ CRM (account_number hoặc id). Nếu truyền vào:
+          - Tìm theo tên trước.
+          - Nếu partner tìm được đã có ref/company_registry khác misa_code
+            → tạo liên hệ mới (tránh ghi đè KH khác cùng tên).
+          - Nếu chưa có mã → dùng liên hệ cũ bình thường.
+        """
         name = name.strip()
-        partner = self.env["res.partner"].search([("name", "=", name)], limit=1)
+        partner = self.env["res.partner"].search([
+            ("name", "=", name),
+            ("parent_id", "=", False),
+        ], limit=1)
+        if partner and misa_code:
+            existing_code = partner.ref or partner.company_registry
+            if existing_code and existing_code != misa_code:
+                # Tên trùng nhưng mã khác → đây là KH khác, tạo mới
+                _logger.info(
+                    "Tên '%s' trùng nhưng mã CRM khác (%s vs %s) → tạo liên hệ mới",
+                    name, existing_code, misa_code,
+                )
+                partner = self.env["res.partner"].browse()  # empty recordset
         if not partner:
-            partner = self.env["res.partner"].create({"name": name, "supplier_rank": 1})
+            partner = self.env["res.partner"].create({"name": name, "customer_rank": 1})
             _logger.info("Tạo liên hệ mới: %s", name)
         else:
             _logger.info("Dùng liên hệ có sẵn: %s", name)

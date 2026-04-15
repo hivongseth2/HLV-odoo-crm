@@ -57,7 +57,10 @@ class MisaApiUtils(models.AbstractModel):
             
             # Find by ref (AccountNumber)
             # Case-insensitive search ideally, but 'ref' is usually exact.
-            partner = Partner.search([('ref', '=', account_number)], limit=1)
+            partner = Partner.search([
+                ('ref', '=', account_number),
+                ('parent_id', '=', False),
+            ], limit=1)
             
             vals = {}
             # Always update name if provided? Or only if different?
