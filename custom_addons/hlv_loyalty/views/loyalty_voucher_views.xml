@@ -86,8 +86,8 @@
                                  style="letter-spacing:1px; opacity:.8">Giá trị giảm</div>
                             <div class="fs-2 fw-bold">
                                 <field name="discount_value" readonly="1" nolabel="1"/>
-                                <t t-if="discount_type == 'percent'">%</t>
-                                <t t-else=""> đ</t>
+                                <span invisible="discount_type != 'percent'">%</span>
+                                <span invisible="discount_type == 'percent'"> đ</span>
                             </div>
                         </div>
                         <div class="col bg-warning text-dark p-4 text-center border border-start-0">

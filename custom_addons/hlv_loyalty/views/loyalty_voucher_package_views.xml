@@ -33,10 +33,8 @@
                                  style="letter-spacing:1px; opacity:.8">Voucher giảm</div>
                             <div class="fs-2 fw-bold">
                                 <field name="discount_value" nolabel="1"/>
-                                <span class="fs-4">
-                                    <t t-if="discount_type == 'percent'">%</t>
-                                    <t t-else=""> đ</t>
-                                </span>
+                                <span class="fw-normal fs-4" invisible="discount_type != 'percent'">%</span>
+                                <span class="fw-normal fs-4" invisible="discount_type == 'percent'"> đ</span>
                             </div>
                         </div>
                         <div class="col bg-info text-white p-4 text-center">
