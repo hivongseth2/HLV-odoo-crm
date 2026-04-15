@@ -141,7 +141,7 @@ class LoyaltyAPIController(http.Controller):
                 'error': f'Không đủ điểm. Cần {package.points_required}, có {partner.loyalty_total_points}',
             }
 
-        # Tạo wizard context và thực hiện đổi
+        # Tạo wizard context và thực hiện đổi 123
         validity_days = package._get_validity_days()
         date_expiry = odoo_fields.Datetime.now() + timedelta(days=validity_days)
 
