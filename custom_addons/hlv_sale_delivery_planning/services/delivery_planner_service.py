@@ -1,4 +1,19 @@
 ﻿from odoo import models, api
+from markupsafe import Markup
+import re
+
+_SKIP_MSG_RE = re.compile(
+    r'Lệnh chuyển hàng được tạo'
+    r'|lệnh chuyển hàng đã được tạo ra từ'
+    r'|Đồng bộ \(xoá .{0,5} tạo lại\) thành công'
+    r'|This transfer has been created from'
+    r'|Transfer created'
+    r'|Sales Order created'
+    r'|Quotation created'
+    r'|has been created from'
+    r'|Đơn hàng được tạo',
+    re.IGNORECASE
+)
 
 
 class DeliveryPlannerService(models.AbstractModel):
@@ -67,5 +82,57 @@ class DeliveryPlannerService(models.AbstractModel):
             'total_count': total_count,
             'dashboard_stats': dashboard_stats,
         }
+
+    @api.model
+    def get_order_messages(self, order_id):
+        so = self.env['sale.order'].browse(int(order_id))
+        if not so.exists():
+            return []
+        picking_ids = so.picking_ids.ids
+        domain = [
+            '|',
+            '&', ('model', '=', 'sale.order'), ('res_id', '=', so.id),
+            '&', ('model', '=', 'stock.picking'), ('res_id', 'in', picking_ids),
+        ]
+        messages = self.env['mail.message'].search(domain, order='date desc', limit=200)
+        picking_name_map = {p.id: p.name for p in so.picking_ids}
+        result = []
+        for msg in messages:
+            plain = re.sub(r'<[^>]+>', '', msg.body or '').strip()
+            has_att = bool(msg.attachment_ids)
+            if not plain and not has_att:
+                continue
+            if plain and _SKIP_MSG_RE.search(plain):
+                continue
+            attachments = [{
+                'id': att.id, 'name': att.name or '',
+                'mimetype': att.mimetype or 'application/octet-stream',
+                'file_size': att.file_size or 0,
+            } for att in msg.attachment_ids]
+            origin = ''
+            if msg.model == 'stock.picking':
+                origin = picking_name_map.get(msg.res_id, '')
+            result.append({
+                'id': msg.id,
+                'date': msg.date.strftime('%d/%m/%Y %H:%M') if msg.date else '',
+                'author': msg.author_id.name if msg.author_id else (msg.email_from or ''),
+                'body': msg.body or '',
+                'origin': origin,
+                'attachments': attachments,
+            })
+        return result
+
+    @api.model
+    def post_order_message(self, order_id, body):
+        so = self.env['sale.order'].browse(int(order_id))
+        if not so.exists():
+            return False
+        safe_body = Markup('<p>%s</p>') % Markup.escape(body)
+        so.message_post(
+            body=safe_body,
+            message_type='comment',
+            subtype_xmlid='mail.mt_note',
+        )
+        return True
 
 

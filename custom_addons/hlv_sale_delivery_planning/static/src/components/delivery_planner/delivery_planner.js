@@ -102,6 +102,11 @@ export class DeliveryPlannerDashboard extends Component {
             pickingReports: [],       // [{id, name, report_type}] — báo cáo có thể in cho stock.picking
             printMenuPickingId: null, // picking.id đang hiển thị menu in
             printMenuPos: null,       // { top, right } — vị trí fixed của dropdown
+
+            // Drawer messages
+            drawerMessages: [],
+            drawerMessagesLoading: false,
+            drawerMessageText: '',
         });
 
         onWillStart(async () => {
@@ -835,6 +840,46 @@ export class DeliveryPlannerDashboard extends Component {
     openOverviewDrawer(so) {
         this.state.selectedOrder = so;
         this.state.isDrawerOpen = true;
+        this.state.drawerMessages = [];
+        this.state.drawerMessageText = '';
+        this.loadDrawerMessages(so.id);
+    }
+
+    async loadDrawerMessages(orderId) {
+        this.state.drawerMessagesLoading = true;
+        try {
+            const result = await this.orm.call(
+                'hlv.delivery.planner.service', 'get_order_messages',
+                [orderId]
+            );
+            this.state.drawerMessages = result || [];
+        } catch (e) {
+            console.error('loadDrawerMessages error', e);
+            this.state.drawerMessages = [];
+        }
+        this.state.drawerMessagesLoading = false;
+    }
+
+    async sendDrawerMessage() {
+        const body = (this.state.drawerMessageText || '').trim();
+        if (!body || !this.state.selectedOrder) return;
+        try {
+            await this.orm.call(
+                'hlv.delivery.planner.service', 'post_order_message',
+                [this.state.selectedOrder.id, body]
+            );
+            this.state.drawerMessageText = '';
+            await this.loadDrawerMessages(this.state.selectedOrder.id);
+        } catch (e) {
+            console.error('sendDrawerMessage error', e);
+        }
+    }
+
+    onMessageKeydown(ev) {
+        if (ev.key === 'Enter' && !ev.shiftKey) {
+            ev.preventDefault();
+            this.sendDrawerMessage();
+        }
     }
 
     closeOverviewDrawer() {

@@ -121,6 +121,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 /* Kanban */
 .kanban-col{min-width:320px;max-width:420px;flex:0 0 auto}
 .kanban-col .card-header{font-size:.85rem}
+#kanban-view{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
 /* Cards */
 .so-card{border-width:1px!important;transition:.1s}
 .so-card:hover{box-shadow:0 3px 10px rgba(0,0,0,.1)}
@@ -243,8 +244,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 <div class="row g-2 mb-2">
   <div class="col-md-2"><label class="form-label small mb-0">Tìm Kiếm</label><input id="f-q" class="form-control form-control-sm" placeholder="SO / Khách hàng..."/></div>
   <div class="col-md-2"><label class="form-label small mb-0">Kho Cung Cấp</label><select id="f-wh" class="form-select form-select-sm"><option value="all">Tất cả</option></select></div>
-  <div class="col-md-1"><label class="form-label small mb-0">Hẹn giao từ</label><input type="date" id="f-date-from" class="form-control form-control-sm"/></div>
-  <div class="col-md-1"><label class="form-label small mb-0">Hẹn giao đến</label><input type="date" id="f-date-to" class="form-control form-control-sm"/></div>
   <div class="col-md-2"><label class="form-label small mb-0">Tiến Độ Giao</label>
     <select id="f-del" class="form-select form-select-sm">
       <option value="pending_partial" selected>Chưa giao &amp; Giao 1 phần</option>
@@ -256,9 +255,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
       <option value="all">Tất cả</option><option value="ready">Đủ hàng</option>
       <option value="partial_ready">Có hàng 1 phần</option><option value="out_of_stock">Không có hàng</option>
     </select></div>
-  <div class="col-md-2 d-flex align-items-end"><button id="btn-filter" class="btn btn-primary btn-sm w-100"><i class="fa fa-search"></i> Lọc</button></div>
-</div>
-<div class="row g-2">
   <div class="col-md-2"><label class="form-label small mb-0">Đóng Gói</label>
     <select id="f-pack" class="form-select form-select-sm">
       <option value="all">Tất cả</option><option value="waiting_stock">Không có hàng đóng</option>
@@ -269,6 +265,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
       <option value="shipping">Đang giao</option>
       <option value="delivered_today">Đã giao trong ngày</option>
     </select></div>
+  <div class="col-md-2 d-flex align-items-end"><button id="btn-filter" class="btn btn-primary btn-sm w-100"><i class="fa fa-search"></i> Lọc</button></div>
+</div>
+<div class="row g-2 mb-2">
   <div class="col-md-2"><label class="form-label small mb-0">Mã NV MISA</label><input id="f-saler" class="form-control form-control-sm" placeholder="VD: NV001"/></div>
   <div class="col-md-3"><label class="form-label small mb-0">HTGH <small class="text-secondary fw-normal">(phẩy=OR, !=loại trừ)</small></label>
     <div class="input-group input-group-sm">
@@ -284,20 +283,22 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
       <option value="GHN">GHN</option>
       <option value="J&T">J&amp;T</option>
     </select></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Nhận hàng từ</label><input type="date" id="f-po-date-from" class="form-control form-control-sm"/></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Nhận hàng đến</label><input type="date" id="f-po-date-to" class="form-control form-control-sm"/></div>
-  <div class="col-md-1"><label class="form-label small mb-0">Hoàn thành từ</label><input type="date" id="f-done-from" class="form-control form-control-sm"/></div>
-  <div class="col-md-1"><label class="form-label small mb-0">Hoàn thành đến</label><input type="date" id="f-done-to" class="form-control form-control-sm"/></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Tag <small class="text-muted">(Ctrl+click chọn nhiều)</small></label><select id="f-tag" multiple class="form-select form-select-sm" style="max-height:90px"></select></div>
-
+  <div class="col-md-3"><label class="form-label small mb-0">Tag <small class="text-muted">(Ctrl+click chọn nhiều)</small></label><select id="f-tag" multiple class="form-select form-select-sm" style="max-height:90px"></select></div>
   <div class="col-md-2"><label class="form-label small mb-0">Trạng Thái (Mua hàng)</label>
-  
     <select id="f-po-status" class="form-select form-select-sm">
       <option value="all">Tất cả</option><option value="pending">Chưa nhận hàng</option>
       <option value="partial">Nhận 1 phần</option><option value="full">Đã nhận đủ</option>
     </select></div>
-  </div>
-
+</div>
+<div class="row g-2">
+  <div class="col-md-2"><label class="form-label small mb-0">Hẹn giao từ</label><input type="date" id="f-date-from" class="form-control form-control-sm"/></div>
+  <div class="col-md-2"><label class="form-label small mb-0">Hẹn giao đến</label><input type="date" id="f-date-to" class="form-control form-control-sm"/></div>
+  <div class="col-md-2"><label class="form-label small mb-0">Hoàn thành từ</label><input type="date" id="f-done-from" class="form-control form-control-sm"/></div>
+  <div class="col-md-2"><label class="form-label small mb-0">Hoàn thành đến</label><input type="date" id="f-done-to" class="form-control form-control-sm"/></div>
+  <div class="col-md-2"><label class="form-label small mb-0">Nhận hàng từ</label><input type="date" id="f-po-date-from" class="form-control form-control-sm"/></div>
+  <div class="col-md-2"><label class="form-label small mb-0">Nhận hàng đến</label><input type="date" id="f-po-date-to" class="form-control form-control-sm"/></div>
+</div>
+<div class="row g-2 mt-1">
   <div class="col-md-2 d-flex align-items-end">
     <div class="form-check form-switch mb-1">
       <input class="form-check-input" type="checkbox" id="f-need-transfer">
@@ -667,8 +668,13 @@ function renderList(){
   });
 }
 
+var _currentDrawerOrderId=null;
 function loadMessages(orderId){
-  fetch('/api/sale_plan/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{order_id:orderId}})})
+  if(orderId) _currentDrawerOrderId=orderId;
+  var oid=orderId||_currentDrawerOrderId;
+  if(!oid)return;
+  $('dr-msg-list').innerHTML='<div class="msg-empty"><i class="fa fa-spinner fa-spin me-1"></i> Đang tải...</div>';
+  fetch('/api/sale_plan/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{order_id:oid}})})
   .then(function(r){return r.json();})
   .then(function(resp){
     var d=resp.result||{};
@@ -710,6 +716,24 @@ function loadMessages(orderId){
   .catch(function(){
     $('dr-msg-list').innerHTML='<div class="msg-empty text-danger">Lỗi kết nối</div>';
   });
+}
+function sendPublicMessage(){
+  var body=($('dr-msg-input').value||'').trim();
+  if(!body||!_currentDrawerOrderId)return;
+  var authorName=($('dr-msg-author').value||'').trim();
+  if(!authorName){$('dr-msg-author').focus();$('dr-msg-author').classList.add('is-invalid');return;}
+  $('dr-msg-author').classList.remove('is-invalid');
+  localStorage.setItem('hlv_msg_author',authorName);
+  var btn=$('dr-msg-send');btn.disabled=true;
+  fetch('/api/sale_plan/send_message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{order_id:_currentDrawerOrderId,body:body,author_name:authorName}})})
+  .then(function(r){return r.json();})
+  .then(function(resp){
+    btn.disabled=false;
+    var d=resp.result||{};
+    if(d.status==='success'){$('dr-msg-input').value='';loadMessages();}
+    else{alert(d.message||'Lỗi gửi tin nhắn');}
+  })
+  .catch(function(){btn.disabled=false;alert('Lỗi kết nối');});
 }
 
 function openDrawer(id){
@@ -792,15 +816,25 @@ function openDrawer(id){
     h+='</ul>';
   }
   h+='<div class="msg-section" id="dr-msg-section">'
-    +'<div class="msg-header open" id="dr-msg-toggle"><i class="fa fa-chevron-right me-1"></i><i class="fa fa-comments me-1"></i> Tin nhắn &amp; Tệp đính kèm <span class="text-muted ms-auto" id="dr-msg-count" style="font-weight:400;font-size:.8rem"></span></div>'
+    +'<div class="msg-header open" id="dr-msg-toggle"><i class="fa fa-chevron-right me-1"></i><i class="fa fa-comments me-1"></i> Tin nhắn &amp; Chat <span class="text-muted" id="dr-msg-count" style="font-weight:400;font-size:.8rem"></span>'
+    +'<button class="btn btn-sm btn-outline-secondary ms-auto px-2 py-0" onclick="event.stopPropagation();loadMessages()" title="Tải lại tin nhắn"><i class="fa fa-refresh"></i></button></div>'
+    +'<div style="padding:10px 14px 6px;border-bottom:1px solid #e2e8f0;background:#f7fafc">'
+    +'<div class="d-flex gap-2 mb-2"><input id="dr-msg-author" class="form-control form-control-sm" placeholder="Tên của bạn..." style="max-width:160px" value="'+(localStorage.getItem('hlv_msg_author')||'')+'"/>'
+    +'<input id="dr-msg-input" class="form-control form-control-sm" placeholder="Nhập tin nhắn..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();sendPublicMessage()}"/>'
+    +'<button id="dr-msg-send" class="btn btn-sm btn-primary px-3" onclick="sendPublicMessage()"><i class="fa fa-paper-plane"></i></button></div>'
+    +'</div>'
     +'<div class="msg-list" id="dr-msg-list"><div class="msg-empty"><i class="fa fa-spinner fa-spin me-1"></i> Đang tải...</div></div>'
     +'</div>';
   $('dr-body').innerHTML=h;
   $('dr-footer').innerHTML='Trị giá: <span class="text-primary fs-5">'+fm(o.amount_total)+'</span>';
-  $('dr-msg-toggle').onclick=function(){
+  $('dr-msg-toggle').onclick=function(e){
+    if(e.target.closest('button'))return;
     this.classList.toggle('open');
     var list=$('dr-msg-list');
-    list.style.display=this.classList.contains('open')?'':'none';
+    var sendBox=this.nextElementSibling;
+    var isOpen=this.classList.contains('open');
+    list.style.display=isOpen?'':'none';
+    if(sendBox&&sendBox.style)sendBox.style.display=isOpen?'':'none';
   };
   loadMessages(o.id);
   $('drawer').classList.add('open');
@@ -1168,6 +1202,33 @@ class SalePlanPublicController(http.Controller):
             return {'status': 'success', 'messages': result}
         except Exception as e:
             _logger.exception('sale_plan messages error')
+            return {'status': 'error', 'message': str(e)}
+
+    @http.route('/api/sale_plan/send_message', type='json', auth='public', methods=['POST'])
+    def api_sale_plan_send_message(self, order_id=None, body='', author_name='', **kwargs):
+        if not request.session.get(SESSION_KEY_OK):
+            return {'status': 'error', 'message': 'Unauthorized'}
+        try:
+            body = (body or '').strip()
+            if not body:
+                return {'status': 'error', 'message': 'Empty message'}
+            so = request.env['sale.order'].sudo().browse(int(order_id))
+            if not so.exists():
+                return {'status': 'error', 'message': 'Order not found'}
+            author_name = (author_name or '').strip()
+            if author_name:
+                safe_body = Markup('<p><strong>[%s]</strong> %s</p>') % (
+                    Markup.escape(author_name), Markup.escape(body))
+            else:
+                safe_body = Markup('<p>%s</p>') % Markup.escape(body)
+            so.message_post(
+                body=safe_body,
+                message_type='comment',
+                subtype_xmlid='mail.mt_note',
+            )
+            return {'status': 'success'}
+        except Exception as e:
+            _logger.exception('send_message error')
             return {'status': 'error', 'message': str(e)}
 
     @http.route('/api/sale_plan/attachment/<int:att_id>', type='http', auth='public', methods=['GET'], csrf=False)
