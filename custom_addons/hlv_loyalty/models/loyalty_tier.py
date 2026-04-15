@@ -35,6 +35,9 @@ class HlvLoyaltyTier(models.Model):
     badge_color = fields.Char(
         string='Màu badge', compute='_compute_badge_color', store=True,
     )
+    image_url = fields.Char(
+        string='URL ảnh hạng', compute='_compute_image_url',
+    )
 
     @api.depends('color')
     def _compute_badge_color(self):
@@ -47,6 +50,18 @@ class HlvLoyaltyTier(models.Model):
         }
         for tier in self:
             tier.badge_color = color_map.get(tier.color, '#cd7f32')
+
+    @api.depends('color')
+    def _compute_image_url(self):
+        image_map = {
+            'brown': '/hlv_loyalty/static/description/brozen.png',
+            'silver': '/hlv_loyalty/static/description/platinum.png',
+            'gold': '/hlv_loyalty/static/description/gold.png',
+            'platinum': '/hlv_loyalty/static/description/platinum.png',
+            'diamond': '/hlv_loyalty/static/description/platinum.png',
+        }
+        for tier in self:
+            tier.image_url = image_map.get(tier.color, '/hlv_loyalty/static/description/brozen.png')
 
     def name_get(self):
         return [(t.id, f'{t.name} (≥{t.min_points} điểm)') for t in self]

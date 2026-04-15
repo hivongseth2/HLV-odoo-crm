@@ -105,7 +105,12 @@
                         <div class="tier-card">
                             <div class="tier-badge mb-3"
                                  t-att-style="'background-color:' + (tier.badge_color or '#cd7f32')">
-                                <i t-att-class="'fa ' + (tier.icon or 'fa-medal') + ' me-1'"/>
+                                <t t-if="tier.image_url">
+                                    <img t-att-src="tier.image_url" style="height:24px; vertical-align:middle; margin-right:4px;" t-att-alt="tier.name"/>
+                                </t>
+                                <t t-else="">
+                                    <i t-att-class="'fa ' + (tier.icon or 'fa-medal') + ' me-1'"/>
+                                </t>
                                 <t t-out="tier.name"/>
                             </div>
                             <div class="text-muted small fw-bold mb-1">
@@ -165,9 +170,13 @@
 
                         <!-- Hạng thành viên -->
                         <t t-if="partner.loyalty_tier_id">
-                            <div class="tier-badge w-100 d-block text-center py-2 mb-3"
+                        <div class="tier-badge w-100 d-block text-center py-2 mb-3"
                                  t-att-style="'background-color:' + (partner.loyalty_tier_id.badge_color or '#cd7f32')">
-                                <i t-att-class="'fa ' + (partner.loyalty_tier_id.icon or 'fa-medal') + ' me-1'"/>
+                                <t t-if="partner.loyalty_tier_id.image_url">
+                                    <img t-att-src="partner.loyalty_tier_id.image_url"
+                                         style="height:22px; vertical-align:middle; margin-right:6px;"
+                                         t-att-alt="partner.loyalty_tier_id.name"/>
+                                </t>
                                 Hạng <t t-out="partner.loyalty_tier_id.name"/>
                             </div>
                         </t>
