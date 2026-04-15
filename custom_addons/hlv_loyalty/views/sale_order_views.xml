@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Kế thừa Form Sale Order - Thêm nút áp dụng Voucher -->
+    <record id="view_sale_order_form_inherit_loyalty" model="ir.ui.view">
+        <field name="name">sale.order.form.inherit.loyalty</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <!-- Thêm trường Voucher vào phần thông tin đơn hàng -->
+            <xpath expr="//group[@name='sale_header']" position="inside">
+                <label for="loyalty_voucher_code" string="Mã Voucher"/>
+                <div class="o_row">
+                    <field name="loyalty_voucher_code" placeholder="Nhập mã Voucher..."
+                           class="oe_inline"/>
+                    <button name="action_apply_loyalty_voucher" type="object"
+                            string="Áp dụng" class="btn-primary btn-sm"
+                            icon="fa-check"
+                            invisible="loyalty_voucher_id"/>
+                    <button name="action_remove_loyalty_voucher" type="object"
+                            string="Xóa Voucher" class="btn-secondary btn-sm"
+                            icon="fa-times"
+                            invisible="not loyalty_voucher_id"
+                            confirm="Bạn có chắc muốn xóa Voucher khỏi đơn hàng?"/>
+                </div>
+                <field name="loyalty_voucher_id" readonly="1" invisible="not loyalty_voucher_id"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

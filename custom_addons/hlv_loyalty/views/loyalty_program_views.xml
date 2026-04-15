@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Form View -->
+    <record id="view_loyalty_program_form" model="ir.ui.view">
+        <field name="name">loyalty.program.form</field>
+        <field name="model">loyalty.program</field>
+        <field name="arch" type="xml">
+            <form string="Chương trình Loyalty">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Tên chương trình..."/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Thông tin chung">
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="currency_id" invisible="1"/>
+                            <field name="active"/>
+                        </group>
+                        <group string="Tỷ lệ tích điểm">
+                            <field name="earning_amount" widget="monetary"
+                                   options="{'currency_field': 'currency_id'}"/>
+                            <field name="earning_points"/>
+                            <field name="voucher_validity_days"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Gói đổi Voucher" name="voucher_packages">
+                            <field name="voucher_package_ids">
+                                <list editable="bottom">
+                                    <field name="name"/>
+                                    <field name="points_required"/>
+                                    <field name="discount_type"/>
+                                    <field name="discount_value"/>
+                                    <field name="max_discount_amount"
+                                           invisible="discount_type != 'percent'"/>
+                                    <field name="apply_on"/>
+                                    <field name="min_order_amount"/>
+                                    <field name="validity_days"/>
+                                    <field name="active"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Ghi chú" name="notes">
+                            <field name="note" placeholder="Ghi chú về chương trình..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- Tree View -->
+    <record id="view_loyalty_program_list" model="ir.ui.view">
+        <field name="name">loyalty.program.list</field>
+        <field name="model">loyalty.program</field>
+        <field name="arch" type="xml">
+            <list string="Chương trình Loyalty">
+                <field name="name"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="earning_amount"/>
+                <field name="earning_points"/>
+                <field name="voucher_validity_days"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_loyalty_program" model="ir.actions.act_window">
+        <field name="name">Chương trình Loyalty</field>
+        <field name="res_model">loyalty.program</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Tạo chương trình Khách hàng thân thiết đầu tiên!
+            </p>
+        </field>
+    </record>
+</odoo>

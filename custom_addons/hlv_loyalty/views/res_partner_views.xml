@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Kế thừa Form Khách hàng - Thêm Smart Buttons & Tab Loyalty -->
+    <record id="view_partner_form_inherit_loyalty" model="ir.ui.view">
+        <field name="name">res.partner.form.inherit.loyalty</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <!-- Smart Buttons -->
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_view_loyalty_history" type="object"
+                        class="oe_stat_button" icon="fa-star">
+                    <div class="o_stat_info">
+                        <field name="loyalty_total_points" class="o_stat_value"/>
+                        <span class="o_stat_text">Điểm Loyalty</span>
+                    </div>
+                </button>
+                <button name="action_view_loyalty_vouchers" type="object"
+                        class="oe_stat_button" icon="fa-ticket">
+                    <div class="o_stat_info">
+                        <field name="loyalty_voucher_count" class="o_stat_value"/>
+                        <span class="o_stat_text">Voucher</span>
+                    </div>
+                </button>
+            </xpath>
+            <!-- Tab Loyalty trong Notebook -->
+            <xpath expr="//notebook" position="inside">
+                <page string="Loyalty" name="loyalty_tab">
+                    <group>
+                        <group string="Tổng quan">
+                            <field name="loyalty_total_points" readonly="1"/>
+                            <button name="action_open_redeem_wizard" type="object"
+                                    string="Đổi Voucher" class="btn-primary"
+                                    icon="fa-exchange"/>
+                        </group>
+                    </group>
+                    <separator string="Lịch sử điểm gần nhất"/>
+                    <field name="loyalty_history_ids" readonly="1" nolabel="1">
+                        <list create="0" delete="0" limit="10"
+                              decoration-success="point_amount &gt; 0"
+                              decoration-danger="point_amount &lt; 0">
+                            <field name="date"/>
+                            <field name="transaction_type" widget="badge"
+                                   decoration-success="transaction_type == 'earn'"
+                                   decoration-warning="transaction_type == 'redeem'"
+                                   decoration-danger="transaction_type == 'return'"/>
+                            <field name="point_amount"/>
+                            <field name="description"/>
+                            <field name="company_name" groups="base.group_multi_company"/>
+                        </list>
+                    </field>
+                    <separator string="Voucher"/>
+                    <field name="loyalty_voucher_ids" readonly="1" nolabel="1">
+                        <list create="0" delete="0"
+                              decoration-success="state == 'active'"
+                              decoration-muted="state != 'active'">
+                            <field name="code" widget="badge"/>
+                            <field name="package_id"/>
+                            <field name="discount_type"/>
+                            <field name="discount_value"/>
+                            <field name="date_expiry"/>
+                            <field name="state" widget="badge"
+                                   decoration-success="state == 'active'"
+                                   decoration-info="state == 'used'"
+                                   decoration-muted="state == 'expired'"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

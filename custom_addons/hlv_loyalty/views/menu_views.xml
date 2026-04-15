@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Menu Root -->
+    <menuitem id="menu_loyalty_root"
+              name="Loyalty"
+              web_icon="hlv_loyalty,static/description/icon.png"
+              sequence="55"/>
+
+    <!-- Menu Cấp 1: Quản lý -->
+    <menuitem id="menu_loyalty_management"
+              name="Quản lý"
+              parent="menu_loyalty_root"
+              sequence="10"/>
+
+    <!-- Lịch sử điểm -->
+    <menuitem id="menu_loyalty_history"
+              name="Lịch sử điểm"
+              parent="menu_loyalty_management"
+              action="action_loyalty_history"
+              sequence="10"/>
+
+    <!-- Voucher -->
+    <menuitem id="menu_loyalty_voucher"
+              name="Voucher"
+              parent="menu_loyalty_management"
+              action="action_loyalty_voucher"
+              sequence="20"/>
+
+    <!-- Menu Cấp 1: Cấu hình -->
+    <menuitem id="menu_loyalty_config"
+              name="Cấu hình"
+              parent="menu_loyalty_root"
+              sequence="90"
+              groups="sales_team.group_sale_manager"/>
+
+    <!-- Chương trình -->
+    <menuitem id="menu_loyalty_program"
+              name="Chương trình Loyalty"
+              parent="menu_loyalty_config"
+              action="action_loyalty_program"
+              sequence="10"/>
+
+    <!-- Gói Voucher -->
+    <menuitem id="menu_loyalty_voucher_package"
+              name="Gói đổi Voucher"
+              parent="menu_loyalty_config"
+              action="action_loyalty_voucher_package"
+              sequence="20"/>
+</odoo>

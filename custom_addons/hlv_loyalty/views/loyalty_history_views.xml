@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Form View -->
+    <record id="view_loyalty_history_form" model="ir.ui.view">
+        <field name="name">loyalty.history.form</field>
+        <field name="model">loyalty.history</field>
+        <field name="arch" type="xml">
+            <form string="Lịch sử điểm Loyalty" create="0">
+                <sheet>
+                    <group>
+                        <group string="Thông tin giao dịch">
+                            <field name="partner_id"/>
+                            <field name="date"/>
+                            <field name="point_amount"
+                                   decoration-success="point_amount &gt; 0"
+                                   decoration-danger="point_amount &lt; 0"/>
+                            <field name="transaction_type" widget="badge"
+                                   decoration-success="transaction_type == 'earn'"
+                                   decoration-warning="transaction_type == 'redeem'"
+                                   decoration-danger="transaction_type == 'return'"
+                                   decoration-info="transaction_type == 'manual'"/>
+                            <field name="description"/>
+                        </group>
+                        <group string="Tham chiếu">
+                            <field name="picking_id"/>
+                            <field name="sale_order_id"/>
+                            <field name="voucher_id"/>
+                        </group>
+                    </group>
+                    <group string="Thông tin đối soát" groups="base.group_multi_company">
+                        <group>
+                            <field name="company_id"/>
+                            <field name="sale_company_id"/>
+                            <field name="delivery_company_id"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Tree View -->
+    <record id="view_loyalty_history_list" model="ir.ui.view">
+        <field name="name">loyalty.history.list</field>
+        <field name="model">loyalty.history</field>
+        <field name="arch" type="xml">
+            <list string="Lịch sử điểm Loyalty" create="0"
+                  decoration-success="point_amount &gt; 0"
+                  decoration-danger="point_amount &lt; 0">
+                <field name="date"/>
+                <field name="partner_id"/>
+                <field name="transaction_type" widget="badge"
+                       decoration-success="transaction_type == 'earn'"
+                       decoration-warning="transaction_type == 'redeem'"
+                       decoration-danger="transaction_type == 'return'"
+                       decoration-info="transaction_type == 'manual'"/>
+                <field name="point_amount" sum="Tổng điểm"/>
+                <field name="description"/>
+                <field name="picking_id" optional="show"/>
+                <field name="sale_order_id" optional="show"/>
+                <field name="voucher_id" optional="hide"/>
+                <field name="company_id" groups="base.group_multi_company" optional="show"/>
+                <field name="sale_company_id" groups="base.group_multi_company" optional="hide"/>
+                <field name="delivery_company_id" groups="base.group_multi_company" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_loyalty_history_search" model="ir.ui.view">
+        <field name="name">loyalty.history.search</field>
+        <field name="model">loyalty.history</field>
+        <field name="arch" type="xml">
+            <search string="Tìm kiếm lịch sử điểm">
+                <field name="partner_id"/>
+                <field name="picking_id"/>
+                <field name="sale_order_id"/>
+                <field name="description"/>
+                <filter string="Tích điểm" name="filter_earn"
+                        domain="[('transaction_type', '=', 'earn')]"/>
+                <filter string="Đổi Voucher" name="filter_redeem"
+                        domain="[('transaction_type', '=', 'redeem')]"/>
+                <filter string="Hoàn hàng" name="filter_return"
+                        domain="[('transaction_type', '=', 'return')]"/>
+                <filter string="Thủ công" name="filter_manual"
+                        domain="[('transaction_type', '=', 'manual')]"/>
+                <separator/>
+                <filter string="Cộng điểm" name="filter_positive"
+                        domain="[('point_amount', '&gt;', 0)]"/>
+                <filter string="Trừ điểm" name="filter_negative"
+                        domain="[('point_amount', '&lt;', 0)]"/>
+                <separator/>
+                <group expand="0" string="Nhóm theo">
+                    <filter string="Khách hàng" name="group_partner"
+                            context="{'group_by': 'partner_id'}"/>
+                    <filter string="Loại giao dịch" name="group_type"
+                            context="{'group_by': 'transaction_type'}"/>
+                    <filter string="Chi nhánh" name="group_company"
+                            context="{'group_by': 'company_id'}"/>
+                    <filter string="Ngày" name="group_date"
+                            context="{'group_by': 'date:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_loyalty_history" model="ir.actions.act_window">
+        <field name="name">Lịch sử điểm</field>
+        <field name="res_model">loyalty.history</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_loyalty_history_search"/>
+        <field name="context">{'search_default_group_partner': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Chưa có giao dịch điểm nào.
+            </p>
+            <p>Điểm sẽ được tích tự động khi giao hàng thành công.</p>
+        </field>
+    </record>
+</odoo>

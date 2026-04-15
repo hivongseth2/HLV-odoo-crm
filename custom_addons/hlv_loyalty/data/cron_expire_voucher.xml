@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Cron: Quét Voucher hết hạn hàng ngày -->
+        <record id="ir_cron_loyalty_expire_vouchers" model="ir.cron">
+            <field name="name">Loyalty: Quét Voucher hết hạn</field>
+            <field name="model_id" ref="model_loyalty_voucher"/>
+            <field name="state">code</field>
+            <field name="code">model.cron_expire_vouchers()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="numbercall">-1</field>
+            <field name="active" eval="True"/>
+        </record>
+    </data>
+</odoo>
