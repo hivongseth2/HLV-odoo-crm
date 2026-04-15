@@ -284,7 +284,9 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
 
             # Khi không bật "hiện đơn đã giao": ẩn hoàn toàn các đơn này
             # NGOẠI TRỪ: đơn có phiếu OUT done hôm nay → hiện trong cột "Đã giao trong ngày"
-            if not show_completed and no_active_outflow and not has_delivered_today:
+            # NGOẠI TRỪ: user đang filter theo ngày hoàn thành → đơn đã pass filter 1b
+            if not show_completed and no_active_outflow and not has_delivered_today \
+                    and not filter_done_date_from and not filter_done_date_to:
                 continue
 
             has_pending = False

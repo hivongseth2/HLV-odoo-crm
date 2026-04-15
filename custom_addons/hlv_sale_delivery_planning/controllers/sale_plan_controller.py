@@ -240,80 +240,84 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 <!-- Active Filters -->
 <div id="active-filters" class="mb-2 d-none d-flex flex-wrap gap-1 align-items-center"></div>
 <!-- Filters -->
-<div class="card mb-3"><div class="card-body py-2">
-<div class="row g-2 mb-2">
-  <div class="col-md-2"><label class="form-label small mb-0">Tìm Kiếm</label><input id="f-q" class="form-control form-control-sm" placeholder="SO / Khách hàng..."/></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Kho Cung Cấp</label><select id="f-wh" class="form-select form-select-sm"><option value="all">Tất cả</option></select></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Tiến Độ Giao</label>
-    <select id="f-del" class="form-select form-select-sm">
-      <option value="pending_partial" selected>Chưa giao &amp; Giao 1 phần</option>
-      <option value="all">Tất cả</option><option value="pending">Chưa giao</option>
-      <option value="partial">Giao 1 phần</option><option value="full">Đã giao đủ</option>
-    </select></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Tình Trạng Kho</label>
-    <select id="f-stk" class="form-select form-select-sm">
-      <option value="all">Tất cả</option><option value="ready">Đủ hàng</option>
-      <option value="partial_ready">Có hàng 1 phần</option><option value="out_of_stock">Không có hàng</option>
-    </select></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Đóng Gói</label>
-    <select id="f-pack" class="form-select form-select-sm">
-      <option value="all">Tất cả</option><option value="waiting_stock">Không có hàng đóng</option>
-      <option value="has_unprinted">Có phiếu chưa in</option>
-      <option value="unpacked">Có hàng chưa đóng gói</option>
-      <option value="printed_waiting">Đã in, chờ đóng gói</option>
-      <option value="packed_waiting_ship">Đã gói, chờ nhận giao</option>
-      <option value="shipping">Đang giao</option>
-      <option value="delivered_today">Đã giao trong ngày</option>
-    </select></div>
-  <div class="col-md-2 d-flex align-items-end"><button id="btn-filter" class="btn btn-primary btn-sm w-100"><i class="fa fa-search"></i> Lọc</button></div>
-</div>
-<div class="row g-2 mb-2">
-  <div class="col-md-2"><label class="form-label small mb-0">Mã NV MISA</label><input id="f-saler" class="form-control form-control-sm" placeholder="VD: NV001"/></div>
-  <div class="col-md-3"><label class="form-label small mb-0">HTGH <small class="text-secondary fw-normal">(phẩy=OR, !=loại trừ)</small></label>
-    <div class="input-group input-group-sm">
-      <input id="f-htgh" class="form-control" placeholder="VD: ghn,cpn hoặc !ghn,!j&amp;t"/>
-      <button type="button" class="btn btn-outline-secondary" id="btn-htgh-save" title="Lưu làm gợi ý"><i class="fa fa-plus"></i></button>
+<div class="card mb-3 shadow-sm" style="border:1px solid #e2e8f0">
+<div class="card-body px-4 py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h6 class="mb-0 fw-bold text-muted"><i class="fa fa-sliders me-2"></i>Bộ lọc nâng cao</h6>
+    <div class="d-flex gap-2">
+      <button id="btn-filter" class="btn btn-primary btn-sm px-4"><i class="fa fa-search me-1"></i>Tìm kiếm</button>
+      <button id="btn-refresh" class="btn btn-outline-secondary btn-sm px-3"><i class="fa fa-refresh me-1"></i>Làm mới</button>
     </div>
-    <div id="htgh-presets" class="mt-1 d-flex flex-wrap gap-1"></div>
   </div>
-  <div class="col-md-2"><label class="form-label small mb-0">Loại vận chuyển</label>
-    <select id="f-dtype" class="form-select form-select-sm">
-      <option value="all">Tất cả</option>
-      <option value="HLV vận chuyển">HLV vận chuyển</option>
-      <option value="GHN">GHN</option>
-      <option value="J&T">J&amp;T</option>
-    </select></div>
-  <div class="col-md-3"><label class="form-label small mb-0">Tag <small class="text-muted">(Ctrl+click chọn nhiều)</small></label><select id="f-tag" multiple class="form-select form-select-sm" style="max-height:90px"></select></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Trạng Thái (Mua hàng)</label>
-    <select id="f-po-status" class="form-select form-select-sm">
-      <option value="all">Tất cả</option><option value="pending">Chưa nhận hàng</option>
-      <option value="partial">Nhận 1 phần</option><option value="full">Đã nhận đủ</option>
-    </select></div>
-</div>
-<div class="row g-2">
-  <div class="col-md-2"><label class="form-label small mb-0">Hẹn giao từ</label><input type="date" id="f-date-from" class="form-control form-control-sm"/></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Hẹn giao đến</label><input type="date" id="f-date-to" class="form-control form-control-sm"/></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Hoàn thành từ</label><input type="date" id="f-done-from" class="form-control form-control-sm"/></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Hoàn thành đến</label><input type="date" id="f-done-to" class="form-control form-control-sm"/></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Nhận hàng từ</label><input type="date" id="f-po-date-from" class="form-control form-control-sm"/></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Nhận hàng đến</label><input type="date" id="f-po-date-to" class="form-control form-control-sm"/></div>
-</div>
-<div class="row g-2 mt-1">
-  <div class="col-md-2 d-flex align-items-end">
-    <div class="form-check form-switch mb-1">
+  <div class="row g-3 mb-3">
+    <div class="col-md-3"><label class="form-label small fw-semibold text-muted mb-1">Tìm Kiếm</label><input id="f-q" class="form-control form-control-sm" placeholder="SO / Khách hàng..."/></div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Kho Cung Cấp</label><select id="f-wh" class="form-select form-select-sm"><option value="all">Tất cả</option></select></div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Tiến Độ Giao</label>
+      <select id="f-del" class="form-select form-select-sm">
+        <option value="pending_partial" selected>Chưa giao &amp; Giao 1 phần</option>
+        <option value="all">Tất cả</option><option value="pending">Chưa giao</option>
+        <option value="partial">Giao 1 phần</option><option value="full">Đã giao đủ</option>
+      </select></div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Tình Trạng Kho</label>
+      <select id="f-stk" class="form-select form-select-sm">
+        <option value="all">Tất cả</option><option value="ready">Đủ hàng</option>
+        <option value="partial_ready">Có hàng 1 phần</option><option value="out_of_stock">Không có hàng</option>
+      </select></div>
+    <div class="col-md-3"><label class="form-label small fw-semibold text-muted mb-1">Đóng Gói</label>
+      <select id="f-pack" class="form-select form-select-sm">
+        <option value="all">Tất cả</option><option value="waiting_stock">Không có hàng đóng</option>
+        <option value="has_unprinted">Có phiếu chưa in</option>
+        <option value="unpacked">Có hàng chưa đóng gói</option>
+        <option value="printed_waiting">Đã in, chờ đóng gói</option>
+        <option value="packed_waiting_ship">Đã gói, chờ nhận giao</option>
+        <option value="shipping">Đang giao</option>
+        <option value="delivered_today">Đã giao trong ngày</option>
+      </select></div>
+  </div>
+  <div class="row g-3 mb-3">
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Mã NV MISA</label><input id="f-saler" class="form-control form-control-sm" placeholder="VD: NV001"/></div>
+    <div class="col-md-3"><label class="form-label small fw-semibold text-muted mb-1">HTGH <small class="text-secondary fw-normal">(phẩy=OR, !=loại trừ)</small></label>
+      <div class="input-group input-group-sm">
+        <input id="f-htgh" class="form-control" placeholder="VD: ghn,cpn hoặc !ghn,!j&amp;t"/>
+        <button type="button" class="btn btn-outline-secondary" id="btn-htgh-save" title="Lưu làm gợi ý"><i class="fa fa-plus"></i></button>
+      </div>
+      <div id="htgh-presets" class="mt-1 d-flex flex-wrap gap-1"></div>
+    </div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Loại vận chuyển</label>
+      <select id="f-dtype" class="form-select form-select-sm">
+        <option value="all">Tất cả</option>
+        <option value="HLV vận chuyển">HLV vận chuyển</option>
+        <option value="GHN">GHN</option>
+        <option value="J&T">J&amp;T</option>
+      </select></div>
+    <div class="col-md-3"><label class="form-label small fw-semibold text-muted mb-1">Tag <small class="text-muted fw-normal">(Ctrl+click chọn nhiều)</small></label><select id="f-tag" multiple class="form-select form-select-sm" style="max-height:80px"></select></div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Trạng Thái Mua hàng</label>
+      <select id="f-po-status" class="form-select form-select-sm">
+        <option value="all">Tất cả</option><option value="pending">Chưa nhận hàng</option>
+        <option value="partial">Nhận 1 phần</option><option value="full">Đã nhận đủ</option>
+      </select></div>
+  </div>
+  <div class="row g-3 mb-2">
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Hẹn giao từ</label><input type="date" id="f-date-from" class="form-control form-control-sm"/></div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Hẹn giao đến</label><input type="date" id="f-date-to" class="form-control form-control-sm"/></div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Hoàn thành từ</label><input type="date" id="f-done-from" class="form-control form-control-sm"/></div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Hoàn thành đến</label><input type="date" id="f-done-to" class="form-control form-control-sm"/></div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Nhận hàng từ</label><input type="date" id="f-po-date-from" class="form-control form-control-sm"/></div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Nhận hàng đến</label><input type="date" id="f-po-date-to" class="form-control form-control-sm"/></div>
+  </div>
+  <div class="d-flex gap-4 pt-1">
+    <div class="form-check form-switch">
       <input class="form-check-input" type="checkbox" id="f-need-transfer">
       <label class="form-check-label small fw-bold" for="f-need-transfer"><i class="fa fa-exchange text-danger me-1"></i>Cần chuyển kho</label>
     </div>
-  </div>
-  <div class="col-md-2 d-flex align-items-end">
-    <div class="form-check form-switch mb-1">
+    <div class="form-check form-switch">
       <input class="form-check-input" type="checkbox" id="f-show-completed">
       <label class="form-check-label small fw-bold" for="f-show-completed"><i class="fa fa-check-circle text-success me-1"></i>Hiện đơn đã giao</label>
     </div>
   </div>
 </div></div>
 <!-- View toggle -->
-<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <div class="d-flex gap-1 flex-wrap align-items-center">
     <span class="text-muted small fw-bold me-1"><i class="fa fa-layer-group"></i> PHÂN NHÓM:</span>
     <button id="grp-packing" class="btn btn-sm btn-outline-primary active">&#128230; Đóng gói</button>
@@ -321,7 +325,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
     <button id="grp-stock" class="btn btn-sm btn-outline-primary">&#128230; Tình trạng kho</button>
   </div>
   <div class="d-flex align-items-center gap-2">
-    <button id="btn-refresh" class="btn btn-sm btn-outline-success" title="Làm mới"><i class="fa fa-refresh"></i> Làm mới</button>
     <button id="btn-export-excel" class="btn btn-sm btn-success" title="Xuất Excel"><i class="fa fa-file-excel-o"></i> Xuất Excel</button>
     <button id="btn-kanban" class="btn btn-sm btn-primary"><i class="fa fa-th"></i> Kanban</button>
     <button id="btn-list" class="btn btn-sm btn-outline-secondary"><i class="fa fa-list"></i> Danh sách</button>
