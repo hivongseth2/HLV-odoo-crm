@@ -913,7 +913,7 @@ document.addEventListener('click',function(e){
 });
 
 function clearAll(){
-  ['f-q','f-date-from','f-date-to','f-po-date-from','f-po-date-to','f-saler','f-htgh'].forEach(function(id){var e=$(id);if(e)e.value='';});
+  ['f-q','f-date-from','f-date-to','f-po-date-from','f-po-date-to','f-saler','f-htgh','f-done-from','f-done-to'].forEach(function(id){var e=$(id);if(e)e.value='';});
   ['f-wh','f-stk','f-pack','f-po-status','f-dtype'].forEach(function(id){var e=$(id);if(e)e.value='all';});
   $('f-del').value='pending_partial';
   var ft=$('f-tag');if(ft){Array.from(ft.options).forEach(function(o){o.selected=false;});}
@@ -1232,6 +1232,9 @@ class SalePlanPublicController(http.Controller):
                 message_type='comment',
                 subtype_xmlid='mail.mt_note',
             )
+            # Kích hoạt trạng thái nháy đỏ Notification FB 
+            if hasattr(so, 'x_plan_unread_message'):
+                so.sudo().write({'x_plan_unread_message': True})
             return {'status': 'success'}
         except Exception as e:
             _logger.exception('send_message error')

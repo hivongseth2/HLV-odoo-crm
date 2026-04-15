@@ -472,6 +472,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 'packing_status': packing_status,
                 'has_pending': has_pending,
                 'has_transfer_option': has_transfer_option,
+                'has_unread_message': bool(so.x_plan_unread_message if hasattr(so, 'x_plan_unread_message') else False),
             }
 
             is_returned_or_stopped = so_status_dict[so.id]['is_returned_or_stopped']
@@ -488,6 +489,10 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             elif filter_delivery_status in ('partial', 'full'):
                 delivery_ok = real_delivery_status == filter_delivery_status
             else:
+                delivery_ok = True
+
+            # NẾU USER CỐ TÌNH FILTER MỤC HOÀN THÀNH TỪ/ĐẾN THÌ OVERRIDE DELIVERY_OK
+            if filter_done_date_from or filter_done_date_to:
                 delivery_ok = True
 
             # Tính effective_packing_status bao gồm trạng thái in phiếu + shipper

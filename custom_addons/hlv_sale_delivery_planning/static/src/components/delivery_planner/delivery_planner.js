@@ -1,7 +1,7 @@
 /** @odoo-module **/
 
 import { registry } from "@web/core/registry";
-import { Component, useState, onWillStart } from "@odoo/owl";
+import { Component, useState, onWillStart, markup } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import {
     translateDeliveryStatus, translatePickingState, translatePickingStatus,
@@ -852,7 +852,16 @@ export class DeliveryPlannerDashboard extends Component {
                 'hlv.delivery.planner.service', 'get_order_messages',
                 [orderId]
             );
-            this.state.drawerMessages = result || [];
+            this.state.drawerMessages = (result || []).map(msg => {
+                if (msg.body) {
+                    msg.body = markup(msg.body);
+                }
+                return msg;
+            });
+            // Mark as read after loading messages (optimistic update)
+            if (this.state.selectedOrder && this.state.selectedOrder.has_unread_message) {
+                this.state.selectedOrder.has_unread_message = false;
+            }
         } catch (e) {
             console.error('loadDrawerMessages error', e);
             this.state.drawerMessages = [];

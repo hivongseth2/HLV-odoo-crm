@@ -1,4 +1,4 @@
-﻿from odoo import models, api
+from odoo import models, api
 from markupsafe import Markup
 import re
 
@@ -88,6 +88,11 @@ class DeliveryPlannerService(models.AbstractModel):
         so = self.env['sale.order'].browse(int(order_id))
         if not so.exists():
             return []
+            
+        # Đánh dấu là đã đọc khi Internal User bấm xem tin nhắn
+        if getattr(so, 'x_plan_unread_message', False):
+            so.sudo().write({'x_plan_unread_message': False})
+            
         picking_ids = so.picking_ids.ids
         domain = [
             '|',
