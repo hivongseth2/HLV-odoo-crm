@@ -196,9 +196,15 @@ class DeliveryPlannerController(http.Controller):
                 'out_of_stock': 'Không có hàng',
             },
             'packing_status': {
-                'fully_packed': 'Đã đóng gói đủ',
-                'unpacked': 'Có hàng chưa đóng gói',
                 'waiting_stock': 'Không có hàng đóng',
+                'unpacked': 'Có hàng chưa đóng gói',
+                'partial_packed': 'Đã đóng 1 phần',
+                'has_unprinted': 'Có phiếu chưa in',
+                'printed_waiting': 'Đã in, chờ đóng gói',
+                'fully_packed': 'Đã đóng gói đủ',
+                'packed_waiting_ship': 'Đã gói, chờ nhận giao',
+                'shipping': 'Đang giao',
+                'delivered': 'Đã giao đủ',
             },
             'delivery_status': {
                 'full': 'Hoàn thành',
@@ -234,6 +240,13 @@ class DeliveryPlannerController(http.Controller):
             )
 
             orders = result.get('orders', [])
+            
+            # Lọc theo selected_ids nếu có (Export các card được check)
+            selected_ids_str = kwargs.get('selected_ids', '')
+            if selected_ids_str:
+                selected_ids = [int(x.strip()) for x in selected_ids_str.split(',') if x.strip().isdigit()]
+                if selected_ids:
+                    orders = [o for o in orders if o.get('id') in selected_ids]
 
             output = io.BytesIO()
             workbook = xlsxwriter.Workbook(output, {'in_memory': True})
@@ -265,9 +278,11 @@ class DeliveryPlannerController(http.Controller):
                 ('Mã NV MISA', 12),
                 ('Ngày đặt hàng', 14),
                 ('Ngày hẹn giao', 14),
+                ('Ngày MISA', 14),
                 ('Tổng tiền', 15),
                 ('Tình trạng kho', 18),
                 ('Đóng gói', 18),
+                ('Đã in phiếu', 12),
                 ('Tiến độ giao', 18),
                 ('TT giao thực tế', 18),
                 ('HTGH', 15),
@@ -306,6 +321,13 @@ class DeliveryPlannerController(http.Controller):
                 else:
                     sheet.write(row_idx, col, '', cell_fmt)
                 col += 1
+                
+                misa_date = order.get('misa_order_date', '')
+                if misa_date:
+                    sheet.write(row_idx, col, misa_date[:10], date_fmt)
+                else:
+                    sheet.write(row_idx, col, '', cell_fmt)
+                col += 1
 
                 sheet.write(row_idx, col, order.get('amount_total', 0), money_fmt); col += 1
 
@@ -314,6 +336,11 @@ class DeliveryPlannerController(http.Controller):
                 sheet.write(row_idx, col, STATUS_LABELS['stock_status'].get(stock_st, stock_st), cell_fmt); col += 1
                 pack_st = order.get('packing_status', '')
                 sheet.write(row_idx, col, STATUS_LABELS['packing_status'].get(pack_st, pack_st), cell_fmt); col += 1
+                
+                # Cột Đã in phiếu
+                is_printed = 'Đã in' if order.get('picking_slip_printed') else 'Chưa in'
+                sheet.write(row_idx, col, is_printed, cell_fmt); col += 1
+                
                 del_st = order.get('delivery_status', '')
                 sheet.write(row_idx, col, STATUS_LABELS['delivery_status'].get(del_st, del_st), cell_fmt); col += 1
                 real_del = order.get('real_delivery_status', '')

@@ -1,4 +1,5 @@
 from odoo import models
+import pytz
 
 
 class DeliveryPlannerServiceFormatter(models.AbstractModel):
@@ -141,12 +142,13 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         Tính real_delivery_status, gom thông tin lines, pickings, packages.
         """
         # --- PO data ---
+        user_tz = pytz.timezone(self.env.context.get('tz') or self.env.user.tz or 'Asia/Ho_Chi_Minh')
         pos = po_by_origin.get(so.name, [])
         po_data = [
             {
                 'id': po.id, 'name': po.name, 'state': po.state,
                 'receipt_status': po.receipt_status if hasattr(po, 'receipt_status') else 'unknown',
-                'date_planned': po.date_planned.strftime('%Y-%m-%d %H:%M:%S') if po.date_planned else False,
+                'date_planned': po.date_planned.replace(tzinfo=pytz.utc).astimezone(user_tz).strftime('%Y-%m-%d %H:%M:%S') if po.date_planned else False,
                 'partner_id': [po.partner_id.id, po.partner_id.name] if po.partner_id else False,
                 'amount_total': po.amount_total,
                 'odoo_note': po.x_studio_ghi_ch_odoo or '',
@@ -418,6 +420,6 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             'is_returned_or_stopped': so_status_dict.get('is_returned_or_stopped', False),
             'picking_slip_printed': bool(so.x_picking_slip_printed),
             'has_new_unprinted_pickings': so_status_dict.get('has_new_unprinted_pickings', False),
-            'has_shipper_received': so_status_dict.get('has_shipper_received', False),
             'has_delivered_today': so_status_dict.get('has_delivered_today', False),
+            'has_unread_message': bool(getattr(so, 'x_plan_unread_message', False)),
         }

@@ -46,7 +46,7 @@
             </div>
 
             <div class="offcanvas-body p-4 text-start bg-light overflow-auto"
-                 style="height: calc(100vh - 150px);">
+                 style="height: calc(100vh - 70px); padding-bottom: 80px !important;">
 
                 <!-- Thông tin SO -->
                 <div class="row bg-white p-3 rounded shadow-sm border mb-4 mx-0">
@@ -301,9 +301,15 @@
 
                 <!-- Luồng Phiếu Xuất Kho trong drawer (timeline) -->
                 <div t-if="state.selectedOrder.pickings and state.selectedOrder.pickings.length > 0">
-                    <h6 class="text-muted text-uppercase small mb-3">
+                    <h6 class="text-muted text-uppercase small mb-3 cursor-pointer d-flex align-items-center"
+                        t-on-click="() => this.toggleSection('drawer_pickings')">
                         <i class="fa fa-sitemap me-1" title="Luồng phiếu"></i> Luồng Phiếu Xuất Kho
+                        <span class="badge bg-secondary bg-opacity-25 text-dark ms-2" style="font-size:.7rem;">
+                            <t t-esc="state.selectedOrder.pickings.length"/>
+                        </span>
+                        <i t-attf-class="fa ms-auto #{this.isSectionCollapsed('drawer_pickings') ? 'fa-chevron-right' : 'fa-chevron-down'} text-muted small"></i>
                     </h6>
+                    <div t-attf-class="#{this.isSectionCollapsed('drawer_pickings') ? 'd-none' : ''}">
                     <div class="position-relative ms-3 border-start border-2 border-primary pb-1 mb-4">
                         <t t-foreach="state.selectedOrder.pickings" t-as="picking" t-key="picking.id">
                             <div class="position-relative mb-3 ms-4 cursor-pointer"
@@ -374,6 +380,71 @@
                                     </div>
                                 </div>
                             </div>
+                        </t>
+                    </div>
+                    </div>
+                </div>
+
+                <!-- Tin nhắn & Chat -->
+                <div class="mb-4">
+                    <h6 class="text-muted text-uppercase small mb-3 d-flex align-items-center">
+                        <i class="fa fa-comments me-1" title="Tin nhắn"></i> Tin nhắn
+                        <button class="btn btn-sm btn-outline-secondary ms-auto px-2 py-0"
+                                t-on-click="() => this.loadDrawerMessages(state.selectedOrder.id)"
+                                title="Tải lại tin nhắn">
+                            <i class="fa fa-refresh" t-att-class="state.drawerMessagesLoading ? 'fa-spin' : ''"></i>
+                        </button>
+                    </h6>
+                    <!-- Send message form -->
+                    <div class="d-flex gap-2 mb-3">
+                        <textarea class="form-control form-control-sm" rows="1"
+                                  placeholder="Nhập tin nhắn..."
+                                  t-att-value="state.drawerMessageText"
+                                  t-on-input="(ev) => { this.state.drawerMessageText = ev.target.value; }"
+                                  t-on-keydown="(ev) => this.onMessageKeydown(ev)"
+                                  style="resize:none;min-height:36px;"/>
+                        <button class="btn btn-sm btn-primary px-3"
+                                t-on-click="() => this.sendDrawerMessage()"
+                                t-att-disabled="!state.drawerMessageText || !state.drawerMessageText.trim()">
+                            <i class="fa fa-paper-plane"></i>
+                        </button>
+                    </div>
+                    <!-- Message list -->
+                    <div style="max-height:500px;overflow-y:auto;-webkit-overflow-scrolling:touch;" class="border rounded bg-white">
+                        <div t-if="state.drawerMessagesLoading" class="text-center text-muted p-3">
+                            <i class="fa fa-spinner fa-spin me-1"></i> Đang tải...
+                        </div>
+                        <div t-elif="!state.drawerMessages.length" class="text-center text-muted p-3">
+                            <i class="fa fa-inbox me-1"></i> Chưa có tin nhắn
+                        </div>
+                        <t t-else="">
+                            <t t-foreach="state.drawerMessages" t-as="msg" t-key="msg.id">
+                                <div class="p-2 border-bottom" style="font-size:.85rem;">
+                                    <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                                        <span t-if="msg.author" class="fw-bold" style="color:#2d3748;">
+                                            <i class="fa fa-user-circle me-1"></i><t t-esc="msg.author"/>
+                                        </span>
+                                        <span t-if="msg.date" class="text-muted" style="font-size:.78rem;"><t t-esc="msg.date"/></span>
+                                        <span t-if="msg.origin" class="badge bg-light text-muted border" style="font-size:.72rem;">
+                                            <i class="fa fa-truck me-1"></i><t t-esc="msg.origin"/>
+                                        </span>
+                                    </div>
+                                    <div t-if="msg.body" class="text-muted" style="word-break:break-word;line-height:1.5;"
+                                         t-out="msg.body"/>
+                                    <div t-if="msg.attachments and msg.attachments.length" class="d-flex flex-wrap gap-1 mt-1">
+                                        <t t-foreach="msg.attachments" t-as="att" t-key="att.id">
+                                            <a t-if="att.mimetype and att.mimetype.indexOf('image/') === 0"
+                                               t-att-href="'/web/image/' + att.id" target="_blank">
+                                                <img t-att-src="'/web/image/' + att.id" style="width:60px;height:60px;object-fit:cover;border-radius:4px;border:1px solid #e2e8f0;" loading="lazy"/>
+                                            </a>
+                                            <a t-else="" class="badge bg-light text-dark border text-decoration-none"
+                                               t-att-href="'/web/content/' + att.id + '?download=true'" target="_blank">
+                                                <i class="fa fa-paperclip me-1"></i><t t-esc="att.name"/>
+                                            </a>
+                                        </t>
+                                    </div>
+                                </div>
+                            </t>
                         </t>
                     </div>
                 </div>

@@ -10,6 +10,13 @@ class SaleOrder(models.Model):
         copy=False,
         help='Được đánh dấu khi người dùng báo cáo đơn hàng cần hủy từ trang sale_plan',
     )
+    
+    x_plan_unread_message = fields.Boolean(
+        string='Có tin nhắn mới',
+        default=False,
+        copy=False,
+        help='Được đánh dấu khi người dùng public gửi tin nhắn qua sale_plan',
+    )
 
     x_picking_slip_printed = fields.Boolean(
         string='Đã in phiếu lấy hàng',

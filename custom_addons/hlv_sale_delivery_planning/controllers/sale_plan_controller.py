@@ -119,8 +119,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 .filter-chip .chip-x{background:none;border:none;color:#fff;font-size:1rem;line-height:1;padding:0 2px;cursor:pointer;opacity:.8}
 .filter-chip .chip-x:hover{opacity:1}
 /* Kanban */
-.kanban-col{min-width:320px;max-width:420px;flex:1}
+.kanban-col{min-width:320px;max-width:420px;flex:0 0 auto}
 .kanban-col .card-header{font-size:.85rem}
+#kanban-view{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
 /* Cards */
 .so-card{border-width:1px!important;transition:.1s}
 .so-card:hover{box-shadow:0 3px 10px rgba(0,0,0,.1)}
@@ -161,7 +162,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 #report-modal{display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.5);align-items:center;justify-content:center}
 /* Messages section */
 .msg-section{margin-top:16px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
-.msg-header{padding:10px 14px;background:#f7fafc;border-bottom:1px solid #e2e8f0;cursor:pointer;display:flex;align-items:center;justify-content:between;gap:8px;font-weight:600;font-size:.9rem;color:#2d3748;user-select:none}
+.msg-header{padding:10px 14px;background:#f7fafc;border-bottom:1px solid #e2e8f0;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:600;font-size:.9rem;color:#2d3748;user-select:none}
 .msg-header i.fa-chevron-right{transition:transform .2s;font-size:.7rem}
 .msg-header.open i.fa-chevron-right{transform:rotate(90deg)}
 .msg-list{max-height:500px;overflow-y:auto;padding:0}
@@ -239,78 +240,84 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 <!-- Active Filters -->
 <div id="active-filters" class="mb-2 d-none d-flex flex-wrap gap-1 align-items-center"></div>
 <!-- Filters -->
-<div class="card mb-3"><div class="card-body py-2">
-<div class="row g-2 mb-2">
-  <div class="col-md-2"><label class="form-label small mb-0">Tìm Kiếm</label><input id="f-q" class="form-control form-control-sm" placeholder="SO / Khách hàng..."/></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Kho Cung Cấp</label><select id="f-wh" class="form-select form-select-sm"><option value="all">Tất cả</option></select></div>
-  <div class="col-md-1"><label class="form-label small mb-0">Giao từ</label><input type="date" id="f-date-from" class="form-control form-control-sm"/></div>
-  <div class="col-md-1"><label class="form-label small mb-0">Giao đến</label><input type="date" id="f-date-to" class="form-control form-control-sm"/></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Tiến Độ Giao</label>
-    <select id="f-del" class="form-select form-select-sm">
-      <option value="pending_partial" selected>Chưa giao &amp; Giao 1 phần</option>
-      <option value="all">Tất cả</option><option value="pending">Chưa giao</option>
-      <option value="partial">Giao 1 phần</option><option value="full">Đã giao đủ</option>
-    </select></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Tình Trạng Kho</label>
-    <select id="f-stk" class="form-select form-select-sm">
-      <option value="all">Tất cả</option><option value="ready">Đủ hàng</option>
-      <option value="partial_ready">Có hàng 1 phần</option><option value="out_of_stock">Không có hàng</option>
-    </select></div>
-  <div class="col-md-2 d-flex align-items-end"><button id="btn-filter" class="btn btn-primary btn-sm w-100"><i class="fa fa-search"></i> Lọc</button></div>
-</div>
-<div class="row g-2">
-  <div class="col-md-2"><label class="form-label small mb-0">Đóng Gói</label>
-    <select id="f-pack" class="form-select form-select-sm">
-      <option value="all">Tất cả</option><option value="waiting_stock">Không có hàng đóng</option>
-      <option value="has_unprinted">Có phiếu chưa in</option>
-      <option value="unpacked">Có hàng chưa đóng gói</option>
-      <option value="printed_waiting">Đã in, chờ đóng gói</option>
-      <option value="packed_waiting_ship">Đã gói, chờ nhận giao</option>
-      <option value="shipping">Đang giao</option>
-      <option value="delivered_today">Đã giao trong ngày</option>
-    </select></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Mã NV MISA</label><input id="f-saler" class="form-control form-control-sm" placeholder="VD: NV001"/></div>
-  <div class="col-md-3"><label class="form-label small mb-0">HTGH <small class="text-secondary fw-normal">(phẩy=OR, !=loại trừ)</small></label>
-    <div class="input-group input-group-sm">
-      <input id="f-htgh" class="form-control" placeholder="VD: ghn,cpn hoặc !ghn,!j&amp;t"/>
-      <button type="button" class="btn btn-outline-secondary" id="btn-htgh-save" title="Lưu làm gợi ý"><i class="fa fa-plus"></i></button>
+<div class="card mb-3 shadow-sm" style="border:1px solid #e2e8f0">
+<div class="card-body px-4 py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h6 class="mb-0 fw-bold text-muted"><i class="fa fa-sliders me-2"></i>Bộ lọc nâng cao</h6>
+    <div class="d-flex gap-2">
+      <button id="btn-filter" class="btn btn-primary btn-sm px-4"><i class="fa fa-search me-1"></i>Tìm kiếm</button>
+      <button id="btn-refresh" class="btn btn-outline-secondary btn-sm px-3"><i class="fa fa-refresh me-1"></i>Làm mới</button>
     </div>
-    <div id="htgh-presets" class="mt-1 d-flex flex-wrap gap-1"></div>
   </div>
-  <div class="col-md-2"><label class="form-label small mb-0">Loại vận chuyển</label>
-    <select id="f-dtype" class="form-select form-select-sm">
-      <option value="all">Tất cả</option>
-      <option value="HLV vận chuyển">HLV vận chuyển</option>
-      <option value="GHN">GHN</option>
-      <option value="J&T">J&amp;T</option>
-    </select></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Nhận hàng từ</label><input type="date" id="f-po-date-from" class="form-control form-control-sm"/></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Nhận hàng đến</label><input type="date" id="f-po-date-to" class="form-control form-control-sm"/></div>
-  <div class="col-md-2"><label class="form-label small mb-0">Tag <small class="text-muted">(Ctrl+click chọn nhiều)</small></label><select id="f-tag" multiple class="form-select form-select-sm" style="max-height:90px"></select></div>
-
-  <div class="col-md-2"><label class="form-label small mb-0">Trạng Thái (Mua hàng)</label>
-  
-    <select id="f-po-status" class="form-select form-select-sm">
-      <option value="all">Tất cả</option><option value="pending">Chưa nhận hàng</option>
-      <option value="partial">Nhận 1 phần</option><option value="full">Đã nhận đủ</option>
-    </select></div>
+  <div class="row g-3 mb-3">
+    <div class="col-md-3"><label class="form-label small fw-semibold text-muted mb-1">Tìm Kiếm</label><input id="f-q" class="form-control form-control-sm" placeholder="SO / Khách hàng..."/></div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Kho Cung Cấp</label><select id="f-wh" class="form-select form-select-sm"><option value="all">Tất cả</option></select></div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Tiến Độ Giao</label>
+      <select id="f-del" class="form-select form-select-sm">
+        <option value="pending_partial" selected>Chưa giao &amp; Giao 1 phần</option>
+        <option value="all">Tất cả</option><option value="pending">Chưa giao</option>
+        <option value="partial">Giao 1 phần</option><option value="full">Đã giao đủ</option>
+      </select></div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Tình Trạng Kho</label>
+      <select id="f-stk" class="form-select form-select-sm">
+        <option value="all">Tất cả</option><option value="ready">Đủ hàng</option>
+        <option value="partial_ready">Có hàng 1 phần</option><option value="out_of_stock">Không có hàng</option>
+      </select></div>
+    <div class="col-md-3"><label class="form-label small fw-semibold text-muted mb-1">Đóng Gói</label>
+      <select id="f-pack" class="form-select form-select-sm">
+        <option value="all">Tất cả</option><option value="waiting_stock">Không có hàng đóng</option>
+        <option value="has_unprinted">Có phiếu chưa in</option>
+        <option value="unpacked">Có hàng chưa đóng gói</option>
+        <option value="printed_waiting">Đã in, chờ đóng gói</option>
+        <option value="packed_waiting_ship">Đã gói, chờ nhận giao</option>
+        <option value="shipping">Đang giao</option>
+        <option value="delivered_today">Đã giao trong ngày</option>
+      </select></div>
   </div>
-
-  <div class="col-md-2 d-flex align-items-end">
-    <div class="form-check form-switch mb-1">
+  <div class="row g-3 mb-3">
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Mã NV MISA</label><input id="f-saler" class="form-control form-control-sm" placeholder="VD: NV001"/></div>
+    <div class="col-md-3"><label class="form-label small fw-semibold text-muted mb-1">HTGH <small class="text-secondary fw-normal">(phẩy=OR, !=loại trừ)</small></label>
+      <div class="input-group input-group-sm">
+        <input id="f-htgh" class="form-control" placeholder="VD: ghn,cpn hoặc !ghn,!j&amp;t"/>
+        <button type="button" class="btn btn-outline-secondary" id="btn-htgh-save" title="Lưu làm gợi ý"><i class="fa fa-plus"></i></button>
+      </div>
+      <div id="htgh-presets" class="mt-1 d-flex flex-wrap gap-1"></div>
+    </div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Loại vận chuyển</label>
+      <select id="f-dtype" class="form-select form-select-sm">
+        <option value="all">Tất cả</option>
+        <option value="HLV vận chuyển">HLV vận chuyển</option>
+        <option value="GHN">GHN</option>
+        <option value="J&T">J&amp;T</option>
+      </select></div>
+    <div class="col-md-3"><label class="form-label small fw-semibold text-muted mb-1">Tag <small class="text-muted fw-normal">(Ctrl+click chọn nhiều)</small></label><select id="f-tag" multiple class="form-select form-select-sm" style="max-height:80px"></select></div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Trạng Thái Mua hàng</label>
+      <select id="f-po-status" class="form-select form-select-sm">
+        <option value="all">Tất cả</option><option value="pending">Chưa nhận hàng</option>
+        <option value="partial">Nhận 1 phần</option><option value="full">Đã nhận đủ</option>
+      </select></div>
+  </div>
+  <div class="row g-3 mb-2">
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Hẹn giao từ</label><input type="date" id="f-date-from" class="form-control form-control-sm"/></div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Hẹn giao đến</label><input type="date" id="f-date-to" class="form-control form-control-sm"/></div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Hoàn thành từ</label><input type="date" id="f-done-from" class="form-control form-control-sm"/></div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Hoàn thành đến</label><input type="date" id="f-done-to" class="form-control form-control-sm"/></div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Nhận hàng từ</label><input type="date" id="f-po-date-from" class="form-control form-control-sm"/></div>
+    <div class="col-md-2"><label class="form-label small fw-semibold text-muted mb-1">Nhận hàng đến</label><input type="date" id="f-po-date-to" class="form-control form-control-sm"/></div>
+  </div>
+  <div class="d-flex gap-4 pt-1">
+    <div class="form-check form-switch">
       <input class="form-check-input" type="checkbox" id="f-need-transfer">
       <label class="form-check-label small fw-bold" for="f-need-transfer"><i class="fa fa-exchange text-danger me-1"></i>Cần chuyển kho</label>
     </div>
-  </div>
-  <div class="col-md-2 d-flex align-items-end">
-    <div class="form-check form-switch mb-1">
+    <div class="form-check form-switch">
       <input class="form-check-input" type="checkbox" id="f-show-completed">
       <label class="form-check-label small fw-bold" for="f-show-completed"><i class="fa fa-check-circle text-success me-1"></i>Hiện đơn đã giao</label>
     </div>
   </div>
 </div></div>
 <!-- View toggle -->
-<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
   <div class="d-flex gap-1 flex-wrap align-items-center">
     <span class="text-muted small fw-bold me-1"><i class="fa fa-layer-group"></i> PHÂN NHÓM:</span>
     <button id="grp-packing" class="btn btn-sm btn-outline-primary active">&#128230; Đóng gói</button>
@@ -318,7 +325,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
     <button id="grp-stock" class="btn btn-sm btn-outline-primary">&#128230; Tình trạng kho</button>
   </div>
   <div class="d-flex align-items-center gap-2">
-    <button id="btn-refresh" class="btn btn-sm btn-outline-success" title="Làm mới"><i class="fa fa-refresh"></i> Làm mới</button>
     <button id="btn-export-excel" class="btn btn-sm btn-success" title="Xuất Excel"><i class="fa fa-file-excel-o"></i> Xuất Excel</button>
     <button id="btn-kanban" class="btn btn-sm btn-primary"><i class="fa fa-th"></i> Kanban</button>
     <button id="btn-list" class="btn btn-sm btn-outline-secondary"><i class="fa fa-list"></i> Danh sách</button>
@@ -420,6 +426,7 @@ function load(append){
     stock_status:gv('f-stk'),packing_status:gv('f-pack'),
     date_from:gv('f-date-from'),date_to:gv('f-date-to'),
     po_date_from:gv('f-po-date-from'),po_date_to:gv('f-po-date-to'),
+    done_date_from:gv('f-done-from'),done_date_to:gv('f-done-to'),
     po_status:gv('f-po-status'),saler_code:gv('f-saler'),
     htgh:gv('f-htgh'),delivery_type:gv('f-dtype'),tag_ids:getTagIds(),
     show_completed:$('f-show-completed').checked,
@@ -444,8 +451,8 @@ function load(append){
     (append?d.orders||[]:S.orders).forEach(function(o){
       var ep=o.packing_status;
       var rd=o.real_delivery_status||o.delivery_status;
-      // Có picking OUT done hôm nay → "Đã giao trong ngày" (kể cả partial)
-      if(o.has_delivered_today) ep='delivered_today';
+      // Đơn đã giao đủ trong ngày: ưu tiên thấp nhất, luôn hiển
+      if(rd==='full'&&o.has_delivered_today) ep='delivered_today';
       else if(o.has_shipper_received) ep='shipping';
       else if(o.has_new_unprinted_pickings) ep='has_unprinted';
       else if(ep==='fully_packed') ep='packed_waiting_ship';
@@ -664,8 +671,13 @@ function renderList(){
   });
 }
 
+var _currentDrawerOrderId=null;
 function loadMessages(orderId){
-  fetch('/api/sale_plan/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{order_id:orderId}})})
+  if(orderId) _currentDrawerOrderId=orderId;
+  var oid=orderId||_currentDrawerOrderId;
+  if(!oid)return;
+  $('dr-msg-list').innerHTML='<div class="msg-empty"><i class="fa fa-spinner fa-spin me-1"></i> Đang tải...</div>';
+  fetch('/api/sale_plan/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{order_id:oid}})})
   .then(function(r){return r.json();})
   .then(function(resp){
     var d=resp.result||{};
@@ -707,6 +719,24 @@ function loadMessages(orderId){
   .catch(function(){
     $('dr-msg-list').innerHTML='<div class="msg-empty text-danger">Lỗi kết nối</div>';
   });
+}
+function sendPublicMessage(){
+  var body=($('dr-msg-input').value||'').trim();
+  if(!body||!_currentDrawerOrderId)return;
+  var authorName=($('dr-msg-author').value||'').trim();
+  if(!authorName){$('dr-msg-author').focus();$('dr-msg-author').classList.add('is-invalid');return;}
+  $('dr-msg-author').classList.remove('is-invalid');
+  localStorage.setItem('hlv_msg_author',authorName);
+  var btn=$('dr-msg-send');btn.disabled=true;
+  fetch('/api/sale_plan/send_message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{order_id:_currentDrawerOrderId,body:body,author_name:authorName}})})
+  .then(function(r){return r.json();})
+  .then(function(resp){
+    btn.disabled=false;
+    var d=resp.result||{};
+    if(d.status==='success'){$('dr-msg-input').value='';loadMessages();}
+    else{alert(d.message||'Lỗi gửi tin nhắn');}
+  })
+  .catch(function(){btn.disabled=false;alert('Lỗi kết nối');});
 }
 
 function openDrawer(id){
@@ -789,16 +819,29 @@ function openDrawer(id){
     h+='</ul>';
   }
   h+='<div class="msg-section" id="dr-msg-section">'
-    +'<div class="msg-header open" id="dr-msg-toggle"><i class="fa fa-chevron-right me-1"></i><i class="fa fa-comments me-1"></i> Tin nhắn &amp; Tệp đính kèm <span class="text-muted ms-auto" id="dr-msg-count" style="font-weight:400;font-size:.8rem"></span></div>'
+    +'<div class="msg-header open" id="dr-msg-toggle"><i class="fa fa-chevron-right me-1"></i><i class="fa fa-comments me-1"></i> Tin nhắn &amp; Chat <span class="text-muted" id="dr-msg-count" style="font-weight:400;font-size:.8rem"></span>'
+    +'<button id="dr-msg-refresh" class="btn btn-sm btn-outline-secondary ms-auto px-2 py-0" title="Tải lại tin nhắn"><i class="fa fa-refresh"></i></button></div>'
+    +'<div style="padding:10px 14px 6px;border-bottom:1px solid #e2e8f0;background:#f7fafc">'
+    +'<div class="d-flex gap-2 mb-2"><input id="dr-msg-author" class="form-control form-control-sm" placeholder="Tên của bạn..." style="max-width:160px" value="'+esc(localStorage.getItem('hlv_msg_author')||'')+'"/>'
+    +'<input id="dr-msg-input" class="form-control form-control-sm" placeholder="Nhập tin nhắn..."/>'
+    +'<button id="dr-msg-send" class="btn btn-sm btn-primary px-3"><i class="fa fa-paper-plane"></i></button></div>'
+    +'</div>'
     +'<div class="msg-list" id="dr-msg-list"><div class="msg-empty"><i class="fa fa-spinner fa-spin me-1"></i> Đang tải...</div></div>'
     +'</div>';
   $('dr-body').innerHTML=h;
   $('dr-footer').innerHTML='Trị giá: <span class="text-primary fs-5">'+fm(o.amount_total)+'</span>';
-  $('dr-msg-toggle').onclick=function(){
+  $('dr-msg-toggle').addEventListener('click',function(e){
+    if(e.target.closest('button'))return;
     this.classList.toggle('open');
     var list=$('dr-msg-list');
-    list.style.display=this.classList.contains('open')?'':'none';
-  };
+    var sendBox=this.nextElementSibling;
+    var isOpen=this.classList.contains('open');
+    list.style.display=isOpen?'':'none';
+    if(sendBox&&sendBox.style)sendBox.style.display=isOpen?'':'none';
+  });
+  $('dr-msg-refresh').addEventListener('click',function(e){e.stopPropagation();loadMessages();});
+  $('dr-msg-send').addEventListener('click',function(){sendPublicMessage();});
+  $('dr-msg-input').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();sendPublicMessage();}});
   loadMessages(o.id);
   $('drawer').classList.add('open');
   $('drawer-overlay').classList.add('open');
@@ -816,8 +859,10 @@ function updFilters(){
   if(gv('f-del')!=='all'){var s2=$('f-del');chips.push({k:'f-del',v:'Giao hàng: '+s2.options[s2.selectedIndex].text,reset:'all'});}
   if(gv('f-stk')!=='all'){var s3=$('f-stk');chips.push({k:'f-stk',v:'Kho: '+s3.options[s3.selectedIndex].text,reset:'all'});}
   if(gv('f-pack')!=='all'){var s4=$('f-pack');chips.push({k:'f-pack',v:'Đóng gói: '+s4.options[s4.selectedIndex].text,reset:'all'});}
-  if(gv('f-date-from')) chips.push({k:'f-date-from',v:'Giao từ: '+gv('f-date-from'),reset:''});
-  if(gv('f-date-to')) chips.push({k:'f-date-to',v:'Giao đến: '+gv('f-date-to'),reset:''});
+  if(gv('f-date-from')) chips.push({k:'f-date-from',v:'Hẹn giao từ: '+gv('f-date-from'),reset:''});
+  if(gv('f-date-to')) chips.push({k:'f-date-to',v:'Hẹn giao đến: '+gv('f-date-to'),reset:''});
+  if(gv('f-done-from')) chips.push({k:'f-done-from',v:'HT từ: '+gv('f-done-from'),reset:''});
+  if(gv('f-done-to')) chips.push({k:'f-done-to',v:'HT đến: '+gv('f-done-to'),reset:''});
   if(gv('f-po-date-from')) chips.push({k:'f-po-date-from',v:'Nhận từ: '+gv('f-po-date-from'),reset:''});
   if(gv('f-po-date-to')) chips.push({k:'f-po-date-to',v:'Nhận đến: '+gv('f-po-date-to'),reset:''});
   if(gv('f-po-status')!=='all'){var s5=$('f-po-status');chips.push({k:'f-po-status',v:'Mua hàng: '+s5.options[s5.selectedIndex].text,reset:'all'});}
@@ -868,7 +913,7 @@ document.addEventListener('click',function(e){
 });
 
 function clearAll(){
-  ['f-q','f-date-from','f-date-to','f-po-date-from','f-po-date-to','f-saler','f-htgh'].forEach(function(id){var e=$(id);if(e)e.value='';});
+  ['f-q','f-date-from','f-date-to','f-po-date-from','f-po-date-to','f-saler','f-htgh','f-done-from','f-done-to'].forEach(function(id){var e=$(id);if(e)e.value='';});
   ['f-wh','f-stk','f-pack','f-po-status','f-dtype'].forEach(function(id){var e=$(id);if(e)e.value='all';});
   $('f-del').value='pending_partial';
   var ft=$('f-tag');if(ft){Array.from(ft.options).forEach(function(o){o.selected=false;});}
@@ -938,6 +983,7 @@ $('btn-export-excel').addEventListener('click',function(){
     filter_stock_status:gv('f-stk'),filter_packing_status:gv('f-pack'),
     filter_date_from:gv('f-date-from'),filter_date_to:gv('f-date-to'),
     filter_po_date_from:gv('f-po-date-from'),filter_po_date_to:gv('f-po-date-to'),
+    filter_done_date_from:gv('f-done-from'),filter_done_date_to:gv('f-done-to'),
     filter_po_status:gv('f-po-status'),filter_saler_code:gv('f-saler'),
     filter_htgh:gv('f-htgh'),filter_delivery_type:gv('f-dtype'),filter_tag_ids:getTagIds(),
     show_completed:$('f-show-completed').checked?'1':''
@@ -1061,6 +1107,7 @@ class SalePlanPublicController(http.Controller):
     def api_sale_plan_data(self, search='', warehouse_id='all', delivery_status='all',
                            stock_status='all', packing_status='all',
                            date_from='', date_to='', po_date_from='', po_date_to='',
+                           done_date_from='', done_date_to='',
                            po_status='all', saler_code='', htgh='', delivery_type='all',
                            tag_ids='', limit=250, offset=0, show_completed=False, **kwargs):
         if not request.session.get(SESSION_KEY_OK):
@@ -1076,6 +1123,8 @@ class SalePlanPublicController(http.Controller):
                 filter_date_to=date_to,
                 filter_po_date_from=po_date_from,
                 filter_po_date_to=po_date_to,
+                filter_done_date_from=done_date_from,
+                filter_done_date_to=done_date_to,
                 filter_po_status=po_status,
                 filter_saler_code=saler_code,
                 filter_htgh=htgh,
@@ -1128,7 +1177,7 @@ class SalePlanPublicController(http.Controller):
             result = []
             picking_name_map = {p.id: p.name for p in so.picking_ids}
             for msg in messages:
-                # Skip system/automated messages by body content 123456
+                # Skip system/automated messages by body content
                 plain = re.sub(r'<[^>]+>', '', msg.body or '').strip()
                 has_att = bool(msg.attachment_ids)
                 if not plain and not has_att:
@@ -1159,6 +1208,36 @@ class SalePlanPublicController(http.Controller):
             return {'status': 'success', 'messages': result}
         except Exception as e:
             _logger.exception('sale_plan messages error')
+            return {'status': 'error', 'message': str(e)}
+
+    @http.route('/api/sale_plan/send_message', type='json', auth='public', methods=['POST'])
+    def api_sale_plan_send_message(self, order_id=None, body='', author_name='', **kwargs):
+        if not request.session.get(SESSION_KEY_OK):
+            return {'status': 'error', 'message': 'Unauthorized'}
+        try:
+            body = (body or '').strip()
+            if not body:
+                return {'status': 'error', 'message': 'Empty message'}
+            so = request.env['sale.order'].sudo().browse(int(order_id))
+            if not so.exists():
+                return {'status': 'error', 'message': 'Order not found'}
+            author_name = (author_name or '').strip()
+            if author_name:
+                safe_body = Markup('<p><strong>[%s]</strong> %s</p>') % (
+                    Markup.escape(author_name), Markup.escape(body))
+            else:
+                safe_body = Markup('<p>%s</p>') % Markup.escape(body)
+            so.message_post(
+                body=safe_body,
+                message_type='comment',
+                subtype_xmlid='mail.mt_note',
+            )
+            # Kích hoạt trạng thái nháy đỏ Notification FB 
+            if hasattr(so, 'x_plan_unread_message'):
+                so.sudo().write({'x_plan_unread_message': True})
+            return {'status': 'success'}
+        except Exception as e:
+            _logger.exception('send_message error')
             return {'status': 'error', 'message': str(e)}
 
     @http.route('/api/sale_plan/attachment/<int:att_id>', type='http', auth='public', methods=['GET'], csrf=False)
@@ -1228,6 +1307,8 @@ class SalePlanPublicController(http.Controller):
                 filter_po_date_from=kwargs.get('filter_po_date_from', ''),
                 filter_po_date_to=kwargs.get('filter_po_date_to', ''),
                 filter_po_status=kwargs.get('filter_po_status', 'all'),
+                filter_done_date_from=kwargs.get('filter_done_date_from', ''),
+                filter_done_date_to=kwargs.get('filter_done_date_to', ''),
                 filter_saler_code=kwargs.get('filter_saler_code', ''),
                 filter_htgh=kwargs.get('filter_htgh', ''),
                 filter_delivery_type=kwargs.get('filter_delivery_type', 'all'),

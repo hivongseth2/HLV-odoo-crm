@@ -271,6 +271,14 @@
                             (<t t-esc="so.misa_order_date"/>)
                         </small>
                         <span t-if="so.is_new_order" class="badge bg-danger ms-1 animate__animated animate__pulse" style="font-size:0.58rem; vertical-align:middle; padding:2px 6px; letter-spacing:0.5px;">★ MỚI</span>
+                        
+                        <!-- Notification badge (lớn hơn) -->
+                        <span t-if="so.has_unread_message" 
+                              class="badge bg-danger ms-1 animate__animated animate__pulse animate__infinite"
+                              style="vertical-align: middle; padding: 3px 6px; font-size: 0.65rem;" 
+                              title="Có tin nhắn mới từ khách hàng/shipper">
+                              <i class="fa fa-envelope me-1"></i> TIN MỚI
+                        </span>
                     </h6>
                     <button class="btn btn-link btn-sm p-0 ms-1 text-secondary flex-shrink-0"
                             style="font-size: 0.75rem; line-height:1;"

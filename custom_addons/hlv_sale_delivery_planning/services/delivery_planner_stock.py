@@ -9,6 +9,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         filter_delivery_status, filter_stock_status, filter_packing_status,
         show_completed=False, filter_need_transfer=False,
         filter_new_orders=False,
+        filter_done_date_from='', filter_done_date_to='',
     ):
         """
         Lọc SO theo PO (nếu có filter PO), tính stock_status và packing_status
@@ -27,6 +28,29 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             matching_pos = self.env['purchase.order'].search_read(po_domain, ['origin'])
             origins = list(set([po['origin'] for po in matching_pos if po['origin']]))
             sales = sales.filtered(lambda s: s.name in origins)
+
+        # --- 1b. Lọc theo ngày hoàn thành (date_done của phiếu OUT) ---
+        if filter_done_date_from or filter_done_date_to:
+            import pytz
+            from datetime import datetime
+            _tz = pytz.timezone(self.env.context.get('tz') or self.env.user.tz or 'Asia/Ho_Chi_Minh')
+            picking_domain = [
+                ('picking_type_code', '=', 'outgoing'),
+                ('state', '=', 'done'),
+                ('sale_id', 'in', sales.ids),
+            ]
+            if filter_done_date_from:
+                local_from = _tz.localize(datetime.strptime(filter_done_date_from, '%Y-%m-%d'))
+                utc_from = local_from.astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
+                picking_domain.append(('date_done', '>=', utc_from))
+            if filter_done_date_to:
+                local_to = _tz.localize(datetime.strptime(filter_done_date_to, '%Y-%m-%d').replace(
+                    hour=23, minute=59, second=59))
+                utc_to = local_to.astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
+                picking_domain.append(('date_done', '<=', utc_to))
+            done_pickings = self.env['stock.picking'].search(picking_domain)
+            done_so_ids = set(done_pickings.mapped('sale_id').ids)
+            sales = sales.filtered(lambda s: s.id in done_so_ids)
 
         all_order_lines = sales.mapped('order_line').filtered(
             lambda l: not l.display_type and l.product_id and l.product_id.type != 'service'
@@ -264,7 +288,9 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
 
             # Khi không bật "hiện đơn đã giao": ẩn hoàn toàn các đơn này
             # NGOẠI TRỪ: đơn có phiếu OUT done hôm nay → hiện trong cột "Đã giao trong ngày"
-            if not show_completed and no_active_outflow and not has_delivered_today:
+            # NGOẠI TRỪ: user đang filter theo ngày hoàn thành → đơn đã pass filter 1b
+            if not show_completed and no_active_outflow and not has_delivered_today \
+                    and not filter_done_date_from and not filter_done_date_to:
                 continue
 
             has_pending = False
@@ -446,6 +472,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 'packing_status': packing_status,
                 'has_pending': has_pending,
                 'has_transfer_option': has_transfer_option,
+                'has_unread_message': bool(so.x_plan_unread_message if hasattr(so, 'x_plan_unread_message') else False),
             }
 
             is_returned_or_stopped = so_status_dict[so.id]['is_returned_or_stopped']
@@ -464,14 +491,29 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             else:
                 delivery_ok = True
 
+            # NẾU USER CỐ TÌNH FILTER MỤC HOÀN THÀNH TỪ/ĐẾN
+            if filter_done_date_from or filter_done_date_to:
+                done_outflows = so.picking_ids.filtered(lambda p: p.state == 'done' and p.date_done)
+                if not done_outflows:
+                    delivery_ok = False
+                else:
+                    latest_done = max(done_outflows, key=lambda p: p.date_done)
+                    latest_done_str = latest_done.date_done.replace(tzinfo=pytz.utc).astimezone(user_tz).strftime('%Y-%m-%d')
+                    if filter_done_date_from and latest_done_str < filter_done_date_from:
+                        delivery_ok = False
+                    elif filter_done_date_to and latest_done_str > filter_done_date_to:
+                        delivery_ok = False
+                    else:
+                        delivery_ok = True
+
             # Tính effective_packing_status bao gồm trạng thái in phiếu + shipper
             has_new_unprinted = so_status_dict[so.id].get('has_new_unprinted_pickings', False)
             has_shipper = so_status_dict[so.id].get('has_shipper_received', False)
             delivered_today = so_status_dict[so.id].get('has_delivered_today', False)
 
-            # delivered_today: ưu tiên cao nhất — áp dụng khi có picking OUT done hôm nay,
-            # kể cả đơn giao 1 phần (partial). Bỏ qua delivery_ok filter.
-            if delivered_today:
+            # delivered_today: đặc biệt — chỉ áp dụng khi đơn đã giao đủ (full),
+            # với ưu tiên thấp nhất (sau shipping). Bỏ qua delivery_ok filter.
+            if real_delivery_status == 'full' and delivered_today:
                 effective_packing = 'delivered_today'
                 # Bypass delivery filter – luôn show "Đã giao trong ngày"
                 delivery_ok = True

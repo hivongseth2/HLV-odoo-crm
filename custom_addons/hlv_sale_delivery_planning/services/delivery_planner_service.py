@@ -1,4 +1,19 @@
-﻿from odoo import models, api
+from odoo import models, api
+from markupsafe import Markup
+import re
+
+_SKIP_MSG_RE = re.compile(
+    r'Lệnh chuyển hàng được tạo'
+    r'|lệnh chuyển hàng đã được tạo ra từ'
+    r'|Đồng bộ \(xoá .{0,5} tạo lại\) thành công'
+    r'|This transfer has been created from'
+    r'|Transfer created'
+    r'|Sales Order created'
+    r'|Quotation created'
+    r'|has been created from'
+    r'|Đơn hàng được tạo',
+    re.IGNORECASE
+)
 
 
 class DeliveryPlannerService(models.AbstractModel):
@@ -12,13 +27,11 @@ class DeliveryPlannerService(models.AbstractModel):
         filter_delivery_status='all', filter_stock_status='all',
         filter_packing_status='all', filter_date_from='', filter_date_to='',
         filter_po_date_from='', filter_po_date_to='', filter_po_status='all',
+        filter_done_date_from='', filter_done_date_to='',
         limit=12, offset=0, filter_saler_code='',
         filter_htgh='', filter_delivery_type='all', filter_tag_ids='',
         show_completed=False, filter_need_transfer=False,        filter_new_orders=False,    ):
-        """
-        Äiá»ƒm vÃ o chÃ­nh: tá»•ng há»£p dá»¯ liá»‡u dashboard giao hÃ ng.
-        Logic chi tiáº¿t Ä‘Æ°á»£c á»§y quyá»n cho tá»«ng mixin service.
-        """
+
         domain = self._build_search_domain(
             search_query, filter_warehouse_id,
             filter_delivery_status, filter_date_from, filter_date_to,
@@ -39,6 +52,8 @@ class DeliveryPlannerService(models.AbstractModel):
                 show_completed=show_completed,
                 filter_need_transfer=filter_need_transfer,
                 filter_new_orders=filter_new_orders,
+                filter_done_date_from=filter_done_date_from,
+                filter_done_date_to=filter_done_date_to,
             )
 
         total_count = len(matched_ids)
@@ -67,5 +82,62 @@ class DeliveryPlannerService(models.AbstractModel):
             'total_count': total_count,
             'dashboard_stats': dashboard_stats,
         }
+
+    @api.model
+    def get_order_messages(self, order_id):
+        so = self.env['sale.order'].browse(int(order_id))
+        if not so.exists():
+            return []
+            
+        # Đánh dấu là đã đọc khi Internal User bấm xem tin nhắn
+        if getattr(so, 'x_plan_unread_message', False):
+            so.sudo().write({'x_plan_unread_message': False})
+            
+        picking_ids = so.picking_ids.ids
+        domain = [
+            '|',
+            '&', ('model', '=', 'sale.order'), ('res_id', '=', so.id),
+            '&', ('model', '=', 'stock.picking'), ('res_id', 'in', picking_ids),
+        ]
+        messages = self.env['mail.message'].search(domain, order='date desc', limit=200)
+        picking_name_map = {p.id: p.name for p in so.picking_ids}
+        result = []
+        for msg in messages:
+            plain = re.sub(r'<[^>]+>', '', msg.body or '').strip()
+            has_att = bool(msg.attachment_ids)
+            if not plain and not has_att:
+                continue
+            if plain and _SKIP_MSG_RE.search(plain):
+                continue
+            attachments = [{
+                'id': att.id, 'name': att.name or '',
+                'mimetype': att.mimetype or 'application/octet-stream',
+                'file_size': att.file_size or 0,
+            } for att in msg.attachment_ids]
+            origin = ''
+            if msg.model == 'stock.picking':
+                origin = picking_name_map.get(msg.res_id, '')
+            result.append({
+                'id': msg.id,
+                'date': msg.date.strftime('%d/%m/%Y %H:%M') if msg.date else '',
+                'author': msg.author_id.name if msg.author_id else (msg.email_from or ''),
+                'body': msg.body or '',
+                'origin': origin,
+                'attachments': attachments,
+            })
+        return result
+
+    @api.model
+    def post_order_message(self, order_id, body):
+        so = self.env['sale.order'].browse(int(order_id))
+        if not so.exists():
+            return False
+        safe_body = Markup('<p>%s</p>') % Markup.escape(body)
+        so.message_post(
+            body=safe_body,
+            message_type='comment',
+            subtype_xmlid='mail.mt_note',
+        )
+        return True
 
 

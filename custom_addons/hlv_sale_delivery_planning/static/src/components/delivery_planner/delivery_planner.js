@@ -1,7 +1,7 @@
 /** @odoo-module **/
 
 import { registry } from "@web/core/registry";
-import { Component, useState, onWillStart } from "@odoo/owl";
+import { Component, useState, onWillStart, markup } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import {
     translateDeliveryStatus, translatePickingState, translatePickingStatus,
@@ -102,6 +102,11 @@ export class DeliveryPlannerDashboard extends Component {
             pickingReports: [],       // [{id, name, report_type}] — báo cáo có thể in cho stock.picking
             printMenuPickingId: null, // picking.id đang hiển thị menu in
             printMenuPos: null,       // { top, right } — vị trí fixed của dropdown
+
+            // Drawer messages
+            drawerMessages: [],
+            drawerMessagesLoading: false,
+            drawerMessageText: '',
         });
 
         onWillStart(async () => {
@@ -310,8 +315,8 @@ export class DeliveryPlannerDashboard extends Component {
             let val = so[field];
             if (dim === 'delivery_status' && val === 'unshipped') val = 'pending';
             if (dim === 'packing_status') {
-                // Có picking OUT done hôm nay → luôn hiển trong cột "Đã giao trong ngày" (kể cả partial)
-                if (so.has_delivered_today) {
+                // Đơn đã giao đủ trong ngày hôm nay → luôn hiển trong cột "Đã giao trong ngày"
+                if (so.real_delivery_status === 'full' && so.has_delivered_today) {
                     val = 'delivered_today';
                 } else if (so.real_delivery_status === 'full') {
                     return false;
@@ -835,6 +840,55 @@ export class DeliveryPlannerDashboard extends Component {
     openOverviewDrawer(so) {
         this.state.selectedOrder = so;
         this.state.isDrawerOpen = true;
+        this.state.drawerMessages = [];
+        this.state.drawerMessageText = '';
+        this.loadDrawerMessages(so.id);
+    }
+
+    async loadDrawerMessages(orderId) {
+        this.state.drawerMessagesLoading = true;
+        try {
+            const result = await this.orm.call(
+                'hlv.delivery.planner.service', 'get_order_messages',
+                [orderId]
+            );
+            this.state.drawerMessages = (result || []).map(msg => {
+                if (msg.body) {
+                    msg.body = markup(msg.body);
+                }
+                return msg;
+            });
+            // Mark as read after loading messages (optimistic update)
+            if (this.state.selectedOrder && this.state.selectedOrder.has_unread_message) {
+                this.state.selectedOrder.has_unread_message = false;
+            }
+        } catch (e) {
+            console.error('loadDrawerMessages error', e);
+            this.state.drawerMessages = [];
+        }
+        this.state.drawerMessagesLoading = false;
+    }
+
+    async sendDrawerMessage() {
+        const body = (this.state.drawerMessageText || '').trim();
+        if (!body || !this.state.selectedOrder) return;
+        try {
+            await this.orm.call(
+                'hlv.delivery.planner.service', 'post_order_message',
+                [this.state.selectedOrder.id, body]
+            );
+            this.state.drawerMessageText = '';
+            await this.loadDrawerMessages(this.state.selectedOrder.id);
+        } catch (e) {
+            console.error('sendDrawerMessage error', e);
+        }
+    }
+
+    onMessageKeydown(ev) {
+        if (ev.key === 'Enter' && !ev.shiftKey) {
+            ev.preventDefault();
+            this.sendDrawerMessage();
+        }
     }
 
     closeOverviewDrawer() {
@@ -1144,6 +1198,12 @@ export class DeliveryPlannerDashboard extends Component {
             filter_tag_ids: this.state.filterTagIds.join(','),
             show_completed: this.state.showCompleted ? '1' : '',
         });
+        
+        const selectedIds = Array.from(this.state.selectedSOIds);
+        if (selectedIds.length > 0) {
+            params.set('selected_ids', selectedIds.join(','));
+        }
+        
         window.open(`/hlv_sale_delivery_planning/export_excel?${params.toString()}`, '_blank');
     }
 
