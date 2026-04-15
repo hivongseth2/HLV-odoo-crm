@@ -1198,6 +1198,12 @@ export class DeliveryPlannerDashboard extends Component {
             filter_tag_ids: this.state.filterTagIds.join(','),
             show_completed: this.state.showCompleted ? '1' : '',
         });
+        
+        const selectedIds = Array.from(this.state.selectedSOIds);
+        if (selectedIds.length > 0) {
+            params.set('selected_ids', selectedIds.join(','));
+        }
+        
         window.open(`/hlv_sale_delivery_planning/export_excel?${params.toString()}`, '_blank');
     }
 
