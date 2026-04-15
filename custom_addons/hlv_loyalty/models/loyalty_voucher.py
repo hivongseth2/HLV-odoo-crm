@@ -22,7 +22,7 @@ class HlvLoyaltyVoucher(models.Model):
     partner_id = fields.Many2one(
         'res.partner', string='Khách hàng', required=True,
         ondelete='restrict', index=True,
-        domain="[('customer_rank', '>', 0), ('parent_id', '=', False)]",
+        domain="[('parent_id', '=', False)]",
     )
     package_id = fields.Many2one(
         'hlv.loyalty.voucher.package', string='Gói Voucher',
