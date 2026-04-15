@@ -34,20 +34,25 @@ class LoyaltyPublicPortal(http.Controller):
                 'keyword': keyword,
             })
 
-        # Tìm partner theo SĐT hoặc email, ưu tiên customer
+        # Tìm partner theo SĐT, email hoặc tên — loại bỏ delivery address
+        _EXCLUDE_TYPES = ['delivery', 'invoice', 'other', 'private']
         partner = request.env['res.partner'].sudo().search([
-            '|',
+            '|', '|',
             ('phone', 'ilike', keyword),
             ('email', 'ilike', keyword),
-            ('customer_rank', '>', 0),
-        ], limit=1)
+            ('name', 'ilike', keyword),
+            ('type', 'not in', _EXCLUDE_TYPES),
+            ('loyalty_total_points', '>', 0),
+        ], order='loyalty_total_points desc', limit=1)
 
         if not partner:
-            # Thử tìm không lọc customer_rank
+            # Fallback: bỏ điều kiện điểm
             partner = request.env['res.partner'].sudo().search([
-                '|',
+                '|', '|',
                 ('phone', 'ilike', keyword),
                 ('email', 'ilike', keyword),
+                ('name', 'ilike', keyword),
+                ('type', 'not in', _EXCLUDE_TYPES),
             ], limit=1)
 
         if not partner:
