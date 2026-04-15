@@ -6,6 +6,7 @@
         <field name="max_points">999</field>
         <field name="color">brown</field>
         <field name="icon">fa-medal</field>
+        <field name="tier_image" type="base64" file="hlv_loyalty/static/description/brozen.png"/>
         <field name="description">Thành viên mới</field>
         <field name="sequence">10</field>
     </record>
@@ -15,6 +16,7 @@
         <field name="max_points">4999</field>
         <field name="color">silver</field>
         <field name="icon">fa-star</field>
+        <field name="tier_image" type="base64" file="hlv_loyalty/static/description/platinum.png"/>
         <field name="description">Khách hàng thân thiết</field>
         <field name="sequence">20</field>
     </record>
@@ -24,6 +26,7 @@
         <field name="max_points">19999</field>
         <field name="color">gold</field>
         <field name="icon">fa-trophy</field>
+        <field name="tier_image" type="base64" file="hlv_loyalty/static/description/gold.png"/>
         <field name="description">Khách hàng VIP</field>
         <field name="sequence">30</field>
     </record>
@@ -32,6 +35,7 @@
         <field name="min_points">20000</field>
         <field name="color">diamond</field>
         <field name="icon">fa-gem</field>
+        <field name="tier_image" type="base64" file="hlv_loyalty/static/description/platinum.png"/>
         <field name="description">Khách hàng VVIP</field>
         <field name="sequence">40</field>
     </record>

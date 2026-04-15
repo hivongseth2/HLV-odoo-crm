@@ -18,10 +18,12 @@
                     <div class="mb-4 p-3 border text-center" style="background:#f8f9fa;">
                         <span class="fw-bold small text-uppercase"
                               style="letter-spacing:1px; color:#6c757d;">Preview hạng</span>
-                        <div class="mt-2">
+                        <div class="mt-3 d-flex align-items-center justify-content-center gap-3">
+                            <field name="tier_image" widget="image"
+                                   style="max-height:64px; max-width:64px;"
+                                   nolabel="1"/>
                             <span class="badge fs-5 px-4 py-2 fw-bold"
-                                  style="background-color: var(--badge-color, #cd7f32); color: #fff;">
-                                <i class="fa me-2"><field name="icon" nolabel="1"/></i>
+                                  style="color: #fff; background-color: #cd7f32;">
                                 <field name="name" nolabel="1"/>
                             </span>
                         </div>

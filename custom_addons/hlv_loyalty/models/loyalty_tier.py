@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import base64
+import os
 from odoo import models, fields, api
 
 
@@ -23,6 +25,9 @@ class HlvLoyaltyTier(models.Model):
     icon = fields.Char(
         string='Icon CSS', default='fa-medal',
         help='Font Awesome icon class, vd: fa-medal, fa-star, fa-crown',
+    )
+    tier_image = fields.Image(
+        string='Ảnh hạng', max_width=256, max_height=256,
     )
     description = fields.Char(string='Mô tả ngắn')
     benefit_ids = fields.One2many(
@@ -51,9 +56,9 @@ class HlvLoyaltyTier(models.Model):
         for tier in self:
             tier.badge_color = color_map.get(tier.color, '#cd7f32')
 
-    @api.depends('color')
+    @api.depends('color', 'tier_image')
     def _compute_image_url(self):
-        image_map = {
+        static_map = {
             'brown': '/hlv_loyalty/static/description/brozen.png',
             'silver': '/hlv_loyalty/static/description/platinum.png',
             'gold': '/hlv_loyalty/static/description/gold.png',
@@ -61,7 +66,10 @@ class HlvLoyaltyTier(models.Model):
             'diamond': '/hlv_loyalty/static/description/platinum.png',
         }
         for tier in self:
-            tier.image_url = image_map.get(tier.color, '/hlv_loyalty/static/description/brozen.png')
+            if tier.tier_image:
+                tier.image_url = f'/web/image/hlv.loyalty.tier/{tier.id}/tier_image'
+            else:
+                tier.image_url = static_map.get(tier.color, '/hlv_loyalty/static/description/brozen.png')
 
     def name_get(self):
         return [(t.id, f'{t.name} (≥{t.min_points} điểm)') for t in self]
