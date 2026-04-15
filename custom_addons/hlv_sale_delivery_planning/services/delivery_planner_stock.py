@@ -52,6 +52,14 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             done_so_ids = set(done_pickings.mapped('sale_id').ids)
             sales = sales.filtered(lambda s: s.id in done_so_ids)
 
+        all_order_lines = sales.mapped('order_line').filtered(
+            lambda l: not l.display_type and l.product_id and l.product_id.type != 'service'
+        )
+        active_moves = self.env['stock.move'].sudo().search([
+            ('sale_line_id', 'in', all_order_lines.ids),
+            ('state', 'not in', ('cancel', 'done')),
+        ])
+
         # --- 2. Tính tồn kho khả dụng theo kho + sản phẩm ---
         product_qty_cache = {}
         for so in sales:
@@ -62,6 +70,10 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 for line in so.order_line:
                     if not line.display_type and line.product_id:
                         product_qty_cache[w_id].add(line.product_id.id)
+                # Bổ sung các sản phẩm thành phần của Combo/Kit
+                for move in active_moves.filtered(lambda m: m.sale_line_id.order_id.id == so.id):
+                    if move.product_id:
+                        product_qty_cache[w_id].add(move.product_id.id)
 
         product_availabilities = {}
         wh_obj = self.env['stock.warehouse']
@@ -111,17 +123,9 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
 
         # --- 3. Số lượng đang giữ (reserved) theo dòng SO ---
         line_reserved_qty = {}
-        all_order_lines = sales.mapped('order_line').filtered(
-            lambda l: not l.display_type and l.product_id and l.product_id.type != 'service'
-        )
-        if all_order_lines:
-            moves = self.env['stock.move'].sudo().search_read([
-                ('sale_line_id', 'in', all_order_lines.ids),
-                ('state', 'not in', ('cancel', 'done')),
-            ], ['sale_line_id', 'quantity'])
-            for m in moves:
-                s_id = m['sale_line_id'][0]
-                line_reserved_qty[s_id] = line_reserved_qty.get(s_id, 0.0) + m['quantity']
+        for m in active_moves:
+            s_id = m.sale_line_id.id
+            line_reserved_qty[s_id] = line_reserved_qty.get(s_id, 0.0) + m.quantity
 
         # --- 4. Tính số lượng đã đóng gói theo PHẦN CÒN PENDING của từng dòng SO ---
         # Mục tiêu: không để hàng đã giao xong ở các dòng khác làm phình packed_qty của đơn.
@@ -300,7 +304,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                     continue
                 p_type = line.product_id.type
                 is_kit = line.product_id.product_tmpl_id.id in kit_tmpl_ids
-                if p_type == 'service' or is_kit:
+                if p_type == 'service':
                     continue
 
                 has_storable_line = True
@@ -311,15 +315,33 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 if pending_qty > 0:
                     has_pending = True
                     total_pending += pending_qty
-                    base_free = product_availabilities.get(
-                        (line.product_id.id, so.warehouse_id.id), 0.0
-                    )
-                    reserved_here = line_reserved_qty.get(line.id, 0.0)
-                    qty_avail = base_free + reserved_here
-                    if qty_avail > 0:
-                        total_avail += min(qty_avail, pending_qty)
-                    if qty_avail < pending_qty:
-                        is_fully_ready = False
+                    
+                    if is_kit:
+                        # Bóc tách thành phần của Kit từ active_moves đã duyệt
+                        cmp_moves = active_moves.filtered(lambda m: m.sale_line_id.id == line.id)
+                        if not cmp_moves:
+                            is_fully_ready = False
+                        else:
+                            for cm in cmp_moves:
+                                c_pending = cm.product_uom_qty
+                                if c_pending > 0:
+                                    c_base_free = product_availabilities.get((cm.product_id.id, so.warehouse_id.id), 0.0)
+                                    c_reserved = cm.quantity
+                                    c_avail = c_base_free + c_reserved
+                                    if c_avail > 0:
+                                        total_avail += min(c_avail, c_pending)
+                                    if c_avail < c_pending:
+                                        is_fully_ready = False
+                    else:
+                        base_free = product_availabilities.get(
+                            (line.product_id.id, so.warehouse_id.id), 0.0
+                        )
+                        reserved_here = line_reserved_qty.get(line.id, 0.0)
+                        qty_avail = base_free + reserved_here
+                        if qty_avail > 0:
+                            total_avail += min(qty_avail, pending_qty)
+                        if qty_avail < pending_qty:
+                            is_fully_ready = False
 
             if has_pending:
                 stock_status = 'ready' if is_fully_ready else (
