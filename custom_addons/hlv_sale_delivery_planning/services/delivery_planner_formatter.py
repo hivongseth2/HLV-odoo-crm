@@ -183,12 +183,12 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             kit_bom_map = {bom.product_tmpl_id.id: bom for bom in kits}
 
         # --- Batch load tồn kho thực cho TẤT CẢ Kit components (Fix N+1) ---
-        # Thay vì stock.quant.search() per bom_line, dùng ONE read_group cho tất cả components
+        # Dùng kit_bom_map.values() thay vì ORM recordset 'kits' (hoạt động cả 2 nhánh)
         kit_comp_true_free = {}
-        if kits and so.warehouse_id and so.warehouse_id.lot_stock_id:
+        if kit_bom_map and so.warehouse_id and so.warehouse_id.lot_stock_id:
             all_comp_prod_ids = list(set(
                 comp.product_id.id
-                for bom in kits
+                for bom in kit_bom_map.values()
                 for comp in bom.bom_line_ids
                 if comp.product_id
             ))
