@@ -112,6 +112,8 @@ export class DeliveryPlannerDashboard extends Component {
             drawerMessages: [],
             drawerMessagesLoading: false,
             drawerMessageText: '',
+            drawerMessageFiles: [],
+            drawerMessageSending: false,
         });
 
         this.notification = useService("notification");
@@ -124,13 +126,36 @@ export class DeliveryPlannerDashboard extends Component {
         onWillStart(async () => {
             if (this.busService) {
                 this.busService.addChannel("delivery_planner_channel");
-                this.busService.addEventListener("notification", ({ detail: notifications }) => {
-                    for (const { payload, type } of notifications) {
+                this._busNotificationHandler = ({ detail: notifications }) => {
+                    for (const item of notifications || []) {
+                        let type;
+                        let payload;
+
+                        if (Array.isArray(item)) {
+                            // Common bus tuple shape: [channel, type, payload]
+                            if (typeof item[1] === "string") {
+                                type = item[1];
+                                payload = item[2];
+                            } else {
+                                const message = item[1] || {};
+                                type = message.type || item[2];
+                                payload = message.payload || message;
+                            }
+                        } else {
+                            type = item && item.type;
+                            payload = item && (item.payload || item);
+                        }
+
                         if (type === "new_portal_message") {
                             this.onNewPortalMessage(payload);
                         }
                     }
-                });
+                };
+                this.busService.addEventListener("notification", this._busNotificationHandler);
+                // Ensure bus is running so realtime notifications are active immediately.
+                if (typeof this.busService.start === "function") {
+                    this.busService.start();
+                }
             }
 
             const [, reports] = await Promise.all([
@@ -152,6 +177,9 @@ export class DeliveryPlannerDashboard extends Component {
         }, 15000);
 
         onWillDestroy(() => {
+            if (this.busService && this._busNotificationHandler && typeof this.busService.removeEventListener === "function") {
+                this.busService.removeEventListener("notification", this._busNotificationHandler);
+            }
             if (this.messagePollingInterval) {
                 clearInterval(this.messagePollingInterval);
             }
@@ -160,31 +188,58 @@ export class DeliveryPlannerDashboard extends Component {
 
     async pollUnreadMessages(isInitial = false) {
         try {
-            const unreadOrders = await this.orm.searchRead(
-                'sale.order',
-                [['x_plan_unread_message', '=', true]],
-                ['id', 'name', 'partner_id'],
-                { limit: 50, order: 'write_date desc' }
+            const notifications = await this.orm.searchRead(
+                'hlv.sale.plan.message',
+                [],
+                ['id', 'sale_order_id', 'last_message_author', 'last_message_preview', 'last_message_date', 'is_read'],
+                { limit: 100, order: 'last_message_date desc, id desc' }
             );
+
+            const prevByOrderId = new Map(
+                this.state.globalUnreadOrders.map((o) => [o.sale_order_id ? o.sale_order_id[0] : o.id, o])
+            );
+
+            const merged = notifications.map((n) => ({
+                id: n.id,
+                sale_order_id: n.sale_order_id,
+                name: n.sale_order_id ? n.sale_order_id[1] : '',
+                last_message_author: n.last_message_author || '',
+                _preview: n.last_message_preview || '',
+                _isRead: !!n.is_read,
+                last_message_date: n.last_message_date,
+            }));
+
+            // Giữ lại trạng thái read/unread đã cập nhật local cho đến khi DB trả về trạng thái mới.
+            for (const item of merged) {
+                const prev = prevByOrderId.get(item.sale_order_id ? item.sale_order_id[0] : item.id);
+                if (prev && prev._isRead && !item._isRead) {
+                    item._isRead = false;
+                }
+            }
+
+            this.state.globalUnreadOrders = merged;
             
-            const prevIds = new Set(this.state.globalUnreadOrders.map(o => o.id));
-            this.state.globalUnreadOrders = unreadOrders;
-            
-            if (!isInitial) {
-                for (const order of unreadOrders) {
-                    if (!prevIds.has(order.id)) {
-                        const so = this.state.saleOrders.find(o => o.id === order.id);
+            const shouldNotifyFromPolling = !isInitial;
+            if (shouldNotifyFromPolling) {
+                for (const notification of notifications.filter((n) => !n.is_read)) {
+                    const orderId = notification.sale_order_id ? notification.sale_order_id[0] : false;
+                    if (!orderId) {
+                        continue;
+                    }
+                    const prev = prevByOrderId.get(orderId);
+                    if (!prev || prev._isRead) {
+                        const so = this.state.saleOrders.find(o => o.id === orderId);
                         if (so) so.has_unread_message = true;
                         
                         this.notification.add(
-                            `Đơn hàng ${order.name} vừa có tin nhắn mới.`,
+                            `Đơn hàng ${notification.sale_order_id ? notification.sale_order_id[1] : ''} vừa có tin nhắn mới.`,
                             {
                                 type: "info",
                                 title: `Tin nhắn chưa đọc`,
                                 buttons: [
                                     {
                                         name: "Xem thông báo",
-                                        onClick: () => this.openDrawerFromMessageList(order.id),
+                                        onClick: () => this.openDrawerFromMessageList(orderId),
                                         primary: true,
                                     }
                                 ]
@@ -198,10 +253,38 @@ export class DeliveryPlannerDashboard extends Component {
         }
     }
 
+    async markOrderAsRead(soId) {
+        try {
+            await this.orm.call('hlv.sale.plan.message', 'mark_read_for_sale_order', [soId]);
+            await this.orm.write('sale.order', [soId], { x_plan_unread_message: false });
+        } catch (e) {
+            console.warn('markOrderAsRead failed', e);
+        }
+    }
+
+    _extractPreviewText(htmlText) {
+        const plain = String(htmlText || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (!plain) {
+            return '';
+        }
+        return plain.length > 120 ? `${plain.slice(0, 120)}...` : plain;
+    }
+
+    get unreadMessageCount() {
+        return this.state.globalUnreadOrders.filter((o) => !o._isRead).length;
+    }
+
     async openDrawerFromMessageList(soId) {
-        // Cập nhật lại list bộ nhớ
-        this.state.globalUnreadOrders = this.state.globalUnreadOrders.filter(o => o.id !== soId);
-        
+        this.state.globalUnreadOrders = this.state.globalUnreadOrders.map((o) =>
+            (o.sale_order_id && o.sale_order_id[0] === soId) ? { ...o, _isRead: true } : o
+        );
+        this.markOrderAsRead(soId);
+
+        const soLocal = this.state.saleOrders.find(o => o.id === soId);
+        if (soLocal) {
+            soLocal.has_unread_message = false;
+        }
+
         // Mở drawer
         let so = this.state.saleOrders.find(o => o.id === soId);
         if (so) {
@@ -215,8 +298,9 @@ export class DeliveryPlannerDashboard extends Component {
                     limit: 1,
                     offset: 0
                 });
-                if (result && result.sale_orders && result.sale_orders.length) {
-                    this.openOverviewDrawer(result.sale_orders[0]);
+                const fetched = result && result.orders ? result.orders.find((o) => o.id === soId) : null;
+                if (fetched) {
+                    this.openOverviewDrawer(fetched);
                 } else {
                     this.openSaleOrder(soId);
                 }
@@ -231,25 +315,29 @@ export class DeliveryPlannerDashboard extends Component {
 
     async onNewPortalMessage(payload) {
         // payload: {so_id, so_name, author_name, body}
-        
-        // Cập nhật danh sách unread của drawer bên trái real-time
-        if (!this.state.globalUnreadOrders.find(o => o.id === payload.so_id)) {
-            // Đẩy lên đầu danh sách ngầm
-            this.state.globalUnreadOrders = [
-                {
-                    id: payload.so_id,
-                    name: payload.so_name,
-                    partner_id: [0, payload.author_name || 'Khách hàng']
-                },
-                ...this.state.globalUnreadOrders
-            ];
-        }
+
+        // Cập nhật danh sách drawer realtime: có tin mới thì đưa lên đầu và bật trạng thái chưa đọc.
+        const existing = this.state.globalUnreadOrders.find(o => (o.sale_order_id && o.sale_order_id[0] === payload.so_id) || o.id === payload.so_id);
+        const headItem = {
+            id: payload.so_id,
+            sale_order_id: [payload.so_id, payload.so_name],
+            name: payload.so_name,
+            last_message_author: payload.author_name || 'Khách hàng',
+            _isRead: false,
+            _preview: this._extractPreviewText(payload.body || ''),
+        };
+        this.state.globalUnreadOrders = [
+            headItem,
+            ...this.state.globalUnreadOrders.filter(o => !((o.sale_order_id && o.sale_order_id[0] === payload.so_id) || o.id === payload.so_id)),
+        ].slice(0, 100);
         
         // Show toaster notification
         const rawBody = (payload.body || '').replace(/<[^>]+>/g, '').substring(0, 80);
         const so = this.state.saleOrders.find(o => o.id === payload.so_id);
-        if (so && !so.has_unread_message) {
+        if (so) {
             so.has_unread_message = true;
+        }
+        if (!existing || existing._isRead) {
             this.notification.add(
                 `Đơn hàng ${payload.so_name}: ${rawBody}...`,
                 {
@@ -988,6 +1076,7 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.isDrawerOpen = true;
         this.state.drawerMessages = [];
         this.state.drawerMessageText = '';
+        this.state.drawerMessageFiles = [];
         this.loadDrawerMessages(so.id);
     }
 
@@ -1004,10 +1093,6 @@ export class DeliveryPlannerDashboard extends Component {
                 }
                 return msg;
             });
-            // Mark as read after loading messages (optimistic update)
-            if (this.state.selectedOrder && this.state.selectedOrder.has_unread_message) {
-                this.state.selectedOrder.has_unread_message = false;
-            }
         } catch (e) {
             console.error('loadDrawerMessages error', e);
             this.state.drawerMessages = [];
@@ -1017,16 +1102,26 @@ export class DeliveryPlannerDashboard extends Component {
 
     async sendDrawerMessage() {
         const body = (this.state.drawerMessageText || '').trim();
-        if (!body || !this.state.selectedOrder) return;
+        const attachments = this.state.drawerMessageFiles.map((file) => ({
+            name: file.name,
+            mimetype: file.mimetype,
+            datas: file.datas,
+        }));
+        if ((!body && !attachments.length) || !this.state.selectedOrder || this.state.drawerMessageSending) return;
+
         try {
+            this.state.drawerMessageSending = true;
             await this.orm.call(
                 'hlv.delivery.planner.service', 'post_order_message',
-                [this.state.selectedOrder.id, body]
+                [this.state.selectedOrder.id, body, attachments]
             );
             this.state.drawerMessageText = '';
+            this.state.drawerMessageFiles = [];
             await this.loadDrawerMessages(this.state.selectedOrder.id);
         } catch (e) {
             console.error('sendDrawerMessage error', e);
+        } finally {
+            this.state.drawerMessageSending = false;
         }
     }
 
@@ -1035,6 +1130,91 @@ export class DeliveryPlannerDashboard extends Component {
             ev.preventDefault();
             this.sendDrawerMessage();
         }
+    }
+
+    triggerDrawerFilePicker() {
+        const picker = document.getElementById('drawer-message-file-input');
+        if (picker) {
+            picker.click();
+        }
+    }
+
+    async onDrawerFilesSelected(ev) {
+        const picker = ev.target;
+        const files = Array.from((picker && picker.files) || []);
+        if (!files.length) {
+            return;
+        }
+
+        const allowedExt = ['.doc', '.docx', '.xls', '.xlsx', '.csv'];
+        const maxFileSize = 20 * 1024 * 1024;
+        const nextFiles = [...this.state.drawerMessageFiles];
+
+        for (const file of files) {
+            const lowerName = (file.name || '').toLowerCase();
+            const ext = lowerName.includes('.') ? lowerName.slice(lowerName.lastIndexOf('.')) : '';
+            const isImage = (file.type || '').startsWith('image/');
+            const isVideo = (file.type || '').startsWith('video/');
+            const isDoc = allowedExt.includes(ext);
+
+            if (!isImage && !isVideo && !isDoc) {
+                this.notification.add(`File ${file.name} không thuộc định dạng hỗ trợ.`, { type: 'warning' });
+                continue;
+            }
+            if (file.size > maxFileSize) {
+                this.notification.add(`File ${file.name} vượt quá 20MB.`, { type: 'warning' });
+                continue;
+            }
+
+            try {
+                const datas = await this._readFileAsBase64(file);
+                nextFiles.push({
+                    uid: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+                    name: file.name,
+                    mimetype: file.type || 'application/octet-stream',
+                    size: file.size || 0,
+                    datas,
+                });
+            } catch (readErr) {
+                this.notification.add(`Không thể đọc file ${file.name}.`, { type: 'danger' });
+                console.error('read file error', readErr);
+            }
+        }
+
+        this.state.drawerMessageFiles = nextFiles;
+        picker.value = '';
+    }
+
+    _readFileAsBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const result = String(reader.result || '');
+                const commaIndex = result.indexOf(',');
+                resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    removeDrawerMessageFile(uid) {
+        this.state.drawerMessageFiles = this.state.drawerMessageFiles.filter((f) => f.uid !== uid);
+    }
+
+    formatFileSize(size) {
+        const value = Number(size || 0);
+        if (value >= 1024 * 1024) {
+            return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+        }
+        if (value >= 1024) {
+            return `${Math.round(value / 1024)} KB`;
+        }
+        return `${value} B`;
+    }
+
+    isVideoAttachment(att) {
+        return !!(att && att.mimetype && att.mimetype.indexOf('video/') === 0);
     }
 
     closeOverviewDrawer() {

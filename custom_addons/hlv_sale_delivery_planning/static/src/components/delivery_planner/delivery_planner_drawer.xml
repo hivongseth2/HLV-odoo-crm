@@ -397,6 +397,17 @@
                     </h6>
                     <!-- Send message form -->
                     <div class="d-flex gap-2 mb-3">
+                        <input id="drawer-message-file-input"
+                               type="file"
+                               class="d-none"
+                               multiple="multiple"
+                               accept=".doc,.docx,.xls,.xlsx,.csv,image/*,video/*"
+                               t-on-change="(ev) => this.onDrawerFilesSelected(ev)"/>
+                        <button class="btn btn-sm btn-outline-secondary px-2"
+                                title="Đính kèm Word, Excel, ảnh, video"
+                                t-on-click="() => this.triggerDrawerFilePicker()">
+                            <i class="fa fa-paperclip"></i>
+                        </button>
                         <textarea class="form-control form-control-sm" rows="1"
                                   placeholder="Nhập tin nhắn..."
                                   t-att-value="state.drawerMessageText"
@@ -405,9 +416,25 @@
                                   style="resize:none;min-height:36px;"/>
                         <button class="btn btn-sm btn-primary px-3"
                                 t-on-click="() => this.sendDrawerMessage()"
-                                t-att-disabled="!state.drawerMessageText || !state.drawerMessageText.trim()">
-                            <i class="fa fa-paper-plane"></i>
+                                t-att-disabled="state.drawerMessageSending || ((!state.drawerMessageText || !state.drawerMessageText.trim()) &amp;&amp; !state.drawerMessageFiles.length)">
+                            <i class="fa fa-paper-plane" t-if="!state.drawerMessageSending"></i>
+                            <i class="fa fa-spinner fa-spin" t-else=""></i>
                         </button>
+                    </div>
+                    <div t-if="state.drawerMessageFiles.length" class="d-flex flex-wrap gap-1 mb-3">
+                        <t t-foreach="state.drawerMessageFiles" t-as="file" t-key="file.uid">
+                            <span class="badge bg-light text-dark border d-inline-flex align-items-center gap-1 px-2 py-1">
+                                <i class="fa fa-paperclip text-muted"></i>
+                                <span class="small"><t t-esc="file.name"/></span>
+                                <span class="small text-muted">(<t t-esc="this.formatFileSize(file.size)"/>)</span>
+                                <button type="button"
+                                        class="btn btn-sm btn-link text-danger p-0 ms-1"
+                                        title="Bỏ file"
+                                        t-on-click="() => this.removeDrawerMessageFile(file.uid)">
+                                    <i class="fa fa-times"></i>
+                                </button>
+                            </span>
+                        </t>
                     </div>
                     <!-- Message list -->
                     <div style="max-height:500px;overflow-y:auto;-webkit-overflow-scrolling:touch;" class="border rounded bg-white">
@@ -436,6 +463,11 @@
                                             <a t-if="att.mimetype and att.mimetype.indexOf('image/') === 0"
                                                t-att-href="'/web/image/' + att.id" target="_blank">
                                                 <img t-att-src="'/web/image/' + att.id" style="width:60px;height:60px;object-fit:cover;border-radius:4px;border:1px solid #e2e8f0;" loading="lazy"/>
+                                            </a>
+                                            <a t-elif="this.isVideoAttachment(att)"
+                                               class="badge bg-light text-dark border text-decoration-none"
+                                               t-att-href="'/web/content/' + att.id" target="_blank">
+                                                <i class="fa fa-video-camera me-1"></i><t t-esc="att.name"/>
                                             </a>
                                             <a t-else="" class="badge bg-light text-dark border text-decoration-none"
                                                t-att-href="'/web/content/' + att.id + '?download=true'" target="_blank">
@@ -497,14 +529,24 @@
                  <div t-else="" class="list-group list-group-flush">
                       <t t-foreach="state.globalUnreadOrders" t-as="uo" t-key="uo.id">
                           <button type="button" class="list-group-item list-group-item-action p-3"
-                                  t-on-click="() => this.openDrawerFromMessageList(uo.id)">
+                                  t-att-class="uo._isRead ? 'opacity-50' : ''"
+                                  t-on-click="() => this.openDrawerFromMessageList(uo.sale_order_id ? uo.sale_order_id[0] : uo.id)">
                               <div class="d-flex w-100 justify-content-between mb-1">
-                                  <h6 class="mb-0 fw-bold text-primary"><t t-esc="uo.name"/></h6>
-                                  <small class="text-danger"><i class="fa fa-circle" style="font-size:0.6rem;"></i> Chưa đọc</small>
+                                  <h6 class="mb-0 fw-bold" t-att-class="uo._isRead ? 'text-muted' : 'text-primary'"><t t-esc="uo.name"/></h6>
+                                  <small t-att-class="uo._isRead ? 'text-muted' : 'text-danger'">
+                                      <i class="fa" t-att-class="uo._isRead ? 'fa-check-circle' : 'fa-circle'" style="font-size:0.6rem;"></i>
+                                      <t t-esc="uo._isRead ? 'Đã xem' : 'Chưa đọc'"/>
+                                  </small>
                               </div>
                               <p class="mb-1 small text-muted">
-                                  <i class="fa fa-user me-1"/> 
-                                  <t t-esc="uo.partner_id ? uo.partner_id[1] : 'Khách hàng'"/>
+                                  <i class="fa fa-user me-1"/>
+                                  <t t-esc="uo.last_message_author || 'Khách hàng'"/>
+                              </p>
+                              <p t-if="uo._preview" class="mb-0 small fst-italic"
+                                 t-att-class="uo._isRead ? 'text-muted' : 'text-dark'"
+                                 style="white-space: normal; word-break: break-word; line-height: 1.35;">
+                                  <i class="fa fa-comment-o me-1 text-muted"></i>
+                                  <t t-esc="uo._preview"/>
                               </p>
                           </button>
                       </t>
