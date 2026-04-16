@@ -109,7 +109,25 @@ export class DeliveryPlannerDashboard extends Component {
             drawerMessageText: '',
         });
 
+        this.notification = useService("notification");
+        try {
+            this.busService = useService("bus_service");
+        } catch (e) {
+            console.warn("bus_service not available");
+        }
+
         onWillStart(async () => {
+            if (this.busService) {
+                this.busService.addChannel("delivery_planner_channel");
+                this.busService.addEventListener("notification", ({ detail: notifications }) => {
+                    for (const { payload, type } of notifications) {
+                        if (type === "new_portal_message") {
+                            this.onNewPortalMessage(payload);
+                        }
+                    }
+                });
+            }
+
             const [, reports] = await Promise.all([
                 this.fetchData(),
                 this.orm.searchRead(
@@ -122,6 +140,44 @@ export class DeliveryPlannerDashboard extends Component {
             this.state.pickingReports = reports;
         });
     }
+
+    async onNewPortalMessage(payload) {
+        // payload: {so_id, so_name, author_name, body}
+        
+        // Show toaster notification
+        const rawBody = (payload.body || '').replace(/<[^>]+>/g, '').substring(0, 80);
+        this.notification.add(
+            `Đơn hàng ${payload.so_name}: ${rawBody}...`,
+            {
+                type: "info",
+                title: `Khách hàng ${payload.author_name} vừa nhắn tin`,
+                buttons: [
+                    {
+                        name: "Xem đơn hàng",
+                        onClick: async () => {
+                            // Cập nhật ngầm để load message mới
+                            await this.fetchData();
+                            const so = this.state.saleOrders.find(o => o.id === payload.so_id);
+                            if (so) {
+                                this.openOverviewDrawer(so);
+                            } else {
+                                // Fallback form
+                                this.openSaleOrder(payload.so_id);
+                            }
+                        },
+                        primary: true,
+                    }
+                ]
+            }
+        );
+
+        // Update local state without full reload
+        const so = this.state.saleOrders.find(o => o.id === payload.so_id);
+        if (so) {
+            so.has_unread_message = true;
+        }
+    }
+
 
     async fetchData() {
         this.state.isLoading = true;

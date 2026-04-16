@@ -1235,6 +1235,18 @@ class SalePlanPublicController(http.Controller):
             # Kích hoạt trạng thái nháy đỏ Notification FB 
             if hasattr(so, 'x_plan_unread_message'):
                 so.sudo().write({'x_plan_unread_message': True})
+            
+            # Send real-time bus notification to the delivery planner dashboard
+            try:
+                request.env['bus.bus'].sudo()._sendone('delivery_planner_channel', 'new_portal_message', {
+                    'so_id': so.id,
+                    'so_name': so.name,
+                    'author_name': author_name or 'Khách hàng',
+                    'body': body
+                })
+            except Exception as e:
+                _logger.warning(f"Delivery Planner Bus send error: {e}")
+
             return {'status': 'success'}
         except Exception as e:
             _logger.exception('send_message error')
