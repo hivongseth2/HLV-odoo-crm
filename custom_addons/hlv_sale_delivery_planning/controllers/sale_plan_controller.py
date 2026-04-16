@@ -150,7 +150,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 /* Kanban */
 .kanban-col{min-width:280px;max-width:420px;flex:0 1 auto}
 .kanban-col .card-header{font-size:.85rem}
-.kanban-wrapper{width:100%;overflow-x:auto;overflow-y:hidden;margin-left:-1rem;margin-right:-1rem;padding-left:1rem;padding-right:1rem;-webkit-overflow-scrolling:touch}
+.kanban-wrapper{width:100%;overflow-x:auto:hidden;margin-left:-1rem;margin-right:-1rem;padding-left:1rem;padding-right:1rem;-webkit-overflow-scrolling:touch}
 #kanban-view{display:flex;flex-wrap:nowrap;gap:1rem;width:fit-content}
 /* Cards */
 .so-card{border-width:1px!important;transition:.1s}
@@ -231,7 +231,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
     </ul>
   </div>
 </div></nav>
-<div class="container-fluid px-3">
+<div class="px-3">
 <!-- KPI row 1 -->
 <div class="row g-2 mb-2">
   <div class="col-6 col-md-3"><div class="card kpi-main kpi-bg-total"><div class="kpi-label">Đơn hàng</div><div class="kpi-val" id="kpi-total">0</div><i class="fa fa-boxes-stacked kpi-icon"></i></div></div>
@@ -374,7 +374,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 <div id="list-view" class="d-none">
 <div class="table-responsive"><table class="table table-hover table-sm table-bordered table-lines align-middle">
 <thead class="table-light"><tr>
-  <th>Đơn hàng</th><th>Khách hàng</th><th>Kho</th><th>Ngày đặt</th>
+  <th>Đơn hàng</th><th>Khách hàng</th><th>Kho</th><th>Ngày đặt</th> 
   <th>Giao dự kiến</th><th>Tổng tiền</th><th>Giao hàng</th><th>Tồn kho</th><th>Đóng kiện</th>
 </tr></thead><tbody id="tbl-body"></tbody>
 </table></div></div>
