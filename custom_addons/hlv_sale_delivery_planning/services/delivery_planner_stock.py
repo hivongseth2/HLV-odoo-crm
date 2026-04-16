@@ -1,4 +1,6 @@
 from odoo import models
+import pytz
+from odoo.fields import Date as OdooDate
 
 
 class DeliveryPlannerServiceStock(models.AbstractModel):
@@ -12,8 +14,8 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         filter_done_date_from='', filter_done_date_to='',
     ):
         """
-        Lọc SO theo PO (nếu có filter PO), tính stock_status và packing_status
-        cho từng SO, trả về danh sách ID khớp và dashboard stats.
+        Phase 3 optimization: thay thế ORM loop per-SO bằng ~11 batch SQL queries cố định.
+        Không còn N×M queries hay for-loop với ORM access per SO.
         """
         # --- 1. Lọc theo tiêu chí PO (nếu có) ---
         if po_date_from or po_date_to or (po_status and po_status != 'all'):
@@ -24,81 +26,140 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 po_domain.append(('date_planned', '<=', po_date_to + ' 23:59:59'))
             if po_status and po_status != 'all':
                 po_domain.append(('receipt_status', '=', po_status))
-
             matching_pos = self.env['purchase.order'].search_read(po_domain, ['origin'])
-            origins = list(set([po['origin'] for po in matching_pos if po['origin']]))
+            origins = list({po['origin'] for po in matching_pos if po['origin']})
             sales = sales.filtered(lambda s: s.name in origins)
 
         # --- 1b. Lọc theo ngày hoàn thành (date_done của phiếu OUT) ---
         if filter_done_date_from or filter_done_date_to:
-            import pytz
             from datetime import datetime
             _tz = pytz.timezone(self.env.context.get('tz') or self.env.user.tz or 'Asia/Ho_Chi_Minh')
-            picking_domain = [
-                ('picking_type_code', '=', 'outgoing'),
-                ('state', '=', 'done'),
-                ('sale_id', 'in', sales.ids),
-            ]
+            pk_dom = [('picking_type_code', '=', 'outgoing'), ('state', '=', 'done'), ('sale_id', 'in', sales.ids)]
             if filter_done_date_from:
-                local_from = _tz.localize(datetime.strptime(filter_done_date_from, '%Y-%m-%d'))
-                utc_from = local_from.astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
-                picking_domain.append(('date_done', '>=', utc_from))
+                utc_from = _tz.localize(datetime.strptime(filter_done_date_from, '%Y-%m-%d')).astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
+                pk_dom.append(('date_done', '>=', utc_from))
             if filter_done_date_to:
-                local_to = _tz.localize(datetime.strptime(filter_done_date_to, '%Y-%m-%d').replace(
-                    hour=23, minute=59, second=59))
-                utc_to = local_to.astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
-                picking_domain.append(('date_done', '<=', utc_to))
-            done_pickings = self.env['stock.picking'].search(picking_domain)
-            done_so_ids = set(done_pickings.mapped('sale_id').ids)
+                utc_to = _tz.localize(datetime.strptime(filter_done_date_to, '%Y-%m-%d').replace(hour=23, minute=59, second=59)).astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
+                pk_dom.append(('date_done', '<=', utc_to))
+            done_so_ids = set(self.env['stock.picking'].search(pk_dom).mapped('sale_id').ids)
             sales = sales.filtered(lambda s: s.id in done_so_ids)
 
-        all_order_lines = sales.mapped('order_line').filtered(
-            lambda l: not l.display_type and l.product_id and l.product_id.type != 'service'
+        _empty = {'total': 0, 'ready': 0, 'partial': 0, 'out_of_stock': 0,
+                  'packing_fully': 0, 'packing_partial': 0, 'packing_unpacked': 0, 'packing_waiting': 0}
+        if not sales:
+            return sales, [], _empty, {}, {}
+
+        so_ids = sales.ids
+        today_date = OdooDate.context_today(self)
+        user_tz = pytz.timezone(self.env.context.get('tz') or self.env.user.tz or 'Asia/Ho_Chi_Minh')
+
+        # ====== PHASE 1: Batch load TẤT CẢ data cần thiết ======
+
+        # [A] SO metadata — 1 query
+        so_mf = set(self.env['sale.order']._fields.keys())
+        so_rf = ['id', 'warehouse_id'] + [f for f in [
+            'x_picking_slip_printed', 'x_studio_misa_order_date', 'date_order', 'x_plan_unread_message',
+        ] if f in so_mf]
+        so_data = {r['id']: r for r in sales.read(so_rf)}
+
+        # [B] Order lines (product lines only, bỏ section/note) — 1 query
+        line_recs = self.env['sale.order.line'].search_read(
+            [('order_id', 'in', so_ids), ('display_type', '=', False)],
+            ['id', 'order_id', 'product_id', 'product_uom_qty', 'qty_delivered'],
         )
-        active_moves = self.env['stock.move'].sudo().search([
-            ('sale_line_id', 'in', all_order_lines.ids),
-            ('state', 'not in', ('cancel', 'done')),
-        ])
+        all_line_ids = [r['id'] for r in line_recs]
+        line_to_so = {r['id']: r['order_id'][0] for r in line_recs}
+        lines_by_so = {}
+        for r in line_recs:
+            lines_by_so.setdefault(r['order_id'][0], []).append(r)
 
-        # --- 2. Tính tồn kho khả dụng theo kho + sản phẩm ---
+        # [C] Product type + tmpl_id — 1 query
+        all_pid_set = {r['product_id'][0] for r in line_recs if r.get('product_id')}
+        product_map = {}
+        if all_pid_set:
+            for r in self.env['product.product'].sudo().search_read(
+                [('id', 'in', list(all_pid_set))], ['id', 'type', 'product_tmpl_id'],
+            ):
+                product_map[r['id']] = r
+
+        # [D] Kit BOMs — 1 query
+        all_tmpl_ids = list({
+            product_map[pid]['product_tmpl_id'][0]
+            for pid in all_pid_set
+            if pid in product_map and product_map[pid].get('product_tmpl_id')
+        })
+        kits = self.env['mrp.bom'].sudo().search([
+            ('product_tmpl_id', 'in', all_tmpl_ids), ('type', '=', 'phantom'),
+        ]) if all_tmpl_ids else self.env['mrp.bom']
+        kit_tmpl_ids = set(kits.mapped('product_tmpl_id').ids)
+
+        # [E] Active moves per sale line — 1 query
+        move_recs = self.env['stock.move'].sudo().search_read(
+            [('sale_line_id', 'in', all_line_ids), ('state', 'not in', ('cancel', 'done'))],
+            ['id', 'sale_line_id', 'product_id', 'quantity', 'product_uom_qty'],
+        ) if all_line_ids else []
+        moves_by_line = {}
+        line_reserved_qty = {}
+        for mv in move_recs:
+            lid = mv['sale_line_id'][0]
+            moves_by_line.setdefault(lid, []).append(mv)
+            line_reserved_qty[lid] = line_reserved_qty.get(lid, 0.0) + (mv['quantity'] or 0)
+
+        # [F] Pickings (tất cả trạng thái) — 1 query
+        pick_mf = set(self.env['stock.picking']._fields.keys())
+        pick_opt = [f for f in ['x_printed', 'shipper_received', 'shipper_returned'] if f in pick_mf]
+        pick_fields = ['id', 'sale_id', 'state', 'picking_type_code', 'date_done',
+                       'return_id', 'picking_type_id'] + pick_opt
+        pick_recs = self.env['stock.picking'].sudo().search_read([('sale_id', 'in', so_ids)], pick_fields)
+
+        # [G] Picking type sequence codes — 1 query
+        pt_ids = list({r['picking_type_id'][0] for r in pick_recs if r.get('picking_type_id')})
+        pt_map = {r['id']: (r.get('sequence_code') or '').upper()
+                  for r in self.env['stock.picking.type'].sudo().search_read(
+                      [('id', 'in', pt_ids)], ['id', 'sequence_code'])} if pt_ids else {}
+        for p in pick_recs:
+            pt_id = p['picking_type_id'][0] if p.get('picking_type_id') else None
+            p['seq_code'] = pt_map.get(pt_id, '')
+        pickings_by_so = {}
+        for p in pick_recs:
+            sale_id = p['sale_id'][0] if p.get('sale_id') else None
+            if sale_id:
+                pickings_by_so.setdefault(sale_id, []).append(p)
+
+        # [H] Build product_qty_cache + batch quant queries (1 location + 1 quant + 1 int_moves)
         product_qty_cache = {}
-        for so in sales:
-            if so.warehouse_id:
-                w_id = so.warehouse_id.id
-                if w_id not in product_qty_cache:
-                    product_qty_cache[w_id] = set()
-                for line in so.order_line:
-                    if not line.display_type and line.product_id:
-                        product_qty_cache[w_id].add(line.product_id.id)
-                # Bổ sung các sản phẩm thành phần của Combo/Kit
-                for move in active_moves.filtered(lambda m: m.sale_line_id.order_id.id == so.id):
-                    if move.product_id:
-                        product_qty_cache[w_id].add(move.product_id.id)
+        for r in line_recs:
+            pid = r['product_id'][0] if r.get('product_id') else None
+            if not pid or product_map.get(pid, {}).get('type') == 'service':
+                continue
+            wh_raw = so_data.get(r['order_id'][0], {}).get('warehouse_id')
+            wh_id = wh_raw[0] if isinstance(wh_raw, (list, tuple)) else wh_raw
+            if wh_id:
+                product_qty_cache.setdefault(wh_id, set()).add(pid)
+        for mv in move_recs:  # Bổ sung Kit components
+            pid = mv['product_id'][0] if mv.get('product_id') else None
+            so_key = line_to_so.get(mv['sale_line_id'][0])
+            if pid and so_key:
+                wh_raw = so_data.get(so_key, {}).get('warehouse_id')
+                wh_id = wh_raw[0] if isinstance(wh_raw, (list, tuple)) else wh_raw
+                if wh_id:
+                    product_qty_cache.setdefault(wh_id, set()).add(pid)
 
-        # --- 2. Batch load tồn kho khả dụng (ONE batch thay vì N queries per warehouse) ---
         all_prod_ids_needed = set()
         for prods in product_qty_cache.values():
             all_prod_ids_needed.update(prods)
-
-        # Kho cần load: kho của SO + tất cả kho DB nếu đang filter chuyển kho
         all_needed_wh_ids = set(product_qty_cache.keys())
         if filter_need_transfer and all_prod_ids_needed:
             all_needed_wh_ids |= set(self.env['stock.warehouse'].search([]).ids)
 
         product_availabilities = {}
-        loc_to_wh_id = {}  # {location_id: warehouse_id}
+        loc_to_wh_id = {}
         if all_prod_ids_needed and all_needed_wh_ids:
             all_wh_objs = self.env['stock.warehouse'].browse(list(all_needed_wh_ids))
             root_loc_ids = [wh.lot_stock_id.id for wh in all_wh_objs if wh.lot_stock_id]
-
-            # ONE query: tất cả child locations của tất cả kho cần dùng
             all_child_locs = self.env['stock.location'].sudo().search([
-                ('id', 'child_of', root_loc_ids),
-                ('usage', '=', 'internal'),
+                ('id', 'child_of', root_loc_ids), ('usage', '=', 'internal'),
             ]) if root_loc_ids else self.env['stock.location']
-
-            # Build loc → warehouse map qua parent_path (Python, chạy 1 lần)
-            # Dùng find() để chọn warehouse có lot_stock_id SÂU NHẤT trong cây vị trí
             for loc in all_child_locs:
                 if not loc.parent_path:
                     continue
@@ -111,48 +172,32 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                         best_pos, best_wh_id = pos, wh.id
                 if best_wh_id is not None:
                     loc_to_wh_id[loc.id] = best_wh_id
-
-            all_child_loc_ids = list(loc_to_wh_id.keys())
-
-            # ONE query: quant theo (product, location) → gộp theo warehouse trong Python
-            if all_child_loc_ids:
-                quant_rows = self.env['stock.quant'].sudo().read_group(
-                    domain=[
-                        ('product_id', 'in', list(all_prod_ids_needed)),
-                        ('location_id', 'in', all_child_loc_ids),
-                    ],
+            all_cloc_ids = list(loc_to_wh_id.keys())
+            if all_cloc_ids:
+                for row in self.env['stock.quant'].sudo().read_group(
+                    domain=[('product_id', 'in', list(all_prod_ids_needed)), ('location_id', 'in', all_cloc_ids)],
                     fields=['product_id', 'location_id', 'quantity:sum', 'reserved_quantity:sum'],
                     groupby=['product_id', 'location_id'],
-                )
-                for row in quant_rows:
+                ):
                     pid = row['product_id'][0]
                     wh_id = loc_to_wh_id.get(row['location_id'][0])
-                    if wh_id is None:
-                        continue
-                    free = max(
-                        (row.get('quantity') or 0.0) - (row.get('reserved_quantity') or 0.0), 0.0
-                    )
-                    key = (pid, wh_id)
-                    product_availabilities[key] = product_availabilities.get(key, 0.0) + free
-
-            # Fill zeros: product/kho hiện tại không xuất hiện trong quant
+                    if wh_id:
+                        free = max((row.get('quantity') or 0) - (row.get('reserved_quantity') or 0), 0.0)
+                        key = (pid, wh_id)
+                        product_availabilities[key] = product_availabilities.get(key, 0.0) + free
             for wh_id, prod_ids in product_qty_cache.items():
                 for pid in prod_ids:
                     if (pid, wh_id) not in product_availabilities:
                         product_availabilities[(pid, wh_id)] = 0.0
-
-            # ONE query: cộng lại qty giữ bởi internal transfers
-            # (Odoo sẽ unreserve internal khi SO cần → hàng đó vẫn "khả dụng" cho SO)
-            if all_child_loc_ids:
-                int_moves = self.env['stock.move'].sudo().search_read([
+            if all_cloc_ids:
+                for mv in self.env['stock.move'].sudo().search_read([
                     ('product_id', 'in', list(all_prod_ids_needed)),
                     ('state', 'in', ('assigned', 'partially_available')),
                     ('picking_id.picking_type_code', '=', 'internal'),
                     ('picking_id.state', 'not in', ('done', 'cancel')),
                     ('sale_line_id', '=', False),
-                    ('location_id', 'in', all_child_loc_ids),
-                ], ['product_id', 'location_id', 'quantity'])
-                for mv in int_moves:
+                    ('location_id', 'in', all_cloc_ids),
+                ], ['product_id', 'location_id', 'quantity']):
                     pid = mv['product_id'][0]
                     wh_id = loc_to_wh_id.get(mv['location_id'][0])
                     if wh_id:
@@ -160,146 +205,79 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                         if key in product_availabilities:
                             product_availabilities[key] += mv['quantity']
 
-        # --- 3. Số lượng đang giữ (reserved) theo dòng SO ---
-        line_reserved_qty = {}
-        for m in active_moves:
-            s_id = m.sale_line_id.id
-            line_reserved_qty[s_id] = line_reserved_qty.get(s_id, 0.0) + m.quantity
+        all_warehouse_ids = set(k[1] for k in product_availabilities.keys())
 
-        # --- 4. Tính số lượng đã đóng gói theo PHẦN CÒN PENDING của từng dòng SO ---
-        # Mục tiêu: không để hàng đã giao xong ở các dòng khác làm phình packed_qty của đơn.
-        pending_qty_by_line = {}
-        for line in sales.mapped('order_line'):
-            if line.display_type or not line.product_id:
-                continue
-            if line.product_id.type == 'service':
-                continue
-            pending_qty = line.product_uom_qty - line.qty_delivered
-            if pending_qty > 0:
-                pending_qty_by_line[line.id] = pending_qty
-
-        all_picking_ids = sales.mapped('picking_ids').ids
+        # [I] Packed quantities — 1 query
+        all_pick_ids = [p['id'] for p in pick_recs]
+        pending_line_ids = {
+            r['id'] for r in line_recs
+            if r.get('product_id')
+            and product_map.get(r['product_id'][0], {}).get('type') != 'service'
+            and ((r.get('product_uom_qty') or 0) - (r.get('qty_delivered') or 0)) > 0
+        }
         packed_qty_by_so = {}
-        if all_picking_ids and pending_qty_by_line:
-            mls = self.env['stock.move.line'].sudo().search([
-                ('picking_id', 'in', all_picking_ids),
+        if all_pick_ids and pending_line_ids:
+            mls = self.env['stock.move.line'].sudo().search_read([
+                ('picking_id', 'in', all_pick_ids),
                 ('picking_id.picking_type_code', '=', 'outgoing'),
                 ('picking_id.state', 'not in', ['done', 'cancel']),
                 ('result_package_id', '!=', False),
                 ('state', 'not in', ['cancel', 'draft']),
-                ('move_id.sale_line_id', 'in', list(pending_qty_by_line.keys())),
-            ])
-
-            # Gộp theo line để có thể cap theo pending từng dòng.
+                ('move_id.sale_line_id', 'in', list(pending_line_ids)),
+            ], ['picking_id', 'move_id', 'quantity'])
+            mv_id_to_line = {mv['id']: mv['sale_line_id'][0] for mv in move_recs if mv.get('sale_line_id')}
+            pk_id_to_so = {p['id']: p['sale_id'][0] for p in pick_recs if p.get('sale_id')}
+            pend_qty_by_line = {
+                r['id']: (r.get('product_uom_qty') or 0) - (r.get('qty_delivered') or 0)
+                for r in line_recs if r['id'] in pending_line_ids
+            }
             packed_by_line = {}
-            so_by_line = {}
             for ml in mls:
-                line_id = ml.move_id.sale_line_id.id
-                if not line_id:
+                mv_val = ml['move_id']
+                mv_id = mv_val[0] if isinstance(mv_val, (list, tuple)) else mv_val
+                lid = mv_id_to_line.get(mv_id)
+                if not lid or lid not in pending_line_ids:
                     continue
-                so_id = ml.picking_id.sale_id.id if ml.picking_id.sale_id else False
-                if not so_id:
-                    continue
-                packed_by_line[line_id] = packed_by_line.get(line_id, 0.0) + float(ml.quantity)
-                so_by_line[line_id] = so_id
+                pk_val = ml['picking_id']
+                so_key = pk_id_to_so.get(pk_val[0] if isinstance(pk_val, (list, tuple)) else pk_val)
+                if so_key:
+                    packed_by_line[lid] = packed_by_line.get(lid, 0.0) + float(ml['quantity'] or 0)
+            for lid, packed in packed_by_line.items():
+                so_key = line_to_so.get(lid)
+                if so_key:
+                    packed_qty_by_so[so_key] = packed_qty_by_so.get(so_key, 0.0) + min(packed, pend_qty_by_line.get(lid, 0.0))
 
-            for line_id, packed_qty in packed_by_line.items():
-                so_id = so_by_line.get(line_id)
-                if not so_id:
-                    continue
-                capped_qty = min(packed_qty, pending_qty_by_line.get(line_id, 0.0))
-                packed_qty_by_so[so_id] = packed_qty_by_so.get(so_id, 0.0) + capped_qty
-
-        # --- 5. Nhận diện sản phẩm Kit (phantom BOM) ---
-        all_product_tmpl_ids = sales.mapped('order_line.product_id.product_tmpl_id').ids
-        kits = self.env['mrp.bom'].sudo().search([
-            ('product_tmpl_id', 'in', all_product_tmpl_ids),
-            ('type', '=', 'phantom'),
-        ])
-        kit_tmpl_ids = set(kits.mapped('product_tmpl_id').ids)
-
-        # --- 6. Tính stock_status + packing_status cho từng SO ---
-        # Tập warehouse IDs để kiểm tra chuyển kho nhanh (kh&ocirc;ng query th&ecirc;m)
-        # Phải l&agrave; TẤT CẢ c&aacute;c kho, kh&ocirc;ng chỉ c&aacute;c kho trong filter,
-        # để filter_need_transfer hoạt động đ&uacute;ng khi kết hợp với filter kho.
-        all_warehouse_ids = set(k[1] for k in product_availabilities.keys())
-
-        # (đã xử lý upfront trong batch load ở trên — không cần bổ sung)
-
+        # ====== PHASE 2: Status computation — pure Python dict lookups, ZERO extra queries ======
         matched_sale_ids = []
-        dashboard_stats = {
-            'total': 0, 'ready': 0, 'partial': 0, 'out_of_stock': 0,
-            'packing_fully': 0, 'packing_partial': 0,
-            'packing_unpacked': 0, 'packing_waiting': 0,
-        }
         so_status_dict = {}
         so_meta_dict = {}
 
-        # Tính today 1 lần ngoài vòng lặp cho filter_new_orders + delivered_today
-        from odoo.fields import Date as OdooDate
-        from odoo.fields import Datetime as OdooDatetime
-        import pytz
-        today_date = OdooDate.context_today(self)
-        # Timezone để convert date_done (UTC) sang local date
-        user_tz = pytz.timezone(self.env.context.get('tz') or self.env.user.tz or 'Asia/Ho_Chi_Minh')
+        for so_id in so_ids:
+            so_rec = so_data.get(so_id, {})
+            wh_raw = so_rec.get('warehouse_id')
+            wh_id = wh_raw[0] if isinstance(wh_raw, (list, tuple)) else wh_raw
+            pickings = pickings_by_so.get(so_id, [])
+            lines = lines_by_so.get(so_id, [])
 
-        # FIX #3: Prefetch toàn bộ các field cần trong vòng lặp chính — batch 1 SQL mỗi field.
-        # Không prefetch: mỗi so.picking_ids trong loop = 1 query riêng.
-        # Core fields luôn tồn tại trên stock.picking
-        picking_core_fields = [
-            'state', 'picking_type_code', 'picking_type_id', 'return_id',
-            'date_done', 'sale_id', 'move_ids',
-        ]
-        # Optional fields từ module hlv_sale_delivery_planning / hlv_barcode_shipper
-        picking_optional_fields = ['x_printed', 'shipper_received', 'shipper_returned', 'shipper_received_by']
-        picking_model_fields = set(self.env['stock.picking']._fields.keys())
-        picking_safe_fields = picking_core_fields + [
-            f for f in picking_optional_fields if f in picking_model_fields
-        ]
-
-        all_pickings = sales.mapped('picking_ids')
-        if all_pickings:
-            all_pickings.read(picking_safe_fields)     # batch-load vào cache
-            all_pickings.mapped('picking_type_id').read(['sequence_code', 'code'])
-            # Prefetch move_ids fields để tránh lazy load trong loop
-            all_pickings.mapped('move_ids').read(['state', 'product_id', 'quantity', 'product_uom_qty', 'sale_line_id'])
-
-        # Prefetch order_line fields
-        sales.mapped('order_line').read([
-            'product_id', 'product_uom_qty', 'qty_delivered', 'display_type',
-        ])
-
-        for so in sales:
-            # --- Phát hiện đơn "trả hàng / dừng": không còn outflow nào active ---
-            # Luồng xuất = pick/pack/out (code = internal hoặc outgoing), loại trừ phiếu nhập (incoming).
-            # Phiếu trả hàng (return_id != False) không tính là outflow thật — chúng chỉ đảo ngược hàng.
-            active_outflow = so.picking_ids.filtered(
-                lambda p: p.state not in ('done', 'cancel')
-                and p.picking_type_code in ('outgoing', 'internal')
-                and not p.return_id  # Loại bỏ phiếu trả hàng
-            )
+            active_outflow = [
+                p for p in pickings
+                if p['state'] not in ('done', 'cancel')
+                and p['picking_type_code'] in ('outgoing', 'internal')
+                and not p.get('return_id')
+            ]
             has_any_outflow = any(
-                p.picking_type_code in ('outgoing', 'internal') and not p.return_id
-                for p in so.picking_ids
+                p['picking_type_code'] in ('outgoing', 'internal') and not p.get('return_id')
+                for p in pickings
             )
-            # Đơn "trả hàng / dừng": đã từng có outflow nhưng không còn cái nào active
             no_active_outflow = has_any_outflow and not bool(active_outflow)
-
-            # Tính has_delivered_today SỚM (trước no_active_outflow skip)
-            # date_done lưu UTC → convert sang timezone local trước khi so sánh ngày
             has_delivered_today = any(
-                p.state == 'done'
-                and p.date_done
-                and p.date_done.replace(tzinfo=pytz.utc).astimezone(user_tz).date() == today_date
-                for p in so.picking_ids
-                if p.picking_type_code == 'outgoing' and not p.return_id
+                p['state'] == 'done' and p.get('date_done')
+                and p['date_done'].replace(tzinfo=pytz.utc).astimezone(user_tz).date() == today_date
+                for p in pickings
+                if p['picking_type_code'] == 'outgoing' and not p.get('return_id')
             )
-
-            # Khi không bật "hiện đơn đã giao": ẩn hoàn toàn các đơn này
-            # NGOẠI TRỪ: đơn có phiếu OUT done hôm nay → hiện trong cột "Đã giao trong ngày"
-            # NGOẠI TRỪ: user đang filter theo ngày hoàn thành → đơn đã pass filter 1b
-            if not show_completed and no_active_outflow and not has_delivered_today \
-                    and not filter_done_date_from and not filter_done_date_to:
+            if (not show_completed and no_active_outflow and not has_delivered_today
+                    and not filter_done_date_from and not filter_done_date_to):
                 continue
 
             has_pending = False
@@ -308,100 +286,80 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             is_fully_ready = True
             total_pending, total_avail = 0, 0
 
-            for line in so.order_line:
-                if line.display_type or not line.product_id:
+            for line in lines:
+                pid = line['product_id'][0] if line.get('product_id') else None
+                if not pid:
                     continue
-                p_type = line.product_id.type
-                is_kit = line.product_id.product_tmpl_id.id in kit_tmpl_ids
-                if p_type == 'service':
+                pdata = product_map.get(pid, {})
+                if pdata.get('type') == 'service':
                     continue
-
                 has_storable_line = True
-                if line.qty_delivered > 0:
+                tmpl_raw = pdata.get('product_tmpl_id')
+                p_tmpl_id = tmpl_raw[0] if isinstance(tmpl_raw, (list, tuple)) else tmpl_raw
+                is_kit = bool(p_tmpl_id and p_tmpl_id in kit_tmpl_ids)
+                qty_del = line.get('qty_delivered') or 0
+                qty_ord = line.get('product_uom_qty') or 0
+                if qty_del > 0:
                     has_delivered = True
-
-                pending_qty = line.product_uom_qty - line.qty_delivered
-                if pending_qty > 0:
-                    has_pending = True
-                    total_pending += pending_qty
-                    
-                    if is_kit:
-                        # Bóc tách thành phần của Kit từ active_moves đã duyệt
-                        cmp_moves = active_moves.filtered(lambda m: m.sale_line_id.id == line.id)
-                        if not cmp_moves:
-                            is_fully_ready = False
-                        else:
-                            for cm in cmp_moves:
-                                c_pending = cm.product_uom_qty
-                                if c_pending > 0:
-                                    c_base_free = product_availabilities.get((cm.product_id.id, so.warehouse_id.id), 0.0)
-                                    c_reserved = cm.quantity
-                                    c_avail = c_base_free + c_reserved
-                                    if c_avail > 0:
-                                        total_avail += min(c_avail, c_pending)
-                                    if c_avail < c_pending:
-                                        is_fully_ready = False
+                pending_qty = qty_ord - qty_del
+                if pending_qty <= 0:
+                    continue
+                has_pending = True
+                total_pending += pending_qty
+                if is_kit:
+                    cmp_moves = moves_by_line.get(line['id'], [])
+                    if not cmp_moves:
+                        is_fully_ready = False
                     else:
-                        base_free = product_availabilities.get(
-                            (line.product_id.id, so.warehouse_id.id), 0.0
-                        )
-                        reserved_here = line_reserved_qty.get(line.id, 0.0)
-                        qty_avail = base_free + reserved_here
-                        if qty_avail > 0:
-                            total_avail += min(qty_avail, pending_qty)
-                        if qty_avail < pending_qty:
-                            is_fully_ready = False
+                        for cm in cmp_moves:
+                            c_pid = cm['product_id'][0] if cm.get('product_id') else None
+                            c_pending = cm.get('product_uom_qty') or 0
+                            if c_pending > 0 and c_pid and wh_id:
+                                c_avail = product_availabilities.get((c_pid, wh_id), 0.0) + (cm.get('quantity') or 0)
+                                if c_avail > 0:
+                                    total_avail += min(c_avail, c_pending)
+                                if c_avail < c_pending:
+                                    is_fully_ready = False
+                else:
+                    base_free = product_availabilities.get((pid, wh_id), 0.0) if wh_id else 0.0
+                    qty_avail = base_free + line_reserved_qty.get(line['id'], 0.0)
+                    if qty_avail > 0:
+                        total_avail += min(qty_avail, pending_qty)
+                    if qty_avail < pending_qty:
+                        is_fully_ready = False
 
-            if has_pending:
-                stock_status = 'ready' if is_fully_ready else (
-                    'partial_ready' if total_avail > 0 else 'out_of_stock'
-                )
-            else:
-                stock_status = 'delivered'
+            stock_status = ('ready' if is_fully_ready else (
+                'partial_ready' if total_avail > 0 else 'out_of_stock'
+            )) if has_pending else 'delivered'
 
-            # Kiểm tra nhanh: có kho khác tồn trữ sản phẩm đang thiếu không?
-            # Dùng product_availabilities đã tính sẵn → không tốn thêm query.
-            # QUAN TRỌNG: phải check products_with_active_demand (giống _compute_transfer_suggestions)
-            # để đảm bảo filter "Cần chuyển kho" khớp với đề xuất trong drawer.
             has_transfer_option = False
-            if filter_need_transfer and stock_status != 'ready':
-                dest_wh_id = so.warehouse_id.id
-                # Chỉ xét SP có stock move active trong picking (khớp formatter)
-                active_pks = so.picking_ids.filtered(
-                    lambda p: p.state not in ('done', 'cancel') and not p.return_id
-                )
-                products_with_demand = set()
-                for pk in active_pks:
-                    for mv in pk.move_ids:
-                        if mv.state not in ('cancel', 'done'):
-                            products_with_demand.add(mv.product_id.id)
-
-                for line in so.order_line:
-                    if line.display_type or not line.product_id:
+            if filter_need_transfer and stock_status != 'ready' and wh_id:
+                products_with_demand = {
+                    mv['product_id'][0]
+                    for line in lines
+                    for mv in moves_by_line.get(line['id'], [])
+                    if mv.get('product_id')
+                }
+                for line in lines:
+                    pid = line['product_id'][0] if line.get('product_id') else None
+                    if not pid or product_map.get(pid, {}).get('type') == 'service':
                         continue
-                    if line.product_id.type == 'service':
+                    tmpl_raw = product_map.get(pid, {}).get('product_tmpl_id')
+                    p_tmpl_id = tmpl_raw[0] if isinstance(tmpl_raw, (list, tuple)) else tmpl_raw
+                    if p_tmpl_id in kit_tmpl_ids or pid not in products_with_demand:
                         continue
-                    if line.product_id.product_tmpl_id.id in kit_tmpl_ids:
-                        continue
-                    if line.product_id.id not in products_with_demand:
-                        continue
-                    pending_qty = line.product_uom_qty - line.qty_delivered
+                    pending_qty = (line.get('product_uom_qty') or 0) - (line.get('qty_delivered') or 0)
                     if pending_qty <= 0:
                         continue
-                    qty_at_dest = (product_availabilities.get((line.product_id.id, dest_wh_id), 0.0)
-                                   + line_reserved_qty.get(line.id, 0.0))
-                    if qty_at_dest >= pending_qty:
-                        continue  # đủ hàng tại kho đích cho dòng này
-                    # Thiếu → check kho khác
+                    if (product_availabilities.get((pid, wh_id), 0.0) + line_reserved_qty.get(line['id'], 0.0)) >= pending_qty:
+                        continue
                     for other_wh_id in all_warehouse_ids:
-                        if other_wh_id != dest_wh_id:
-                            if product_availabilities.get((line.product_id.id, other_wh_id), 0.0) > 0:
-                                has_transfer_option = True
-                                break
+                        if other_wh_id != wh_id and product_availabilities.get((pid, other_wh_id), 0.0) > 0:
+                            has_transfer_option = True
+                            break
                     if has_transfer_option:
                         break
 
-            # Dong bo voi logic hien thi tren card/kanban.
             if not has_storable_line:
                 real_delivery_status = 'full'
             elif has_pending and not has_delivered:
@@ -411,91 +369,52 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             else:
                 real_delivery_status = 'full'
 
-            packed_qty = packed_qty_by_so.get(so.id, 0.0)
-            # Packing status dựa trên trạng thái phiếu kho (PACK/OUT), không còn dựa trên package.
-            # Lý do: nhiều phiếu sản phẩm không nằm trong kiện hàng nhưng đã qua bước đóng gói.
             if not has_pending:
                 packing_status = 'delivered'
             elif total_avail <= 0:
                 packing_status = 'waiting_stock'
             else:
-                # Kiểm tra trạng thái phiếu PACK và OUT
-                pack_pickings = active_outflow.filtered(
-                    lambda p: (p.picking_type_id.sequence_code or '').upper() == 'PACK'
-                )
-                out_pickings = active_outflow.filtered(
-                    lambda p: (p.picking_type_id.sequence_code or '').upper() == 'OUT'
-                )
-                # Phiếu PACK đã done (không còn trong active_outflow) → check tất cả pickings
-                done_pack = so.picking_ids.filtered(
-                    lambda p: p.state == 'done'
-                    and not p.return_id
-                    and (p.picking_type_id.sequence_code or '').upper() == 'PACK'
-                )
-                # Nếu có phiếu PACK đã done VÀ không còn phiếu PACK active → đã đóng gói xong
-                # Hoặc: không có PACK (2-step) mà PICK đã done → cũng tính là packed
-                if done_pack and not pack_pickings:
-                    packing_status = 'fully_packed'
-                elif not done_pack and not pack_pickings and not out_pickings:
-                    # Không có phiếu nào active ngoài PICK → chưa đến bước pack
-                    packing_status = 'unpacked'
-                else:
-                    # Còn phiếu PACK active → đang đóng gói
-                    packing_status = 'unpacked'
+                pack_pks = [p for p in active_outflow if p['seq_code'] == 'PACK']
+                done_pack_pks = [
+                    p for p in pickings
+                    if p['state'] == 'done' and not p.get('return_id') and p['seq_code'] == 'PACK'
+                ]
+                packing_status = 'fully_packed' if (done_pack_pks and not pack_pks) else 'unpacked'
 
-            # Shipper đã nhận hàng để giao? (chỉ xét outgoing pickings)
-            has_shipper_received = any(
-                p.shipper_received and not p.shipper_returned
-                for p in active_outflow
-                if p.picking_type_code == 'outgoing'
+            has_shipper = any(
+                p.get('shipper_received') and not p.get('shipper_returned')
+                for p in active_outflow if p['picking_type_code'] == 'outgoing'
+            )
+            x_printed = so_rec.get('x_picking_slip_printed') or False
+            has_new_unprinted = bool(x_printed) and bool(active_outflow) and any(
+                not p.get('x_printed') and p['state'] == 'assigned'
+                for p in active_outflow if 'PICK' in p['seq_code']
+            )
+            has_assigned_pick = any(
+                p['state'] == 'assigned' for p in active_outflow if 'PICK' in p['seq_code']
             )
 
-            # has_delivered_today đã tính ở trên (trước no_active_outflow skip)
-
-            so_status_dict[so.id] = {
+            so_status_dict[so_id] = {
                 'stock_status': stock_status,
                 'packing_status': packing_status,
                 'real_delivery_status': real_delivery_status,
-                # Đơn trả hàng / dừng: outflow hết nhưng chưa giao đủ → hiện riêng khi show_completed
                 'is_returned_or_stopped': no_active_outflow and real_delivery_status != 'full',
-                # Đã in phiếu nhưng có phiếu pick mới chưa in VÀ có hàng (assigned).
-                # Nếu phiếu PICK chưa in nhưng chưa có hàng (confirmed/waiting) → không ưu tiên trạng thái này.
-                'has_new_unprinted_pickings': (
-                    bool(so.x_picking_slip_printed)
-                    and bool(active_outflow)
-                    and any(
-                        not p.x_printed and p.state == 'assigned'
-                        for p in active_outflow
-                        if 'PICK' in (p.picking_type_id.sequence_code or '').upper()
-                    )
-                ),
-                # Shipper đã nhận hàng giao chưa
-                'has_shipper_received': has_shipper_received,
-                # Đã giao hàng (OUT done) trong ngày hôm nay
+                'has_new_unprinted_pickings': has_new_unprinted,
+                'has_shipper_received': has_shipper,
                 'has_delivered_today': has_delivered_today,
-                # Có phiếu PICK nào đang ASSIGNED (sẵn hàng thực sự) không
-                # (dùng để quyết định có nên ưu tiên delivered_today hay không)
-                'has_assigned_pick': any(
-                    p.state == 'assigned'
-                    for p in active_outflow
-                    if 'PICK' in (p.picking_type_id.sequence_code or '').upper()
-                ),
+                'has_assigned_pick': has_assigned_pick,
             }
-
-            # Giữ metadata để tổng hợp KPI theo tập đã lọc cuối cùng.
-            so_meta_dict[so.id] = {
+            so_meta_dict[so_id] = {
                 'stock_status': stock_status,
                 'packing_status': packing_status,
                 'has_pending': has_pending,
                 'has_transfer_option': has_transfer_option,
-                'has_unread_message': bool(so.x_plan_unread_message if hasattr(so, 'x_plan_unread_message') else False),
+                'has_unread_message': bool(so_rec.get('x_plan_unread_message', False)),
             }
 
-            is_returned_or_stopped = so_status_dict[so.id]['is_returned_or_stopped']
-
-            # Đơn trả hàng/dừng: hiển thị riêng trong group "Trả hàng" khi show_completed
+            is_returned_or_stopped = no_active_outflow and real_delivery_status != 'full'
             if show_completed and is_returned_or_stopped:
-                matched_sale_ids.append(so.id)
+                matched_sale_ids.append(so_id)
                 continue
 
             if filter_delivery_status == 'pending_partial':
@@ -507,50 +426,28 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             else:
                 delivery_ok = True
 
-            # NẾU USER CỐ TÌNH FILTER MỤC HOÀN THÀNH TỪ/ĐẾN
             if filter_done_date_from or filter_done_date_to:
-                done_outflows = so.picking_ids.filtered(lambda p: p.state == 'done' and p.date_done)
-                if not done_outflows:
+                done_pks = [p for p in pickings if p['state'] == 'done' and p.get('date_done')]
+                if not done_pks:
                     delivery_ok = False
                 else:
-                    latest_done = max(done_outflows, key=lambda p: p.date_done)
-                    latest_done_str = latest_done.date_done.replace(tzinfo=pytz.utc).astimezone(user_tz).strftime('%Y-%m-%d')
-                    if filter_done_date_from and latest_done_str < filter_done_date_from:
-                        delivery_ok = False
-                    elif filter_done_date_to and latest_done_str > filter_done_date_to:
-                        delivery_ok = False
-                    else:
-                        delivery_ok = True
+                    latest = max(done_pks, key=lambda p: p['date_done'])
+                    latest_str = latest['date_done'].replace(tzinfo=pytz.utc).astimezone(user_tz).strftime('%Y-%m-%d')
+                    delivery_ok = (
+                        (not filter_done_date_from or latest_str >= filter_done_date_from)
+                        and (not filter_done_date_to or latest_str <= filter_done_date_to)
+                    )
 
-            # Tính effective_packing_status bao gồm trạng thái in phiếu + shipper
-            has_new_unprinted = so_status_dict[so.id].get('has_new_unprinted_pickings', False)
-            has_shipper = so_status_dict[so.id].get('has_shipper_received', False)
-            delivered_today = so_status_dict[so.id].get('has_delivered_today', False)
-
-            # Kiểm tra có phiếu PICK nào đang ASSIGNED (sẵn hàng thực sự) không
-            has_assigned_pick = any(
-                p.state == 'assigned'
-                for p in active_outflow
-                if 'PICK' in (p.picking_type_id.sequence_code or '').upper()
-            )
-
-            # delivered_today: ưu tiên CAO NHẤT khi:
-            #   - Có phiếu OUT done hôm nay (kể cả đơn giao partial)
-            #   - VÀ không có phiếu PICK nào đang assigned sẵn hàng
-            # Lý do: nếu PICK chỉ confirmed/waiting = đợi hàng về, không cần làm gì ngay.
-            if delivered_today and (real_delivery_status == 'full' or not has_assigned_pick):
+            if has_delivered_today and (real_delivery_status == 'full' or not has_assigned_pick):
                 effective_packing = 'delivered_today'
-                # Bypass delivery filter – luôn show "Đã giao trong ngày"
                 delivery_ok = True
             elif has_shipper:
-                # Shipper đã nhận → "Đang giao"
                 effective_packing = 'shipping'
             elif has_new_unprinted:
                 effective_packing = 'has_unprinted'
             elif packing_status == 'fully_packed':
-                # Đã đóng gói đủ, shipper chưa nhận → "Đã gói, chờ nhận giao"
                 effective_packing = 'packed_waiting_ship'
-            elif bool(so.x_picking_slip_printed) and packing_status not in ('delivered',):
+            elif bool(x_printed) and packing_status not in ('delivered',):
                 effective_packing = 'printed_waiting'
             else:
                 effective_packing = packing_status
@@ -560,54 +457,42 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             else:
                 packing_ok = filter_packing_status == 'all' or packing_status == filter_packing_status
 
-            # Kiểm tra đơn hàng mới (misa_order_date hoặc date_order = hôm nay)
             if filter_new_orders:
-                order_date = so.x_studio_misa_order_date or (so.date_order.date() if so.date_order else None)
-                is_new = order_date == today_date if order_date else False
+                order_date_raw = so_rec.get('x_studio_misa_order_date')
+                if not order_date_raw:
+                    d = so_rec.get('date_order')
+                    order_date_raw = d.date() if d and hasattr(d, 'date') else None
+                is_new = order_date_raw == today_date if order_date_raw else False
             else:
-                is_new = True  # Không filter → cho qua
+                is_new = True
 
-            if (
-                delivery_ok
-                and (filter_stock_status == 'all' or stock_status == filter_stock_status)
-                and packing_ok
-                and (not filter_need_transfer or has_transfer_option)
-                and is_new
-            ):
-                matched_sale_ids.append(so.id)
+            if delivery_ok and packing_ok and is_new \
+                    and (filter_stock_status == 'all' or stock_status == filter_stock_status) \
+                    and (not filter_need_transfer or has_transfer_option):
+                matched_sale_ids.append(so_id)
 
-        # KPI phải phản ánh đúng tập dữ liệu sau khi áp toàn bộ filter hiện tại.
-        dashboard_stats.update({
-            'total': 0,
-            'ready': 0,
-            'partial': 0,
-            'out_of_stock': 0,
-            'packing_fully': 0,
-            'packing_partial': 0,
-            'packing_unpacked': 0,
-            'packing_waiting': 0,
-        })
-
+        # KPI stats
+        dashboard_stats = {
+            'total': 0, 'ready': 0, 'partial': 0, 'out_of_stock': 0,
+            'packing_fully': 0, 'packing_partial': 0, 'packing_unpacked': 0, 'packing_waiting': 0,
+        }
         for so_id in matched_sale_ids:
             meta = so_meta_dict.get(so_id, {})
-            stock_status = meta.get('stock_status')
-            packing_status = meta.get('packing_status')
-            has_pending = meta.get('has_pending', False)
-
+            st = meta.get('stock_status')
+            ps = meta.get('packing_status')
             dashboard_stats['total'] += 1
-            if stock_status == 'ready':
+            if st == 'ready':
                 dashboard_stats['ready'] += 1
-            elif stock_status == 'partial_ready':
+            elif st == 'partial_ready':
                 dashboard_stats['partial'] += 1
-            elif stock_status == 'out_of_stock':
+            elif st == 'out_of_stock':
                 dashboard_stats['out_of_stock'] += 1
-
-            if has_pending:
-                if packing_status == 'fully_packed':
+            if meta.get('has_pending'):
+                if ps == 'fully_packed':
                     dashboard_stats['packing_fully'] += 1
-                elif packing_status == 'unpacked':
+                elif ps == 'unpacked':
                     dashboard_stats['packing_unpacked'] += 1
-                elif packing_status == 'waiting_stock':
+                elif ps == 'waiting_stock':
                     dashboard_stats['packing_waiting'] += 1
 
         return sales, matched_sale_ids, dashboard_stats, product_availabilities, so_status_dict
