@@ -69,6 +69,68 @@ class ZaloMiniAppAPI(http.Controller):
         return "/web/image/%s/%s/%s" % (model, rec_id, field_name)
 
     @staticmethod
+    def _product_images(product):
+        image_fields = ["image_1", "image_2", "image_3", "image_4", "image_5"]
+        images = []
+        for field_name in image_fields:
+            if field_name in product._fields and getattr(product, field_name):
+                images.append(ZaloMiniAppAPI._img_url("product.template", product.id, field_name))
+        if not images:
+            images.append(ZaloMiniAppAPI._img_url("product.template", product.id))
+        return images
+
+    @staticmethod
+    def _studio_price(product):
+        value = getattr(product, "x_studio_gia_san_tmdt", None)
+        return float(value or 0.0)
+
+    @staticmethod
+    def _studio_original_price(product):
+        value = getattr(product, "x_studio_ga_hng_nim_yt", None)
+        return float(value or 0.0)
+
+    @staticmethod
+    def _record_brief(record):
+        return {
+            "id": record.id,
+            "name": record.display_name if hasattr(record, "display_name") else record.name,
+        }
+
+    @staticmethod
+    def _many2many_brief(records):
+        return [ZaloMiniAppAPI._record_brief(record) for record in records]
+
+    @staticmethod
+    def _free_stock_qty(product):
+        variants = product.product_variant_ids or product.product_variant_id
+        variant_ids = variants.ids if hasattr(variants, "ids") else [variants.id]
+        if not variant_ids:
+            return 0.0
+
+        quant_model = request.env["stock.quant"].sudo()
+        stock_location_ids = request.env["stock.location"].sudo().search([
+            ("usage", "=", "internal"),
+        ]).ids
+        if not stock_location_ids:
+            return 0.0
+
+        grouped = quant_model.read_group(
+            [
+                ("product_id", "in", variant_ids),
+                ("location_id", "in", stock_location_ids),
+            ],
+            ["quantity:sum", "reserved_quantity:sum"],
+            ["product_id"],
+            lazy=False,
+        )
+        total_free = 0.0
+        for row in grouped:
+            total_qty = float(row.get("quantity_sum") or row.get("quantity") or 0.0)
+            reserved_qty = float(row.get("reserved_quantity_sum") or row.get("reserved_quantity") or 0.0)
+            total_free += max(total_qty - reserved_qty, 0.0)
+        return total_free
+
+    @staticmethod
     def _partner_tier_dict(tier):
         if not tier:
             return None
@@ -244,8 +306,8 @@ class ZaloMiniAppAPI(http.Controller):
             domain.append(("website_published", "=", True))
 
         sort_map = {
-            "price_asc": "list_price asc, id desc",
-            "price_desc": "list_price desc, id desc",
+            "price_asc": "x_studio_gia_san_tmdt asc, id desc" if "x_studio_gia_san_tmdt" in request.env["product.template"]._fields else "list_price asc, id desc",
+            "price_desc": "x_studio_gia_san_tmdt desc, id desc" if "x_studio_gia_san_tmdt" in request.env["product.template"]._fields else "list_price desc, id desc",
             "newest": "create_date desc, id desc",
             "best_seller": "sales_count desc, id desc" if "sales_count" in request.env["product.template"]._fields else "id desc",
         }
@@ -255,31 +317,40 @@ class ZaloMiniAppAPI(http.Controller):
         total = model.search_count(domain)
         products = model.search(domain, offset=offset, limit=limit, order=order)
 
-        def _original_price(p):
-            compare_price = getattr(p, "compare_list_price", 0) or 0
-            return compare_price if compare_price and compare_price >= p.list_price else p.list_price
-
         def _discount_percent(p):
-            original = _original_price(p)
-            if original and original > p.list_price:
-                return int(round((original - p.list_price) * 100.0 / original, 0))
+            price = self._studio_price(p)
+            original = self._studio_original_price(p)
+            if not original or original < price:
+                original = price
+            if original and original > price:
+                return int(round((original - price) * 100.0 / original, 0))
             return 0
 
         data = []
         for p in products:
-            price = p.list_price
-            original_price = _original_price(p)
+            price = self._studio_price(p)
+            original_price = self._studio_original_price(p)
+            if not original_price or original_price < price:
+                original_price = price
+            stock_qty = self._free_stock_qty(p)
+            product_tags = self._many2many_brief(p.product_tag_ids) if "product_tag_ids" in p._fields else []
+            website_categories = self._many2many_brief(p.public_categ_ids) if "public_categ_ids" in p._fields else []
             data.append({
                 "id": p.id,
                 "name": p.name,
                 "price": price,
                 "original_price": original_price,
                 "discount_percent": _discount_percent(p),
-                "image_url": self._img_url("product.template", p.id),
+                "image_url": self._product_images(p)[0],
                 "sold_count": getattr(p, "sales_count", 0),
                 "free_shipping": False,
                 "voucher_label": None,
                 "gifts": [],
+                "stock_available": bool(stock_qty > 0),
+                "stock_available_qty": stock_qty,
+                "sales_description": p.description_sale or "",
+                "tags": product_tags,
+                "categories": website_categories,
             })
 
         return self._response_success({
@@ -303,11 +374,15 @@ class ZaloMiniAppAPI(http.Controller):
                     "value": ", ".join(line.value_ids.mapped("name")),
                 })
 
-        imgs = [self._img_url("product.template", product.id)]
-        price = product.list_price
-        compare_price = getattr(product, "compare_list_price", 0) or 0
-        original_price = compare_price if compare_price and compare_price >= price else price
+        imgs = self._product_images(product)
+        price = self._studio_price(product)
+        original_price = self._studio_original_price(product)
+        if not original_price or original_price < price:
+            original_price = price
         discount_percent = int(round((original_price - price) * 100.0 / original_price, 0)) if original_price else 0
+        stock_qty = self._free_stock_qty(product)
+        product_tags = self._many2many_brief(product.product_tag_ids) if "product_tag_ids" in product._fields else []
+        website_categories = self._many2many_brief(product.public_categ_ids) if "public_categ_ids" in product._fields else []
 
         return self._response_success({
             "product": {
@@ -316,19 +391,23 @@ class ZaloMiniAppAPI(http.Controller):
                 "price": price,
                 "original_price": original_price,
                 "discount_percent": discount_percent,
-                "image_url": self._img_url("product.template", product.id),
+                "image_url": imgs[0] if imgs else self._img_url("product.template", product.id),
                 "images": imgs,
                 "sold_count": getattr(product, "sales_count", 0),
                 "free_shipping": False,
                 "voucher_label": None,
                 "gifts": [],
                 "description": product.description_sale or product.description or "",
+                "sales_description": product.description_sale or "",
                 "specifications": specs,
                 "category_id": product.categ_id.id if product.categ_id else None,
                 "category_name": product.categ_id.name if product.categ_id else "",
-                "stock_available": bool(product.qty_available > 0),
+                "stock_available": bool(stock_qty > 0),
+                "stock_available_qty": stock_qty,
                 "rating": 0,
                 "review_count": 0,
+                "tags": product_tags,
+                "categories": website_categories,
             }
         })
 
@@ -471,10 +550,13 @@ class ZaloMiniAppAPI(http.Controller):
             product = request.env["product.product"].sudo().browse(product_id)
             if not product.exists() or not product.sale_ok:
                 return self._response_error("INVALID_PRODUCT", "Product %s is invalid" % product_id, status=400)
+            product_price = getattr(product.product_tmpl_id, "x_studio_gia_san_tmdt", None)
+            if not product_price:
+                product_price = product.list_price
             lines.append((0, 0, {
                 "product_id": product.id,
                 "product_uom_qty": qty,
-                "price_unit": product.list_price,
+                "price_unit": product_price,
                 "name": product.display_name,
             }))
 
