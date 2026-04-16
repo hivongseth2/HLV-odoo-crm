@@ -132,9 +132,15 @@ export class DeliveryPlannerDashboard extends Component {
                         let payload;
 
                         if (Array.isArray(item)) {
-                            const message = item[1] || {};
-                            type = message.type || item[2];
-                            payload = message.payload || message;
+                            // Common bus tuple shape: [channel, type, payload]
+                            if (typeof item[1] === "string") {
+                                type = item[1];
+                                payload = item[2];
+                            } else {
+                                const message = item[1] || {};
+                                type = message.type || item[2];
+                                payload = message.payload || message;
+                            }
                         } else {
                             type = item && item.type;
                             payload = item && (item.payload || item);
@@ -213,7 +219,7 @@ export class DeliveryPlannerDashboard extends Component {
 
             this.state.globalUnreadOrders = merged;
             
-            const shouldNotifyFromPolling = !isInitial && !this.busService;
+            const shouldNotifyFromPolling = !isInitial;
             if (shouldNotifyFromPolling) {
                 for (const notification of notifications.filter((n) => !n.is_read)) {
                     const orderId = notification.sale_order_id ? notification.sale_order_id[0] : false;

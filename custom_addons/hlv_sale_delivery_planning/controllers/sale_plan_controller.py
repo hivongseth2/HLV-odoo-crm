@@ -1413,10 +1413,8 @@ class SalePlanPublicController(http.Controller):
               bus = request.env['bus.bus'].sudo()
 
               # Primary: channel notification for dashboard subscribers.
-              try:
-                bus._sendone('delivery_planner_channel', {'type': 'new_portal_message', 'payload': payload})
-              except TypeError:
-                bus._sendone('delivery_planner_channel', 'new_portal_message', payload)
+              # Odoo on this server expects _sendone(channel, type, message).
+              bus._sendone('delivery_planner_channel', 'new_portal_message', payload)
 
               # Fallback: push directly to all internal users (share=False).
               internal_partners = request.env['res.users'].sudo().search([
