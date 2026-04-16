@@ -112,6 +112,8 @@ export class DeliveryPlannerDashboard extends Component {
             drawerMessages: [],
             drawerMessagesLoading: false,
             drawerMessageText: '',
+            drawerMessageFiles: [],
+            drawerMessageSending: false,
         });
 
         this.notification = useService("notification");
@@ -199,9 +201,6 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     async openDrawerFromMessageList(soId) {
-        // Cập nhật lại list bộ nhớ
-        this.state.globalUnreadOrders = this.state.globalUnreadOrders.filter(o => o.id !== soId);
-        
         // Mở drawer
         let so = this.state.saleOrders.find(o => o.id === soId);
         if (so) {
@@ -988,6 +987,7 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.isDrawerOpen = true;
         this.state.drawerMessages = [];
         this.state.drawerMessageText = '';
+        this.state.drawerMessageFiles = [];
         this.loadDrawerMessages(so.id);
     }
 
@@ -1004,10 +1004,6 @@ export class DeliveryPlannerDashboard extends Component {
                 }
                 return msg;
             });
-            // Mark as read after loading messages (optimistic update)
-            if (this.state.selectedOrder && this.state.selectedOrder.has_unread_message) {
-                this.state.selectedOrder.has_unread_message = false;
-            }
         } catch (e) {
             console.error('loadDrawerMessages error', e);
             this.state.drawerMessages = [];
@@ -1017,16 +1013,26 @@ export class DeliveryPlannerDashboard extends Component {
 
     async sendDrawerMessage() {
         const body = (this.state.drawerMessageText || '').trim();
-        if (!body || !this.state.selectedOrder) return;
+        const attachments = this.state.drawerMessageFiles.map((file) => ({
+            name: file.name,
+            mimetype: file.mimetype,
+            datas: file.datas,
+        }));
+        if ((!body && !attachments.length) || !this.state.selectedOrder || this.state.drawerMessageSending) return;
+
         try {
+            this.state.drawerMessageSending = true;
             await this.orm.call(
                 'hlv.delivery.planner.service', 'post_order_message',
-                [this.state.selectedOrder.id, body]
+                [this.state.selectedOrder.id, body, attachments]
             );
             this.state.drawerMessageText = '';
+            this.state.drawerMessageFiles = [];
             await this.loadDrawerMessages(this.state.selectedOrder.id);
         } catch (e) {
             console.error('sendDrawerMessage error', e);
+        } finally {
+            this.state.drawerMessageSending = false;
         }
     }
 
@@ -1035,6 +1041,91 @@ export class DeliveryPlannerDashboard extends Component {
             ev.preventDefault();
             this.sendDrawerMessage();
         }
+    }
+
+    triggerDrawerFilePicker() {
+        const picker = document.getElementById('drawer-message-file-input');
+        if (picker) {
+            picker.click();
+        }
+    }
+
+    async onDrawerFilesSelected(ev) {
+        const picker = ev.target;
+        const files = Array.from((picker && picker.files) || []);
+        if (!files.length) {
+            return;
+        }
+
+        const allowedExt = ['.doc', '.docx', '.xls', '.xlsx', '.csv'];
+        const maxFileSize = 20 * 1024 * 1024;
+        const nextFiles = [...this.state.drawerMessageFiles];
+
+        for (const file of files) {
+            const lowerName = (file.name || '').toLowerCase();
+            const ext = lowerName.includes('.') ? lowerName.slice(lowerName.lastIndexOf('.')) : '';
+            const isImage = (file.type || '').startsWith('image/');
+            const isVideo = (file.type || '').startsWith('video/');
+            const isDoc = allowedExt.includes(ext);
+
+            if (!isImage && !isVideo && !isDoc) {
+                this.notification.add(`File ${file.name} không thuộc định dạng hỗ trợ.`, { type: 'warning' });
+                continue;
+            }
+            if (file.size > maxFileSize) {
+                this.notification.add(`File ${file.name} vượt quá 20MB.`, { type: 'warning' });
+                continue;
+            }
+
+            try {
+                const datas = await this._readFileAsBase64(file);
+                nextFiles.push({
+                    uid: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+                    name: file.name,
+                    mimetype: file.type || 'application/octet-stream',
+                    size: file.size || 0,
+                    datas,
+                });
+            } catch (readErr) {
+                this.notification.add(`Không thể đọc file ${file.name}.`, { type: 'danger' });
+                console.error('read file error', readErr);
+            }
+        }
+
+        this.state.drawerMessageFiles = nextFiles;
+        picker.value = '';
+    }
+
+    _readFileAsBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const result = String(reader.result || '');
+                const commaIndex = result.indexOf(',');
+                resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    removeDrawerMessageFile(uid) {
+        this.state.drawerMessageFiles = this.state.drawerMessageFiles.filter((f) => f.uid !== uid);
+    }
+
+    formatFileSize(size) {
+        const value = Number(size || 0);
+        if (value >= 1024 * 1024) {
+            return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+        }
+        if (value >= 1024) {
+            return `${Math.round(value / 1024)} KB`;
+        }
+        return `${value} B`;
+    }
+
+    isVideoAttachment(att) {
+        return !!(att && att.mimetype && att.mimetype.indexOf('video/') === 0);
     }
 
     closeOverviewDrawer() {

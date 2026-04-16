@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import os
 import re
 import time
 from collections import defaultdict
@@ -29,6 +30,16 @@ _FAIL_LOG = defaultdict(list)
 _RL_MAX = 5
 _RL_WINDOW = 600
 
+_ALLOWED_CHAT_ATTACHMENT_MIMES = {
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv',
+}
+_ALLOWED_CHAT_ATTACHMENT_EXTS = {'.doc', '.docx', '.xls', '.xlsx', '.csv'}
+_MAX_CHAT_ATTACHMENT_BYTES = 20 * 1024 * 1024
+
 
 def _is_rate_limited(ip):
     now = time.time()
@@ -39,6 +50,16 @@ def _is_rate_limited(ip):
 
 def _record_failure(ip):
     _FAIL_LOG[ip].append(time.time())
+
+
+def _is_allowed_chat_attachment(name, mimetype):
+  mt = (mimetype or '').lower()
+  if mt.startswith('image/') or mt.startswith('video/'):
+    return True
+  if mt in _ALLOWED_CHAT_ATTACHMENT_MIMES:
+    return True
+  ext = os.path.splitext(name or '')[1].lower()
+  return ext in _ALLOWED_CHAT_ATTACHMENT_EXTS
 
 
 _H = [("Content-Type", "text/html; charset=utf-8")]
@@ -181,6 +202,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 .msg-att-img{width:60px;height:60px;object-fit:cover;border-radius:4px;border:1px solid #e2e8f0;cursor:pointer}
 .msg-att-img:hover{opacity:.85}
 .msg-empty{padding:20px;text-align:center;color:#a0aec0;font-size:.85rem}
+.msg-compose-files{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.msg-compose-file{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:4px;font-size:.78rem;color:#4a5568}
+.msg-compose-file button{border:none;background:transparent;color:#c53030;padding:0;line-height:1}
 #report-modal .rmod-card{background:#fff;max-width:440px;width:90%;border-radius:4px;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,.2)}
 </style>
 </head><body>
@@ -672,6 +696,88 @@ function renderList(){
 }
 
 var _currentDrawerOrderId=null;
+var _currentMsgFiles=[];
+
+function fmtFileSize(sz){
+  if(sz>=1048576) return (sz/1048576).toFixed(1)+'MB';
+  if(sz>=1024) return Math.round(sz/1024)+'KB';
+  return sz+'B';
+}
+
+function renderPublicFileQueue(){
+  var wrap=$('dr-msg-files');
+  if(!wrap) return;
+  if(!_currentMsgFiles.length){wrap.innerHTML='';return;}
+  var html='';
+  _currentMsgFiles.forEach(function(f,idx){
+    html+='<span class="msg-compose-file"><i class="fa fa-paperclip"></i> '
+      +esc(f.name)+' <small>('+fmtFileSize(f.size||0)+')</small>'
+      +'<button type="button" data-file-idx="'+idx+'"><i class="fa fa-times"></i></button></span>';
+  });
+  wrap.innerHTML=html;
+  wrap.querySelectorAll('button[data-file-idx]').forEach(function(btn){
+    btn.addEventListener('click',function(ev){
+      ev.preventDefault();
+      var idx=parseInt(this.getAttribute('data-file-idx'),10);
+      if(!isNaN(idx)){
+        _currentMsgFiles.splice(idx,1);
+        renderPublicFileQueue();
+      }
+    });
+  });
+}
+
+function readFileAsBase64(file){
+  return new Promise(function(resolve,reject){
+    var reader=new FileReader();
+    reader.onload=function(){
+      var out=String(reader.result||'');
+      var p=out.indexOf(',');
+      resolve(p>=0?out.slice(p+1):out);
+    };
+    reader.onerror=reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function onPublicFilesSelected(ev){
+  var input=ev.target;
+  var files=Array.from(input.files||[]);
+  if(!files.length) return;
+  var allowedExt=['.doc','.docx','.xls','.xlsx','.csv'];
+  var maxSize=20*1024*1024;
+
+  for(var i=0;i<files.length;i++){
+    var file=files[i];
+    var lower=(file.name||'').toLowerCase();
+    var ext=lower.indexOf('.')>=0?lower.slice(lower.lastIndexOf('.')):'';
+    var isImg=(file.type||'').indexOf('image/')===0;
+    var isVideo=(file.type||'').indexOf('video/')===0;
+    var isDoc=allowedExt.indexOf(ext)>=0;
+    if(!isImg&&!isVideo&&!isDoc){
+      alert('File '+file.name+' không thuộc định dạng hỗ trợ.');
+      continue;
+    }
+    if((file.size||0)>maxSize){
+      alert('File '+file.name+' vượt quá 20MB.');
+      continue;
+    }
+    try{
+      var datas=await readFileAsBase64(file);
+      _currentMsgFiles.push({
+        name:file.name,
+        mimetype:file.type||'application/octet-stream',
+        size:file.size||0,
+        datas:datas,
+      });
+    }catch(_e){
+      alert('Không đọc được file '+file.name);
+    }
+  }
+  input.value='';
+  renderPublicFileQueue();
+}
+
 function loadMessages(orderId){
   if(orderId) _currentDrawerOrderId=orderId;
   var oid=orderId||_currentDrawerOrderId;
@@ -702,9 +808,13 @@ function loadMessages(orderId){
         html+='<div class="msg-attachments">';
         m.attachments.forEach(function(a){
           var isImg=a.mimetype&&a.mimetype.indexOf('image/')===0;
+          var isVideo=a.mimetype&&a.mimetype.indexOf('video/')===0;
           var url='/api/sale_plan/attachment/'+a.id;
           if(isImg){
             html+='<a href="'+url+'" target="_blank"><img class="msg-att-img" src="'+url+'" alt="'+esc(a.name)+'" loading="lazy"></a>';
+          }else if(isVideo){
+            var vSz=a.file_size>1048576?(a.file_size/1048576).toFixed(1)+'MB':(a.file_size>1024?(a.file_size/1024).toFixed(0)+'KB':a.file_size+'B');
+            html+='<a class="msg-att" href="'+url+'" target="_blank"><i class="fa fa-video-camera"></i> '+esc(a.name)+' <small>('+vSz+')</small></a>';
           }else{
             var sz=a.file_size>1048576?(a.file_size/1048576).toFixed(1)+'MB':(a.file_size>1024?(a.file_size/1024).toFixed(0)+'KB':a.file_size+'B');
             html+='<a class="msg-att" href="'+url+'" target="_blank"><i class="fa fa-paperclip"></i> '+esc(a.name)+' <small>('+sz+')</small></a>';
@@ -722,18 +832,18 @@ function loadMessages(orderId){
 }
 function sendPublicMessage(){
   var body=($('dr-msg-input').value||'').trim();
-  if(!body||!_currentDrawerOrderId)return;
+  if((!body&&!_currentMsgFiles.length)||!_currentDrawerOrderId)return;
   var authorName=($('dr-msg-author').value||'').trim();
   if(!authorName){$('dr-msg-author').focus();$('dr-msg-author').classList.add('is-invalid');return;}
   $('dr-msg-author').classList.remove('is-invalid');
   localStorage.setItem('hlv_msg_author',authorName);
   var btn=$('dr-msg-send');btn.disabled=true;
-  fetch('/api/sale_plan/send_message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{order_id:_currentDrawerOrderId,body:body,author_name:authorName}})})
+  fetch('/api/sale_plan/send_message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{order_id:_currentDrawerOrderId,body:body,author_name:authorName,attachments:_currentMsgFiles.map(function(f){return {name:f.name,mimetype:f.mimetype,datas:f.datas};})}})})
   .then(function(r){return r.json();})
   .then(function(resp){
     btn.disabled=false;
     var d=resp.result||{};
-    if(d.status==='success'){$('dr-msg-input').value='';loadMessages();}
+    if(d.status==='success'){$('dr-msg-input').value='';_currentMsgFiles=[];renderPublicFileQueue();loadMessages();}
     else{alert(d.message||'Lỗi gửi tin nhắn');}
   })
   .catch(function(){btn.disabled=false;alert('Lỗi kết nối');});
@@ -823,8 +933,11 @@ function openDrawer(id){
     +'<button id="dr-msg-refresh" class="btn btn-sm btn-outline-secondary ms-auto px-2 py-0" title="Tải lại tin nhắn"><i class="fa fa-refresh"></i></button></div>'
     +'<div style="padding:10px 14px 6px;border-bottom:1px solid #e2e8f0;background:#f7fafc">'
     +'<div class="d-flex gap-2 mb-2"><input id="dr-msg-author" class="form-control form-control-sm" placeholder="Tên của bạn..." style="max-width:160px" value="'+esc(localStorage.getItem('hlv_msg_author')||'')+'"/>'
+    +'<input id="dr-msg-files-input" type="file" multiple accept=".doc,.docx,.xls,.xlsx,.csv,image/*,video/*" style="display:none"/>'
+    +'<button id="dr-msg-attach" class="btn btn-sm btn-outline-secondary px-2" title="Đính kèm Word, Excel, ảnh, video"><i class="fa fa-paperclip"></i></button>'
     +'<input id="dr-msg-input" class="form-control form-control-sm" placeholder="Nhập tin nhắn..."/>'
     +'<button id="dr-msg-send" class="btn btn-sm btn-primary px-3"><i class="fa fa-paper-plane"></i></button></div>'
+    +'<div id="dr-msg-files" class="msg-compose-files"></div>'
     +'</div>'
     +'<div class="msg-list" id="dr-msg-list"><div class="msg-empty"><i class="fa fa-spinner fa-spin me-1"></i> Đang tải...</div></div>'
     +'</div>';
@@ -840,8 +953,12 @@ function openDrawer(id){
     if(sendBox&&sendBox.style)sendBox.style.display=isOpen?'':'none';
   });
   $('dr-msg-refresh').addEventListener('click',function(e){e.stopPropagation();loadMessages();});
+  $('dr-msg-attach').addEventListener('click',function(e){e.preventDefault();e.stopPropagation();$('dr-msg-files-input').click();});
+  $('dr-msg-files-input').addEventListener('change',onPublicFilesSelected);
   $('dr-msg-send').addEventListener('click',function(){sendPublicMessage();});
   $('dr-msg-input').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();sendPublicMessage();}});
+  _currentMsgFiles=[];
+  renderPublicFileQueue();
   loadMessages(o.id);
   $('drawer').classList.add('open');
   $('drawer-overlay').classList.add('open');
@@ -1211,26 +1328,60 @@ class SalePlanPublicController(http.Controller):
             return {'status': 'error', 'message': str(e)}
 
     @http.route('/api/sale_plan/send_message', type='json', auth='public', methods=['POST'])
-    def api_sale_plan_send_message(self, order_id=None, body='', author_name='', **kwargs):
+    def api_sale_plan_send_message(self, order_id=None, body='', author_name='', attachments=None, **kwargs):
         if not request.session.get(SESSION_KEY_OK):
             return {'status': 'error', 'message': 'Unauthorized'}
         try:
             body = (body or '').strip()
-            if not body:
-                return {'status': 'error', 'message': 'Empty message'}
+            attachments = attachments or []
             so = request.env['sale.order'].sudo().browse(int(order_id))
             if not so.exists():
                 return {'status': 'error', 'message': 'Order not found'}
             author_name = (author_name or '').strip()
-            if author_name:
-                safe_body = Markup('<p><strong>[%s]</strong> %s</p>') % (
-                    Markup.escape(author_name), Markup.escape(body))
+
+            attachment_ids = []
+            for att in attachments:
+                if not isinstance(att, dict):
+                    continue
+                name = (att.get('name') or 'file').strip()[:255]
+                mimetype = (att.get('mimetype') or 'application/octet-stream').strip().lower()
+                datas = (att.get('datas') or '').strip()
+                if not datas:
+                    continue
+                if not _is_allowed_chat_attachment(name, mimetype):
+                    continue
+                estimated_size = int(len(datas) * 0.75)
+                if estimated_size > _MAX_CHAT_ATTACHMENT_BYTES:
+                    continue
+                new_att = request.env['ir.attachment'].sudo().create({
+                    'name': name,
+                    'datas': datas,
+                    'mimetype': mimetype,
+                    'res_model': 'sale.order',
+                    'res_id': so.id,
+                    'type': 'binary',
+                })
+                attachment_ids.append(new_att.id)
+
+            if not body and not attachment_ids:
+                return {'status': 'error', 'message': 'Empty message'}
+
+            if body:
+                if author_name:
+                    safe_body = Markup('<p><strong>[%s]</strong> %s</p>') % (
+                        Markup.escape(author_name), Markup.escape(body))
+                else:
+                    safe_body = Markup('<p>%s</p>') % Markup.escape(body)
+            elif author_name:
+                safe_body = Markup('<p><strong>[%s]</strong> gửi tệp đính kèm</p>') % Markup.escape(author_name)
             else:
-                safe_body = Markup('<p>%s</p>') % Markup.escape(body)
+                safe_body = Markup('<p>Gửi tệp đính kèm</p>')
+
             so.message_post(
                 body=safe_body,
                 message_type='comment',
                 subtype_xmlid='mail.mt_note',
+                attachment_ids=attachment_ids,
             )
             # Kích hoạt trạng thái nháy đỏ Notification FB 
             if hasattr(so, 'x_plan_unread_message'):

@@ -1,3 +1,5 @@
+import os
+
 from odoo import models, api
 from markupsafe import Markup
 import re
@@ -14,6 +16,16 @@ _SKIP_MSG_RE = re.compile(
     r'|Đơn hàng được tạo',
     re.IGNORECASE
 )
+
+_ALLOWED_CHAT_ATTACHMENT_MIMES = {
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/csv',
+}
+_ALLOWED_CHAT_ATTACHMENT_EXTS = {'.doc', '.docx', '.xls', '.xlsx', '.csv'}
+_MAX_CHAT_ATTACHMENT_BYTES = 20 * 1024 * 1024
 
 
 class DeliveryPlannerService(models.AbstractModel):
@@ -111,10 +123,6 @@ class DeliveryPlannerService(models.AbstractModel):
         if not so.exists():
             return []
             
-        # Đánh dấu là đã đọc khi Internal User bấm xem tin nhắn
-        if getattr(so, 'x_plan_unread_message', False):
-            so.sudo().write({'x_plan_unread_message': False})
-            
         picking_ids = so.picking_ids.ids
         domain = [
             '|',
@@ -150,17 +158,60 @@ class DeliveryPlannerService(models.AbstractModel):
         return result
 
     @api.model
-    def post_order_message(self, order_id, body):
+    def post_order_message(self, order_id, body='', attachments=None):
         so = self.env['sale.order'].browse(int(order_id))
         if not so.exists():
             return False
-        safe_body = Markup('<p>%s</p>') % Markup.escape(body)
+
+        body = (body or '').strip()
+        attachments = attachments or []
+        if not body and not attachments:
+            return False
+
+        attachment_ids = []
+        for att in attachments:
+            if not isinstance(att, dict):
+                continue
+            name = (att.get('name') or 'file').strip()[:255]
+            mimetype = (att.get('mimetype') or 'application/octet-stream').strip().lower()
+            datas = (att.get('datas') or '').strip()
+            if not datas:
+                continue
+            if not self._is_allowed_chat_attachment(name, mimetype):
+                continue
+            estimated_size = int(len(datas) * 0.75)
+            if estimated_size > _MAX_CHAT_ATTACHMENT_BYTES:
+                continue
+            new_att = self.env['ir.attachment'].sudo().create({
+                'name': name,
+                'datas': datas,
+                'mimetype': mimetype or 'application/octet-stream',
+                'res_model': 'sale.order',
+                'res_id': so.id,
+                'type': 'binary',
+            })
+            attachment_ids.append(new_att.id)
+
+        if not body and not attachment_ids:
+            return False
+
+        safe_body = Markup('<p>%s</p>') % Markup.escape(body) if body else Markup('<p><i>Tệp đính kèm</i></p>')
         so.message_post(
             body=safe_body,
             message_type='comment',
             subtype_xmlid='mail.mt_note',
+            attachment_ids=attachment_ids,
         )
         return True
+
+    @api.model
+    def _is_allowed_chat_attachment(self, name, mimetype):
+        if mimetype and (mimetype.startswith('image/') or mimetype.startswith('video/')):
+            return True
+        if mimetype in _ALLOWED_CHAT_ATTACHMENT_MIMES:
+            return True
+        ext = os.path.splitext(name or '')[1].lower()
+        return ext in _ALLOWED_CHAT_ATTACHMENT_EXTS
 
     @api.model
     def _batch_blocking_moves(self, page_sales):
