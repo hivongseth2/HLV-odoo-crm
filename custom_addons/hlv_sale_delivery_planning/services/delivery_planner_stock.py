@@ -75,73 +75,90 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                     if move.product_id:
                         product_qty_cache[w_id].add(move.product_id.id)
 
+        # --- 2. Batch load tồn kho khả dụng (ONE batch thay vì N queries per warehouse) ---
+        all_prod_ids_needed = set()
+        for prods in product_qty_cache.values():
+            all_prod_ids_needed.update(prods)
+
+        # Kho cần load: kho của SO + tất cả kho DB nếu đang filter chuyển kho
+        all_needed_wh_ids = set(product_qty_cache.keys())
+        if filter_need_transfer and all_prod_ids_needed:
+            all_needed_wh_ids |= set(self.env['stock.warehouse'].search([]).ids)
+
         product_availabilities = {}
-        wh_obj = self.env['stock.warehouse']
-        # FIX #2: Thay vì gọi p.free_qty (N+1 queries), batch query qua stock.quant một lần.
-        # stock.quant lưu (product_id, location_id, qty_on_hand, reserved_quantity).
-        # free_qty = sum(quantity) - sum(reserved_quantity) per (product_id, location_id).
-        for w_id, prod_ids in product_qty_cache.items():
-            if not prod_ids:
-                continue
-            wh = wh_obj.browse(w_id)
-            loc_id = wh.lot_stock_id.id
-            # Lấy tất cả location con của kho (stock + sub-locations)
-            child_loc_ids = self.env['stock.location'].sudo().search([
-                ('id', 'child_of', loc_id), ('usage', '=', 'internal'),
-            ]).ids
-            if not child_loc_ids:
-                child_loc_ids = [loc_id]
-            quant_data = self.env['stock.quant'].sudo().read_group(
-                domain=[
-                    ('product_id', 'in', list(prod_ids)),
-                    ('location_id', 'in', child_loc_ids),
-                ],
-                fields=['product_id', 'quantity:sum', 'reserved_quantity:sum'],
-                groupby=['product_id'],
-            )
-            for row in quant_data:
-                pid = row['product_id'][0]
-                free = (row.get('quantity', 0.0) or 0.0) - (row.get('reserved_quantity', 0.0) or 0.0)
-                product_availabilities[(pid, w_id)] = max(free, 0.0)
-            # Sản phẩm không có trong quant → set = 0
-            for pid in prod_ids:
-                if (pid, w_id) not in product_availabilities:
-                    product_availabilities[(pid, w_id)] = 0.0
+        loc_to_wh_id = {}  # {location_id: warehouse_id}
+        if all_prod_ids_needed and all_needed_wh_ids:
+            all_wh_objs = self.env['stock.warehouse'].browse(list(all_needed_wh_ids))
+            root_loc_ids = [wh.lot_stock_id.id for wh in all_wh_objs if wh.lot_stock_id]
 
-        # --- 2b. Cộng lại qty đang bị giữ bởi internal transfers (không phải SO) ---
-        # Lý do: SO ưu tiên hơn internal transfer, nên hàng bị internal giữ
-        # vẫn tính là "có hàng" cho SO (Odoo sẽ unreserve internal khi cần).
-        all_prod_ids = set()
-        wh_loc_map = {}  # {warehouse_id: lot_stock_id}
-        for w_id, prod_ids in product_qty_cache.items():
-            wh = wh_obj.browse(w_id)
-            wh_loc_map[w_id] = wh.lot_stock_id.id
-            all_prod_ids.update(prod_ids)
+            # ONE query: tất cả child locations của tất cả kho cần dùng
+            all_child_locs = self.env['stock.location'].sudo().search([
+                ('id', 'child_of', root_loc_ids),
+                ('usage', '=', 'internal'),
+            ]) if root_loc_ids else self.env['stock.location']
 
-        if all_prod_ids and wh_loc_map:
-            # Pre-cache: tất cả child locations của từng warehouse
-            loc_to_wh = {}  # {location_id: warehouse_id}
-            for w_id, loc_id in wh_loc_map.items():
-                child_locs = self.env['stock.location'].sudo().search([
-                    ('id', 'child_of', loc_id),
-                ])
-                for cl in child_locs:
-                    loc_to_wh[cl.id] = w_id
+            # Build loc → warehouse map qua parent_path (Python, chạy 1 lần)
+            # Dùng find() để chọn warehouse có lot_stock_id SÂU NHẤT trong cây vị trí
+            for loc in all_child_locs:
+                if not loc.parent_path:
+                    continue
+                best_wh_id, best_pos = None, -1
+                for wh in all_wh_objs:
+                    if not wh.lot_stock_id:
+                        continue
+                    pos = loc.parent_path.find(f'/{wh.lot_stock_id.id}/')
+                    if pos > best_pos:
+                        best_pos, best_wh_id = pos, wh.id
+                if best_wh_id is not None:
+                    loc_to_wh_id[loc.id] = best_wh_id
 
-            internal_moves = self.env['stock.move'].sudo().search_read([
-                ('product_id', 'in', list(all_prod_ids)),
-                ('state', 'in', ('assigned', 'partially_available')),
-                ('picking_id.picking_type_code', '=', 'internal'),
-                ('picking_id.state', 'not in', ('done', 'cancel')),
-                ('sale_line_id', '=', False),
-            ], ['product_id', 'location_id', 'quantity'])
+            all_child_loc_ids = list(loc_to_wh_id.keys())
 
-            for mv in internal_moves:
-                pid = mv['product_id'][0]
-                mv_loc_id = mv['location_id'][0]
-                w_id = loc_to_wh.get(mv_loc_id)
-                if w_id and (pid, w_id) in product_availabilities:
-                    product_availabilities[(pid, w_id)] += mv['quantity']
+            # ONE query: quant theo (product, location) → gộp theo warehouse trong Python
+            if all_child_loc_ids:
+                quant_rows = self.env['stock.quant'].sudo().read_group(
+                    domain=[
+                        ('product_id', 'in', list(all_prod_ids_needed)),
+                        ('location_id', 'in', all_child_loc_ids),
+                    ],
+                    fields=['product_id', 'location_id', 'quantity:sum', 'reserved_quantity:sum'],
+                    groupby=['product_id', 'location_id'],
+                )
+                for row in quant_rows:
+                    pid = row['product_id'][0]
+                    wh_id = loc_to_wh_id.get(row['location_id'][0])
+                    if wh_id is None:
+                        continue
+                    free = max(
+                        (row.get('quantity') or 0.0) - (row.get('reserved_quantity') or 0.0), 0.0
+                    )
+                    key = (pid, wh_id)
+                    product_availabilities[key] = product_availabilities.get(key, 0.0) + free
+
+            # Fill zeros: product/kho hiện tại không xuất hiện trong quant
+            for wh_id, prod_ids in product_qty_cache.items():
+                for pid in prod_ids:
+                    if (pid, wh_id) not in product_availabilities:
+                        product_availabilities[(pid, wh_id)] = 0.0
+
+            # ONE query: cộng lại qty giữ bởi internal transfers
+            # (Odoo sẽ unreserve internal khi SO cần → hàng đó vẫn "khả dụng" cho SO)
+            if all_child_loc_ids:
+                int_moves = self.env['stock.move'].sudo().search_read([
+                    ('product_id', 'in', list(all_prod_ids_needed)),
+                    ('state', 'in', ('assigned', 'partially_available')),
+                    ('picking_id.picking_type_code', '=', 'internal'),
+                    ('picking_id.state', 'not in', ('done', 'cancel')),
+                    ('sale_line_id', '=', False),
+                    ('location_id', 'in', all_child_loc_ids),
+                ], ['product_id', 'location_id', 'quantity'])
+                for mv in int_moves:
+                    pid = mv['product_id'][0]
+                    wh_id = loc_to_wh_id.get(mv['location_id'][0])
+                    if wh_id:
+                        key = (pid, wh_id)
+                        if key in product_availabilities:
+                            product_availabilities[key] += mv['quantity']
 
         # --- 3. Số lượng đang giữ (reserved) theo dòng SO ---
         line_reserved_qty = {}
@@ -207,75 +224,8 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         # để filter_need_transfer hoạt động đ&uacute;ng khi kết hợp với filter kho.
         all_warehouse_ids = set(k[1] for k in product_availabilities.keys())
 
-        if all_warehouse_ids:
-            # Bổ sung inventory cho c&aacute;c kho kh&aacute;c chưa c&oacute; trong product_availabilities
-            # (xảy ra khi đang filter theo 1 kho cụ thể)
-            all_db_warehouses = self.env['stock.warehouse'].search([])
-            missing_wh_ids = set(all_db_warehouses.ids) - all_warehouse_ids
-            if missing_wh_ids:
-                # Thu thập tất cả product_id đang cần check
-                all_prod_ids_for_transfer = set(k[0] for k in product_availabilities.keys())
-                if all_prod_ids_for_transfer:
-                    # 6a. Lấy free_qty tại các kho khác — dùng stock.quant batch (không N+1)
-                    missing_wh_loc_map = {}  # {wh_id: lot_stock_id}
-                    for wh in all_db_warehouses.filtered(lambda w: w.id in missing_wh_ids):
-                        if not wh.lot_stock_id:
-                            continue
-                        missing_wh_loc_map[wh.id] = wh.lot_stock_id.id
-                        child_loc_ids = self.env['stock.location'].sudo().search([
-                            ('id', 'child_of', wh.lot_stock_id.id), ('usage', '=', 'internal'),
-                        ]).ids or [wh.lot_stock_id.id]
-                        quant_rows = self.env['stock.quant'].sudo().read_group(
-                            domain=[
-                                ('product_id', 'in', list(all_prod_ids_for_transfer)),
-                                ('location_id', 'in', child_loc_ids),
-                            ],
-                            fields=['product_id', 'quantity:sum', 'reserved_quantity:sum'],
-                            groupby=['product_id'],
-                        )
-                        quant_map = {r['product_id'][0]: max(
-                            (r.get('quantity') or 0.0) - (r.get('reserved_quantity') or 0.0), 0.0
-                        ) for r in quant_rows}
-                        for pid in all_prod_ids_for_transfer:
-                            # Lưu cả free_qty = 0 để step 6b có thể cộng internal reserved
-                            product_availabilities[(pid, wh.id)] = quant_map.get(pid, 0.0)
-
-                    # 6b. Cộng lại internal transfer reserved (giống step 2b)
-                    # vì SO ưu tiên hơn internal transfer
-                    if missing_wh_loc_map:
-                        missing_loc_to_wh = {}
-                        for w_id, loc_id in missing_wh_loc_map.items():
-                            child_locs = self.env['stock.location'].sudo().search([
-                                ('id', 'child_of', loc_id),
-                            ])
-                            for cl in child_locs:
-                                missing_loc_to_wh[cl.id] = w_id
-
-                        missing_internal_moves = self.env['stock.move'].sudo().search_read([
-                            ('product_id', 'in', list(all_prod_ids_for_transfer)),
-                            ('state', 'in', ('assigned', 'partially_available')),
-                            ('picking_id.picking_type_code', '=', 'internal'),
-                            ('picking_id.state', 'not in', ('done', 'cancel')),
-                            ('sale_line_id', '=', False),
-                        ], ['product_id', 'location_id', 'quantity'])
-
-                        for mv in missing_internal_moves:
-                            pid = mv['product_id'][0]
-                            mv_loc_id = mv['location_id'][0]
-                            w_id = missing_loc_to_wh.get(mv_loc_id)
-                            if w_id and (pid, w_id) in product_availabilities:
-                                product_availabilities[(pid, w_id)] += mv['quantity']
-
-                    # Xóa entries <= 0 tại kho khác để không gây nhiễu
-                    to_remove = [
-                        k for k in product_availabilities
-                        if k[1] in missing_wh_ids and product_availabilities[k] <= 0
-                    ]
-                    for k in to_remove:
-                        del product_availabilities[k]
-
-                    all_warehouse_ids = set(k[1] for k in product_availabilities.keys())
-
+        # (đã xử lý upfront trong batch load ở trên — không cần bổ sung)
+
         matched_sale_ids = []
         dashboard_stats = {
             'total': 0, 'ready': 0, 'partial': 0, 'out_of_stock': 0,
