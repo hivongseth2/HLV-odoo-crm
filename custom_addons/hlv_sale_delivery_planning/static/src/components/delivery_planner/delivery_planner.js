@@ -126,13 +126,18 @@ export class DeliveryPlannerDashboard extends Component {
         onWillStart(async () => {
             if (this.busService) {
                 this.busService.addChannel("delivery_planner_channel");
-                this.busService.addEventListener("notification", ({ detail: notifications }) => {
+                this._busNotificationHandler = ({ detail: notifications }) => {
                     for (const { payload, type } of notifications) {
                         if (type === "new_portal_message") {
                             this.onNewPortalMessage(payload);
                         }
                     }
-                });
+                };
+                this.busService.addEventListener("notification", this._busNotificationHandler);
+                // Ensure bus is running so realtime notifications are active immediately.
+                if (typeof this.busService.start === "function") {
+                    this.busService.start();
+                }
             }
 
             const [, reports] = await Promise.all([
@@ -154,6 +159,9 @@ export class DeliveryPlannerDashboard extends Component {
         }, 15000);
 
         onWillDestroy(() => {
+            if (this.busService && this._busNotificationHandler && typeof this.busService.removeEventListener === "function") {
+                this.busService.removeEventListener("notification", this._busNotificationHandler);
+            }
             if (this.messagePollingInterval) {
                 clearInterval(this.messagePollingInterval);
             }
