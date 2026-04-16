@@ -150,7 +150,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 /* Kanban */
 .kanban-col{min-width:320px;max-width:420px;flex:0 0 auto}
 .kanban-col .card-header{font-size:.85rem}
-#kanban-view{display:flex;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;margin-left:-1rem;margin-right:-1rem;padding-left:1rem;padding-right:1rem;-webkit-overflow-scrolling:touch}
+.kanban-wrapper{overflow-x:auto;overflow-y:hidden;margin-left:-1rem;margin-right:-1rem;padding-left:1rem;padding-right:1rem;-webkit-overflow-scrolling:touch}
+#kanban-view{display:flex;flex-wrap:nowrap;gap:1rem}
 /* Cards */
 .so-card{border-width:1px!important;transition:.1s}
 .so-card:hover{box-shadow:0 3px 10px rgba(0,0,0,.1)}
@@ -366,7 +367,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
   </div>
 </div>
 <!-- Kanban -->
-<div id="kanban-view" class="d-flex gap-3 overflow-auto pb-3"></div>
+<div class="kanban-wrapper">
+<div id="kanban-view" class="pb-3"></div>
+</div>
 <!-- List -->
 <div id="list-view" class="d-none">
 <div class="table-responsive"><table class="table table-hover table-sm table-bordered table-lines align-middle">
