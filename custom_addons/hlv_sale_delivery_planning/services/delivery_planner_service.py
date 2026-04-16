@@ -263,12 +263,17 @@ class DeliveryPlannerService(models.AbstractModel):
                             ('product_id', 'in', needed_prod_ids),
                             ('location_id', 'in', list(loc_to_owh.keys())),
                         ],
-                        fields=['product_id', 'location_id', 'quantity:sum', 'reserved_quantity:sum'],
+                        fields=['quantity:sum', 'reserved_quantity:sum'],
                         groupby=['product_id', 'location_id'],
                     )
                     for row in q_rows:
-                        pid = row['product_id'][0]
-                        wh_id = loc_to_owh.get(row['location_id'][0])
+                        pid_raw = row.get('product_id')
+                        loc_raw = row.get('location_id')
+                        if not pid_raw or not loc_raw:
+                            continue
+                        pid = pid_raw[0] if isinstance(pid_raw, (list, tuple)) else pid_raw
+                        loc_id = loc_raw[0] if isinstance(loc_raw, (list, tuple)) else loc_raw
+                        wh_id = loc_to_owh.get(loc_id)
                         if wh_id:
                             free = max(
                                 (row.get('quantity') or 0.0) - (row.get('reserved_quantity') or 0.0), 0.0

@@ -194,11 +194,14 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                         ('product_id', 'in', all_comp_prod_ids),
                         ('location_id', 'in', comp_locs.ids),
                     ],
-                    fields=['product_id', 'quantity:sum', 'reserved_quantity:sum'],
+                    fields=['quantity:sum', 'reserved_quantity:sum'],
                     groupby=['product_id'],
                 )
                 for row in comp_q_rows:
-                    pid = row['product_id'][0]
+                    pid_raw = row.get('product_id')
+                    if not pid_raw:
+                        continue
+                    pid = pid_raw[0] if isinstance(pid_raw, (list, tuple)) else pid_raw
                     kit_comp_true_free[(pid, so.warehouse_id.id)] = max(
                         (row.get('quantity') or 0.0) - (row.get('reserved_quantity') or 0.0), 0.0
                     )

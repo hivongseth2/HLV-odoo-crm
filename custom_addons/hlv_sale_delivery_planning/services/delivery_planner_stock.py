@@ -176,11 +176,16 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             if all_cloc_ids:
                 for row in self.env['stock.quant'].sudo().read_group(
                     domain=[('product_id', 'in', list(all_prod_ids_needed)), ('location_id', 'in', all_cloc_ids)],
-                    fields=['product_id', 'location_id', 'quantity:sum', 'reserved_quantity:sum'],
+                    fields=['quantity:sum', 'reserved_quantity:sum'],
                     groupby=['product_id', 'location_id'],
                 ):
-                    pid = row['product_id'][0]
-                    wh_id = loc_to_wh_id.get(row['location_id'][0])
+                    pid_raw = row.get('product_id')
+                    loc_raw = row.get('location_id')
+                    if not pid_raw or not loc_raw:
+                        continue
+                    pid = pid_raw[0] if isinstance(pid_raw, (list, tuple)) else pid_raw
+                    loc_id = loc_raw[0] if isinstance(loc_raw, (list, tuple)) else loc_raw
+                    wh_id = loc_to_wh_id.get(loc_id)
                     if wh_id:
                         free = max((row.get('quantity') or 0) - (row.get('reserved_quantity') or 0), 0.0)
                         key = (pid, wh_id)
