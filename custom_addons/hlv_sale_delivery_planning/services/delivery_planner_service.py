@@ -42,9 +42,11 @@ class DeliveryPlannerService(models.AbstractModel):
         filter_done_date_from='', filter_done_date_to='',
         limit=12, offset=0, filter_saler_code='',
         filter_htgh='', filter_delivery_type='all', filter_tag_ids='',
-        show_completed=False, filter_need_transfer=False,        filter_new_orders=False,    ):
+        show_completed=False, filter_need_transfer=False, filter_new_orders=False,
+        domain=None,
+    ):
 
-        domain = self._build_search_domain(
+        search_domain = self._build_search_domain(
             search_query, filter_warehouse_id,
             filter_delivery_status, filter_date_from, filter_date_to,
             filter_saler_code=filter_saler_code,
@@ -52,8 +54,11 @@ class DeliveryPlannerService(models.AbstractModel):
             filter_delivery_type=filter_delivery_type,
             filter_tag_ids=filter_tag_ids,
         )
+        if domain:
+            extra_domain = list(domain)
+            search_domain = search_domain + extra_domain
         sales = self.env['sale.order'].search(
-            domain,
+            search_domain,
             order='x_studio_misa_order_date desc nulls last, create_date desc, commitment_date asc, date_order desc'
         )
 

@@ -268,8 +268,9 @@ export class DeliveryPlannerDashboard extends Component {
                     limit: 1,
                     offset: 0
                 });
-                if (result && result.sale_orders && result.sale_orders.length) {
-                    this.openOverviewDrawer(result.sale_orders[0]);
+                const fetched = result && result.orders ? result.orders.find((o) => o.id === soId) : null;
+                if (fetched) {
+                    this.openOverviewDrawer(fetched);
                 } else {
                     this.openSaleOrder(soId);
                 }
