@@ -136,6 +136,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
     def _format_dashboard_order(
         self, so, po_by_origin, product_availabilities,
         att_by_picking, so_packages_dict, so_status_dict,
+        transfer_suggestions=None,
     ):
         """
         Serialize một Sale Order thành dict để trả về cho OWL Dashboard.
@@ -174,9 +175,36 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         ])
         kit_tmpl_ids = set(kits.mapped('product_tmpl_id').ids)
 
-        # Cache tồn kho thực (on_hand - reserved_in_quant) cho linh kiện kit
-        # Dùng riêng vì product_availabilities dùng free_qty (bỏ qua assigned reservations)
+        # --- Batch load tồn kho thực cho TẤT CẢ Kit components (Fix N+1) ---
+        # Thay vì stock.quant.search() per bom_line, dùng ONE read_group cho tất cả components
         kit_comp_true_free = {}
+        if kits and so.warehouse_id and so.warehouse_id.lot_stock_id:
+            all_comp_prod_ids = list(set(
+                comp.product_id.id
+                for bom in kits
+                for comp in bom.bom_line_ids
+                if comp.product_id
+            ))
+            if all_comp_prod_ids:
+                comp_locs = self.env['stock.location'].sudo().search([
+                    ('id', 'child_of', so.warehouse_id.lot_stock_id.id),
+                ])
+                comp_q_rows = self.env['stock.quant'].sudo().read_group(
+                    domain=[
+                        ('product_id', 'in', all_comp_prod_ids),
+                        ('location_id', 'in', comp_locs.ids),
+                    ],
+                    fields=['quantity:sum', 'reserved_quantity:sum'],
+                    groupby=['product_id'],
+                )
+                for row in comp_q_rows:
+                    pid_raw = row.get('product_id')
+                    if not pid_raw:
+                        continue
+                    pid = pid_raw[0] if isinstance(pid_raw, (list, tuple)) else pid_raw
+                    kit_comp_true_free[(pid, so.warehouse_id.id)] = max(
+                        (row.get('quantity') or 0.0) - (row.get('reserved_quantity') or 0.0), 0.0
+                    )
 
         # --- Dòng sản phẩm ---
         has_pending = False
@@ -388,7 +416,8 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             if p.picking_type_id and p.picking_type_id.warehouse_id
         ]))
 
-        transfer_suggestions = self._compute_transfer_suggestions(so, so_lines_data)
+        if transfer_suggestions is None:
+            transfer_suggestions = self._compute_transfer_suggestions(so, so_lines_data)
 
         return {
             'id': so.id, 'name': so.name,
