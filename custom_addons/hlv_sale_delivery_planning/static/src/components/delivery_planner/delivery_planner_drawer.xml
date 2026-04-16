@@ -478,9 +478,9 @@
              t-on-click.stop="">
              
              <div class="offcanvas-header bg-danger text-white p-3">
-                 <h5 class="offcanvas-title m-0">
+                 <h5 class="offcanvas-title m-0" style="color:white">
                      <i class="fa fa-bell me-2"></i>
-                     Tin nhắn từ khách hàng mới
+                     Tin nhắn mới từ saler
                  </h5>
                  <button type="button" class="btn-close btn-close-white ms-auto"
                          aria-label="Close" t-on-click="() => { state.isMessageDrawerOpen = false; }"></button>

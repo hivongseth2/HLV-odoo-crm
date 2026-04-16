@@ -373,7 +373,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 var S={limit:100,total:0,viewMode:'kanban',kanbanGroupBy:'packing_status',
   orders:[],warehouses:[],stats:{},whLoaded:false,kanbanColPageSize:{},reportedIds:{},tagsLoaded:false};
 
-var DL={unshipped:'CHƯA GIAO',pending:'CHƯA GIAO',partial:'Giao 1 phần',full:'Đã giao đủ'};
+var DL={unshipped:'Chưa giao',pending:'Chưa giao',partial:'Giao 1 phần',full:'Đã giao đủ'};
 var DC={unshipped:'badge-del-pending',pending:'badge-del-pending',partial:'badge-del-partial',full:'badge-del-full'};
 var SL={ready:'Đủ hàng xuất',partial_ready:'Có hàng 1 phần',out_of_stock:'Không có hàng'};
 var SC={ready:'badge-stk-ready',partial_ready:'badge-stk-partial',out_of_stock:'badge-stk-out'};

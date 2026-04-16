@@ -56,10 +56,10 @@
                             </button>
                             <button class="btn btn-outline-danger shadow-sm position-relative ms-2"
                                     t-on-click="() => { this.state.isMessageDrawerOpen = true; }">
-                                <i class="fa fa-bell"></i> Tin nhắn
+                                <i class="fa fa-bell" ></i> Tin nhắn
                                 <span t-if="this.state.globalUnreadOrders.length > 0"
                                       class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                                      style="font-size: 0.7rem; padding: 0.35em 0.5em;">
+                                      style="font-size: 0.7rem; padding: 0.35em 0.5em; color:white">
                                     <t t-esc="this.state.globalUnreadOrders.length"/>
                                 </span>
                             </button>
