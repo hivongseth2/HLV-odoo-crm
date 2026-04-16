@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import base64
 import json
 from datetime import timedelta
 from odoo import fields, http
@@ -69,15 +70,31 @@ class ZaloMiniAppAPI(http.Controller):
         return "/web/image/%s/%s/%s" % (model, rec_id, field_name)
 
     @staticmethod
+    def _api_image_url(product_id, field_name):
+        return "/api/v1/products/%s/image/%s" % (product_id, field_name)
+
+    @staticmethod
     def _product_images(product):
         image_fields = ["image_1", "image_2", "image_3", "image_4", "image_5"]
         images = []
         for field_name in image_fields:
             if field_name in product._fields and getattr(product, field_name):
-                images.append(ZaloMiniAppAPI._img_url("product.template", product.id, field_name))
+                images.append(ZaloMiniAppAPI._api_image_url(product.id, field_name))
         if not images:
-            images.append(ZaloMiniAppAPI._img_url("product.template", product.id))
+            images.append(ZaloMiniAppAPI._api_image_url(product.id, "image_1920"))
         return images
+
+    @staticmethod
+    def _guess_image_mimetype(raw_bytes):
+        if raw_bytes.startswith(b"\xff\xd8\xff"):
+            return "image/jpeg"
+        if raw_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+            return "image/png"
+        if raw_bytes.startswith(b"GIF87a") or raw_bytes.startswith(b"GIF89a"):
+            return "image/gif"
+        if raw_bytes.startswith(b"RIFF") and raw_bytes[8:12] == b"WEBP":
+            return "image/webp"
+        return "application/octet-stream"
 
     @staticmethod
     def _studio_price(product):
@@ -410,6 +427,30 @@ class ZaloMiniAppAPI(http.Controller):
                 "categories": website_categories,
             }
         })
+
+    @http.route("/api/v1/products/<int:product_id>/image/<string:field_name>", type="http", auth="public", methods=["GET"], csrf=False)
+    def product_image(self, product_id, field_name, **kwargs):
+        allowed_fields = {"image_1920", "image_1", "image_2", "image_3", "image_4", "image_5"}
+        if field_name not in allowed_fields:
+            return self._response_error("INVALID_IMAGE_FIELD", "Unsupported image field", status=400)
+
+        product = request.env["product.template"].sudo().browse(product_id)
+        if not product.exists() or field_name not in product._fields:
+            return self._response_error("NOT_FOUND", "Product or image field not found", status=404)
+
+        encoded = getattr(product, field_name)
+        if not encoded and field_name != "image_1920":
+            encoded = product.image_1920
+
+        if not encoded:
+            return self._response_error("IMAGE_NOT_FOUND", "Image is empty", status=404)
+
+        try:
+            raw = base64.b64decode(encoded)
+        except Exception:
+            return self._response_error("IMAGE_DECODE_ERROR", "Unable to decode image", status=500)
+
+        return Response(raw, status=200, content_type=self._guess_image_mimetype(raw))
 
     @http.route("/api/v1/banners", type="http", auth="public", methods=["GET"], csrf=False)
     def banners(self, **kwargs):
