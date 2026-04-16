@@ -5,6 +5,9 @@ class DeliveryPlannerMessage(models.Model):
     _name = 'hlv.sale.plan.message'
     _description = 'HLV Sale Plan Message Notification'
     _order = 'last_message_date desc, id desc'
+    _sql_constraints = [
+        ('uniq_sale_order_notification', 'unique(sale_order_id)', 'Each sale order can have only one notification row.'),
+    ]
 
     sale_order_id = fields.Many2one(
         'sale.order',

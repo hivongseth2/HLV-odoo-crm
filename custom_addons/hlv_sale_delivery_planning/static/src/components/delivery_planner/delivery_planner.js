@@ -193,9 +193,13 @@ export class DeliveryPlannerDashboard extends Component {
 
             this.state.globalUnreadOrders = merged;
             
-            if (!isInitial) {
+            const shouldNotifyFromPolling = !isInitial && !this.busService;
+            if (shouldNotifyFromPolling) {
                 for (const notification of notifications.filter((n) => !n.is_read)) {
                     const orderId = notification.sale_order_id ? notification.sale_order_id[0] : false;
+                    if (!orderId) {
+                        continue;
+                    }
                     const prev = prevByOrderId.get(orderId);
                     if (!prev || prev._isRead) {
                         const so = this.state.saleOrders.find(o => o.id === orderId);
@@ -246,7 +250,7 @@ export class DeliveryPlannerDashboard extends Component {
 
     async openDrawerFromMessageList(soId) {
         this.state.globalUnreadOrders = this.state.globalUnreadOrders.map((o) =>
-            (o.sale_order_id && o.sale_order_id[0] === soId) || o.id === soId ? { ...o, _isRead: true } : o
+            (o.sale_order_id && o.sale_order_id[0] === soId) ? { ...o, _isRead: true } : o
         );
         this.markOrderAsRead(soId);
 
