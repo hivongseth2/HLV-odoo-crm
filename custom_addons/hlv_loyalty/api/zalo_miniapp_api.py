@@ -255,15 +255,20 @@ class ZaloMiniAppAPI(http.Controller):
         total = model.search_count(domain)
         products = model.search(domain, offset=offset, limit=limit, order=order)
 
+        def _original_price(p):
+            compare_price = getattr(p, "compare_list_price", 0) or 0
+            return compare_price if compare_price and compare_price >= p.list_price else p.list_price
+
         def _discount_percent(p):
-            if p.list_price and p.lst_price and p.lst_price > p.list_price:
-                return int(round((p.lst_price - p.list_price) * 100.0 / p.lst_price, 0))
+            original = _original_price(p)
+            if original and original > p.list_price:
+                return int(round((original - p.list_price) * 100.0 / original, 0))
             return 0
 
         data = []
         for p in products:
             price = p.list_price
-            original_price = p.lst_price if p.lst_price and p.lst_price >= price else price
+            original_price = _original_price(p)
             data.append({
                 "id": p.id,
                 "name": p.name,
@@ -300,7 +305,8 @@ class ZaloMiniAppAPI(http.Controller):
 
         imgs = [self._img_url("product.template", product.id)]
         price = product.list_price
-        original_price = product.lst_price if product.lst_price and product.lst_price >= price else price
+        compare_price = getattr(product, "compare_list_price", 0) or 0
+        original_price = compare_price if compare_price and compare_price >= price else price
         discount_percent = int(round((original_price - price) * 100.0 / original_price, 0)) if original_price else 0
 
         return self._response_success({
@@ -468,7 +474,7 @@ class ZaloMiniAppAPI(http.Controller):
             lines.append((0, 0, {
                 "product_id": product.id,
                 "product_uom_qty": qty,
-                "price_unit": product.lst_price,
+                "price_unit": product.list_price,
                 "name": product.display_name,
             }))
 
