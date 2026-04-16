@@ -7,6 +7,7 @@
     'author': 'HLV',
     'depends': ['sale_management', 'purchase_stock'],
     'data': [
+        'security/ir.model.access.csv',
         'views/delivery_planner_views.xml',
     ],
     'assets': {
