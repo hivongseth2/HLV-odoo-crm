@@ -1404,12 +1404,34 @@ class SalePlanPublicController(http.Controller):
             
             # Send real-time bus notification to the delivery planner dashboard
             try:
-                request.env['bus.bus'].sudo()._sendone('delivery_planner_channel', 'new_portal_message', {
-                    'so_id': so.id,
-                    'so_name': so.name,
-                    'author_name': author_name or 'Khách hàng',
-                    'body': body
-                })
+              payload = {
+                'so_id': so.id,
+                'so_name': so.name,
+                'author_name': author_name or 'Khách hàng',
+                'body': body,
+              }
+              bus = request.env['bus.bus'].sudo()
+
+              # Primary: channel notification for dashboard subscribers.
+              try:
+                bus._sendone('delivery_planner_channel', {'type': 'new_portal_message', 'payload': payload})
+              except TypeError:
+                bus._sendone('delivery_planner_channel', 'new_portal_message', payload)
+
+              # Fallback: push directly to all internal users (share=False).
+              internal_partners = request.env['res.users'].sudo().search([
+                ('share', '=', False),
+                ('active', '=', True),
+              ]).mapped('partner_id')
+              if internal_partners:
+                try:
+                  bus._sendmany([
+                    (partner, 'new_portal_message', payload)
+                    for partner in internal_partners
+                  ])
+                except Exception:
+                  for partner in internal_partners:
+                    bus._sendone(partner, 'new_portal_message', payload)
             except Exception as e:
                 _logger.warning(f"Delivery Planner Bus send error: {e}")
 

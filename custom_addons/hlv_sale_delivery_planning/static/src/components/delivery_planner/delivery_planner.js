@@ -127,7 +127,19 @@ export class DeliveryPlannerDashboard extends Component {
             if (this.busService) {
                 this.busService.addChannel("delivery_planner_channel");
                 this._busNotificationHandler = ({ detail: notifications }) => {
-                    for (const { payload, type } of notifications) {
+                    for (const item of notifications || []) {
+                        let type;
+                        let payload;
+
+                        if (Array.isArray(item)) {
+                            const message = item[1] || {};
+                            type = message.type || item[2];
+                            payload = message.payload || message;
+                        } else {
+                            type = item && item.type;
+                            payload = item && (item.payload || item);
+                        }
+
                         if (type === "new_portal_message") {
                             this.onNewPortalMessage(payload);
                         }
