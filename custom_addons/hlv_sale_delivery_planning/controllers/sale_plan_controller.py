@@ -148,10 +148,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 .filter-chip .chip-x{background:none;border:none;color:#fff;font-size:1rem;line-height:1;padding:0 2px;cursor:pointer;opacity:.8}
 .filter-chip .chip-x:hover{opacity:1}
 /* Kanban */
-.kanban-col{min-width:320px;max-width:420px;flex:0 0 auto}
+.kanban-col{min-width:280px;max-width:420px;flex:0 1 auto}
 .kanban-col .card-header{font-size:.85rem}
-.kanban-wrapper{overflow-x:auto;overflow-y:hidden;margin-left:-1rem;margin-right:-1rem;padding-left:1rem;padding-right:1rem;-webkit-overflow-scrolling:touch}
-#kanban-view{display:flex;flex-wrap:nowrap;gap:1rem}
+.kanban-wrapper{width:100%;overflow-x:auto;overflow-y:hidden;margin-left:-1rem;margin-right:-1rem;padding-left:1rem;padding-right:1rem;-webkit-overflow-scrolling:touch}
+#kanban-view{display:flex;flex-wrap:nowrap;gap:1rem;width:fit-content}
 /* Cards */
 .so-card{border-width:1px!important;transition:.1s}
 .so-card:hover{box-shadow:0 3px 10px rgba(0,0,0,.1)}
