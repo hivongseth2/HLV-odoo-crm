@@ -165,16 +165,31 @@ export class DeliveryPlannerDashboard extends Component {
             const unreadOrders = await this.orm.searchRead(
                 'sale.order',
                 [['x_plan_unread_message', '=', true]],
-                ['id', 'name', 'partner_id'],
+                ['id', 'name', 'partner_id', 'write_date'],
                 { limit: 50, order: 'write_date desc' }
             );
-            
-            const prevIds = new Set(this.state.globalUnreadOrders.map(o => o.id));
-            this.state.globalUnreadOrders = unreadOrders;
+
+            const prevById = new Map(this.state.globalUnreadOrders.map((o) => [o.id, o]));
+            const unreadIds = new Set(unreadOrders.map((o) => o.id));
+
+            const merged = unreadOrders.map((o) => ({
+                ...o,
+                _isRead: false,
+            }));
+
+            // Giữ các item đã đọc ở panel (không xóa), chỉ làm mờ để phân biệt.
+            for (const prev of this.state.globalUnreadOrders) {
+                if (prev._isRead && !unreadIds.has(prev.id)) {
+                    merged.push(prev);
+                }
+            }
+
+            this.state.globalUnreadOrders = merged.slice(0, 100);
             
             if (!isInitial) {
                 for (const order of unreadOrders) {
-                    if (!prevIds.has(order.id)) {
+                    const prev = prevById.get(order.id);
+                    if (!prev || prev._isRead) {
                         const so = this.state.saleOrders.find(o => o.id === order.id);
                         if (so) so.has_unread_message = true;
                         
@@ -200,7 +215,25 @@ export class DeliveryPlannerDashboard extends Component {
         }
     }
 
+    async markOrderAsRead(soId) {
+        try {
+            await this.orm.write('sale.order', [soId], { x_plan_unread_message: false });
+        } catch (e) {
+            console.warn('markOrderAsRead failed', e);
+        }
+    }
+
     async openDrawerFromMessageList(soId) {
+        this.state.globalUnreadOrders = this.state.globalUnreadOrders.map((o) =>
+            o.id === soId ? { ...o, _isRead: true } : o
+        );
+        this.markOrderAsRead(soId);
+
+        const soLocal = this.state.saleOrders.find(o => o.id === soId);
+        if (soLocal) {
+            soLocal.has_unread_message = false;
+        }
+
         // Mở drawer
         let so = this.state.saleOrders.find(o => o.id === soId);
         if (so) {
@@ -230,25 +263,27 @@ export class DeliveryPlannerDashboard extends Component {
 
     async onNewPortalMessage(payload) {
         // payload: {so_id, so_name, author_name, body}
-        
-        // Cập nhật danh sách unread của drawer bên trái real-time
-        if (!this.state.globalUnreadOrders.find(o => o.id === payload.so_id)) {
-            // Đẩy lên đầu danh sách ngầm
-            this.state.globalUnreadOrders = [
-                {
-                    id: payload.so_id,
-                    name: payload.so_name,
-                    partner_id: [0, payload.author_name || 'Khách hàng']
-                },
-                ...this.state.globalUnreadOrders
-            ];
-        }
+
+        // Cập nhật danh sách drawer realtime: có tin mới thì đưa lên đầu và bật trạng thái chưa đọc.
+        const existing = this.state.globalUnreadOrders.find(o => o.id === payload.so_id);
+        const headItem = {
+            id: payload.so_id,
+            name: payload.so_name,
+            partner_id: [0, payload.author_name || 'Khách hàng'],
+            _isRead: false,
+        };
+        this.state.globalUnreadOrders = [
+            headItem,
+            ...this.state.globalUnreadOrders.filter(o => o.id !== payload.so_id),
+        ].slice(0, 100);
         
         // Show toaster notification
         const rawBody = (payload.body || '').replace(/<[^>]+>/g, '').substring(0, 80);
         const so = this.state.saleOrders.find(o => o.id === payload.so_id);
-        if (so && !so.has_unread_message) {
+        if (so) {
             so.has_unread_message = true;
+        }
+        if (!existing || existing._isRead) {
             this.notification.add(
                 `Đơn hàng ${payload.so_name}: ${rawBody}...`,
                 {

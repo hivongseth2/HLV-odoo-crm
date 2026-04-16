@@ -529,10 +529,14 @@
                  <div t-else="" class="list-group list-group-flush">
                       <t t-foreach="state.globalUnreadOrders" t-as="uo" t-key="uo.id">
                           <button type="button" class="list-group-item list-group-item-action p-3"
+                                  t-att-class="uo._isRead ? 'opacity-50' : ''"
                                   t-on-click="() => this.openDrawerFromMessageList(uo.id)">
                               <div class="d-flex w-100 justify-content-between mb-1">
-                                  <h6 class="mb-0 fw-bold text-primary"><t t-esc="uo.name"/></h6>
-                                  <small class="text-danger"><i class="fa fa-circle" style="font-size:0.6rem;"></i> Chưa đọc</small>
+                                  <h6 class="mb-0 fw-bold" t-att-class="uo._isRead ? 'text-muted' : 'text-primary'"><t t-esc="uo.name"/></h6>
+                                  <small t-att-class="uo._isRead ? 'text-muted' : 'text-danger'">
+                                      <i class="fa" t-att-class="uo._isRead ? 'fa-check-circle' : 'fa-circle'" style="font-size:0.6rem;"></i>
+                                      <t t-esc="uo._isRead ? 'Đã xem' : 'Chưa đọc'"/>
+                                  </small>
                               </div>
                               <p class="mb-1 small text-muted">
                                   <i class="fa fa-user me-1"/> 
