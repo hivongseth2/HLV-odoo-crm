@@ -137,6 +137,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         self, so, po_by_origin, product_availabilities,
         att_by_picking, so_packages_dict, so_status_dict,
         transfer_suggestions=None,
+        page_kit_tmpl_ids=None, page_kit_bom_map=None, page_blocking_by_so=None,
     ):
         """
         Serialize một Sale Order thành dict để trả về cho OWL Dashboard.
@@ -168,12 +169,18 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                     qty_packed_map[prod_name] = qty_packed_map.get(prod_name, 0.0) + qty
 
         # --- Nhận diện Kit (phantom BOM) ---
-        product_templates = so.order_line.mapped('product_id.product_tmpl_id')
-        kits = self.env['mrp.bom'].sudo().search([
-            ('product_tmpl_id', 'in', product_templates.ids),
-            ('type', '=', 'phantom'),
-        ])
-        kit_tmpl_ids = set(kits.mapped('product_tmpl_id').ids)
+        # Dùng data batch từ caller (thay thế per-SO mrp.bom.search)
+        if page_kit_tmpl_ids is not None:
+            kit_tmpl_ids = page_kit_tmpl_ids
+            kit_bom_map = page_kit_bom_map or {}
+        else:
+            product_templates = so.order_line.mapped('product_id.product_tmpl_id')
+            kits = self.env['mrp.bom'].sudo().search([
+                ('product_tmpl_id', 'in', product_templates.ids),
+                ('type', '=', 'phantom'),
+            ])
+            kit_tmpl_ids = set(kits.mapped('product_tmpl_id').ids)
+            kit_bom_map = {bom.product_tmpl_id.id: bom for bom in kits}
 
         # --- Batch load tồn kho thực cho TẤT CẢ Kit components (Fix N+1) ---
         # Thay vì stock.quant.search() per bom_line, dùng ONE read_group cho tất cả components
@@ -222,11 +229,8 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             is_kit = line.product_id.product_tmpl_id.id in kit_tmpl_ids
 
             if is_kit:
-                # Phantom BOM kit: tính số kit hoàn chỉnh có thể lắp ráp từ linh kiện
-                bom = next(
-                    (b for b in kits if b.product_tmpl_id.id == line.product_id.product_tmpl_id.id),
-                    None
-                )
+                # Phantom BOM kit: tính số kit hoàn chỉnh từ linh kiện
+                bom = kit_bom_map.get(line.product_id.product_tmpl_id.id)
                 if bom and so.warehouse_id:
                     # Lấy pickings active của đơn này để cộng lại reserved cho chính đơn
                     so_active_pickings = so.picking_ids.filtered(
@@ -329,40 +333,46 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 pending_product_ids.append(ld['product_id'][0])
 
         blocked_by_product = {}
-        if pending_product_ids and so.warehouse_id:
-            # Tìm stock.move đang giữ hàng (reserved) tại kho này, KHÔNG phải của SO này
-            blocking_moves = self.env['stock.move'].sudo().search([
-                ('product_id', 'in', pending_product_ids),
-                ('state', 'in', ('assigned', 'partially_available', 'confirmed', 'waiting')),
-                ('location_id', 'child_of', so.warehouse_id.lot_stock_id.id),
-                ('picking_id', '!=', False),
-                ('picking_id.state', 'not in', ('done', 'cancel')),
-                ('sale_line_id', '=', False),  # Không phải move từ SO (internal transfers)
-            ])
-            for mv in blocking_moves:
-                pid = mv.product_id.id
-                reserved_qty = mv.quantity  # reserved qty on the move
-                if reserved_qty <= 0:
-                    continue
-                if pid not in blocked_by_product:
-                    blocked_by_product[pid] = []
-                # Gom theo picking
-                existing = next(
-                    (b for b in blocked_by_product[pid] if b['picking_id'] == mv.picking_id.id),
-                    None,
-                )
-                if existing:
-                    existing['qty'] += reserved_qty
-                else:
-                    blocked_by_product[pid].append({
-                        'picking_id': mv.picking_id.id,
-                        'picking_name': mv.picking_id.name,
-                        'picking_type': mv.picking_id.picking_type_id.name or '',
-                        'picking_code': mv.picking_id.picking_type_id.code or '',
-                        'origin': mv.picking_id.origin or '',
-                        'state': mv.picking_id.state,
-                        'qty': reserved_qty,
-                    })
+        if pending_product_ids:
+            # Dùng data batch từ caller (thay thế per-SO stock.move.search)
+            so_blocking = (page_blocking_by_so or {}).get(so.id, {})
+            for pid in pending_product_ids:
+                entries = so_blocking.get(pid, [])
+                if entries:
+                    blocked_by_product[pid] = entries
+
+            # Fallback: nếu không có data batch (gọi standalone), query trực tiếp
+            if page_blocking_by_so is None and so.warehouse_id and so.warehouse_id.lot_stock_id:
+                blocking_moves = self.env['stock.move'].sudo().search([
+                    ('product_id', 'in', pending_product_ids),
+                    ('state', 'in', ('assigned', 'partially_available', 'confirmed', 'waiting')),
+                    ('location_id', 'child_of', so.warehouse_id.lot_stock_id.id),
+                    ('picking_id', '!=', False),
+                    ('picking_id.state', 'not in', ('done', 'cancel')),
+                    ('sale_line_id', '=', False),
+                ])
+                for mv in blocking_moves:
+                    pid = mv.product_id.id
+                    if mv.quantity <= 0:
+                        continue
+                    if pid not in blocked_by_product:
+                        blocked_by_product[pid] = []
+                    existing = next(
+                        (b for b in blocked_by_product[pid] if b['picking_id'] == mv.picking_id.id),
+                        None,
+                    )
+                    if existing:
+                        existing['qty'] += mv.quantity
+                    else:
+                        blocked_by_product[pid].append({
+                            'picking_id': mv.picking_id.id,
+                            'picking_name': mv.picking_id.name,
+                            'picking_type': mv.picking_id.picking_type_id.name or '',
+                            'picking_code': mv.picking_id.picking_type_id.code or '',
+                            'origin': mv.picking_id.origin or '',
+                            'state': mv.picking_id.state,
+                            'qty': mv.quantity,
+                        })
 
         # Gắn blocking info vào từng line
         for ld in so_lines_data:

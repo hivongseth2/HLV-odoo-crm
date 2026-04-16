@@ -65,6 +65,19 @@ class DeliveryPlannerService(models.AbstractModel):
         att_by_picking = self._fetch_attachments_for_pickings(page_sales.mapped('picking_ids').ids)
         so_packages_dict = self._fetch_packages_for_sales(page_sales)
 
+        # Batch load BOM kits cho tất cả 12 SO trang (thay thế 12× mrp.bom.search per-SO)
+        page_tmpl_ids = page_sales.mapped('order_line.product_id.product_tmpl_id').ids
+        page_kits = self.env['mrp.bom'].sudo().search([
+            ('product_tmpl_id', 'in', page_tmpl_ids), ('type', '=', 'phantom'),
+        ]) if page_tmpl_ids else self.env['mrp.bom']
+        page_kit_tmpl_ids = set(page_kits.mapped('product_tmpl_id').ids)
+        # Kit BOM map: {tmpl_id: bom} để tra nhanh
+        page_kit_bom_map = {bom.product_tmpl_id.id: bom for bom in page_kits}
+
+        # Batch load blocking moves cho tất cả 12 SO trang (thay thế 12× stock.move.search per-SO)
+        # Chỉ load khi có kho, gom theo (so_id, product_id)
+        page_blocking_by_so = self._batch_blocking_moves(page_sales)
+
         # Fix High #2: batch compute transfer suggestions ONCE for all page SOs
         # Thay vì _compute_transfer_suggestions per-SO (N×M×P queries),
         # dùng 1 location + 1 quant + 1 moves query cho toàn trang.
@@ -75,6 +88,9 @@ class DeliveryPlannerService(models.AbstractModel):
                 so, po_by_origin, product_availabilities,
                 att_by_picking, so_packages_dict, so_status_dict.get(so.id, {}),
                 transfer_suggestions=transfer_map.get(so.id),
+                page_kit_tmpl_ids=page_kit_tmpl_ids,
+                page_kit_bom_map=page_kit_bom_map,
+                page_blocking_by_so=page_blocking_by_so,
             )
             for so in page_sales
         ]
@@ -145,6 +161,111 @@ class DeliveryPlannerService(models.AbstractModel):
             subtype_xmlid='mail.mt_note',
         )
         return True
+
+    @api.model
+    def _batch_blocking_moves(self, page_sales):
+        """
+        Batch load internal moves đang block hàng tại kho của từng SO trên trang.
+        Thay 12× stock.move.search per-SO bằng 1 batch query.
+        Trả về: {so_id: {product_id: [{picking_id, picking_name, ...}]}}
+        """
+        if not page_sales:
+            return {}
+        so_wh_locs = {}
+        all_pending_pids = set()
+        for so in page_sales:
+            if not so.warehouse_id or not so.warehouse_id.lot_stock_id:
+                continue
+            so_wh_locs[so.id] = (so.warehouse_id.id, so.warehouse_id.lot_stock_id.id)
+            for line in so.order_line:
+                if line.display_type or not line.product_id:
+                    continue
+                if line.product_id.type == 'service':
+                    continue
+                if (line.product_uom_qty - line.qty_delivered) > 0:
+                    all_pending_pids.add(line.product_id.id)
+
+        if not all_pending_pids or not so_wh_locs:
+            return {}
+
+        all_root_locs = list({v[1] for v in so_wh_locs.values()})
+        child_locs = self.env['stock.location'].sudo().search([
+            ('id', 'child_of', all_root_locs), ('usage', '=', 'internal'),
+        ])
+        loc_to_whs = {}
+        for so_id, (wh_id, root_loc) in so_wh_locs.items():
+            for loc in child_locs:
+                if loc.parent_path and f'/{root_loc}/' in loc.parent_path:
+                    loc_to_whs.setdefault(loc.id, set()).add(wh_id)
+
+        if not loc_to_whs:
+            return {}
+
+        raw_moves = self.env['stock.move'].sudo().search_read([
+            ('product_id', 'in', list(all_pending_pids)),
+            ('state', 'in', ('assigned', 'partially_available', 'confirmed', 'waiting')),
+            ('location_id', 'in', list(loc_to_whs.keys())),
+            ('picking_id', '!=', False),
+            ('picking_id.state', 'not in', ('done', 'cancel')),
+            ('sale_line_id', '=', False),
+        ], ['product_id', 'location_id', 'quantity', 'picking_id'])
+
+        pk_ids = list({mv['picking_id'][0] for mv in raw_moves if mv.get('picking_id')})
+        pk_info = {}
+        if pk_ids:
+            for r in self.env['stock.picking'].sudo().search_read(
+                [('id', 'in', pk_ids)],
+                ['id', 'name', 'state', 'origin', 'picking_type_id'],
+            ):
+                pt_id = r['picking_type_id'][0] if r.get('picking_type_id') else None
+                pk_info[r['id']] = {
+                    'name': r['name'], 'state': r['state'],
+                    'origin': r.get('origin') or '', 'pt_id': pt_id,
+                }
+            pt_ids = list({v['pt_id'] for v in pk_info.values() if v['pt_id']})
+            if pt_ids:
+                pt_map = {r['id']: r for r in self.env['stock.picking.type'].sudo().search_read(
+                    [('id', 'in', pt_ids)], ['id', 'name', 'code'],
+                )}
+                for info in pk_info.values():
+                    pt = pt_map.get(info['pt_id'], {})
+                    info['type_name'] = pt.get('name') or ''
+                    info['type_code'] = pt.get('code') or ''
+
+        wh_to_sos = {}
+        for so_id, (wh_id, _) in so_wh_locs.items():
+            wh_to_sos.setdefault(wh_id, []).append(so_id)
+
+        result = {}
+        for mv in raw_moves:
+            pid = mv['product_id'][0]
+            qty = mv.get('quantity') or 0
+            if qty <= 0:
+                continue
+            loc_id = mv['location_id'][0] if mv.get('location_id') else None
+            pk_id = mv['picking_id'][0] if mv.get('picking_id') else None
+            if not loc_id or not pk_id:
+                continue
+            pk_data = pk_info.get(pk_id, {})
+            for wh_id in loc_to_whs.get(loc_id, set()):
+                for so_id in wh_to_sos.get(wh_id, []):
+                    entries = result.setdefault(so_id, {}).setdefault(pid, {})
+                    if pk_id in entries:
+                        entries[pk_id]['qty'] += qty
+                    else:
+                        entries[pk_id] = {
+                            'picking_id': pk_id,
+                            'picking_name': pk_data.get('name', ''),
+                            'picking_type': pk_data.get('type_name', ''),
+                            'picking_code': pk_data.get('type_code', ''),
+                            'origin': pk_data.get('origin', ''),
+                            'state': pk_data.get('state', ''),
+                            'qty': qty,
+                        }
+        return {
+            so_id: {pid: list(entries.values()) for pid, entries in by_prod.items()}
+            for so_id, by_prod in result.items()
+        }
 
     @api.model
     def _batch_transfer_suggestions(self, page_sales, product_availabilities):

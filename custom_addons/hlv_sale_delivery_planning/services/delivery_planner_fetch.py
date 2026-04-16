@@ -34,57 +34,71 @@ class DeliveryPlannerServiceFetch(models.AbstractModel):
         if not all_picking_ids:
             return att_by_picking
 
-        # --- Attachments trực tiếp ---
-        picking_attachments = self.env['ir.attachment'].sudo().search([
+        # --- Attachments trực tiếp (search_read thay vì browse) ---
+        for att in self.env['ir.attachment'].sudo().search_read([
             ('res_model', '=', 'stock.picking'),
             ('res_id', 'in', all_picking_ids),
-        ])
-        for att in picking_attachments:
-            if att.name and (
-                att.name.lower().endswith(('.webm', '.mp4'))
-                or 'video' in (att.mimetype or '')
+        ], ['id', 'name', 'res_id', 'mimetype']):
+            if att['name'] and (
+                att['name'].lower().endswith(('.webm', '.mp4'))
+                or 'video' in (att.get('mimetype') or '')
             ):
-                att_by_picking.setdefault(att.res_id, []).append({
-                    'id': att.id, 'name': att.name,
-                    'url': f'/web/content/{att.id}?download=true',
+                att_by_picking.setdefault(att['res_id'], []).append({
+                    'id': att['id'], 'name': att['name'],
+                    'url': f"/web/content/{att['id']}?download=true",
                 })
 
-        # --- Video trong chatter (mail.message) ---
-        messages = self.env['mail.message'].sudo().search([
+        # --- Video trong chatter: 1 query message + 1 query attachment ---
+        msg_recs = self.env['mail.message'].sudo().search_read([
             ('model', '=', 'stock.picking'),
             ('res_id', 'in', all_picking_ids),
-        ])
-        for msg in messages:
-            if msg.attachment_ids:
-                for att in msg.attachment_ids:
-                    if att.name and (
-                        att.name.lower().endswith(('.webm', '.mp4'))
-                        or 'video' in (att.mimetype or '')
-                    ):
-                        url = f'/web/content/{att.id}?download=true'
-                        if not any(a['url'] == url for a in att_by_picking.get(msg.res_id, [])):
-                            att_by_picking.setdefault(msg.res_id, []).append(
-                                {'id': att.id, 'name': att.name, 'url': url}
-                            )
+        ], ['id', 'res_id', 'attachment_ids', 'body'])
 
-            if msg.body:
-                if 'Video đóng gói' in msg.body or 'video' in msg.body.lower():
-                    urls = re.findall(r'href=[\'"]([^\'"]+)[\'"]', msg.body)
+        # Batch load attachments của tất cả messages 1 lần
+        all_msg_att_ids = [att_id for m in msg_recs for att_id in (m.get('attachment_ids') or [])]
+        msg_att_map = {}
+        if all_msg_att_ids:
+            for att in self.env['ir.attachment'].sudo().search_read(
+                [('id', 'in', all_msg_att_ids)],
+                ['id', 'name', 'mimetype'],
+            ):
+                msg_att_map[att['id']] = att
+
+        for msg in msg_recs:
+            pick_id = msg['res_id']
+            for att_id in (msg.get('attachment_ids') or []):
+                att = msg_att_map.get(att_id)
+                if not att:
+                    continue
+                if att.get('name') and (
+                    att['name'].lower().endswith(('.webm', '.mp4'))
+                    or 'video' in (att.get('mimetype') or '')
+                ):
+                    url = f"/web/content/{att['id']}?download=true"
+                    if not any(a['url'] == url for a in att_by_picking.get(pick_id, [])):
+                        att_by_picking.setdefault(pick_id, []).append(
+                            {'id': att['id'], 'name': att['name'], 'url': url}
+                        )
+
+            body = msg.get('body') or ''
+            if body:
+                if 'Video đóng gói' in body or 'video' in body.lower():
+                    urls = re.findall(r'href=[\'"]([\'"]+)[\'"]', body)
                     for i, url in enumerate(urls):
                         clean_url = url.replace('&amp;', '&')
-                        if not any(u['url'] == clean_url for u in att_by_picking.get(msg.res_id, [])):
-                            att_by_picking.setdefault(msg.res_id, []).append({
-                                'id': f"log_{msg.id}_{i}",
+                        if not any(u['url'] == clean_url for u in att_by_picking.get(pick_id, [])):
+                            att_by_picking.setdefault(pick_id, []).append({
+                                'id': f"log_{msg['id']}_{i}",
                                 'name': 'Video Đóng Gói',
                                 'url': clean_url,
                             })
                 else:
-                    urls = re.findall(r'(\/web\/content\/[0-9]+.*?\.webm)', msg.body)
+                    urls = re.findall(r'(\/web\/content\/[0-9]+.*?\.webm)', body)
                     for i, url in enumerate(urls):
                         clean_url = url.replace('&amp;', '&')
-                        if not any(u['url'] == clean_url for u in att_by_picking.get(msg.res_id, [])):
-                            att_by_picking.setdefault(msg.res_id, []).append({
-                                'id': f"log_{msg.id}_{i}",
+                        if not any(u['url'] == clean_url for u in att_by_picking.get(pick_id, [])):
+                            att_by_picking.setdefault(pick_id, []).append({
+                                'id': f"log_{msg['id']}_{i}",
                                 'name': 'Video Log',
                                 'url': clean_url,
                             })
@@ -98,7 +112,7 @@ class DeliveryPlannerServiceFetch(models.AbstractModel):
     def _fetch_packages_for_sales(self, page_sales):
         """
         Lấy thông tin kiện hàng (stock.quant.package) theo từng phiếu kho
-        của các SO, nhóm theo SO → Picking → Package.
+        của các SO, nhóm theo SO -> Picking -> Package.
         Trả về dict: {so_id: [{picking_id, picking_name, state, packages}, ...]}
         """
         all_picking_ids = page_sales.mapped('picking_ids').ids
@@ -114,28 +128,49 @@ class DeliveryPlannerServiceFetch(models.AbstractModel):
         if not move_lines:
             return {}
 
-        # --- Lấy metadata kiện ---
+        # --- Metadata kiện: search_read thay vì browse ---
         package_ids = list(set(
             ml['result_package_id'][0] for ml in move_lines if ml['result_package_id']
         ))
-        packages = self.env['stock.quant.package'].sudo().browse(package_ids)
-        pack_dict = {
-            p.id: {
-                'id': p.id,
-                'name': p.name,
-                'location_name': p.location_id.display_name if p.location_id else '',
-                'pack_sequence': getattr(p, 'pack_sequence', 0),
-                'pack_total': getattr(p, 'pack_total', 0),
-            }
-            for p in packages
-        }
+        pack_dict = {}
+        if package_ids:
+            for p in self.env['stock.quant.package'].sudo().search_read(
+                [('id', 'in', package_ids)],
+                ['id', 'name', 'location_id', 'pack_sequence', 'pack_total'],
+            ):
+                # location_id là Many2one → [id, name] hoặc False
+                loc_raw = p.get('location_id')
+                loc_name = loc_raw[1] if isinstance(loc_raw, (list, tuple)) and loc_raw else ''
+                pack_dict[p['id']] = {
+                    'id': p['id'],
+                    'name': p.get('name') or '',
+                    'location_name': loc_name,
+                    'pack_sequence': p.get('pack_sequence') or 0,
+                    'pack_total': p.get('pack_total') or 0,
+                }
 
-        # --- Thông tin picking ---
-        pickings_objs = self.env['stock.picking'].sudo().browse(all_picking_ids)
-        picking_info_map = {
-            p.id: {'state': p.state, 'code': p.picking_type_id.code}
-            for p in pickings_objs
-        }
+        # --- Thông tin picking: search_read thay vì browse ---
+        pickings_info_map = {}
+        for r in self.env['stock.picking'].sudo().search_read(
+            [('id', 'in', all_picking_ids)],
+            ['id', 'state', 'picking_type_id'],
+        ):
+            pt_raw = r.get('picking_type_id')
+            pickings_info_map[r['id']] = {
+                'state': r['state'],
+                'code': '',  # điền sau
+                '_pt_id': pt_raw[0] if isinstance(pt_raw, (list, tuple)) else None,
+            }
+        # Lấy code từ picking_type
+        pt_ids_needed = list({v['_pt_id'] for v in pickings_info_map.values() if v['_pt_id']})
+        if pt_ids_needed:
+            pt_code_map = {r['id']: r.get('code', '') for r in self.env['stock.picking.type'].sudo().search_read(
+                [('id', 'in', pt_ids_needed)], ['id', 'code'],
+            )}
+            for info in pickings_info_map.values():
+                info['code'] = pt_code_map.get(info['_pt_id'], 'outgoing')
+        picking_info_map = pickings_info_map
+
         picking_to_so = {
             picking.id: so.id
             for so in page_sales
