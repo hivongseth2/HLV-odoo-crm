@@ -162,67 +162,54 @@ export class DeliveryPlannerDashboard extends Component {
 
     async pollUnreadMessages(isInitial = false) {
         try {
-            const unreadOrders = await this.orm.searchRead(
-                'sale.order',
-                [['x_plan_unread_message', '=', true]],
-                ['id', 'name', 'partner_id', 'write_date'],
-                { limit: 50, order: 'write_date desc' }
+            const notifications = await this.orm.searchRead(
+                'hlv.sale.plan.message',
+                [],
+                ['id', 'sale_order_id', 'last_message_author', 'last_message_preview', 'last_message_date', 'is_read'],
+                { limit: 100, order: 'last_message_date desc, id desc' }
             );
-            const unreadIds = unreadOrders.map((o) => o.id);
-            const previewMap = new Map();
 
-            if (unreadIds.length) {
-                const messages = await this.orm.searchRead(
-                    'mail.message',
-                    [
-                        ['model', '=', 'sale.order'],
-                        ['res_id', 'in', unreadIds],
-                    ],
-                    ['res_id', 'body', 'attachment_ids', 'date'],
-                    { order: 'date desc' }
-                );
-                for (const msg of messages) {
-                    if (previewMap.has(msg.res_id)) continue;
-                    const bodyText = this._extractPreviewText(msg.body || '');
-                    const hasAttachments = Array.isArray(msg.attachment_ids) ? msg.attachment_ids.length > 0 : !!msg.attachment_ids;
-                    previewMap.set(msg.res_id, bodyText || (hasAttachments ? 'Có tệp đính kèm' : ''));
-                }
-            }
+            const prevByOrderId = new Map(
+                this.state.globalUnreadOrders.map((o) => [o.sale_order_id ? o.sale_order_id[0] : o.id, o])
+            );
 
-            const prevById = new Map(this.state.globalUnreadOrders.map((o) => [o.id, o]));
-            const unreadIdSet = new Set(unreadIds);
-
-            const merged = unreadOrders.map((o) => ({
-                ...o,
-                _isRead: false,
-                _preview: previewMap.get(o.id) || '',
+            const merged = notifications.map((n) => ({
+                id: n.id,
+                sale_order_id: n.sale_order_id,
+                name: n.sale_order_id ? n.sale_order_id[1] : '',
+                last_message_author: n.last_message_author || '',
+                _preview: n.last_message_preview || '',
+                _isRead: !!n.is_read,
+                last_message_date: n.last_message_date,
             }));
 
-            // Giữ các item đã đọc ở panel (không xóa), chỉ làm mờ để phân biệt.
-            for (const prev of this.state.globalUnreadOrders) {
-                if (prev._isRead && !unreadIdSet.has(prev.id)) {
-                    merged.push(prev);
+            // Giữ lại trạng thái read/unread đã cập nhật local cho đến khi DB trả về trạng thái mới.
+            for (const item of merged) {
+                const prev = prevByOrderId.get(item.sale_order_id ? item.sale_order_id[0] : item.id);
+                if (prev && prev._isRead && !item._isRead) {
+                    item._isRead = false;
                 }
             }
 
-            this.state.globalUnreadOrders = merged.slice(0, 100);
+            this.state.globalUnreadOrders = merged;
             
             if (!isInitial) {
-                for (const order of unreadOrders) {
-                    const prev = prevById.get(order.id);
+                for (const notification of notifications.filter((n) => !n.is_read)) {
+                    const orderId = notification.sale_order_id ? notification.sale_order_id[0] : false;
+                    const prev = prevByOrderId.get(orderId);
                     if (!prev || prev._isRead) {
-                        const so = this.state.saleOrders.find(o => o.id === order.id);
+                        const so = this.state.saleOrders.find(o => o.id === orderId);
                         if (so) so.has_unread_message = true;
                         
                         this.notification.add(
-                            `Đơn hàng ${order.name} vừa có tin nhắn mới.`,
+                            `Đơn hàng ${notification.sale_order_id ? notification.sale_order_id[1] : ''} vừa có tin nhắn mới.`,
                             {
                                 type: "info",
                                 title: `Tin nhắn chưa đọc`,
                                 buttons: [
                                     {
                                         name: "Xem thông báo",
-                                        onClick: () => this.openDrawerFromMessageList(order.id),
+                                        onClick: () => this.openDrawerFromMessageList(orderId),
                                         primary: true,
                                     }
                                 ]
@@ -238,6 +225,7 @@ export class DeliveryPlannerDashboard extends Component {
 
     async markOrderAsRead(soId) {
         try {
+            await this.orm.call('hlv.sale.plan.message', 'mark_read_for_sale_order', [soId]);
             await this.orm.write('sale.order', [soId], { x_plan_unread_message: false });
         } catch (e) {
             console.warn('markOrderAsRead failed', e);
@@ -258,7 +246,7 @@ export class DeliveryPlannerDashboard extends Component {
 
     async openDrawerFromMessageList(soId) {
         this.state.globalUnreadOrders = this.state.globalUnreadOrders.map((o) =>
-            o.id === soId ? { ...o, _isRead: true } : o
+            (o.sale_order_id && o.sale_order_id[0] === soId) || o.id === soId ? { ...o, _isRead: true } : o
         );
         this.markOrderAsRead(soId);
 
@@ -298,17 +286,18 @@ export class DeliveryPlannerDashboard extends Component {
         // payload: {so_id, so_name, author_name, body}
 
         // Cập nhật danh sách drawer realtime: có tin mới thì đưa lên đầu và bật trạng thái chưa đọc.
-        const existing = this.state.globalUnreadOrders.find(o => o.id === payload.so_id);
+        const existing = this.state.globalUnreadOrders.find(o => (o.sale_order_id && o.sale_order_id[0] === payload.so_id) || o.id === payload.so_id);
         const headItem = {
             id: payload.so_id,
+            sale_order_id: [payload.so_id, payload.so_name],
             name: payload.so_name,
-            partner_id: [0, payload.author_name || 'Khách hàng'],
+            last_message_author: payload.author_name || 'Khách hàng',
             _isRead: false,
             _preview: this._extractPreviewText(payload.body || ''),
         };
         this.state.globalUnreadOrders = [
             headItem,
-            ...this.state.globalUnreadOrders.filter(o => o.id !== payload.so_id),
+            ...this.state.globalUnreadOrders.filter(o => !((o.sale_order_id && o.sale_order_id[0] === payload.so_id) || o.id === payload.so_id)),
         ].slice(0, 100);
         
         // Show toaster notification
@@ -333,10 +322,6 @@ export class DeliveryPlannerDashboard extends Component {
                 }
             );
         }
-    }
-
-    get unreadMessageCount() {
-        return this.state.globalUnreadOrders.filter((o) => !o._isRead).length;
     }
 
 

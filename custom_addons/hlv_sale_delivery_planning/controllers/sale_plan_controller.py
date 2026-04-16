@@ -62,6 +62,14 @@ def _is_allowed_chat_attachment(name, mimetype):
   return ext in _ALLOWED_CHAT_ATTACHMENT_EXTS
 
 
+def _normalize_preview_text(text, limit=140):
+  plain = re.sub(r'<[^>]+>', ' ', text or '')
+  plain = re.sub(r'\s+', ' ', plain).strip()
+  if not plain:
+    return ''
+  return plain[:limit] + ('...' if len(plain) > limit else '')
+
+
 _H = [("Content-Type", "text/html; charset=utf-8")]
 
 _ERR_PW = '<div class="alert alert-danger mb-3">Mật khẩu không đúng.</div>'
@@ -1382,6 +1390,13 @@ class SalePlanPublicController(http.Controller):
                 message_type='comment',
                 subtype_xmlid='mail.mt_note',
                 attachment_ids=attachment_ids,
+            )
+            preview = _normalize_preview_text(body or 'Tệp đính kèm')
+            request.env['hlv.sale.plan.message'].sudo().upsert_for_sale_order(
+              so,
+              author_name=author_name or 'Khách hàng',
+              preview=preview,
+              message_type='customer',
             )
             # Kích hoạt trạng thái nháy đỏ Notification FB 
             if hasattr(so, 'x_plan_unread_message'):

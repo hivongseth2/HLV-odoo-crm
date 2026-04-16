@@ -540,7 +540,7 @@
                               </div>
                               <p class="mb-1 small text-muted">
                                   <i class="fa fa-user me-1"/>
-                                  <t t-esc="uo.partner_id ? uo.partner_id[1] : 'Khách hàng'"/>
+                                  <t t-esc="uo.last_message_author || 'Khách hàng'"/>
                               </p>
                               <p t-if="uo._preview" class="mb-0 small fst-italic"
                                  t-att-class="uo._isRead ? 'text-muted' : 'text-dark'"
