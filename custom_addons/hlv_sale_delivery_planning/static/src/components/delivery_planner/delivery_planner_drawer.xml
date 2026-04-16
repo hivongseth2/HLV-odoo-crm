@@ -467,4 +467,50 @@
         </div>
     </t>
 
+    <!-- ================================================================
+         Message Drawer - Danh sách tin nhắn mới bên trái
+         Sử dụng state.globalUnreadOrders và state.isMessageDrawerOpen
+         ================================================================ -->
+    <t t-name="hlv_sale_delivery_planning.MessageDrawer">
+        <div t-if="state.isMessageDrawerOpen"
+             class="offcanvas offcanvas-start show shadow-lg" tabindex="-1"
+             style="visibility: visible; width: 400px; z-index: 1050; position: fixed; top: 0; bottom: 0; left: 0; background: white;"
+             t-on-click.stop="">
+             
+             <div class="offcanvas-header bg-danger text-white p-3">
+                 <h5 class="offcanvas-title m-0" style="color:white">
+                     <i class="fa fa-bell me-2"></i>
+                     Tin nhắn mới từ saler
+                 </h5>
+                 <button type="button" class="btn-close btn-close-white ms-auto"
+                         aria-label="Close" t-on-click="() => { state.isMessageDrawerOpen = false; }"></button>
+             </div>
+             
+             <div class="offcanvas-body p-0 bg-light overflow-auto" style="height: calc(100vh - 70px);">
+                 <div t-if="state.globalUnreadOrdersLoading" class="p-4 text-center text-muted">
+                      <i class="fa fa-spinner fa-spin fa-2x mb-2"></i><br/>Đang tải...
+                 </div>
+                 <div t-elif="state.globalUnreadOrders.length === 0" class="p-4 text-center text-muted">
+                      <i class="fa fa-envelope-open-o fa-3x text-success opacity-50 mb-3"></i><br/>
+                      Tuyệt vời! Không có tin nhắn mới nào chưa đọc.
+                 </div>
+                 <div t-else="" class="list-group list-group-flush">
+                      <t t-foreach="state.globalUnreadOrders" t-as="uo" t-key="uo.id">
+                          <button type="button" class="list-group-item list-group-item-action p-3"
+                                  t-on-click="() => this.openDrawerFromMessageList(uo.id)">
+                              <div class="d-flex w-100 justify-content-between mb-1">
+                                  <h6 class="mb-0 fw-bold text-primary"><t t-esc="uo.name"/></h6>
+                                  <small class="text-danger"><i class="fa fa-circle" style="font-size:0.6rem;"></i> Chưa đọc</small>
+                              </div>
+                              <p class="mb-1 small text-muted">
+                                  <i class="fa fa-user me-1"/> 
+                                  <t t-esc="uo.partner_id ? uo.partner_id[1] : 'Khách hàng'"/>
+                              </p>
+                          </button>
+                      </t>
+                 </div>
+             </div>
+        </div>
+    </t>
+
 </templates>

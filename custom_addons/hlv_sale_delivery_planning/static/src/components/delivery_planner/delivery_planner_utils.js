@@ -14,70 +14,70 @@
 
 export function translateDeliveryStatus(status) {
     const trans = {
-        unknown:         'Chưa cập nhật',
-        pending:         'CHƯA GIAO',
-        unshipped:       'CHƯA GIAO',
-        partial:         'Giao 1 phần',
+        unknown: 'Chưa cập nhật',
+        pending: 'Chưa giao',
+        unshipped: 'Chưa giao',
+        partial: 'Giao 1 phần',
         pending_partial: 'Chưa & Giao 1 phần',
-        full:            'Đã giao đủ',
+        full: 'Đã giao đủ',
     };
     return trans[status] || (status ? status.toUpperCase() : '');
 }
 
 export function translatePickingState(state) {
     const trans = {
-        draft:     'Nháp',
-        waiting:   'Chờ phiếu khác',
+        draft: 'Nháp',
+        waiting: 'Chờ phiếu khác',
         confirmed: 'Chờ hàng',
-        assigned:  'Sẵn sàng',
-        done:      'Hoàn thành',
-        cancel:    'Đã hủy',
+        assigned: 'Sẵn sàng',
+        done: 'Hoàn thành',
+        cancel: 'Đã hủy',
     };
     return trans[state] || state;
 }
 
 export function translatePickingStatus(state) {
     const trans = {
-        draft:     'Nháp',
-        waiting:   'Chờ QĐ',
+        draft: 'Nháp',
+        waiting: 'Chờ QĐ',
         confirmed: 'Chờ hàng',
-        assigned:  'Sẵn sàng',
-        done:      'Hoàn thành',
-        cancel:    'Hủy',
+        assigned: 'Sẵn sàng',
+        done: 'Hoàn thành',
+        cancel: 'Hủy',
     };
     return trans[state] || (state ? state.toUpperCase() : '');
 }
 
 export function translateStockStatus(status) {
     const trans = {
-        out_of_stock:  'Không có hàng',
+        out_of_stock: 'Không có hàng',
         partial_ready: 'Có hàng 1 phần',
-        ready:         'Đủ hàng xuất',
+        ready: 'Đủ hàng xuất',
     };
     return trans[status] || (status ? status.toUpperCase() : '');
 }
 
 export function translatePackingStatus(status) {
     const trans = {
-        waiting_stock:   'Không Có Hàng Đóng',
-        unpacked:        'Có Hàng Chưa Đóng Gói',
-        partial_packed:  'Đã Đóng 1 Phần',
-        has_unprinted:       'Có Phiếu Chưa In',
-        printed_waiting:     'Đã In, Chờ Đóng Gói',
-        fully_packed:        'Đã Đóng Gói Đủ',
+        waiting_stock: 'Không Có Hàng Đóng',
+        unpacked: 'Có Hàng Chưa Đóng Gói',
+        partial_packed: 'Đã Đóng 1 Phần',
+        has_unprinted: 'Có Phiếu Chưa In',
+        printed_waiting: 'Đã In, Chờ Đóng Gói',
+        fully_packed: 'Đã Đóng Gói Đủ',
         packed_waiting_ship: 'Đã Gói, Chờ Nhận Giao',
-        shipping:            'Đang Giao',
-        delivered:           'Đã Giao Đủ',
+        shipping: 'Đang Giao',
+        delivered: 'Đã Giao Đủ',
     };
     return trans[status] || (status ? status.toUpperCase() : '');
 }
 
 export function translateSOStatus(status) {
     const trans = {
-        draft:  'Báo giá',
-        sent:   'Đã gửi',
-        sale:   'Đơn hàng',
-        done:   'Khóa',
+        draft: 'Báo giá',
+        sent: 'Đã gửi',
+        sale: 'Đơn hàng',
+        done: 'Khóa',
         cancel: 'Đã hủy',
     };
     return trans[status] || (status ? status.toUpperCase() : '');
@@ -87,7 +87,7 @@ export function translatePOStatus(receiptStatus) {
     const trans = {
         partial: 'Nhận 1 phần',
         pending: 'Chưa nhận',
-        full:    'Đã nhận đủ',
+        full: 'Đã nhận đủ',
         unknown: 'Không rõ',
     };
     return trans[receiptStatus] || 'Mới Tạo / Hủy';
@@ -99,58 +99,58 @@ export function translatePOStatus(receiptStatus) {
 
 export function getPickingStateBadgeClass(state) {
     const mapping = {
-        draft:     'bg-light text-dark',
-        waiting:   'bg-warning text-dark',
+        draft: 'bg-light text-dark',
+        waiting: 'bg-warning text-dark',
         confirmed: 'bg-info text-white',
-        assigned:  'bg-primary text-white',
-        done:      'bg-success text-white',
-        cancel:    'bg-danger text-white',
+        assigned: 'bg-primary text-white',
+        done: 'bg-success text-white',
+        cancel: 'bg-danger text-white',
     };
     return mapping[state] || 'bg-secondary text-white';
 }
 
 export function getPickingStatusBadgeClass(state) {
-    if (state === 'done')     return 'text-bg-success';
+    if (state === 'done') return 'text-bg-success';
     if (state === 'assigned') return 'text-bg-primary';
-    if (state === 'cancel')   return 'text-bg-secondary opacity-50';
+    if (state === 'cancel') return 'text-bg-secondary opacity-50';
     return 'text-bg-warning';
 }
 
 export function getDeliveryStatusBadgeClass(status) {
-    if (status === 'full')    return 'text-bg-success';
+    if (status === 'full') return 'text-bg-success';
     if (status === 'partial') return 'text-bg-warning';
     if (status === 'pending') return 'text-bg-secondary';
     return 'text-bg-light border text-dark';
 }
 
 export function getStockStatusBadgeClass(status) {
-    if (status === 'ready')         return 'text-bg-primary';
+    if (status === 'ready') return 'text-bg-primary';
     if (status === 'partial_ready') return 'text-bg-warning';
-    if (status === 'out_of_stock')  return 'text-bg-danger';
+    if (status === 'out_of_stock') return 'text-bg-danger';
     return 'text-bg-light border text-dark';
 }
 
 export function getPackingStatusBadgeClass(status) {
-    if (status === 'fully_packed')  return 'text-bg-success';
-    if (status === 'partial_packed')return 'text-bg-info';        // backward compat
-    if (status === 'unpacked')      return 'text-bg-warning';     // có hàng → đóng ngay!
+    if (status === 'fully_packed') return 'text-bg-success';
+    if (status === 'partial_packed') return 'text-bg-info';        // backward compat
+    if (status === 'unpacked') return 'text-bg-warning';     // có hàng → đóng ngay!
     if (status === 'waiting_stock') return 'text-bg-secondary';   // chờ hàng về
-    if (status === 'delivered')     return 'text-bg-secondary';
+    if (status === 'delivered') return 'text-bg-secondary';
     return 'text-bg-light border text-dark';
 }
 
 export function getPOStatusBadgeClass(state, receiptStatus) {
-    if (state === 'cancel')                      return 'text-bg-secondary';
-    if (receiptStatus === 'full')                return 'text-bg-success';
-    if (receiptStatus === 'partial')             return 'text-bg-info';
-    if (state === 'purchase' || state === 'done')return 'text-bg-primary';
+    if (state === 'cancel') return 'text-bg-secondary';
+    if (receiptStatus === 'full') return 'text-bg-success';
+    if (receiptStatus === 'partial') return 'text-bg-info';
+    if (state === 'purchase' || state === 'done') return 'text-bg-primary';
     return 'text-bg-light border text-dark';
 }
 
 export function getSOCardColorClass(so) {
-    if (so.real_delivery_status === 'full')    return 'border-success border-2 shadow-sm';
-    if (so.stock_status === 'ready')           return 'border-primary border-2 shadow-sm';
-    if (so.stock_status === 'partial_ready')   return 'border-warning border-2 shadow-sm';
+    if (so.real_delivery_status === 'full') return 'border-success border-2 shadow-sm';
+    if (so.stock_status === 'ready') return 'border-primary border-2 shadow-sm';
+    if (so.stock_status === 'partial_ready') return 'border-warning border-2 shadow-sm';
     return 'border-danger border-2 shadow-sm';
 }
 

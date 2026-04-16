@@ -54,6 +54,15 @@
                                     (<t t-esc="this.selectedCount"/>)
                                 </t>
                             </button>
+                            <button class="btn btn-outline-danger shadow-sm position-relative ms-2"
+                                    t-on-click="() => { this.state.isMessageDrawerOpen = true; }">
+                                <i class="fa fa-bell" ></i> Tin nhắn
+                                <span t-if="this.state.globalUnreadOrders.length > 0"
+                                      class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                                      style="font-size: 0.7rem; padding: 0.35em 0.5em; color:white">
+                                    <t t-esc="this.state.globalUnreadOrders.length"/>
+                                </span>
+                            </button>
                         </div>
                     </div>
 
@@ -172,10 +181,18 @@
             <!-- Relocation Modal -->
             <t t-call="hlv_sale_delivery_planning.RelocationModal"/>
 
+            <!-- Message Drawer (Left) -->
+            <t t-call="hlv_sale_delivery_planning.MessageDrawer"/>
+
             <!-- Backdrop Drawer -->
             <div t-if="state.isDrawerOpen"
                  class="modal-backdrop fade show"
                  t-on-click="closeOverviewDrawer"
+                 style="z-index: 1040;"></div>
+                 
+            <div t-if="state.isMessageDrawerOpen"
+                 class="modal-backdrop fade show"
+                 t-on-click="() => { this.state.isMessageDrawerOpen = false; }"
                  style="z-index: 1040;"></div>
 
         </div>

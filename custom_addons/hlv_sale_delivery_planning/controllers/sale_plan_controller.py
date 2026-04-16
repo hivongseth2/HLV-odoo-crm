@@ -233,7 +233,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
     <div><div class="kpi-pack-label">Đang giao</div><div class="kpi-pack-val" id="kpi-ps">0</div></div>
   </div></div>
   <div style="flex:1 1 0;min-width:130px"><div class="card kpi-pack" id="kpi-pack-deltoday" data-filter="delivered_today">
-    <div class="kpi-pack-icon" style="background:#d4edda;color:#155724"><i class="fa fa-calendar-check-o"></i></div>
+    <div class="kpi-pack-icon" style="background:#d4edda;color:#155724"><i class="fa fa-calendar-check"></i></div>
     <div><div class="kpi-pack-label">Đã giao trong ngày</div><div class="kpi-pack-val" id="kpi-pdt">0</div></div>
   </div></div>
 </div>
@@ -373,7 +373,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 var S={limit:100,total:0,viewMode:'kanban',kanbanGroupBy:'packing_status',
   orders:[],warehouses:[],stats:{},whLoaded:false,kanbanColPageSize:{},reportedIds:{},tagsLoaded:false};
 
-var DL={unshipped:'CHƯA GIAO',pending:'CHƯA GIAO',partial:'Giao 1 phần',full:'Đã giao đủ'};
+var DL={unshipped:'Chưa giao',pending:'Chưa giao',partial:'Giao 1 phần',full:'Đã giao đủ'};
 var DC={unshipped:'badge-del-pending',pending:'badge-del-pending',partial:'badge-del-partial',full:'badge-del-full'};
 var SL={ready:'Đủ hàng xuất',partial_ready:'Có hàng 1 phần',out_of_stock:'Không có hàng'};
 var SC={ready:'badge-stk-ready',partial_ready:'badge-stk-partial',out_of_stock:'badge-stk-out'};
@@ -1235,6 +1235,18 @@ class SalePlanPublicController(http.Controller):
             # Kích hoạt trạng thái nháy đỏ Notification FB 
             if hasattr(so, 'x_plan_unread_message'):
                 so.sudo().write({'x_plan_unread_message': True})
+            
+            # Send real-time bus notification to the delivery planner dashboard
+            try:
+                request.env['bus.bus'].sudo()._sendone('delivery_planner_channel', 'new_portal_message', {
+                    'so_id': so.id,
+                    'so_name': so.name,
+                    'author_name': author_name or 'Khách hàng',
+                    'body': body
+                })
+            except Exception as e:
+                _logger.warning(f"Delivery Planner Bus send error: {e}")
+
             return {'status': 'success'}
         except Exception as e:
             _logger.exception('send_message error')
