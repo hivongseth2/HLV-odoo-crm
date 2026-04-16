@@ -60,6 +60,11 @@ export class DeliveryPlannerDashboard extends Component {
             isDrawerOpen: false,
             selectedOrder: null,
 
+            // Message Drawer (Left)
+            isMessageDrawerOpen: false,
+            globalUnreadOrders: [],
+            globalUnreadOrdersLoading: false,
+
             // Package Modal
             isPackageModalOpen: false,
             selectedPackage: null,
@@ -140,9 +145,10 @@ export class DeliveryPlannerDashboard extends Component {
             this.state.pickingReports = reports;
         });
 
+        this.pollUnreadMessages(true); // Initial fetch
         // Polling fallback cho notification (chạy mỗi 15s) vì bus trên server cấu hình có thể không ổn định
         this.messagePollingInterval = setInterval(() => {
-            this.pollUnreadMessages();
+            this.pollUnreadMessages(false);
         }, 15000);
 
         onWillDestroy(() => {
@@ -152,45 +158,39 @@ export class DeliveryPlannerDashboard extends Component {
         });
     }
 
-    async pollUnreadMessages() {
-        if (!this.state.saleOrders || this.state.saleOrders.length === 0) return;
-        
-        const currentIds = this.state.saleOrders.map(so => so.id);
-        
+    async pollUnreadMessages(isInitial = false) {
         try {
             const unreadOrders = await this.orm.searchRead(
                 'sale.order',
-                [['id', 'in', currentIds], ['x_plan_unread_message', '=', true]],
-                ['id', 'name']
+                [['x_plan_unread_message', '=', true]],
+                ['id', 'name', 'partner_id'],
+                { limit: 50, order: 'write_date desc' }
             );
             
-            for (const order of unreadOrders) {
-                const so = this.state.saleOrders.find(o => o.id === order.id);
-                if (so && !so.has_unread_message) {
-                    so.has_unread_message = true;
-                    
-                    this.notification.add(
-                        `Đơn hàng ${so.name} vừa có tin nhắn mới.`,
-                        {
-                            type: "info",
-                            title: `Có tin nhắn mới`,
-                            buttons: [
-                                {
-                                    name: "Xem đơn hàng",
-                                    onClick: async () => {
-                                        await this.fetchData();
-                                        const updatedSo = this.state.saleOrders.find(o => o.id === so.id);
-                                        if (updatedSo) {
-                                            this.openOverviewDrawer(updatedSo);
-                                        } else {
-                                            this.openSaleOrder(so.id);
-                                        }
-                                    },
-                                    primary: true,
-                                }
-                            ]
-                        }
-                    );
+            const prevIds = new Set(this.state.globalUnreadOrders.map(o => o.id));
+            this.state.globalUnreadOrders = unreadOrders;
+            
+            if (!isInitial) {
+                for (const order of unreadOrders) {
+                    if (!prevIds.has(order.id)) {
+                        const so = this.state.saleOrders.find(o => o.id === order.id);
+                        if (so) so.has_unread_message = true;
+                        
+                        this.notification.add(
+                            `Đơn hàng ${order.name} vừa có tin nhắn mới.`,
+                            {
+                                type: "info",
+                                title: `Tin nhắn chưa đọc`,
+                                buttons: [
+                                    {
+                                        name: "Xem thông báo",
+                                        onClick: () => this.openDrawerFromMessageList(order.id),
+                                        primary: true,
+                                    }
+                                ]
+                            }
+                        );
+                    }
                 }
             }
         } catch (e) {
@@ -198,8 +198,52 @@ export class DeliveryPlannerDashboard extends Component {
         }
     }
 
+    async openDrawerFromMessageList(soId) {
+        // Cập nhật lại list bộ nhớ
+        this.state.globalUnreadOrders = this.state.globalUnreadOrders.filter(o => o.id !== soId);
+        
+        // Mở drawer
+        let so = this.state.saleOrders.find(o => o.id === soId);
+        if (so) {
+            this.openOverviewDrawer(so);
+        } else {
+            // Đơn chưa được tải trên màn hình Kanban hiện tại, query dữ liệu single SO
+            this.state.isLoading = true;
+            try {
+                const result = await this.orm.call('hlv.delivery.planner.service', 'get_dashboard_data', [], {
+                    domain: [['id', '=', soId]],
+                    limit: 1,
+                    offset: 0
+                });
+                if (result && result.sale_orders && result.sale_orders.length) {
+                    this.openOverviewDrawer(result.sale_orders[0]);
+                } else {
+                    this.openSaleOrder(soId);
+                }
+            } catch (e) {
+                this.openSaleOrder(soId);
+            } finally {
+                this.state.isLoading = false;
+            }
+        }
+        this.state.isMessageDrawerOpen = false; // Đóng cửa sổ bên trái
+    }
+
     async onNewPortalMessage(payload) {
         // payload: {so_id, so_name, author_name, body}
+        
+        // Cập nhật danh sách unread của drawer bên trái real-time
+        if (!this.state.globalUnreadOrders.find(o => o.id === payload.so_id)) {
+            // Đẩy lên đầu danh sách ngầm
+            this.state.globalUnreadOrders = [
+                {
+                    id: payload.so_id,
+                    name: payload.so_name,
+                    partner_id: [0, payload.author_name || 'Khách hàng']
+                },
+                ...this.state.globalUnreadOrders
+            ];
+        }
         
         // Show toaster notification
         const rawBody = (payload.body || '').replace(/<[^>]+>/g, '').substring(0, 80);
@@ -214,15 +258,7 @@ export class DeliveryPlannerDashboard extends Component {
                     buttons: [
                         {
                             name: "Xem đơn hàng",
-                            onClick: async () => {
-                                await this.fetchData();
-                                const updatedSo = this.state.saleOrders.find(o => o.id === payload.so_id);
-                                if (updatedSo) {
-                                    this.openOverviewDrawer(updatedSo);
-                                } else {
-                                    this.openSaleOrder(payload.so_id);
-                                }
-                            },
+                            onClick: () => this.openDrawerFromMessageList(payload.so_id),
                             primary: true,
                         }
                     ]
