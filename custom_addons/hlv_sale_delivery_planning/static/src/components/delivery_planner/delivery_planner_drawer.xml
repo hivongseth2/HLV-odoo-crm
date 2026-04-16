@@ -539,8 +539,14 @@
                                   </small>
                               </div>
                               <p class="mb-1 small text-muted">
-                                  <i class="fa fa-user me-1"/> 
+                                  <i class="fa fa-user me-1"/>
                                   <t t-esc="uo.partner_id ? uo.partner_id[1] : 'Khách hàng'"/>
+                              </p>
+                              <p t-if="uo._preview" class="mb-0 small fst-italic"
+                                 t-att-class="uo._isRead ? 'text-muted' : 'text-dark'"
+                                 style="white-space: normal; word-break: break-word; line-height: 1.35;">
+                                  <i class="fa fa-comment-o me-1 text-muted"></i>
+                                  <t t-esc="uo._preview"/>
                               </p>
                           </button>
                       </t>

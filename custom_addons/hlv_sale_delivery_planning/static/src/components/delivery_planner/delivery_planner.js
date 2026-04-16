@@ -168,18 +168,39 @@ export class DeliveryPlannerDashboard extends Component {
                 ['id', 'name', 'partner_id', 'write_date'],
                 { limit: 50, order: 'write_date desc' }
             );
+            const unreadIds = unreadOrders.map((o) => o.id);
+            const previewMap = new Map();
+
+            if (unreadIds.length) {
+                const messages = await this.orm.searchRead(
+                    'mail.message',
+                    [
+                        ['model', '=', 'sale.order'],
+                        ['res_id', 'in', unreadIds],
+                    ],
+                    ['res_id', 'body', 'attachment_ids', 'date'],
+                    { order: 'date desc' }
+                );
+                for (const msg of messages) {
+                    if (previewMap.has(msg.res_id)) continue;
+                    const bodyText = this._extractPreviewText(msg.body || '');
+                    const hasAttachments = Array.isArray(msg.attachment_ids) ? msg.attachment_ids.length > 0 : !!msg.attachment_ids;
+                    previewMap.set(msg.res_id, bodyText || (hasAttachments ? 'Có tệp đính kèm' : ''));
+                }
+            }
 
             const prevById = new Map(this.state.globalUnreadOrders.map((o) => [o.id, o]));
-            const unreadIds = new Set(unreadOrders.map((o) => o.id));
+            const unreadIdSet = new Set(unreadIds);
 
             const merged = unreadOrders.map((o) => ({
                 ...o,
                 _isRead: false,
+                _preview: previewMap.get(o.id) || '',
             }));
 
             // Giữ các item đã đọc ở panel (không xóa), chỉ làm mờ để phân biệt.
             for (const prev of this.state.globalUnreadOrders) {
-                if (prev._isRead && !unreadIds.has(prev.id)) {
+                if (prev._isRead && !unreadIdSet.has(prev.id)) {
                     merged.push(prev);
                 }
             }
@@ -221,6 +242,18 @@ export class DeliveryPlannerDashboard extends Component {
         } catch (e) {
             console.warn('markOrderAsRead failed', e);
         }
+    }
+
+    _extractPreviewText(htmlText) {
+        const plain = String(htmlText || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (!plain) {
+            return '';
+        }
+        return plain.length > 120 ? `${plain.slice(0, 120)}...` : plain;
+    }
+
+    get unreadMessageCount() {
+        return this.state.globalUnreadOrders.filter((o) => !o._isRead).length;
     }
 
     async openDrawerFromMessageList(soId) {
@@ -271,6 +304,7 @@ export class DeliveryPlannerDashboard extends Component {
             name: payload.so_name,
             partner_id: [0, payload.author_name || 'Khách hàng'],
             _isRead: false,
+            _preview: this._extractPreviewText(payload.body || ''),
         };
         this.state.globalUnreadOrders = [
             headItem,
@@ -299,6 +333,10 @@ export class DeliveryPlannerDashboard extends Component {
                 }
             );
         }
+    }
+
+    get unreadMessageCount() {
+        return this.state.globalUnreadOrders.filter((o) => !o._isRead).length;
     }
 
 
