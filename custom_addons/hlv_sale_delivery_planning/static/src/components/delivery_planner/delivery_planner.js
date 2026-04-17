@@ -30,6 +30,8 @@ export class DeliveryPlannerDashboard extends Component {
             filterStockStatus: "all",
             filterDateFrom: "",
             filterDateTo: null,
+            filterDoneDateFrom: "",
+            filterDoneDateTo: "",
             filterPODateFrom: null,
             filterPODateTo: null,
             filterPOStatus: "all",
@@ -371,6 +373,8 @@ export class DeliveryPlannerDashboard extends Component {
                     filter_stock_status: this.state.filterStockStatus,
                     filter_date_from: this.state.filterDateFrom,
                     filter_date_to: this.state.filterDateTo,
+                    filter_done_date_from: this.state.filterDoneDateFrom,
+                    filter_done_date_to: this.state.filterDoneDateTo,
                     filter_po_date_from: this.state.filterPODateFrom,
                     filter_po_date_to: this.state.filterPODateTo,
                     filter_po_status: this.state.filterPOStatus,
@@ -1452,6 +1456,8 @@ export class DeliveryPlannerDashboard extends Component {
             this.state.filterStockStatus !== "all" ||
             this.state.filterDateFrom ||
             this.state.filterDateTo ||
+            this.state.filterDoneDateFrom ||
+            this.state.filterDoneDateTo ||
             this.state.filterPODateFrom ||
             this.state.filterPODateTo ||
             this.state.filterPOStatus !== "all" ||
@@ -1491,6 +1497,8 @@ export class DeliveryPlannerDashboard extends Component {
         this.state.filterStockStatus = "all";
         this.state.filterDateFrom = "";
         this.state.filterDateTo = null;
+        this.state.filterDoneDateFrom = "";
+        this.state.filterDoneDateTo = "";
         this.state.filterPODateFrom = null;
         this.state.filterPODateTo = null;
         this.state.filterPOStatus = "all";
@@ -1515,6 +1523,8 @@ export class DeliveryPlannerDashboard extends Component {
             filter_packing_status: this.state.filterPackingStatus,
             filter_date_from: this.state.filterDateFrom || '',
             filter_date_to: this.state.filterDateTo || '',
+            filter_done_date_from: this.state.filterDoneDateFrom || '',
+            filter_done_date_to: this.state.filterDoneDateTo || '',
             filter_po_date_from: this.state.filterPODateFrom || '',
             filter_po_date_to: this.state.filterPODateTo || '',
             filter_po_status: this.state.filterPOStatus,
