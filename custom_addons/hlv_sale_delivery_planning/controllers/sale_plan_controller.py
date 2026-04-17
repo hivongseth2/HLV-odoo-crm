@@ -38,6 +38,10 @@ _ALLOWED_CHAT_ATTACHMENT_MIMES = {
   'text/csv',
 }
 _ALLOWED_CHAT_ATTACHMENT_EXTS = {'.doc', '.docx', '.xls', '.xlsx', '.csv'}
+_ALLOWED_CHAT_MEDIA_EXTS = {
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.heic', '.heif',
+  '.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.3gp'
+}
 _MAX_CHAT_ATTACHMENT_BYTES = 20 * 1024 * 1024
 
 
@@ -59,7 +63,9 @@ def _is_allowed_chat_attachment(name, mimetype):
   if mt in _ALLOWED_CHAT_ATTACHMENT_MIMES:
     return True
   ext = os.path.splitext(name or '')[1].lower()
-  return ext in _ALLOWED_CHAT_ATTACHMENT_EXTS
+  if ext in _ALLOWED_CHAT_ATTACHMENT_EXTS:
+    return True
+  return ext in _ALLOWED_CHAT_MEDIA_EXTS
 
 
 def _normalize_preview_text(text, limit=140):
@@ -751,20 +757,40 @@ function readFileAsBase64(file){
   });
 }
 
+function guessMimeTypeByName(name){
+  var lower=(name||'').toLowerCase();
+  var ext=lower.indexOf('.')>=0?lower.slice(lower.lastIndexOf('.')):'';
+  var map={
+    '.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.gif':'image/gif',
+    '.webp':'image/webp','.bmp':'image/bmp','.heic':'image/heic','.heif':'image/heif',
+    '.mp4':'video/mp4','.mov':'video/quicktime','.avi':'video/x-msvideo','.mkv':'video/x-matroska',
+    '.webm':'video/webm','.m4v':'video/x-m4v','.3gp':'video/3gpp',
+    '.doc':'application/msword',
+    '.docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.xls':'application/vnd.ms-excel',
+    '.xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.csv':'text/csv'
+  };
+  return map[ext]||'';
+}
+
 async function onPublicFilesSelected(ev){
   var input=ev.target;
   var files=Array.from(input.files||[]);
   if(!files.length) return;
-  var allowedExt=['.doc','.docx','.xls','.xlsx','.csv'];
+  var docExt=['.doc','.docx','.xls','.xlsx','.csv'];
+  var imageExt=['.jpg','.jpeg','.png','.gif','.webp','.bmp','.heic','.heif'];
+  var videoExt=['.mp4','.mov','.avi','.mkv','.webm','.m4v','.3gp'];
   var maxSize=20*1024*1024;
 
   for(var i=0;i<files.length;i++){
     var file=files[i];
     var lower=(file.name||'').toLowerCase();
     var ext=lower.indexOf('.')>=0?lower.slice(lower.lastIndexOf('.')):'';
-    var isImg=(file.type||'').indexOf('image/')===0;
-    var isVideo=(file.type||'').indexOf('video/')===0;
-    var isDoc=allowedExt.indexOf(ext)>=0;
+    var mt=(file.type||'').toLowerCase();
+    var isImg=mt.indexOf('image/')===0||imageExt.indexOf(ext)>=0;
+    var isVideo=mt.indexOf('video/')===0||videoExt.indexOf(ext)>=0;
+    var isDoc=docExt.indexOf(ext)>=0;
     if(!isImg&&!isVideo&&!isDoc){
       alert('File '+file.name+' không thuộc định dạng hỗ trợ.');
       continue;
@@ -777,7 +803,7 @@ async function onPublicFilesSelected(ev){
       var datas=await readFileAsBase64(file);
       _currentMsgFiles.push({
         name:file.name,
-        mimetype:file.type||'application/octet-stream',
+        mimetype:mt||guessMimeTypeByName(file.name)||'application/octet-stream',
         size:file.size||0,
         datas:datas,
       });
