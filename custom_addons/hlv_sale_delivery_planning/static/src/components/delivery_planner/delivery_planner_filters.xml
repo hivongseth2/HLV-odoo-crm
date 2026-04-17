@@ -156,38 +156,7 @@
                 </div>
             </div>
 
-            <!-- Ngày Hẹn Giao SO -->
-            <div class="col-md-3">
-                <label class="form-label small fw-bold text-muted mb-1"
-                       style="min-height:34px; display:flex; align-items:flex-end;">Ngày Hẹn Giao (Bán hàng)</label>
-                <div class="input-group">
-                    <span class="input-group-text bg-light px-2" title="Từ Ngày">
-                        <i class="fa fa-calendar text-primary"></i>
-                    </span>
-                    <input type="date" class="form-control px-1" title="Từ Ngày"
-                           t-model="state.filterDateFrom" t-on-change="onFilterChange"/>
-                    <span class="input-group-text bg-light px-2 border-start-0 border-end-0">~</span>
-                    <input type="date" class="form-control px-1" title="Đến Ngày"
-                           t-model="state.filterDateTo" t-on-change="onFilterChange"/>
-                </div>
-            </div>
-
-            <!-- Hoàn Thành (Theo ngày giao thực tế) -->
-            <div class="col-md-3">
-                <label class="form-label small fw-bold text-muted mb-1"
-                       style="min-height:34px; display:flex; align-items:flex-end;">Hoàn thành</label>
-                <div class="input-group">
-                    <span class="input-group-text bg-light px-2" title="Hoàn thành từ">
-                        <i class="fa fa-check-circle text-success"></i>
-                    </span>
-                    <input type="date" class="form-control px-1" title="Hoàn thành từ"
-                           t-model="state.filterDoneDateFrom" t-on-change="onFilterChange"/>
-                    <span class="input-group-text bg-light px-2 border-start-0 border-end-0">~</span>
-                    <input type="date" class="form-control px-1" title="Hoàn thành đến"
-                           t-model="state.filterDoneDateTo" t-on-change="onFilterChange"/>
-                </div>
-            </div>
-
+      
             <!-- Tiến Độ Giao -->
             <div class="col-md-2">
                 <label class="form-label small fw-bold text-muted mb-1"
@@ -246,6 +215,39 @@
                     </select>
                 </div>
             </div>
+
+                  <!-- Ngày Hẹn Giao SO -->
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted mb-1"
+                       style="min-height:34px; display:flex; align-items:flex-end;">Ngày Hẹn Giao (Bán hàng)</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light px-2" title="Từ Ngày">
+                        <i class="fa fa-calendar text-primary"></i>
+                    </span>
+                    <input type="date" class="form-control px-1" title="Từ Ngày"
+                           t-model="state.filterDateFrom" t-on-change="onFilterChange"/>
+                    <span class="input-group-text bg-light px-2 border-start-0 border-end-0">~</span>
+                    <input type="date" class="form-control px-1" title="Đến Ngày"
+                           t-model="state.filterDateTo" t-on-change="onFilterChange"/>
+                </div>
+            </div>
+
+            <!-- Hoàn Thành (Theo ngày giao thực tế) -->
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted mb-1"
+                       style="min-height:34px; display:flex; align-items:flex-end;">Hoàn thành</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light px-2" title="Hoàn thành từ">
+                        <i class="fa fa-check-circle text-success"></i>
+                    </span>
+                    <input type="date" class="form-control px-1" title="Hoàn thành từ"
+                           t-model="state.filterDoneDateFrom" t-on-change="onFilterChange"/>
+                    <span class="input-group-text bg-light px-2 border-start-0 border-end-0">~</span>
+                    <input type="date" class="form-control px-1" title="Hoàn thành đến"
+                           t-model="state.filterDoneDateTo" t-on-change="onFilterChange"/>
+                </div>
+            </div>
+
 
             <!-- Ngày Hẹn Nhận PO -->
             <div class="col-md-3">
