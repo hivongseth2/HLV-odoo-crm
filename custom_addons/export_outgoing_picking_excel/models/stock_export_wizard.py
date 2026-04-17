@@ -21,26 +21,29 @@ _logger = logging.getLogger(__name__)
 
 
 
-def _to_date_str(val):
+def _to_date_str(val, hour=None):
     if not val:
         return ""
+    
+    fmt = "%A, %B %d, %Y"
+    if hour is not None:
+        fmt += f" {hour:02d}:00:00"
+
     if isinstance(val, str):
         try:
             d = fields.Datetime.from_string(val)
             if d:
-                return d.strftime("%A, %B %d, %Y")
+                return d.strftime(fmt)
         except Exception:
             try:
                 d2 = fields.Date.from_string(val)
                 if d2:
-                    return d2.strftime("%A, %B %d, %Y")
+                    return d2.strftime(fmt)
             except Exception:
                 return val
         return val
-    if isinstance(val, datetime.datetime):
-        return val.strftime("%A, %B %d, %Y")
-    if isinstance(val, datetime.date):
-        return val.strftime("%A, %B %d, %Y")
+    if isinstance(val, (datetime.datetime, datetime.date)):
+        return val.strftime(fmt)
     return str(val)
 
 
@@ -173,6 +176,7 @@ class StockExportWizard(models.TransientModel):
         # --- Common Info ---
         date_done = picking.date_done or picking.scheduled_date or fields.Datetime.now()
         date_str = _to_date_str(date_done)
+        date_hach_toan_str = _to_date_str(date_done, hour=18)
         
         partner = picking.partner_id
         partner_code = self._partner_code(partner)
@@ -358,7 +362,7 @@ class StockExportWizard(models.TransientModel):
             
             row = {
                 'loai_xuat_kho': loai_xuat,
-                'ngay_hach_toan': date_str,
+                'ngay_hach_toan': date_hach_toan_str,
                 'ngay_chung_tu': date_str,
                 'so_chung_tu': picking.name,
                 'don_hang_goc': don_hang_goc,
