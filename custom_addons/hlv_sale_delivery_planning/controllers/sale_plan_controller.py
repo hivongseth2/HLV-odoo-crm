@@ -40,7 +40,7 @@ _ALLOWED_CHAT_ATTACHMENT_MIMES = {
 _ALLOWED_CHAT_ATTACHMENT_EXTS = {'.doc', '.docx', '.xls', '.xlsx', '.csv'}
 _ALLOWED_CHAT_MEDIA_EXTS = {
   '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.heic', '.heif',
-  '.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.3gp'
+  '.jfif', '.svg', '.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.3gp'
 }
 _MAX_CHAT_ATTACHMENT_BYTES = 20 * 1024 * 1024
 
@@ -763,6 +763,7 @@ function guessMimeTypeByName(name){
   var map={
     '.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.gif':'image/gif',
     '.webp':'image/webp','.bmp':'image/bmp','.heic':'image/heic','.heif':'image/heif',
+    '.jfif':'image/jpeg','.svg':'image/svg+xml',
     '.mp4':'video/mp4','.mov':'video/quicktime','.avi':'video/x-msvideo','.mkv':'video/x-matroska',
     '.webm':'video/webm','.m4v':'video/x-m4v','.3gp':'video/3gpp',
     '.doc':'application/msword',
@@ -779,7 +780,7 @@ async function onPublicFilesSelected(ev){
   var files=Array.from(input.files||[]);
   if(!files.length) return;
   var docExt=['.doc','.docx','.xls','.xlsx','.csv'];
-  var imageExt=['.jpg','.jpeg','.png','.gif','.webp','.bmp','.heic','.heif'];
+  var imageExt=['.jpg','.jpeg','.png','.gif','.webp','.bmp','.heic','.heif','.jfif','.svg'];
   var videoExt=['.mp4','.mov','.avi','.mkv','.webm','.m4v','.3gp'];
   var maxSize=20*1024*1024;
 
@@ -1377,28 +1378,36 @@ class SalePlanPublicController(http.Controller):
             author_name = (author_name or '').strip()
 
             attachment_ids = []
+            skipped_attachments = []
             for att in attachments:
-                if not isinstance(att, dict):
-                    continue
-                name = (att.get('name') or 'file').strip()[:255]
-                mimetype = (att.get('mimetype') or 'application/octet-stream').strip().lower()
-                datas = (att.get('datas') or '').strip()
-                if not datas:
-                    continue
-                if not _is_allowed_chat_attachment(name, mimetype):
-                    continue
-                estimated_size = int(len(datas) * 0.75)
-                if estimated_size > _MAX_CHAT_ATTACHMENT_BYTES:
-                    continue
-                new_att = request.env['ir.attachment'].sudo().create({
+              if not isinstance(att, dict):
+                skipped_attachments.append({'reason': 'invalid_payload'})
+                continue
+              name = (att.get('name') or 'file').strip()[:255]
+              mimetype = (att.get('mimetype') or 'application/octet-stream').strip().lower()
+              datas = (att.get('datas') or '').strip()
+              if not datas:
+                skipped_attachments.append({'name': name, 'mimetype': mimetype, 'reason': 'empty_datas'})
+                continue
+              if not _is_allowed_chat_attachment(name, mimetype):
+                skipped_attachments.append({'name': name, 'mimetype': mimetype, 'reason': 'blocked_by_whitelist'})
+                continue
+              estimated_size = int(len(datas) * 0.75)
+              if estimated_size > _MAX_CHAT_ATTACHMENT_BYTES:
+                skipped_attachments.append({'name': name, 'mimetype': mimetype, 'reason': 'too_large', 'estimated_size': estimated_size})
+                continue
+              new_att = request.env['ir.attachment'].sudo().create({
                     'name': name,
                     'datas': datas,
                     'mimetype': mimetype,
                     'res_model': 'sale.order',
                     'res_id': so.id,
                     'type': 'binary',
-                })
-                attachment_ids.append(new_att.id)
+              })
+              attachment_ids.append(new_att.id)
+
+            if skipped_attachments:
+                _logger.info('sale_plan/send_message skipped attachments=%s', skipped_attachments)
 
             if not body and not attachment_ids:
                 return {'status': 'error', 'message': 'Empty message'}
@@ -1414,12 +1423,18 @@ class SalePlanPublicController(http.Controller):
             else:
                 safe_body = Markup('<p>Gửi tệp đính kèm</p>')
 
-            so.message_post(
+            posted_msg = so.message_post(
                 body=safe_body,
                 message_type='comment',
                 subtype_xmlid='mail.mt_note',
                 attachment_ids=attachment_ids,
             )
+            # Edge/engine variations can cause attachment_ids to be ignored by message_post in some flows.
+            # Enforce the link to the created mail.message as a safety net.
+            if attachment_ids and posted_msg:
+                missing_ids = [aid for aid in attachment_ids if aid not in posted_msg.attachment_ids.ids]
+                if missing_ids:
+                    posted_msg.sudo().write({'attachment_ids': [(4, aid) for aid in missing_ids]})
             preview = _normalize_preview_text(body or 'Tệp đính kèm')
             request.env['hlv.sale.plan.message'].sudo().upsert_for_sale_order(
               so,
