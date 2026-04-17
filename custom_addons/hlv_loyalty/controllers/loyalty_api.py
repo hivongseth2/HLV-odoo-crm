@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import base64
 import json
 import logging
 from datetime import timedelta
@@ -263,6 +264,10 @@ class LoyaltyExternalAPI(http.Controller):
         if not encoded_image:
             return Response(status=404, response=status_not_found, content_type='text/plain; charset=utf-8')
         try:
+            if isinstance(encoded_image, str):
+                encoded_image = encoded_image.strip()
+                if ',' in encoded_image and encoded_image.startswith('data:'):
+                    encoded_image = encoded_image.split(',', 1)[1]
             raw = base64.b64decode(encoded_image)
         except Exception:
             return Response(status=404, response='Ảnh không hợp lệ', content_type='text/plain; charset=utf-8')
@@ -316,14 +321,14 @@ class LoyaltyExternalAPI(http.Controller):
 
     @http.route('/api/v1/loyalty/tiers/<int:tier_id>/image', type='http', auth='public', methods=['GET'], csrf=False)
     def tier_image(self, tier_id, **kwargs):
-        tier = request.env['hlv.loyalty.tier'].sudo().browse(tier_id)
+        tier = request.env['hlv.loyalty.tier'].sudo().with_context(bin_size=False).browse(tier_id)
         if not tier.exists():
             return Response(status=404, response='Tier not found', content_type='text/plain; charset=utf-8')
         return self._image_response(tier.tier_image)
 
     @http.route('/api/v1/loyalty/partners/<int:partner_id>/image', type='http', auth='public', methods=['GET'], csrf=False)
     def partner_image(self, partner_id, **kwargs):
-        partner = request.env['res.partner'].sudo().browse(partner_id)
+        partner = request.env['res.partner'].sudo().with_context(bin_size=False).browse(partner_id)
         if not partner.exists():
             return Response(status=404, response='Partner not found', content_type='text/plain; charset=utf-8')
         return self._image_response(partner.image_1920 if 'image_1920' in partner._fields else None)
