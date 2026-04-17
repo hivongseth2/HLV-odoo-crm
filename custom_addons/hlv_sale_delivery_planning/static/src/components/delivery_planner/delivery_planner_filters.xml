@@ -76,6 +76,20 @@
                    t-on-click="() => { state.filterStockStatus = 'all'; this.fetchData(); }"></i>
             </span>
 
+                        <span t-if="state.filterDoneDateFrom"
+                                    class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
+                                Hoàn thành từ: <t t-esc="state.filterDoneDateFrom"/>
+                                <i class="fa fa-times cursor-pointer ms-1" title="Xóa"
+                                     t-on-click="() => { state.filterDoneDateFrom = ''; this.onFilterChange(); }"></i>
+                        </span>
+
+                        <span t-if="state.filterDoneDateTo"
+                                    class="badge text-bg-info d-flex align-items-center gap-2 p-2 rounded-pill">
+                                Hoàn thành đến: <t t-esc="state.filterDoneDateTo"/>
+                                <i class="fa fa-times cursor-pointer ms-1" title="Xóa"
+                                     t-on-click="() => { state.filterDoneDateTo = ''; this.onFilterChange(); }"></i>
+                        </span>
+
             <span t-if="state.showCompleted"
                   class="badge text-bg-success d-flex align-items-center gap-2 p-2 rounded-pill">
                 Hiện đơn đã giao
@@ -155,6 +169,22 @@
                     <span class="input-group-text bg-light px-2 border-start-0 border-end-0">~</span>
                     <input type="date" class="form-control px-1" title="Đến Ngày"
                            t-model="state.filterDateTo" t-on-change="onFilterChange"/>
+                </div>
+            </div>
+
+            <!-- Hoàn Thành (Theo ngày giao thực tế) -->
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted mb-1"
+                       style="min-height:34px; display:flex; align-items:flex-end;">Hoàn thành</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light px-2" title="Hoàn thành từ">
+                        <i class="fa fa-check-circle text-success"></i>
+                    </span>
+                    <input type="date" class="form-control px-1" title="Hoàn thành từ"
+                           t-model="state.filterDoneDateFrom" t-on-change="onFilterChange"/>
+                    <span class="input-group-text bg-light px-2 border-start-0 border-end-0">~</span>
+                    <input type="date" class="form-control px-1" title="Hoàn thành đến"
+                           t-model="state.filterDoneDateTo" t-on-change="onFilterChange"/>
                 </div>
             </div>
 
