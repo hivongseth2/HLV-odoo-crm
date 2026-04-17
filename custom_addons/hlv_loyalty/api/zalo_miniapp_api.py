@@ -75,13 +75,19 @@ class ZaloMiniAppAPI(http.Controller):
 
     @staticmethod
     def _product_images(product):
-        image_fields = ["image_1", "image_2", "image_3", "image_4", "image_5"]
+        """Return all product images: original Odoo image + multi-images"""
         images = []
-        for field_name in image_fields:
-            if field_name in product._fields and getattr(product, field_name):
-                images.append(ZaloMiniAppAPI._api_image_url(product.id, field_name))
-        if not images:
+        
+        # Add original Odoo image (image_1920) as base image
+        if "image_1920" in product._fields and getattr(product, "image_1920", None):
             images.append(ZaloMiniAppAPI._api_image_url(product.id, "image_1920"))
+        
+        # Add multi-images (image_1 through image_5)
+        image_fields = ["image_1", "image_2", "image_3", "image_4", "image_5"]
+        for field_name in image_fields:
+            if field_name in product._fields and getattr(product, field_name, None):
+                images.append(ZaloMiniAppAPI._api_image_url(product.id, field_name))
+        
         return images
 
     @staticmethod
