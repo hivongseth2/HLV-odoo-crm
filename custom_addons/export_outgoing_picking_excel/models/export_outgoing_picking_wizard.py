@@ -14,26 +14,29 @@ except ImportError:
     Workbook = None
 
 
-def _to_date_str(val):
+def _to_date_str(val, hour=None):
     if not val:
         return ""
+    
+    fmt = "%A, %B %d, %Y"
+    if hour is not None:
+        fmt += f" {hour:02d}:00:00"
+
     if isinstance(val, str):
         try:
             d = fields.Datetime.from_string(val)
             if d:
-                return d.strftime("%A, %B %d, %Y")
+                return d.strftime(fmt)
         except Exception:
             try:
                 d2 = fields.Date.from_string(val)
                 if d2:
-                    return d2.strftime("%A, %B %d, %Y")
+                    return d2.strftime(fmt)
             except Exception:
                 return val
         return val
-    if isinstance(val, datetime.datetime):
-        return val.strftime("%A, %B %d, %Y")
-    if isinstance(val, datetime.date):
-        return val.strftime("%A, %B %d, %Y")
+    if isinstance(val, (datetime.datetime, datetime.date)):
+        return val.strftime(fmt)
     return str(val)
 
 
@@ -1009,6 +1012,7 @@ class PickingExportWizard(models.TransientModel):
         # --- Common Info ---
         date_done = picking.date_done or picking.scheduled_date or fields.Datetime.now()
         date_str = _to_date_str(date_done)
+        date_hach_toan_str = _to_date_str(date_done, hour=18)
         
         # --- Xử lý hậu tố 2 ca ---
         import pytz
@@ -1325,7 +1329,7 @@ class PickingExportWizard(models.TransientModel):
                 'kiem_phieu_xuat_kho': 'Có',
                 'lap_kem_hoa_don': 'Không',
                 'da_lap_hoa_don': 'Chưa lập',
-                'ngay_hach_toan': date_str,
+                'ngay_hach_toan': date_hach_toan_str,
                 'ngay_chung_tu': date_str,
                 'so_chung_tu': so_chung_tu,
                 'so_phieu_xuat': so_phieu_xuat,
