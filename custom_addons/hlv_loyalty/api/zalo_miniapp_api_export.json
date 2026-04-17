@@ -168,7 +168,8 @@
       "name": "List loyalty tiers",
       "method": "GET",
       "path": "/loyalty/tiers",
-      "description": "Returns tier image_url, icon, description, and benefits"
+      "description": "Returns tier image_url, icon, description, and benefits",
+      "image_route": "/loyalty/tiers/{tier_id}/image"
     },
     {
       "id": 14,
@@ -191,7 +192,8 @@
       "path_params": {
         "partner_id": "number"
       },
-      "description": "Returns partner image_url plus current and next tier image_url"
+      "description": "Returns partner image_url plus current and next tier image_url",
+      "image_route": "/loyalty/partners/{partner_id}/image"
     },
     {
       "id": 16,

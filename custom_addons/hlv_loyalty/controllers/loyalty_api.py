@@ -247,6 +247,28 @@ class LoyaltyExternalAPI(http.Controller):
                         status=status, content_type='application/json')
 
     @staticmethod
+    def _guess_image_mimetype(raw_bytes):
+        if raw_bytes.startswith(b'\xff\xd8\xff'):
+            return 'image/jpeg'
+        if raw_bytes.startswith(b'\x89PNG\r\n\x1a\n'):
+            return 'image/png'
+        if raw_bytes.startswith(b'GIF87a') or raw_bytes.startswith(b'GIF89a'):
+            return 'image/gif'
+        if raw_bytes.startswith(b'RIFF') and raw_bytes[8:12] == b'WEBP':
+            return 'image/webp'
+        return 'application/octet-stream'
+
+    @staticmethod
+    def _image_response(encoded_image, status_not_found='Không có ảnh'):
+        if not encoded_image:
+            return Response(status=404, response=status_not_found, content_type='text/plain; charset=utf-8')
+        try:
+            raw = base64.b64decode(encoded_image)
+        except Exception:
+            return Response(status=404, response='Ảnh không hợp lệ', content_type='text/plain; charset=utf-8')
+        return Response(raw, status=200, content_type=LoyaltyExternalAPI._guess_image_mimetype(raw))
+
+    @staticmethod
     def _tier_dict(tier):
         if not tier:
             return None
@@ -268,7 +290,7 @@ class LoyaltyExternalAPI(http.Controller):
         if not partner:
             return ''
         if 'image_1920' in partner._fields and getattr(partner, 'image_1920', None):
-            return f'/web/image/res.partner/{partner.id}/image_1920'
+            return f'/api/v1/loyalty/partners/{partner.id}/image'
         return ''
 
     @staticmethod
@@ -291,6 +313,20 @@ class LoyaltyExternalAPI(http.Controller):
             'next_tier_image_url': next_tier.image_url if next_tier else '',
             'points_to_next': (next_tier.min_points - pts) if next_tier else 0,
         }
+
+    @http.route('/api/v1/loyalty/tiers/<int:tier_id>/image', type='http', auth='public', methods=['GET'], csrf=False)
+    def tier_image(self, tier_id, **kwargs):
+        tier = request.env['hlv.loyalty.tier'].sudo().browse(tier_id)
+        if not tier.exists():
+            return Response(status=404, response='Tier not found', content_type='text/plain; charset=utf-8')
+        return self._image_response(tier.tier_image)
+
+    @http.route('/api/v1/loyalty/partners/<int:partner_id>/image', type='http', auth='public', methods=['GET'], csrf=False)
+    def partner_image(self, partner_id, **kwargs):
+        partner = request.env['res.partner'].sudo().browse(partner_id)
+        if not partner.exists():
+            return Response(status=404, response='Partner not found', content_type='text/plain; charset=utf-8')
+        return self._image_response(partner.image_1920 if 'image_1920' in partner._fields else None)
 
     # ── Endpoints ────────────────────────────────────────────────────────────
 
