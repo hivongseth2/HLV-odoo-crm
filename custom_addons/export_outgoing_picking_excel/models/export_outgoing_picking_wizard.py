@@ -1166,7 +1166,7 @@ class PickingExportWizard(models.TransientModel):
                     'kiem_phieu_xuat_kho': 'Có',
                     'lap_kem_hoa_don': 'Có',
                     'da_lap_hoa_don': 'Đã lập',
-                    'ngay_hach_toan': date_str,
+                    'ngay_hach_toan': date_hach_toan_str,
                     'ngay_chung_tu': date_str,
                     'so_chung_tu': so_chung_tu,
                     'so_phieu_xuat': so_phieu_xuat,
