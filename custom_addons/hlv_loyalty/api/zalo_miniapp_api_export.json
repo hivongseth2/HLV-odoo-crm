@@ -4,10 +4,10 @@
   "generated_from": "custom_addons/hlv_loyalty/docs/api.md",
   "base_url": "/api/v1",
   "auth": {
-    "type": "bearer",
+    "type": "public",
     "header": "Authorization",
     "format": "Bearer {API_KEY}",
-    "note": "Use /auth/zalo to bootstrap api_key or your existing auth flow"
+    "note": "Routes are public in Odoo; Authorization header is optional for gateway compatibility"
   },
   "content_type": "application/json",
   "response_format": {
@@ -167,7 +167,8 @@
       "id": 13,
       "name": "List loyalty tiers",
       "method": "GET",
-      "path": "/loyalty/tiers"
+      "path": "/loyalty/tiers",
+      "description": "Returns tier image_url, icon, description, and benefits"
     },
     {
       "id": 14,
@@ -189,7 +190,8 @@
       "path": "/loyalty/partner/{partner_id}",
       "path_params": {
         "partner_id": "number"
-      }
+      },
+      "description": "Returns partner image_url plus current and next tier image_url"
     },
     {
       "id": 16,

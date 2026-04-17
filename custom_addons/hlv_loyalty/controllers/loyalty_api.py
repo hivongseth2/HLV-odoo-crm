@@ -264,6 +264,14 @@ class LoyaltyExternalAPI(http.Controller):
         }
 
     @staticmethod
+    def _partner_image_url(partner):
+        if not partner:
+            return ''
+        if 'image_1920' in partner._fields and getattr(partner, 'image_1920', None):
+            return f'/web/image/res.partner/{partner.id}/image_1920'
+        return ''
+
+    @staticmethod
     def _partner_summary(partner):
         tiers = request.env['hlv.loyalty.tier'].sudo().search([], order='min_points asc')
         tier = partner.loyalty_tier_id
@@ -276,15 +284,18 @@ class LoyaltyExternalAPI(http.Controller):
             'phone': partner.phone or '',
             'email': partner.email or '',
             'total_points': pts,
+            'image_url': LoyaltyExternalAPI._partner_image_url(partner),
             'tier': LoyaltyExternalAPI._tier_dict(tier),
+            'tier_image_url': tier.image_url if tier else '',
             'next_tier': LoyaltyExternalAPI._tier_dict(next_tier),
+            'next_tier_image_url': next_tier.image_url if next_tier else '',
             'points_to_next': (next_tier.min_points - pts) if next_tier else 0,
         }
 
     # ── Endpoints ────────────────────────────────────────────────────────────
 
     @http.route('/api/v1/loyalty/tiers', type='http',
-                auth='api_key', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False)
     def list_tiers(self, **kwargs):
         """GET /api/v1/loyalty/tiers
         Trả về danh sách hạng thành viên kèm ảnh và quyền lợi.
@@ -293,7 +304,7 @@ class LoyaltyExternalAPI(http.Controller):
         return self._json_ok([self._tier_dict(t) for t in tiers])
 
     @http.route('/api/v1/loyalty/partner/lookup', type='http',
-                auth='api_key', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False)
     def lookup_partner(self, **kwargs):
         """GET /api/v1/loyalty/partner/lookup?phone=0901234567
            GET /api/v1/loyalty/partner/lookup?email=abc@example.com
@@ -327,7 +338,7 @@ class LoyaltyExternalAPI(http.Controller):
         return self._json_ok(results if len(results) > 1 else results[0])
 
     @http.route('/api/v1/loyalty/partner/<int:partner_id>', type='http',
-                auth='api_key', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False)
     def get_partner(self, partner_id, **kwargs):
         """GET /api/v1/loyalty/partner/<id>
         Lấy thông tin điểm + hạng + voucher đang có.
@@ -366,7 +377,7 @@ class LoyaltyExternalAPI(http.Controller):
         return self._json_ok(summary)
 
     @http.route('/api/v1/loyalty/partner/<int:partner_id>/history', type='http',
-                auth='api_key', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False)
     def get_partner_history(self, partner_id, **kwargs):
         """GET /api/v1/loyalty/partner/<id>/history?limit=20&offset=0"""
         partner = request.env['res.partner'].sudo().browse(partner_id)
@@ -398,7 +409,7 @@ class LoyaltyExternalAPI(http.Controller):
         })
 
     @http.route('/api/v1/loyalty/points/add', type='json',
-                auth='api_key', methods=['POST'], csrf=False)
+                auth='public', methods=['POST'], csrf=False)
     def add_points(self, **kwargs):
         """POST /api/v1/loyalty/points/add
         Cộng/trừ điểm thủ công.
@@ -460,7 +471,7 @@ class LoyaltyExternalAPI(http.Controller):
         }
 
     @http.route('/api/v1/loyalty/vouchers/<int:partner_id>', type='http',
-                auth='api_key', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False)
     def get_partner_vouchers(self, partner_id, **kwargs):
         """GET /api/v1/loyalty/vouchers/<id>?state=active"""
         partner = request.env['res.partner'].sudo().browse(partner_id)
@@ -487,7 +498,7 @@ class LoyaltyExternalAPI(http.Controller):
         } for v in vouchers])
 
     @http.route('/api/v1/loyalty/voucher/validate', type='json',
-                auth='api_key', methods=['POST'], csrf=False)
+                auth='public', methods=['POST'], csrf=False)
     def validate_voucher_external(self, **kwargs):
         """POST /api/v1/loyalty/voucher/validate
         Body: {"code": "VHQ-XXXXX", "partner_id": 42, "order_amount": 500000}
