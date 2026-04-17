@@ -298,19 +298,6 @@
                 </div>
             </div>
 
-
-              <!-- Đơn hàng mới hôm nay -->
-            <div class="col-md-2 d-flex align-items-end">
-                <div class="form-check form-switch mb-2">
-                    <input class="form-check-input" type="checkbox" role="switch"
-                           id="filterNewOrders"
-                           t-att-checked="state.filterNewOrders"
-                           t-on-change="(ev) => { this.state.filterNewOrders = ev.target.checked; this.onFilterChange(); }"/>
-                    <label class="form-check-label small fw-bold" for="filterNewOrders">
-                        <i class="fa fa-star me-1" style="color:#d63384;"></i>Đơn hàng mới
-                    </label>
-                </div>
-            </div>
             <!-- HTGH — chips dùng position:absolute để không làm cao cột -->
             <div class="col-md-3" style="position: relative;">
                 <label class="form-label small fw-bold text-muted mb-1"
@@ -400,6 +387,18 @@
                 </div>
             </div>
 
+              <!-- Đơn hàng mới hôm nay -->
+            <div class="col-md-2 d-flex align-items-end">
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" role="switch"
+                           id="filterNewOrders"
+                           t-att-checked="state.filterNewOrders"
+                           t-on-change="(ev) => { this.state.filterNewOrders = ev.target.checked; this.onFilterChange(); }"/>
+                    <label class="form-check-label small fw-bold" for="filterNewOrders">
+                        <i class="fa fa-star me-1" style="color:#d63384;"></i>Đơn hàng mới
+                    </label>
+                </div>
+            </div>
           
 
             <!-- Hiện đơn đã giao -->
