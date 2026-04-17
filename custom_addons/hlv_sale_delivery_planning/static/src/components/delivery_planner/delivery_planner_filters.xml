@@ -304,23 +304,8 @@
                        style="min-height:34px; display:flex; align-items:flex-end;">HTGH
                     <small class="fw-normal text-secondary ms-1">(phẩy=OR, !=loại trừ)</small>
                 </label>
-                <div class="input-group">
-                    <span class="input-group-text bg-light px-2">
-                        <i class="fa fa-info-circle text-secondary"></i>
-                    </span>
-                    <input type="text" class="form-control px-2"
-                           placeholder="VD: ghn,cpn hoặc !ghn,!j&amp;t"
-                           t-model="state.filterHtgh"
-                           t-on-keyup="onSearchKeyup"/>
-                    <button class="btn btn-outline-secondary px-2" type="button"
-                            title="Lưu giá trị hiện tại làm gợi ý"
-                            t-on-click="saveHtghPreset">
-                        <i class="fa fa-plus"></i>
-                    </button>
-                </div>
-                <!-- chips nằm ngoài flow, không ảnh hưởng chiều cao cột -->
                 <div class="d-flex flex-wrap gap-1"
-                     style="position:absolute; top:100%; left:0; right:0; padding-top:4px; z-index:20;">
+                     style="top:100%; left:0; right:0; padding-top:4px; z-index:20;">
                     <t t-foreach="state.htghPresets" t-as="preset" t-key="preset_index">
                         <span class="badge border d-inline-flex align-items-center gap-1 px-2 py-1"
                               style="font-size:.72rem; background:#f8f9fa; color:#495057; border-color:#dee2e6!important; cursor:default; white-space:nowrap;">
@@ -336,6 +321,22 @@
                         </span>
                     </t>
                 </div>
+                <div class="input-group">
+                    <span class="input-group-text bg-light px-2">
+                        <i class="fa fa-info-circle text-secondary"></i>
+                    </span>
+                    <input type="text" class="form-control px-2"
+                           placeholder="VD: ghn,cpn hoặc !ghn,!j&amp;t"
+                           t-model="state.filterHtgh"
+                           t-on-keyup="onSearchKeyup"/>
+                    <button class="btn btn-outline-secondary px-2" type="button"
+                            title="Lưu giá trị hiện tại làm gợi ý"
+                            t-on-click="saveHtghPreset">
+                        <i class="fa fa-plus"></i>
+                    </button>
+                </div>
+                <!-- chips nằm ngoài flow, không ảnh hưởng chiều cao cột -->
+                
             </div>
 
             <!-- Loại vận chuyển -->
