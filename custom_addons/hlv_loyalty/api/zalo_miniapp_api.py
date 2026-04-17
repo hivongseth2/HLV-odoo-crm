@@ -355,6 +355,7 @@ class ZaloMiniAppAPI(http.Controller):
             original_price = self._studio_original_price(p)
             if not original_price or original_price < price:
                 original_price = price
+            images = self._product_images(p)
             stock_qty = self._free_stock_qty(p)
             product_tags = self._many2many_brief(p.product_tag_ids) if "product_tag_ids" in p._fields else []
             website_categories = self._many2many_brief(p.public_categ_ids) if "public_categ_ids" in p._fields else []
@@ -364,7 +365,8 @@ class ZaloMiniAppAPI(http.Controller):
                 "price": price,
                 "original_price": original_price,
                 "discount_percent": _discount_percent(p),
-                "image_url": self._product_images(p)[0],
+                "image_url": images[0] if images else "",
+                "images": images,
                 "sold_count": getattr(p, "sales_count", 0),
                 "free_shipping": False,
                 "voucher_label": None,
