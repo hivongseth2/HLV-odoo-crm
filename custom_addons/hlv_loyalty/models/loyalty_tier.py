@@ -67,7 +67,7 @@ class HlvLoyaltyTier(models.Model):
         }
         for tier in self:
             if tier.tier_image:
-                tier.image_url = f'/web/image/hlv.loyalty.tier/{tier.id}/tier_image'
+                tier.image_url = f'/api/v1/loyalty/tiers/{tier.id}/image'
             else:
                 tier.image_url = static_map.get(tier.color, '/hlv_loyalty/static/description/brozen.png')
 

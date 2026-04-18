@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import base64
 import json
 import logging
 from datetime import timedelta
@@ -247,6 +248,32 @@ class LoyaltyExternalAPI(http.Controller):
                         status=status, content_type='application/json')
 
     @staticmethod
+    def _guess_image_mimetype(raw_bytes):
+        if raw_bytes.startswith(b'\xff\xd8\xff'):
+            return 'image/jpeg'
+        if raw_bytes.startswith(b'\x89PNG\r\n\x1a\n'):
+            return 'image/png'
+        if raw_bytes.startswith(b'GIF87a') or raw_bytes.startswith(b'GIF89a'):
+            return 'image/gif'
+        if raw_bytes.startswith(b'RIFF') and raw_bytes[8:12] == b'WEBP':
+            return 'image/webp'
+        return 'application/octet-stream'
+
+    @staticmethod
+    def _image_response(encoded_image, status_not_found='Không có ảnh'):
+        if not encoded_image:
+            return Response(status=404, response=status_not_found, content_type='text/plain; charset=utf-8')
+        try:
+            if isinstance(encoded_image, str):
+                encoded_image = encoded_image.strip()
+                if ',' in encoded_image and encoded_image.startswith('data:'):
+                    encoded_image = encoded_image.split(',', 1)[1]
+            raw = base64.b64decode(encoded_image)
+        except Exception:
+            return Response(status=404, response='Ảnh không hợp lệ', content_type='text/plain; charset=utf-8')
+        return Response(raw, status=200, content_type=LoyaltyExternalAPI._guess_image_mimetype(raw))
+
+    @staticmethod
     def _tier_dict(tier):
         if not tier:
             return None
@@ -264,6 +291,14 @@ class LoyaltyExternalAPI(http.Controller):
         }
 
     @staticmethod
+    def _partner_image_url(partner):
+        if not partner:
+            return ''
+        if 'image_1920' in partner._fields and getattr(partner, 'image_1920', None):
+            return f'/api/v1/loyalty/partners/{partner.id}/image'
+        return ''
+
+    @staticmethod
     def _partner_summary(partner):
         tiers = request.env['hlv.loyalty.tier'].sudo().search([], order='min_points asc')
         tier = partner.loyalty_tier_id
@@ -276,15 +311,32 @@ class LoyaltyExternalAPI(http.Controller):
             'phone': partner.phone or '',
             'email': partner.email or '',
             'total_points': pts,
+            'image_url': LoyaltyExternalAPI._partner_image_url(partner),
             'tier': LoyaltyExternalAPI._tier_dict(tier),
+            'tier_image_url': tier.image_url if tier else '',
             'next_tier': LoyaltyExternalAPI._tier_dict(next_tier),
+            'next_tier_image_url': next_tier.image_url if next_tier else '',
             'points_to_next': (next_tier.min_points - pts) if next_tier else 0,
         }
+
+    @http.route('/api/v1/loyalty/tiers/<int:tier_id>/image', type='http', auth='public', methods=['GET'], csrf=False)
+    def tier_image(self, tier_id, **kwargs):
+        tier = request.env['hlv.loyalty.tier'].sudo().with_context(bin_size=False).browse(tier_id)
+        if not tier.exists():
+            return Response(status=404, response='Tier not found', content_type='text/plain; charset=utf-8')
+        return self._image_response(tier.tier_image)
+
+    @http.route('/api/v1/loyalty/partners/<int:partner_id>/image', type='http', auth='public', methods=['GET'], csrf=False)
+    def partner_image(self, partner_id, **kwargs):
+        partner = request.env['res.partner'].sudo().with_context(bin_size=False).browse(partner_id)
+        if not partner.exists():
+            return Response(status=404, response='Partner not found', content_type='text/plain; charset=utf-8')
+        return self._image_response(partner.image_1920 if 'image_1920' in partner._fields else None)
 
     # ── Endpoints ────────────────────────────────────────────────────────────
 
     @http.route('/api/v1/loyalty/tiers', type='http',
-                auth='api_key', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False)
     def list_tiers(self, **kwargs):
         """GET /api/v1/loyalty/tiers
         Trả về danh sách hạng thành viên kèm ảnh và quyền lợi.
@@ -293,7 +345,7 @@ class LoyaltyExternalAPI(http.Controller):
         return self._json_ok([self._tier_dict(t) for t in tiers])
 
     @http.route('/api/v1/loyalty/partner/lookup', type='http',
-                auth='api_key', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False)
     def lookup_partner(self, **kwargs):
         """GET /api/v1/loyalty/partner/lookup?phone=0901234567
            GET /api/v1/loyalty/partner/lookup?email=abc@example.com
@@ -327,7 +379,7 @@ class LoyaltyExternalAPI(http.Controller):
         return self._json_ok(results if len(results) > 1 else results[0])
 
     @http.route('/api/v1/loyalty/partner/<int:partner_id>', type='http',
-                auth='api_key', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False)
     def get_partner(self, partner_id, **kwargs):
         """GET /api/v1/loyalty/partner/<id>
         Lấy thông tin điểm + hạng + voucher đang có.
@@ -366,7 +418,7 @@ class LoyaltyExternalAPI(http.Controller):
         return self._json_ok(summary)
 
     @http.route('/api/v1/loyalty/partner/<int:partner_id>/history', type='http',
-                auth='api_key', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False)
     def get_partner_history(self, partner_id, **kwargs):
         """GET /api/v1/loyalty/partner/<id>/history?limit=20&offset=0"""
         partner = request.env['res.partner'].sudo().browse(partner_id)
@@ -398,7 +450,7 @@ class LoyaltyExternalAPI(http.Controller):
         })
 
     @http.route('/api/v1/loyalty/points/add', type='json',
-                auth='api_key', methods=['POST'], csrf=False)
+                auth='public', methods=['POST'], csrf=False)
     def add_points(self, **kwargs):
         """POST /api/v1/loyalty/points/add
         Cộng/trừ điểm thủ công.
@@ -460,7 +512,7 @@ class LoyaltyExternalAPI(http.Controller):
         }
 
     @http.route('/api/v1/loyalty/vouchers/<int:partner_id>', type='http',
-                auth='api_key', methods=['GET'], csrf=False)
+                auth='public', methods=['GET'], csrf=False)
     def get_partner_vouchers(self, partner_id, **kwargs):
         """GET /api/v1/loyalty/vouchers/<id>?state=active"""
         partner = request.env['res.partner'].sudo().browse(partner_id)
@@ -487,7 +539,7 @@ class LoyaltyExternalAPI(http.Controller):
         } for v in vouchers])
 
     @http.route('/api/v1/loyalty/voucher/validate', type='json',
-                auth='api_key', methods=['POST'], csrf=False)
+                auth='public', methods=['POST'], csrf=False)
     def validate_voucher_external(self, **kwargs):
         """POST /api/v1/loyalty/voucher/validate
         Body: {"code": "VHQ-XXXXX", "partner_id": 42, "order_amount": 500000}

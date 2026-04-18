@@ -74,6 +74,10 @@ class ZaloMiniAppAPI(http.Controller):
         return "/api/v1/products/%s/image/%s" % (product_id, field_name)
 
     @staticmethod
+    def _partner_image_url(partner_id):
+        return "/api/v1/loyalty/partners/%s/image" % partner_id
+
+    @staticmethod
     def _product_images(product):
         """Return all product images: original Odoo image + multi-images"""
         images = []
@@ -219,6 +223,80 @@ class ZaloMiniAppAPI(http.Controller):
         }
 
     @staticmethod
+    def _order_line_to_dict(line):
+        return {
+            "id": line.id,
+            "product_id": line.product_id.id,
+            "product_name": line.product_id.display_name,
+            "product_image": ZaloMiniAppAPI._img_url("product.product", line.product_id.id),
+            "quantity": line.product_uom_qty,
+            "price_unit": line.price_unit,
+            "price_subtotal": line.price_subtotal,
+        }
+
+    @staticmethod
+    def _order_to_dict(order, include_shipping=True):
+        ship_partner = order.partner_shipping_id or order.partner_id
+        return {
+            "id": order.id,
+            "name": order.name,
+            "state": order.state,
+            "date_order": order.date_order.isoformat() if order.date_order else None,
+            "amount_total": order.amount_total,
+            "amount_tax": order.amount_tax,
+            "voucher_code": order.loyalty_voucher_code or None,
+            "items": [ZaloMiniAppAPI._order_line_to_dict(line) for line in order.order_line.filtered(lambda l: not l.display_type)],
+            "shipping_address": {
+                "name": ship_partner.name,
+                "phone": ship_partner.phone or ship_partner.mobile or "",
+                "street": ship_partner.street or "",
+                "ward": ship_partner.street2 or "",
+                "district": "",
+                "city": ship_partner.city or "",
+            } if include_shipping else None,
+        }
+
+    def _get_cart_order(self, partner, create_if_missing=False):
+        order_model = request.env["sale.order"].sudo()
+        domain = [
+            ("partner_id", "child_of", partner.id),
+            ("state", "=", "draft"),
+        ]
+        cart = order_model.search(domain, order="write_date desc, id desc", limit=1)
+        if cart or not create_if_missing:
+            return cart
+
+        shipping = partner
+        default_address_id = self._get_default_address_id(partner)
+        if default_address_id:
+            shipping_candidate = request.env["res.partner"].sudo().browse(default_address_id)
+            if shipping_candidate.exists() and shipping_candidate.parent_id.id == partner.id:
+                shipping = shipping_candidate
+
+        return order_model.create({
+            "partner_id": partner.id,
+            "partner_invoice_id": partner.id,
+            "partner_shipping_id": shipping.id,
+            "note": "",
+        })
+
+    def _upsert_cart_line(self, cart, product, quantity):
+        line = cart.order_line.filtered(lambda l: not l.display_type and l.product_id.id == product.id)[:1]
+        price = getattr(product.product_tmpl_id, "x_studio_gia_san_tmdt", None)
+        if not price:
+            price = product.list_price
+        if line:
+            line.write({"product_uom_qty": quantity, "price_unit": price})
+            return line
+        return request.env["sale.order.line"].sudo().create({
+            "order_id": cart.id,
+            "product_id": product.id,
+            "product_uom_qty": quantity,
+            "price_unit": price,
+            "name": product.display_name,
+        })
+
+    @staticmethod
     def _history_to_dict(history):
         return {
             "id": history.id,
@@ -275,6 +353,34 @@ class ZaloMiniAppAPI(http.Controller):
             "avatar": self._img_url("res.partner", root.id),
             "loyalty_points": root.loyalty_total_points,
             "tier": root.loyalty_tier_id.name if root.loyalty_tier_id else None,
+        })
+
+    @http.route("/api/v1/account", type="http", auth="public", methods=["GET"], csrf=False)
+    def account(self, **kwargs):
+        partner = self._partner_from_session_or_param(kwargs)
+        if not partner:
+            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+
+        addresses = request.env["res.partner"].sudo().search([
+            ("parent_id", "=", partner.id),
+            ("type", "=", "delivery"),
+        ])
+        cart = self._get_cart_order(partner, create_if_missing=False)
+        return self._response_success({
+            "account": {
+                "id": partner.id,
+                "name": partner.name,
+                "phone": partner.phone or partner.mobile or "",
+                "email": partner.email or "",
+                "avatar": self._partner_image_url(partner),
+                "loyalty_points": getattr(partner, "loyalty_total_points", 0),
+                "tier": partner.loyalty_tier_id.name if partner.loyalty_tier_id else None,
+                "tier_image_url": partner.loyalty_tier_id.image_url if partner.loyalty_tier_id else "",
+                "default_address_id": self._get_default_address_id(partner),
+                "address_count": len(addresses),
+                "cart_id": cart.id if cart else None,
+                "cart_item_count": len(cart.order_line.filtered(lambda l: not l.display_type)) if cart else 0,
+            }
         })
 
     # ----------------------------
@@ -355,6 +461,7 @@ class ZaloMiniAppAPI(http.Controller):
             original_price = self._studio_original_price(p)
             if not original_price or original_price < price:
                 original_price = price
+            images = self._product_images(p)
             stock_qty = self._free_stock_qty(p)
             product_tags = self._many2many_brief(p.product_tag_ids) if "product_tag_ids" in p._fields else []
             website_categories = self._many2many_brief(p.public_categ_ids) if "public_categ_ids" in p._fields else []
@@ -364,7 +471,8 @@ class ZaloMiniAppAPI(http.Controller):
                 "price": price,
                 "original_price": original_price,
                 "discount_percent": _discount_percent(p),
-                "image_url": self._product_images(p)[0],
+                "image_url": images[0] if images else "",
+                "images": images,
                 "sold_count": getattr(p, "sales_count", 0),
                 "free_shipping": False,
                 "voucher_label": None,
@@ -462,6 +570,138 @@ class ZaloMiniAppAPI(http.Controller):
     def banners(self, **kwargs):
         # Keep a stable contract for Mini App; integrate with a custom banner model later.
         return self._response_success({"banners": []})
+
+    @http.route("/api/v1/cart", type="http", auth="public", methods=["GET"], csrf=False)
+    def cart_get(self, **kwargs):
+        partner = self._partner_from_session_or_param(kwargs)
+        if not partner:
+            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+
+        cart = self._get_cart_order(partner, create_if_missing=False)
+        if not cart:
+            return self._response_success({
+                "cart": {
+                    "id": None,
+                    "name": None,
+                    "state": "draft",
+                    "amount_total": 0,
+                    "amount_tax": 0,
+                    "items": [],
+                    "item_count": 0,
+                    "shipping_address": None,
+                    "voucher_code": None,
+                }
+            })
+
+        items = [self._order_line_to_dict(line) for line in cart.order_line.filtered(lambda l: not l.display_type)]
+        payload = self._order_to_dict(cart)
+        payload["item_count"] = len(items)
+        payload["state"] = "draft"
+        return self._response_success({"cart": payload})
+
+    @http.route("/api/v1/cart/items", type="http", auth="public", methods=["POST"], csrf=False)
+    def cart_add_item(self, **kwargs):
+        payload = self._request_json()
+        partner = self._partner_from_session_or_param(payload)
+        if not partner:
+            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+
+        product_id = self._parse_int(payload.get("product_id"), 0)
+        quantity = self._parse_float(payload.get("quantity"), 0)
+        if product_id <= 0 or quantity <= 0:
+            return self._response_error("INVALID_INPUT", "product_id and quantity are required", status=400)
+
+        product = request.env["product.product"].sudo().browse(product_id)
+        if not product.exists() or not product.sale_ok:
+            return self._response_error("INVALID_PRODUCT", "Product not found", status=404)
+
+        cart = self._get_cart_order(partner, create_if_missing=True)
+        line = self._upsert_cart_line(cart, product, quantity)
+        return self._response_success({
+            "cart": self._order_to_dict(cart),
+            "line": self._order_line_to_dict(line),
+        }, status=201)
+
+    @http.route("/api/v1/cart/items/<int:line_id>", type="http", auth="public", methods=["PUT"], csrf=False)
+    def cart_update_item(self, line_id, **kwargs):
+        payload = self._request_json()
+        partner = self._partner_from_session_or_param(payload)
+        if not partner:
+            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+
+        cart = self._get_cart_order(partner, create_if_missing=False)
+        if not cart:
+            return self._response_error("NOT_FOUND", "Cart not found", status=404)
+
+        line = cart.order_line.filtered(lambda l: not l.display_type and l.id == line_id)[:1]
+        if not line:
+            return self._response_error("NOT_FOUND", "Cart item not found", status=404)
+
+        quantity = self._parse_float(payload.get("quantity"), 0)
+        if quantity <= 0:
+            line.unlink()
+        else:
+            line.write({"product_uom_qty": quantity})
+        return self._response_success({"cart": self._order_to_dict(cart)})
+
+    @http.route("/api/v1/cart/items/<int:line_id>", type="http", auth="public", methods=["DELETE"], csrf=False)
+    def cart_delete_item(self, line_id, **kwargs):
+        payload = self._request_json()
+        partner = self._partner_from_session_or_param(payload)
+        if not partner:
+            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+
+        cart = self._get_cart_order(partner, create_if_missing=False)
+        if not cart:
+            return self._response_error("NOT_FOUND", "Cart not found", status=404)
+
+        line = cart.order_line.filtered(lambda l: not l.display_type and l.id == line_id)[:1]
+        if not line:
+            return self._response_error("NOT_FOUND", "Cart item not found", status=404)
+        line.unlink()
+        return self._response_success({"cart": self._order_to_dict(cart)})
+
+    @http.route("/api/v1/cart/clear", type="http", auth="public", methods=["POST"], csrf=False)
+    def cart_clear(self, **kwargs):
+        payload = self._request_json()
+        partner = self._partner_from_session_or_param(payload)
+        if not partner:
+            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+
+        cart = self._get_cart_order(partner, create_if_missing=False)
+        if not cart:
+            return self._response_success({"cart": {"id": None, "items": [], "amount_total": 0, "amount_tax": 0}})
+
+        cart.order_line.filtered(lambda l: not l.display_type).unlink()
+        return self._response_success({"cart": self._order_to_dict(cart)})
+
+    @http.route("/api/v1/cart/checkout", type="http", auth="public", methods=["POST"], csrf=False)
+    def cart_checkout(self, **kwargs):
+        payload = self._request_json()
+        partner = self._partner_from_session_or_param(payload)
+        if not partner:
+            return self._response_error("UNAUTHORIZED", "Missing partner context. Call /auth/zalo first.", status=401)
+
+        cart = self._get_cart_order(partner, create_if_missing=False)
+        if not cart or not cart.order_line.filtered(lambda l: not l.display_type):
+            return self._response_error("EMPTY_CART", "Cart is empty", status=400)
+
+        cart.note = payload.get("note") or cart.note or ""
+        voucher_code = (payload.get("voucher_code") or cart.loyalty_voucher_code or "").strip()
+        if voucher_code:
+            cart.loyalty_voucher_code = voucher_code
+
+        address_id = payload.get("address_id")
+        if address_id:
+            shipping = request.env["res.partner"].sudo().browse(int(address_id))
+            if not shipping.exists() or shipping.parent_id.id != partner.id:
+                return self._response_error("INVALID_ADDRESS", "Address not found", status=400)
+            cart.partner_shipping_id = shipping.id
+
+        return self._response_success({
+            "cart": self._order_to_dict(cart),
+            "message": "Cart is ready for order submission",
+        })
 
     # ----------------------------
     # 4. Orders
