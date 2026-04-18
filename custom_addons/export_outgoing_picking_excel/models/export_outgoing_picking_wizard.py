@@ -1027,9 +1027,15 @@ class PickingExportWizard(models.TransientModel):
             else:
                 shift_suffix = "-2"
 
+        # Prepend original order reference
+        sale_name = so.name if so else (picking.origin or "")
+        
         # Số chứng từ: x_studio_pos_group (VD: POS/050126)
         # Nếu chưa có thì fallback về picking name
         base_so_chung_tu = picking.x_studio_pos_group or picking.name
+        if sale_name:
+            base_so_chung_tu = f"{sale_name}_{base_so_chung_tu}"
+            
         so_chung_tu = f"{base_so_chung_tu}{shift_suffix}" if base_so_chung_tu else ""
         
         # Số phiếu xuất: thêm 'PXK' trước số chứng từ
@@ -1065,8 +1071,7 @@ class PickingExportWizard(models.TransientModel):
             
         partner_vat = (partner and partner.vat) or ""
 
-        # Sale info
-        sale_name = so.name if so else (picking.origin or "")
+        # Sale info (sale_name defined earlier)
         sale_user_code = ''
         if so and so.user_id:
             sale_user_code = so.user_id.login or so.user_id.name or ''
