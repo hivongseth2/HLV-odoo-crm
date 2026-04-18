@@ -364,7 +364,7 @@ class StockExportWizard(models.TransientModel):
                 'loai_xuat_kho': loai_xuat,
                 'ngay_hach_toan': date_hach_toan_str,
                 'ngay_chung_tu': date_str,
-                'so_chung_tu': picking.name,
+                'so_chung_tu': f"{don_hang_goc}_{picking.name}" if don_hang_goc else picking.name,
                 'don_hang_goc': don_hang_goc,
                 'ma_doi_tuong': partner_code,
                 'ten_doi_tuong': partner_name,
