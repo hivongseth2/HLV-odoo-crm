@@ -3,7 +3,6 @@ import json
 import ast
 import datetime
 from odoo import http
-from odoo.tests import Form
 from .locations import Locations
 from .partners import Partners
 from .users import Users
@@ -1741,7 +1740,9 @@ class Outbounds(http.Controller):
                 try:
                     validation_res = new_stock_picking.button_validate()
                     if not isinstance(validation_res, bool) and validation_res["res_model"] == "expiry.picking.confirmation":
-                        confirm_expiry = Form(self.request.env["expiry.picking.confirmation"].with_context(validation_res["context"])).save()
+                        confirm_expiry = self.request.env["expiry.picking.confirmation"].with_context(
+                            validation_res["context"]
+                        ).sudo().create({})
                         confirm_expiry.process()
                     if "return_note" in inputs and bool(inputs["return_note"]):
                         new_stock_picking.sudo().write({"note": str(inputs["return_note"])})
