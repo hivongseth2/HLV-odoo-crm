@@ -5,7 +5,7 @@
                 <meta charset="utf-8"/>
                 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
                 <title>Barcode Mobile App</title>
-                <link rel="stylesheet" href="/hlv_mobile_barcode_lite/static/src/css/mobile_barcode.css"/>
+                <link rel="stylesheet" href="/hlv_mobile_barcode_lite/static/src/css/mobile_barcode.css?v=20260419"/>
             </head>
             <body class="hlv-mobile-wrap">
                 <div class="hlv-app-container">
@@ -183,7 +183,7 @@
 
                 </div>
 
-                <script src="/hlv_mobile_barcode_lite/static/src/js/app.js"></script>
+                <script src="/hlv_mobile_barcode_lite/static/src/js/app.js?v=20260419"></script>
             </body>
         </html>
     </template>
