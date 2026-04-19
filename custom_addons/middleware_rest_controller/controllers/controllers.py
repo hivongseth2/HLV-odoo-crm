@@ -68,7 +68,21 @@ class OdooRestController(http.Controller):
         unames.append(params["login"].lower())
         for i in range(len(unames)):
             try:
-                http.request.session.authenticate(params["db"], login=unames[i], password=params["password"])
+                session = http.request.session
+                try:
+                    # Odoo 16/17 style
+                    session.authenticate(params["db"], login=unames[i], password=params["password"])
+                except TypeError:
+                    try:
+                        # Odoo versions with positional auth signature
+                        session.authenticate(params["db"], unames[i], params["password"])
+                    except TypeError:
+                        # Odoo versions that expect a credentials dict
+                        session.authenticate(params["db"], {
+                            "login": unames[i],
+                            "password": params["password"],
+                            "type": "password",
+                        })
                 _is_authentic = True
                 break
             except Exception as e:
