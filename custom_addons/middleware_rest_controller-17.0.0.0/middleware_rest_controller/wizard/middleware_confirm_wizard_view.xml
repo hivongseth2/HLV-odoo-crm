@@ -1,0 +1,24 @@
+<odoo>
+    <data>
+        <record model="ir.ui.view" id="middleware_confirm_wizard_form_view">
+            <field name="name">middleware.confirm.wizard.form.view</field>
+            <field name="model">middleware.confirm.wizard</field>
+            <field name="arch" type="xml">
+                <form string="Confirm">
+                    <field name="message" readonly="1" widget="html"/>
+                    <footer style="line-height: 2.5;">
+                        <button name="however_continue" type="object" string="CONTINUE" class="btn btn-secondary"/>
+                        OR
+                        <button string="WANT TO CHANGE" special="cancel" class="btn btn-primary"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+        <record model="ir.actions.act_window" id="middleware_confirm_wizard_action">
+            <field name="name">middleware.confirm.wizard.action</field>
+            <field name="res_model">middleware.confirm.wizard</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+    </data>
+</odoo>
