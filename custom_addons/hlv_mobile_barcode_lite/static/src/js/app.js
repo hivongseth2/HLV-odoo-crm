@@ -3,16 +3,14 @@
  * Main application controller for screen transitions and logic
  */
 
-(function () {
+ (function () {
     "use strict";
 
-    // ===== APP STATE =====
     const app = {
         currentScreen: "login",
         currentWorkflow: null,
-        auth: { db: "", username: "", password: "" },
-        authToken: null,
-        currentSlip: { id: null, type: null, details: null },
+        auth: { db: "", login: "", password: "", mode: "prod" },
+        currentSlip: { id: "", type: "", details: null },
         stageState: {},
         slipLineItems: [],
         apiResponse: null,
@@ -31,11 +29,13 @@
         }
     }
 
-    // ===== SCREEN TRANSITIONS =====
     function toLogin() {
         show("login-screen");
         app.currentScreen = "login";
-        byId("hlv_password").focus();
+        const passwordInput = byId("hlv_password");
+        if (passwordInput) {
+            passwordInput.focus();
+        }
     }
 
     function toWorkflow() {
@@ -46,7 +46,10 @@
     function toSlipScan() {
         show("slip-scan-screen");
         app.currentScreen = "slip";
-        byId("hlv_slip_scan_input").focus();
+        const slipInput = byId("hlv_slip_scan_input");
+        if (slipInput) {
+            slipInput.focus();
+        }
         updateSlipTitle();
         clearSlipPreview();
     }
@@ -54,7 +57,10 @@
     function toDetailScan() {
         show("detail-scan-screen");
         app.currentScreen = "detail";
-        byId("hlv_detail_scan_input").focus();
+        const detailInput = byId("hlv_detail_scan_input");
+        if (detailInput) {
+            detailInput.focus();
+        }
         updateDetailHeader();
         renderDetailCards();
     }
@@ -73,28 +79,20 @@
         byId("hlv_result_title").textContent = message;
     }
 
-    // ===== LOGIN LOGIC =====
     byId("hlv_btn_login").addEventListener("click", async function () {
         const db = byId("hlv_db").value.trim();
-        const username = byId("hlv_login").value.trim();
+        const login = byId("hlv_login").value.trim();
         const password = byId("hlv_password").value;
 
-        if (!db || !username || !password) {
+        if (!db || !login || !password) {
             showLoginError("Vui lòng nhập đầy đủ thông tin");
             return;
         }
 
         try {
-            // Call JSON-RPC authenticate
-            const response = await callRPC("common", "authenticate", [db, username, password, {}]);
-            
-            if (!response) {
-                showLoginError("Đăng nhập thất bại");
-                return;
-            }
-
-            app.auth = { db, username, password };
-            app.authToken = response.user_id;
+            app.auth = { db, login, password, mode: "prod" };
+            // Probe endpoint to validate credentials using middleware auth.
+            await callEndpoint("/api/v1/list-sale-orders", { limit: 1, page: 1 });
             clearLoginError();
             toWorkflow();
         } catch (error) {
@@ -114,17 +112,18 @@
 
     byId("hlv_btn_back_workflow").addEventListener("click", toLogin);
 
-    // ===== WORKFLOW SELECTION =====
     document.querySelectorAll(".hlv-workflow-card").forEach(card => {
         card.addEventListener("click", function () {
             const workflow = this.dataset.workflow;
             app.currentWorkflow = workflow;
+            app.currentSlip = { id: "", type: workflow, details: null };
+            app.slipLineItems = [];
+            app.stageState = {};
             beep(true);
             toSlipScan();
         });
     });
 
-    // ===== SLIP SCAN LOGIC =====
     function updateSlipTitle() {
         const titles = {
             picking: "Quét Phiếu Xuất",
@@ -149,31 +148,41 @@
         }
 
         try {
-            // Call API to get slip details
-            const slip = await callRPC("hlv_mobile_barcode_lite", "get_slip_details", [
-                app.auth.db,
-                app.currentWorkflow,
-                slipId
-            ]);
-
-            if (!slip) {
-                beep(false);
-                showSlipError("Không tìm thấy phiếu: " + slipId);
-                return;
+            let data;
+            if (app.currentWorkflow === "picking") {
+                const soId = parsePositiveInt(slipId, "SO ID phải là số nguyên dương");
+                data = await callEndpoint("/api/v1/list-line-items-by-sale-order", { so_id: soId });
+            } else if (app.currentWorkflow === "receiving") {
+                const poId = parsePositiveInt(slipId, "PO ID phải là số nguyên dương");
+                data = await callEndpoint("/api/v1/list-line-items-by-purchase-order", { po_id: poId });
+            } else if (app.currentWorkflow === "shipment") {
+                const soId = parsePositiveInt(slipId, "SO ID phải là số nguyên dương");
+                data = await callEndpoint("/api/v1/list-sales-order-shipments", {
+                    so_id: soId,
+                    shipment_name: "",
+                    limit: 20,
+                    page: 1,
+                });
+            } else {
+                // transfer and product locator do not require fetching line-items by slip.
+                data = [];
             }
 
             app.currentSlip = {
-                id: slip.id || slipId,
+                id: slipId,
                 type: app.currentWorkflow,
-                details: slip
+                details: data,
             };
-            app.slipLineItems = slip.line_items || [];
-
-            displaySlipPreview(slip);
+            app.slipLineItems = Array.isArray(data) ? data : [];
+            displaySlipPreview({
+                id: slipId,
+                state: "ready",
+                line_items: app.slipLineItems,
+            });
             beep(true);
         } catch (error) {
             beep(false);
-            showSlipError("Lỗi: " + error.message);
+            showSlipError(error.message || String(error));
         }
     });
 
@@ -185,8 +194,7 @@
     }
 
     function showSlipError(msg) {
-        // Could show a toast or alert - for now, just log
-        alert(msg);
+        alert("Lỗi: " + msg);
     }
 
     byId("hlv_btn_continue_detail").addEventListener("click", function () {
@@ -196,7 +204,6 @@
 
     byId("hlv_btn_back_slip").addEventListener("click", toWorkflow);
 
-    // ===== DETAIL SCAN LOGIC =====
     function updateDetailHeader() {
         byId("hlv_detail_title").textContent = `Quét Chi Tiết - ${app.currentSlip.id}`;
         byId("hlv_detail_required").textContent = app.slipLineItems.length;
@@ -204,7 +211,8 @@
     }
 
     function updateDetailProgress() {
-        byId("hlv_detail_scanned").textContent = Object.keys(app.stageState).length;
+        const total = Object.values(app.stageState).reduce((sum, item) => sum + (item.qty_done || 0), 0);
+        byId("hlv_detail_scanned").textContent = total;
     }
 
     byId("hlv_btn_detail_scan").addEventListener("click", async function () {
@@ -215,25 +223,25 @@
         }
 
         try {
-            // Look up product by barcode
-            const product = await callRPC("hlv_mobile_barcode_lite", "get_product_by_scan", [
-                app.auth.db,
-                barcode
-            ]);
-
-            if (!product) {
-                beep(false);
-                return;
+            if (app.currentWorkflow === "transfer") {
+                upsertTransferItem(barcode);
+            } else if (app.currentWorkflow === "shipment") {
+                upsertShipmentItem(barcode);
+            } else {
+                const products = await callEndpoint("/api/v1/get-product-by-scan", { product_codes: [barcode] });
+                if (!Array.isArray(products) || products.length === 0) {
+                    throw new Error("Không tìm thấy sản phẩm theo barcode vừa quét.");
+                }
+                upsertStageProduct(products[0]);
             }
 
-            // Add/increment to staging
-            upsertStageProduct(product);
             byId("hlv_detail_scan_input").value = "";
             byId("hlv_detail_scan_input").focus();
             updateDetailProgress();
             renderDetailCards();
             beep(true);
         } catch (error) {
+            showConfirmError("Lỗi: " + (error.message || String(error)));
             beep(false);
         }
     });
@@ -246,6 +254,32 @@
                 product_code: product.barcode,
                 product_name: product.name,
                 qty_done: 0
+            };
+        }
+        app.stageState[key].qty_done += 1;
+    }
+
+    function upsertTransferItem(barcode) {
+        const key = `transfer:${barcode}`;
+        if (!app.stageState[key]) {
+            app.stageState[key] = {
+                product_id: 0,
+                product_code: barcode,
+                product_name: `Transfer ${barcode}`,
+                qty_done: 0,
+            };
+        }
+        app.stageState[key].qty_done += 1;
+    }
+
+    function upsertShipmentItem(shipmentCode) {
+        const key = `shipment:${shipmentCode}`;
+        if (!app.stageState[key]) {
+            app.stageState[key] = {
+                product_id: 0,
+                product_code: shipmentCode,
+                product_name: `Shipment ${shipmentCode}`,
+                qty_done: 0,
             };
         }
         app.stageState[key].qty_done += 1;
@@ -283,8 +317,8 @@
     byId("hlv_btn_confirm_detail").addEventListener("click", toConfirm);
     byId("hlv_btn_back_detail").addEventListener("click", toSlipScan);
 
-    // ===== CONFIRM LOGIC =====
     function renderConfirmScreen() {
+        byId("hlv_confirm_error").style.display = "none";
         byId("hlv_confirm_slip_id").textContent = app.currentSlip.id;
         byId("hlv_confirm_workflow").textContent = getWorkflowName(app.currentWorkflow);
         byId("hlv_confirm_item_count").textContent = Object.keys(app.stageState).length;
@@ -318,27 +352,81 @@
     }
 
     function buildPayload() {
-        const items = Object.values(app.stageState).map(item => ({
-            product_id: item.product_id,
-            qty_done: item.qty_done
-        }));
-        return { slip_id: app.currentSlip.id, items };
+        const values = Object.values(app.stageState);
+        if (app.currentWorkflow === "picking") {
+            return {
+                so_id: parseInt(app.currentSlip.id, 10),
+                line_items: [{
+                    normal: values.map((item) => ({
+                        product_id: item.product_id,
+                        qty_done: item.qty_done,
+                        expiry_date: "",
+                    })),
+                }],
+            };
+        }
+
+        if (app.currentWorkflow === "receiving") {
+            return {
+                po_id: parseInt(app.currentSlip.id, 10),
+                line_items: [{
+                    normal: values.map((item) => ({
+                        product_id: item.product_id,
+                        qty_done: item.qty_done,
+                        expiry_date: "",
+                    })),
+                }],
+            };
+        }
+
+        if (app.currentWorkflow === "shipment") {
+            return {
+                so_id: parseInt(app.currentSlip.id, 10),
+                shipment_name: values[0] ? values[0].product_code : "",
+                limit: 20,
+                page: 1,
+            };
+        }
+
+        if (app.currentWorkflow === "transfer") {
+            return {
+                source: 0,
+                destination: 0,
+                line_items: values.map((item) => ({
+                    product_code: item.product_code,
+                    lot_or_serial: "none",
+                    lot_serial: "",
+                    quantity: item.qty_done,
+                    note: "",
+                })),
+            };
+        }
+
+        return {
+            product_codes: values.map((item) => item.product_code),
+        };
     }
 
     byId("hlv_btn_submit_confirm").addEventListener("click", async function () {
         try {
             const payload = buildPayload();
-            const result = await callRPC("hlv_mobile_barcode_lite", "submit_operation", [
-                app.auth.db,
-                app.currentWorkflow,
-                payload
-            ]);
-
-            if (result.success) {
-                toResult(true, "✓ Thành Công!");
+            let result;
+            if (app.currentWorkflow === "picking") {
+                result = await callEndpoint("/api/v1/picking-by-sale-order", payload);
+            } else if (app.currentWorkflow === "receiving") {
+                result = await callEndpoint("/api/v1/receiving-by-purchase-order", payload);
+            } else if (app.currentWorkflow === "shipment") {
+                result = await callEndpoint("/api/v1/list-sales-order-shipments", payload);
+            } else if (app.currentWorkflow === "product_locator") {
+                result = await callEndpoint("/api/v1/get-product-by-scan", payload);
             } else {
-                showConfirmError("Lỗi: " + (result.message || "Thao tác thất bại"));
+                throw new Error("Màn hình chuyển kho cần thêm source/destination trước khi xác nhận.");
             }
+
+            app.apiResponse = result;
+            byId("hlv_result_msg").textContent = `Đã xử lý ${Object.keys(app.stageState).length} dòng quét.`;
+            byId("hlv_result_details").textContent = JSON.stringify(result, null, 2);
+            toResult(true, "Thành công");
         } catch (error) {
             showConfirmError("Lỗi: " + error.message);
         }
@@ -352,7 +440,6 @@
     byId("hlv_btn_cancel_confirm").addEventListener("click", toDetailScan);
     byId("hlv_btn_back_confirm").addEventListener("click", toDetailScan);
 
-    // ===== RESULT LOGIC =====
     byId("hlv_btn_scan_again").addEventListener("click", toWorkflow);
     byId("hlv_btn_logout").addEventListener("click", toLogin);
 
@@ -385,33 +472,50 @@
         }
     }
 
-    // ===== JSON-RPC CALLS =====
-    async function callRPC(model, method, params) {
+    async function callEndpoint(path, inputs) {
+        if (!app.auth.db || !app.auth.login || !app.auth.password) {
+            throw new Error("Thiếu DB/Login/Password.");
+        }
+
         const payload = {
             jsonrpc: "2.0",
             method: "call",
             params: {
-                service: "object",
-                method: "execute",
-                args: [app.auth.db, app.authToken, model, method, ...params]
+                db: app.auth.db,
+                login: app.auth.login,
+                password: app.auth.password,
+                mode: app.auth.mode,
+                inputs: inputs || {},
             },
-            id: Math.random()
+            id: Date.now(),
         };
 
-        const response = await fetch("/jsonrpc", {
+        const response = await fetch(path, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
         });
 
         const data = await response.json();
         if (data.error) {
             throw new Error(data.error.data.message || "RPC Error");
         }
-        return data.result;
+
+        const result = data.result || {};
+        if (result.status === "error") {
+            throw new Error(result.message || "Request failed");
+        }
+        return result.data;
     }
 
-    // ===== INIT =====
+    function parsePositiveInt(raw, errorMessage) {
+        const value = Number(raw);
+        if (!Number.isInteger(value) || value <= 0) {
+            throw new Error(errorMessage);
+        }
+        return value;
+    }
+
     document.addEventListener("DOMContentLoaded", function () {
         toLogin();
     });
