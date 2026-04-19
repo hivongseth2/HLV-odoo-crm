@@ -1,0 +1,15 @@
+<odoo>
+    <data>
+        <record id="action_mobile_barcode_lite" model="ir.actions.act_url">
+            <field name="name">Mobile Barcode Lite</field>
+            <field name="url">/hlv_mobile_barcode_lite/app</field>
+            <field name="target">self</field>
+        </record>
+
+        <menuitem id="menu_mobile_barcode_lite"
+                  name="Mobile Barcode Lite"
+                  parent="stock.menu_stock_root"
+                  sequence="92"
+                  action="action_mobile_barcode_lite"/>
+    </data>
+</odoo>
