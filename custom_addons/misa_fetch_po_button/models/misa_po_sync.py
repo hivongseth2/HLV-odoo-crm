@@ -625,7 +625,7 @@ class MisaPOSync(models.TransientModel):
 
         if stock_code not in stock_mapping:
             # raise models.UserError(f"📛 Kho {stock_code} không được hỗ trợ")
-            stock_code = "BENCACM" #default về BENCAM nếu không tìm thấy, vì đa số là BENCAM, tránh lỗi không đồng bộ được PO chỉ vì mã kho không chuẩn (thường do nhập liệu từ MISA)
+            stock_code = "BENCAM" #default về BENCAM nếu không tìm thấy, vì đa số là BENCAM, tránh lỗi không đồng bộ được PO chỉ vì mã kho không chuẩn (thường do nhập liệu từ MISA)
 
         location_name = stock_mapping[stock_code]
         location = self.env['stock.location'].search([('complete_name', '=', location_name)], limit=1)
