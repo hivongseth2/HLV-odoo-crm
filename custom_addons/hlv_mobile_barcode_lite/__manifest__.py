@@ -10,5 +10,5 @@
         "views/mobile_barcode_templates.xml"
     ],
     "installable": True,
-    "application": False
+    "application": True
 }
