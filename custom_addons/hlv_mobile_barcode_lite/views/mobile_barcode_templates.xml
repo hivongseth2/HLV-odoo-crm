@@ -4,193 +4,131 @@
             <head>
                 <meta charset="utf-8"/>
                 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-                <title>Mobile Barcode Lite</title>
+                <title>Barcode Mobile App</title>
                 <link rel="stylesheet" href="/hlv_mobile_barcode_lite/static/src/css/mobile_barcode.css"/>
             </head>
             <body class="hlv-mobile-wrap">
-                <div class="hlv-shell">
-                    <header class="hlv-header">
-                        <h1>Mobile Barcode Lite</h1>
-                        <p>Scan-first workflow for Picking, Receiving, Transfer, Product Locator and Shipment Scan</p>
+                <div class="hlv-phone-shell">
+                    <header class="hlv-appbar">
+                        <div class="hlv-appbar-left">
+                            <div class="hlv-hamburger"></div>
+                            <strong>LogiPrecision</strong>
+                        </div>
+                        <div class="hlv-avatar">W</div>
                     </header>
 
-                    <section class="hlv-auth-card hlv-compact-card">
-                        <h2>API Credentials</h2>
-                        <div class="hlv-grid-2">
-                            <label>
-                                <span>DB</span>
-                                <input id="hlv_db" type="text" t-att-value="default_db"/>
-                            </label>
-                            <label>
-                                <span>Login</span>
-                                <input id="hlv_login" type="text" t-att-value="default_login"/>
-                            </label>
-                            <label>
-                                <span>Password</span>
-                                <input id="hlv_password" type="password" placeholder="Your password"/>
-                            </label>
-                            <label>
-                                <span>Mode (optional)</span>
-                                <input id="hlv_mode" type="text" value="prod"/>
-                            </label>
+                    <section class="hlv-auth-sheet">
+                        <div class="hlv-auth-grid">
+                            <input id="hlv_db" type="text" t-att-value="default_db" placeholder="Database"/>
+                            <input id="hlv_login" type="text" t-att-value="default_login" placeholder="Login"/>
+                            <input id="hlv_password" type="password" placeholder="Password"/>
+                            <input id="hlv_mode" type="text" value="prod" placeholder="Mode"/>
                         </div>
                     </section>
 
-                    <section class="hlv-scan-card">
-                        <div class="hlv-scan-row">
-                            <label class="hlv-scan-label">
-                                <span>Scan Zone (barcode scanner -> Enter)</span>
-                                <input id="hlv_scan_input" type="text" placeholder="Quet ma SO/PO/SP/Location/Shipment" autocomplete="off"/>
-                            </label>
+                    <section class="hlv-scan-hero">
+                        <div class="hlv-camera-preview">SCAN ZONE</div>
+                        <div class="hlv-scan-input-row">
+                            <input id="hlv_scan_input" type="text" placeholder="Quet ma (SO/PO/SP/Location/Shipment)" autocomplete="off"/>
                             <button id="hlv_scan_btn">Scan</button>
                         </div>
                         <div class="hlv-scan-meta">
-                            <span id="hlv_scan_hint">Che do: Lay hang. Quet SO ID truoc, sau do quet ma san pham.</span>
+                            <span id="hlv_scan_hint">Che do Lay hang: quet SO ID truoc.</span>
                             <span id="hlv_scan_last">Last scan: -</span>
                         </div>
                     </section>
 
-                    <nav class="hlv-tabs" id="hlv_tabs">
-                        <button class="active" data-tab="picking">Lấy hàng</button>
-                        <button data-tab="receiving">Nhận hàng</button>
-                        <button data-tab="transfer">Chuyển kho</button>
-                        <button data-tab="product_locator">Vị trí SP</button>
-                        <button data-tab="shipment_scan">Quét kiện</button>
+                    <nav class="hlv-tabbar" id="hlv_tabs">
+                        <button class="active" data-tab="picking">Lay hang</button>
+                        <button data-tab="receiving">Nhan hang</button>
+                        <button data-tab="transfer">Chuyen kho</button>
+                        <button data-tab="product_locator">Vi tri SP</button>
+                        <button data-tab="shipment_scan">Quet kien</button>
                     </nav>
 
-                    <main>
+                    <main class="hlv-main">
                         <section class="hlv-panel active" data-panel="picking">
-                            <h3>Lấy hàng (SO Picking)</h3>
-                            <div class="hlv-actions">
-                                <button data-action="listSaleOrders">Danh sách SO cần lấy</button>
-                                <button data-action="listSaleLines">Chi tiết line SO</button>
-                                <button data-action="doPicking">Xác nhận lấy hàng</button>
-                                <button data-action="resetPickingStage" class="hlv-btn-muted">Reset staging</button>
+                            <div class="hlv-panel-title">Phieu lay hang</div>
+                            <div class="hlv-chip-row">
+                                <input id="hlv_so_id" type="number" placeholder="SO ID"/>
+                                <button data-action="listSaleLines">Tai line</button>
+                                <button data-action="doPicking" class="hlv-btn-primary">Xac nhan</button>
                             </div>
-                            <label>
-                                <span>SO ID</span>
-                                <input id="hlv_so_id" type="number" placeholder="Ví dụ: 123"/>
-                            </label>
-                            <label>
-                                <span>Line items JSON (cho picking-by-sale-order)</span>
-                                <textarea id="hlv_picking_lines">[{"normal":[{"product_id":1,"qty_done":1}]}]</textarea>
-                            </label>
                         </section>
 
                         <section class="hlv-panel" data-panel="receiving">
-                            <h3>Nhận hàng (PO Receiving)</h3>
-                            <div class="hlv-actions">
-                                <button data-action="listPurchaseOrders">Danh sách PO cần nhận</button>
-                                <button data-action="listPurchaseLines">Chi tiết line PO</button>
-                                <button data-action="doReceiving">Xác nhận nhận hàng</button>
-                                <button data-action="resetReceivingStage" class="hlv-btn-muted">Reset staging</button>
+                            <div class="hlv-panel-title">Phieu nhan hang</div>
+                            <div class="hlv-chip-row">
+                                <input id="hlv_po_id" type="number" placeholder="PO ID"/>
+                                <button data-action="listPurchaseLines">Tai line</button>
+                                <button data-action="doReceiving" class="hlv-btn-primary">Xac nhan</button>
                             </div>
-                            <label>
-                                <span>PO ID</span>
-                                <input id="hlv_po_id" type="number" placeholder="Ví dụ: 456"/>
-                            </label>
-                            <label>
-                                <span>Line items JSON (cho receiving-by-purchase-order)</span>
-                                <textarea id="hlv_receiving_lines">[{"normal":[{"product_id":1,"qty_done":1,"expiry_date":""}]}]</textarea>
-                            </label>
                         </section>
 
                         <section class="hlv-panel" data-panel="transfer">
-                            <h3>Chuyển kho nội bộ</h3>
-                            <div class="hlv-actions">
-                                <button data-action="doTransfer">Thực hiện chuyển kho</button>
-                                <button data-action="setSourceFromScan" class="hlv-btn-muted">Gan scan vao Source</button>
-                                <button data-action="setDestinationFromScan" class="hlv-btn-muted">Gan scan vao Destination</button>
+                            <div class="hlv-panel-title">Chuyen kho noi bo</div>
+                            <div class="hlv-transfer-grid">
+                                <input id="hlv_src_wh_name" type="text" placeholder="Kho nguon"/>
+                                <input id="hlv_dst_wh_name" type="text" placeholder="Kho dich"/>
+                                <input id="hlv_transfer_source" type="number" placeholder="Source location"/>
+                                <input id="hlv_transfer_destination" type="number" placeholder="Destination location"/>
                             </div>
-                            <div class="hlv-grid-2">
-                                <label>
-                                    <span>Kho nguồn (src_wh_name)</span>
-                                    <input id="hlv_src_wh_name" type="text" placeholder="Tên warehouse nguồn"/>
-                                </label>
-                                <label>
-                                    <span>Kho đích (dst_wh_name)</span>
-                                    <input id="hlv_dst_wh_name" type="text" placeholder="Tên warehouse đích"/>
-                                </label>
-                                <label>
-                                    <span>Source location ID</span>
-                                    <input id="hlv_transfer_source" type="number"/>
-                                </label>
-                                <label>
-                                    <span>Destination location ID</span>
-                                    <input id="hlv_transfer_destination" type="number"/>
-                                </label>
+                            <div class="hlv-chip-row">
+                                <button data-action="setSourceFromScan">Gan source tu scan</button>
+                                <button data-action="setDestinationFromScan">Gan dich tu scan</button>
+                                <button data-action="doTransfer" class="hlv-btn-primary">Chuyen kho</button>
                             </div>
-                            <label>
-                                <span>Line items JSON (cho internal-transfer)</span>
-                                <textarea id="hlv_transfer_lines">[{"product_code":"123456789","lot_or_serial":"none","lot_serial":"","quantity":1,"note":""}]</textarea>
-                            </label>
                         </section>
 
                         <section class="hlv-panel" data-panel="product_locator">
-                            <h3>Quét sản phẩm và tìm vị trí</h3>
-                            <div class="hlv-actions">
-                                <button data-action="scanProducts">Quét mã sản phẩm</button>
-                                <button data-action="inventoryByLocation">Tồn theo vị trí</button>
-                                <button data-action="scanLocation">Quét vị trí</button>
+                            <div class="hlv-panel-title">Tra vi tri san pham</div>
+                            <div class="hlv-transfer-grid">
+                                <input id="hlv_inventory_product_code" type="text" placeholder="Product barcode"/>
+                                <input id="hlv_inventory_location_name" type="text" placeholder="Ten location"/>
+                                <input id="hlv_location_barcode" type="text" placeholder="Scan location"/>
+                                <input id="hlv_location_wh_name" type="text" placeholder="Warehouse filter"/>
                             </div>
-                            <label>
-                                <span>Danh sách barcode (phân tách dấu phẩy)</span>
-                                <input id="hlv_product_codes" type="text" placeholder="code1,code2"/>
-                            </label>
-                            <div class="hlv-grid-2">
-                                <label>
-                                    <span>1 barcode để tra tồn theo vị trí</span>
-                                    <input id="hlv_inventory_product_code" type="text" placeholder="Một product_code"/>
-                                </label>
-                                <label>
-                                    <span>Tên location (optional)</span>
-                                    <input id="hlv_inventory_location_name" type="text" placeholder="WH/Stock"/>
-                                </label>
-                                <label>
-                                    <span>Location barcode / name / id</span>
-                                    <input id="hlv_location_barcode" type="text" placeholder="Mã vị trí"/>
-                                </label>
-                                <label>
-                                    <span>Tên warehouse filter (optional)</span>
-                                    <input id="hlv_location_wh_name" type="text" placeholder="Warehouse name"/>
-                                </label>
+                            <div class="hlv-chip-row">
+                                <button data-action="scanProducts">Thong tin SP</button>
+                                <button data-action="inventoryByLocation">Ton theo vi tri</button>
+                                <button data-action="scanLocation">Tim vi tri</button>
                             </div>
                         </section>
 
                         <section class="hlv-panel" data-panel="shipment_scan">
-                            <h3>Quét kiện hàng (shipment)</h3>
-                            <div class="hlv-actions">
-                                <button data-action="listShipments">Xem kiện theo SO + mã kiện</button>
-                                <button data-action="finderSearch">Finder search nâng cao</button>
+                            <div class="hlv-panel-title">Quet kien hang</div>
+                            <div class="hlv-transfer-grid">
+                                <input id="hlv_shipment_so_id" type="number" placeholder="SO ID"/>
+                                <input id="hlv_shipment_name" type="text" placeholder="Shipment code"/>
                             </div>
-                            <div class="hlv-grid-2">
-                                <label>
-                                    <span>SO ID</span>
-                                    <input id="hlv_shipment_so_id" type="number" placeholder="Bắt buộc cho list-sales-order-shipments"/>
-                                </label>
-                                <label>
-                                    <span>Mã kiện / shipment name scan</span>
-                                    <input id="hlv_shipment_name" type="text" placeholder="WH/OUT/0001"/>
-                                </label>
+                            <div class="hlv-chip-row">
+                                <button data-action="listShipments">Chi tiet kien</button>
+                                <button data-action="finderSearch">Finder search</button>
                             </div>
-                            <label>
-                                <span>Finder payload JSON (items + criteria)</span>
-                                <textarea id="hlv_finder_payload">{"items":[],"criteria":{"is_and":true,"criteria":[]}}</textarea>
-                            </label>
                         </section>
 
-                        <section class="hlv-stage">
-                            <div class="hlv-result-header">
-                                <h3>Scan Staging</h3>
+                        <section class="hlv-stage-card">
+                            <div class="hlv-section-head">
+                                <strong>Danh sach quet</strong>
                                 <button id="hlv_clear_stage">Clear</button>
                             </div>
-                            <pre id="hlv_stage_preview">{}</pre>
+                            <div id="hlv_stage_cards" class="hlv-stage-cards"></div>
+                            <pre id="hlv_stage_preview" class="hlv-hidden">{}</pre>
                         </section>
 
-                        <section class="hlv-result">
-                            <div class="hlv-result-header">
-                                <h3>Kết quả</h3>
-                                <button id="hlv_clear_output">Xóa</button>
+                        <details class="hlv-advanced">
+                            <summary>Advanced payload</summary>
+                            <textarea id="hlv_picking_lines">[{"normal":[{"product_id":1,"qty_done":1}]}]</textarea>
+                            <textarea id="hlv_receiving_lines">[{"normal":[{"product_id":1,"qty_done":1,"expiry_date":""}]}]</textarea>
+                            <textarea id="hlv_transfer_lines">[{"product_code":"123456789","lot_or_serial":"none","lot_serial":"","quantity":1,"note":""}]</textarea>
+                            <input id="hlv_product_codes" type="text" placeholder="code1,code2"/>
+                            <textarea id="hlv_finder_payload">{"items":[],"criteria":{"is_and":true,"criteria":[]}}</textarea>
+                        </details>
+
+                        <section class="hlv-console-card">
+                            <div class="hlv-section-head">
+                                <strong>Ket qua</strong>
+                                <button id="hlv_clear_output">Xoa</button>
                             </div>
                             <pre id="hlv_output">Ready.</pre>
                         </section>

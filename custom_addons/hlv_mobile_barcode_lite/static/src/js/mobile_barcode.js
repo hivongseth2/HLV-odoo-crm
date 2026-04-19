@@ -5,11 +5,15 @@
         picking: {},
         receiving: {},
     };
-
     let lastScanValue = "";
 
     function byId(id) {
         return document.getElementById(id);
+    }
+
+    function getActiveTab() {
+        const active = document.querySelector("#hlv_tabs button.active");
+        return active ? active.dataset.tab : "picking";
     }
 
     function getCredentials() {
@@ -31,12 +35,6 @@
 
     function printOutput(payload) {
         byId("hlv_output").textContent = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
-    }
-
-    function printStage() {
-        const active = getActiveTab();
-        const data = active === "receiving" ? stageState.receiving : stageState.picking;
-        byId("hlv_stage_preview").textContent = JSON.stringify(data, null, 2);
     }
 
     function beep(success) {
@@ -91,42 +89,49 @@
         return body.result;
     }
 
-    function initTabs() {
-        const tabWrap = byId("hlv_tabs");
-        const tabButtons = tabWrap.querySelectorAll("button");
-        const panels = document.querySelectorAll(".hlv-panel");
+    function renderStageCards() {
+        const active = getActiveTab();
+        const stageWrap = byId("hlv_stage_cards");
+        let rows = [];
 
-        tabButtons.forEach((button) => {
-            button.addEventListener("click", () => {
-                const tab = button.dataset.tab;
-                tabButtons.forEach((btn) => btn.classList.remove("active"));
-                button.classList.add("active");
-                panels.forEach((panel) => panel.classList.toggle("active", panel.dataset.panel === tab));
-                updateScanHint();
-                printStage();
-                byId("hlv_scan_input").focus();
-            });
-        });
-    }
+        if (active === "picking" || active === "receiving") {
+            const data = active === "picking" ? stageState.picking : stageState.receiving;
+            rows = Object.values(data);
+        } else if (active === "transfer") {
+            rows = parseJsonInput("hlv_transfer_lines", []);
+        }
 
-    function getActiveTab() {
-        const active = document.querySelector("#hlv_tabs button.active");
-        return active ? active.dataset.tab : "picking";
+        if (!rows || rows.length === 0) {
+            stageWrap.innerHTML = "<div class='hlv-item-sub'>Chua co du lieu quet.</div>";
+            byId("hlv_stage_preview").textContent = "{}";
+            return;
+        }
+
+        stageWrap.innerHTML = rows
+            .map((row) => {
+                const name = row.product_name || row.product_code || row.product_id || "Unknown";
+                const code = row.product_code || row.product_id || "-";
+                const qty = row.qty_done || row.quantity || 0;
+                return "<div class='hlv-item-card'><div class='hlv-item-top'><div><div class='hlv-item-name'>" + name + "</div><div class='hlv-item-sub'>SKU: " + code + "</div></div><div class='hlv-item-qty'>" + qty + "</div></div></div>";
+            })
+            .join("");
+
+        byId("hlv_stage_preview").textContent = JSON.stringify(rows, null, 2);
     }
 
     function updateScanHint() {
         const tab = getActiveTab();
         let hint = "";
         if (tab === "picking") {
-            hint = "Che do Lay hang: quet SO ID truoc, tiep theo quet barcode san pham de tang qty.";
+            hint = "Lay hang: Quet SO ID, sau do quet barcode san pham.";
         } else if (tab === "receiving") {
-            hint = "Che do Nhan hang: quet PO ID truoc, tiep theo quet barcode san pham de tang qty.";
+            hint = "Nhan hang: Quet PO ID, sau do quet barcode san pham.";
         } else if (tab === "transfer") {
-            hint = "Che do Chuyen kho: quet location id cho source/destination, roi quet barcode vao line_items.";
+            hint = "Chuyen kho: Quet location nguon/dich va quet san pham.";
         } else if (tab === "product_locator") {
-            hint = "Che do Vi tri SP: quet barcode san pham hoac ma vi tri de tra cuu nhanh.";
+            hint = "Vi tri SP: Quet barcode san pham hoac vi tri.";
         } else {
-            hint = "Che do Quet kien: quet SO ID roi quet ma shipment de xem noi dung.";
+            hint = "Quet kien: Quet SO ID roi quet shipment code.";
         }
         byId("hlv_scan_hint").textContent = hint;
     }
@@ -157,7 +162,7 @@
         } else {
             byId("hlv_receiving_lines").value = JSON.stringify(payload);
         }
-        printStage();
+        renderStageCards();
     }
 
     function appendTransferLineFromScan(barcode) {
@@ -170,7 +175,7 @@
             note: "",
         });
         byId("hlv_transfer_lines").value = JSON.stringify(lines);
-        byId("hlv_stage_preview").textContent = JSON.stringify(lines, null, 2);
+        renderStageCards();
     }
 
     async function onScan(code) {
@@ -241,6 +246,24 @@
         }
     }
 
+    function initTabs() {
+        const tabWrap = byId("hlv_tabs");
+        const tabButtons = tabWrap.querySelectorAll("button");
+        const panels = document.querySelectorAll(".hlv-panel");
+
+        tabButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                const tab = button.dataset.tab;
+                tabButtons.forEach((btn) => btn.classList.remove("active"));
+                button.classList.add("active");
+                panels.forEach((panel) => panel.classList.toggle("active", panel.dataset.panel === tab));
+                updateScanHint();
+                renderStageCards();
+                byId("hlv_scan_input").focus();
+            });
+        });
+    }
+
     function bindActions() {
         document.querySelectorAll("[data-action]").forEach((button) => {
             button.addEventListener("click", async () => {
@@ -248,9 +271,7 @@
                 printOutput("Loading...");
                 try {
                     let result;
-                    if (action === "listSaleOrders") {
-                        result = await callEndpoint("/api/v1/list-sale-orders", { limit: 20, page: 1 });
-                    } else if (action === "listSaleLines") {
+                    if (action === "listSaleLines") {
                         result = await callEndpoint("/api/v1/list-line-items-by-sale-order", {
                             so_id: Number(byId("hlv_so_id").value || 0),
                         });
@@ -259,8 +280,6 @@
                             so_id: Number(byId("hlv_so_id").value || 0),
                             line_items: parseJsonInput("hlv_picking_lines", []),
                         });
-                    } else if (action === "listPurchaseOrders") {
-                        result = await callEndpoint("/api/v1/list-purchase-orders", { limit: 20, page: 1 });
                     } else if (action === "listPurchaseLines") {
                         result = await callEndpoint("/api/v1/list-line-items-by-purchase-order", {
                             po_id: Number(byId("hlv_po_id").value || 0),
@@ -279,11 +298,8 @@
                             line_items: parseJsonInput("hlv_transfer_lines", []),
                         });
                     } else if (action === "scanProducts") {
-                        const productCodes = (byId("hlv_product_codes").value || "")
-                            .split(",")
-                            .map((x) => x.trim())
-                            .filter(Boolean);
-                        result = await callEndpoint("/api/v1/get-product-by-scan", { product_codes: productCodes });
+                        const productCode = (byId("hlv_inventory_product_code").value || "").trim();
+                        result = await callEndpoint("/api/v1/get-product-by-scan", { product_codes: [productCode] });
                     } else if (action === "inventoryByLocation") {
                         result = await callEndpoint("/api/v1/item-inventory-by-locations", {
                             product_code: (byId("hlv_inventory_product_code").value || "").trim(),
@@ -305,25 +321,17 @@
                         });
                     } else if (action === "finderSearch") {
                         result = await callEndpoint("/api/v1/finder-search", parseJsonInput("hlv_finder_payload", {}));
-                    } else if (action === "resetPickingStage") {
-                        stageState.picking = {};
-                        byId("hlv_picking_lines").value = "[]";
-                        result = { message: "Picking staging reset." };
-                    } else if (action === "resetReceivingStage") {
-                        stageState.receiving = {};
-                        byId("hlv_receiving_lines").value = "[]";
-                        result = { message: "Receiving staging reset." };
                     } else if (action === "setSourceFromScan") {
                         byId("hlv_transfer_source").value = lastScanValue;
-                        result = { message: "Source set from last scan." };
+                        result = { message: "Da gan source tu last scan." };
                     } else if (action === "setDestinationFromScan") {
                         byId("hlv_transfer_destination").value = lastScanValue;
-                        result = { message: "Destination set from last scan." };
+                        result = { message: "Da gan destination tu last scan." };
                     } else {
                         throw new Error("Unsupported action: " + action);
                     }
                     printOutput(result);
-                    printStage();
+                    renderStageCards();
                 } catch (error) {
                     printOutput({ status: "error", message: error.message || String(error) });
                 }
@@ -337,9 +345,10 @@
         byId("hlv_clear_stage").addEventListener("click", () => {
             stageState.picking = {};
             stageState.receiving = {};
-            byId("hlv_stage_preview").textContent = "{}";
             byId("hlv_picking_lines").value = "[]";
             byId("hlv_receiving_lines").value = "[]";
+            byId("hlv_transfer_lines").value = "[]";
+            renderStageCards();
         });
 
         byId("hlv_scan_btn").addEventListener("click", () => onScan(byId("hlv_scan_input").value));
@@ -353,7 +362,7 @@
         document.addEventListener("click", (event) => {
             const target = event.target;
             if (target && target.id !== "hlv_scan_input") {
-                setTimeout(() => byId("hlv_scan_input").focus(), 40);
+                setTimeout(() => byId("hlv_scan_input").focus(), 60);
             }
         });
     }
@@ -362,7 +371,7 @@
         initTabs();
         bindActions();
         updateScanHint();
-        printStage();
+        renderStageCards();
         byId("hlv_scan_input").focus();
     });
 })();
