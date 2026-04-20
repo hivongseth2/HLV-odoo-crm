@@ -449,6 +449,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             'lines': so_lines_data,
             'packages': package_groups,
             'total_packages_count': total_packages_count,
+            'origin': so.origin or '',
             'misa_shipping_address': so.misa_shipping_address or '',
             'x_studio_htgh': so.x_studio_htgh or '',
             'x_studio_delivery_type': so.x_studio_delivery_type or '',

@@ -492,8 +492,8 @@ function load(append){
     (append?d.orders||[]:S.orders).forEach(function(o){
       var ep=o.packing_status;
       var rd=o.real_delivery_status||o.delivery_status;
-      // Đơn đã giao đủ trong ngày: ưu tiên thấp nhất, luôn hiển
-      if(rd==='full'&&o.has_delivered_today) ep='delivered_today';
+      // Đơn đã giao trong ngày (kể cả partial) VÀ không có PICK nào assigned sẵn hàng
+      if(o.has_delivered_today&&(rd==='full'||!o.has_assigned_pick)) ep='delivered_today';
       else if(o.has_shipper_received) ep='shipping';
       else if(o.has_new_unprinted_pickings) ep='has_unprinted';
       else if(ep==='fully_packed') ep='packed_waiting_ship';
@@ -659,6 +659,7 @@ function renderSOCard(o){
   if(o.x_studio_delivery_type) h+='<small class="text-muted"><i class="fa fa-truck me-1"></i>'+esc(o.x_studio_delivery_type)+'</small><br>';
   if(o.x_studio_htgh) h+='<small class="text-muted"><i class="fa fa-info-circle me-1"></i>'+esc(o.x_studio_htgh)+'</small><br>';
   if(o.x_studio_misa_saler_code) h+='<small class="text-muted"><i class="fa fa-id-badge me-1"></i>NV: '+esc(o.x_studio_misa_saler_code)+'</small><br>';
+  if(o.origin) h+='<small class="text-muted" style="font-size:.7rem"><i class="fa fa-sticky-note-o me-1 text-warning"></i><b>Ghi ch\u00fa:</b> '+esc(o.origin)+'</small><br>';
   if(o.misa_shipping_address) h+='<small class="text-muted" style="font-size:.7rem"><i class="fa fa-map-marker me-1 text-danger"></i>'+esc(o.misa_shipping_address)+'</small><br>';
   if(o._shipper_names&&o._shipper_names.length) h+='<small class="text-success fw-bold" style="font-size:.72rem"><i class="fa fa-motorcycle me-1"></i>T\u00e0i x\u1ebf: '+o._shipper_names.map(esc).join(', ')+'</small><br>';
   if(o.tag_ids&&o.tag_ids.length) h+='<div class="mt-1">'+o.tag_ids.map(tagBadge).join('')+'</div>';

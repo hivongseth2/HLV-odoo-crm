@@ -178,6 +178,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                     domain=[('product_id', 'in', list(all_prod_ids_needed)), ('location_id', 'in', all_cloc_ids)],
                     fields=['quantity:sum', 'reserved_quantity:sum'],
                     groupby=['product_id', 'location_id'],
+                    lazy=False,
                 ):
                     pid_raw = row.get('product_id')
                     loc_raw = row.get('location_id')
