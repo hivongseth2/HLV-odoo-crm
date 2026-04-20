@@ -37,12 +37,13 @@
                 </button>
             </div>
 
-            <div class="ms-auto d-flex align-items-center gap-3">
+            <div class="ms-auto d-flex align-items-center gap-3"
+                 t-on-click="() => { this.closeSelectedPickingPrintMenu(); }">
                 <!-- Print Button -->
                 <button class="btn btn-sm"
                         t-att-class="this.selectedCount > 0 ? 'btn-success' : 'btn-outline-secondary'"
                         t-att-disabled="this.selectedCount === 0 || state.isLoading"
-                        t-on-click="printSelectedPickingSlips"
+                        t-on-click="(ev) => this.toggleSelectedPickingPrintMenu(ev)"
                         title="In phiếu lấy hàng cho các đơn đã chọn">
                     <i class="fa fa-print me-1" title="In phiếu"></i>
                     In phiếu lấy hàng
@@ -50,6 +51,29 @@
                         <t t-esc="this.selectedCount"/>
                     </span>
                 </button>
+                <div t-if="this.selectedPrintMenuPos"
+                     class="bg-white border rounded shadow-lg"
+                     style="position:fixed; z-index:2000; min-width:260px; max-height:340px; overflow-y:auto;"
+                     t-att-style="'position:fixed; z-index:2000; min-width:260px; max-height:340px; overflow-y:auto; top:' + this.selectedPrintMenuPos.top + 'px; right:' + this.selectedPrintMenuPos.right + 'px;'"
+                     t-on-click.stop="">
+                    <div class="px-3 py-2 bg-light border-bottom small fw-bold text-muted">
+                        <i class="fa fa-print me-1"></i> Chọn mẫu in
+                    </div>
+                    <t t-foreach="state.pickingReports" t-as="report" t-key="report.id">
+                        <div class="px-3 py-2 small cursor-pointer"
+                             style="border-bottom:1px solid #f3f3f3;"
+                             t-on-click="(ev) => this.printSelectedPickingSlips(report.id, report.report_type)">
+                            <i class="fa fa-file-pdf-o me-2 text-danger"
+                               t-if="report.report_type === 'qweb-pdf'"></i>
+                            <i class="fa fa-file-excel-o me-2 text-success"
+                               t-elif="report.report_type === 'xlsx'"></i>
+                            <i class="fa fa-file-o me-2 text-muted" t-else=""></i>
+                            <t t-esc="report.name"/>
+                        </div>
+                    </t>
+                    <div t-if="!state.pickingReports.length"
+                         class="px-3 py-2 text-muted small">Không có mẫu in</div>
+                </div>
                 <!-- Tạo phiếu luân chuyển -->
                 <button class="btn btn-sm"
                         t-att-class="this.selectedCount > 0 ? 'btn-warning' : 'btn-outline-secondary'"
