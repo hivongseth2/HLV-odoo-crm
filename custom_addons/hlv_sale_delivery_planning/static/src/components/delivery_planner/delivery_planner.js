@@ -560,6 +560,7 @@ export class DeliveryPlannerDashboard extends Component {
             tx.objectStore(this._CACHE_STORE).put({
                 filterKey: this._buildFilterKey(),
                 timestamp: Date.now(),
+                kanbanBatchSize: this.state.kanbanBatchSize,
                 data: {
                     dashboard_stats: result.dashboard_stats,
                     orders: result.orders,
@@ -591,7 +592,11 @@ export class DeliveryPlannerDashboard extends Component {
                     if (!payload) { console.log('[DP Cache] No cached data found'); return resolve(null); }
                     if (payload.filterKey !== this._buildFilterKey()) { console.log('[DP Cache] Filter key mismatch, skipping cache'); return resolve(null); }
                     if (Date.now() - payload.timestamp > this._CACHE_TTL) { console.log('[DP Cache] Cache expired'); return resolve(null); }
-                    console.log('[DP Cache] Restored', (payload.data.orders || []).length, 'orders from IndexedDB');
+                    // Restore kanbanBatchSize so "tải thêm" data persists
+                    if (payload.kanbanBatchSize) {
+                        this.state.kanbanBatchSize = payload.kanbanBatchSize;
+                    }
+                    console.log('[DP Cache] Restored', (payload.data.orders || []).length, 'orders (batchSize=' + (payload.kanbanBatchSize || '?') + ') from IndexedDB');
                     resolve(payload.data);
                 };
                 req.onerror = () => { db.close(); console.warn('[DP Cache] _loadFromCache read error'); resolve(null); };
