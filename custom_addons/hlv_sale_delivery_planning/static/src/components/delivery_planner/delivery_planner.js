@@ -136,8 +136,8 @@ export class DeliveryPlannerDashboard extends Component {
                 this.busService.subscribe("new_portal_message", this._onBusNewPortalMessage);
             }
 
-            // Try to restore from cache for instant display
-            const cached = this._loadFromCache();
+            // Try to restore from IndexedDB cache for instant display
+            const cached = await this._loadFromCache();
             if (cached) {
                 this._applyResult(cached);
                 this.state.isLoading = false;
@@ -362,7 +362,8 @@ export class DeliveryPlannerDashboard extends Component {
         }
         this._dataChangedDebounce = setTimeout(async () => {
             this._dataChangedDebounce = null;
-            await this.fetchData();
+            // Use silent refresh: no loading spinner, smart merge
+            await this._silentRefresh();
             this.notification.add(
                 "Dữ liệu đã được cập nhật tự động",
                 { type: "info", title: "Cập nhật" }
@@ -370,9 +371,154 @@ export class DeliveryPlannerDashboard extends Component {
         }, 1500);
     }
 
+    /**
+     * Refresh data without loading spinner.
+     * Smart-merge: only update orders that changed, add new, remove deleted.
+     * Preserves scroll position and avoids full kanban re-render.
+     */
+    async _silentRefresh() {
+        const isKanban = this.state.viewMode === 'kanban';
+        try {
+            const result = await this.orm.call(
+                "sale.order",
+                "get_delivery_dashboard_data",
+                [],
+                {
+                    search_query: this.state.searchQuery.trim(),
+                    filter_warehouse_id: this.state.filterWarehouseId,
+                    filter_delivery_status: this.state.filterDeliveryStatus,
+                    filter_stock_status: this.state.filterStockStatus,
+                    filter_date_from: this.state.filterDateFrom,
+                    filter_date_to: this.state.filterDateTo,
+                    filter_done_date_from: this.state.filterDoneDateFrom,
+                    filter_done_date_to: this.state.filterDoneDateTo,
+                    filter_po_date_from: this.state.filterPODateFrom,
+                    filter_po_date_to: this.state.filterPODateTo,
+                    filter_po_status: this.state.filterPOStatus,
+                    filter_packing_status: this.state.filterPackingStatus,
+                    filter_saler_code: this.state.filterSalerCode.trim(),
+                    filter_htgh: this.state.filterHtgh.trim(),
+                    filter_delivery_type: this.state.filterDeliveryType,
+                    filter_tag_ids: this.state.filterTagIds.join(','),
+                    show_completed: this.state.showCompleted,
+                    filter_need_transfer: this.state.filterNeedTransfer,
+                    filter_new_orders: this.state.filterNewOrders,
+                    limit: isKanban ? this.state.kanbanBatchSize : this.state.itemsPerPage,
+                    offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
+                }
+            );
+            this._mergeResult(result);
+            this._saveToCache(result);
+        } catch (error) {
+            console.error("Silent refresh failed:", error);
+        }
+    }
 
-    // --- Cache helpers ---
-    _CACHE_KEY = 'hlv_dp_cache_v1';
+    /**
+     * Smart merge: update existing orders in-place, add new, remove deleted.
+     * OWL only re-renders cards whose reactive properties actually changed.
+     */
+    _mergeResult(result) {
+        // Update stats
+        this.state.dashboardStats = result.dashboard_stats || this.state.dashboardStats;
+        this.state.totalCount = result.total_count || 0;
+
+        const newOrders = result.orders || [];
+        const todayStr = new Date().toISOString().slice(0, 10);
+
+        // Build map of current orders by ID for O(1) lookup
+        const oldMap = new Map();
+        for (const so of this.state.saleOrders) {
+            oldMap.set(so.id, so);
+        }
+
+        // Build new order list, reusing old objects where nothing changed
+        const merged = [];
+        for (const fresh of newOrders) {
+            fresh.flows = fresh.flows || [];
+            fresh.pickings = fresh.pickings || [];
+            fresh.lines = fresh.lines || [];
+            fresh.pos = fresh.pos || [];
+            const orderDate = fresh.misa_order_date || (fresh.date_order ? fresh.date_order.substring(0, 10) : '');
+            fresh.is_new_order = orderDate === todayStr;
+
+            const old = oldMap.get(fresh.id);
+            if (old) {
+                // Update existing order in-place (OWL detects property changes)
+                const skipKeys = new Set(['id']);
+                for (const key of Object.keys(fresh)) {
+                    if (skipKeys.has(key)) continue;
+                    old[key] = fresh[key];
+                }
+                // Re-apply flow link colors
+                this._applyFlowColors(old);
+                merged.push(old);
+                oldMap.delete(fresh.id);
+            } else {
+                // New order
+                this._applyFlowColors(fresh);
+                merged.push(fresh);
+            }
+        }
+
+        // Replace array only if order IDs changed (added/removed/reordered)
+        const oldIds = this.state.saleOrders.map(o => o.id).join(',');
+        const newIds = merged.map(o => o.id).join(',');
+        if (oldIds !== newIds) {
+            this.state.saleOrders = merged;
+        }
+
+        // Update warehouses/tags if first time
+        if (this.state.warehouses.length === 0) {
+            this.state.warehouses = result.warehouses || [];
+        }
+        if (this.state.tags.length === 0) {
+            this.state.tags = result.tags || [];
+        }
+    }
+
+    _applyFlowColors(so) {
+        const nodeByName = {};
+        so.flows.forEach(flow => {
+            (flow.nodes || []).forEach(node => { nodeByName[node.name] = node; });
+        });
+        const colorClasses = ['info', 'warning', 'danger', 'primary', 'success', 'dark'];
+        let colorIdx = 0;
+        so.flows.forEach(flow => {
+            (flow.nodes || []).forEach(node => {
+                const parentName = node.return_of || node.backorder_of;
+                if (parentName && nodeByName[parentName]) {
+                    const parentNode = nodeByName[parentName];
+                    node.parent_seq = parentNode.global_seq;
+                    if (!parentNode.link_color) {
+                        parentNode.link_color = colorClasses[colorIdx % colorClasses.length];
+                        colorIdx++;
+                    }
+                    node.link_color = parentNode.link_color;
+                }
+            });
+        });
+    }
+
+
+    // --- IndexedDB Cache helpers ---
+    _CACHE_DB = 'hlv_dp_cache';
+    _CACHE_STORE = 'dashboard';
+    _CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+    _openCacheDB() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(this._CACHE_DB, 1);
+            req.onupgradeneeded = () => {
+                const db = req.result;
+                if (!db.objectStoreNames.contains(this._CACHE_STORE)) {
+                    db.createObjectStore(this._CACHE_STORE);
+                }
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    }
 
     _buildFilterKey() {
         return JSON.stringify({
@@ -399,9 +545,11 @@ export class DeliveryPlannerDashboard extends Component {
         });
     }
 
-    _saveToCache(result) {
+    async _saveToCache(result) {
         try {
-            const payload = {
+            const db = await this._openCacheDB();
+            const tx = db.transaction(this._CACHE_STORE, 'readwrite');
+            tx.objectStore(this._CACHE_STORE).put({
                 filterKey: this._buildFilterKey(),
                 timestamp: Date.now(),
                 data: {
@@ -411,22 +559,29 @@ export class DeliveryPlannerDashboard extends Component {
                     warehouses: result.warehouses,
                     tags: result.tags,
                 },
-            };
-            sessionStorage.setItem(this._CACHE_KEY, JSON.stringify(payload));
+            }, 'latest');
+            db.close();
         } catch (e) {
-            // sessionStorage full or unavailable — ignore
+            // IndexedDB unavailable — ignore
         }
     }
 
-    _loadFromCache() {
+    async _loadFromCache() {
         try {
-            const raw = sessionStorage.getItem(this._CACHE_KEY);
-            if (!raw) return null;
-            const payload = JSON.parse(raw);
-            // Only use cache if same filters and not older than 5 minutes
-            if (payload.filterKey !== this._buildFilterKey()) return null;
-            if (Date.now() - payload.timestamp > 5 * 60 * 1000) return null;
-            return payload.data;
+            const db = await this._openCacheDB();
+            return new Promise((resolve) => {
+                const tx = db.transaction(this._CACHE_STORE, 'readonly');
+                const req = tx.objectStore(this._CACHE_STORE).get('latest');
+                req.onsuccess = () => {
+                    db.close();
+                    const payload = req.result;
+                    if (!payload) return resolve(null);
+                    if (payload.filterKey !== this._buildFilterKey()) return resolve(null);
+                    if (Date.now() - payload.timestamp > this._CACHE_TTL) return resolve(null);
+                    resolve(payload.data);
+                };
+                req.onerror = () => { db.close(); resolve(null); };
+            });
         } catch (e) {
             return null;
         }
@@ -440,35 +595,7 @@ export class DeliveryPlannerDashboard extends Component {
             so.pickings = so.pickings || [];
             so.lines = so.lines || [];
             so.pos = so.pos || [];
-
-            // Map of name -> node for finding parent
-            const nodeByName = {};
-            so.flows.forEach(flow => {
-                (flow.nodes || []).forEach(node => {
-                    nodeByName[node.name] = node;
-                });
-            });
-
-            // Assign persistent visual link info
-            const colorClasses = ['info', 'warning', 'danger', 'primary', 'success', 'dark'];
-            let colorIdx = 0;
-
-            so.flows.forEach(flow => {
-                (flow.nodes || []).forEach(node => {
-                    const parentName = node.return_of || node.backorder_of;
-                    if (parentName && nodeByName[parentName]) {
-                        const parentNode = nodeByName[parentName];
-                        node.parent_seq = parentNode.global_seq;
-
-                        if (!parentNode.link_color) {
-                            parentNode.link_color = colorClasses[colorIdx % colorClasses.length];
-                            colorIdx++;
-                        }
-                        node.link_color = parentNode.link_color;
-                    }
-                });
-            });
-
+            this._applyFlowColors(so);
             return so;
         });
 

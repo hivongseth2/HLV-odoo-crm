@@ -459,27 +459,45 @@ function groupLines(lines){
 function partnerName(o){return o.partner_id?o.partner_id[1]:'';}
 function whName(o){return o.warehouse_id?o.warehouse_id[1]:''}
 
-// --- SessionStorage cache ---
-var _SP_CACHE_KEY='hlv_sale_plan_cache';
-var _SP_CACHE_TTL=5*60*1000; // 5 minutes
+// --- IndexedDB cache ---
+var _SP_CACHE_TTL=5*60*1000;
 function _spFilterKey(){
   return JSON.stringify([gv('f-q'),gv('f-wh'),gv('f-del'),gv('f-stk'),gv('f-pack'),
     gv('f-date-from'),gv('f-date-to'),gv('f-po-date-from'),gv('f-po-date-to'),
     gv('f-done-from'),gv('f-done-to'),gv('f-po-status'),gv('f-saler'),
     gv('f-htgh'),gv('f-dtype'),getTagIds(),$('f-show-completed').checked]);
 }
+function _spOpenDB(){
+  return new Promise(function(resolve,reject){
+    var req=indexedDB.open('hlv_sp_cache',1);
+    req.onupgradeneeded=function(){var db=req.result;if(!db.objectStoreNames.contains('data'))db.createObjectStore('data');};
+    req.onsuccess=function(){resolve(req.result);};
+    req.onerror=function(){reject(req.error);};
+  });
+}
 function _spSaveCache(result){
-  try{sessionStorage.setItem(_SP_CACHE_KEY,JSON.stringify({ts:Date.now(),fk:_spFilterKey(),data:result}));}catch(e){}
+  _spOpenDB().then(function(db){
+    var tx=db.transaction('data','readwrite');
+    tx.objectStore('data').put({ts:Date.now(),fk:_spFilterKey(),data:result},'latest');
+    db.close();
+  }).catch(function(){});
 }
 function _spLoadCache(){
-  try{
-    var raw=sessionStorage.getItem(_SP_CACHE_KEY);
-    if(!raw)return null;
-    var c=JSON.parse(raw);
-    if(Date.now()-c.ts>_SP_CACHE_TTL)return null;
-    if(c.fk!==_spFilterKey())return null;
-    return c.data;
-  }catch(e){return null;}
+  return _spOpenDB().then(function(db){
+    return new Promise(function(resolve){
+      var tx=db.transaction('data','readonly');
+      var req=tx.objectStore('data').get('latest');
+      req.onsuccess=function(){
+        db.close();
+        var c=req.result;
+        if(!c)return resolve(null);
+        if(Date.now()-c.ts>_SP_CACHE_TTL)return resolve(null);
+        if(c.fk!==_spFilterKey())return resolve(null);
+        resolve(c.data);
+      };
+      req.onerror=function(){db.close();resolve(null);};
+    });
+  }).catch(function(){return null;});
 }
 var _spCacheRestored=false;
 
@@ -1325,8 +1343,8 @@ $('report-submit').addEventListener('click',function(){
   }).catch(function(){btn.disabled=false;btn.innerHTML='<i class="fa fa-flag me-1"></i>Gửi báo cáo';alert('Lỗi kết nối.');});
 });
 
-// Restore from cache for instant display, then refresh in background
-var _cachedData=_spLoadCache();
+// Restore from IndexedDB cache for instant display, then refresh in background
+_spLoadCache().then(function(_cachedData){
 if(_cachedData){
   _spCacheRestored=true;
   S.orders=_cachedData.orders||[];
@@ -1367,6 +1385,7 @@ if(_cachedData){
   hideLoading();
 }
 load(false);
+});
 })();
 </script>
 </body></html>"""
