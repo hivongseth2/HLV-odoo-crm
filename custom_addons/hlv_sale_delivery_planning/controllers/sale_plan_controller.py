@@ -956,13 +956,21 @@ function openDrawer(id){
       +'<ul class="list-group list-group-flush">';
     o.pos.forEach(function(p){
       var st=p.receipt_status||'pending';
-      h+='<li class="list-group-item d-flex justify-content-between align-items-center py-2">'
+      h+='<li class="list-group-item py-2">'
+        +'<div class="d-flex justify-content-between align-items-center">'
         +'<span>'+esc(p.name)
         +(p.date_planned?' <small class="text-muted">('+fd(p.date_planned)+')</small>':'')
         +(p.partner_id?' <small class="text-muted">- '+esc(p.partner_id[1])+'</small>':'')
         +'</span>'
         +b(POC[st]||'badge-po-pending',POL[st]||st)
-        +'</li>';
+        +'</div>';
+      if(p.odoo_note){
+        h+='<div class="small text-muted fst-italic border-start border-3 border-warning ps-2 mt-1" style="font-size:.75rem;white-space:pre-wrap;">'
+          +'<i class="fa fa-sticky-note-o text-warning me-1"></i>'
+          +esc(p.odoo_note)
+          +'</div>';
+      }
+      h+='</li>';
     });
     h+='</ul>';
   }
