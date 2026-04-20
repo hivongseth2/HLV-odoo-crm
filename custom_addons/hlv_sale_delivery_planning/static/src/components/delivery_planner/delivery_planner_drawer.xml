@@ -95,7 +95,7 @@
 
                     <div class="col-md-6 mb-2" t-if="state.selectedOrder.origin">
                         <h6 class="text-muted text-uppercase small mb-2">Ghi Chú</h6>
-                        <div class="text-muted small">
+                        <div class="text-warning fw-bold  small">
                             <i class="fa fa-sticky-note me-1"></i>
                             <t t-esc="state.selectedOrder.origin"/>
                         </div>
