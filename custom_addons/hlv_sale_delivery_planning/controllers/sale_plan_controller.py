@@ -909,7 +909,7 @@ function openDrawer(id){
     +(o.x_studio_misa_saler_code?'<div><i class="fa fa-id-badge text-muted me-2"></i><span class="text-muted">NV MISA: '+esc(o.x_studio_misa_saler_code)+'</span></div>':'')
     +(o.misa_shipping_address?'<div><i class="fa fa-map-marker text-muted me-2"></i><span class="text-muted">'+esc(o.misa_shipping_address)+'</span></div>':'')
     +(o._shipper_names&&o._shipper_names.length?'<div><i class="fa fa-motorcycle text-success me-2"></i><strong class="text-success">Tài xế: '+o._shipper_names.map(esc).join(', ')+'</strong></div>':'')
-    +(o.origin?'<div><i class="fa fa-sticky-note text-warning me-2"></i><span class="text-muted">Ghi chú: '+esc(o.origin)+'</span></div>':'')
+    +(o.origin?'<div><i class="fa fa-sticky-note text-muted me-2"></i><span class="text-muted">Ghi chú: '+esc(o.origin)+'</span></div>':'')
     +(o.tag_ids&&o.tag_ids.length?'<div><i class="fa fa-tags text-muted me-2"></i>'+o.tag_ids.map(tagBadge).join('')+'</div>':'')
     +'</div>'
     +'</div>';
