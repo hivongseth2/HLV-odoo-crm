@@ -51,10 +51,10 @@
                         <t t-esc="this.selectedCount"/>
                     </span>
                 </button>
-                <div t-if="this.selectedPrintMenuPos"
+                 <div t-if="state.selectedPrintMenuPos"
                      class="bg-white border rounded shadow-lg"
                      style="position:fixed; z-index:2000; min-width:260px; max-height:340px; overflow-y:auto;"
-                     t-att-style="'position:fixed; z-index:2000; min-width:260px; max-height:340px; overflow-y:auto; top:' + this.selectedPrintMenuPos.top + 'px; right:' + this.selectedPrintMenuPos.right + 'px;'"
+                     t-att-style="'position:fixed; z-index:2000; min-width:260px; max-height:340px; overflow-y:auto; top:' + state.selectedPrintMenuPos.top + 'px; right:' + state.selectedPrintMenuPos.right + 'px;'"
                      t-on-click.stop="">
                     <div class="px-3 py-2 bg-light border-bottom small fw-bold text-muted">
                         <i class="fa fa-print me-1"></i> Chọn mẫu in
