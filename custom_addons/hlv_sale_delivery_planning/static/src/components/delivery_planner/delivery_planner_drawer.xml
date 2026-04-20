@@ -92,6 +92,14 @@
                             <t t-esc="state.selectedOrder.misa_shipping_address"/>
                         </div>
                     </div>
+
+                    <div class="col-md-6 mb-2" t-if="state.selectedOrder.origin">
+                        <h6 class="text-muted text-uppercase small mb-2">Ghi Chú</h6>
+                        <div class="text-muted small">
+                            <i class="fa fa-sticky-note me-1"></i>
+                            <t t-esc="state.selectedOrder.origin"/>
+                        </div>
+                    </div>
                     <div class="col-md-12 mb-0" t-if="state.selectedOrder.tag_ids and state.selectedOrder.tag_ids.length">
                         <h6 class="text-muted text-uppercase small mb-2">Tags</h6>
                         <div class="d-flex flex-wrap gap-1">
