@@ -457,10 +457,35 @@ function groupLines(lines){
 }
 
 function partnerName(o){return o.partner_id?o.partner_id[1]:'';}
-function whName(o){return o.warehouse_id?o.warehouse_id[1]:'';}
+function whName(o){return o.warehouse_id?o.warehouse_id[1]:''}
+
+// --- SessionStorage cache ---
+var _SP_CACHE_KEY='hlv_sale_plan_cache';
+var _SP_CACHE_TTL=5*60*1000; // 5 minutes
+function _spFilterKey(){
+  return JSON.stringify([gv('f-q'),gv('f-wh'),gv('f-del'),gv('f-stk'),gv('f-pack'),
+    gv('f-date-from'),gv('f-date-to'),gv('f-po-date-from'),gv('f-po-date-to'),
+    gv('f-done-from'),gv('f-done-to'),gv('f-po-status'),gv('f-saler'),
+    gv('f-htgh'),gv('f-dtype'),getTagIds(),$('f-show-completed').checked]);
+}
+function _spSaveCache(result){
+  try{sessionStorage.setItem(_SP_CACHE_KEY,JSON.stringify({ts:Date.now(),fk:_spFilterKey(),data:result}));}catch(e){}
+}
+function _spLoadCache(){
+  try{
+    var raw=sessionStorage.getItem(_SP_CACHE_KEY);
+    if(!raw)return null;
+    var c=JSON.parse(raw);
+    if(Date.now()-c.ts>_SP_CACHE_TTL)return null;
+    if(c.fk!==_spFilterKey())return null;
+    return c.data;
+  }catch(e){return null;}
+}
+var _spCacheRestored=false;
 
 function load(append){
-  showLoading();
+  if(!_spCacheRestored)showLoading();
+  _spCacheRestored=false;
   var offset=append?S.orders.length:0;
   var lim=append?100:S.limit;
   var body={search:gv('f-q'),warehouse_id:gv('f-wh'),delivery_status:gv('f-del'),
@@ -524,6 +549,7 @@ function load(append){
       });
       S.tagsLoaded=true;
     }
+    if(!append)_spSaveCache(d);
     updKPI();render();updLoadMore();updFilters();
   }).catch(function(e){hideLoading();console.error(e);});
 }
@@ -1299,6 +1325,47 @@ $('report-submit').addEventListener('click',function(){
   }).catch(function(){btn.disabled=false;btn.innerHTML='<i class="fa fa-flag me-1"></i>Gửi báo cáo';alert('Lỗi kết nối.');});
 });
 
+// Restore from cache for instant display, then refresh in background
+var _cachedData=_spLoadCache();
+if(_cachedData){
+  _spCacheRestored=true;
+  S.orders=_cachedData.orders||[];
+  S.total=_cachedData.total_count||0;
+  S.stats=_cachedData.dashboard_stats||{};
+  var today=new Date().toISOString().slice(0,10);
+  S.orders.forEach(function(o){
+    var ep=o.packing_status;
+    var rd=o.real_delivery_status||o.delivery_status;
+    if(o.has_delivered_today&&(rd==='full'||!o.has_assigned_pick)) ep='delivered_today';
+    else if(o.has_shipper_received) ep='shipping';
+    else if(o.has_new_unprinted_pickings) ep='has_unprinted';
+    else if(ep==='fully_packed') ep='packed_waiting_ship';
+    else if(o.picking_slip_printed&&ep!=='delivered') ep='printed_waiting';
+    else if(ep==='partial_packed') ep='unpacked';
+    o.effective_packing=ep;
+    o._shipper_names=[];
+    if(o.pickings){o.pickings.forEach(function(p){if(p.shipper_received&&p.shipper_user)o._shipper_names.push(p.shipper_user[1]);});}
+    var od=o.misa_order_date||(o.date_order?o.date_order.slice(0,10):'');
+    o._is_new=(od===today);
+  });
+  if(_cachedData.warehouses){
+    var sel=$('f-wh');
+    _cachedData.warehouses.forEach(function(w){
+      var opt=document.createElement('option');opt.value=w.id;opt.textContent=w.name;sel.appendChild(opt);
+    });
+    S.whLoaded=true;S.warehouses=_cachedData.warehouses;
+  }
+  if(_cachedData.tags){
+    var tsel=$('f-tag');S.tagsMap={};
+    _cachedData.tags.forEach(function(t){
+      S.tagsMap[t.id]=t;
+      var opt=document.createElement('option');opt.value=t.id;opt.textContent=t.name;tsel.appendChild(opt);
+    });
+    S.tagsLoaded=true;
+  }
+  updKPI();render();updLoadMore();updFilters();
+  hideLoading();
+}
 load(false);
 })();
 </script>

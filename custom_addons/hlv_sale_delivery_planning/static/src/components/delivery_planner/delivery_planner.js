@@ -164,6 +164,14 @@ export class DeliveryPlannerDashboard extends Component {
                 }
             }
 
+            // Try to restore from cache for instant display
+            const cached = this._loadFromCache();
+            if (cached) {
+                this._applyResult(cached);
+                this.state.isLoading = false;
+                this._isCacheRestored = true;
+            }
+
             const [, reports] = await Promise.all([
                 this.fetchData(),
                 this.orm.searchRead(
@@ -173,6 +181,7 @@ export class DeliveryPlannerDashboard extends Component {
                     { order: 'name' }
                 )
             ]);
+            this._isCacheRestored = false;
             this.state.pickingReports = reports;
         });
 
@@ -384,8 +393,128 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
 
+    // --- Cache helpers ---
+    _CACHE_KEY = 'hlv_dp_cache_v1';
+
+    _buildFilterKey() {
+        return JSON.stringify({
+            q: this.state.searchQuery.trim(),
+            wh: this.state.filterWarehouseId,
+            ds: this.state.filterDeliveryStatus,
+            ss: this.state.filterStockStatus,
+            ps: this.state.filterPackingStatus,
+            df: this.state.filterDateFrom,
+            dt: this.state.filterDateTo,
+            ddf: this.state.filterDoneDateFrom,
+            ddt: this.state.filterDoneDateTo,
+            pdf: this.state.filterPODateFrom,
+            pdt: this.state.filterPODateTo,
+            pos: this.state.filterPOStatus,
+            sc: this.state.filterSalerCode.trim(),
+            htgh: this.state.filterHtgh.trim(),
+            dtype: this.state.filterDeliveryType,
+            tags: this.state.filterTagIds.join(','),
+            comp: this.state.showCompleted,
+            nt: this.state.filterNeedTransfer,
+            no: this.state.filterNewOrders,
+            vm: this.state.viewMode,
+        });
+    }
+
+    _saveToCache(result) {
+        try {
+            const payload = {
+                filterKey: this._buildFilterKey(),
+                timestamp: Date.now(),
+                data: {
+                    dashboard_stats: result.dashboard_stats,
+                    orders: result.orders,
+                    total_count: result.total_count,
+                    warehouses: result.warehouses,
+                    tags: result.tags,
+                },
+            };
+            sessionStorage.setItem(this._CACHE_KEY, JSON.stringify(payload));
+        } catch (e) {
+            // sessionStorage full or unavailable — ignore
+        }
+    }
+
+    _loadFromCache() {
+        try {
+            const raw = sessionStorage.getItem(this._CACHE_KEY);
+            if (!raw) return null;
+            const payload = JSON.parse(raw);
+            // Only use cache if same filters and not older than 5 minutes
+            if (payload.filterKey !== this._buildFilterKey()) return null;
+            if (Date.now() - payload.timestamp > 5 * 60 * 1000) return null;
+            return payload.data;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    _applyResult(result) {
+        this.state.dashboardStats = result.dashboard_stats || { total: 0, ready: 0, partial: 0, out_of_stock: 0 };
+        const fetchedOrders = result.orders || [];
+        this.state.saleOrders = fetchedOrders.map(so => {
+            so.flows = so.flows || [];
+            so.pickings = so.pickings || [];
+            so.lines = so.lines || [];
+            so.pos = so.pos || [];
+
+            // Map of name -> node for finding parent
+            const nodeByName = {};
+            so.flows.forEach(flow => {
+                (flow.nodes || []).forEach(node => {
+                    nodeByName[node.name] = node;
+                });
+            });
+
+            // Assign persistent visual link info
+            const colorClasses = ['info', 'warning', 'danger', 'primary', 'success', 'dark'];
+            let colorIdx = 0;
+
+            so.flows.forEach(flow => {
+                (flow.nodes || []).forEach(node => {
+                    const parentName = node.return_of || node.backorder_of;
+                    if (parentName && nodeByName[parentName]) {
+                        const parentNode = nodeByName[parentName];
+                        node.parent_seq = parentNode.global_seq;
+
+                        if (!parentNode.link_color) {
+                            parentNode.link_color = colorClasses[colorIdx % colorClasses.length];
+                            colorIdx++;
+                        }
+                        node.link_color = parentNode.link_color;
+                    }
+                });
+            });
+
+            return so;
+        });
+
+        // Đánh dấu đơn mới: misa_order_date (hoặc date_order) = hôm nay
+        const todayStr = new Date().toISOString().slice(0, 10);
+        for (const so of this.state.saleOrders) {
+            const orderDate = so.misa_order_date || (so.date_order ? so.date_order.substring(0, 10) : '');
+            so.is_new_order = orderDate === todayStr;
+        }
+
+        this.state.totalCount = result.total_count || 0;
+        if (this.state.warehouses.length === 0) {
+            this.state.warehouses = result.warehouses || [];
+        }
+        if (this.state.tags.length === 0) {
+            this.state.tags = result.tags || [];
+        }
+    }
+
     async fetchData() {
-        this.state.isLoading = true;
+        // Don't show full loading spinner if we already have cached data on screen
+        if (!this._isCacheRestored) {
+            this.state.isLoading = true;
+        }
         const isKanban = this.state.viewMode === 'kanban';
         try {
             const result = await this.orm.call(
@@ -418,59 +547,9 @@ export class DeliveryPlannerDashboard extends Component {
                 }
             );
 
-            this.state.dashboardStats = result.dashboard_stats || { total: 0, ready: 0, partial: 0, out_of_stock: 0 };
-            const fetchedOrders = result.orders || [];
-            this.state.saleOrders = fetchedOrders.map(so => {
-                so.flows = so.flows || [];
-                so.pickings = so.pickings || [];
-                so.lines = so.lines || [];
-                so.pos = so.pos || [];
-
-                // Map of name -> node for finding parent
-                const nodeByName = {};
-                so.flows.forEach(flow => {
-                    (flow.nodes || []).forEach(node => {
-                        nodeByName[node.name] = node;
-                    });
-                });
-
-                // Assign persistent visual link info
-                const colorClasses = ['info', 'warning', 'danger', 'primary', 'success', 'dark'];
-                let colorIdx = 0;
-
-                so.flows.forEach(flow => {
-                    (flow.nodes || []).forEach(node => {
-                        const parentName = node.return_of || node.backorder_of;
-                        if (parentName && nodeByName[parentName]) {
-                            const parentNode = nodeByName[parentName];
-                            node.parent_seq = parentNode.global_seq;
-
-                            if (!parentNode.link_color) {
-                                parentNode.link_color = colorClasses[colorIdx % colorClasses.length];
-                                colorIdx++;
-                            }
-                            node.link_color = parentNode.link_color;
-                        }
-                    });
-                });
-
-                return so;
-            });
-
-            // Đánh dấu đơn mới: misa_order_date (hoặc date_order) = hôm nay
-            const todayStr = new Date().toISOString().slice(0, 10);
-            for (const so of this.state.saleOrders) {
-                const orderDate = so.misa_order_date || (so.date_order ? so.date_order.substring(0, 10) : '');
-                so.is_new_order = orderDate === todayStr;
-            }
-
-            this.state.totalCount = result.total_count || 0;
-            if (this.state.warehouses.length === 0) {
-                this.state.warehouses = result.warehouses || [];
-            }
-            if (this.state.tags.length === 0) {
-                this.state.tags = result.tags || [];
-            }
+            this._applyResult(result);
+            // Save to cache for instant restore on next page load
+            this._saveToCache(result);
         } catch (error) {
             console.error("Lỗi khi tải dữ liệu bảng điều phối:", error);
         } finally {
