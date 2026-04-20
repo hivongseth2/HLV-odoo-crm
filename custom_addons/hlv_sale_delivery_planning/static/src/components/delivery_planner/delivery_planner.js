@@ -129,39 +129,11 @@ export class DeliveryPlannerDashboard extends Component {
         onWillStart(async () => {
             if (this.busService) {
                 this.busService.addChannel("delivery_planner_channel");
-                this._busNotificationHandler = ({ detail: notifications }) => {
-                    for (const item of notifications || []) {
-                        let type;
-                        let payload;
-
-                        if (Array.isArray(item)) {
-                            // Common bus tuple shape: [channel, type, payload]
-                            if (typeof item[1] === "string") {
-                                type = item[1];
-                                payload = item[2];
-                            } else {
-                                const message = item[1] || {};
-                                type = message.type || item[2];
-                                payload = message.payload || message;
-                            }
-                        } else {
-                            type = item && item.type;
-                            payload = item && (item.payload || item);
-                        }
-
-                        if (type === "new_portal_message") {
-                            this.onNewPortalMessage(payload);
-                        }
-                        if (type === "delivery_planner_data_changed") {
-                            this._onDataChanged(payload);
-                        }
-                    }
-                };
-                this.busService.addEventListener("notification", this._busNotificationHandler);
-                // Ensure bus is running so realtime notifications are active immediately.
-                if (typeof this.busService.start === "function") {
-                    this.busService.start();
-                }
+                // Odoo 18: use subscribe(type, callback) — addEventListener("notification") is internal-only
+                this._onBusDataChanged = (payload) => this._onDataChanged(payload);
+                this._onBusNewPortalMessage = (payload) => this.onNewPortalMessage(payload);
+                this.busService.subscribe("delivery_planner_data_changed", this._onBusDataChanged);
+                this.busService.subscribe("new_portal_message", this._onBusNewPortalMessage);
             }
 
             // Try to restore from cache for instant display
@@ -192,8 +164,14 @@ export class DeliveryPlannerDashboard extends Component {
         }, 15000);
 
         onWillDestroy(() => {
-            if (this.busService && this._busNotificationHandler && typeof this.busService.removeEventListener === "function") {
-                this.busService.removeEventListener("notification", this._busNotificationHandler);
+            if (this.busService) {
+                if (this._onBusDataChanged) {
+                    this.busService.unsubscribe("delivery_planner_data_changed", this._onBusDataChanged);
+                }
+                if (this._onBusNewPortalMessage) {
+                    this.busService.unsubscribe("new_portal_message", this._onBusNewPortalMessage);
+                }
+                this.busService.deleteChannel("delivery_planner_channel");
             }
             if (this.messagePollingInterval) {
                 clearInterval(this.messagePollingInterval);
