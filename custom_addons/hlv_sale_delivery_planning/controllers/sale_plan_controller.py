@@ -479,7 +479,8 @@ function _spSaveCache(result){
   _spOpenDB().then(function(db){
     var tx=db.transaction('data','readwrite');
     tx.objectStore('data').put({ts:Date.now(),fk:_spFilterKey(),data:result},'latest');
-    db.close();
+    tx.oncomplete=function(){db.close();};
+    tx.onerror=function(){db.close();};
   }).catch(function(){});
 }
 function _spLoadCache(){

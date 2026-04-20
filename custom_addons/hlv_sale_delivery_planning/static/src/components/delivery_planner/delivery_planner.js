@@ -355,20 +355,23 @@ export class DeliveryPlannerDashboard extends Component {
     _dataChangedDebounce = null;
 
     _onDataChanged(payload) {
+        // Show immediate visual feedback that a change was detected
+        this.notification.add(
+            "Đang cập nhật dữ liệu...",
+            { type: "warning", title: "Thay đổi phát hiện", sticky: false }
+        );
         // Debounce: multiple writes can fire in quick succession (e.g. batch picking validation).
-        // Wait 1.5s of silence before refreshing to avoid hammering the server.
         if (this._dataChangedDebounce) {
             clearTimeout(this._dataChangedDebounce);
         }
         this._dataChangedDebounce = setTimeout(async () => {
             this._dataChangedDebounce = null;
-            // Use silent refresh: no loading spinner, smart merge
             await this._silentRefresh();
             this.notification.add(
                 "Dữ liệu đã được cập nhật tự động",
-                { type: "info", title: "Cập nhật" }
+                { type: "info", title: "Cập nhật xong" }
             );
-        }, 1500);
+        }, 800);
     }
 
     /**
@@ -408,7 +411,7 @@ export class DeliveryPlannerDashboard extends Component {
                 }
             );
             this._mergeResult(result);
-            this._saveToCache(result);
+            await this._saveToCache(result);
         } catch (error) {
             console.error("Silent refresh failed:", error);
         }
@@ -560,6 +563,10 @@ export class DeliveryPlannerDashboard extends Component {
                     tags: result.tags,
                 },
             }, 'latest');
+            await new Promise((resolve, reject) => {
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
             db.close();
         } catch (e) {
             // IndexedDB unavailable — ignore
@@ -653,8 +660,8 @@ export class DeliveryPlannerDashboard extends Component {
             );
 
             this._applyResult(result);
-            // Save to cache for instant restore on next page load
-            this._saveToCache(result);
+            // Save to IndexedDB cache for instant restore on next page load
+            await this._saveToCache(result);
         } catch (error) {
             console.error("Lỗi khi tải dữ liệu bảng điều phối:", error);
         } finally {
