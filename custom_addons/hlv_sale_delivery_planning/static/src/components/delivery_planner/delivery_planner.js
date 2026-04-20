@@ -152,6 +152,9 @@ export class DeliveryPlannerDashboard extends Component {
                         if (type === "new_portal_message") {
                             this.onNewPortalMessage(payload);
                         }
+                        if (type === "delivery_planner_data_changed") {
+                            this._onDataChanged(payload);
+                        }
                     }
                 };
                 this.busService.addEventListener("notification", this._busNotificationHandler);
@@ -185,6 +188,9 @@ export class DeliveryPlannerDashboard extends Component {
             }
             if (this.messagePollingInterval) {
                 clearInterval(this.messagePollingInterval);
+            }
+            if (this._dataChangedDebounce) {
+                clearTimeout(this._dataChangedDebounce);
             }
         });
     }
@@ -356,6 +362,25 @@ export class DeliveryPlannerDashboard extends Component {
                 }
             );
         }
+    }
+
+    // --- Real-time data refresh via bus ---
+    _dataChangedDebounce = null;
+
+    _onDataChanged(payload) {
+        // Debounce: multiple writes can fire in quick succession (e.g. batch picking validation).
+        // Wait 1.5s of silence before refreshing to avoid hammering the server.
+        if (this._dataChangedDebounce) {
+            clearTimeout(this._dataChangedDebounce);
+        }
+        this._dataChangedDebounce = setTimeout(async () => {
+            this._dataChangedDebounce = null;
+            await this.fetchData();
+            this.notification.add(
+                "Dữ liệu đã được cập nhật tự động",
+                { type: "info", title: "Cập nhật" }
+            );
+        }, 1500);
     }
 
 

@@ -1195,6 +1195,72 @@ $('dr-close').addEventListener('click',closeDrawer);
 $('drawer-overlay').addEventListener('click',closeDrawer);
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeDrawer();closeReportModal();}});
 
+// --- Auto-refresh: poll for changes every 10s ---
+var _lastFingerprint=null;
+var _pollInterval=10000; // 10 seconds
+var _pollTimer=null;
+var _pollPaused=false;
+
+function pollChanges(){
+  if(_pollPaused)return;
+  fetch('/api/sale_plan/check_changes',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{}})})
+  .then(function(r){return r.json();})
+  .then(function(j){
+    if(!j.result||j.result.status!=='success')return;
+    var fp=j.result.fingerprint;
+    if(_lastFingerprint===null){_lastFingerprint=fp;return;}
+    if(fp!==_lastFingerprint){
+      _lastFingerprint=fp;
+      load(false);
+      // Show a brief toast notification
+      var t=document.createElement('div');
+      t.style.cssText='position:fixed;bottom:24px;left:24px;z-index:3000;background:#3182ce;color:#fff;padding:10px 18px;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.2);font-size:.85rem;font-weight:600;transition:opacity .3s';
+      t.innerHTML='<i class="fa fa-refresh me-1"></i>Dữ liệu đã được cập nhật tự động';
+      document.body.appendChild(t);
+      setTimeout(function(){t.style.opacity='0';setTimeout(function(){t.remove();},400);},3000);
+    }
+  })
+  .catch(function(){/* silent */});
+}
+
+function startPolling(){
+  if(_pollTimer)clearInterval(_pollTimer);
+  _pollTimer=setInterval(pollChanges,_pollInterval);
+}
+
+// Pause polling when tab is hidden to save resources
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden){_pollPaused=true;}
+  else{_pollPaused=false;pollChanges();}
+});
+
+// Start polling after initial load completes
+var _origLoad=load;
+var _firstLoadDone=false;
+// We hook into the existing load callback by overriding:
+// After the first successful load, start polling
+(function(){
+  var origFetch=window.fetch;
+  var pendingDataReq=false;
+  window.fetch=function(url,opts){
+    var isDataReq=(typeof url==='string'&&url.indexOf('/api/sale_plan/data')!==-1);
+    if(isDataReq)pendingDataReq=true;
+    return origFetch.apply(this,arguments).then(function(resp){
+      if(isDataReq&&pendingDataReq){
+        pendingDataReq=false;
+        if(!_firstLoadDone){
+          _firstLoadDone=true;
+          // Set initial fingerprint from a check right after first load
+          pollChanges();
+          startPolling();
+        }
+      }
+      return resp;
+    });
+  };
+})();
+
 // --- Report modal ---
 var _reportSoId=null;
 function openReportModal(id,name){
@@ -1302,6 +1368,31 @@ class SalePlanPublicController(http.Controller):
             return {'status': 'success', 'data': result}
         except Exception as e:
             _logger.exception('sale_plan API error')
+            return {'status': 'error', 'message': str(e)}
+
+    @http.route('/api/sale_plan/check_changes', type='json', auth='public', methods=['POST'])
+    def api_check_changes(self, **kwargs):
+        """Lightweight endpoint: returns a fingerprint (max write_date + record count)
+        so the frontend can detect changes without reloading heavy data."""
+        if not request.session.get(SESSION_KEY_OK):
+            return {'status': 'error', 'message': 'Unauthorized'}
+        try:
+            SaleOrder = request.env['sale.order'].sudo()
+            domain = [('state', 'in', ['sale', 'done'])]
+            result = SaleOrder.search_read(domain, fields=['write_date'], order='write_date desc', limit=1)
+            max_write = result[0]['write_date'].isoformat() if result else ''
+            count = SaleOrder.search_count(domain)
+            # Also check stock.picking changes (packing/delivery status changes)
+            Picking = request.env['stock.picking'].sudo()
+            pick_result = Picking.search_read(
+                [('sale_id', '!=', False)],
+                fields=['write_date'], order='write_date desc', limit=1
+            )
+            pick_write = pick_result[0]['write_date'].isoformat() if pick_result else ''
+            fingerprint = f"{max_write}|{count}|{pick_write}"
+            return {'status': 'success', 'fingerprint': fingerprint}
+        except Exception as e:
+            _logger.exception('check_changes error')
             return {'status': 'error', 'message': str(e)}
 
     @http.route('/api/sale_plan/report_order', type='json', auth='public', methods=['POST'])

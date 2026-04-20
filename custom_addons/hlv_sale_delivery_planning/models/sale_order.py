@@ -1,5 +1,17 @@
+import logging
 from odoo import models, fields, api
 from dateutil.relativedelta import relativedelta
+
+_logger = logging.getLogger(__name__)
+
+# Fields whose changes should trigger a real-time dashboard refresh
+_NOTIFY_FIELDS = {
+    'state', 'picking_ids', 'delivery_status', 'amount_total',
+    'commitment_date', 'x_plan_need_cancel', 'x_plan_unread_message',
+    'x_picking_slip_printed', 'x_studio_delivery_type', 'x_studio_htgh',
+    'tag_ids', 'order_line',
+}
+
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
@@ -60,6 +72,31 @@ class SaleOrder(models.Model):
         return self.env['hlv.delivery.planner.service'].create_relocation_pickings(
             relocation_data
         )
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        orders = super().create(vals_list)
+        # Notify when new confirmed orders are created (e.g. from MISA import)
+        if any(o.state in ('sale', 'done') for o in orders):
+            orders._notify_delivery_planner_changed()
+        return orders
+
+    def write(self, vals):
+        res = super().write(vals)
+        if vals and _NOTIFY_FIELDS.intersection(vals.keys()):
+            self._notify_delivery_planner_changed()
+        return res
+
+    def _notify_delivery_planner_changed(self):
+        """Send bus notification so the delivery planner dashboard refreshes instantly."""
+        try:
+            self.env['bus.bus']._sendone(
+                'delivery_planner_channel',
+                'delivery_planner_data_changed',
+                {'source': 'sale.order'},
+            )
+        except Exception:
+            _logger.debug('Failed to send delivery_planner_data_changed notification', exc_info=True)
 
     @api.model
     def get_delivery_dashboard_data(self, search_query='', filter_warehouse_id='all', filter_delivery_status='all', filter_stock_status='all', filter_packing_status='all', filter_date_from='', filter_date_to='', filter_po_date_from='', filter_po_date_to='', filter_po_status='all', filter_done_date_from='', filter_done_date_to='', filter_saler_code='', filter_htgh='', filter_delivery_type='all', filter_tag_ids='', limit=12, offset=0, show_completed=False, filter_need_transfer=False, filter_new_orders=False):
