@@ -355,11 +355,13 @@ export class DeliveryPlannerDashboard extends Component {
     _dataChangedDebounce = null;
 
     _onDataChanged(payload) {
-        // Show immediate visual feedback that a change was detected
-        this.notification.add(
-            "Đang cập nhật dữ liệu...",
-            { type: "warning", title: "Thay đổi phát hiện", sticky: false }
-        );
+        // Only show toast on the FIRST event in a burst (not every bus message)
+        if (!this._dataChangedDebounce) {
+            this.notification.add(
+                "Đang cập nhật dữ liệu...",
+                { type: "warning", title: "Thay đổi phát hiện", sticky: false }
+            );
+        }
         // Debounce: multiple writes can fire in quick succession (e.g. batch picking validation).
         if (this._dataChangedDebounce) {
             clearTimeout(this._dataChangedDebounce);
@@ -568,8 +570,9 @@ export class DeliveryPlannerDashboard extends Component {
                 tx.onerror = () => reject(tx.error);
             });
             db.close();
+            console.log('[DP Cache] Saved', (result.orders || []).length, 'orders to IndexedDB');
         } catch (e) {
-            // IndexedDB unavailable — ignore
+            console.warn('[DP Cache] _saveToCache failed:', e);
         }
     }
 
@@ -582,14 +585,16 @@ export class DeliveryPlannerDashboard extends Component {
                 req.onsuccess = () => {
                     db.close();
                     const payload = req.result;
-                    if (!payload) return resolve(null);
-                    if (payload.filterKey !== this._buildFilterKey()) return resolve(null);
-                    if (Date.now() - payload.timestamp > this._CACHE_TTL) return resolve(null);
+                    if (!payload) { console.log('[DP Cache] No cached data found'); return resolve(null); }
+                    if (payload.filterKey !== this._buildFilterKey()) { console.log('[DP Cache] Filter key mismatch, skipping cache'); return resolve(null); }
+                    if (Date.now() - payload.timestamp > this._CACHE_TTL) { console.log('[DP Cache] Cache expired'); return resolve(null); }
+                    console.log('[DP Cache] Restored', (payload.data.orders || []).length, 'orders from IndexedDB');
                     resolve(payload.data);
                 };
-                req.onerror = () => { db.close(); resolve(null); };
+                req.onerror = () => { db.close(); console.warn('[DP Cache] _loadFromCache read error'); resolve(null); };
             });
         } catch (e) {
+            console.warn('[DP Cache] _loadFromCache failed:', e);
             return null;
         }
     }

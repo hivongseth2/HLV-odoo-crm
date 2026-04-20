@@ -34,12 +34,16 @@ class StockMove(models.Model):
         return res
 
     def _notify_delivery_planner_changed(self):
-        """Send bus notification so the delivery planner dashboard refreshes instantly."""
+        """Send bus notification so the delivery planner dashboard refreshes instantly.
+        Uses context flag to send at most ONE notification per request cycle."""
+        if self.env.context.get('_dp_notified'):
+            return
         try:
             self.env['bus.bus']._sendone(
                 'delivery_planner_channel',
                 'delivery_planner_data_changed',
                 {'source': 'stock.move'},
             )
+            self.env.context = dict(self.env.context, _dp_notified=True)
         except Exception:
             _logger.debug('Failed to send delivery_planner_data_changed notification', exc_info=True)
