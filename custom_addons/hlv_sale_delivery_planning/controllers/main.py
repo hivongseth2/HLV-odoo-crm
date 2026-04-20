@@ -12,7 +12,7 @@ _logger = logging.getLogger(__name__)
 class DeliveryPlannerController(http.Controller):
 
     @http.route('/hlv_sale_delivery_planning/print_picking_slips', type='json', auth='user', methods=['POST'])
-    def print_picking_slips(self, sale_order_ids=None, **kwargs):
+    def print_picking_slips(self, sale_order_ids=None, report_id=None, **kwargs):
         """
         In phiếu lấy hàng cho các đơn hàng đã chọn.
         Loại bỏ các phiếu đã hoàn thành (state = 'done').
@@ -28,6 +28,15 @@ class DeliveryPlannerController(http.Controller):
             if not isinstance(sale_order_ids, list):
                 sale_order_ids = [sale_order_ids] if sale_order_ids else []
             sale_order_ids = [int(x) for x in sale_order_ids if x]
+
+            if report_id is None:
+                report_id = kwargs.get('report_id')
+            if report_id is None and isinstance(request.jsonrequest, dict):
+                report_id = (request.jsonrequest.get('params') or {}).get('report_id')
+            if isinstance(report_id, (list, tuple, set)):
+                report_id = next(iter(report_id), None)
+            if report_id:
+                report_id = int(report_id)
 
             if not sale_order_ids:
                 return {'success': False, 'message': 'Không có đơn hàng nào được chọn'}
@@ -65,13 +74,23 @@ class DeliveryPlannerController(http.Controller):
             if not all_pickings:
                 return {'success': False, 'message': 'Không có phiếu lấy hàng nào cần in (tất cả đã hoàn thành hoặc đã hủy)'}
 
-            # Fetch report by name "Hoạt động lấy hàng"
-            report = request.env['ir.actions.report'].sudo().search([
-                ('name', 'ilike', 'Hoạt động lấy hàng TSN'),
-            ], limit=1)
-            
-            if not report:
-                return {'success': False, 'message': 'Không tìm thấy report template cho phiếu lấy hàng'}
+            if report_id:
+                report = request.env['ir.actions.report'].sudo().browse(report_id).exists()
+                if not report:
+                    return {'success': False, 'message': 'Không tìm thấy report template đã chọn'}
+                if report.report_type != 'qweb-pdf':
+                    return {
+                        'success': False,
+                        'message': 'Mẫu in đã chọn không hỗ trợ in hàng loạt bằng PDF',
+                    }
+            else:
+                # Fetch report by name "Hoạt động lấy hàng"
+                report = request.env['ir.actions.report'].sudo().search([
+                    ('name', 'ilike', 'Hoạt động lấy hàng TSN'),
+                ], limit=1)
+
+                if not report:
+                    return {'success': False, 'message': 'Không tìm thấy report template cho phiếu lấy hàng'}
 
             picking_ids = list(all_pickings.ids)
             try:

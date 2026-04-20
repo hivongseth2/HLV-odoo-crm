@@ -109,6 +109,7 @@ export class DeliveryPlannerDashboard extends Component {
             pickingReports: [],       // [{id, name, report_type}] — báo cáo có thể in cho stock.picking
             printMenuPickingId: null, // picking.id đang hiển thị menu in
             printMenuPos: null,       // { top, right } — vị trí fixed của dropdown
+            selectedPrintMenuPos: null, // vị trí dropdown in cho các SO đã chọn
 
             // Drawer messages
             drawerMessages: [],
@@ -674,10 +675,60 @@ export class DeliveryPlannerDashboard extends Component {
         return this.state.selectedSOIds.size;
     }
 
-    async printSelectedPickingSlips() {
+    getSelectedPickingIds() {
+        const selectedIds = new Set(this.state.selectedSOIds);
+        const pickingIds = [];
+        const seenPickingIds = new Set();
+
+        for (const so of this.state.saleOrders) {
+            if (!selectedIds.has(so.id)) {
+                continue;
+            }
+            for (const picking of so.pickings || []) {
+                if (!picking || !picking.id) {
+                    continue;
+                }
+                const sequenceCode = (picking.sequence_code || '').toUpperCase();
+                if (!sequenceCode.includes('PICK')) {
+                    continue;
+                }
+                if (picking.state === 'done' || picking.state === 'cancel' || picking.return_of_id) {
+                    continue;
+                }
+                if (seenPickingIds.has(picking.id)) {
+                    continue;
+                }
+                seenPickingIds.add(picking.id);
+                pickingIds.push(picking.id);
+            }
+        }
+
+        return pickingIds;
+    }
+
+    toggleSelectedPickingPrintMenu(ev) {
+        ev.stopPropagation();
+        if (this.state.selectedPrintMenuPos) {
+            this.state.selectedPrintMenuPos = null;
+            return;
+        }
+        const rect = ev.currentTarget.getBoundingClientRect();
+        this.state.selectedPrintMenuPos = {
+            top: rect.bottom + window.scrollY,
+            right: window.innerWidth - rect.right,
+        };
+    }
+
+    closeSelectedPickingPrintMenu() {
+        this.state.selectedPrintMenuPos = null;
+    }
+
+    async printSelectedPickingSlips(reportId = null, reportType = 'qweb-pdf') {
         if (this.selectedCount === 0) return;
 
         const selectedIds = Array.from(this.state.selectedSOIds);
+        const pickingIds = this.getSelectedPickingIds();
+        this.state.selectedPrintMenuPos = null;
 
         try {
             this.state.isLoading = true;
@@ -705,46 +756,59 @@ export class DeliveryPlannerDashboard extends Component {
                 console.warn('Giữ hàng thất bại, tiếp tục in:', reserveErr);
             }
 
-            const url = `/hlv_sale_delivery_planning/print_picking_slips`;
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                body: JSON.stringify({
-                    jsonrpc: '2.0',
-                    method: 'call',
-                    params: {
-                        sale_order_ids: selectedIds,
-                    },
-                }),
-            });
-
-            const result = await response.json();
-            if (result.error) {
-                console.error('Error printing picking slips:', result.error);
-                alert('Lỗi khi in phiếu lấy hàng: ' + (result.error.data?.message || result.error.message));
-                return;
-            }
-
-            if (result.result && result.result.success === false) {
-                alert(result.result.message || 'Không thể in phiếu lấy hàng');
-                return;
-            }
-
-            // Open PDF in new tab
-            if (result.result && result.result.url) {
-                window.open(result.result.url, '_blank');
-                // Đánh dấu ribbon "Đã in" trên các đơn vừa in (optimistic update)
-                for (const so of this.state.saleOrders) {
-                    if (selectedIds.includes(so.id)) {
-                        so.picking_slip_printed = true;
-                        so.has_new_unprinted_pickings = false;
-                    }
+            if (reportId && reportType !== 'qweb-pdf') {
+                if (!pickingIds.length) {
+                    alert('Không có phiếu lấy hàng hợp lệ để in');
+                    return;
                 }
-                // Clear selections after successful print
+                await this.actionService.doAction(reportId, {
+                    additionalContext: {
+                        active_ids: pickingIds,
+                        active_id: pickingIds[0],
+                        active_model: 'stock.picking',
+                    },
+                });
                 this.clearAllSelections();
+            } else {
+                const url = `/hlv_sale_delivery_planning/print_picking_slips`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        method: 'call',
+                        params: {
+                            sale_order_ids: selectedIds,
+                            report_id: reportId,
+                        },
+                    }),
+                });
+
+                const result = await response.json();
+                if (result.error) {
+                    console.error('Error printing picking slips:', result.error);
+                    alert('Lỗi khi in phiếu lấy hàng: ' + (result.error.data?.message || result.error.message));
+                    return;
+                }
+
+                if (result.result && result.result.success === false) {
+                    alert(result.result.message || 'Không thể in phiếu lấy hàng');
+                    return;
+                }
+
+                if (result.result && result.result.url) {
+                    window.open(result.result.url, '_blank');
+                    for (const so of this.state.saleOrders) {
+                        if (selectedIds.includes(so.id)) {
+                            so.picking_slip_printed = true;
+                            so.has_new_unprinted_pickings = false;
+                        }
+                    }
+                    this.clearAllSelections();
+                }
             }
         } catch (error) {
             console.error('Error printing picking slips:', error);
