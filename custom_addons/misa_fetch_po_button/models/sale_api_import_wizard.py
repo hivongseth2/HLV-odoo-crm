@@ -1145,6 +1145,8 @@ class SaleApiImportWizard(models.TransientModel):
                         sale_vals['x_studio_httt'] = owner_date['httt']
                     if owner_date.get('htgh'):
                         sale_vals['x_studio_htgh'] = owner_date['htgh']
+                    if owner_date.get('misa_note') and 'x_studio_misa_note' in self.env['sale.order']._fields:
+                        sale_vals['x_studio_misa_note'] = owner_date['misa_note']
 
                     sale_order = self.env['sale.order'].create(sale_vals)
                     _logger.info("✅ [%s] Created SO id=%s with partner_shipping_id=%s (delivery_contact.id=%s)",
@@ -1437,7 +1439,8 @@ class SaleApiImportWizard(models.TransientModel):
                                 upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
                             if owner_date.get('misa_delivery'):
                                 upd['x_studio_misa_delivery'] = owner_date['misa_delivery']
-                                
+                            if owner_date.get('misa_note') and 'x_studio_misa_note' in self.env['sale.order']._fields:
+                                upd['x_studio_misa_note'] = owner_date['misa_note']
                             if commitment_date:
                                 upd['commitment_date'] = commitment_date
                             if upd:
@@ -1464,6 +1467,8 @@ class SaleApiImportWizard(models.TransientModel):
                             sale_vals['x_studio_misa_order_date'] = owner_date['sale_order_date']
                         if owner_date.get('misa_delivery'):
                             sale_vals['x_studio_misa_delivery'] = owner_date['misa_delivery']
+                        if owner_date.get('misa_note') and 'x_studio_misa_note' in self.env['sale.order']._fields:
+                            sale_vals['x_studio_misa_note'] = owner_date['misa_note']
 
                         sale_order = self.env['sale.order'].create(sale_vals)
 

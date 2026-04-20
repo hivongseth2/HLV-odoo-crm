@@ -612,6 +612,7 @@ class MisaApiUtils(models.AbstractModel):
         # Lấy hình thức thanh toán và hình thức giao hàng
         httt = (cd.get("CustomField15") or "").strip() or None  # Hình thức thanh toán
         htgh = (cd.get("CustomField16") or "").strip() or None  # Hình thức giao hàng
+        misa_note = (cd.get("CustomField21") or "").strip() or None  # Ghi chú MISA
 
         # Trả về kết quả dạng dict
         return {
@@ -622,7 +623,8 @@ class MisaApiUtils(models.AbstractModel):
             "other_sys_order_code": other_sys_order_code,
             "delivery_order_number": delivery_order_number,
             "httt": httt,
-            "htgh": htgh
+            "htgh": htgh,
+            "misa_note": misa_note
         }
     
 

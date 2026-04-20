@@ -644,6 +644,8 @@ class SaleOrder(models.Model):
             vals_create['x_studio_httt'] = owner_date['httt']
         if owner_date.get('htgh'):
             vals_create['x_studio_htgh'] = owner_date['htgh']
+        if owner_date.get('misa_note') and 'x_studio_misa_note' in env['sale.order']._fields:
+            vals_create['x_studio_misa_note'] = owner_date['misa_note']
 
         new_so = env['sale.order'].create(vals_create)
 
@@ -1230,6 +1232,8 @@ class SaleOrder(models.Model):
             vals_header_upd['x_studio_httt'] = owner_date['httt']
         if owner_date.get('htgh'):
             vals_header_upd['x_studio_htgh'] = owner_date['htgh']
+        if owner_date.get('misa_note') and 'x_studio_misa_note' in env['sale.order']._fields:
+            vals_header_upd['x_studio_misa_note'] = owner_date['misa_note']
         shipping_address_raw = (data.get('ShippingAddress') or '').strip()
         vals_header_upd['misa_shipping_address'] = shipping_address_raw or False
         vals_header_upd['x_studio_sdt_giao_hang'] = data.get('Phone') or False
