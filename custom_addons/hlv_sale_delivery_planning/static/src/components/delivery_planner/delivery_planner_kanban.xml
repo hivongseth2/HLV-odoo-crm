@@ -377,6 +377,11 @@
                 </div>
 
 
+                <!-- Row 5b: Ghi chú (origin / chứng từ gốc) -->
+                <div t-if="so.origin" class="mt-1 text-muted" style="font-size:0.68rem; line-height:1.3;">
+                    <i class="fa fa-sticky-note-o me-1 text-warning"></i><span class="fw-semibold">Ghi chú:</span> <t t-esc="so.origin"/>
+                </div>
+
                 <!-- Row 6: Shipping address -->
                 <div t-if="so.misa_shipping_address" class="mt-1 text-muted" style="font-size:0.68rem; line-height:1.3;">
                     <i class="fa fa-map-marker me-1 text-danger"></i><t t-esc="so.misa_shipping_address"/>
