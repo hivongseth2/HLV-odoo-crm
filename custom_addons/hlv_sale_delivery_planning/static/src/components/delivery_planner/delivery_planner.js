@@ -1,7 +1,7 @@
 /** @odoo-module **/
 
 import { registry } from "@web/core/registry";
-import { Component, useState, onWillStart, onWillDestroy, markup } from "@odoo/owl";
+import { Component, useState, onWillStart, onMounted, onWillDestroy, markup } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import {
     translateDeliveryStatus, translatePickingState, translatePickingStatus,
@@ -144,17 +144,20 @@ export class DeliveryPlannerDashboard extends Component {
                 this._isCacheRestored = true;
             }
 
-            const [, reports] = await Promise.all([
-                this.fetchData(),
-                this.orm.searchRead(
-                    'ir.actions.report',
-                    [['model', '=', 'stock.picking'], ['binding_model_id', '!=', false]],
-                    ['id', 'name', 'report_type'],
-                    { order: 'name' }
-                )
-            ]);
-            this._isCacheRestored = false;
+            // Only load lightweight reports here — heavy fetchData moves to onMounted
+            const reports = await this.orm.searchRead(
+                'ir.actions.report',
+                [['model', '=', 'stock.picking'], ['binding_model_id', '!=', false]],
+                ['id', 'name', 'report_type'],
+                { order: 'name' }
+            );
             this.state.pickingReports = reports;
+        });
+
+        // fetchData runs AFTER mount so cached data shows instantly
+        onMounted(async () => {
+            await this.fetchData();
+            this._isCacheRestored = false;
         });
 
         this.pollUnreadMessages(true); // Initial fetch
