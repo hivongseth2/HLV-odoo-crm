@@ -88,18 +88,17 @@ class SaleOrder(models.Model):
         return res
 
     def _notify_delivery_planner_changed(self):
-        """Send bus notification so the delivery planner dashboard refreshes instantly.
-        Uses context flag to send at most ONE notification per request cycle."""
-        if self.env.context.get('_dp_notified'):
+        """Send bus notification with the affected SO ids so the dashboard can
+        do a partial subset refresh instead of a full reload."""
+        ids = list(self.ids)
+        if not ids:
             return
         try:
             self.env['bus.bus']._sendone(
                 'delivery_planner_channel',
                 'delivery_planner_data_changed',
-                {'source': 'sale.order'},
+                {'source': 'sale.order', 'sale_order_ids': ids},
             )
-            # Flag this request so cascading model writes don't send duplicates
-            self.env.context = dict(self.env.context, _dp_notified=True)
         except Exception:
             _logger.debug('Failed to send delivery_planner_data_changed notification', exc_info=True)
 
@@ -128,3 +127,9 @@ class SaleOrder(models.Model):
             filter_need_transfer=filter_need_transfer,
             filter_new_orders=filter_new_orders,
         )
+
+    @api.model
+    def get_delivery_orders_subset(self, order_ids):
+        """RPC wrapper around hlv.delivery.planner.service.get_orders_subset.
+        Used by the bus-driven partial refresh."""
+        return self.env['hlv.delivery.planner.service'].get_orders_subset(order_ids)

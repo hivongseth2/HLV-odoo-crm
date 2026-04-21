@@ -142,6 +142,86 @@ class DeliveryPlannerService(models.AbstractModel):
         }
 
     @api.model
+    def get_orders_subset(self, order_ids):
+        """Lightweight partial refresh used by the bus update flow.
+
+        Re-formats only the given sale.order ids using the same Phase 1+2
+        batch loaders, but scoped to those ids — avoids the heavy work over
+        the whole filtered set. Returns a list of formatted orders the
+        frontend can merge into its existing state.
+
+        Returns:
+            {
+                'orders': [...],   # formatted orders for ids that still exist
+                'removed_ids': [], # ids that no longer exist or were cancelled
+            }
+        """
+        if not order_ids:
+            return {'orders': [], 'removed_ids': []}
+
+        ids = [int(i) for i in order_ids if i]
+        page_sales = self.env['sale.order'].browse(ids).exists()
+        existing_ids = set(page_sales.ids)
+        removed_ids = [i for i in ids if i not in existing_ids]
+
+        if not page_sales:
+            return {'orders': [], 'removed_ids': removed_ids}
+
+        # Run the same batch status compute, but only over the subset.
+        # All filters set to defaults — this endpoint just refreshes data,
+        # filtering is the frontend's job (it can drop orders not matching).
+        page_sales, _matched_ids, _stats, product_availabilities, so_status_dict = \
+            self._calculate_po_and_stock_status(
+                page_sales,
+                po_date_from='', po_date_to='', po_status='all',
+                filter_delivery_status='all', filter_stock_status='all',
+                filter_packing_status='all',
+                show_completed=True,  # never drop subset orders
+                filter_need_transfer=False,
+                filter_new_orders=False,
+            )
+
+        po_by_origin = self._fetch_pos_for_sales(page_sales)
+        att_by_picking = self._fetch_attachments_for_pickings(page_sales.mapped('picking_ids').ids)
+        so_packages_dict = self._fetch_packages_for_sales(page_sales)
+
+        page_tmpl_ids = page_sales.mapped('order_line.product_id.product_tmpl_id').ids
+        page_kits = self.env['mrp.bom'].sudo().search([
+            ('product_tmpl_id', 'in', page_tmpl_ids), ('type', '=', 'phantom'),
+        ]) if page_tmpl_ids else self.env['mrp.bom']
+        page_kit_tmpl_ids = set(page_kits.mapped('product_tmpl_id').ids)
+        page_kit_bom_map = {bom.product_tmpl_id.id: bom for bom in page_kits}
+
+        page_blocking_by_so = self._batch_blocking_moves(page_sales)
+        transfer_map = self._batch_transfer_suggestions(page_sales, product_availabilities)
+
+        # Pre-warm prefetch for the picking graph (same as full load)
+        page_pickings = page_sales.mapped('picking_ids')
+        if page_pickings:
+            page_pickings.read([
+                'state', 'date_done', 'scheduled_date', 'create_date',
+                'picking_type_id', 'backorder_id', 'return_id', 'move_ids',
+            ])
+            all_moves = page_pickings.mapped('move_ids')
+            if all_moves:
+                all_moves.read(['picking_id', 'move_dest_ids', 'move_orig_ids'])
+                (all_moves.move_dest_ids | all_moves.move_orig_ids).read(['picking_id'])
+            page_pickings.picking_type_id.read(['name', 'code'])
+
+        orders = [
+            self._format_dashboard_order(
+                so, po_by_origin, product_availabilities,
+                att_by_picking, so_packages_dict, so_status_dict.get(so.id, {}),
+                transfer_suggestions=transfer_map.get(so.id),
+                page_kit_tmpl_ids=page_kit_tmpl_ids,
+                page_kit_bom_map=page_kit_bom_map,
+                page_blocking_by_so=page_blocking_by_so,
+            )
+            for so in page_sales
+        ]
+        return {'orders': orders, 'removed_ids': removed_ids}
+
+    @api.model
     def get_order_messages(self, order_id):
         so = self.env['sale.order'].browse(int(order_id))
         if not so.exists():

@@ -356,6 +356,8 @@ export class DeliveryPlannerDashboard extends Component {
 
     // --- Real-time data refresh via bus ---
     _dataChangedDebounce = null;
+    _pendingChangedSoIds = null;
+    _pendingFallbackFull = false;
 
     _onDataChanged(payload) {
         // Only show toast on the FIRST event in a burst (not every bus message)
@@ -365,18 +367,119 @@ export class DeliveryPlannerDashboard extends Component {
                 { type: "warning", title: "Thay đổi phát hiện", sticky: false }
             );
         }
+        // Accumulate affected SO ids across the burst (ids come from sale_order/picking/move triggers).
+        // If a payload has no ids, mark fallback so we do a full refresh.
+        if (!this._pendingChangedSoIds) {
+            this._pendingChangedSoIds = new Set();
+            this._pendingFallbackFull = false;
+        }
+        const ids = payload && payload.sale_order_ids;
+        if (Array.isArray(ids) && ids.length) {
+            for (const i of ids) this._pendingChangedSoIds.add(i);
+        } else {
+            this._pendingFallbackFull = true;
+        }
         // Debounce: multiple writes can fire in quick succession (e.g. batch picking validation).
         if (this._dataChangedDebounce) {
             clearTimeout(this._dataChangedDebounce);
         }
         this._dataChangedDebounce = setTimeout(async () => {
             this._dataChangedDebounce = null;
-            await this._silentRefresh();
+            const ids = Array.from(this._pendingChangedSoIds || []);
+            const fallback = this._pendingFallbackFull;
+            this._pendingChangedSoIds = null;
+            this._pendingFallbackFull = false;
+            // Only orders currently on screen need a subset refresh; others can be ignored
+            // (they aren't displayed; the next full refresh / cache load will pick them up).
+            const visibleIds = new Set(this.state.saleOrders.map(o => o.id));
+            const subsetIds = ids.filter(i => visibleIds.has(i));
+            if (!fallback && subsetIds.length && subsetIds.length === ids.length) {
+                // Fast path: all changes target visible orders → partial subset refresh
+                await this._refreshSubset(subsetIds);
+            } else if (!fallback && subsetIds.length === 0 && ids.length > 0) {
+                // All changes are for orders not on screen — nothing to do visually
+            } else {
+                // Fallback: full silent refresh (filters may have caused new matches)
+                await this._silentRefresh();
+            }
             this.notification.add(
                 "Dữ liệu đã được cập nhật tự động",
                 { type: "info", title: "Cập nhật xong" }
             );
         }, 800);
+    }
+
+    /**
+     * Partial refresh — re-fetches only the given SO ids and merges them in.
+     * Works for both kanban and list views (both share state.saleOrders).
+     */
+    async _refreshSubset(soIds) {
+        try {
+            const res = await this.orm.call(
+                "sale.order", "get_delivery_orders_subset", [], { order_ids: soIds }
+            );
+            const fresh = (res && res.orders) || [];
+            const removed = new Set((res && res.removed_ids) || []);
+            this._mergeSubset(fresh, removed);
+            // Persist the merged state to cache
+            const cacheable = {
+                dashboard_stats: this.state.dashboardStats,
+                orders: this.state.saleOrders,
+                total_count: this.state.totalCount,
+                warehouses: this.state.warehouses,
+                tags: this.state.tags,
+            };
+            await this._saveToCache(cacheable);
+        } catch (e) {
+            console.error("Subset refresh failed, falling back to full refresh:", e);
+            await this._silentRefresh();
+        }
+    }
+
+    /**
+     * Merge subset result into state.saleOrders WITHOUT replacing the array.
+     * - Update existing orders in-place (only changed properties are reactive-touched).
+     * - Insert new orders that pass the screen filter at the end.
+     * - Remove orders explicitly marked as removed by the backend.
+     */
+    _mergeSubset(freshOrders, removedIds) {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const indexById = new Map();
+        this.state.saleOrders.forEach((o, idx) => indexById.set(o.id, idx));
+
+        for (const fresh of freshOrders) {
+            fresh.flows = fresh.flows || [];
+            fresh.pickings = fresh.pickings || [];
+            fresh.lines = fresh.lines || [];
+            fresh.pos = fresh.pos || [];
+            const orderDate = fresh.misa_order_date || (fresh.date_order ? fresh.date_order.substring(0, 10) : '');
+            fresh.is_new_order = orderDate === todayStr;
+            this._applyFlowColors(fresh);
+
+            const idx = indexById.get(fresh.id);
+            if (idx !== undefined) {
+                // In-place property update — preserves reactive identity, only touched keys re-render
+                const old = this.state.saleOrders[idx];
+                for (const key of Object.keys(fresh)) {
+                    old[key] = fresh[key];
+                }
+                // Drop any old keys not present in fresh
+                for (const key of Object.keys(old)) {
+                    if (!(key in fresh)) delete old[key];
+                }
+            } else {
+                // New order entered the visible set — append
+                this.state.saleOrders.push(fresh);
+            }
+        }
+        // Remove deleted/cancelled orders
+        if (removedIds && removedIds.size) {
+            for (let i = this.state.saleOrders.length - 1; i >= 0; i--) {
+                if (removedIds.has(this.state.saleOrders[i].id)) {
+                    this.state.saleOrders.splice(i, 1);
+                }
+            }
+        }
     }
 
     /**

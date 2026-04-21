@@ -32,16 +32,16 @@ class StockPicking(models.Model):
         return res
 
     def _notify_delivery_planner_changed(self):
-        """Send bus notification so the delivery planner dashboard refreshes instantly.
-        Uses context flag to send at most ONE notification per request cycle."""
-        if self.env.context.get('_dp_notified'):
+        """Send bus notification with the affected SO ids so the dashboard can
+        do a partial subset refresh instead of a full reload."""
+        so_ids = list(set(self.mapped('sale_id').ids))
+        if not so_ids:
             return
         try:
             self.env['bus.bus']._sendone(
                 'delivery_planner_channel',
                 'delivery_planner_data_changed',
-                {'source': 'stock.picking'},
+                {'source': 'stock.picking', 'sale_order_ids': so_ids},
             )
-            self.env.context = dict(self.env.context, _dp_notified=True)
         except Exception:
             _logger.debug('Failed to send delivery_planner_data_changed notification', exc_info=True)
