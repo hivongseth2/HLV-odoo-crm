@@ -56,6 +56,7 @@ export class DeliveryPlannerDashboard extends Component {
             // without waiting for stats compute.)
             dashboardStats: { total: 0, ready: 0, partial: 0, out_of_stock: 0 },
             statsLoading: false,
+            isLoadingMore: false,
 
             // Pagination
             currentPage: 1,
@@ -1130,9 +1131,53 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     async loadMoreKanbanBatch() {
-        if (this.state.isLoading || !this.hasMoreKanbanData) return;
-        this.state.kanbanBatchSize += 100;
-        await this.fetchData();
+        if (this.state.isLoading || this.state.isLoadingMore || !this.hasMoreKanbanData) return;
+        const BATCH = 100;
+        const currentLen = this.state.saleOrders.length;
+        this.state.isLoadingMore = true;
+        try {
+            const result = await this.orm.call(
+                "sale.order",
+                "get_delivery_dashboard_data",
+                [],
+                {
+                    ...this._buildFetchKwargs(),
+                    limit: BATCH,
+                    offset: currentLen,
+                    include_stats: false,
+                }
+            );
+            const fresh = (result && result.orders) || [];
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const existingIds = new Set(this.state.saleOrders.map(o => o.id));
+            for (const so of fresh) {
+                if (existingIds.has(so.id)) continue; // dedupe (e.g. bus update during fetch)
+                so.flows = so.flows || [];
+                so.pickings = so.pickings || [];
+                so.lines = so.lines || [];
+                so.pos = so.pos || [];
+                this._applyFlowColors(so);
+                const orderDate = so.misa_order_date || (so.date_order ? so.date_order.substring(0, 10) : '');
+                so.is_new_order = orderDate === todayStr;
+                this.state.saleOrders.push(so);
+            }
+            if (typeof result.total_count === 'number') {
+                this.state.totalCount = result.total_count;
+            }
+            this.state.kanbanBatchSize = this.state.saleOrders.length;
+            // Persist appended state to cache
+            await this._saveToCache({
+                dashboard_stats: this.state.dashboardStats,
+                orders: this.state.saleOrders,
+                total_count: this.state.totalCount,
+                warehouses: this.state.warehouses,
+                tags: this.state.tags,
+            });
+        } catch (e) {
+            console.error("loadMoreKanbanBatch failed:", e);
+        } finally {
+            this.state.isLoadingMore = false;
+        }
     }
 
     // --- Returned / Stopped orders group ---

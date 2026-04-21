@@ -101,9 +101,10 @@
                 <button t-if="this.hasMoreKanbanData"
                         class="btn btn-sm btn-outline-primary"
                         t-on-click="loadMoreKanbanBatch"
-                        t-att-disabled="state.isLoading">
-                    <i class="fa fa-plus me-1" title="Tải thêm"></i>
-                    Tải thêm 100
+                        t-att-disabled="state.isLoading or state.isLoadingMore">
+                    <i t-attf-class="fa me-1 {{ state.isLoadingMore ? 'fa-spinner fa-spin' : 'fa-plus' }}" title="Tải thêm"></i>
+                    <t t-if="state.isLoadingMore">Đang tải...</t>
+                    <t t-else="">Tải thêm 100</t>
                 </button>
                 <span class="text-muted small">
                     <i class="fa fa-arrows text-secondary me-1" title="Kéo thả"/>
