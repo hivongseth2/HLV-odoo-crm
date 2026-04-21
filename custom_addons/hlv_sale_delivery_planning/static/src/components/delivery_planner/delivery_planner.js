@@ -75,13 +75,18 @@ export class DeliveryPlannerDashboard extends Component {
             collapsedSections: new Set(['packages', 'flows', 'pending_products']), // Default collapsed
 
             // View Mode
-            viewMode: 'kanban',               // 'list' | 'kanban'
+            viewMode: 'kanban',               // 'kanban' | 'list' (Card) | 'table' (Bảng)
             kanbanGroupBy: 'packing_status', // 'packing_status' | 'delivery_status' | 'stock_status'
             draggedSoId: null,
             dragOverColumn: null,
             kanbanColumnOrder: {},           // { colValue: [soId, ...] } — thứ tự DnD client-side
             kanbanColPageSize: {},           // { colValue: N } — số card hiển thị mỗi cột
             kanbanBatchSize: 100,            // số đơn tải backend cho toàn kanban
+
+            // Table (Bảng) View State
+            tableSortField: 'commitment_date', // 'name'|'misa_order_date'|'partner'|'warehouse'|'delivery_status'|'stock_status'|'packing_status'|'commitment_date'|'amount_total'
+            tableSortDir: 'desc',              // 'asc' | 'desc'
+            expandedTableRows: new Set(),      // Set of soId currently expanded
 
             // Selection for printing
             selectedSOIds: new Set(),        // Set of selected sale order IDs for printing
@@ -835,6 +840,143 @@ export class DeliveryPlannerDashboard extends Component {
         }
         this.state.currentPage = 1;
         await this.fetchData();
+    }
+
+    // ============================================================
+    // TABLE (BẢNG) VIEW HELPERS
+    // ============================================================
+    toggleTableSort(field) {
+        if (this.state.tableSortField === field) {
+            this.state.tableSortDir = this.state.tableSortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.state.tableSortField = field;
+            this.state.tableSortDir = 'asc';
+        }
+    }
+
+    toggleTableRowExpand(soId) {
+        if (this.state.expandedTableRows.has(soId)) {
+            this.state.expandedTableRows.delete(soId);
+        } else {
+            this.state.expandedTableRows.add(soId);
+        }
+        // Force reactivity
+        this.state.expandedTableRows = new Set(this.state.expandedTableRows);
+    }
+
+    isTableRowExpanded(soId) {
+        return this.state.expandedTableRows.has(soId);
+    }
+
+    /** Sorted client-side based on tableSortField/tableSortDir */
+    get tableSortedOrders() {
+        const orders = this.state.saleOrders || [];
+        const field = this.state.tableSortField;
+        const dir = this.state.tableSortDir === 'asc' ? 1 : -1;
+        const getVal = (so) => {
+            switch (field) {
+                case 'name':              return so.name || '';
+                case 'misa_order_date':   return so.misa_order_date || '';
+                case 'partner':           return (so.partner_id && so.partner_id[1]) || '';
+                case 'warehouse':         return (so.warehouse_id && so.warehouse_id[1]) || '';
+                case 'delivery_status':   return so.real_delivery_status || so.delivery_status || '';
+                case 'stock_status':      return so.stock_status || '';
+                case 'packing_status':    return so.packing_status || '';
+                case 'commitment_date':   return so.commitment_date || '';
+                case 'amount_total':      return Number(so.amount_total) || 0;
+                default:                  return '';
+            }
+        };
+        // Copy first to avoid mutating the reactive proxy in-place
+        const arr = orders.slice();
+        arr.sort((a, b) => {
+            const va = getVal(a);
+            const vb = getVal(b);
+            if (typeof va === 'number' && typeof vb === 'number') {
+                return (va - vb) * dir;
+            }
+            return String(va).localeCompare(String(vb), 'vi') * dir;
+        });
+        return arr;
+    }
+
+    /** Color-code main row by status (delivery + packing) */
+    getTableRowClass(so) {
+        const classes = ['cursor-pointer'];
+        const ds = so.real_delivery_status || so.delivery_status;
+        if (ds === 'full') {
+            classes.push('hlv-row-delivered');
+        } else if (so.stock_status === 'out_of_stock') {
+            classes.push('hlv-row-oos');
+        } else if (so.stock_status === 'partial_ready') {
+            classes.push('hlv-row-partial');
+        } else if (so.stock_status === 'ready') {
+            classes.push('hlv-row-ready');
+        }
+        if (so.is_returned_or_stopped) {
+            classes.push('hlv-row-stopped');
+        }
+        if (so.has_unread_message) {
+            classes.push('hlv-row-unread');
+        }
+        return classes.join(' ');
+    }
+
+    /** Collect distinct shipper names from active pickings */
+    getShippersForSO(so) {
+        const seen = new Set();
+        const out = [];
+        for (const pk of (so.pickings || [])) {
+            const u = pk.shipper_user;
+            if (u && !seen.has(u)) {
+                seen.add(u);
+                out.push(u);
+            }
+        }
+        return out;
+    }
+
+    /** Select / deselect all SO currently visible (sorted page) */
+    toggleSelectAllVisibleSO() {
+        const visible = this.tableSortedOrders;
+        const allSelected = visible.length > 0 &&
+            visible.every(so => this.state.selectedSOIds.has(so.id));
+        if (allSelected) {
+            visible.forEach(so => this.state.selectedSOIds.delete(so.id));
+        } else {
+            visible.forEach(so => this.state.selectedSOIds.add(so.id));
+        }
+        this.state.selectedSOIds = new Set(this.state.selectedSOIds);
+    }
+
+    get allTableRowsSelected() {
+        const visible = this.tableSortedOrders;
+        return visible.length > 0 &&
+            visible.every(so => this.state.selectedSOIds.has(so.id));
+    }
+
+    /** Column resize: drag right border of <th> to change its width */
+    onColResizeStart(ev, colKey) {
+        ev.stopPropagation();
+        ev.preventDefault();
+        const th = ev.target.closest('th');
+        if (!th) return;
+        const startX = ev.clientX;
+        const startWidth = th.offsetWidth;
+        const onMove = (e) => {
+            const delta = e.clientX - startX;
+            const newW = Math.max(80, startWidth + delta);
+            th.style.width = newW + 'px';
+            th.style.minWidth = newW + 'px';
+        };
+        const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            document.body.style.userSelect = '';
+        };
+        document.body.style.userSelect = 'none';
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
     }
 
     setKanbanGroupBy(dim) {
