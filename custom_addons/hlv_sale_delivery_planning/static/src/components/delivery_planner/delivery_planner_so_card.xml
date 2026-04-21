@@ -358,8 +358,12 @@
             <div class="small fw-bold"
                  t-att-class="picking.state == 'done' ? 'text-muted' : 'text-dark'">
                 <t t-esc="picking.name"/>
-                <span t-if="picking.bien_ban_printed" class="badge bg-info ms-1" style="font-size:0.55rem;" title="Đã in biên bản">
-                    <i class="fa fa-file-text-o"></i> BB
+            </div>
+            <div t-if="picking.bien_ban_printed" class="mt-1">
+                <span class="badge bg-info text-white d-inline-flex align-items-center gap-1"
+                      style="font-size:0.55rem; padding:2px 5px;"
+                      title="Đã in biên bản">
+                    <i class="fa fa-file-text-o"></i> Đã in BB
                 </span>
             </div>
 
@@ -424,8 +428,12 @@
             <div class="small fw-bold"
                  t-att-class="picking.state == 'done' ? 'text-muted' : 'text-dark'">
                 <t t-esc="picking.name"/>
-                <span t-if="picking.bien_ban_printed" class="badge bg-info ms-1" style="font-size:0.55rem;" title="Đã in biên bản">
-                    <i class="fa fa-file-text-o"></i> BB
+            </div>
+            <div t-if="picking.bien_ban_printed" class="mt-1">
+                <span class="badge bg-info text-white d-inline-flex align-items-center gap-1"
+                      style="font-size:0.55rem; padding:2px 5px;"
+                      title="Đã in biên bản">
+                    <i class="fa fa-file-text-o"></i> Đã in BB
                 </span>
             </div>
 

@@ -1576,13 +1576,16 @@ export class DeliveryPlannerDashboard extends Component {
 
     async printSelectedPickingSlips(reportId = null, reportType = 'qweb-pdf') {
         if (this.selectedCount === 0) return;
+        if (this.state.isPrintingPickingSlips) return;
 
         const selectedIds = Array.from(this.state.selectedSOIds);
         const pickingIds = this.getSelectedPickingIds();
         this.state.selectedPrintMenuPos = null;
 
         try {
-            this.state.isLoading = true;
+            // Local flag — KHÔNG dùng state.isLoading để tránh triệu hồi full-screen overlay
+            // / re-render kanban. Bus event sẽ tự động triệu hồi subset refresh.
+            this.state.isPrintingPickingSlips = true;
 
             // Luôn gọi giữ hàng (check availability) trước khi in
             // Backend sẽ tự xác định picking nào chưa assigned để reserve
@@ -1665,7 +1668,7 @@ export class DeliveryPlannerDashboard extends Component {
             console.error('Error printing picking slips:', error);
             alert('Lỗi khi in phiếu lấy hàng');
         } finally {
-            this.state.isLoading = false;
+            this.state.isPrintingPickingSlips = false;
         }
     }
 

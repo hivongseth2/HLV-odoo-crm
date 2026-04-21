@@ -42,11 +42,12 @@
                 <!-- Print Button -->
                 <button class="btn btn-sm"
                         t-att-class="this.selectedCount > 0 ? 'btn-success' : 'btn-outline-secondary'"
-                        t-att-disabled="this.selectedCount === 0 || state.isLoading"
+                        t-att-disabled="this.selectedCount === 0 || state.isLoading || state.isPrintingPickingSlips"
                         t-on-click="(ev) => this.toggleSelectedPickingPrintMenu(ev)"
                         title="In phiếu lấy hàng cho các đơn đã chọn">
-                    <i class="fa fa-print me-1" title="In phiếu"></i>
-                    In phiếu lấy hàng
+                    <i t-attf-class="fa me-1 #{state.isPrintingPickingSlips ? 'fa-spinner fa-spin' : 'fa-print'}" title="In phiếu"></i>
+                    <t t-if="state.isPrintingPickingSlips">Đang in...</t>
+                    <t t-else="">In phiếu lấy hàng</t>
                     <span t-if="this.selectedCount > 0" class="badge bg-white text-success ms-1">
                         <t t-esc="this.selectedCount"/>
                     </span>
@@ -434,9 +435,23 @@
                                   t-att-title="pk.name + ' — ' + (pk.printed ? 'Đã in' : 'Chưa in')">
                                 <i t-att-class="pk.printed ? 'fa fa-check-circle' : 'fa fa-exclamation-circle'"></i>
                                 <t t-esc="pk.name"/>
-                                <i t-if="pk.bien_ban_printed" class="fa fa-file-text-o ms-1" title="Đã in biên bản"></i>
                             </span>
                         </t>
+                    </div>
+                    <!-- Biên bản: tách hẳn ra dòng riêng để dễ nhìn -->
+                    <t t-set="bbPickings" t-value="pickPickings.filter(p =&gt; p.bien_ban_printed)"/>
+                    <div t-if="bbPickings.length" class="mt-1">
+                        <div class="text-muted fw-bold mb-1" style="font-size:0.58rem;"><i class="fa fa-file-text-o me-1"></i>Đã in biên bản</div>
+                        <div class="d-flex flex-wrap gap-1">
+                            <t t-foreach="bbPickings" t-as="bb" t-key="bb.id">
+                                <span class="badge d-inline-flex align-items-center gap-1 bg-info text-white"
+                                      style="font-size:0.6rem; padding:2px 5px;"
+                                      t-att-title="bb.name + ' — Đã in biên bản'">
+                                    <i class="fa fa-file-text-o"></i>
+                                    <t t-esc="bb.name"/>
+                                </span>
+                            </t>
+                        </div>
                     </div>
                 </div>
 
