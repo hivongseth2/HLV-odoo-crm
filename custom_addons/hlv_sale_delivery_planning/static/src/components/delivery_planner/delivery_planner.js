@@ -51,7 +51,11 @@ export class DeliveryPlannerDashboard extends Component {
             ],
 
             // Stats
+            // KPI dashboard stats (loaded ASYNCHRONOUSLY via a separate endpoint
+            // — main fetchData does NOT touch this so the table/kanban can render
+            // without waiting for stats compute.)
             dashboardStats: { total: 0, ready: 0, partial: 0, out_of_stock: 0 },
+            statsLoading: false,
 
             // Pagination
             currentPage: 1,
@@ -494,33 +498,18 @@ export class DeliveryPlannerDashboard extends Component {
      */
     async _silentRefresh() {
         const isKanban = this.state.viewMode === 'kanban';
+        // Stats refreshed independently \u2014 don't block silent refresh on it
+        this._fetchStatsAsync();
         try {
             const result = await this.orm.call(
                 "sale.order",
                 "get_delivery_dashboard_data",
                 [],
                 {
-                    search_query: this.state.searchQuery.trim(),
-                    filter_warehouse_id: this.state.filterWarehouseId,
-                    filter_delivery_status: this.state.filterDeliveryStatus,
-                    filter_stock_status: this.state.filterStockStatus,
-                    filter_date_from: this.state.filterDateFrom,
-                    filter_date_to: this.state.filterDateTo,
-                    filter_done_date_from: this.state.filterDoneDateFrom,
-                    filter_done_date_to: this.state.filterDoneDateTo,
-                    filter_po_date_from: this.state.filterPODateFrom,
-                    filter_po_date_to: this.state.filterPODateTo,
-                    filter_po_status: this.state.filterPOStatus,
-                    filter_packing_status: this.state.filterPackingStatus,
-                    filter_saler_code: this.state.filterSalerCode.trim(),
-                    filter_htgh: this.state.filterHtgh.trim(),
-                    filter_delivery_type: this.state.filterDeliveryType,
-                    filter_tag_ids: this.state.filterTagIds.join(','),
-                    show_completed: this.state.showCompleted,
-                    filter_need_transfer: this.state.filterNeedTransfer,
-                    filter_new_orders: this.state.filterNewOrders,
+                    ...this._buildFetchKwargs(),
                     limit: isKanban ? this.state.kanbanBatchSize : this.state.itemsPerPage,
                     offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
+                    include_stats: false,
                 }
             );
             this._mergeResult(result);
@@ -535,8 +524,10 @@ export class DeliveryPlannerDashboard extends Component {
      * OWL only re-renders cards whose reactive properties actually changed.
      */
     _mergeResult(result) {
-        // Update stats
-        this.state.dashboardStats = result.dashboard_stats || this.state.dashboardStats;
+        // Stats handled independently — only update if backend returned them
+        if (result.dashboard_stats) {
+            this.state.dashboardStats = result.dashboard_stats;
+        }
         this.state.totalCount = result.total_count || 0;
 
         const newOrders = result.orders || [];
@@ -716,7 +707,13 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     _applyResult(result) {
-        this.state.dashboardStats = result.dashboard_stats || { total: 0, ready: 0, partial: 0, out_of_stock: 0 };
+        // NOTE: do not overwrite dashboardStats here — stats are loaded
+        // independently via _fetchStatsAsync so the kanban/table can render
+        // without waiting on stats compute. We only assign if the backend
+        // actually returned non-null stats (legacy callers / first paint).
+        if (result.dashboard_stats) {
+            this.state.dashboardStats = result.dashboard_stats;
+        }
         const fetchedOrders = result.orders || [];
         this.state.saleOrders = fetchedOrders.map(so => {
             so.flows = so.flows || [];
@@ -772,10 +769,14 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     /**
-     * Fire the cached stats-only endpoint. Used to paint KPI cards
-     * BEFORE the heavy main fetch finishes (cache hit ~ms).
+     * Fetch KPI stats independently of the main data fetch. Runs in the
+     * background and updates `state.dashboardStats` whenever it returns —
+     * the table/kanban/card view never waits on it. Cached on backend so
+     * cost is ~ms when warm.
      */
-    async _prefetchStats() {
+    async _fetchStatsAsync() {
+        const myToken = (this._statsRequestSeq = (this._statsRequestSeq || 0) + 1);
+        this.state.statsLoading = true;
         try {
             const stats = await this.orm.call(
                 "sale.order",
@@ -783,18 +784,24 @@ export class DeliveryPlannerDashboard extends Component {
                 [],
                 this._buildFetchKwargs(),
             );
-            // Only apply if main fetch hasn't already finished AND stats not stale.
-            // We compare token to detect race: a newer fetchData supersedes ours.
-            if (this._statsToken !== this._currentFetchToken) return;
+            // Drop stale responses if a newer request superseded this one
+            if (myToken !== this._statsRequestSeq) return;
             if (stats && stats.dashboard_stats) {
                 this.state.dashboardStats = stats.dashboard_stats;
                 if (typeof stats.total_count === 'number') {
-                    this.state.totalCount = stats.total_count;
+                    // Only update totalCount from stats if main fetch hasn't
+                    // already populated it (avoid flicker).
+                    if (!this.state.totalCount) {
+                        this.state.totalCount = stats.total_count;
+                    }
                 }
             }
         } catch (e) {
-            // Silent: stats prefetch is best-effort
-            console.debug('[DP Stats] prefetch failed:', e);
+            console.debug('[DP Stats] async fetch failed:', e);
+        } finally {
+            if (myToken === this._statsRequestSeq) {
+                this.state.statsLoading = false;
+            }
         }
     }
 
@@ -805,14 +812,9 @@ export class DeliveryPlannerDashboard extends Component {
         }
         const isKanban = this.state.viewMode === 'kanban';
 
-        // Token to discard stale parallel responses if user changes filter mid-flight
-        this._currentFetchToken = (this._currentFetchToken || 0) + 1;
-        this._statsToken = this._currentFetchToken;
-
-        // Fire stats-only RPC in PARALLEL — it hits the in-memory cache when
-        // warm and updates KPI cards almost instantly without waiting for the
-        // heavy main fetch.
-        const statsPromise = this._prefetchStats();
+        // Fire stats fetch INDEPENDENTLY — we don't await it. Stats render
+        // when ready, and never block kanban/table painting.
+        this._fetchStatsAsync();
 
         try {
             const result = await this.orm.call(
@@ -824,6 +826,7 @@ export class DeliveryPlannerDashboard extends Component {
                     // Kanban tải theo batch, không phân trang backend
                     limit: isKanban ? this.state.kanbanBatchSize : this.state.itemsPerPage,
                     offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
+                    include_stats: false,
                 }
             );
 
@@ -835,8 +838,6 @@ export class DeliveryPlannerDashboard extends Component {
         } finally {
             this.state.isLoading = false;
         }
-        // Don't await — let any late stats response no-op via token check
-        statsPromise.catch(() => {});
     }
 
     // --- Computed Filters & Pagination ---

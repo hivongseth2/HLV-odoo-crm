@@ -110,7 +110,7 @@ class SaleOrder(models.Model):
             _logger.debug('Failed to send delivery_planner_data_changed notification', exc_info=True)
 
     @api.model
-    def get_delivery_dashboard_data(self, search_query='', filter_warehouse_id='all', filter_delivery_status='all', filter_stock_status='all', filter_packing_status='all', filter_date_from='', filter_date_to='', filter_po_date_from='', filter_po_date_to='', filter_po_status='all', filter_done_date_from='', filter_done_date_to='', filter_saler_code='', filter_htgh='', filter_delivery_type='all', filter_tag_ids='', limit=12, offset=0, show_completed=False, filter_need_transfer=False, filter_new_orders=False):
+    def get_delivery_dashboard_data(self, search_query='', filter_warehouse_id='all', filter_delivery_status='all', filter_stock_status='all', filter_packing_status='all', filter_date_from='', filter_date_to='', filter_po_date_from='', filter_po_date_to='', filter_po_status='all', filter_done_date_from='', filter_done_date_to='', filter_saler_code='', filter_htgh='', filter_delivery_type='all', filter_tag_ids='', limit=12, offset=0, show_completed=False, filter_need_transfer=False, filter_new_orders=False, include_stats=True):
         return self.env['hlv.delivery.planner.service'].get_dashboard_data(
             search_query=search_query,
             filter_warehouse_id=filter_warehouse_id,
@@ -133,6 +133,7 @@ class SaleOrder(models.Model):
             show_completed=show_completed,
             filter_need_transfer=filter_need_transfer,
             filter_new_orders=filter_new_orders,
+            include_stats=include_stats,
         )
 
     @api.model

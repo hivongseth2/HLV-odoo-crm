@@ -43,7 +43,7 @@ class DeliveryPlannerService(models.AbstractModel):
         limit=12, offset=0, filter_saler_code='',
         filter_htgh='', filter_delivery_type='all', filter_tag_ids='',
         show_completed=False, filter_need_transfer=False, filter_new_orders=False,
-        domain=None,
+        domain=None, include_stats=True,
     ):
 
         search_domain = self._build_search_domain(
@@ -161,7 +161,11 @@ class DeliveryPlannerService(models.AbstractModel):
             'warehouses': warehouses,
             'tags': tags,
             'total_count': total_count,
-            'dashboard_stats': dashboard_stats,
+            # Stats are loaded asynchronously by the frontend via
+            # get_dashboard_stats_only, so omit them when include_stats is
+            # False to keep the response payload light and signal to the
+            # client that it should not overwrite existing KPI values.
+            'dashboard_stats': dashboard_stats if include_stats else None,
         }
 
     @api.model

@@ -319,3 +319,13 @@
     }
     .hlv-th-label { display: inline-flex; align-items: center; gap: 0.25rem; }
 }
+
+/* KPI loading state - subtle pulse while stats are recomputing */
+.hlv-kpi-row.hlv-kpi-loading {
+    position: relative;
+    .card { animation: hlv-kpi-pulse 1.4s ease-in-out infinite; }
+}
+@keyframes hlv-kpi-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+}
