@@ -287,22 +287,34 @@ class PackScanController(http.Controller):
         move = ml.move_id
         updated_lines = []
 
-        # [FIX-OVERFLOW] Lock the move row to serialize concurrent scans on the
-        # same stock.move. Without this, two parallel HTTP workers can both read
-        # qty_done = 9, both compute remaining = 1, and both write +1 -> total 11
-        # (overflow). FOR UPDATE forces the second transaction to wait until the
-        # first commits, then it sees the fresh value and respects the cap.
+        # [FIX-OVERFLOW] Lock the move row + all its move_lines to serialize
+        # concurrent scans on the same stock.move. Without this, two parallel
+        # HTTP workers can both read qty_done = 9, both compute remaining = 1,
+        # and both write +1 -> total 11 (overflow). FOR UPDATE forces the second
+        # transaction to wait until the first commits, then it sees the fresh
+        # value and respects the cap.
         if delta > 0:
             try:
+                # Lock the parent move first
                 request.env.cr.execute(
                     "SELECT id FROM stock_move WHERE id = %s FOR UPDATE",
                     (move.id,),
                 )
-                # Invalidate ORM cache so subsequent reads hit the DB after lock
-                move.invalidate_recordset(['move_line_ids'])
-                ml.invalidate_recordset(['qty_done'])
+                # Also lock all sibling move_lines of this move to prevent
+                # other transactions from updating qty_done concurrently.
+                request.env.cr.execute(
+                    "SELECT id FROM stock_move_line WHERE move_id = %s FOR UPDATE",
+                    (move.id,),
+                )
+                # Invalidate the FULL ORM cache so subsequent reads of qty_done
+                # on ANY move_line of this move hit the freshly-locked DB rows
+                # (not stale per-record cache from before the lock).
+                request.env.invalidate_all()
             except Exception as e:
                 _logger.warning(f"Could not acquire row lock on move {move.id}: {e}")
+            # Re-browse to be extra safe after invalidate_all
+            ml = request.env['stock.move.line'].sudo().browse(ml.id)
+            move = ml.move_id
 
         current_qty = ml.qty_done
 
