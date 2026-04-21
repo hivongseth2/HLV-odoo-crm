@@ -1,8 +1,36 @@
 from odoo import models
+import pytz
+from datetime import datetime, timedelta
 
 
 class DeliveryPlannerServiceDomain(models.AbstractModel):
     _inherit = 'hlv.delivery.planner.service'
+
+    def _get_today_delivered_so_ids(self):
+        """SO ID có ít nhất 1 phiếu OUT done trong NGÀY HÔM NAY (theo TZ user).
+
+        Dùng để bypass SQL prefilter `delivery_status` (xem _build_search_domain),
+        đảm bảo các SO đã giao trong ngày luôn xuất hiện trên dashboard kể cả
+        khi user lọc "Chưa giao & Giao 1 phần".
+        """
+        user_tz_name = self.env.user.tz or 'UTC'
+        try:
+            user_tz = pytz.timezone(user_tz_name)
+        except Exception:
+            user_tz = pytz.UTC
+        now_local = datetime.now(user_tz)
+        start_local = user_tz.localize(datetime(now_local.year, now_local.month, now_local.day))
+        end_local = start_local + timedelta(days=1)
+        utc_from = start_local.astimezone(pytz.UTC).replace(tzinfo=None)
+        utc_to = end_local.astimezone(pytz.UTC).replace(tzinfo=None)
+        pickings = self.env['stock.picking'].sudo().search_read([
+            ('state', '=', 'done'),
+            ('date_done', '>=', utc_from),
+            ('date_done', '<', utc_to),
+            ('picking_type_code', '=', 'outgoing'),
+            ('sale_id', '!=', False),
+        ], ['sale_id'])
+        return list({p['sale_id'][0] for p in pickings if p.get('sale_id')})
 
     def _build_search_domain(
         self, search_query, filter_warehouse_id,
@@ -29,7 +57,17 @@ class DeliveryPlannerServiceDomain(models.AbstractModel):
         }
         native_allowed = _native_status_map.get(filter_delivery_status)
         if native_allowed:
-            domain += [('delivery_status', 'in', list(native_allowed))]
+            # Bypass: đơn có phiếu OUT done trong NGÀY HÔM NAY luôn được include
+            # (kể cả khi delivery_status='full' không nằm trong native_allowed).
+            # Cần thiết vì cột "Đã giao trong ngày" phải hiển thị đầy đủ kể cả
+            # user đang lọc "Chưa & Giao 1 phần".
+            today_so_ids = self._get_today_delivered_so_ids()
+            if today_so_ids:
+                domain += ['|',
+                           ('delivery_status', 'in', list(native_allowed)),
+                           ('id', 'in', today_so_ids)]
+            else:
+                domain += [('delivery_status', 'in', list(native_allowed))]
 
         if filter_warehouse_id != 'all':
             domain += [('warehouse_id', '=', int(filter_warehouse_id))]
