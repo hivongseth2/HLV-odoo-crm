@@ -329,13 +329,7 @@
                             t-on-click.stop="() => this.openOverviewDrawer(so)">
                         <i class="fa fa-eye" title="Tổng quan"></i>
                     </button>
-                    <button class="btn btn-link btn-sm p-0 ms-1 flex-shrink-0"
-                            style="font-size: 0.75rem; line-height:1;"
-                            t-att-class="this.isSOArchived(so.id) ? 'text-success' : 'text-warning'"
-                            t-att-title="this.isSOArchived(so.id) ? 'Phục hồi đơn đã cất' : 'Cất đơn (ẩn khỏi danh sách)'"
-                            t-on-click.stop="() => this.toggleArchiveSO(so.id)">
-                        <i t-attf-class="fa #{this.isSOArchived(so.id) ? 'fa-undo' : 'fa-archive'}"></i>
-                    </button>
+                   
                 </div>
 
                 <!-- Row 2: Customer -->
@@ -495,6 +489,18 @@
                         <t t-esc="so.warehouse_name"/>
                     </span>
                 </div>
+
+
+                    <div class="d-flex justify-content-end align-items-end mb-1 gap-1"> 
+                     <button class="btn btn-link btn-sm p-0 ms-1 flex-shrink-0"
+                            style="font-size: 0.75rem; line-height:1;"
+                            t-att-class="this.isSOArchived(so.id) ? 'text-success' : 'text-warning'"
+                            t-att-title="this.isSOArchived(so.id) ? 'Phục hồi đơn đã cất' : 'Cất đơn (ẩn khỏi danh sách)'"
+                            t-on-click.stop="() => this.toggleArchiveSO(so.id)">
+                        <i t-attf-class="fa #{this.isSOArchived(so.id) ? 'fa-undo' : 'fa-archive'}"></i>
+                    </button>
+                    </div>
+
 
             </div>
         </div>
