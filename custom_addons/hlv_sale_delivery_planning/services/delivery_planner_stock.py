@@ -401,12 +401,19 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 if not done_pks:
                     delivery_ok = False
                 else:
-                    latest = max(done_pks, key=lambda p: p['date_done'])
-                    latest_str = latest['date_done'].replace(tzinfo=pytz.utc).astimezone(user_tz).strftime('%Y-%m-%d')
-                    delivery_ok = (
-                        (not filter_done_date_from or latest_str >= filter_done_date_from)
-                        and (not filter_done_date_to or latest_str <= filter_done_date_to)
-                    )
+                    # SO match nếu BẤT KỲ phiếu OUT done nào có date_done nằm trong khoảng,
+                    # không chỉ phiếu cuối cùng. (Trước đây dùng max() => sai khi SO có
+                    # nhiều phiếu giao ở nhiều ngày khác nhau.)
+                    any_match = False
+                    for p in done_pks:
+                        d_str = p['date_done'].replace(tzinfo=pytz.utc).astimezone(user_tz).strftime('%Y-%m-%d')
+                        if filter_done_date_from and d_str < filter_done_date_from:
+                            continue
+                        if filter_done_date_to and d_str > filter_done_date_to:
+                            continue
+                        any_match = True
+                        break
+                    delivery_ok = any_match
 
             if has_delivered_today and (real_delivery_status == 'full' or not has_assigned_pick):
                 effective_packing = 'delivered_today'

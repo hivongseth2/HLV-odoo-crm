@@ -7,6 +7,7 @@ _logger = logging.getLogger(__name__)
 _PICK_NOTIFY_FIELDS = {
     'state', 'x_printed', 'carrier_id', 'carrier_tracking_ref',
     'scheduled_date', 'date_done', 'x_bien_ban_printed',
+    'shipper_received', 'shipper_returned', 'shipper_user_id', 'shipper_received_by',
 }
 
 
