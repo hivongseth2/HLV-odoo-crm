@@ -743,37 +743,84 @@ export class DeliveryPlannerDashboard extends Component {
         }
     }
 
+    /**
+     * Build the kwargs object passed to RPC calls.
+     * Shared by full data fetch and stats-only prefetch.
+     */
+    _buildFetchKwargs() {
+        return {
+            search_query: this.state.searchQuery.trim(),
+            filter_warehouse_id: this.state.filterWarehouseId,
+            filter_delivery_status: this.state.filterDeliveryStatus,
+            filter_stock_status: this.state.filterStockStatus,
+            filter_date_from: this.state.filterDateFrom,
+            filter_date_to: this.state.filterDateTo,
+            filter_done_date_from: this.state.filterDoneDateFrom,
+            filter_done_date_to: this.state.filterDoneDateTo,
+            filter_po_date_from: this.state.filterPODateFrom,
+            filter_po_date_to: this.state.filterPODateTo,
+            filter_po_status: this.state.filterPOStatus,
+            filter_packing_status: this.state.filterPackingStatus,
+            filter_saler_code: this.state.filterSalerCode.trim(),
+            filter_htgh: this.state.filterHtgh.trim(),
+            filter_delivery_type: this.state.filterDeliveryType,
+            filter_tag_ids: this.state.filterTagIds.join(','),
+            show_completed: this.state.showCompleted,
+            filter_need_transfer: this.state.filterNeedTransfer,
+            filter_new_orders: this.state.filterNewOrders,
+        };
+    }
+
+    /**
+     * Fire the cached stats-only endpoint. Used to paint KPI cards
+     * BEFORE the heavy main fetch finishes (cache hit ~ms).
+     */
+    async _prefetchStats() {
+        try {
+            const stats = await this.orm.call(
+                "sale.order",
+                "get_delivery_dashboard_stats",
+                [],
+                this._buildFetchKwargs(),
+            );
+            // Only apply if main fetch hasn't already finished AND stats not stale.
+            // We compare token to detect race: a newer fetchData supersedes ours.
+            if (this._statsToken !== this._currentFetchToken) return;
+            if (stats && stats.dashboard_stats) {
+                this.state.dashboardStats = stats.dashboard_stats;
+                if (typeof stats.total_count === 'number') {
+                    this.state.totalCount = stats.total_count;
+                }
+            }
+        } catch (e) {
+            // Silent: stats prefetch is best-effort
+            console.debug('[DP Stats] prefetch failed:', e);
+        }
+    }
+
     async fetchData() {
         // Don't show full loading spinner if we already have cached data on screen
         if (!this._isCacheRestored) {
             this.state.isLoading = true;
         }
         const isKanban = this.state.viewMode === 'kanban';
+
+        // Token to discard stale parallel responses if user changes filter mid-flight
+        this._currentFetchToken = (this._currentFetchToken || 0) + 1;
+        this._statsToken = this._currentFetchToken;
+
+        // Fire stats-only RPC in PARALLEL — it hits the in-memory cache when
+        // warm and updates KPI cards almost instantly without waiting for the
+        // heavy main fetch.
+        const statsPromise = this._prefetchStats();
+
         try {
             const result = await this.orm.call(
                 "sale.order",
                 "get_delivery_dashboard_data",
                 [],
                 {
-                    search_query: this.state.searchQuery.trim(),
-                    filter_warehouse_id: this.state.filterWarehouseId,
-                    filter_delivery_status: this.state.filterDeliveryStatus,
-                    filter_stock_status: this.state.filterStockStatus,
-                    filter_date_from: this.state.filterDateFrom,
-                    filter_date_to: this.state.filterDateTo,
-                    filter_done_date_from: this.state.filterDoneDateFrom,
-                    filter_done_date_to: this.state.filterDoneDateTo,
-                    filter_po_date_from: this.state.filterPODateFrom,
-                    filter_po_date_to: this.state.filterPODateTo,
-                    filter_po_status: this.state.filterPOStatus,
-                    filter_packing_status: this.state.filterPackingStatus,
-                    filter_saler_code: this.state.filterSalerCode.trim(),
-                    filter_htgh: this.state.filterHtgh.trim(),
-                    filter_delivery_type: this.state.filterDeliveryType,
-                    filter_tag_ids: this.state.filterTagIds.join(','),
-                    show_completed: this.state.showCompleted,
-                    filter_need_transfer: this.state.filterNeedTransfer,
-                    filter_new_orders: this.state.filterNewOrders,
+                    ...this._buildFetchKwargs(),
                     // Kanban tải theo batch, không phân trang backend
                     limit: isKanban ? this.state.kanbanBatchSize : this.state.itemsPerPage,
                     offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
@@ -788,6 +835,8 @@ export class DeliveryPlannerDashboard extends Component {
         } finally {
             this.state.isLoading = false;
         }
+        // Don't await — let any late stats response no-op via token check
+        statsPromise.catch(() => {});
     }
 
     // --- Computed Filters & Pagination ---

@@ -133,6 +133,29 @@ class DeliveryPlannerService(models.AbstractModel):
         warehouses = self.env['stock.warehouse'].search_read([], ['id', 'name'])
         tags = self.env['crm.tag'].search_read([], ['id', 'name'])
 
+        # Populate stats cache so subsequent get_dashboard_stats_only calls
+        # (e.g. parallel KPI prefetch on next page load) hit warm.
+        self._store_stats_cache(
+            dashboard_stats, total_count,
+            search_query=search_query, filter_warehouse_id=filter_warehouse_id,
+            filter_delivery_status=filter_delivery_status,
+            filter_stock_status=filter_stock_status,
+            filter_packing_status=filter_packing_status,
+            filter_date_from=filter_date_from, filter_date_to=filter_date_to,
+            filter_po_date_from=filter_po_date_from,
+            filter_po_date_to=filter_po_date_to,
+            filter_po_status=filter_po_status,
+            filter_done_date_from=filter_done_date_from,
+            filter_done_date_to=filter_done_date_to,
+            filter_saler_code=filter_saler_code, filter_htgh=filter_htgh,
+            filter_delivery_type=filter_delivery_type,
+            filter_tag_ids=filter_tag_ids,
+            show_completed=show_completed,
+            filter_need_transfer=filter_need_transfer,
+            filter_new_orders=filter_new_orders,
+            domain=domain,
+        )
+
         return {
             'orders': result,
             'warehouses': warehouses,

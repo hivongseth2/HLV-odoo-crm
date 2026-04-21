@@ -93,6 +93,13 @@ class SaleOrder(models.Model):
         ids = list(self.ids)
         if not ids:
             return
+        # Invalidate the in-memory KPI stats cache so the next stats-only
+        # request recomputes instead of serving stale numbers.
+        try:
+            from ..services.delivery_planner_stats import bump_stats_cache_version
+            bump_stats_cache_version()
+        except Exception:
+            pass
         try:
             self.env['bus.bus']._sendone(
                 'delivery_planner_channel',
@@ -133,3 +140,42 @@ class SaleOrder(models.Model):
         """RPC wrapper around hlv.delivery.planner.service.get_orders_subset.
         Used by the bus-driven partial refresh."""
         return self.env['hlv.delivery.planner.service'].get_orders_subset(order_ids)
+
+    @api.model
+    def get_delivery_dashboard_stats(
+        self, search_query='', filter_warehouse_id='all',
+        filter_delivery_status='all', filter_stock_status='all',
+        filter_packing_status='all', filter_date_from='', filter_date_to='',
+        filter_po_date_from='', filter_po_date_to='', filter_po_status='all',
+        filter_done_date_from='', filter_done_date_to='',
+        filter_saler_code='', filter_htgh='', filter_delivery_type='all',
+        filter_tag_ids='', show_completed=False,
+        filter_need_transfer=False, filter_new_orders=False,
+    ):
+        """RPC wrapper for the cached stats-only endpoint.
+
+        Returns {'dashboard_stats': {...}, 'total_count': N, 'cached': bool}.
+        Frontend calls this in parallel with get_delivery_dashboard_data so
+        KPI cards paint immediately when the cache is warm.
+        """
+        return self.env['hlv.delivery.planner.service'].get_dashboard_stats_only(
+            search_query=search_query,
+            filter_warehouse_id=filter_warehouse_id,
+            filter_delivery_status=filter_delivery_status,
+            filter_stock_status=filter_stock_status,
+            filter_packing_status=filter_packing_status,
+            filter_date_from=filter_date_from,
+            filter_date_to=filter_date_to,
+            filter_po_date_from=filter_po_date_from,
+            filter_po_date_to=filter_po_date_to,
+            filter_po_status=filter_po_status,
+            filter_done_date_from=filter_done_date_from,
+            filter_done_date_to=filter_done_date_to,
+            filter_saler_code=filter_saler_code,
+            filter_htgh=filter_htgh,
+            filter_delivery_type=filter_delivery_type,
+            filter_tag_ids=filter_tag_ids,
+            show_completed=show_completed,
+            filter_need_transfer=filter_need_transfer,
+            filter_new_orders=filter_new_orders,
+        )

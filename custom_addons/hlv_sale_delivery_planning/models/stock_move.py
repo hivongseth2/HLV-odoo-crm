@@ -40,6 +40,11 @@ class StockMove(models.Model):
         if not so_ids:
             return
         try:
+            from ..services.delivery_planner_stats import bump_stats_cache_version
+            bump_stats_cache_version()
+        except Exception:
+            pass
+        try:
             self.env['bus.bus']._sendone(
                 'delivery_planner_channel',
                 'delivery_planner_data_changed',
