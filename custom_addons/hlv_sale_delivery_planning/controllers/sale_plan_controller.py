@@ -664,6 +664,8 @@ function renderKanban(){
     var field=(gb==='delivery_status')?'real_delivery_status':(gb==='packing_status'?'effective_packing':gb);
     var needTransfer=$('f-need-transfer').checked;
     var items=S.orders.filter(function(o){
+      // Đơn trả hàng/dừng → ẩn khỏi cột chính, chỉ hiện ở cột "Trả hàng / Dừng"
+      if(o.is_returned_or_stopped) return false;
       if(needTransfer&&!(o.transfer_suggestions&&o.transfer_suggestions.length)) return false;
       return o[field]===c.key;
     });
@@ -689,6 +691,36 @@ function renderKanban(){
       body.appendChild(btn);
     }
   });
+
+  // ── Cột "Trả hàng / Dừng" — chỉ hiển thị khi user bật "Hiện đơn đã giao" ──
+  var showCompleted=$('f-show-completed')&&$('f-show-completed').checked;
+  if(showCompleted){
+    var returnedItems=S.orders.filter(function(o){return o.is_returned_or_stopped;});
+    if(returnedItems.length>0){
+      var rPageSize=S.kanbanColPageSize['__returned__']||15;
+      var rVisible=returnedItems.slice(0,rPageSize);
+      var rRemaining=returnedItems.length-rPageSize;
+      var rCol=document.createElement('div');rCol.className='kanban-col';
+      rCol.innerHTML='<div class="card border-danger"><div class="card-header d-flex justify-content-between align-items-center text-danger py-2" style="background:#fff0f0;border-color:#dc3545">'
+        +'<strong><i class="fa fa-undo me-1"></i>TRẢ HÀNG / DỪNG</strong>'
+        +'<span class="badge bg-danger rounded-pill">'+returnedItems.length+'</span></div>'
+        +'<div class="card-body p-2 d-flex flex-column gap-2"></div></div>';
+      wrap.appendChild(rCol);
+      var rBody=rCol.querySelector('.card-body');
+      rVisible.forEach(function(o){
+        var card=document.createElement('div');
+        card.innerHTML=renderSOCard(o);
+        rBody.appendChild(card.firstChild);
+      });
+      if(rRemaining>0){
+        var rBtn=document.createElement('button');
+        rBtn.className='btn-col-more mt-1';
+        rBtn.innerHTML='<i class="fa fa-chevron-down"></i> Tải thêm ('+rRemaining+' còn lại)';
+        rBtn.setAttribute('data-col-key','__returned__');
+        rBody.appendChild(rBtn);
+      }
+    }
+  }
 }
 
 function getCardBorderClass(o){

@@ -461,6 +461,15 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             else:
                 is_new = True
 
+            # Đơn đã giao trong ngày → bypass MỌI filter (delivery/packing/stock/print/
+            # shipper/new/transfer). Đảm bảo cột "Đã giao trong ngày" luôn hiển thị
+            # đầy đủ kể cả khi user đang lọc "Chưa giao & Giao 1 phần" hoặc các trạng
+            # thái khác. Frontend sẽ tự xếp vào cột delivered_today dựa trên
+            # has_delivered_today.
+            if has_delivered_today:
+                matched_sale_ids.append(so_id)
+                continue
+
             if delivery_ok and packing_ok and is_new \
                     and (filter_stock_status == 'all' or stock_status == filter_stock_status) \
                     and (not filter_need_transfer or has_transfer_option) \
