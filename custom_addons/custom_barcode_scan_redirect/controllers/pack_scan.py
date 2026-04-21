@@ -284,9 +284,27 @@ class PackScanController(http.Controller):
     def _apply_qty_update(self, target_ml, delta):
         """Apply the qty_done delta to target_ml and return updated_lines list."""
         ml = target_ml
-        current_qty = ml.qty_done
         move = ml.move_id
         updated_lines = []
+
+        # [FIX-OVERFLOW] Lock the move row to serialize concurrent scans on the
+        # same stock.move. Without this, two parallel HTTP workers can both read
+        # qty_done = 9, both compute remaining = 1, and both write +1 -> total 11
+        # (overflow). FOR UPDATE forces the second transaction to wait until the
+        # first commits, then it sees the fresh value and respects the cap.
+        if delta > 0:
+            try:
+                request.env.cr.execute(
+                    "SELECT id FROM stock_move WHERE id = %s FOR UPDATE",
+                    (move.id,),
+                )
+                # Invalidate ORM cache so subsequent reads hit the DB after lock
+                move.invalidate_recordset(['move_line_ids'])
+                ml.invalidate_recordset(['qty_done'])
+            except Exception as e:
+                _logger.warning(f"Could not acquire row lock on move {move.id}: {e}")
+
+        current_qty = ml.qty_done
 
         ml_reserved_qty = getattr(ml, 'reserved_qty', 0) or getattr(ml, 'reserved_uom_qty', 0) or getattr(ml, 'product_uom_qty', 0) or 0
         ml_remaining = max(0, ml_reserved_qty - current_qty)
@@ -297,10 +315,20 @@ class PackScanController(http.Controller):
         _logger.info(f"Updating line {ml.id}. Current: {current_qty}. ML Reserved: {ml_reserved_qty}. ML Remain: {ml_remaining}. Move Total: {move_total_done}. Move Remain: {move_remain}")
 
         if delta > 0:
+            # [FIX-OVERFLOW] Hard server-side guard: never exceed move demand,
+            # regardless of what the client validation allowed. This is the
+            # last line of defense against race conditions and tampered clients.
+            if move_remain <= 0:
+                return {"error": f"⚠️ Sản phẩm '{move.product_id.display_name}' đã quét đủ số lượng yêu cầu ({move.product_uom_qty})!"}
+
             if ml_remaining > 0:
-                add_qty = min(delta, ml_remaining)
+                add_qty = min(delta, ml_remaining, move_remain)
             else:
-                add_qty = min(delta, move_remain) if move_remain > 0 else delta
+                add_qty = min(delta, move_remain)
+
+            # Final safety clamp
+            if add_qty > move_remain:
+                add_qty = move_remain
 
             if add_qty > 0:
                 # Kiểm tra tồn kho tại vị trí

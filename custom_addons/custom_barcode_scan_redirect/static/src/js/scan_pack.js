@@ -48,6 +48,22 @@ document.addEventListener("DOMContentLoaded", function () {
   // [NEW] Semaphore to prevent double-packing (race condition)
   let isProcessingPack = false;
 
+  // [FIX-OVERFLOW] Promise queue to serialize all scan operations.
+  // Prevents race condition when network is slow: multiple scans firing
+  // in parallel would all read the same stale qty_done from DOM and pass
+  // client-side validation, causing overflow on server.
+  let scanLock = Promise.resolve();
+  function enqueueScan(fn) {
+    const prev = scanLock;
+    let release;
+    const next = new Promise(r => release = r);
+    scanLock = next;
+    return prev.then(() => {
+      try { return Promise.resolve(fn()).finally(release); }
+      catch (e) { release(); throw e; }
+    });
+  }
+
   document.addEventListener("keydown", (e) => {
     const now = Date.now();
     // Reset count if gap is large (> 70ms implies manual typing or start of new sequence)
@@ -259,6 +275,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // §2.6 — updateQty (core scan → server flow)
   async function updateQty(barcode, delta = 1, lineId = null, moveId = null, skipValidation = false) {
+    // [FIX-OVERFLOW] Serialize: only 1 scan in-flight at a time per page.
+    return enqueueScan(() => _doUpdateQty(barcode, delta, lineId, moveId, skipValidation));
+  }
+
+  async function _doUpdateQty(barcode, delta = 1, lineId = null, moveId = null, skipValidation = false) {
     if (!lineId) {
       const found = findLineToUpdate(barcode);
       lineId = found?.lineId || null;
@@ -295,6 +316,32 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
 
+    // [FIX-OVERFLOW] Optimistic UI update BEFORE fetch.
+    // Ensures the next queued scan reads the correct currentDone from DOM
+    // instead of the stale pre-fetch value. Reverted on error.
+    let optimisticInput = null;
+    let optimisticOldVal = null;
+    let optimisticOldDataset = null;
+    if (!skipValidation && delta !== 0) {
+      const targetEl = moveId
+        ? document.querySelector(`[data-move-id="${moveId}"]`)
+        : (lineId ? document.querySelector(`[data-line-id="${lineId}"]`) : null);
+      const inp = targetEl?.querySelector('.done-input');
+      if (inp) {
+        optimisticInput = inp;
+        optimisticOldVal = inp.value;
+        optimisticOldDataset = inp.dataset.currentQty;
+        const baseVal = parseFloat(
+          inp.dataset.currentQty !== undefined && inp.dataset.currentQty !== ''
+            ? inp.dataset.currentQty
+            : inp.value
+        ) || 0;
+        const optVal = parseFloat((baseVal + delta).toFixed(3));
+        inp.value = optVal;
+        inp.dataset.currentQty = optVal;
+      }
+    }
+
     try {
       const res = await fetch("/pack_scan/scan_item", {
         method: "POST",
@@ -321,12 +368,24 @@ document.addEventListener("DOMContentLoaded", function () {
         toast.error(result.error);
         playError();
         setFocus();
+        // [FIX-OVERFLOW] Revert optimistic update on server error
+        if (optimisticInput) {
+          optimisticInput.value = optimisticOldVal;
+          if (optimisticOldDataset === undefined) delete optimisticInput.dataset.currentQty;
+          else optimisticInput.dataset.currentQty = optimisticOldDataset;
+        }
         throw new Error(result.error);
       }
       if (!result?.scanned?.length) {
         toast.warn('Không có dòng nào được cập nhật');
         playError();
         setFocus();
+        // [FIX-OVERFLOW] Revert optimistic update if server didn't update anything
+        if (optimisticInput) {
+          optimisticInput.value = optimisticOldVal;
+          if (optimisticOldDataset === undefined) delete optimisticInput.dataset.currentQty;
+          else optimisticInput.dataset.currentQty = optimisticOldDataset;
+        }
         throw new Error("No lines updated");
       }
 
@@ -441,6 +500,13 @@ document.addEventListener("DOMContentLoaded", function () {
       toggleUnpackBtn();
 
     } catch (err) {
+      // [FIX-OVERFLOW] Revert optimistic update on network/exception errors
+      // (only if not already reverted above by the server-error branch)
+      if (optimisticInput && optimisticInput.value !== optimisticOldVal) {
+        optimisticInput.value = optimisticOldVal;
+        if (optimisticOldDataset === undefined) delete optimisticInput.dataset.currentQty;
+        else optimisticInput.dataset.currentQty = optimisticOldDataset;
+      }
       toast.error("Lỗi kết nối: " + err.message);
       playError();
       setFocus();
