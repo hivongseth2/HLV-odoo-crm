@@ -106,6 +106,23 @@
                     <t t-if="state.isLoadingMore">Đang tải...</t>
                     <t t-else="">Tải thêm 100</t>
                 </button>
+                <button class="btn btn-sm"
+                        t-att-class="state.showArchivedOnly ? 'btn-warning' : 'btn-outline-warning'"
+                        t-on-click="toggleShowArchivedOnly"
+                        t-att-title="state.showArchivedOnly ? 'Bấm để quay lại danh sách thường' : 'Xem các đơn đã cất'">
+                    <i t-attf-class="fa me-1 #{state.showArchivedOnly ? 'fa-list' : 'fa-archive'}"></i>
+                    <t t-if="state.showArchivedOnly">Quay lại</t>
+                    <t t-else="">Đơn đã cất</t>
+                    <span t-if="state.archivedSOIds.size" class="badge bg-light text-dark ms-1">
+                        <t t-esc="state.archivedSOIds.size"/>
+                    </span>
+                </button>
+                <button t-if="state.showArchivedOnly and state.archivedSOIds.size"
+                        class="btn btn-sm btn-outline-danger"
+                        t-on-click="clearAllArchived"
+                        title="Phục hồi tất cả đơn đã cất">
+                    <i class="fa fa-undo me-1"></i> Phục hồi tất cả
+                </button>
                 <span class="text-muted small">
                     <i class="fa fa-arrows text-secondary me-1" title="Kéo thả"/>
                     Màu sắc: Đã giao (Xanh dương) - đủ hàng (Xanh lá) - Mới (đỏ Cam)
@@ -410,6 +427,7 @@
                                   t-att-title="pk.name + ' — ' + (pk.printed ? 'Đã in' : 'Chưa in')">
                                 <i t-att-class="pk.printed ? 'fa fa-check-circle' : 'fa fa-exclamation-circle'"></i>
                                 <t t-esc="pk.name"/>
+                                <i t-if="pk.bien_ban_printed" class="fa fa-file-text-o ms-1" title="Đã in biên bản"></i>
                             </span>
                         </t>
                     </div>

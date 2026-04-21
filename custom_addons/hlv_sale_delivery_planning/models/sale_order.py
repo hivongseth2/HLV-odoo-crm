@@ -143,6 +143,13 @@ class SaleOrder(models.Model):
         return self.env['hlv.delivery.planner.service'].get_orders_subset(order_ids)
 
     @api.model
+    def get_delivery_so_flow(self, so_id):
+        """Lazy RPC: returns {'flows': [...]} for one SO. Called when the user
+        expands the "Luồng Xử Lý Kho" section. Default dashboard payload no
+        longer contains flows."""
+        return self.env['hlv.delivery.planner.service'].get_so_flow(so_id)
+
+    @api.model
     def get_delivery_dashboard_stats(
         self, search_query='', filter_warehouse_id='all',
         filter_delivery_status='all', filter_stock_status='all',

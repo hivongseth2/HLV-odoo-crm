@@ -96,6 +96,12 @@ export class DeliveryPlannerDashboard extends Component {
             // Selection for printing
             selectedSOIds: new Set(),        // Set of selected sale order IDs for printing
 
+            // Archive (cất đơn) — frontend-only, persisted to localStorage.
+            // Dùng để ẩn các đơn không cần hiển thị tạm thời ở mọi view; bấm
+            // "Đơn đã cất" để xem riêng và phục hồi.
+            archivedSOIds: new Set(JSON.parse(localStorage.getItem('hlv_dp_archived_sos') || '[]')),
+            showArchivedOnly: false,
+
             // Returned/Stopped group paging
             returnedColPageSize: 15,
 
@@ -847,7 +853,58 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     get paginatedOrders() {
-        return this.state.saleOrders;
+        return this._applyArchiveFilter(this.state.saleOrders);
+    }
+
+    /**
+     * Apply the archive (cất đơn) view filter:
+     *  - showArchivedOnly = true  → only archived SOs
+     *  - showArchivedOnly = false → all SOs except archived
+     */
+    _applyArchiveFilter(orders) {
+        const archived = this.state.archivedSOIds;
+        if (this.state.showArchivedOnly) {
+            return orders.filter(so => archived.has(so.id));
+        }
+        if (!archived.size) return orders;
+        return orders.filter(so => !archived.has(so.id));
+    }
+
+    isSOArchived(soId) {
+        return this.state.archivedSOIds.has(soId);
+    }
+
+    toggleArchiveSO(soId) {
+        if (!soId) return;
+        if (this.state.archivedSOIds.has(soId)) {
+            this.state.archivedSOIds.delete(soId);
+        } else {
+            this.state.archivedSOIds.add(soId);
+        }
+        this._persistArchivedSOs();
+    }
+
+    toggleShowArchivedOnly() {
+        this.state.showArchivedOnly = !this.state.showArchivedOnly;
+    }
+
+    clearAllArchived() {
+        if (!this.state.archivedSOIds.size) return;
+        if (!window.confirm('Phục hồi tất cả ' + this.state.archivedSOIds.size + ' đơn đã cất?')) return;
+        this.state.archivedSOIds.clear();
+        this._persistArchivedSOs();
+        this.state.showArchivedOnly = false;
+    }
+
+    _persistArchivedSOs() {
+        try {
+            localStorage.setItem(
+                'hlv_dp_archived_sos',
+                JSON.stringify(Array.from(this.state.archivedSOIds))
+            );
+        } catch (e) {
+            console.warn('[DP Archive] persist failed:', e);
+        }
     }
 
     // --- Actions ---
@@ -921,7 +978,7 @@ export class DeliveryPlannerDashboard extends Component {
 
     /** Sorted client-side based on tableSortField/tableSortDir */
     get tableSortedOrders() {
-        const orders = this.state.saleOrders || [];
+        const orders = this._applyArchiveFilter(this.state.saleOrders || []);
         const field = this.state.tableSortField;
         const dir = this.state.tableSortDir === 'asc' ? 1 : -1;
         const getVal = (so) => {
@@ -1073,7 +1130,15 @@ export class DeliveryPlannerDashboard extends Component {
         const field = fieldMap[dim];
 
         const needTransfer = this.state.filterNeedTransfer;
+        const archived = this.state.archivedSOIds;
+        const showArchivedOnly = this.state.showArchivedOnly;
         const base = this.state.saleOrders.filter(so => {
+            // Archive (cất đơn) — apply BEFORE column grouping so card counts reflect view.
+            if (showArchivedOnly) {
+                if (!archived.has(so.id)) return false;
+            } else if (archived.has(so.id)) {
+                return false;
+            }
             if (so.is_returned_or_stopped) return false;   // hiện riêng trong cột "Trả hàng"
             let val = so[field];
             if (dim === 'delivery_status' && val === 'unshipped') val = 'pending';
@@ -1182,7 +1247,7 @@ export class DeliveryPlannerDashboard extends Component {
 
     // --- Returned / Stopped orders group ---
     get returnedOrders() {
-        return this.state.saleOrders.filter(so => so.is_returned_or_stopped);
+        return this._applyArchiveFilter(this.state.saleOrders.filter(so => so.is_returned_or_stopped));
     }
 
     get returnedOrdersPaged() {
@@ -1632,6 +1697,36 @@ export class DeliveryPlannerDashboard extends Component {
 
     isSectionCollapsed(sectionKey) {
         return this.state.collapsedSections.has(sectionKey);
+    }
+
+    /**
+     * Lazy-load flows for a given SO when the user expands the
+     * "Luồng Xử Lý Kho" section. The default dashboard payload no longer
+     * contains flows (heavy recursive picking-graph walk → ~40-60% CPU per
+     * page). We fetch them on demand and cache on so.flows.
+     */
+    async toggleFlowSection(so) {
+        // Mirror the global section toggle (used by other so cards too)
+        this.toggleSection('flows');
+        const expanded = !this.isSectionCollapsed('flows');
+        if (!expanded) return;
+        if (!so || !so.has_flow) return;
+        if (Array.isArray(so.flows) && so.flows.length > 0) return; // already loaded
+        if (so.flows_loading) return;
+        so.flows_loading = true;
+        try {
+            const res = await this.orm.call(
+                "sale.order", "get_delivery_so_flow", [], { so_id: so.id }
+            );
+            const flows = (res && res.flows) || [];
+            so.flows = flows;
+            this._applyFlowColors(so);
+        } catch (e) {
+            console.error("get_delivery_so_flow failed:", e);
+            so.flows = [];
+        } finally {
+            so.flows_loading = false;
+        }
     }
 
     // --- Badge Classes (delegate to utils) ---

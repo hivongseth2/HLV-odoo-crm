@@ -83,6 +83,8 @@ class DeliveryPlannerServiceFlow(models.AbstractModel):
                     'scheduled_date': p.scheduled_date.strftime('%Y-%m-%d') if p.scheduled_date else False,
                     'backorder_of': p.backorder_id.name if p.backorder_id else False,
                     'return_of': p.return_id.name if hasattr(p, 'return_id') and p.return_id else False,
+                    'printed': bool(getattr(p, 'x_printed', False)),
+                    'bien_ban_printed': bool(getattr(p, 'x_bien_ban_printed', False)),
                     'videos': att_by_picking.get(p.id, []),
                 }
                 for p in path_pickings

@@ -138,6 +138,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         att_by_picking, so_packages_dict, so_status_dict,
         transfer_suggestions=None,
         page_kit_tmpl_ids=None, page_kit_bom_map=None, page_blocking_by_so=None,
+        with_flows=False,
     ):
         """
         Serialize một Sale Order thành dict để trả về cho OWL Dashboard.
@@ -408,6 +409,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'return_of_id': p.return_id.id if p.return_id else False,
                 'return_of': p.return_id.name if p.return_id else False,
                 'printed': bool(p.x_printed),
+                'bien_ban_printed': bool(getattr(p, 'x_bien_ban_printed', False)),
                 'shipper_scanned': bool(getattr(p, 'shipper_scanned', False)),
                 'shipper_received': bool(getattr(p, 'shipper_received', False)),
                 'shipper_user': (
@@ -419,7 +421,11 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
                 'videos': att_by_picking.get(p.id, []),
             })
 
-        flows = self._build_flow_nodes(so, att_by_picking)
+        # Lazy: flows are heavy (recursive picking graph + per-SO ORM walks).
+        # The kanban/card/table view only needs them when the user expands the
+        # "Luồng Xử Lý Kho" section, so we build on-demand via
+        # get_so_flow(so_id) RPC. Pass with_flows=True to inline them.
+        flows = self._build_flow_nodes(so, att_by_picking) if with_flows else []
         picking_warehouse_ids = list(set([
             p.picking_type_id.warehouse_id.id
             for p in so.picking_ids
@@ -445,6 +451,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             'picking_warehouse_ids': picking_warehouse_ids,
             'pos': po_data,
             'flows': flows,
+            'has_flow': bool(so.picking_ids),
             'pickings': flat_pickings,
             'lines': so_lines_data,
             'packages': package_groups,

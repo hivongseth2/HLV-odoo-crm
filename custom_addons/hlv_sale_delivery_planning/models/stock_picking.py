@@ -6,7 +6,7 @@ _logger = logging.getLogger(__name__)
 # Fields whose changes should trigger a real-time dashboard refresh
 _PICK_NOTIFY_FIELDS = {
     'state', 'x_printed', 'carrier_id', 'carrier_tracking_ref',
-    'scheduled_date', 'date_done',
+    'scheduled_date', 'date_done', 'x_bien_ban_printed',
 }
 
 
@@ -18,6 +18,13 @@ class StockPicking(models.Model):
         default=False,
         copy=False,
         help='Đánh dấu tự động khi phiếu được in từ màn hình điều phối giao hàng',
+    )
+
+    x_bien_ban_printed = fields.Boolean(
+        string='Đã in biên bản',
+        default=False,
+        copy=False,
+        help='Đánh dấu tự động khi in một report có chữ "biên bản" (vd: biên bản giao nhận, biên bản bàn giao...) cho phiếu này.',
     )
 
     def write(self, vals):

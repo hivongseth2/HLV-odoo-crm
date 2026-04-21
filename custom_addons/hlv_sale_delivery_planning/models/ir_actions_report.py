@@ -33,6 +33,22 @@ class IrActionsReport(models.Model):
                     and 'packages' not in report_technical
                 )
             )
+
+            # === "Biên bản" detection ===
+            # Bất kỳ report nào có chữ "biên bản" trong tên (vi/en)
+            # và in cho stock.picking → đánh dấu x_bien_ban_printed.
+            is_bien_ban_report = 'biên bản' in translated_name or 'bien ban' in translated_name
+            if is_bien_ban_report and report.model == 'stock.picking':
+                pickings_bb = self.env['stock.picking'].browse(res_ids).exists()
+                pickings_bb = pickings_bb.filtered(lambda p: not p.x_bien_ban_printed)
+                if pickings_bb:
+                    pickings_bb.write({'x_bien_ban_printed': True})
+                    _logger.info(
+                        'Auto-marked %d pickings as bien_ban_printed (report: %s): %s',
+                        len(pickings_bb), translated_name or report_technical,
+                        ', '.join(pickings_bb.mapped('name')),
+                    )
+
             if not is_picking_report:
                 return result
 
