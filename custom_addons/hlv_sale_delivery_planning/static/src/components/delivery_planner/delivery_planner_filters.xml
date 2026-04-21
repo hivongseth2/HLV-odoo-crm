@@ -414,6 +414,21 @@
                     </label>
                 </div>
             </div>
+
+            <!-- Lưu / Xoá bộ lọc mặc định cá nhân -->
+            <div class="col-md-3 d-flex align-items-end gap-2">
+                <button class="btn btn-sm btn-outline-primary mb-2"
+                        t-on-click="saveCurrentFiltersAsDefault"
+                        title="Lưu bộ lọc hiện tại làm mặc định mỗi khi mở dashboard">
+                    <i class="fa fa-bookmark me-1"></i> Lưu mặc định
+                </button>
+                <button t-if="state.hasDefaultFilters"
+                        class="btn btn-sm btn-outline-secondary mb-2"
+                        t-on-click="clearDefaultFilters"
+                        title="Xoá bộ lọc mặc định đã lưu">
+                    <i class="fa fa-bookmark-o me-1"></i> Xoá mặc định
+                </button>
+            </div>
         </div>
     </t>
 

@@ -96,11 +96,11 @@ export class DeliveryPlannerDashboard extends Component {
             // Selection for printing
             selectedSOIds: new Set(),        // Set of selected sale order IDs for printing
 
-            // Archive (cất đơn) — frontend-only, persisted to localStorage.
-            // Dùng để ẩn các đơn không cần hiển thị tạm thời ở mọi view; bấm
-            // "Đơn đã cất" để xem riêng và phục hồi.
-            archivedSOIds: new Set(JSON.parse(localStorage.getItem('hlv_dp_archived_sos') || '[]')),
+            // Archive (cất đơn) — backend persisted (per user) via
+            // hlv.delivery.planner.user.pref. Loaded in onWillStart.
+            archivedSOIds: new Set(),
             showArchivedOnly: false,
+            hasDefaultFilters: false,
 
             // Returned/Stopped group paging
             returnedColPageSize: 15,
@@ -151,6 +151,10 @@ export class DeliveryPlannerDashboard extends Component {
                 this.busService.subscribe("delivery_planner_data_changed", this._onBusDataChanged);
                 this.busService.subscribe("new_portal_message", this._onBusNewPortalMessage);
             }
+
+            // Load per-user preferences (archived SOs + default filters) BEFORE
+            // the first fetch so the dashboard opens with the user's saved state.
+            await this._loadUserPreferences();
 
             // Try to restore from IndexedDB cache for instant display
             const cached = await this._loadFromCache();
@@ -874,36 +878,170 @@ export class DeliveryPlannerDashboard extends Component {
         return this.state.archivedSOIds.has(soId);
     }
 
-    toggleArchiveSO(soId) {
+    async toggleArchiveSO(soId) {
         if (!soId) return;
-        if (this.state.archivedSOIds.has(soId)) {
+        // Optimistic UI update — flip immediately so user sees feedback,
+        // then sync to backend. Revert on failure.
+        const wasArchived = this.state.archivedSOIds.has(soId);
+        if (wasArchived) {
             this.state.archivedSOIds.delete(soId);
         } else {
             this.state.archivedSOIds.add(soId);
         }
-        this._persistArchivedSOs();
+        try {
+            const res = await this.orm.call(
+                'hlv.delivery.planner.user.pref', 'toggle_archive', [], { so_id: soId }
+            );
+            // Sync with server-truth (handles concurrent edits in another tab)
+            this.state.archivedSOIds = new Set(res.archived_so_ids || []);
+        } catch (e) {
+            console.error('toggle_archive failed:', e);
+            // Revert
+            if (wasArchived) {
+                this.state.archivedSOIds.add(soId);
+            } else {
+                this.state.archivedSOIds.delete(soId);
+            }
+            this.notification.add('Không thể cập nhật trạng thái cất đơn', {
+                type: 'danger', title: 'Lỗi',
+            });
+        }
     }
 
     toggleShowArchivedOnly() {
         this.state.showArchivedOnly = !this.state.showArchivedOnly;
     }
 
-    clearAllArchived() {
+    async clearAllArchived() {
         if (!this.state.archivedSOIds.size) return;
         if (!window.confirm('Phục hồi tất cả ' + this.state.archivedSOIds.size + ' đơn đã cất?')) return;
-        this.state.archivedSOIds.clear();
-        this._persistArchivedSOs();
-        this.state.showArchivedOnly = false;
+        try {
+            await this.orm.call(
+                'hlv.delivery.planner.user.pref', 'set_archived', [], { so_ids: [] }
+            );
+            this.state.archivedSOIds = new Set();
+            this.state.showArchivedOnly = false;
+        } catch (e) {
+            console.error('clearAllArchived failed:', e);
+            this.notification.add('Không thể phục hồi đơn đã cất', {
+                type: 'danger', title: 'Lỗi',
+            });
+        }
     }
 
-    _persistArchivedSOs() {
+    /**
+     * Load per-user preferences from backend on startup. Applies the saved
+     * default filter set IN PLACE on this.state, so the first fetchData()
+     * call uses them. Falls back silently if the model is missing (module
+     * not yet upgraded) — UI still works, just without backend persistence.
+     */
+    async _loadUserPreferences() {
         try {
-            localStorage.setItem(
-                'hlv_dp_archived_sos',
-                JSON.stringify(Array.from(this.state.archivedSOIds))
+            const res = await this.orm.call(
+                'hlv.delivery.planner.user.pref', 'get_user_preferences', [], {}
             );
+            this.state.archivedSOIds = new Set(res.archived_so_ids || []);
+            const defaults = res.default_filters || {};
+            if (defaults && Object.keys(defaults).length) {
+                this._applyFilterSnapshot(defaults);
+                this.state.hasDefaultFilters = true;
+            }
         } catch (e) {
-            console.warn('[DP Archive] persist failed:', e);
+            console.warn('[DP Pref] could not load user preferences:', e);
+        }
+    }
+
+    /**
+     * Snapshot of all filter form state — keys MUST match _applyFilterSnapshot
+     * (and _buildFetchKwargs where applicable). Stored as JSON in user pref.
+     */
+    _buildFilterSnapshot() {
+        const s = this.state;
+        return {
+            searchQuery: s.searchQuery,
+            filterWarehouseId: s.filterWarehouseId,
+            filterDeliveryStatus: s.filterDeliveryStatus,
+            filterStockStatus: s.filterStockStatus,
+            filterPackingStatus: s.filterPackingStatus,
+            filterDateFrom: s.filterDateFrom,
+            filterDateTo: s.filterDateTo,
+            filterDoneDateFrom: s.filterDoneDateFrom,
+            filterDoneDateTo: s.filterDoneDateTo,
+            filterPODateFrom: s.filterPODateFrom,
+            filterPODateTo: s.filterPODateTo,
+            filterPOStatus: s.filterPOStatus,
+            filterSalerCode: s.filterSalerCode,
+            filterHtgh: s.filterHtgh,
+            filterDeliveryType: s.filterDeliveryType,
+            filterTagIds: Array.from(s.filterTagIds || []),
+            showCompleted: s.showCompleted,
+            filterNeedTransfer: s.filterNeedTransfer,
+            filterNewOrders: s.filterNewOrders,
+            viewMode: s.viewMode,
+            kanbanGroupBy: s.kanbanGroupBy,
+        };
+    }
+
+    _applyFilterSnapshot(snap) {
+        if (!snap || typeof snap !== 'object') return;
+        const s = this.state;
+        const assign = (key, fallback) => {
+            if (snap[key] !== undefined && snap[key] !== null) s[key] = snap[key];
+            else if (fallback !== undefined) s[key] = fallback;
+        };
+        assign('searchQuery');
+        assign('filterWarehouseId');
+        assign('filterDeliveryStatus');
+        assign('filterStockStatus');
+        assign('filterPackingStatus');
+        assign('filterDateFrom');
+        assign('filterDateTo');
+        assign('filterDoneDateFrom');
+        assign('filterDoneDateTo');
+        assign('filterPODateFrom');
+        assign('filterPODateTo');
+        assign('filterPOStatus');
+        assign('filterSalerCode');
+        assign('filterHtgh');
+        assign('filterDeliveryType');
+        if (Array.isArray(snap.filterTagIds)) s.filterTagIds = snap.filterTagIds.slice();
+        assign('showCompleted');
+        assign('filterNeedTransfer');
+        assign('filterNewOrders');
+        assign('viewMode');
+        assign('kanbanGroupBy');
+    }
+
+    /** Save the current filter form as the user's default. */
+    async saveCurrentFiltersAsDefault() {
+        try {
+            const snap = this._buildFilterSnapshot();
+            await this.orm.call(
+                'hlv.delivery.planner.user.pref', 'save_default_filters',
+                [], { filters: snap }
+            );
+            this.state.hasDefaultFilters = true;
+            this.notification.add('Đã lưu bộ lọc mặc định cho bạn', {
+                type: 'success', title: 'Lưu thành công',
+            });
+        } catch (e) {
+            console.error('saveCurrentFiltersAsDefault failed:', e);
+            this.notification.add('Không thể lưu bộ lọc mặc định', {
+                type: 'danger', title: 'Lỗi',
+            });
+        }
+    }
+
+    async clearDefaultFilters() {
+        if (!window.confirm('Xoá bộ lọc mặc định đã lưu?')) return;
+        try {
+            await this.orm.call(
+                'hlv.delivery.planner.user.pref', 'clear_default_filters', [], {}
+            );
+            this.state.hasDefaultFilters = false;
+            this.notification.add('Đã xoá bộ lọc mặc định', { type: 'info' });
+        } catch (e) {
+            console.error('clearDefaultFilters failed:', e);
         }
     }
 
