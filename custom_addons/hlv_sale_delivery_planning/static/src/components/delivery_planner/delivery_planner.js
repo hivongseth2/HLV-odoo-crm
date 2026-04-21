@@ -414,20 +414,15 @@ export class DeliveryPlannerDashboard extends Component {
             const visibleIds = new Set(this.state.saleOrders.map(o => o.id));
             const subsetIds = ids.filter(i => visibleIds.has(i));
             const offscreenIds = ids.filter(i => !visibleIds.has(i));
-            if (!fallback && subsetIds.length && subsetIds.length === ids.length) {
-                // Fast path: all changes target visible orders → partial subset refresh
-                await this._refreshSubset(subsetIds);
-            } else if (!fallback && subsetIds.length === 0 && ids.length > 0) {
-                // All changes are for orders NOT on screen — notify user with actions
-                await this._notifyOffscreenChanges(offscreenIds);
-                return; // skip the generic "Cập nhật xong" toast
+            if (!fallback && ids.length > 0 && subsetIds.length + offscreenIds.length === ids.length) {
+                // Auto-load: refresh visible + auto-pull offscreen vào danh sách (không hỏi user)
+                await this._refreshSubset(ids);
+                if (offscreenIds.length) {
+                    await this._notifyOffscreenAutoLoaded(offscreenIds);
+                }
             } else {
                 // Fallback: full silent refresh (filters may have caused new matches)
                 await this._silentRefresh();
-                if (offscreenIds.length && subsetIds.length) {
-                    // Mixed: some visible refreshed, some off-screen → inform briefly
-                    this._maybeNotifyMixedOffscreen(offscreenIds);
-                }
             }
             this.notification.add(
                 "Dữ liệu đã được cập nhật tự động",
@@ -437,10 +432,10 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     /**
-     * Off-screen change handler — fetch SO names then show actionable toast.
-     * User can choose to load those SOs into the current list, or do a full refresh.
+     * Off-screen auto-loaded notification — đã tự động merge vào state, chỉ thông báo cho user biết.
+     * Toast nhẹ (info, không sticky) kèm tên SO để user thấy rõ đơn nào vừa xuất hiện.
      */
-    async _notifyOffscreenChanges(soIds) {
+    async _notifyOffscreenAutoLoaded(soIds) {
         if (!soIds || !soIds.length) return;
         let names = [];
         try {
@@ -451,60 +446,10 @@ export class DeliveryPlannerDashboard extends Component {
         }
         const previewNames = names.slice(0, 3).join(", ");
         const moreCount = names.length > 3 ? ` (+${names.length - 3})` : "";
-        const label = names.length
-            ? `${previewNames}${moreCount}`
-            : `${soIds.length} đơn`;
+        const label = names.length ? `${previewNames}${moreCount}` : `${soIds.length} đơn`;
         this.notification.add(
-            `Có thay đổi ở ${label} — không nằm trong danh sách đang xem.`,
-            {
-                type: "warning",
-                title: "Cập nhật ngoài danh sách",
-                sticky: true,
-                buttons: [
-                    {
-                        name: "Tải vào danh sách",
-                        primary: true,
-                        onClick: async () => {
-                            try {
-                                await this._refreshSubset(soIds);
-                                this.notification.add(
-                                    `Đã thêm ${soIds.length} đơn vào danh sách`,
-                                    { type: "success" }
-                                );
-                            } catch (e) {
-                                console.error("load offscreen failed:", e);
-                                await this._silentRefresh();
-                            }
-                        },
-                    },
-                    {
-                        name: "Tải lại tất cả",
-                        onClick: () => this._silentRefresh(),
-                    },
-                ],
-            }
-        );
-    }
-
-    /**
-     * Lighter notification for the mixed case (some visible already refreshed,
-     * some off-screen also changed). Non-sticky info toast with one action.
-     */
-    _maybeNotifyMixedOffscreen(offscreenIds) {
-        if (!offscreenIds || !offscreenIds.length) return;
-        this.notification.add(
-            `Còn ${offscreenIds.length} đơn thay đổi ngoài danh sách đang xem.`,
-            {
-                type: "info",
-                title: "Có thay đổi khác",
-                buttons: [
-                    {
-                        name: "Tải vào danh sách",
-                        primary: true,
-                        onClick: () => this._refreshSubset(offscreenIds),
-                    },
-                ],
-            }
+            `Đã tự động tải ${label} vào danh sách.`,
+            { type: "info", title: "Cập nhật ngoài danh sách" }
         );
     }
 
