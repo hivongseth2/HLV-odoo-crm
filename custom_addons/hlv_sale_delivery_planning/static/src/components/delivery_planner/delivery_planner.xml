@@ -72,8 +72,8 @@
                         </div>
                     </div>
 
-                    <!-- Loading Spinner -->
-                    <div t-if="state.isLoading" class="text-center p-5 mt-5">
+                    <!-- Loading Spinner (only on FIRST load with no data on screen) -->
+                    <div t-if="state.isLoading and !state.saleOrders.length" class="text-center p-5 mt-5">
                         <div class="spinner-border text-primary" role="status"
                              style="width: 3rem; height: 3rem;">
                             <span class="visually-hidden">Loading...</span>
@@ -82,6 +82,12 @@
                     </div>
 
                     <div t-else="">
+                        <!-- Thin top progress bar shown while refreshing
+                             (filter change / reload) so users see existing
+                             data without a full-screen overlay flash. -->
+                        <div t-if="state.isLoading or state.isRefreshing"
+                             class="hlv-refresh-progress"
+                             title="Đang làm mới dữ liệu..."/>
                         <!-- KPI Tồn Kho -->
                         <t t-call="hlv_sale_delivery_planning.KPIStockCards"/>
 

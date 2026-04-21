@@ -67,7 +67,7 @@ class StockPicking(models.Model):
             delivery_pickings = self.env['stock.picking'].search([
                 ('group_id', '=', sale_order.procurement_group_id.id),
                 ('state', 'in', ['confirmed', 'waiting', 'partially_available']),
-                ('picking_type_code', '=', 'outgoing'),
+                ('picking_type_code', 'in', ['outgoing', 'internal']),
             ])
 
             if delivery_pickings:
@@ -78,7 +78,11 @@ class StockPicking(models.Model):
                     sale_order.name,
                     ', '.join(delivery_pickings.mapped('name')),
                 )
-                delivery_pickings.action_assign()
+                # Gọi trực tiếp _action_assign trên moves để bỏ qua kiểm tra reservation_date
+                moves_to_assign = delivery_pickings.move_ids.filtered(
+                    lambda m: m.state in ['confirmed', 'waiting', 'partially_available']
+                )
+                moves_to_assign._action_assign()
                 reserved_any = True
 
         return reserved_any
@@ -92,7 +96,7 @@ class StockPicking(models.Model):
         warehouse = picking.picking_type_id.warehouse_id
 
         domain = [
-            ('picking_type_code', '=', 'outgoing'),
+            ('picking_type_code', 'in', ['outgoing', 'internal']),
             ('state', 'in', ['confirmed', 'waiting', 'partially_available']),
         ]
         if warehouse:
@@ -120,6 +124,9 @@ class StockPicking(models.Model):
                 warehouse.name if warehouse else 'all',
                 ', '.join(pickings_to_reserve.mapped('name')),
             )
-            # Gọi action_assign theo thứ tự để ưu tiên đơn cũ nhất
+            # Gọi trực tiếp _action_assign trên moves để bỏ qua kiểm tra reservation_date
             for p in pickings_to_reserve:
-                p.action_assign()
+                moves = p.move_ids.filtered(
+                    lambda m: m.state in ['confirmed', 'waiting', 'partially_available']
+                )
+                moves._action_assign()

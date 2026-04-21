@@ -22,6 +22,7 @@ export class DeliveryPlannerDashboard extends Component {
             warehouses: [],
             tags: [],
             isLoading: true,
+            isRefreshing: false,  // Refresh in progress with data already on screen (thin top bar instead of full overlay)
 
             // Search & Filters
             searchQuery: "",
@@ -92,6 +93,7 @@ export class DeliveryPlannerDashboard extends Component {
             tableSortField: 'commitment_date', // 'name'|'misa_order_date'|'partner'|'warehouse'|'delivery_status'|'stock_status'|'packing_status'|'commitment_date'|'amount_total'
             tableSortDir: 'desc',              // 'asc' | 'desc'
             expandedTableRows: new Set(),      // Set of soId currently expanded
+            tableColSearch: {},                // { [field]: 'substr' } — per-column quick search
 
             // Selection for printing
             selectedSOIds: new Set(),        // Set of selected sale order IDs for printing
@@ -841,9 +843,16 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     async fetchData() {
-        // Don't show full loading spinner if we already have cached data on screen
-        if (!this._isCacheRestored) {
+        // Don't show full loading spinner if we already have data on screen
+        // (cache restored OR previous fetch already populated saleOrders).
+        // This prevents the full-screen overlay from flashing on every
+        // filter change — instead the user keeps seeing the current rows
+        // while a thin "refreshing" indicator runs at the top.
+        const hasDataOnScreen = this._isCacheRestored || (this.state.saleOrders && this.state.saleOrders.length > 0);
+        if (!hasDataOnScreen) {
             this.state.isLoading = true;
+        } else {
+            this.state.isRefreshing = true;
         }
         const isKanban = this.state.viewMode === 'kanban';
 
@@ -872,6 +881,7 @@ export class DeliveryPlannerDashboard extends Component {
             console.error("Lỗi khi tải dữ liệu bảng điều phối:", error);
         } finally {
             this.state.isLoading = false;
+            this.state.isRefreshing = false;
         }
     }
 
@@ -1138,9 +1148,66 @@ export class DeliveryPlannerDashboard extends Component {
         return this.state.expandedTableRows.has(soId);
     }
 
-    /** Sorted client-side based on tableSortField/tableSortDir */
+    /** Per-column quick search setter for Bảng view */
+    setTableColSearch(field, value) {
+        const search = { ...(this.state.tableColSearch || {}) };
+        if (value && String(value).trim()) {
+            search[field] = String(value);
+        } else {
+            delete search[field];
+        }
+        this.state.tableColSearch = search;
+    }
+
+    clearTableColSearch() {
+        this.state.tableColSearch = {};
+    }
+
+    get hasTableColSearch() {
+        return Object.keys(this.state.tableColSearch || {}).length > 0;
+    }
+
+    _normalizeSearchText(s) {
+        if (s === null || s === undefined) return '';
+        try {
+            return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        } catch (e) {
+            return String(s).toLowerCase();
+        }
+    }
+
+    /** Get the searchable string for a SO + column field (matches the column shown in Bảng) */
+    _getTableColText(so, field) {
+        switch (field) {
+            case 'name':                return so.name || '';
+            case 'misa_order_date':     return so.misa_order_date || '';
+            case 'partner':             return (so.partner_id && so.partner_id[1]) || '';
+            case 'warehouse':           return (so.warehouse_id && so.warehouse_id[1]) || '';
+            case 'delivery_status':     return this.translateDeliveryStatus(so.real_delivery_status || so.delivery_status) || '';
+            case 'stock_status':        return this.translateStockStatus(so.stock_status) || '';
+            case 'packing_status':      return this.translatePackingStatus(so.packing_status) || '';
+            case 'commitment_date':     return so.commitment_date ? so.commitment_date.substring(0, 10) : '';
+            case 'amount_total':        return String(so.amount_total || '');
+            case 'htgh':                return so.x_studio_htgh || '';
+            case 'delivery_type':       return so.x_studio_delivery_type || '';
+            case 'saler_code':          return so.x_studio_misa_saler_code || '';
+            case 'shipper':             return (this.getShippersForSO(so) || []).join(' ');
+            case 'address':             return so.misa_shipping_address || '';
+            case 'tags':                return (so.tag_ids || []).map(t => t[1]).join(' ');
+            default:                    return '';
+        }
+    }
+
+    /** Sorted client-side based on tableSortField/tableSortDir, with optional per-column search */
     get tableSortedOrders() {
-        const orders = this._applyArchiveFilter(this.state.saleOrders || []);
+        let orders = this._applyArchiveFilter(this.state.saleOrders || []);
+        // Apply per-column quick search (case+diacritic insensitive substring)
+        const search = this.state.tableColSearch || {};
+        const activeFields = Object.keys(search).filter(f => search[f] && String(search[f]).trim());
+        if (activeFields.length) {
+            const needles = activeFields.map(f => ({ f, q: this._normalizeSearchText(search[f]) }));
+            orders = orders.filter(so => needles.every(({ f, q }) => this._normalizeSearchText(this._getTableColText(so, f)).includes(q)));
+        }
         const field = this.state.tableSortField;
         const dir = this.state.tableSortDir === 'asc' ? 1 : -1;
         const getVal = (so) => {

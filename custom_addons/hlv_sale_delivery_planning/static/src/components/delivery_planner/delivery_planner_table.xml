@@ -17,6 +17,104 @@
     <t t-name="hlv_sale_delivery_planning.TableBoard">
         <div class="hlv-table-view mt-2">
 
+            <!-- ── Bảng action toolbar (parity with Kanban) ───────────── -->
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-3 p-2 bg-white rounded shadow-sm border"
+                 t-on-click="() => { this.closeSelectedPickingPrintMenu(); }">
+                <span class="text-muted small fw-bold text-uppercase ms-1">
+                    <i class="fa fa-table text-primary me-1"/> Bảng
+                </span>
+                <span class="text-muted small ms-2">
+                    Đã chọn: <span class="fw-bold text-dark"><t t-esc="this.selectedCount"/></span>
+                </span>
+
+                <div class="ms-auto d-flex align-items-center gap-2 flex-wrap">
+                    <!-- In phiếu lấy hàng -->
+                    <button class="btn btn-sm"
+                            t-att-class="this.selectedCount > 0 ? 'btn-success' : 'btn-outline-secondary'"
+                            t-att-disabled="this.selectedCount === 0 || state.isLoading || state.isPrintingPickingSlips"
+                            t-on-click="(ev) => this.toggleSelectedPickingPrintMenu(ev)"
+                            title="In phiếu lấy hàng cho các đơn đã chọn">
+                        <i t-attf-class="fa me-1 #{state.isPrintingPickingSlips ? 'fa-spinner fa-spin' : 'fa-print'}" title="In phiếu"></i>
+                        <t t-if="state.isPrintingPickingSlips">Đang in...</t>
+                        <t t-else="">In phiếu lấy hàng</t>
+                        <span t-if="this.selectedCount > 0" class="badge bg-white text-success ms-1">
+                            <t t-esc="this.selectedCount"/>
+                        </span>
+                    </button>
+
+                    <!-- Tạo phiếu luân chuyển -->
+                    <button class="btn btn-sm"
+                            t-att-class="this.selectedCount > 0 ? 'btn-warning' : 'btn-outline-secondary'"
+                            t-att-disabled="this.selectedCount === 0 || state.isLoading"
+                            t-on-click="openTransferModal"
+                            title="Tạo phiếu luân chuyển từ các đơn đã chọn">
+                        <i class="fa fa-exchange me-1" title="Luân chuyển"></i>
+                        Tạo phiếu luân chuyển
+                        <span t-if="this.selectedCount > 0" class="badge bg-white text-warning ms-1">
+                            <t t-esc="this.selectedCount"/>
+                        </span>
+                    </button>
+
+                    <!-- Chuyển vị trí -->
+                    <button class="btn btn-sm"
+                            t-att-class="this.selectedCount > 0 ? 'btn-info' : 'btn-outline-secondary'"
+                            t-att-disabled="this.selectedCount === 0 || state.isLoading"
+                            t-on-click="openRelocationModal"
+                            title="Chuyển vị trí sản phẩm gần khu đóng gói">
+                        <i class="fa fa-arrows me-1" title="Chuyển vị trí"></i>
+                        Chuyển vị trí
+                        <span t-if="this.selectedCount > 0" class="badge bg-white text-info ms-1">
+                            <t t-esc="this.selectedCount"/>
+                        </span>
+                    </button>
+
+                    <!-- Đơn đã cất / Quay lại -->
+                    <button class="btn btn-sm"
+                            t-att-class="state.showArchivedOnly ? 'btn-warning' : 'btn-outline-warning'"
+                            t-on-click="toggleShowArchivedOnly"
+                            t-att-title="state.showArchivedOnly ? 'Bấm để quay lại danh sách thường' : 'Xem các đơn đã cất'">
+                        <i t-attf-class="fa me-1 #{state.showArchivedOnly ? 'fa-list' : 'fa-archive'}"></i>
+                        <t t-if="state.showArchivedOnly">Quay lại</t>
+                        <t t-else="">Đơn đã cất</t>
+                        <span t-if="state.archivedSOIds.size" class="badge bg-light text-dark ms-1">
+                            <t t-esc="state.archivedSOIds.size"/>
+                        </span>
+                    </button>
+
+                    <!-- Xóa filter cột -->
+                    <button t-if="this.hasTableColSearch"
+                            class="btn btn-sm btn-outline-danger"
+                            t-on-click="clearTableColSearch"
+                            title="Xóa toàn bộ tìm kiếm trên cột">
+                        <i class="fa fa-eraser me-1"/> Xóa lọc cột
+                    </button>
+                </div>
+            </div>
+
+            <!-- Print report dropdown (positioned fixed by selectedPrintMenuPos) -->
+            <div t-if="state.selectedPrintMenuPos"
+                 class="bg-white border rounded shadow-lg"
+                 t-att-style="'position:fixed; z-index:2000; min-width:260px; max-height:340px; overflow-y:auto; top:' + state.selectedPrintMenuPos.top + 'px; right:' + state.selectedPrintMenuPos.right + 'px;'"
+                 t-on-click.stop="">
+                <div class="px-3 py-2 bg-light border-bottom small fw-bold text-muted">
+                    <i class="fa fa-print me-1"></i> Chọn mẫu in
+                </div>
+                <t t-foreach="state.pickingReports" t-as="report" t-key="report.id">
+                    <div class="px-3 py-2 small cursor-pointer"
+                         style="border-bottom:1px solid #f3f3f3;"
+                         t-on-click="(ev) => this.printSelectedPickingSlips(report.id, report.report_type)">
+                        <i class="fa fa-file-pdf-o me-2 text-danger"
+                           t-if="report.report_type === 'qweb-pdf'"></i>
+                        <i class="fa fa-file-excel-o me-2 text-success"
+                           t-elif="report.report_type === 'xlsx'"></i>
+                        <i class="fa fa-file-o me-2 text-muted" t-else=""></i>
+                        <t t-esc="report.name"/>
+                    </div>
+                </t>
+                <div t-if="!state.pickingReports.length"
+                     class="px-3 py-2 text-muted small">Không có mẫu in</div>
+            </div>
+
             <!-- Empty State -->
             <div t-if="!state.saleOrders.length"
                  class="alert alert-info shadow-sm d-flex align-items-center p-4"
@@ -131,6 +229,108 @@
                             <th>Địa chỉ giao</th>
                             <th>Tags</th>
                             <th class="text-center" style="width: 110px;">Hành động</th>
+                        </tr>
+
+                        <!-- ── Per-column quick search row ─────────────── -->
+                        <tr class="hlv-col-search-row">
+                            <th class="hlv-col-frozen hlv-col-search">
+                                <input type="search" placeholder="Mã đơn..."
+                                       t-att-value="state.tableColSearch.name || ''"
+                                       t-on-input="(ev) => this.setTableColSearch('name', ev.target.value)"
+                                       t-on-click.stop=""/>
+                            </th>
+                            <th class="hlv-col-search">
+                                <input type="search" placeholder="Ngày..."
+                                       t-att-value="state.tableColSearch.misa_order_date || ''"
+                                       t-on-input="(ev) => this.setTableColSearch('misa_order_date', ev.target.value)"
+                                       t-on-click.stop=""/>
+                            </th>
+                            <th class="hlv-col-search">
+                                <input type="search" placeholder="Khách hàng..."
+                                       t-att-value="state.tableColSearch.partner || ''"
+                                       t-on-input="(ev) => this.setTableColSearch('partner', ev.target.value)"
+                                       t-on-click.stop=""/>
+                            </th>
+                            <th class="hlv-col-search">
+                                <input type="search" placeholder="Kho..."
+                                       t-att-value="state.tableColSearch.warehouse || ''"
+                                       t-on-input="(ev) => this.setTableColSearch('warehouse', ev.target.value)"
+                                       t-on-click.stop=""/>
+                            </th>
+                            <th class="hlv-col-search">
+                                <input type="search" placeholder="Tiến độ..."
+                                       t-att-value="state.tableColSearch.delivery_status || ''"
+                                       t-on-input="(ev) => this.setTableColSearch('delivery_status', ev.target.value)"
+                                       t-on-click.stop=""/>
+                            </th>
+                            <th class="hlv-col-search">
+                                <input type="search" placeholder="Tồn kho..."
+                                       t-att-value="state.tableColSearch.stock_status || ''"
+                                       t-on-input="(ev) => this.setTableColSearch('stock_status', ev.target.value)"
+                                       t-on-click.stop=""/>
+                            </th>
+                            <th class="hlv-col-search">
+                                <input type="search" placeholder="Đóng gói..."
+                                       t-att-value="state.tableColSearch.packing_status || ''"
+                                       t-on-input="(ev) => this.setTableColSearch('packing_status', ev.target.value)"
+                                       t-on-click.stop=""/>
+                            </th>
+                            <th class="hlv-col-search">
+                                <input type="search" placeholder="Hẹn giao..."
+                                       t-att-value="state.tableColSearch.commitment_date || ''"
+                                       t-on-input="(ev) => this.setTableColSearch('commitment_date', ev.target.value)"
+                                       t-on-click.stop=""/>
+                            </th>
+                            <th class="hlv-col-search">
+                                <input type="search" placeholder="Tổng tiền..."
+                                       t-att-value="state.tableColSearch.amount_total || ''"
+                                       t-on-input="(ev) => this.setTableColSearch('amount_total', ev.target.value)"
+                                       t-on-click.stop=""/>
+                            </th>
+                            <th class="hlv-col-search">
+                                <input type="search" placeholder="HTGH..."
+                                       t-att-value="state.tableColSearch.htgh || ''"
+                                       t-on-input="(ev) => this.setTableColSearch('htgh', ev.target.value)"
+                                       t-on-click.stop=""/>
+                            </th>
+                            <th class="hlv-col-search">
+                                <input type="search" placeholder="HT giao..."
+                                       t-att-value="state.tableColSearch.delivery_type || ''"
+                                       t-on-input="(ev) => this.setTableColSearch('delivery_type', ev.target.value)"
+                                       t-on-click.stop=""/>
+                            </th>
+                            <th class="hlv-col-search">
+                                <input type="search" placeholder="Mã NV..."
+                                       t-att-value="state.tableColSearch.saler_code || ''"
+                                       t-on-input="(ev) => this.setTableColSearch('saler_code', ev.target.value)"
+                                       t-on-click.stop=""/>
+                            </th>
+                            <th class="hlv-col-search">
+                                <input type="search" placeholder="Shipper..."
+                                       t-att-value="state.tableColSearch.shipper || ''"
+                                       t-on-input="(ev) => this.setTableColSearch('shipper', ev.target.value)"
+                                       t-on-click.stop=""/>
+                            </th>
+                            <th class="hlv-col-search">
+                                <input type="search" placeholder="Địa chỉ..."
+                                       t-att-value="state.tableColSearch.address || ''"
+                                       t-on-input="(ev) => this.setTableColSearch('address', ev.target.value)"
+                                       t-on-click.stop=""/>
+                            </th>
+                            <th class="hlv-col-search">
+                                <input type="search" placeholder="Tags..."
+                                       t-att-value="state.tableColSearch.tags || ''"
+                                       t-on-input="(ev) => this.setTableColSearch('tags', ev.target.value)"
+                                       t-on-click.stop=""/>
+                            </th>
+                            <th class="hlv-col-search text-center">
+                                <button t-if="this.hasTableColSearch"
+                                        class="btn btn-sm btn-link text-danger p-0"
+                                        title="Xóa lọc"
+                                        t-on-click.stop="clearTableColSearch">
+                                    <i class="fa fa-times"/>
+                                </button>
+                            </th>
                         </tr>
                     </thead>
 
