@@ -554,7 +554,7 @@ document.addEventListener("DOMContentLoaded", function () {
         toast.error(data.error);
       } else {
         toast.success(data.message || 'Đã bỏ đóng gói thành công!');
-        // Reset toàn bộ DOM về 0 (không reload để không cắt video)
+        // Reset toàn bộ DOM về 0 (để phản hồi tức thì cho người dùng)
         document.querySelectorAll('#product_list .product-item').forEach(el => {
           const input = el.querySelector('.done-input');
           if (input) {
@@ -568,8 +568,13 @@ document.addEventListener("DOMContentLoaded", function () {
         });
         // Xóa tất cả thẻ kiện trong side panel
         document.querySelector('.panel-packages-list')?.remove();
-        // Ẩn nút "Làm lại" vì qty_done đã reset về 0 ###
+        // Ẩn nút "Làm lại" vì qty_done đã reset về 0
         toggleUnpackBtn();
+
+        // Reload lại trang sau khi reset DOM để đồng bộ lại toàn bộ dữ liệu từ server
+        setTimeout(() => {
+          window.location.reload();
+        }, 800);
       }
     } catch (e) {
       toast.error('Lỗi khi bỏ đóng gói: ' + e.message);
