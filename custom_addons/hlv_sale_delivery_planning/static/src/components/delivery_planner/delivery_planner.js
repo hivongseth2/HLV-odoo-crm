@@ -413,20 +413,99 @@ export class DeliveryPlannerDashboard extends Component {
             // (they aren't displayed; the next full refresh / cache load will pick them up).
             const visibleIds = new Set(this.state.saleOrders.map(o => o.id));
             const subsetIds = ids.filter(i => visibleIds.has(i));
+            const offscreenIds = ids.filter(i => !visibleIds.has(i));
             if (!fallback && subsetIds.length && subsetIds.length === ids.length) {
                 // Fast path: all changes target visible orders → partial subset refresh
                 await this._refreshSubset(subsetIds);
             } else if (!fallback && subsetIds.length === 0 && ids.length > 0) {
-                // All changes are for orders not on screen — nothing to do visually
+                // All changes are for orders NOT on screen — notify user with actions
+                await this._notifyOffscreenChanges(offscreenIds);
+                return; // skip the generic "Cập nhật xong" toast
             } else {
                 // Fallback: full silent refresh (filters may have caused new matches)
                 await this._silentRefresh();
+                if (offscreenIds.length && subsetIds.length) {
+                    // Mixed: some visible refreshed, some off-screen → inform briefly
+                    this._maybeNotifyMixedOffscreen(offscreenIds);
+                }
             }
             this.notification.add(
                 "Dữ liệu đã được cập nhật tự động",
                 { type: "info", title: "Cập nhật xong" }
             );
         }, 800);
+    }
+
+    /**
+     * Off-screen change handler — fetch SO names then show actionable toast.
+     * User can choose to load those SOs into the current list, or do a full refresh.
+     */
+    async _notifyOffscreenChanges(soIds) {
+        if (!soIds || !soIds.length) return;
+        let names = [];
+        try {
+            const recs = await this.orm.read("sale.order", soIds, ["name"]);
+            names = (recs || []).map(r => r.name).filter(Boolean);
+        } catch (e) {
+            console.warn("read SO names failed:", e);
+        }
+        const previewNames = names.slice(0, 3).join(", ");
+        const moreCount = names.length > 3 ? ` (+${names.length - 3})` : "";
+        const label = names.length
+            ? `${previewNames}${moreCount}`
+            : `${soIds.length} đơn`;
+        this.notification.add(
+            `Có thay đổi ở ${label} — không nằm trong danh sách đang xem.`,
+            {
+                type: "warning",
+                title: "Cập nhật ngoài danh sách",
+                sticky: true,
+                buttons: [
+                    {
+                        name: "Tải vào danh sách",
+                        primary: true,
+                        onClick: async () => {
+                            try {
+                                await this._refreshSubset(soIds);
+                                this.notification.add(
+                                    `Đã thêm ${soIds.length} đơn vào danh sách`,
+                                    { type: "success" }
+                                );
+                            } catch (e) {
+                                console.error("load offscreen failed:", e);
+                                await this._silentRefresh();
+                            }
+                        },
+                    },
+                    {
+                        name: "Tải lại tất cả",
+                        onClick: () => this._silentRefresh(),
+                    },
+                ],
+            }
+        );
+    }
+
+    /**
+     * Lighter notification for the mixed case (some visible already refreshed,
+     * some off-screen also changed). Non-sticky info toast with one action.
+     */
+    _maybeNotifyMixedOffscreen(offscreenIds) {
+        if (!offscreenIds || !offscreenIds.length) return;
+        this.notification.add(
+            `Còn ${offscreenIds.length} đơn thay đổi ngoài danh sách đang xem.`,
+            {
+                type: "info",
+                title: "Có thay đổi khác",
+                buttons: [
+                    {
+                        name: "Tải vào danh sách",
+                        primary: true,
+                        onClick: () => this._refreshSubset(offscreenIds),
+                    },
+                ],
+            }
+        );
     }
 
     /**
