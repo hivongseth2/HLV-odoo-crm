@@ -3,7 +3,7 @@
 
     <!-- ================================================================
          TABLE (BẢNG) VIEW – Excel-like table for the Delivery Planner
-         ----------------------------------------------------------------
+         ================================================================
          Features:
            • Sticky header (thead)
            • Sortable columns (click header)
