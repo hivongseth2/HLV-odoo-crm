@@ -12,6 +12,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         show_completed=False, filter_need_transfer=False,
         filter_new_orders=False,
         filter_done_date_from='', filter_done_date_to='',
+        filter_print_status='all', filter_shipper_received='all',
     ):
         """
         Phase 3 optimization: thay thế ORM loop per-SO bằng ~11 batch SQL queries cố định.
@@ -434,6 +435,23 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             else:
                 packing_ok = filter_packing_status == 'all' or packing_status == filter_packing_status
 
+            # --- New: Tình trạng phiếu in (per-column filter on Bảng) ---
+            if filter_print_status == 'has_unprinted':
+                print_ok = bool(has_new_unprinted)
+            elif filter_print_status == 'all_printed':
+                # SO has at least one assigned PICK and none of them is unprinted
+                print_ok = bool(has_assigned_pick) and not bool(has_new_unprinted)
+            else:
+                print_ok = True
+
+            # --- New: Nhận giao (shipper_received) ---
+            if filter_shipper_received == 'received':
+                shipper_ok = bool(has_shipper)
+            elif filter_shipper_received == 'not_received':
+                shipper_ok = not bool(has_shipper)
+            else:
+                shipper_ok = True
+
             if filter_new_orders:
                 order_date_raw = so_rec.get('x_studio_misa_order_date')
                 if not order_date_raw:
@@ -445,7 +463,8 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
 
             if delivery_ok and packing_ok and is_new \
                     and (filter_stock_status == 'all' or stock_status == filter_stock_status) \
-                    and (not filter_need_transfer or has_transfer_option):
+                    and (not filter_need_transfer or has_transfer_option) \
+                    and print_ok and shipper_ok:
                 matched_sale_ids.append(so_id)
 
         # KPI stats

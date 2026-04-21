@@ -107,6 +107,16 @@
                     <t t-if="state.isLoadingMore">Đang tải...</t>
                     <t t-else="">Tải thêm 100</t>
                 </button>
+                <!-- Tải hết: nút nhỏ, có confirm khi >300 đơn để tránh bấm nhầm -->
+                <button t-if="this.hasMoreKanbanData"
+                        class="btn btn-sm btn-link text-secondary p-1"
+                        style="font-size:0.78rem;"
+                        t-on-click="loadAllKanbanBatch"
+                        t-att-disabled="state.isLoading or state.isLoadingMore"
+                        t-att-title="'Tải hết ' + this.remainingKanbanCount + ' đơn còn lại (có xác nhận khi >300)'">
+                    <i t-attf-class="fa me-1 #{state.isLoadingMore ? 'fa-spinner fa-spin' : 'fa-cloud-download'}"/>
+                    Tải hết (<t t-esc="this.remainingKanbanCount"/>)
+                </button>
                 <button class="btn btn-sm"
                         t-att-class="state.showArchivedOnly ? 'btn-warning' : 'btn-outline-warning'"
                         t-on-click="toggleShowArchivedOnly"

@@ -43,6 +43,8 @@ export class DeliveryPlannerDashboard extends Component {
             filterTagIds: [],
             filterNeedTransfer: false,
             filterNewOrders: false,
+            filterPrintStatus: 'all',         // 'all' | 'has_unprinted' | 'all_printed'
+            filterShipperReceived: 'all',     // 'all' | 'received' | 'not_received'
             showCompleted: false,
 
             // HTGH presets (lưu localStorage)
@@ -93,7 +95,6 @@ export class DeliveryPlannerDashboard extends Component {
             tableSortField: 'commitment_date', // 'name'|'misa_order_date'|'partner'|'warehouse'|'delivery_status'|'stock_status'|'packing_status'|'commitment_date'|'amount_total'
             tableSortDir: 'desc',              // 'asc' | 'desc'
             expandedTableRows: new Set(),      // Set of soId currently expanded
-            tableColSearch: {},                // { [field]: 'substr' } — per-column quick search
 
             // Selection for printing
             selectedSOIds: new Set(),        // Set of selected sale order IDs for printing
@@ -685,6 +686,8 @@ export class DeliveryPlannerDashboard extends Component {
             comp: this.state.showCompleted,
             nt: this.state.filterNeedTransfer,
             no: this.state.filterNewOrders,
+            pr: this.state.filterPrintStatus,
+            sr: this.state.filterShipperReceived,
             vm: this.state.viewMode,
         });
     }
@@ -802,6 +805,8 @@ export class DeliveryPlannerDashboard extends Component {
             show_completed: this.state.showCompleted,
             filter_need_transfer: this.state.filterNeedTransfer,
             filter_new_orders: this.state.filterNewOrders,
+            filter_print_status: this.state.filterPrintStatus,
+            filter_shipper_received: this.state.filterShipperReceived,
         };
     }
 
@@ -1134,6 +1139,26 @@ export class DeliveryPlannerDashboard extends Component {
         }
     }
 
+    /**
+     * Reset toàn bộ filter cột Bảng (các filter backend được bind từ
+     * dropdown trên column header) về giá trị mặc định và refetch backend.
+     */
+    async resetTableColumnFilters() {
+        this.state.filterWarehouseId = 'all';
+        this.state.filterDeliveryStatus = 'all';
+        this.state.filterStockStatus = 'all';
+        this.state.filterPackingStatus = 'all';
+        this.state.filterDeliveryType = 'all';
+        this.state.filterTagIds = [];
+        this.state.filterPrintStatus = 'all';
+        this.state.filterShipperReceived = 'all';
+        this.state.filterHtgh = '';
+        this.state.filterSalerCode = '';
+        this.state.searchQuery = '';
+        this.state.filterDateFrom = '';
+        await this.onFilterChange();
+    }
+
     toggleTableRowExpand(soId) {
         if (this.state.expandedTableRows.has(soId)) {
             this.state.expandedTableRows.delete(soId);
@@ -1148,66 +1173,124 @@ export class DeliveryPlannerDashboard extends Component {
         return this.state.expandedTableRows.has(soId);
     }
 
-    /** Per-column quick search setter for Bảng view */
-    setTableColSearch(field, value) {
-        const search = { ...(this.state.tableColSearch || {}) };
-        if (value && String(value).trim()) {
-            search[field] = String(value);
-        } else {
-            delete search[field];
+    /**
+     * Debounced backend filter trigger for Bảng column text inputs.
+     * Updates `state[stateKey]` immediately (so input value is responsive)
+     * but waits 400ms of idle before calling onFilterChange() → backend.
+     */
+    setTableFilterDebounced(stateKey, value) {
+        this.state[stateKey] = value;
+        if (this._tableFilterDebounceTimer) {
+            clearTimeout(this._tableFilterDebounceTimer);
         }
-        this.state.tableColSearch = search;
+        this._tableFilterDebounceTimer = setTimeout(() => {
+            this._tableFilterDebounceTimer = null;
+            this.onFilterChange();
+        }, 400);
     }
 
-    clearTableColSearch() {
-        this.state.tableColSearch = {};
+    /** True if any filter beyond the defaults is active (used to show "clear" button on Bảng) */
+    get hasAnyTableFilter() {
+        const s = this.state;
+        return (
+            (s.searchQuery && s.searchQuery.trim()) ||
+            (s.filterWarehouseId && s.filterWarehouseId !== 'all') ||
+            (s.filterDeliveryStatus && s.filterDeliveryStatus !== 'all' && s.filterDeliveryStatus !== 'pending_partial') ||
+            (s.filterStockStatus && s.filterStockStatus !== 'all') ||
+            (s.filterPackingStatus && s.filterPackingStatus !== 'all') ||
+            (s.filterDeliveryType && s.filterDeliveryType !== 'all') ||
+            (s.filterHtgh && s.filterHtgh.trim()) ||
+            (s.filterSalerCode && s.filterSalerCode.trim()) ||
+            (s.filterTagIds && s.filterTagIds.length > 0)
+        );
     }
 
-    get hasTableColSearch() {
-        return Object.keys(this.state.tableColSearch || {}).length > 0;
+    /** Reset all Bảng-relevant filters to default and refetch */
+    async clearAllTableFilters() {
+        this.state.searchQuery = '';
+        this.state.filterWarehouseId = 'all';
+        this.state.filterDeliveryStatus = 'pending_partial';
+        this.state.filterStockStatus = 'all';
+        this.state.filterPackingStatus = 'all';
+        this.state.filterDeliveryType = 'all';
+        this.state.filterHtgh = '';
+        this.state.filterSalerCode = '';
+        this.state.filterTagIds = [];
+        await this.onFilterChange();
     }
 
-    _normalizeSearchText(s) {
-        if (s === null || s === undefined) return '';
-        try {
-            return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        } catch (e) {
-            return String(s).toLowerCase();
-        }
+    /**
+     * Compute the print status of a SO based on its outbound (PICK) pickings:
+     *   - 'none'    : không có phiếu PICK
+     *   - 'unprinted'  : có phiếu nhưng chưa in cái nào
+     *   - 'partial'    : in một phần
+     *   - 'printed'    : tất cả PICK đã in
+     */
+    getSOPrintStatus(so) {
+        const pickings = (so.pickings || []).filter(p => (p.sequence_code || '').toUpperCase().startsWith('PICK'));
+        if (!pickings.length) return 'none';
+        const printed = pickings.filter(p => p.printed).length;
+        if (printed === 0) return 'unprinted';
+        if (printed === pickings.length) return 'printed';
+        return 'partial';
     }
 
-    /** Get the searchable string for a SO + column field (matches the column shown in Bảng) */
-    _getTableColText(so, field) {
-        switch (field) {
-            case 'name':                return so.name || '';
-            case 'misa_order_date':     return so.misa_order_date || '';
-            case 'partner':             return (so.partner_id && so.partner_id[1]) || '';
-            case 'warehouse':           return (so.warehouse_id && so.warehouse_id[1]) || '';
-            case 'delivery_status':     return this.translateDeliveryStatus(so.real_delivery_status || so.delivery_status) || '';
-            case 'stock_status':        return this.translateStockStatus(so.stock_status) || '';
-            case 'packing_status':      return this.translatePackingStatus(so.packing_status) || '';
-            case 'commitment_date':     return so.commitment_date ? so.commitment_date.substring(0, 10) : '';
-            case 'amount_total':        return String(so.amount_total || '');
-            case 'htgh':                return so.x_studio_htgh || '';
-            case 'delivery_type':       return so.x_studio_delivery_type || '';
-            case 'saler_code':          return so.x_studio_misa_saler_code || '';
-            case 'shipper':             return (this.getShippersForSO(so) || []).join(' ');
-            case 'address':             return so.misa_shipping_address || '';
-            case 'tags':                return (so.tag_ids || []).map(t => t[1]).join(' ');
-            default:                    return '';
-        }
+    getPrintStatusLabel(status) {
+        return ({
+            none: '—',
+            unprinted: 'Chưa in',
+            partial: 'In một phần',
+            printed: 'Đã in',
+        })[status] || '—';
     }
 
-    /** Sorted client-side based on tableSortField/tableSortDir, with optional per-column search */
+    getPrintStatusBadgeClass(status) {
+        return ({
+            none: 'bg-light text-muted',
+            unprinted: 'bg-danger text-white',
+            partial: 'bg-warning text-dark',
+            printed: 'bg-success text-white',
+        })[status] || 'bg-light text-muted';
+    }
+
+    /**
+     * Compute shipper-receive status of a SO based on its outbound pickings:
+     *   - 'none'      : không có phiếu PICK
+     *   - 'unreceived': chưa shipper nào nhận
+     *   - 'partial'   : nhận một phần
+     *   - 'received'  : tất cả đã nhận
+     */
+    getSOReceiveStatus(so) {
+        const pickings = (so.pickings || []).filter(p => (p.sequence_code || '').toUpperCase().startsWith('PICK'));
+        if (!pickings.length) return 'none';
+        const received = pickings.filter(p => p.shipper_received).length;
+        if (received === 0) return 'unreceived';
+        if (received === pickings.length) return 'received';
+        return 'partial';
+    }
+
+    getReceiveStatusLabel(status) {
+        return ({
+            none: '—',
+            unreceived: 'Chưa nhận',
+            partial: 'Nhận một phần',
+            received: 'Đã nhận',
+        })[status] || '—';
+    }
+
+    getReceiveStatusBadgeClass(status) {
+        return ({
+            none: 'bg-light text-muted',
+            unreceived: 'bg-secondary text-white',
+            partial: 'bg-warning text-dark',
+            received: 'bg-info text-dark',
+        })[status] || 'bg-light text-muted';
+    }
+
+    /** Sorted client-side based on tableSortField/tableSortDir.
+     *  Filtering is now done on the BACKEND via state.filter* fields. */
     get tableSortedOrders() {
-        let orders = this._applyArchiveFilter(this.state.saleOrders || []);
-        // Apply per-column quick search (case+diacritic insensitive substring)
-        const search = this.state.tableColSearch || {};
-        const activeFields = Object.keys(search).filter(f => search[f] && String(search[f]).trim());
-        if (activeFields.length) {
-            const needles = activeFields.map(f => ({ f, q: this._normalizeSearchText(search[f]) }));
-            orders = orders.filter(so => needles.every(({ f, q }) => this._normalizeSearchText(this._getTableColText(so, f)).includes(q)));
-        }
+        const orders = this._applyArchiveFilter(this.state.saleOrders || []);
         const field = this.state.tableSortField;
         const dir = this.state.tableSortDir === 'asc' ? 1 : -1;
         const getVal = (so) => {
@@ -1422,6 +1505,69 @@ export class DeliveryPlannerDashboard extends Component {
 
     get hasMoreKanbanData() {
         return this.state.viewMode === 'kanban' && this.state.saleOrders.length < this.state.totalCount;
+    }
+
+    get remainingKanbanCount() {
+        return Math.max(0, (this.state.totalCount || 0) - (this.state.saleOrders || []).length);
+    }
+
+    /**
+     * Tải hết các đơn còn lại trong Kanban với MỘT request duy nhất
+     * (limit = số còn lại). Có confirm để tránh bấm nhầm.
+     */
+    async loadAllKanbanBatch() {
+        if (this.state.isLoading || this.state.isLoadingMore || !this.hasMoreKanbanData) return;
+        const remaining = this.remainingKanbanCount;
+        if (!remaining) return;
+        // Soft-confirm khi số đơn còn lại lớn để tránh tải nhầm gây lag
+        if (remaining > 300) {
+            const ok = window.confirm(`Tải tất cả ${remaining} đơn còn lại? Có thể chậm nếu số lượng lớn.`);
+            if (!ok) return;
+        }
+        const currentLen = this.state.saleOrders.length;
+        this.state.isLoadingMore = true;
+        try {
+            const result = await this.orm.call(
+                "sale.order",
+                "get_delivery_dashboard_data",
+                [],
+                {
+                    ...this._buildFetchKwargs(),
+                    limit: remaining,
+                    offset: currentLen,
+                    include_stats: false,
+                }
+            );
+            const fresh = (result && result.orders) || [];
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const existingIds = new Set(this.state.saleOrders.map(o => o.id));
+            for (const so of fresh) {
+                if (existingIds.has(so.id)) continue;
+                so.flows = so.flows || [];
+                so.pickings = so.pickings || [];
+                so.lines = so.lines || [];
+                so.pos = so.pos || [];
+                this._applyFlowColors(so);
+                const orderDate = so.misa_order_date || (so.date_order ? so.date_order.substring(0, 10) : '');
+                so.is_new_order = orderDate === todayStr;
+                this.state.saleOrders.push(so);
+            }
+            if (typeof result.total_count === 'number') {
+                this.state.totalCount = result.total_count;
+            }
+            this.state.kanbanBatchSize = this.state.saleOrders.length;
+            await this._saveToCache({
+                dashboard_stats: this.state.dashboardStats,
+                orders: this.state.saleOrders,
+                total_count: this.state.totalCount,
+                warehouses: this.state.warehouses,
+                tags: this.state.tags,
+            });
+        } catch (e) {
+            console.error("loadAllKanbanBatch failed:", e);
+        } finally {
+            this.state.isLoadingMore = false;
+        }
     }
 
     async loadMoreKanbanBatch() {
