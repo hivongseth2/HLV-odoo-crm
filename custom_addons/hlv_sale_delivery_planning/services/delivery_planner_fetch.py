@@ -49,9 +49,14 @@ class DeliveryPlannerServiceFetch(models.AbstractModel):
                 })
 
         # --- Video trong chatter: 1 query message + 1 query attachment ---
+        # Optimization: only fetch messages that actually contain a video URL or have attachments.
+        # Cuts payload from ALL chatter messages (with full HTML body) down to relevant ones.
         msg_recs = self.env['mail.message'].sudo().search_read([
             ('model', '=', 'stock.picking'),
             ('res_id', 'in', all_picking_ids),
+            '|',
+                ('attachment_ids', '!=', False),
+                ('body', 'ilike', '.webm'),
         ], ['id', 'res_id', 'attachment_ids', 'body'])
 
         # Batch load attachments của tất cả messages 1 lần
@@ -81,27 +86,18 @@ class DeliveryPlannerServiceFetch(models.AbstractModel):
                         )
 
             body = msg.get('body') or ''
-            if body:
-                if 'Video đóng gói' in body or 'video' in body.lower():
-                    urls = re.findall(r'href=[\'"]([\'"]+)[\'"]', body)
-                    for i, url in enumerate(urls):
-                        clean_url = url.replace('&amp;', '&')
-                        if not any(u['url'] == clean_url for u in att_by_picking.get(pick_id, [])):
-                            att_by_picking.setdefault(pick_id, []).append({
-                                'id': f"log_{msg['id']}_{i}",
-                                'name': 'Video Đóng Gói',
-                                'url': clean_url,
-                            })
-                else:
-                    urls = re.findall(r'(\/web\/content\/[0-9]+.*?\.webm)', body)
-                    for i, url in enumerate(urls):
-                        clean_url = url.replace('&amp;', '&')
-                        if not any(u['url'] == clean_url for u in att_by_picking.get(pick_id, [])):
-                            att_by_picking.setdefault(pick_id, []).append({
-                                'id': f"log_{msg['id']}_{i}",
-                                'name': 'Video Log',
-                                'url': clean_url,
-                            })
+            # Only the second regex actually works — the first regex `r'href=[\'"]([\'"]+)[\'"]'`
+            # required the URL to consist solely of quote chars (always 0 matches), so removed.
+            if body and '.webm' in body:
+                urls = re.findall(r'(\/web\/content\/[0-9]+.*?\.webm)', body)
+                for i, url in enumerate(urls):
+                    clean_url = url.replace('&amp;', '&')
+                    if not any(u['url'] == clean_url for u in att_by_picking.get(pick_id, [])):
+                        att_by_picking.setdefault(pick_id, []).append({
+                            'id': f"log_{msg['id']}_{i}",
+                            'name': 'Video Log',
+                            'url': clean_url,
+                        })
 
         return att_by_picking
 

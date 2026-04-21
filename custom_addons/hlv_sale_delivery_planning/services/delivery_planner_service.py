@@ -100,6 +100,25 @@ class DeliveryPlannerService(models.AbstractModel):
         # dùng 1 location + 1 quant + 1 moves query cho toàn trang.
         transfer_map = self._batch_transfer_suggestions(page_sales, product_availabilities)
 
+        # Optimization: pre-warm prefetch cache for picking graph used by _build_flow_nodes.
+        # Without this, each per-SO call to _build_flow_nodes triggers many SQL round-trips
+        # (move_dest_ids, move_orig_ids, picking_id, picking_type_id...) for that SO alone.
+        # By traversing the WHOLE page's picking graph once, ORM prefetch fills the cache so
+        # the 12× recursive calls become pure Python.
+        page_pickings = page_sales.mapped('picking_ids')
+        if page_pickings:
+            page_pickings.read([
+                'state', 'date_done', 'scheduled_date', 'create_date',
+                'picking_type_id', 'backorder_id', 'return_id',
+                'move_ids',
+            ])
+            all_moves = page_pickings.mapped('move_ids')
+            if all_moves:
+                all_moves.read(['picking_id', 'move_dest_ids', 'move_orig_ids'])
+                # Touch dest/orig to prefetch their picking_id in one go
+                (all_moves.move_dest_ids | all_moves.move_orig_ids).read(['picking_id'])
+            page_pickings.picking_type_id.read(['name', 'code'])
+
         result = [
             self._format_dashboard_order(
                 so, po_by_origin, product_availabilities,

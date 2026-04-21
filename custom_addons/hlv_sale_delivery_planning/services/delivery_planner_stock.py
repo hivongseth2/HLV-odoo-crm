@@ -213,45 +213,9 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
 
         all_warehouse_ids = set(k[1] for k in product_availabilities.keys())
 
-        # [I] Packed quantities — 1 query
-        all_pick_ids = [p['id'] for p in pick_recs]
-        pending_line_ids = {
-            r['id'] for r in line_recs
-            if r.get('product_id')
-            and product_map.get(r['product_id'][0], {}).get('type') != 'service'
-            and ((r.get('product_uom_qty') or 0) - (r.get('qty_delivered') or 0)) > 0
-        }
-        packed_qty_by_so = {}
-        if all_pick_ids and pending_line_ids:
-            mls = self.env['stock.move.line'].sudo().search_read([
-                ('picking_id', 'in', all_pick_ids),
-                ('picking_id.picking_type_code', '=', 'outgoing'),
-                ('picking_id.state', 'not in', ['done', 'cancel']),
-                ('result_package_id', '!=', False),
-                ('state', 'not in', ['cancel', 'draft']),
-                ('move_id.sale_line_id', 'in', list(pending_line_ids)),
-            ], ['picking_id', 'move_id', 'quantity'])
-            mv_id_to_line = {mv['id']: mv['sale_line_id'][0] for mv in move_recs if mv.get('sale_line_id')}
-            pk_id_to_so = {p['id']: p['sale_id'][0] for p in pick_recs if p.get('sale_id')}
-            pend_qty_by_line = {
-                r['id']: (r.get('product_uom_qty') or 0) - (r.get('qty_delivered') or 0)
-                for r in line_recs if r['id'] in pending_line_ids
-            }
-            packed_by_line = {}
-            for ml in mls:
-                mv_val = ml['move_id']
-                mv_id = mv_val[0] if isinstance(mv_val, (list, tuple)) else mv_val
-                lid = mv_id_to_line.get(mv_id)
-                if not lid or lid not in pending_line_ids:
-                    continue
-                pk_val = ml['picking_id']
-                so_key = pk_id_to_so.get(pk_val[0] if isinstance(pk_val, (list, tuple)) else pk_val)
-                if so_key:
-                    packed_by_line[lid] = packed_by_line.get(lid, 0.0) + float(ml['quantity'] or 0)
-            for lid, packed in packed_by_line.items():
-                so_key = line_to_so.get(lid)
-                if so_key:
-                    packed_qty_by_so[so_key] = packed_qty_by_so.get(so_key, 0.0) + min(packed, pend_qty_by_line.get(lid, 0.0))
+        # [I] Packed quantities — DEAD CODE removed (was computed but never returned/used)
+        # Previously ran a heavy stock.move.line search with dotted-path joins
+        # over all matched SOs (~200-600ms). Result `packed_qty_by_so` was unused.
 
         # ====== PHASE 2: Status computation — pure Python dict lookups, ZERO extra queries ======
         matched_sale_ids = []
