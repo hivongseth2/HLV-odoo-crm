@@ -412,10 +412,10 @@
                                type="file"
                                class="d-none"
                                multiple="multiple"
-                               accept=".doc,.docx,.xls,.xlsx,.csv,image/*,video/*"
+                               accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,application/pdf,image/*,video/*"
                                t-on-change="(ev) => this.onDrawerFilesSelected(ev)"/>
                         <button class="btn btn-sm btn-outline-secondary px-2"
-                                title="Đính kèm Word, Excel, ảnh, video"
+                                title="Đính kèm PDF, Word, Excel, ảnh, video"
                                 t-on-click="() => this.triggerDrawerFilePicker()">
                             <i class="fa fa-paperclip"></i>
                         </button>

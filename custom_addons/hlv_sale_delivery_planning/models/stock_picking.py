@@ -24,7 +24,7 @@ class StockPicking(models.Model):
         string='Đã in biên bản',
         default=False,
         copy=False,
-        help='Đánh dấu tự động khi in một report có chữ "biên bản" (vd: biên bản giao nhận, biên bản bàn giao...) cho phiếu này.',
+        help='Đánh dấu tự động khi in các report như: biên bản giao nhận/bàn giao, BBGN, BBBG, PXBH, phiếu xuất, phiếu bàn giao... cho phiếu này.',
     )
 
     def write(self, vals):

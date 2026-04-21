@@ -5,7 +5,7 @@
          Thanh bộ lọc đang kích hoạt (Active Filters Bar)
          ================================================================ -->
     <t t-name="hlv_sale_delivery_planning.ActiveFiltersBar">
-        <div t-if="this.hasActiveFilters"
+        <div t-if="this.hasActiveFilters or state.hasDefaultFilters"
              class="mb-4 d-flex flex-wrap align-items-center gap-2 px-3 py-2 bg-light rounded border border-info border-opacity-25 w-100 shadow-sm mx-auto"
              style="max-width: 98%;">
             <span class="text-secondary small fw-bold me-2">
@@ -111,8 +111,20 @@
                    t-on-click="() => { state.filterNewOrders = false; this.onFilterChange(); }"></i>
             </span>
 
-            <button class="btn btn-sm btn-outline-danger border-0 fw-bold ms-auto" t-on-click="resetFilters">
+            <button class="btn btn-sm btn-outline-danger border-0 fw-bold ms-auto" t-on-click="resetFilters" t-if="this.hasActiveFilters">
                 <i class="fa fa-trash-o me-1" title="Xóa tất cả"></i> Xóa tất cả bộ lọc
+            </button>
+            <button class="btn btn-sm btn-outline-primary fw-bold"
+                    t-att-class="this.hasActiveFilters ? '' : 'ms-auto'"
+                    t-on-click="saveCurrentFiltersAsDefault"
+                    title="Lưu bộ lọc hiện tại làm mặc định mỗi khi mở dashboard">
+                <i class="fa fa-bookmark me-1"></i> Lưu mặc định
+            </button>
+            <button t-if="state.hasDefaultFilters"
+                    class="btn btn-sm btn-outline-secondary fw-bold"
+                    t-on-click="clearDefaultFilters"
+                    title="Xoá bộ lọc mặc định đã lưu">
+                <i class="fa fa-bookmark-o me-1"></i> Xoá mặc định
             </button>
         </div>
     </t>
@@ -413,21 +425,6 @@
                         <i class="fa fa-check-circle text-success me-1"></i>Hiện đơn đã giao
                     </label>
                 </div>
-            </div>
-
-            <!-- Lưu / Xoá bộ lọc mặc định cá nhân -->
-            <div class="col-md-3 d-flex align-items-end gap-2">
-                <button class="btn btn-sm btn-outline-primary mb-2"
-                        t-on-click="saveCurrentFiltersAsDefault"
-                        title="Lưu bộ lọc hiện tại làm mặc định mỗi khi mở dashboard">
-                    <i class="fa fa-bookmark me-1"></i> Lưu mặc định
-                </button>
-                <button t-if="state.hasDefaultFilters"
-                        class="btn btn-sm btn-outline-secondary mb-2"
-                        t-on-click="clearDefaultFilters"
-                        title="Xoá bộ lọc mặc định đã lưu">
-                    <i class="fa fa-bookmark-o me-1"></i> Xoá mặc định
-                </button>
             </div>
         </div>
     </t>

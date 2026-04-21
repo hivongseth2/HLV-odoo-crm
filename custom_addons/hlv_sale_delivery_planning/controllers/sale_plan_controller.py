@@ -825,7 +825,7 @@ async function onPublicFilesSelected(ev){
   var input=ev.target;
   var files=Array.from(input.files||[]);
   if(!files.length) return;
-  var docExt=['.doc','.docx','.xls','.xlsx','.csv'];
+  var docExt=['.pdf','.doc','.docx','.xls','.xlsx','.csv'];
   var imageExt=['.jpg','.jpeg','.png','.gif','.webp','.bmp','.heic','.heif','.jfif','.svg'];
   var videoExt=['.mp4','.mov','.avi','.mkv','.webm','.m4v','.3gp'];
   var maxSize=20*1024*1024;
@@ -837,8 +837,9 @@ async function onPublicFilesSelected(ev){
     var mt=(file.type||'').toLowerCase();
     var isImg=mt.indexOf('image/')===0||imageExt.indexOf(ext)>=0;
     var isVideo=mt.indexOf('video/')===0||videoExt.indexOf(ext)>=0;
+    var isPdf=mt==='application/pdf'||ext==='.pdf';
     var isDoc=docExt.indexOf(ext)>=0;
-    if(!isImg&&!isVideo&&!isDoc){
+    if(!isImg&&!isVideo&&!isDoc&&!isPdf){
       alert('File '+file.name+' không thuộc định dạng hỗ trợ.');
       continue;
     }
@@ -1026,8 +1027,8 @@ function openDrawer(id){
     +'<button id="dr-msg-refresh" class="btn btn-sm btn-outline-secondary ms-auto px-2 py-0" title="Tải lại tin nhắn"><i class="fa fa-refresh"></i></button></div>'
     +'<div style="padding:10px 14px 6px;border-bottom:1px solid #e2e8f0;background:#f7fafc">'
     +'<div class="d-flex gap-2 mb-2"><input id="dr-msg-author" class="form-control form-control-sm" placeholder="Tên của bạn..." style="max-width:160px" value="'+esc(localStorage.getItem('hlv_msg_author')||'')+'"/>'
-    +'<input id="dr-msg-files-input" type="file" multiple accept=".doc,.docx,.xls,.xlsx,.csv,image/*,video/*" style="display:none"/>'
-    +'<button id="dr-msg-attach" class="btn btn-sm btn-outline-secondary px-2" title="Đính kèm Word, Excel, ảnh, video"><i class="fa fa-paperclip"></i></button>'
+    +'<input id="dr-msg-files-input" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,application/pdf,image/*,video/*" style="display:none"/>'
+    +'<button id="dr-msg-attach" class="btn btn-sm btn-outline-secondary px-2" title="Đính kèm PDF, Word, Excel, ảnh, video"><i class="fa fa-paperclip"></i></button>'
     +'<input id="dr-msg-input" class="form-control form-control-sm" placeholder="Nhập tin nhắn..."/>'
     +'<button id="dr-msg-send" class="btn btn-sm btn-primary px-3"><i class="fa fa-paper-plane"></i></button></div>'
     +'<div id="dr-msg-files" class="msg-compose-files"></div>'

@@ -2016,7 +2016,7 @@ export class DeliveryPlannerDashboard extends Component {
             return;
         }
 
-        const allowedExt = ['.doc', '.docx', '.xls', '.xlsx', '.csv'];
+        const allowedExt = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv'];
         const maxFileSize = 20 * 1024 * 1024;
         const nextFiles = [...this.state.drawerMessageFiles];
 
@@ -2025,9 +2025,10 @@ export class DeliveryPlannerDashboard extends Component {
             const ext = lowerName.includes('.') ? lowerName.slice(lowerName.lastIndexOf('.')) : '';
             const isImage = (file.type || '').startsWith('image/');
             const isVideo = (file.type || '').startsWith('video/');
+            const isPdf = (file.type || '') === 'application/pdf' || ext === '.pdf';
             const isDoc = allowedExt.includes(ext);
 
-            if (!isImage && !isVideo && !isDoc) {
+            if (!isImage && !isVideo && !isDoc && !isPdf) {
                 this.notification.add(`File ${file.name} không thuộc định dạng hỗ trợ.`, { type: 'warning' });
                 continue;
             }

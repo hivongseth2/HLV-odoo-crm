@@ -274,6 +274,12 @@
                                             t-on-click.stop="() => this.openSaleOrder(so.id)">
                                         <i class="fa fa-external-link"/>
                                     </button>
+                                    <button class="btn btn-sm ms-1"
+                                            t-att-class="this.isSOArchived(so.id) ? 'btn-outline-success' : 'btn-outline-warning'"
+                                            t-att-title="this.isSOArchived(so.id) ? 'Phục hồi đơn đã cất' : 'Cất đơn (ẩn khỏi danh sách)'"
+                                            t-on-click.stop="() => this.toggleArchiveSO(so.id)">
+                                        <i t-attf-class="fa #{this.isSOArchived(so.id) ? 'fa-undo' : 'fa-archive'}"></i>
+                                    </button>
                                 </td>
                             </tr>
 
