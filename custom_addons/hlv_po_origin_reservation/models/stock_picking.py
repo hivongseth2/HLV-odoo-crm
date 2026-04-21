@@ -26,7 +26,7 @@ class StockPicking(models.Model):
     def _reserve_for_origin_sale_order(self, picking):
         """Sau khi nhập kho, tìm SO từ PO.origin và giữ hàng cho đơn giao.
         Nếu PO không có origin hoặc origin không match SO nào,
-        giữ hàng cho đơn bán hàng cũ nhất đang chờ (cùng warehouse).
+        giữ hàng cho đơn bán hàng cũ nhất đang chờ (cùng warehouse). mới
         """
         purchase_order = picking.purchase_id
         # Lấy danh sách sản phẩm vừa nhập kho
