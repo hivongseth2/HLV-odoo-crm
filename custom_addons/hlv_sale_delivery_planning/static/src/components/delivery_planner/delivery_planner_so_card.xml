@@ -40,6 +40,12 @@
                             t-on-click="() => this.openOverviewDrawer(so)">
                         <i class="fa fa-eye" title="Xem nhanh"></i> Tổng Quan
                     </button>
+                    <button class="btn btn-sm mb-1 ms-1"
+                            t-att-class="this.isSOArchived(so.id) ? 'btn-outline-success' : 'btn-outline-warning'"
+                            t-on-click="() => this.toggleArchiveSO(so.id)"
+                            t-att-title="this.isSOArchived(so.id) ? 'Phục hồi đơn đã cất' : 'Cất đơn (ẩn khỏi danh sách)'">
+                        <i t-attf-class="fa #{this.isSOArchived(so.id) ? 'fa-undo' : 'fa-archive'}"></i>
+                    </button>
                     <div class="small fw-bold text-nowrap mt-1" t-if="so.commitment_date">
                         <i class="fa fa-calendar-check-o text-danger me-1" title="Ngày hẹn giao"></i>
                         Giao: <t t-esc="so.commitment_date.substring(0, 10)"/>
@@ -141,17 +147,21 @@
                 </div>
 
                 <!-- Luồng Xử Lý Kho -->
-                <div t-if="so.flows and so.flows.length > 0">
+                <div t-if="so.has_flow or (so.flows and so.flows.length > 0)">
                     <div class="d-flex align-items-center justify-content-between mb-2 mt-2 px-1 cursor-pointer toggle-section-header"
-                         t-on-click="() => this.toggleSection('flows')">
+                         t-on-click="() => this.toggleFlowSection(so)">
                         <h6 class="text-uppercase text-secondary small fw-bold mb-0">
                             <i class="fa fa-sitemap me-1" title="Sơ đồ"></i> Luồng Xử Lý Kho
+                            <i t-if="so.flows_loading" class="fa fa-spinner fa-spin ms-2 text-muted small"></i>
                         </h6>
                         <i t-attf-class="fa #{this.isSectionCollapsed('flows') ? 'fa-chevron-right' : 'fa-chevron-down'} text-muted small"></i>
                     </div>
 
                     <div t-attf-class="#{this.isSectionCollapsed('flows') ? 'd-none' : ''}">
-                        <t t-foreach="so.flows" t-as="flow" t-key="flow.id">
+                        <div t-if="so.flows_loading" class="text-center text-muted small py-2">
+                            <i class="fa fa-spinner fa-spin me-1"></i> Đang tải sơ đồ luồng...
+                        </div>
+                        <t t-foreach="so.flows or []" t-as="flow" t-key="flow.id">
                             <div class="d-flex align-items-center overflow-auto pb-3 pt-1 gap-2 px-1 border-1"
                                  style="white-space: nowrap;">
 
@@ -349,6 +359,13 @@
                  t-att-class="picking.state == 'done' ? 'text-muted' : 'text-dark'">
                 <t t-esc="picking.name"/>
             </div>
+            <div t-if="picking.bien_ban_printed" class="mt-1">
+                <span class="badge bg-info text-white d-inline-flex align-items-center gap-1"
+                      style="font-size:0.55rem; padding:2px 5px;"
+                      title="Đã in biên bản">
+                    <i class="fa fa-file-text-o"></i> Đã in BB
+                </span>
+            </div>
 
             <div t-if="picking.return_of" class="text-danger mt-1 text-truncate"
                  style="font-size: 0.70rem;"
@@ -411,6 +428,13 @@
             <div class="small fw-bold"
                  t-att-class="picking.state == 'done' ? 'text-muted' : 'text-dark'">
                 <t t-esc="picking.name"/>
+            </div>
+            <div t-if="picking.bien_ban_printed" class="mt-1">
+                <span class="badge bg-info text-white d-inline-flex align-items-center gap-1"
+                      style="font-size:0.55rem; padding:2px 5px;"
+                      title="Đã in biên bản">
+                    <i class="fa fa-file-text-o"></i> Đã in BB
+                </span>
             </div>
 
             <div t-if="picking.backorder_of" class="text-muted mt-1 text-truncate"

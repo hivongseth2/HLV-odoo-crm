@@ -280,7 +280,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
     <div><div class="kpi-pack-label">Đang giao</div><div class="kpi-pack-val" id="kpi-ps">0</div></div>
   </div></div>
   <div style="flex:1 1 0;min-width:130px"><div class="card kpi-pack" id="kpi-pack-deltoday" data-filter="delivered_today">
-    <div class="kpi-pack-icon" style="background:#d4edda;color:#155724"><i class="fa fa-calendar-check"></i></div>
+    <div class="kpi-pack-icon" style="background:#d4edda;color:#155724"><i class="fa fa-calendar-check-o"></i></div>
     <div><div class="kpi-pack-label">Đã giao trong ngày</div><div class="kpi-pack-val" id="kpi-pdt">0</div></div>
   </div></div>
 </div>
@@ -465,10 +465,54 @@ function groupLines(lines){
 }
 
 function partnerName(o){return o.partner_id?o.partner_id[1]:'';}
-function whName(o){return o.warehouse_id?o.warehouse_id[1]:'';}
+function whName(o){return o.warehouse_id?o.warehouse_id[1]:''}
+
+// --- IndexedDB cache ---
+var _SP_CACHE_TTL=5*60*1000;
+function _spFilterKey(){
+  return JSON.stringify([gv('f-q'),gv('f-wh'),gv('f-del'),gv('f-stk'),gv('f-pack'),
+    gv('f-date-from'),gv('f-date-to'),gv('f-po-date-from'),gv('f-po-date-to'),
+    gv('f-done-from'),gv('f-done-to'),gv('f-po-status'),gv('f-saler'),
+    gv('f-htgh'),gv('f-dtype'),getTagIds(),$('f-show-completed').checked]);
+}
+function _spOpenDB(){
+  return new Promise(function(resolve,reject){
+    var req=indexedDB.open('hlv_sp_cache',1);
+    req.onupgradeneeded=function(){var db=req.result;if(!db.objectStoreNames.contains('data'))db.createObjectStore('data');};
+    req.onsuccess=function(){resolve(req.result);};
+    req.onerror=function(){reject(req.error);};
+  });
+}
+function _spSaveCache(result){
+  _spOpenDB().then(function(db){
+    var tx=db.transaction('data','readwrite');
+    tx.objectStore('data').put({ts:Date.now(),fk:_spFilterKey(),data:result},'latest');
+    tx.oncomplete=function(){db.close();};
+    tx.onerror=function(){db.close();};
+  }).catch(function(){});
+}
+function _spLoadCache(){
+  return _spOpenDB().then(function(db){
+    return new Promise(function(resolve){
+      var tx=db.transaction('data','readonly');
+      var req=tx.objectStore('data').get('latest');
+      req.onsuccess=function(){
+        db.close();
+        var c=req.result;
+        if(!c)return resolve(null);
+        if(Date.now()-c.ts>_SP_CACHE_TTL)return resolve(null);
+        if(c.fk!==_spFilterKey())return resolve(null);
+        resolve(c.data);
+      };
+      req.onerror=function(){db.close();resolve(null);};
+    });
+  }).catch(function(){return null;});
+}
+var _spCacheRestored=false;
 
 function load(append){
-  showLoading();
+  if(!_spCacheRestored)showLoading();
+  _spCacheRestored=false;
   var offset=append?S.orders.length:0;
   var lim=append?100:S.limit;
   var body={search:gv('f-q'),warehouse_id:gv('f-wh'),delivery_status:gv('f-del'),
@@ -515,27 +559,23 @@ function load(append){
       var od=o.misa_order_date||(o.date_order?o.date_order.slice(0,10):'');
       o._is_new=(od===today);
     });
-    // Refresh dropdown kho mỗi khi danh sách backend thay đổi (thêm/xóa kho)
+    // Refresh dropdown kho/tag mỗi khi backend trả danh sách khác → tránh stale
     if(d.warehouses){
       var whSig=d.warehouses.map(function(w){return w.id;}).join(',');
       if(whSig!==S.whSig){
-        var sel=$('f-wh');
-        var cur=sel.value;
-        // Giữ option "all" đầu tiên, xoá phần còn lại
+        var sel=$('f-wh');var cur=sel.value;
         while(sel.options.length>1) sel.remove(1);
         d.warehouses.forEach(function(w){
           var o=document.createElement('option');o.value=w.id;o.textContent=w.name;sel.appendChild(o);
         });
         if(cur) sel.value=cur;
-        S.whSig=whSig;
-        S.warehouses=d.warehouses;
+        S.whSig=whSig;S.warehouses=d.warehouses;
       }
     }
     if(d.tags){
       var tagSig=d.tags.map(function(t){return t.id;}).join(',');
       if(tagSig!==S.tagsSig){
-        var tsel=$('f-tag');
-        var curT=tsel.value;
+        var tsel=$('f-tag');var curT=tsel.value;
         while(tsel.options.length>1) tsel.remove(1);
         S.tagsMap={};
         d.tags.forEach(function(t){
@@ -546,6 +586,7 @@ function load(append){
         S.tagsSig=tagSig;
       }
     }
+    if(!append)_spSaveCache(d);
     updKPI();render();updLoadMore();updFilters();
   }).catch(function(e){hideLoading();console.error(e);});
 }
@@ -802,7 +843,7 @@ async function onPublicFilesSelected(ev){
   var input=ev.target;
   var files=Array.from(input.files||[]);
   if(!files.length) return;
-  var docExt=['.doc','.docx','.xls','.xlsx','.csv'];
+  var docExt=['.pdf','.doc','.docx','.xls','.xlsx','.csv'];
   var imageExt=['.jpg','.jpeg','.png','.gif','.webp','.bmp','.heic','.heif','.jfif','.svg'];
   var videoExt=['.mp4','.mov','.avi','.mkv','.webm','.m4v','.3gp'];
   var maxSize=20*1024*1024;
@@ -814,8 +855,9 @@ async function onPublicFilesSelected(ev){
     var mt=(file.type||'').toLowerCase();
     var isImg=mt.indexOf('image/')===0||imageExt.indexOf(ext)>=0;
     var isVideo=mt.indexOf('video/')===0||videoExt.indexOf(ext)>=0;
+    var isPdf=mt==='application/pdf'||ext==='.pdf';
     var isDoc=docExt.indexOf(ext)>=0;
-    if(!isImg&&!isVideo&&!isDoc){
+    if(!isImg&&!isVideo&&!isDoc&&!isPdf){
       alert('File '+file.name+' không thuộc định dạng hỗ trợ.');
       continue;
     }
@@ -1003,8 +1045,8 @@ function openDrawer(id){
     +'<button id="dr-msg-refresh" class="btn btn-sm btn-outline-secondary ms-auto px-2 py-0" title="Tải lại tin nhắn"><i class="fa fa-refresh"></i></button></div>'
     +'<div style="padding:10px 14px 6px;border-bottom:1px solid #e2e8f0;background:#f7fafc">'
     +'<div class="d-flex gap-2 mb-2"><input id="dr-msg-author" class="form-control form-control-sm" placeholder="Tên của bạn..." style="max-width:160px" value="'+esc(localStorage.getItem('hlv_msg_author')||'')+'"/>'
-    +'<input id="dr-msg-files-input" type="file" multiple accept=".doc,.docx,.xls,.xlsx,.csv,image/*,video/*" style="display:none"/>'
-    +'<button id="dr-msg-attach" class="btn btn-sm btn-outline-secondary px-2" title="Đính kèm Word, Excel, ảnh, video"><i class="fa fa-paperclip"></i></button>'
+    +'<input id="dr-msg-files-input" type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,application/pdf,image/*,video/*" style="display:none"/>'
+    +'<button id="dr-msg-attach" class="btn btn-sm btn-outline-secondary px-2" title="Đính kèm PDF, Word, Excel, ảnh, video"><i class="fa fa-paperclip"></i></button>'
     +'<input id="dr-msg-input" class="form-control form-control-sm" placeholder="Nhập tin nhắn..."/>'
     +'<button id="dr-msg-send" class="btn btn-sm btn-primary px-3"><i class="fa fa-paper-plane"></i></button></div>'
     +'<div id="dr-msg-files" class="msg-compose-files"></div>'
@@ -1217,6 +1259,72 @@ $('dr-close').addEventListener('click',closeDrawer);
 $('drawer-overlay').addEventListener('click',closeDrawer);
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeDrawer();closeReportModal();}});
 
+// --- Auto-refresh: poll for changes every 10s ---
+var _lastFingerprint=null;
+var _pollInterval=10000; // 10 seconds
+var _pollTimer=null;
+var _pollPaused=false;
+
+function pollChanges(){
+  if(_pollPaused)return;
+  fetch('/api/sale_plan/check_changes',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({jsonrpc:'2.0',method:'call',params:{}})})
+  .then(function(r){return r.json();})
+  .then(function(j){
+    if(!j.result||j.result.status!=='success')return;
+    var fp=j.result.fingerprint;
+    if(_lastFingerprint===null){_lastFingerprint=fp;return;}
+    if(fp!==_lastFingerprint){
+      _lastFingerprint=fp;
+      load(false);
+      // Show a brief toast notification
+      var t=document.createElement('div');
+      t.style.cssText='position:fixed;bottom:24px;left:24px;z-index:3000;background:#3182ce;color:#fff;padding:10px 18px;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.2);font-size:.85rem;font-weight:600;transition:opacity .3s';
+      t.innerHTML='<i class="fa fa-refresh me-1"></i>Dữ liệu đã được cập nhật tự động';
+      document.body.appendChild(t);
+      setTimeout(function(){t.style.opacity='0';setTimeout(function(){t.remove();},400);},3000);
+    }
+  })
+  .catch(function(){/* silent */});
+}
+
+function startPolling(){
+  if(_pollTimer)clearInterval(_pollTimer);
+  _pollTimer=setInterval(pollChanges,_pollInterval);
+}
+
+// Pause polling when tab is hidden to save resources
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden){_pollPaused=true;}
+  else{_pollPaused=false;pollChanges();}
+});
+
+// Start polling after initial load completes
+var _origLoad=load;
+var _firstLoadDone=false;
+// We hook into the existing load callback by overriding:
+// After the first successful load, start polling
+(function(){
+  var origFetch=window.fetch;
+  var pendingDataReq=false;
+  window.fetch=function(url,opts){
+    var isDataReq=(typeof url==='string'&&url.indexOf('/api/sale_plan/data')!==-1);
+    if(isDataReq)pendingDataReq=true;
+    return origFetch.apply(this,arguments).then(function(resp){
+      if(isDataReq&&pendingDataReq){
+        pendingDataReq=false;
+        if(!_firstLoadDone){
+          _firstLoadDone=true;
+          // Set initial fingerprint from a check right after first load
+          pollChanges();
+          startPolling();
+        }
+      }
+      return resp;
+    });
+  };
+})();
+
 // --- Report modal ---
 var _reportSoId=null;
 function openReportModal(id,name){
@@ -1255,7 +1363,50 @@ $('report-submit').addEventListener('click',function(){
   }).catch(function(){btn.disabled=false;btn.innerHTML='<i class="fa fa-flag me-1"></i>Gửi báo cáo';alert('Lỗi kết nối.');});
 });
 
+// Restore from IndexedDB cache for instant display, then refresh in background
+_spLoadCache().then(function(_cachedData){
+if(_cachedData){
+  _spCacheRestored=true;
+  S.orders=_cachedData.orders||[];
+  S.total=_cachedData.total_count||0;
+  S.stats=_cachedData.dashboard_stats||{};
+  var today=new Date().toISOString().slice(0,10);
+  S.orders.forEach(function(o){
+    var ep=o.packing_status;
+    var rd=o.real_delivery_status||o.delivery_status;
+    if(o.has_delivered_today&&(rd==='full'||!o.has_assigned_pick)) ep='delivered_today';
+    else if(o.has_shipper_received) ep='shipping';
+    else if(o.has_new_unprinted_pickings) ep='has_unprinted';
+    else if(ep==='fully_packed') ep='packed_waiting_ship';
+    else if(o.picking_slip_printed&&ep!=='delivered') ep='printed_waiting';
+    else if(ep==='partial_packed') ep='unpacked';
+    o.effective_packing=ep;
+    o._shipper_names=[];
+    if(o.pickings){o.pickings.forEach(function(p){if(p.shipper_received&&p.shipper_user)o._shipper_names.push(p.shipper_user[1]);});}
+    var od=o.misa_order_date||(o.date_order?o.date_order.slice(0,10):'');
+    o._is_new=(od===today);
+  });
+  if(_cachedData.warehouses){
+    var sel=$('f-wh');
+    _cachedData.warehouses.forEach(function(w){
+      var opt=document.createElement('option');opt.value=w.id;opt.textContent=w.name;sel.appendChild(opt);
+    });
+    S.whSig=_cachedData.warehouses.map(function(w){return w.id;}).join(',');
+    S.warehouses=_cachedData.warehouses;
+  }
+  if(_cachedData.tags){
+    var tsel=$('f-tag');S.tagsMap={};
+    _cachedData.tags.forEach(function(t){
+      S.tagsMap[t.id]=t;
+      var opt=document.createElement('option');opt.value=t.id;opt.textContent=t.name;tsel.appendChild(opt);
+    });
+    S.tagsSig=_cachedData.tags.map(function(t){return t.id;}).join(',');
+  }
+  updKPI();render();updLoadMore();updFilters();
+  hideLoading();
+}
 load(false);
+});
 })();
 </script>
 </body></html>"""
@@ -1324,6 +1475,31 @@ class SalePlanPublicController(http.Controller):
             return {'status': 'success', 'data': result}
         except Exception as e:
             _logger.exception('sale_plan API error')
+            return {'status': 'error', 'message': str(e)}
+
+    @http.route('/api/sale_plan/check_changes', type='json', auth='public', methods=['POST'])
+    def api_check_changes(self, **kwargs):
+        """Lightweight endpoint: returns a fingerprint (max write_date + record count)
+        so the frontend can detect changes without reloading heavy data."""
+        if not request.session.get(SESSION_KEY_OK):
+            return {'status': 'error', 'message': 'Unauthorized'}
+        try:
+            SaleOrder = request.env['sale.order'].sudo()
+            domain = [('state', 'in', ['sale', 'done'])]
+            result = SaleOrder.search_read(domain, fields=['write_date'], order='write_date desc', limit=1)
+            max_write = result[0]['write_date'].isoformat() if result else ''
+            count = SaleOrder.search_count(domain)
+            # Also check stock.picking changes (packing/delivery status changes)
+            Picking = request.env['stock.picking'].sudo()
+            pick_result = Picking.search_read(
+                [('sale_id', '!=', False)],
+                fields=['write_date'], order='write_date desc', limit=1
+            )
+            pick_write = pick_result[0]['write_date'].isoformat() if pick_result else ''
+            fingerprint = f"{max_write}|{count}|{pick_write}"
+            return {'status': 'success', 'fingerprint': fingerprint}
+        except Exception as e:
+            _logger.exception('check_changes error')
             return {'status': 'error', 'message': str(e)}
 
     @http.route('/api/sale_plan/report_order', type='json', auth='public', methods=['POST'])

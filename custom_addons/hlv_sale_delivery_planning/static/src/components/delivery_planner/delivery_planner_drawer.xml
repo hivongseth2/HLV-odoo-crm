@@ -344,6 +344,9 @@
                                                       class="badge bg-danger ms-1" style="font-size:0.6rem;">
                                                     <i class="fa fa-exclamation-circle me-1"></i>Chưa in
                                                 </span>
+                                                <span t-if="picking.bien_ban_printed" class="badge bg-info ms-1" style="font-size:0.6rem;" title="Đã in biên bản cho phiếu này">
+                                                    <i class="fa fa-file-text-o me-1"></i>Đã in BB
+                                                </span>
                                             </div>
                                             <div t-if="picking.return_of" class="small mt-1 text-danger">
                                                 <i class="fa fa-undo me-1" title="Trả hàng"></i>
@@ -409,10 +412,10 @@
                                type="file"
                                class="d-none"
                                multiple="multiple"
-                               accept=".doc,.docx,.xls,.xlsx,.csv,image/*,video/*"
+                               accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,application/pdf,image/*,video/*"
                                t-on-change="(ev) => this.onDrawerFilesSelected(ev)"/>
                         <button class="btn btn-sm btn-outline-secondary px-2"
-                                title="Đính kèm Word, Excel, ảnh, video"
+                                title="Đính kèm PDF, Word, Excel, ảnh, video"
                                 t-on-click="() => this.triggerDrawerFilePicker()">
                             <i class="fa fa-paperclip"></i>
                         </button>

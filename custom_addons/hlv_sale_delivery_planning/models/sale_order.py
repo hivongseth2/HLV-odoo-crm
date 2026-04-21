@@ -1,5 +1,17 @@
+import logging
 from odoo import models, fields, api
 from dateutil.relativedelta import relativedelta
+
+_logger = logging.getLogger(__name__)
+
+# Fields whose changes should trigger a real-time dashboard refresh
+_NOTIFY_FIELDS = {
+    'state', 'picking_ids', 'delivery_status', 'amount_total',
+    'commitment_date', 'x_plan_need_cancel', 'x_plan_unread_message',
+    'x_picking_slip_printed', 'x_studio_delivery_type', 'x_studio_htgh',
+    'tag_ids', 'order_line',
+}
+
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
@@ -61,8 +73,44 @@ class SaleOrder(models.Model):
             relocation_data
         )
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        orders = super().create(vals_list)
+        # Notify when new confirmed orders are created (e.g. from MISA import)
+        if any(o.state in ('sale', 'done') for o in orders):
+            orders._notify_delivery_planner_changed()
+        return orders
+
+    def write(self, vals):
+        res = super().write(vals)
+        if vals and _NOTIFY_FIELDS.intersection(vals.keys()):
+            self._notify_delivery_planner_changed()
+        return res
+
+    def _notify_delivery_planner_changed(self):
+        """Send bus notification with the affected SO ids so the dashboard can
+        do a partial subset refresh instead of a full reload."""
+        ids = list(self.ids)
+        if not ids:
+            return
+        # Invalidate the in-memory KPI stats cache so the next stats-only
+        # request recomputes instead of serving stale numbers.
+        try:
+            from ..services.delivery_planner_stats import bump_stats_cache_version
+            bump_stats_cache_version()
+        except Exception:
+            pass
+        try:
+            self.env['bus.bus']._sendone(
+                'delivery_planner_channel',
+                'delivery_planner_data_changed',
+                {'source': 'sale.order', 'sale_order_ids': ids},
+            )
+        except Exception:
+            _logger.debug('Failed to send delivery_planner_data_changed notification', exc_info=True)
+
     @api.model
-    def get_delivery_dashboard_data(self, search_query='', filter_warehouse_id='all', filter_delivery_status='all', filter_stock_status='all', filter_packing_status='all', filter_date_from='', filter_date_to='', filter_po_date_from='', filter_po_date_to='', filter_po_status='all', filter_done_date_from='', filter_done_date_to='', filter_saler_code='', filter_htgh='', filter_delivery_type='all', filter_tag_ids='', limit=12, offset=0, show_completed=False, filter_need_transfer=False, filter_new_orders=False):
+    def get_delivery_dashboard_data(self, search_query='', filter_warehouse_id='all', filter_delivery_status='all', filter_stock_status='all', filter_packing_status='all', filter_date_from='', filter_date_to='', filter_po_date_from='', filter_po_date_to='', filter_po_status='all', filter_done_date_from='', filter_done_date_to='', filter_saler_code='', filter_htgh='', filter_delivery_type='all', filter_tag_ids='', limit=12, offset=0, show_completed=False, filter_need_transfer=False, filter_new_orders=False, filter_print_status='all', filter_shipper_received='all', include_stats=True):
         return self.env['hlv.delivery.planner.service'].get_dashboard_data(
             search_query=search_query,
             filter_warehouse_id=filter_warehouse_id,
@@ -85,4 +133,62 @@ class SaleOrder(models.Model):
             show_completed=show_completed,
             filter_need_transfer=filter_need_transfer,
             filter_new_orders=filter_new_orders,
+            filter_print_status=filter_print_status,
+            filter_shipper_received=filter_shipper_received,
+            include_stats=include_stats,
+        )
+
+    @api.model
+    def get_delivery_orders_subset(self, order_ids):
+        """RPC wrapper around hlv.delivery.planner.service.get_orders_subset.
+        Used by the bus-driven partial refresh."""
+        return self.env['hlv.delivery.planner.service'].get_orders_subset(order_ids)
+
+    @api.model
+    def get_delivery_so_flow(self, so_id):
+        """Lazy RPC: returns {'flows': [...]} for one SO. Called when the user
+        expands the "Luồng Xử Lý Kho" section. Default dashboard payload no
+        longer contains flows."""
+        return self.env['hlv.delivery.planner.service'].get_so_flow(so_id)
+
+    @api.model
+    def get_delivery_dashboard_stats(
+        self, search_query='', filter_warehouse_id='all',
+        filter_delivery_status='all', filter_stock_status='all',
+        filter_packing_status='all', filter_date_from='', filter_date_to='',
+        filter_po_date_from='', filter_po_date_to='', filter_po_status='all',
+        filter_done_date_from='', filter_done_date_to='',
+        filter_saler_code='', filter_htgh='', filter_delivery_type='all',
+        filter_tag_ids='', show_completed=False,
+        filter_need_transfer=False, filter_new_orders=False,
+        filter_print_status='all', filter_shipper_received='all',
+    ):
+        """RPC wrapper for the cached stats-only endpoint.
+
+        Returns {'dashboard_stats': {...}, 'total_count': N, 'cached': bool}.
+        Frontend calls this in parallel with get_delivery_dashboard_data so
+        KPI cards paint immediately when the cache is warm.
+        """
+        return self.env['hlv.delivery.planner.service'].get_dashboard_stats_only(
+            search_query=search_query,
+            filter_warehouse_id=filter_warehouse_id,
+            filter_delivery_status=filter_delivery_status,
+            filter_stock_status=filter_stock_status,
+            filter_packing_status=filter_packing_status,
+            filter_date_from=filter_date_from,
+            filter_date_to=filter_date_to,
+            filter_po_date_from=filter_po_date_from,
+            filter_po_date_to=filter_po_date_to,
+            filter_po_status=filter_po_status,
+            filter_done_date_from=filter_done_date_from,
+            filter_done_date_to=filter_done_date_to,
+            filter_saler_code=filter_saler_code,
+            filter_htgh=filter_htgh,
+            filter_delivery_type=filter_delivery_type,
+            filter_tag_ids=filter_tag_ids,
+            show_completed=show_completed,
+            filter_need_transfer=filter_need_transfer,
+            filter_new_orders=filter_new_orders,
+            filter_print_status=filter_print_status,
+            filter_shipper_received=filter_shipper_received,
         )

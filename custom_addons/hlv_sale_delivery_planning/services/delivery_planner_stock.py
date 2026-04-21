@@ -12,6 +12,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
         show_completed=False, filter_need_transfer=False,
         filter_new_orders=False,
         filter_done_date_from='', filter_done_date_to='',
+        filter_print_status='all', filter_shipper_received='all',
     ):
         """
         Phase 3 optimization: thay thế ORM loop per-SO bằng ~11 batch SQL queries cố định.
@@ -213,45 +214,9 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
 
         all_warehouse_ids = set(k[1] for k in product_availabilities.keys())
 
-        # [I] Packed quantities — 1 query
-        all_pick_ids = [p['id'] for p in pick_recs]
-        pending_line_ids = {
-            r['id'] for r in line_recs
-            if r.get('product_id')
-            and product_map.get(r['product_id'][0], {}).get('type') != 'service'
-            and ((r.get('product_uom_qty') or 0) - (r.get('qty_delivered') or 0)) > 0
-        }
-        packed_qty_by_so = {}
-        if all_pick_ids and pending_line_ids:
-            mls = self.env['stock.move.line'].sudo().search_read([
-                ('picking_id', 'in', all_pick_ids),
-                ('picking_id.picking_type_code', '=', 'outgoing'),
-                ('picking_id.state', 'not in', ['done', 'cancel']),
-                ('result_package_id', '!=', False),
-                ('state', 'not in', ['cancel', 'draft']),
-                ('move_id.sale_line_id', 'in', list(pending_line_ids)),
-            ], ['picking_id', 'move_id', 'quantity'])
-            mv_id_to_line = {mv['id']: mv['sale_line_id'][0] for mv in move_recs if mv.get('sale_line_id')}
-            pk_id_to_so = {p['id']: p['sale_id'][0] for p in pick_recs if p.get('sale_id')}
-            pend_qty_by_line = {
-                r['id']: (r.get('product_uom_qty') or 0) - (r.get('qty_delivered') or 0)
-                for r in line_recs if r['id'] in pending_line_ids
-            }
-            packed_by_line = {}
-            for ml in mls:
-                mv_val = ml['move_id']
-                mv_id = mv_val[0] if isinstance(mv_val, (list, tuple)) else mv_val
-                lid = mv_id_to_line.get(mv_id)
-                if not lid or lid not in pending_line_ids:
-                    continue
-                pk_val = ml['picking_id']
-                so_key = pk_id_to_so.get(pk_val[0] if isinstance(pk_val, (list, tuple)) else pk_val)
-                if so_key:
-                    packed_by_line[lid] = packed_by_line.get(lid, 0.0) + float(ml['quantity'] or 0)
-            for lid, packed in packed_by_line.items():
-                so_key = line_to_so.get(lid)
-                if so_key:
-                    packed_qty_by_so[so_key] = packed_qty_by_so.get(so_key, 0.0) + min(packed, pend_qty_by_line.get(lid, 0.0))
+        # [I] Packed quantities — DEAD CODE removed (was computed but never returned/used)
+        # Previously ran a heavy stock.move.line search with dotted-path joins
+        # over all matched SOs (~200-600ms). Result `packed_qty_by_so` was unused.
 
         # ====== PHASE 2: Status computation — pure Python dict lookups, ZERO extra queries ======
         matched_sale_ids = []
@@ -437,12 +402,19 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 if not done_pks:
                     delivery_ok = False
                 else:
-                    latest = max(done_pks, key=lambda p: p['date_done'])
-                    latest_str = latest['date_done'].replace(tzinfo=pytz.utc).astimezone(user_tz).strftime('%Y-%m-%d')
-                    delivery_ok = (
-                        (not filter_done_date_from or latest_str >= filter_done_date_from)
-                        and (not filter_done_date_to or latest_str <= filter_done_date_to)
-                    )
+                    # SO match nếu BẤT KỲ phiếu OUT done nào có date_done nằm trong khoảng,
+                    # không chỉ phiếu cuối cùng. (Trước đây dùng max() => sai khi SO có
+                    # nhiều phiếu giao ở nhiều ngày khác nhau.)
+                    any_match = False
+                    for p in done_pks:
+                        d_str = p['date_done'].replace(tzinfo=pytz.utc).astimezone(user_tz).strftime('%Y-%m-%d')
+                        if filter_done_date_from and d_str < filter_done_date_from:
+                            continue
+                        if filter_done_date_to and d_str > filter_done_date_to:
+                            continue
+                        any_match = True
+                        break
+                    delivery_ok = any_match
 
             if has_delivered_today and (real_delivery_status == 'full' or not has_assigned_pick):
                 effective_packing = 'delivered_today'
@@ -463,6 +435,23 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             else:
                 packing_ok = filter_packing_status == 'all' or packing_status == filter_packing_status
 
+            # --- New: Tình trạng phiếu in (per-column filter on Bảng) ---
+            if filter_print_status == 'has_unprinted':
+                print_ok = bool(has_new_unprinted)
+            elif filter_print_status == 'all_printed':
+                # SO has at least one assigned PICK and none of them is unprinted
+                print_ok = bool(has_assigned_pick) and not bool(has_new_unprinted)
+            else:
+                print_ok = True
+
+            # --- New: Nhận giao (shipper_received) ---
+            if filter_shipper_received == 'received':
+                shipper_ok = bool(has_shipper)
+            elif filter_shipper_received == 'not_received':
+                shipper_ok = not bool(has_shipper)
+            else:
+                shipper_ok = True
+
             if filter_new_orders:
                 order_date_raw = so_rec.get('x_studio_misa_order_date')
                 if not order_date_raw:
@@ -474,7 +463,8 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
 
             if delivery_ok and packing_ok and is_new \
                     and (filter_stock_status == 'all' or stock_status == filter_stock_status) \
-                    and (not filter_need_transfer or has_transfer_option):
+                    and (not filter_need_transfer or has_transfer_option) \
+                    and print_ok and shipper_ok:
                 matched_sale_ids.append(so_id)
 
         # KPI stats

@@ -42,16 +42,17 @@
                 <!-- Print Button -->
                 <button class="btn btn-sm"
                         t-att-class="this.selectedCount > 0 ? 'btn-success' : 'btn-outline-secondary'"
-                        t-att-disabled="this.selectedCount === 0 || state.isLoading"
+                        t-att-disabled="this.selectedCount === 0 || state.isLoading || state.isPrintingPickingSlips"
                         t-on-click="(ev) => this.toggleSelectedPickingPrintMenu(ev)"
                         title="In phiếu lấy hàng cho các đơn đã chọn">
-                    <i class="fa fa-print me-1" title="In phiếu"></i>
-                    In phiếu lấy hàng
+                    <i t-attf-class="fa me-1 #{state.isPrintingPickingSlips ? 'fa-spinner fa-spin' : 'fa-print'}" title="In phiếu"></i>
+                    <t t-if="state.isPrintingPickingSlips">Đang in...</t>
+                    <t t-else="">In phiếu lấy hàng</t>
                     <span t-if="this.selectedCount > 0" class="badge bg-white text-success ms-1">
                         <t t-esc="this.selectedCount"/>
                     </span>
                 </button>
-                <div t-if="state.selectedPrintMenuPos"
+                 <div t-if="state.selectedPrintMenuPos"
                      class="bg-white border rounded shadow-lg"
                      style="position:fixed; z-index:2000; min-width:260px; max-height:340px; overflow-y:auto;"
                      t-att-style="'position:fixed; z-index:2000; min-width:260px; max-height:340px; overflow-y:auto; top:' + state.selectedPrintMenuPos.top + 'px; right:' + state.selectedPrintMenuPos.right + 'px;'"
@@ -101,9 +102,37 @@
                 <button t-if="this.hasMoreKanbanData"
                         class="btn btn-sm btn-outline-primary"
                         t-on-click="loadMoreKanbanBatch"
-                        t-att-disabled="state.isLoading">
-                    <i class="fa fa-plus me-1" title="Tải thêm"></i>
-                    Tải thêm 100
+                        t-att-disabled="state.isLoading or state.isLoadingMore">
+                    <i t-attf-class="fa me-1 {{ state.isLoadingMore ? 'fa-spinner fa-spin' : 'fa-plus' }}" title="Tải thêm"></i>
+                    <t t-if="state.isLoadingMore">Đang tải...</t>
+                    <t t-else="">Tải thêm 100</t>
+                </button>
+                <!-- Tải hết: nút nhỏ, có confirm khi >300 đơn để tránh bấm nhầm -->
+                <button t-if="this.hasMoreKanbanData"
+                        class="btn btn-sm btn-link text-secondary p-1"
+                        style="font-size:0.78rem;"
+                        t-on-click="loadAllKanbanBatch"
+                        t-att-disabled="state.isLoading or state.isLoadingMore"
+                        t-att-title="'Tải hết ' + this.remainingKanbanCount + ' đơn còn lại (có xác nhận khi >300)'">
+                    <i t-attf-class="fa me-1 #{state.isLoadingMore ? 'fa-spinner fa-spin' : 'fa-cloud-download'}"/>
+                    Tải hết (<t t-esc="this.remainingKanbanCount"/>)
+                </button>
+                <button class="btn btn-sm"
+                        t-att-class="state.showArchivedOnly ? 'btn-warning' : 'btn-outline-warning'"
+                        t-on-click="toggleShowArchivedOnly"
+                        t-att-title="state.showArchivedOnly ? 'Bấm để quay lại danh sách thường' : 'Xem các đơn đã cất'">
+                    <i t-attf-class="fa me-1 #{state.showArchivedOnly ? 'fa-list' : 'fa-archive'}"></i>
+                    <t t-if="state.showArchivedOnly">Quay lại</t>
+                    <t t-else="">Đơn đã cất</t>
+                    <span t-if="state.archivedSOIds.size" class="badge bg-light text-dark ms-1">
+                        <t t-esc="state.archivedSOIds.size"/>
+                    </span>
+                </button>
+                <button t-if="state.showArchivedOnly and state.archivedSOIds.size"
+                        class="btn btn-sm btn-outline-danger"
+                        t-on-click="clearAllArchived"
+                        title="Phục hồi tất cả đơn đã cất">
+                    <i class="fa fa-undo me-1"></i> Phục hồi tất cả
                 </button>
                 <span class="text-muted small">
                     <i class="fa fa-arrows text-secondary me-1" title="Kéo thả"/>
@@ -310,6 +339,7 @@
                             t-on-click.stop="() => this.openOverviewDrawer(so)">
                         <i class="fa fa-eye" title="Tổng quan"></i>
                     </button>
+                   
                 </div>
 
                 <!-- Row 2: Customer -->
@@ -412,6 +442,21 @@
                             </span>
                         </t>
                     </div>
+                    <!-- Biên bản: tách hẳn ra dòng riêng để dễ nhìn -->
+                    <t t-set="bbPickings" t-value="pickPickings.filter(p =&gt; p.bien_ban_printed)"/>
+                    <div t-if="bbPickings.length" class="mt-1">
+                        <div class="text-muted fw-bold mb-1" style="font-size:0.58rem;"><i class="fa fa-file-text-o me-1"></i>Đã in biên bản</div>
+                        <div class="d-flex flex-wrap gap-1">
+                            <t t-foreach="bbPickings" t-as="bb" t-key="bb.id">
+                                <span class="badge d-inline-flex align-items-center gap-1 bg-info text-white"
+                                      style="font-size:0.6rem; padding:2px 5px;"
+                                      t-att-title="bb.name + ' — Đã in biên bản'">
+                                    <i class="fa fa-file-text-o"></i>
+                                    <t t-esc="bb.name"/>
+                                </span>
+                            </t>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Row 8a: Shipper status (outgoing pickings) -->
@@ -454,6 +499,18 @@
                         <t t-esc="so.warehouse_name"/>
                     </span>
                 </div>
+
+
+                    <div class="d-flex justify-content-end align-items-end mb-1 gap-1"> 
+                     <button class="btn btn-link btn-sm p-0 ms-1 flex-shrink-0"
+                            style="font-size: 0.75rem; line-height:1;"
+                            t-att-class="this.isSOArchived(so.id) ? 'text-success' : 'text-warning'"
+                            t-att-title="this.isSOArchived(so.id) ? 'Phục hồi đơn đã cất' : 'Cất đơn (ẩn khỏi danh sách)'"
+                            t-on-click.stop="() => this.toggleArchiveSO(so.id)">
+                        <i t-attf-class="fa #{this.isSOArchived(so.id) ? 'fa-undo' : 'fa-archive'}"></i>
+                    </button>
+                    </div>
+
 
             </div>
         </div>
