@@ -63,7 +63,12 @@ export class DeliveryPlannerDashboard extends Component {
 
             // Pagination
             currentPage: 1,
-            itemsPerPage: 12,
+            itemsPerPage: (function(){
+                try{
+                    var v=parseInt(localStorage.getItem('hlv_dp_items_per_page'),10);
+                    return [12,25,50,100,200].indexOf(v)>=0 ? v : 12;
+                }catch(e){return 12;}
+            })(),
             totalCount: 0,
 
             // Drawer
@@ -1097,6 +1102,19 @@ export class DeliveryPlannerDashboard extends Component {
             this.state.currentPage--;
             await this.fetchData();
         }
+    }
+
+    /**
+     * Cho phép user tự chọn số dòng/trang ở bảng (Card/Table view).
+     * Lưu localStorage để nhớ pref qua các phiên.
+     */
+    async onItemsPerPageChange(ev) {
+        var n = parseInt(ev.target.value, 10);
+        if (![12, 25, 50, 100, 200].includes(n)) n = 12;
+        this.state.itemsPerPage = n;
+        this.state.currentPage = 1;
+        try { localStorage.setItem('hlv_dp_items_per_page', String(n)); } catch (e) { /* quota / private mode */ }
+        await this.fetchData();
     }
 
     async onFilterChange() {
