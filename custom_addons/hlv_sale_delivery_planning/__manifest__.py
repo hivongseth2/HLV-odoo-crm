@@ -5,7 +5,7 @@
     'description': 'Dashboard trực quan bằng OWL quản lý kế hoạch giao hàng từ đơn bán và tiến độ hàng từ đơn mua.',
     'category': 'Sales',
     'author': 'HLV',
-    'depends': ['sale_management', 'purchase_stock'],
+    'depends': ['sale_management', 'purchase_stock', 'bus'],
     'data': [
         'security/ir.model.access.csv',
         'views/delivery_planner_views.xml',
@@ -20,6 +20,7 @@
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_drawer.xml',
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_modal.xml',
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_kanban.xml',
+            'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_table.xml',
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_transfer_modal.xml',
             'hlv_sale_delivery_planning/static/src/components/delivery_planner/delivery_planner_relocation_modal.xml',
             # Main template

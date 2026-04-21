@@ -1,7 +1,7 @@
 /** @odoo-module **/
 
 import { registry } from "@web/core/registry";
-import { Component, useState, onWillStart, onWillDestroy, markup } from "@odoo/owl";
+import { Component, useState, onWillStart, onMounted, onWillDestroy, markup } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import {
     translateDeliveryStatus, translatePickingState, translatePickingStatus,
@@ -22,6 +22,7 @@ export class DeliveryPlannerDashboard extends Component {
             warehouses: [],
             tags: [],
             isLoading: true,
+            isRefreshing: false,  // Refresh in progress with data already on screen (thin top bar instead of full overlay)
 
             // Search & Filters
             searchQuery: "",
@@ -42,6 +43,8 @@ export class DeliveryPlannerDashboard extends Component {
             filterTagIds: [],
             filterNeedTransfer: false,
             filterNewOrders: false,
+            filterPrintStatus: 'all',         // 'all' | 'has_unprinted' | 'all_printed'
+            filterShipperReceived: 'all',     // 'all' | 'received' | 'not_received'
             showCompleted: false,
 
             // HTGH presets (lưu localStorage)
@@ -51,7 +54,12 @@ export class DeliveryPlannerDashboard extends Component {
             ],
 
             // Stats
+            // KPI dashboard stats (loaded ASYNCHRONOUSLY via a separate endpoint
+            // — main fetchData does NOT touch this so the table/kanban can render
+            // without waiting for stats compute.)
             dashboardStats: { total: 0, ready: 0, partial: 0, out_of_stock: 0 },
+            statsLoading: false,
+            isLoadingMore: false,
 
             // Pagination
             currentPage: 1,
@@ -75,7 +83,7 @@ export class DeliveryPlannerDashboard extends Component {
             collapsedSections: new Set(['packages', 'flows', 'pending_products']), // Default collapsed
 
             // View Mode
-            viewMode: 'kanban',               // 'list' | 'kanban'
+            viewMode: 'kanban',               // 'kanban' | 'list' (Card) | 'table' (Bảng)
             kanbanGroupBy: 'packing_status', // 'packing_status' | 'delivery_status' | 'stock_status'
             draggedSoId: null,
             dragOverColumn: null,
@@ -83,8 +91,19 @@ export class DeliveryPlannerDashboard extends Component {
             kanbanColPageSize: {},           // { colValue: N } — số card hiển thị mỗi cột
             kanbanBatchSize: 100,            // số đơn tải backend cho toàn kanban
 
+            // Table (Bảng) View State
+            tableSortField: 'commitment_date', // 'name'|'misa_order_date'|'partner'|'warehouse'|'delivery_status'|'stock_status'|'packing_status'|'commitment_date'|'amount_total'
+            tableSortDir: 'desc',              // 'asc' | 'desc'
+            expandedTableRows: new Set(),      // Set of soId currently expanded
+
             // Selection for printing
             selectedSOIds: new Set(),        // Set of selected sale order IDs for printing
+
+            // Archive (cất đơn) — backend persisted (per user) via
+            // hlv.delivery.planner.user.pref. Loaded in onWillStart.
+            archivedSOIds: new Set(),
+            showArchivedOnly: false,
+            hasDefaultFilters: false,
 
             // Returned/Stopped group paging
             returnedColPageSize: 15,
@@ -129,48 +148,39 @@ export class DeliveryPlannerDashboard extends Component {
         onWillStart(async () => {
             if (this.busService) {
                 this.busService.addChannel("delivery_planner_channel");
-                this._busNotificationHandler = ({ detail: notifications }) => {
-                    for (const item of notifications || []) {
-                        let type;
-                        let payload;
-
-                        if (Array.isArray(item)) {
-                            // Common bus tuple shape: [channel, type, payload]
-                            if (typeof item[1] === "string") {
-                                type = item[1];
-                                payload = item[2];
-                            } else {
-                                const message = item[1] || {};
-                                type = message.type || item[2];
-                                payload = message.payload || message;
-                            }
-                        } else {
-                            type = item && item.type;
-                            payload = item && (item.payload || item);
-                        }
-
-                        if (type === "new_portal_message") {
-                            this.onNewPortalMessage(payload);
-                        }
-                    }
-                };
-                this.busService.addEventListener("notification", this._busNotificationHandler);
-                // Ensure bus is running so realtime notifications are active immediately.
-                if (typeof this.busService.start === "function") {
-                    this.busService.start();
-                }
+                // Odoo 18: use subscribe(type, callback) — addEventListener("notification") is internal-only
+                this._onBusDataChanged = (payload) => this._onDataChanged(payload);
+                this._onBusNewPortalMessage = (payload) => this.onNewPortalMessage(payload);
+                this.busService.subscribe("delivery_planner_data_changed", this._onBusDataChanged);
+                this.busService.subscribe("new_portal_message", this._onBusNewPortalMessage);
             }
 
-            const [, reports] = await Promise.all([
-                this.fetchData(),
-                this.orm.searchRead(
-                    'ir.actions.report',
-                    [['model', '=', 'stock.picking'], ['binding_model_id', '!=', false]],
-                    ['id', 'name', 'report_type'],
-                    { order: 'name' }
-                )
-            ]);
+            // Load per-user preferences (archived SOs + default filters) BEFORE
+            // the first fetch so the dashboard opens with the user's saved state.
+            await this._loadUserPreferences();
+
+            // Try to restore from IndexedDB cache for instant display
+            const cached = await this._loadFromCache();
+            if (cached) {
+                this._applyResult(cached);
+                this.state.isLoading = false;
+                this._isCacheRestored = true;
+            }
+
+            // Only load lightweight reports here — heavy fetchData moves to onMounted
+            const reports = await this.orm.searchRead(
+                'ir.actions.report',
+                [['model', '=', 'stock.picking'], ['binding_model_id', '!=', false]],
+                ['id', 'name', 'report_type'],
+                { order: 'name' }
+            );
             this.state.pickingReports = reports;
+        });
+
+        // fetchData runs AFTER mount so cached data shows instantly
+        onMounted(async () => {
+            await this.fetchData();
+            this._isCacheRestored = false;
         });
 
         this.pollUnreadMessages(true); // Initial fetch
@@ -180,11 +190,20 @@ export class DeliveryPlannerDashboard extends Component {
         }, 15000);
 
         onWillDestroy(() => {
-            if (this.busService && this._busNotificationHandler && typeof this.busService.removeEventListener === "function") {
-                this.busService.removeEventListener("notification", this._busNotificationHandler);
+            if (this.busService) {
+                if (this._onBusDataChanged) {
+                    this.busService.unsubscribe("delivery_planner_data_changed", this._onBusDataChanged);
+                }
+                if (this._onBusNewPortalMessage) {
+                    this.busService.unsubscribe("new_portal_message", this._onBusNewPortalMessage);
+                }
+                this.busService.deleteChannel("delivery_planner_channel");
             }
             if (this.messagePollingInterval) {
                 clearInterval(this.messagePollingInterval);
+            }
+            if (this._dataChangedDebounce) {
+                clearTimeout(this._dataChangedDebounce);
             }
         });
     }
@@ -358,98 +377,516 @@ export class DeliveryPlannerDashboard extends Component {
         }
     }
 
+    // --- Real-time data refresh via bus ---
+    _dataChangedDebounce = null;
+    _pendingChangedSoIds = null;
+    _pendingFallbackFull = false;
 
-    async fetchData() {
-        this.state.isLoading = true;
+    _onDataChanged(payload) {
+        // Only show toast on the FIRST event in a burst (not every bus message)
+        if (!this._dataChangedDebounce) {
+            this.notification.add(
+                "Đang cập nhật dữ liệu...",
+                { type: "warning", title: "Thay đổi phát hiện", sticky: false }
+            );
+        }
+        // Accumulate affected SO ids across the burst (ids come from sale_order/picking/move triggers).
+        // If a payload has no ids, mark fallback so we do a full refresh.
+        if (!this._pendingChangedSoIds) {
+            this._pendingChangedSoIds = new Set();
+            this._pendingFallbackFull = false;
+        }
+        const ids = payload && payload.sale_order_ids;
+        if (Array.isArray(ids) && ids.length) {
+            for (const i of ids) this._pendingChangedSoIds.add(i);
+        } else {
+            this._pendingFallbackFull = true;
+        }
+        // Debounce: multiple writes can fire in quick succession (e.g. batch picking validation).
+        if (this._dataChangedDebounce) {
+            clearTimeout(this._dataChangedDebounce);
+        }
+        this._dataChangedDebounce = setTimeout(async () => {
+            this._dataChangedDebounce = null;
+            const ids = Array.from(this._pendingChangedSoIds || []);
+            const fallback = this._pendingFallbackFull;
+            this._pendingChangedSoIds = null;
+            this._pendingFallbackFull = false;
+            // Only orders currently on screen need a subset refresh; others can be ignored
+            // (they aren't displayed; the next full refresh / cache load will pick them up).
+            const visibleIds = new Set(this.state.saleOrders.map(o => o.id));
+            const subsetIds = ids.filter(i => visibleIds.has(i));
+            const offscreenIds = ids.filter(i => !visibleIds.has(i));
+            if (!fallback && ids.length > 0 && subsetIds.length + offscreenIds.length === ids.length) {
+                // Auto-load: refresh visible + auto-pull offscreen vào danh sách (không hỏi user)
+                await this._refreshSubset(ids);
+                if (offscreenIds.length) {
+                    await this._notifyOffscreenAutoLoaded(offscreenIds);
+                }
+            } else {
+                // Fallback: full silent refresh (filters may have caused new matches)
+                await this._silentRefresh();
+            }
+            this.notification.add(
+                "Dữ liệu đã được cập nhật tự động",
+                { type: "info", title: "Cập nhật xong" }
+            );
+        }, 800);
+    }
+
+    /**
+     * Off-screen auto-loaded notification — đã tự động merge vào state, chỉ thông báo cho user biết.
+     * Toast nhẹ (info, không sticky) kèm tên SO để user thấy rõ đơn nào vừa xuất hiện.
+     */
+    async _notifyOffscreenAutoLoaded(soIds) {
+        if (!soIds || !soIds.length) return;
+        let names = [];
+        try {
+            const recs = await this.orm.read("sale.order", soIds, ["name"]);
+            names = (recs || []).map(r => r.name).filter(Boolean);
+        } catch (e) {
+            console.warn("read SO names failed:", e);
+        }
+        const previewNames = names.slice(0, 3).join(", ");
+        const moreCount = names.length > 3 ? ` (+${names.length - 3})` : "";
+        const label = names.length ? `${previewNames}${moreCount}` : `${soIds.length} đơn`;
+        this.notification.add(
+            `Đã tự động tải ${label} vào danh sách.`,
+            { type: "info", title: "Cập nhật ngoài danh sách" }
+        );
+    }
+
+    /**
+     * Partial refresh — re-fetches only the given SO ids and merges them in.
+     * Works for both kanban and list views (both share state.saleOrders).
+     */
+    async _refreshSubset(soIds) {
+        try {
+            const res = await this.orm.call(
+                "sale.order", "get_delivery_orders_subset", [], { order_ids: soIds }
+            );
+            const fresh = (res && res.orders) || [];
+            const removed = new Set((res && res.removed_ids) || []);
+            this._mergeSubset(fresh, removed);
+            // Persist the merged state to cache
+            const cacheable = {
+                dashboard_stats: this.state.dashboardStats,
+                orders: this.state.saleOrders,
+                total_count: this.state.totalCount,
+                warehouses: this.state.warehouses,
+                tags: this.state.tags,
+            };
+            await this._saveToCache(cacheable);
+        } catch (e) {
+            console.error("Subset refresh failed, falling back to full refresh:", e);
+            await this._silentRefresh();
+        }
+    }
+
+    /**
+     * Merge subset result into state.saleOrders WITHOUT replacing the array.
+     * - Update existing orders in-place (only changed properties are reactive-touched).
+     * - Insert new orders that pass the screen filter at the end.
+     * - Remove orders explicitly marked as removed by the backend.
+     */
+    _mergeSubset(freshOrders, removedIds) {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const indexById = new Map();
+        this.state.saleOrders.forEach((o, idx) => indexById.set(o.id, idx));
+
+        for (const fresh of freshOrders) {
+            fresh.flows = fresh.flows || [];
+            fresh.pickings = fresh.pickings || [];
+            fresh.lines = fresh.lines || [];
+            fresh.pos = fresh.pos || [];
+            const orderDate = fresh.misa_order_date || (fresh.date_order ? fresh.date_order.substring(0, 10) : '');
+            fresh.is_new_order = orderDate === todayStr;
+            this._applyFlowColors(fresh);
+
+            const idx = indexById.get(fresh.id);
+            if (idx !== undefined) {
+                // In-place property update — preserves reactive identity, only touched keys re-render
+                const old = this.state.saleOrders[idx];
+                for (const key of Object.keys(fresh)) {
+                    old[key] = fresh[key];
+                }
+                // Drop any old keys not present in fresh
+                for (const key of Object.keys(old)) {
+                    if (!(key in fresh)) delete old[key];
+                }
+            } else {
+                // New order entered the visible set — append
+                this.state.saleOrders.push(fresh);
+            }
+        }
+        // Remove deleted/cancelled orders
+        if (removedIds && removedIds.size) {
+            for (let i = this.state.saleOrders.length - 1; i >= 0; i--) {
+                if (removedIds.has(this.state.saleOrders[i].id)) {
+                    this.state.saleOrders.splice(i, 1);
+                }
+            }
+        }
+    }
+
+    /**
+     * Refresh data without loading spinner.
+     * Smart-merge: only update orders that changed, add new, remove deleted.
+     * Preserves scroll position and avoids full kanban re-render.
+     */
+    async _silentRefresh() {
         const isKanban = this.state.viewMode === 'kanban';
+        // Stats refreshed independently \u2014 don't block silent refresh on it
+        this._fetchStatsAsync();
         try {
             const result = await this.orm.call(
                 "sale.order",
                 "get_delivery_dashboard_data",
                 [],
                 {
-                    search_query: this.state.searchQuery.trim(),
-                    filter_warehouse_id: this.state.filterWarehouseId,
-                    filter_delivery_status: this.state.filterDeliveryStatus,
-                    filter_stock_status: this.state.filterStockStatus,
-                    filter_date_from: this.state.filterDateFrom,
-                    filter_date_to: this.state.filterDateTo,
-                    filter_done_date_from: this.state.filterDoneDateFrom,
-                    filter_done_date_to: this.state.filterDoneDateTo,
-                    filter_po_date_from: this.state.filterPODateFrom,
-                    filter_po_date_to: this.state.filterPODateTo,
-                    filter_po_status: this.state.filterPOStatus,
-                    filter_packing_status: this.state.filterPackingStatus,
-                    filter_saler_code: this.state.filterSalerCode.trim(),
-                    filter_htgh: this.state.filterHtgh.trim(),
-                    filter_delivery_type: this.state.filterDeliveryType,
-                    filter_tag_ids: this.state.filterTagIds.join(','),
-                    show_completed: this.state.showCompleted,
-                    filter_need_transfer: this.state.filterNeedTransfer,
-                    filter_new_orders: this.state.filterNewOrders,
+                    ...this._buildFetchKwargs(),
+                    limit: isKanban ? this.state.kanbanBatchSize : this.state.itemsPerPage,
+                    offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
+                    include_stats: false,
+                }
+            );
+            this._mergeResult(result);
+            await this._saveToCache(result);
+        } catch (error) {
+            console.error("Silent refresh failed:", error);
+        }
+    }
+
+    /**
+     * Smart merge: update existing orders in-place, add new, remove deleted.
+     * OWL only re-renders cards whose reactive properties actually changed.
+     */
+    _mergeResult(result) {
+        // Stats handled independently — only update if backend returned them
+        if (result.dashboard_stats) {
+            this.state.dashboardStats = result.dashboard_stats;
+        }
+        this.state.totalCount = result.total_count || 0;
+
+        const newOrders = result.orders || [];
+        const todayStr = new Date().toISOString().slice(0, 10);
+
+        // Build map of current orders by ID for O(1) lookup
+        const oldMap = new Map();
+        for (const so of this.state.saleOrders) {
+            oldMap.set(so.id, so);
+        }
+
+        // Build new order list, reusing old objects where nothing changed
+        const merged = [];
+        for (const fresh of newOrders) {
+            fresh.flows = fresh.flows || [];
+            fresh.pickings = fresh.pickings || [];
+            fresh.lines = fresh.lines || [];
+            fresh.pos = fresh.pos || [];
+            const orderDate = fresh.misa_order_date || (fresh.date_order ? fresh.date_order.substring(0, 10) : '');
+            fresh.is_new_order = orderDate === todayStr;
+
+            const old = oldMap.get(fresh.id);
+            if (old) {
+                // Update existing order in-place (OWL detects property changes)
+                const skipKeys = new Set(['id']);
+                for (const key of Object.keys(fresh)) {
+                    if (skipKeys.has(key)) continue;
+                    old[key] = fresh[key];
+                }
+                // Re-apply flow link colors
+                this._applyFlowColors(old);
+                merged.push(old);
+                oldMap.delete(fresh.id);
+            } else {
+                // New order
+                this._applyFlowColors(fresh);
+                merged.push(fresh);
+            }
+        }
+
+        // Replace array only if order IDs changed (added/removed/reordered)
+        const oldIds = this.state.saleOrders.map(o => o.id).join(',');
+        const newIds = merged.map(o => o.id).join(',');
+        if (oldIds !== newIds) {
+            this.state.saleOrders = merged;
+        }
+
+        // Update warehouses/tags if first time
+        if (this.state.warehouses.length === 0) {
+            this.state.warehouses = result.warehouses || [];
+        }
+        if (this.state.tags.length === 0) {
+            this.state.tags = result.tags || [];
+        }
+    }
+
+    _applyFlowColors(so) {
+        const nodeByName = {};
+        so.flows.forEach(flow => {
+            (flow.nodes || []).forEach(node => { nodeByName[node.name] = node; });
+        });
+        const colorClasses = ['info', 'warning', 'danger', 'primary', 'success', 'dark'];
+        let colorIdx = 0;
+        so.flows.forEach(flow => {
+            (flow.nodes || []).forEach(node => {
+                const parentName = node.return_of || node.backorder_of;
+                if (parentName && nodeByName[parentName]) {
+                    const parentNode = nodeByName[parentName];
+                    node.parent_seq = parentNode.global_seq;
+                    if (!parentNode.link_color) {
+                        parentNode.link_color = colorClasses[colorIdx % colorClasses.length];
+                        colorIdx++;
+                    }
+                    node.link_color = parentNode.link_color;
+                }
+            });
+        });
+    }
+
+
+    // --- IndexedDB Cache helpers ---
+    _CACHE_DB = 'hlv_dp_cache';
+    _CACHE_STORE = 'dashboard';
+    _CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+    _openCacheDB() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(this._CACHE_DB, 1);
+            req.onupgradeneeded = () => {
+                const db = req.result;
+                if (!db.objectStoreNames.contains(this._CACHE_STORE)) {
+                    db.createObjectStore(this._CACHE_STORE);
+                }
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    _buildFilterKey() {
+        return JSON.stringify({
+            q: this.state.searchQuery.trim(),
+            wh: this.state.filterWarehouseId,
+            ds: this.state.filterDeliveryStatus,
+            ss: this.state.filterStockStatus,
+            ps: this.state.filterPackingStatus,
+            df: this.state.filterDateFrom,
+            dt: this.state.filterDateTo,
+            ddf: this.state.filterDoneDateFrom,
+            ddt: this.state.filterDoneDateTo,
+            pdf: this.state.filterPODateFrom,
+            pdt: this.state.filterPODateTo,
+            pos: this.state.filterPOStatus,
+            sc: this.state.filterSalerCode.trim(),
+            htgh: this.state.filterHtgh.trim(),
+            dtype: this.state.filterDeliveryType,
+            tags: this.state.filterTagIds.join(','),
+            comp: this.state.showCompleted,
+            nt: this.state.filterNeedTransfer,
+            no: this.state.filterNewOrders,
+            pr: this.state.filterPrintStatus,
+            sr: this.state.filterShipperReceived,
+            vm: this.state.viewMode,
+        });
+    }
+
+    async _saveToCache(result) {
+        try {
+            const db = await this._openCacheDB();
+            const tx = db.transaction(this._CACHE_STORE, 'readwrite');
+            tx.objectStore(this._CACHE_STORE).put({
+                filterKey: this._buildFilterKey(),
+                timestamp: Date.now(),
+                kanbanBatchSize: this.state.kanbanBatchSize,
+                data: {
+                    dashboard_stats: result.dashboard_stats,
+                    orders: result.orders,
+                    total_count: result.total_count,
+                    warehouses: result.warehouses,
+                    tags: result.tags,
+                },
+            }, 'latest');
+            await new Promise((resolve, reject) => {
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+            db.close();
+            console.log('[DP Cache] Saved', (result.orders || []).length, 'orders to IndexedDB');
+        } catch (e) {
+            console.warn('[DP Cache] _saveToCache failed:', e);
+        }
+    }
+
+    async _loadFromCache() {
+        try {
+            const db = await this._openCacheDB();
+            return new Promise((resolve) => {
+                const tx = db.transaction(this._CACHE_STORE, 'readonly');
+                const req = tx.objectStore(this._CACHE_STORE).get('latest');
+                req.onsuccess = () => {
+                    db.close();
+                    const payload = req.result;
+                    if (!payload) { console.log('[DP Cache] No cached data found'); return resolve(null); }
+                    if (payload.filterKey !== this._buildFilterKey()) { console.log('[DP Cache] Filter key mismatch, skipping cache'); return resolve(null); }
+                    if (Date.now() - payload.timestamp > this._CACHE_TTL) { console.log('[DP Cache] Cache expired'); return resolve(null); }
+                    // Restore kanbanBatchSize so "tải thêm" data persists
+                    if (payload.kanbanBatchSize) {
+                        this.state.kanbanBatchSize = payload.kanbanBatchSize;
+                    }
+                    console.log('[DP Cache] Restored', (payload.data.orders || []).length, 'orders (batchSize=' + (payload.kanbanBatchSize || '?') + ') from IndexedDB');
+                    resolve(payload.data);
+                };
+                req.onerror = () => { db.close(); console.warn('[DP Cache] _loadFromCache read error'); resolve(null); };
+            });
+        } catch (e) {
+            console.warn('[DP Cache] _loadFromCache failed:', e);
+            return null;
+        }
+    }
+
+    _applyResult(result) {
+        // NOTE: do not overwrite dashboardStats here — stats are loaded
+        // independently via _fetchStatsAsync so the kanban/table can render
+        // without waiting on stats compute. We only assign if the backend
+        // actually returned non-null stats (legacy callers / first paint).
+        if (result.dashboard_stats) {
+            this.state.dashboardStats = result.dashboard_stats;
+        }
+        const fetchedOrders = result.orders || [];
+        this.state.saleOrders = fetchedOrders.map(so => {
+            so.flows = so.flows || [];
+            so.pickings = so.pickings || [];
+            so.lines = so.lines || [];
+            so.pos = so.pos || [];
+            this._applyFlowColors(so);
+            return so;
+        });
+
+        // Đánh dấu đơn mới: misa_order_date (hoặc date_order) = hôm nay
+        const todayStr = new Date().toISOString().slice(0, 10);
+        for (const so of this.state.saleOrders) {
+            const orderDate = so.misa_order_date || (so.date_order ? so.date_order.substring(0, 10) : '');
+            so.is_new_order = orderDate === todayStr;
+        }
+
+        this.state.totalCount = result.total_count || 0;
+        if (this.state.warehouses.length === 0) {
+            this.state.warehouses = result.warehouses || [];
+        }
+        if (this.state.tags.length === 0) {
+            this.state.tags = result.tags || [];
+        }
+    }
+
+    /**
+     * Build the kwargs object passed to RPC calls.
+     * Shared by full data fetch and stats-only prefetch.
+     */
+    _buildFetchKwargs() {
+        return {
+            search_query: this.state.searchQuery.trim(),
+            filter_warehouse_id: this.state.filterWarehouseId,
+            filter_delivery_status: this.state.filterDeliveryStatus,
+            filter_stock_status: this.state.filterStockStatus,
+            filter_date_from: this.state.filterDateFrom,
+            filter_date_to: this.state.filterDateTo,
+            filter_done_date_from: this.state.filterDoneDateFrom,
+            filter_done_date_to: this.state.filterDoneDateTo,
+            filter_po_date_from: this.state.filterPODateFrom,
+            filter_po_date_to: this.state.filterPODateTo,
+            filter_po_status: this.state.filterPOStatus,
+            filter_packing_status: this.state.filterPackingStatus,
+            filter_saler_code: this.state.filterSalerCode.trim(),
+            filter_htgh: this.state.filterHtgh.trim(),
+            filter_delivery_type: this.state.filterDeliveryType,
+            filter_tag_ids: this.state.filterTagIds.join(','),
+            show_completed: this.state.showCompleted,
+            filter_need_transfer: this.state.filterNeedTransfer,
+            filter_new_orders: this.state.filterNewOrders,
+            filter_print_status: this.state.filterPrintStatus,
+            filter_shipper_received: this.state.filterShipperReceived,
+        };
+    }
+
+    /**
+     * Fetch KPI stats independently of the main data fetch. Runs in the
+     * background and updates `state.dashboardStats` whenever it returns —
+     * the table/kanban/card view never waits on it. Cached on backend so
+     * cost is ~ms when warm.
+     */
+    async _fetchStatsAsync() {
+        const myToken = (this._statsRequestSeq = (this._statsRequestSeq || 0) + 1);
+        this.state.statsLoading = true;
+        try {
+            const stats = await this.orm.call(
+                "sale.order",
+                "get_delivery_dashboard_stats",
+                [],
+                this._buildFetchKwargs(),
+            );
+            // Drop stale responses if a newer request superseded this one
+            if (myToken !== this._statsRequestSeq) return;
+            if (stats && stats.dashboard_stats) {
+                this.state.dashboardStats = stats.dashboard_stats;
+                if (typeof stats.total_count === 'number') {
+                    // Only update totalCount from stats if main fetch hasn't
+                    // already populated it (avoid flicker).
+                    if (!this.state.totalCount) {
+                        this.state.totalCount = stats.total_count;
+                    }
+                }
+            }
+        } catch (e) {
+            console.debug('[DP Stats] async fetch failed:', e);
+        } finally {
+            if (myToken === this._statsRequestSeq) {
+                this.state.statsLoading = false;
+            }
+        }
+    }
+
+    async fetchData() {
+        // Don't show full loading spinner if we already have data on screen
+        // (cache restored OR previous fetch already populated saleOrders).
+        // This prevents the full-screen overlay from flashing on every
+        // filter change — instead the user keeps seeing the current rows
+        // while a thin "refreshing" indicator runs at the top.
+        const hasDataOnScreen = this._isCacheRestored || (this.state.saleOrders && this.state.saleOrders.length > 0);
+        if (!hasDataOnScreen) {
+            this.state.isLoading = true;
+        } else {
+            this.state.isRefreshing = true;
+        }
+        const isKanban = this.state.viewMode === 'kanban';
+
+        // Fire stats fetch INDEPENDENTLY — we don't await it. Stats render
+        // when ready, and never block kanban/table painting.
+        this._fetchStatsAsync();
+
+        try {
+            const result = await this.orm.call(
+                "sale.order",
+                "get_delivery_dashboard_data",
+                [],
+                {
+                    ...this._buildFetchKwargs(),
                     // Kanban tải theo batch, không phân trang backend
                     limit: isKanban ? this.state.kanbanBatchSize : this.state.itemsPerPage,
                     offset: isKanban ? 0 : (this.state.currentPage - 1) * this.state.itemsPerPage,
+                    include_stats: false,
                 }
             );
 
-            this.state.dashboardStats = result.dashboard_stats || { total: 0, ready: 0, partial: 0, out_of_stock: 0 };
-            const fetchedOrders = result.orders || [];
-            this.state.saleOrders = fetchedOrders.map(so => {
-                so.flows = so.flows || [];
-                so.pickings = so.pickings || [];
-                so.lines = so.lines || [];
-                so.pos = so.pos || [];
-
-                // Map of name -> node for finding parent
-                const nodeByName = {};
-                so.flows.forEach(flow => {
-                    (flow.nodes || []).forEach(node => {
-                        nodeByName[node.name] = node;
-                    });
-                });
-
-                // Assign persistent visual link info
-                const colorClasses = ['info', 'warning', 'danger', 'primary', 'success', 'dark'];
-                let colorIdx = 0;
-
-                so.flows.forEach(flow => {
-                    (flow.nodes || []).forEach(node => {
-                        const parentName = node.return_of || node.backorder_of;
-                        if (parentName && nodeByName[parentName]) {
-                            const parentNode = nodeByName[parentName];
-                            node.parent_seq = parentNode.global_seq;
-
-                            if (!parentNode.link_color) {
-                                parentNode.link_color = colorClasses[colorIdx % colorClasses.length];
-                                colorIdx++;
-                            }
-                            node.link_color = parentNode.link_color;
-                        }
-                    });
-                });
-
-                return so;
-            });
-
-            // Đánh dấu đơn mới: misa_order_date (hoặc date_order) = hôm nay
-            const todayStr = new Date().toISOString().slice(0, 10);
-            for (const so of this.state.saleOrders) {
-                const orderDate = so.misa_order_date || (so.date_order ? so.date_order.substring(0, 10) : '');
-                so.is_new_order = orderDate === todayStr;
-            }
-
-            this.state.totalCount = result.total_count || 0;
-            if (this.state.warehouses.length === 0) {
-                this.state.warehouses = result.warehouses || [];
-            }
-            if (this.state.tags.length === 0) {
-                this.state.tags = result.tags || [];
-            }
+            this._applyResult(result);
+            // Save to IndexedDB cache for instant restore on next page load
+            await this._saveToCache(result);
         } catch (error) {
             console.error("Lỗi khi tải dữ liệu bảng điều phối:", error);
         } finally {
             this.state.isLoading = false;
+            this.state.isRefreshing = false;
         }
     }
 
@@ -459,7 +896,192 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     get paginatedOrders() {
-        return this.state.saleOrders;
+        return this._applyArchiveFilter(this.state.saleOrders);
+    }
+
+    /**
+     * Apply the archive (cất đơn) view filter:
+     *  - showArchivedOnly = true  → only archived SOs
+     *  - showArchivedOnly = false → all SOs except archived
+     */
+    _applyArchiveFilter(orders) {
+        const archived = this.state.archivedSOIds;
+        if (this.state.showArchivedOnly) {
+            return orders.filter(so => archived.has(so.id));
+        }
+        if (!archived.size) return orders;
+        return orders.filter(so => !archived.has(so.id));
+    }
+
+    isSOArchived(soId) {
+        return this.state.archivedSOIds.has(soId);
+    }
+
+    async toggleArchiveSO(soId) {
+        if (!soId) return;
+        // Optimistic UI update — flip immediately so user sees feedback,
+        // then sync to backend. Revert on failure.
+        const wasArchived = this.state.archivedSOIds.has(soId);
+        if (wasArchived) {
+            this.state.archivedSOIds.delete(soId);
+        } else {
+            this.state.archivedSOIds.add(soId);
+        }
+        try {
+            const res = await this.orm.call(
+                'hlv.delivery.planner.user.pref', 'toggle_archive', [], { so_id: soId }
+            );
+            // Sync with server-truth (handles concurrent edits in another tab)
+            this.state.archivedSOIds = new Set(res.archived_so_ids || []);
+        } catch (e) {
+            console.error('toggle_archive failed:', e);
+            // Revert
+            if (wasArchived) {
+                this.state.archivedSOIds.add(soId);
+            } else {
+                this.state.archivedSOIds.delete(soId);
+            }
+            this.notification.add('Không thể cập nhật trạng thái cất đơn', {
+                type: 'danger', title: 'Lỗi',
+            });
+        }
+    }
+
+    toggleShowArchivedOnly() {
+        this.state.showArchivedOnly = !this.state.showArchivedOnly;
+    }
+
+    async clearAllArchived() {
+        if (!this.state.archivedSOIds.size) return;
+        if (!window.confirm('Phục hồi tất cả ' + this.state.archivedSOIds.size + ' đơn đã cất?')) return;
+        try {
+            await this.orm.call(
+                'hlv.delivery.planner.user.pref', 'set_archived', [], { so_ids: [] }
+            );
+            this.state.archivedSOIds = new Set();
+            this.state.showArchivedOnly = false;
+        } catch (e) {
+            console.error('clearAllArchived failed:', e);
+            this.notification.add('Không thể phục hồi đơn đã cất', {
+                type: 'danger', title: 'Lỗi',
+            });
+        }
+    }
+
+    /**
+     * Load per-user preferences from backend on startup. Applies the saved
+     * default filter set IN PLACE on this.state, so the first fetchData()
+     * call uses them. Falls back silently if the model is missing (module
+     * not yet upgraded) — UI still works, just without backend persistence.
+     */
+    async _loadUserPreferences() {
+        try {
+            const res = await this.orm.call(
+                'hlv.delivery.planner.user.pref', 'get_user_preferences', [], {}
+            );
+            this.state.archivedSOIds = new Set(res.archived_so_ids || []);
+            const defaults = res.default_filters || {};
+            if (defaults && Object.keys(defaults).length) {
+                this._applyFilterSnapshot(defaults);
+                this.state.hasDefaultFilters = true;
+            }
+        } catch (e) {
+            console.warn('[DP Pref] could not load user preferences:', e);
+        }
+    }
+
+    /**
+     * Snapshot of all filter form state — keys MUST match _applyFilterSnapshot
+     * (and _buildFetchKwargs where applicable). Stored as JSON in user pref.
+     */
+    _buildFilterSnapshot() {
+        const s = this.state;
+        return {
+            searchQuery: s.searchQuery,
+            filterWarehouseId: s.filterWarehouseId,
+            filterDeliveryStatus: s.filterDeliveryStatus,
+            filterStockStatus: s.filterStockStatus,
+            filterPackingStatus: s.filterPackingStatus,
+            filterDateFrom: s.filterDateFrom,
+            filterDateTo: s.filterDateTo,
+            filterDoneDateFrom: s.filterDoneDateFrom,
+            filterDoneDateTo: s.filterDoneDateTo,
+            filterPODateFrom: s.filterPODateFrom,
+            filterPODateTo: s.filterPODateTo,
+            filterPOStatus: s.filterPOStatus,
+            filterSalerCode: s.filterSalerCode,
+            filterHtgh: s.filterHtgh,
+            filterDeliveryType: s.filterDeliveryType,
+            filterTagIds: Array.from(s.filterTagIds || []),
+            showCompleted: s.showCompleted,
+            filterNeedTransfer: s.filterNeedTransfer,
+            filterNewOrders: s.filterNewOrders,
+            viewMode: s.viewMode,
+            kanbanGroupBy: s.kanbanGroupBy,
+        };
+    }
+
+    _applyFilterSnapshot(snap) {
+        if (!snap || typeof snap !== 'object') return;
+        const s = this.state;
+        const assign = (key, fallback) => {
+            if (snap[key] !== undefined && snap[key] !== null) s[key] = snap[key];
+            else if (fallback !== undefined) s[key] = fallback;
+        };
+        assign('searchQuery');
+        assign('filterWarehouseId');
+        assign('filterDeliveryStatus');
+        assign('filterStockStatus');
+        assign('filterPackingStatus');
+        assign('filterDateFrom');
+        assign('filterDateTo');
+        assign('filterDoneDateFrom');
+        assign('filterDoneDateTo');
+        assign('filterPODateFrom');
+        assign('filterPODateTo');
+        assign('filterPOStatus');
+        assign('filterSalerCode');
+        assign('filterHtgh');
+        assign('filterDeliveryType');
+        if (Array.isArray(snap.filterTagIds)) s.filterTagIds = snap.filterTagIds.slice();
+        assign('showCompleted');
+        assign('filterNeedTransfer');
+        assign('filterNewOrders');
+        assign('viewMode');
+        assign('kanbanGroupBy');
+    }
+
+    /** Save the current filter form as the user's default. */
+    async saveCurrentFiltersAsDefault() {
+        try {
+            const snap = this._buildFilterSnapshot();
+            await this.orm.call(
+                'hlv.delivery.planner.user.pref', 'save_default_filters',
+                [], { filters: snap }
+            );
+            this.state.hasDefaultFilters = true;
+            this.notification.add('Đã lưu bộ lọc mặc định cho bạn', {
+                type: 'success', title: 'Lưu thành công',
+            });
+        } catch (e) {
+            console.error('saveCurrentFiltersAsDefault failed:', e);
+            this.notification.add('Không thể lưu bộ lọc mặc định', {
+                type: 'danger', title: 'Lỗi',
+            });
+        }
+    }
+
+    async clearDefaultFilters() {
+        if (!window.confirm('Xoá bộ lọc mặc định đã lưu?')) return;
+        try {
+            await this.orm.call(
+                'hlv.delivery.planner.user.pref', 'clear_default_filters', [], {}
+            );
+            this.state.hasDefaultFilters = false;
+            this.notification.add('Đã xoá bộ lọc mặc định', { type: 'info' });
+        } catch (e) {
+            console.error('clearDefaultFilters failed:', e);
+        }
     }
 
     // --- Actions ---
@@ -505,6 +1127,278 @@ export class DeliveryPlannerDashboard extends Component {
         await this.fetchData();
     }
 
+    // ============================================================
+    // TABLE (BẢNG) VIEW HELPERS
+    // ============================================================
+    toggleTableSort(field) {
+        if (this.state.tableSortField === field) {
+            this.state.tableSortDir = this.state.tableSortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.state.tableSortField = field;
+            this.state.tableSortDir = 'asc';
+        }
+    }
+
+    /**
+     * Reset toàn bộ filter cột Bảng (các filter backend được bind từ
+     * dropdown trên column header) về giá trị mặc định và refetch backend.
+     */
+    async resetTableColumnFilters() {
+        this.state.filterWarehouseId = 'all';
+        this.state.filterDeliveryStatus = 'all';
+        this.state.filterStockStatus = 'all';
+        this.state.filterPackingStatus = 'all';
+        this.state.filterDeliveryType = 'all';
+        this.state.filterTagIds = [];
+        this.state.filterPrintStatus = 'all';
+        this.state.filterShipperReceived = 'all';
+        this.state.filterHtgh = '';
+        this.state.filterSalerCode = '';
+        this.state.searchQuery = '';
+        this.state.filterDateFrom = '';
+        await this.onFilterChange();
+    }
+
+    toggleTableRowExpand(soId) {
+        if (this.state.expandedTableRows.has(soId)) {
+            this.state.expandedTableRows.delete(soId);
+        } else {
+            this.state.expandedTableRows.add(soId);
+        }
+        // Force reactivity
+        this.state.expandedTableRows = new Set(this.state.expandedTableRows);
+    }
+
+    isTableRowExpanded(soId) {
+        return this.state.expandedTableRows.has(soId);
+    }
+
+    /**
+     * Debounced backend filter trigger for Bảng column text inputs.
+     * Updates `state[stateKey]` immediately (so input value is responsive)
+     * but waits 400ms of idle before calling onFilterChange() → backend.
+     */
+    setTableFilterDebounced(stateKey, value) {
+        this.state[stateKey] = value;
+        if (this._tableFilterDebounceTimer) {
+            clearTimeout(this._tableFilterDebounceTimer);
+        }
+        this._tableFilterDebounceTimer = setTimeout(() => {
+            this._tableFilterDebounceTimer = null;
+            this.onFilterChange();
+        }, 400);
+    }
+
+    /** True if any filter beyond the defaults is active (used to show "clear" button on Bảng) */
+    get hasAnyTableFilter() {
+        const s = this.state;
+        return (
+            (s.searchQuery && s.searchQuery.trim()) ||
+            (s.filterWarehouseId && s.filterWarehouseId !== 'all') ||
+            (s.filterDeliveryStatus && s.filterDeliveryStatus !== 'all' && s.filterDeliveryStatus !== 'pending_partial') ||
+            (s.filterStockStatus && s.filterStockStatus !== 'all') ||
+            (s.filterPackingStatus && s.filterPackingStatus !== 'all') ||
+            (s.filterDeliveryType && s.filterDeliveryType !== 'all') ||
+            (s.filterHtgh && s.filterHtgh.trim()) ||
+            (s.filterSalerCode && s.filterSalerCode.trim()) ||
+            (s.filterTagIds && s.filterTagIds.length > 0)
+        );
+    }
+
+    /** Reset all Bảng-relevant filters to default and refetch */
+    async clearAllTableFilters() {
+        this.state.searchQuery = '';
+        this.state.filterWarehouseId = 'all';
+        this.state.filterDeliveryStatus = 'pending_partial';
+        this.state.filterStockStatus = 'all';
+        this.state.filterPackingStatus = 'all';
+        this.state.filterDeliveryType = 'all';
+        this.state.filterHtgh = '';
+        this.state.filterSalerCode = '';
+        this.state.filterTagIds = [];
+        await this.onFilterChange();
+    }
+
+    /**
+     * Compute the print status of a SO based on its outbound (PICK) pickings:
+     *   - 'none'    : không có phiếu PICK
+     *   - 'unprinted'  : có phiếu nhưng chưa in cái nào
+     *   - 'partial'    : in một phần
+     *   - 'printed'    : tất cả PICK đã in
+     */
+    getSOPrintStatus(so) {
+        const pickings = (so.pickings || []).filter(p => (p.sequence_code || '').toUpperCase().startsWith('PICK'));
+        if (!pickings.length) return 'none';
+        const printed = pickings.filter(p => p.printed).length;
+        if (printed === 0) return 'unprinted';
+        if (printed === pickings.length) return 'printed';
+        return 'partial';
+    }
+
+    getPrintStatusLabel(status) {
+        return ({
+            none: '—',
+            unprinted: 'Chưa in',
+            partial: 'In một phần',
+            printed: 'Đã in',
+        })[status] || '—';
+    }
+
+    getPrintStatusBadgeClass(status) {
+        return ({
+            none: 'bg-light text-muted',
+            unprinted: 'bg-danger text-white',
+            partial: 'bg-warning text-dark',
+            printed: 'bg-success text-white',
+        })[status] || 'bg-light text-muted';
+    }
+
+    /**
+     * Compute shipper-receive status of a SO based on its outbound pickings:
+     *   - 'none'      : không có phiếu PICK
+     *   - 'unreceived': chưa shipper nào nhận
+     *   - 'partial'   : nhận một phần
+     *   - 'received'  : tất cả đã nhận
+     */
+    getSOReceiveStatus(so) {
+        const pickings = (so.pickings || []).filter(p => (p.sequence_code || '').toUpperCase().startsWith('PICK'));
+        if (!pickings.length) return 'none';
+        const received = pickings.filter(p => p.shipper_received).length;
+        if (received === 0) return 'unreceived';
+        if (received === pickings.length) return 'received';
+        return 'partial';
+    }
+
+    getReceiveStatusLabel(status) {
+        return ({
+            none: '—',
+            unreceived: 'Chưa nhận',
+            partial: 'Nhận một phần',
+            received: 'Đã nhận',
+        })[status] || '—';
+    }
+
+    getReceiveStatusBadgeClass(status) {
+        return ({
+            none: 'bg-light text-muted',
+            unreceived: 'bg-secondary text-white',
+            partial: 'bg-warning text-dark',
+            received: 'bg-info text-dark',
+        })[status] || 'bg-light text-muted';
+    }
+
+    /** Sorted client-side based on tableSortField/tableSortDir.
+     *  Filtering is now done on the BACKEND via state.filter* fields. */
+    get tableSortedOrders() {
+        const orders = this._applyArchiveFilter(this.state.saleOrders || []);
+        const field = this.state.tableSortField;
+        const dir = this.state.tableSortDir === 'asc' ? 1 : -1;
+        const getVal = (so) => {
+            switch (field) {
+                case 'name':              return so.name || '';
+                case 'misa_order_date':   return so.misa_order_date || '';
+                case 'partner':           return (so.partner_id && so.partner_id[1]) || '';
+                case 'warehouse':         return (so.warehouse_id && so.warehouse_id[1]) || '';
+                case 'delivery_status':   return so.real_delivery_status || so.delivery_status || '';
+                case 'stock_status':      return so.stock_status || '';
+                case 'packing_status':    return so.packing_status || '';
+                case 'commitment_date':   return so.commitment_date || '';
+                case 'amount_total':      return Number(so.amount_total) || 0;
+                default:                  return '';
+            }
+        };
+        // Copy first to avoid mutating the reactive proxy in-place
+        const arr = orders.slice();
+        arr.sort((a, b) => {
+            const va = getVal(a);
+            const vb = getVal(b);
+            if (typeof va === 'number' && typeof vb === 'number') {
+                return (va - vb) * dir;
+            }
+            return String(va).localeCompare(String(vb), 'vi') * dir;
+        });
+        return arr;
+    }
+
+    /** Color-code main row by status (delivery + packing) */
+    getTableRowClass(so) {
+        const classes = ['cursor-pointer'];
+        const ds = so.real_delivery_status || so.delivery_status;
+        if (ds === 'full') {
+            classes.push('hlv-row-delivered');
+        } else if (so.stock_status === 'out_of_stock') {
+            classes.push('hlv-row-oos');
+        } else if (so.stock_status === 'partial_ready') {
+            classes.push('hlv-row-partial');
+        } else if (so.stock_status === 'ready') {
+            classes.push('hlv-row-ready');
+        }
+        if (so.is_returned_or_stopped) {
+            classes.push('hlv-row-stopped');
+        }
+        if (so.has_unread_message) {
+            classes.push('hlv-row-unread');
+        }
+        return classes.join(' ');
+    }
+
+    /** Collect distinct shipper names from active pickings */
+    getShippersForSO(so) {
+        const seen = new Set();
+        const out = [];
+        for (const pk of (so.pickings || [])) {
+            const u = pk.shipper_user;
+            if (u && !seen.has(u)) {
+                seen.add(u);
+                out.push(u);
+            }
+        }
+        return out;
+    }
+
+    /** Select / deselect all SO currently visible (sorted page) */
+    toggleSelectAllVisibleSO() {
+        const visible = this.tableSortedOrders;
+        const allSelected = visible.length > 0 &&
+            visible.every(so => this.state.selectedSOIds.has(so.id));
+        if (allSelected) {
+            visible.forEach(so => this.state.selectedSOIds.delete(so.id));
+        } else {
+            visible.forEach(so => this.state.selectedSOIds.add(so.id));
+        }
+        this.state.selectedSOIds = new Set(this.state.selectedSOIds);
+    }
+
+    get allTableRowsSelected() {
+        const visible = this.tableSortedOrders;
+        return visible.length > 0 &&
+            visible.every(so => this.state.selectedSOIds.has(so.id));
+    }
+
+    /** Column resize: drag right border of <th> to change its width */
+    onColResizeStart(ev, colKey) {
+        ev.stopPropagation();
+        ev.preventDefault();
+        const th = ev.target.closest('th');
+        if (!th) return;
+        const startX = ev.clientX;
+        const startWidth = th.offsetWidth;
+        const onMove = (e) => {
+            const delta = e.clientX - startX;
+            const newW = Math.max(80, startWidth + delta);
+            th.style.width = newW + 'px';
+            th.style.minWidth = newW + 'px';
+        };
+        const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            document.body.style.userSelect = '';
+        };
+        document.body.style.userSelect = 'none';
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    }
+
     setKanbanGroupBy(dim) {
         this.state.kanbanGroupBy = dim;
         this.state.kanbanColumnOrder = {};
@@ -548,7 +1442,15 @@ export class DeliveryPlannerDashboard extends Component {
         const field = fieldMap[dim];
 
         const needTransfer = this.state.filterNeedTransfer;
+        const archived = this.state.archivedSOIds;
+        const showArchivedOnly = this.state.showArchivedOnly;
         const base = this.state.saleOrders.filter(so => {
+            // Archive (cất đơn) — apply BEFORE column grouping so card counts reflect view.
+            if (showArchivedOnly) {
+                if (!archived.has(so.id)) return false;
+            } else if (archived.has(so.id)) {
+                return false;
+            }
             if (so.is_returned_or_stopped) return false;   // hiện riêng trong cột "Trả hàng"
             let val = so[field];
             if (dim === 'delivery_status' && val === 'unshipped') val = 'pending';
@@ -605,15 +1507,122 @@ export class DeliveryPlannerDashboard extends Component {
         return this.state.viewMode === 'kanban' && this.state.saleOrders.length < this.state.totalCount;
     }
 
+    get remainingKanbanCount() {
+        return Math.max(0, (this.state.totalCount || 0) - (this.state.saleOrders || []).length);
+    }
+
+    /**
+     * Tải hết các đơn còn lại trong Kanban với MỘT request duy nhất
+     * (limit = số còn lại). Có confirm để tránh bấm nhầm.
+     */
+    async loadAllKanbanBatch() {
+        if (this.state.isLoading || this.state.isLoadingMore || !this.hasMoreKanbanData) return;
+        const remaining = this.remainingKanbanCount;
+        if (!remaining) return;
+        // Soft-confirm khi số đơn còn lại lớn để tránh tải nhầm gây lag
+        if (remaining > 300) {
+            const ok = window.confirm(`Tải tất cả ${remaining} đơn còn lại? Có thể chậm nếu số lượng lớn.`);
+            if (!ok) return;
+        }
+        const currentLen = this.state.saleOrders.length;
+        this.state.isLoadingMore = true;
+        try {
+            const result = await this.orm.call(
+                "sale.order",
+                "get_delivery_dashboard_data",
+                [],
+                {
+                    ...this._buildFetchKwargs(),
+                    limit: remaining,
+                    offset: currentLen,
+                    include_stats: false,
+                }
+            );
+            const fresh = (result && result.orders) || [];
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const existingIds = new Set(this.state.saleOrders.map(o => o.id));
+            for (const so of fresh) {
+                if (existingIds.has(so.id)) continue;
+                so.flows = so.flows || [];
+                so.pickings = so.pickings || [];
+                so.lines = so.lines || [];
+                so.pos = so.pos || [];
+                this._applyFlowColors(so);
+                const orderDate = so.misa_order_date || (so.date_order ? so.date_order.substring(0, 10) : '');
+                so.is_new_order = orderDate === todayStr;
+                this.state.saleOrders.push(so);
+            }
+            if (typeof result.total_count === 'number') {
+                this.state.totalCount = result.total_count;
+            }
+            this.state.kanbanBatchSize = this.state.saleOrders.length;
+            await this._saveToCache({
+                dashboard_stats: this.state.dashboardStats,
+                orders: this.state.saleOrders,
+                total_count: this.state.totalCount,
+                warehouses: this.state.warehouses,
+                tags: this.state.tags,
+            });
+        } catch (e) {
+            console.error("loadAllKanbanBatch failed:", e);
+        } finally {
+            this.state.isLoadingMore = false;
+        }
+    }
+
     async loadMoreKanbanBatch() {
-        if (this.state.isLoading || !this.hasMoreKanbanData) return;
-        this.state.kanbanBatchSize += 100;
-        await this.fetchData();
+        if (this.state.isLoading || this.state.isLoadingMore || !this.hasMoreKanbanData) return;
+        const BATCH = 100;
+        const currentLen = this.state.saleOrders.length;
+        this.state.isLoadingMore = true;
+        try {
+            const result = await this.orm.call(
+                "sale.order",
+                "get_delivery_dashboard_data",
+                [],
+                {
+                    ...this._buildFetchKwargs(),
+                    limit: BATCH,
+                    offset: currentLen,
+                    include_stats: false,
+                }
+            );
+            const fresh = (result && result.orders) || [];
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const existingIds = new Set(this.state.saleOrders.map(o => o.id));
+            for (const so of fresh) {
+                if (existingIds.has(so.id)) continue; // dedupe (e.g. bus update during fetch)
+                so.flows = so.flows || [];
+                so.pickings = so.pickings || [];
+                so.lines = so.lines || [];
+                so.pos = so.pos || [];
+                this._applyFlowColors(so);
+                const orderDate = so.misa_order_date || (so.date_order ? so.date_order.substring(0, 10) : '');
+                so.is_new_order = orderDate === todayStr;
+                this.state.saleOrders.push(so);
+            }
+            if (typeof result.total_count === 'number') {
+                this.state.totalCount = result.total_count;
+            }
+            this.state.kanbanBatchSize = this.state.saleOrders.length;
+            // Persist appended state to cache
+            await this._saveToCache({
+                dashboard_stats: this.state.dashboardStats,
+                orders: this.state.saleOrders,
+                total_count: this.state.totalCount,
+                warehouses: this.state.warehouses,
+                tags: this.state.tags,
+            });
+        } catch (e) {
+            console.error("loadMoreKanbanBatch failed:", e);
+        } finally {
+            this.state.isLoadingMore = false;
+        }
     }
 
     // --- Returned / Stopped orders group ---
     get returnedOrders() {
-        return this.state.saleOrders.filter(so => so.is_returned_or_stopped);
+        return this._applyArchiveFilter(this.state.saleOrders.filter(so => so.is_returned_or_stopped));
     }
 
     get returnedOrdersPaged() {
@@ -725,13 +1734,16 @@ export class DeliveryPlannerDashboard extends Component {
 
     async printSelectedPickingSlips(reportId = null, reportType = 'qweb-pdf') {
         if (this.selectedCount === 0) return;
+        if (this.state.isPrintingPickingSlips) return;
 
         const selectedIds = Array.from(this.state.selectedSOIds);
         const pickingIds = this.getSelectedPickingIds();
         this.state.selectedPrintMenuPos = null;
 
         try {
-            this.state.isLoading = true;
+            // Local flag — KHÔNG dùng state.isLoading để tránh triệu hồi full-screen overlay
+            // / re-render kanban. Bus event sẽ tự động triệu hồi subset refresh.
+            this.state.isPrintingPickingSlips = true;
 
             // Luôn gọi giữ hàng (check availability) trước khi in
             // Backend sẽ tự xác định picking nào chưa assigned để reserve
@@ -814,7 +1826,7 @@ export class DeliveryPlannerDashboard extends Component {
             console.error('Error printing picking slips:', error);
             alert('Lỗi khi in phiếu lấy hàng');
         } finally {
-            this.state.isLoading = false;
+            this.state.isPrintingPickingSlips = false;
         }
     }
 
@@ -1065,6 +2077,36 @@ export class DeliveryPlannerDashboard extends Component {
         return this.state.collapsedSections.has(sectionKey);
     }
 
+    /**
+     * Lazy-load flows for a given SO when the user expands the
+     * "Luồng Xử Lý Kho" section. The default dashboard payload no longer
+     * contains flows (heavy recursive picking-graph walk → ~40-60% CPU per
+     * page). We fetch them on demand and cache on so.flows.
+     */
+    async toggleFlowSection(so) {
+        // Mirror the global section toggle (used by other so cards too)
+        this.toggleSection('flows');
+        const expanded = !this.isSectionCollapsed('flows');
+        if (!expanded) return;
+        if (!so || !so.has_flow) return;
+        if (Array.isArray(so.flows) && so.flows.length > 0) return; // already loaded
+        if (so.flows_loading) return;
+        so.flows_loading = true;
+        try {
+            const res = await this.orm.call(
+                "sale.order", "get_delivery_so_flow", [], { so_id: so.id }
+            );
+            const flows = (res && res.flows) || [];
+            so.flows = flows;
+            this._applyFlowColors(so);
+        } catch (e) {
+            console.error("get_delivery_so_flow failed:", e);
+            so.flows = [];
+        } finally {
+            so.flows_loading = false;
+        }
+    }
+
     // --- Badge Classes (delegate to utils) ---
     getPickingStateBadgeClass(s)            { return getPickingStateBadgeClass(s); }
     getPickingStatusBadgeClass(s)           { return getPickingStatusBadgeClass(s); }
@@ -1214,7 +2256,7 @@ export class DeliveryPlannerDashboard extends Component {
             return;
         }
 
-        const allowedExt = ['.doc', '.docx', '.xls', '.xlsx', '.csv'];
+        const allowedExt = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv'];
         const maxFileSize = 20 * 1024 * 1024;
         const nextFiles = [...this.state.drawerMessageFiles];
 
@@ -1223,9 +2265,10 @@ export class DeliveryPlannerDashboard extends Component {
             const ext = lowerName.includes('.') ? lowerName.slice(lowerName.lastIndexOf('.')) : '';
             const isImage = (file.type || '').startsWith('image/');
             const isVideo = (file.type || '').startsWith('video/');
+            const isPdf = (file.type || '') === 'application/pdf' || ext === '.pdf';
             const isDoc = allowedExt.includes(ext);
 
-            if (!isImage && !isVideo && !isDoc) {
+            if (!isImage && !isVideo && !isDoc && !isPdf) {
                 this.notification.add(`File ${file.name} không thuộc định dạng hỗ trợ.`, { type: 'warning' });
                 continue;
             }

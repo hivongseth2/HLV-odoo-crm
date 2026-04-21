@@ -33,6 +33,35 @@ class IrActionsReport(models.Model):
                     and 'packages' not in report_technical
                 )
             )
+
+            # === "Biên bản" detection ===
+            # Bất kỳ report có dấu hiệu "biên bản giao nhận / bàn giao / phiếu xuất / phiếu bàn giao"
+            # hoặc các viết tắt phổ biến (BBGN, BBBG, PXBH) trong tên (vi/en hoặc technical name)
+            # và in cho stock.picking → đánh dấu x_bien_ban_printed.
+            tech_lower = report_technical.lower()
+            bien_ban_keywords = (
+                'biên bản', 'bien ban',
+                'bbgn', 'bbbg', 'pxbh',
+                'phiếu xuất', 'phieu xuat',
+                'phiếu bàn', 'phieu ban',
+                'phiếu giao nhận', 'phieu giao nhan',
+                'bàn giao', 'ban giao',
+            )
+            is_bien_ban_report = any(
+                kw in translated_name or kw in tech_lower
+                for kw in bien_ban_keywords
+            )
+            if is_bien_ban_report and report.model == 'stock.picking':
+                pickings_bb = self.env['stock.picking'].browse(res_ids).exists()
+                pickings_bb = pickings_bb.filtered(lambda p: not p.x_bien_ban_printed)
+                if pickings_bb:
+                    pickings_bb.write({'x_bien_ban_printed': True})
+                    _logger.info(
+                        'Auto-marked %d pickings as bien_ban_printed (report: %s): %s',
+                        len(pickings_bb), translated_name or report_technical,
+                        ', '.join(pickings_bb.mapped('name')),
+                    )
+
             if not is_picking_report:
                 return result
 

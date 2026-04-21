@@ -14,8 +14,8 @@
         <div class="o_action o_view_controller hlv_delivery_planner_dashboard"
              style="height: 100%; display: flex; flex-direction: column;">
             <div class="o_content bg-view bg-light" style="flex: 1; overflow-y: auto;">
-                <!-- kanban mode: không padding ngang, fullscreen -->
-                <div t-att-class="state.viewMode === 'kanban' ? 'px-3 pt-4 pb-5' : 'container-fluid pt-4 pb-5'">
+                <!-- kanban/table mode: không padding ngang, fullscreen; card mode: container-fluid -->
+                <div t-att-class="(state.viewMode === 'kanban' || state.viewMode === 'table') ? 'px-3 pt-4 pb-5' : 'container-fluid pt-4 pb-5'">
 
                     <!-- Header -->
                     <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
@@ -24,19 +24,25 @@
                             BẢNG ĐIỀU PHỐI GIAO HÀNG
                         </h2>
                         <div class="d-flex align-items-center gap-2">
-                            <!-- Toggle dạng xem -->
+                            <!-- Toggle dạng xem: Kanban / Card / Bảng -->
                             <div class="btn-group btn-group-sm" role="group" aria-label="View mode">
                                 <button class="btn"
                                         title="Dạng Kanban"
                                         t-att-class="state.viewMode === 'kanban' ? 'btn-primary' : 'btn-outline-secondary'"
                                         t-on-click="() => this.setViewMode('kanban')">
-                                    <i class="fa fa-columns" title="Kanban"></i>
+                                    <i class="fa fa-columns" title="Kanban"></i> Kanban
                                 </button>
                                 <button class="btn"
-                                        title="Dạng danh sách"
+                                        title="Dạng Card (lưới 3 cột)"
                                         t-att-class="state.viewMode === 'list' ? 'btn-primary' : 'btn-outline-secondary'"
                                         t-on-click="() => this.setViewMode('list')">
-                                    <i class="fa fa-th-large" title="Danh sách"></i>
+                                    <i class="fa fa-th-large" title="Card"></i> Card
+                                </button>
+                                <button class="btn"
+                                        title="Dạng Bảng (Excel)"
+                                        t-att-class="state.viewMode === 'table' ? 'btn-primary' : 'btn-outline-secondary'"
+                                        t-on-click="() => this.setViewMode('table')">
+                                    <i class="fa fa-table" title="Bảng"></i> Bảng
                                 </button>
                             </div>
                             <button class="btn btn-primary shadow-sm"
@@ -66,8 +72,8 @@
                         </div>
                     </div>
 
-                    <!-- Loading Spinner -->
-                    <div t-if="state.isLoading" class="text-center p-5 mt-5">
+                    <!-- Loading Spinner (only on FIRST load with no data on screen) -->
+                    <div t-if="state.isLoading and !state.saleOrders.length" class="text-center p-5 mt-5">
                         <div class="spinner-border text-primary" role="status"
                              style="width: 3rem; height: 3rem;">
                             <span class="visually-hidden">Loading...</span>
@@ -76,6 +82,12 @@
                     </div>
 
                     <div t-else="">
+                        <!-- Thin top progress bar shown while refreshing
+                             (filter change / reload) so users see existing
+                             data without a full-screen overlay flash. -->
+                        <div t-if="state.isLoading or state.isRefreshing"
+                             class="hlv-refresh-progress"
+                             title="Đang làm mới dữ liệu..."/>
                         <!-- KPI Tồn Kho -->
                         <t t-call="hlv_sale_delivery_planning.KPIStockCards"/>
 
@@ -96,7 +108,14 @@
                         </div>
 
                         <!-- ============================================
-                             LIST VIEW
+                             TABLE VIEW (Bảng / Excel-like)
+                             ============================================ -->
+                        <div t-elif="state.viewMode === 'table'">
+                            <t t-call="hlv_sale_delivery_planning.TableBoard"/>
+                        </div>
+
+                        <!-- ============================================
+                             CARD VIEW (3-col grid of SOCard)
                              ============================================ -->
                         <div t-else="">
                             <!-- Empty State -->

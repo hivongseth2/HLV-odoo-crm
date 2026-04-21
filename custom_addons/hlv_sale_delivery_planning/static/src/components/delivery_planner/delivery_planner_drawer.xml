@@ -92,6 +92,14 @@
                             <t t-esc="state.selectedOrder.misa_shipping_address"/>
                         </div>
                     </div>
+
+                    <div class="col-md-6 mb-2" t-if="state.selectedOrder.origin">
+                        <h6 class="text-muted text-uppercase small mb-2">Ghi Chú</h6>
+                        <div class="text-warning fw-bold  small">
+                            <i class="fa fa-sticky-note me-1"></i>
+                            <t t-esc="state.selectedOrder.origin"/>
+                        </div>
+                    </div>
                     <div class="col-md-12 mb-0" t-if="state.selectedOrder.tag_ids and state.selectedOrder.tag_ids.length">
                         <h6 class="text-muted text-uppercase small mb-2">Tags</h6>
                         <div class="d-flex flex-wrap gap-1">
@@ -336,6 +344,9 @@
                                                       class="badge bg-danger ms-1" style="font-size:0.6rem;">
                                                     <i class="fa fa-exclamation-circle me-1"></i>Chưa in
                                                 </span>
+                                                <span t-if="picking.bien_ban_printed" class="badge bg-info ms-1" style="font-size:0.6rem;" title="Đã in biên bản cho phiếu này">
+                                                    <i class="fa fa-file-text-o me-1"></i>Đã in BB
+                                                </span>
                                             </div>
                                             <div t-if="picking.return_of" class="small mt-1 text-danger">
                                                 <i class="fa fa-undo me-1" title="Trả hàng"></i>
@@ -401,10 +412,10 @@
                                type="file"
                                class="d-none"
                                multiple="multiple"
-                               accept=".doc,.docx,.xls,.xlsx,.csv,image/*,video/*"
+                               accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,application/pdf,image/*,video/*"
                                t-on-change="(ev) => this.onDrawerFilesSelected(ev)"/>
                         <button class="btn btn-sm btn-outline-secondary px-2"
-                                title="Đính kèm Word, Excel, ảnh, video"
+                                title="Đính kèm PDF, Word, Excel, ảnh, video"
                                 t-on-click="() => this.triggerDrawerFilePicker()">
                             <i class="fa fa-paperclip"></i>
                         </button>
