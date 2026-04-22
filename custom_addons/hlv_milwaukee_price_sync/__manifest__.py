@@ -16,6 +16,7 @@
     'data': [
         'security/ir.model.access.csv',
         'views/milwaukee_config_views.xml',
+        'views/milwaukee_pricing_views.xml',
         'views/product_template_views.xml',
     ],
     'installable': True,

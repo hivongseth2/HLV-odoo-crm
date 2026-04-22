@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- View List dành riêng cho việc quản lý giá -->
+    <record id="view_product_template_milwaukee_pricing_list" model="ir.ui.view">
+        <field name="name">product.template.milwaukee.pricing.list</field>
+        <field name="model">product.template</field>
+        <field name="arch" type="xml">
+            <list string="Quản lý giá Milwaukee" editable="bottom" create="false">
+                <field name="default_code" readonly="1"/>
+                <field name="name" readonly="1"/>
+                <field name="x_studio_ga_web" string="Giá Web (Regular)"/>
+                <field name="milwaukee_sale_price" string="Giá giảm Milwaukee"/>
+                <field name="milwaukee_id" readonly="1" optional="hide"/>
+                <button name="action_sync_to_milwaukee_single" string="Đồng bộ" type="object" icon="fa-refresh" class="btn-link"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Search view để lọc nhanh sản phẩm đã map Milwaukee -->
+    <record id="view_product_template_milwaukee_search" model="ir.ui.view">
+        <field name="name">product.template.milwaukee.search</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_search_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[@name='filter_to_sell']" position="after">
+                <separator/>
+                <filter string="Đã map Milwaukee" name="mapped_milwaukee" domain="[('milwaukee_id', '!=', False)]"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Action mở trang quản lý giá -->
+    <record id="action_milwaukee_pricing_management" model="ir.actions.act_window">
+        <field name="name">Quản lý giá Milwaukee</field>
+        <field name="res_model">product.template</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_product_template_milwaukee_pricing_list"/>
+        <field name="domain">[('milwaukee_id', '!=', False)]</field>
+        <field name="context">{'search_default_mapped_milwaukee': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Chưa có sản phẩm nào được map với Milwaukee.
+            </p>
+            <p>
+                Hãy vào Cấu hình > Milwaukee Pricing Sync và nhấn "Lấy danh sách sản phẩm" trước.
+            </p>
+        </field>
+    </record>
+
+    <!-- Menu Item -->
+    <menuitem id="menu_milwaukee_pricing_mgmt"
+              name="Quản lý giá Website"
+              parent="stock.menu_stock_inventory_control"
+              action="action_milwaukee_pricing_management"
+              sequence="15"/>
+</odoo>

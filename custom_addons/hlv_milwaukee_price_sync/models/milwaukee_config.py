@@ -79,11 +79,16 @@ class MilwaukeeConfig(models.Model):
         """
         self.ensure_one()
         
-        # Tìm tất cả sản phẩm đã được map ID
-        products = self.env['product.template'].search([('milwaukee_id', '!=', False)])
+        # Nếu được gọi từ list view (có active_ids), chỉ sync những sản phẩm được chọn
+        active_ids = self.env.context.get('active_ids')
+        if active_ids and self.env.context.get('active_model') == 'product.template':
+            products = self.env['product.template'].browse(active_ids).filtered(lambda p: p.milwaukee_id)
+        else:
+            # Tìm tất cả sản phẩm đã được map ID
+            products = self.env['product.template'].search([('milwaukee_id', '!=', False)])
         
         if not products:
-            raise UserError(_("Chưa có sản phẩm nào được map Milwaukee ID. Vui lòng chạy 'Lấy danh sách sản phẩm' trước."))
+            raise UserError(_("Không tìm thấy sản phẩm nào đã được map Milwaukee ID để đồng bộ."))
         
         payload = []
         for product in products:
