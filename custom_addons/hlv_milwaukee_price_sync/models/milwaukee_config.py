@@ -92,9 +92,9 @@ class MilwaukeeConfig(models.Model):
         
         payload = []
         for product in products:
-            # regularPrice lấy từ x_studio_ga_web
+            # regularPrice lấy từ x_studio_gi_web
             # Nếu field không tồn tại (do chưa cài Studio hoặc lỗi field), fallback về list_price
-            regular_price = getattr(product, 'x_studio_ga_web', 0.0) or product.list_price or 0.0
+            regular_price = getattr(product, 'x_studio_gi_web', 0.0) or product.list_price or 0.0
             
             # salePrice lấy từ milwaukee_sale_price
             sale_price = product.milwaukee_sale_price or None

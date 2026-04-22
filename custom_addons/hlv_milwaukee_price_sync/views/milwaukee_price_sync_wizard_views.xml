@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Wizard View for Manual Milwaukee Sync -->
+    <record id="view_milwaukee_price_sync_wizard" model="ir.ui.view">
+        <field name="name">milwaukee.price.sync.wizard</field>
+        <field name="model">milwaukee.price.sync.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Đồng bộ giá Milwaukee">
+                <group>
+                    <field name="product_ids" widget="many2many_tags" readonly="1" force_save="1"/>
+                    <field name="sync_mode" required="1" widget="radio"/>
+                </group>
+                <footer>
+                    <button string="Đồng bộ" name="action_sync" type="object" class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action Action for the Wizard -->
+    <record id="action_milwaukee_price_sync_wizard" model="ir.actions.act_window">
+        <field name="name">Đồng bộ giá Milwaukee</field>
+        <field name="res_model">milwaukee.price.sync.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_milwaukee_price_sync_wizard"/>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="product.model_product_template"/>
+        <field name="binding_view_types">list,form</field>
+    </record>
+</odoo>
