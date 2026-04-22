@@ -301,7 +301,7 @@
     <t t-name="hlv_sale_delivery_planning.KanbanSOCard">
         <div class="card border-1 shadow-sm hlv-kanban-card-inner position-relative overflow-hidden"
              t-att-class="this.getSOCardColorClass(so)"
-             t-att-style="so.has_delivered_today ? 'background:#62b1ff30;' : so.stock_status === 'ready' ? 'background:#21c22f17;' : so.is_new_order ? 'background:#e77d191c;' : ''">
+             t-att-style="(so.x_studio_htgh &amp;&amp; String(so.x_studio_htgh).toLowerCase().includes('ncc')) ? 'background:#ffd6d6;border-left:4px solid #dc3545 !important;' : so.has_delivered_today ? 'background:#62b1ff30;' : so.stock_status === 'ready' ? 'background:#21c22f17;' : so.is_new_order ? 'background:#e77d191c;' : ''">
 
             <!-- Ribbon "Đã in phiếu" / "Có phiếu chưa in" -->
             <div t-if="so.has_new_unprinted_pickings"
