@@ -16,7 +16,7 @@
                             <p class="text-muted">
                                 <strong>Milwaukee ID:</strong> ID được lấy tự động từ website thông qua SKU.
                                 <br/>
-                                <strong>Giá Web (x_studio_ga_web):</strong> Sẽ được gửi làm <i>regularPrice</i>.
+                                <strong>Giá Web (x_studio_gi_web):</strong> Sẽ được gửi làm <i>regularPrice</i>.
                                 <br/>
                                 <strong>Giá giảm Milwaukee:</strong> Sẽ được gửi làm <i>salePrice</i>.
                             </p>

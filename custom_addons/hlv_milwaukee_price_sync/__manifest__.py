@@ -6,7 +6,7 @@
     'summary': 'Synchronize product prices from Odoo to Milwaukee Website',
     'description': """
         Module to synchronize prices from Odoo to Milwaukee website via REST API.
-        - regularPrice mapping: x_studio_ga_web
+        - regularPrice mapping: x_studio_gi_web
         - salePrice mapping: milwaukee_sale_price
         - Product matching: SKU (default_code)
     """,

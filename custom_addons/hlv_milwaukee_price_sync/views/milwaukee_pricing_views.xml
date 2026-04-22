@@ -8,7 +8,7 @@
             <list string="Quản lý giá Milwaukee" editable="bottom" create="false">
                 <field name="default_code" readonly="1"/>
                 <field name="name" readonly="1"/>
-                <field name="x_studio_ga_web" string="Giá Web (Regular)"/>
+                <field name="x_studio_gi_web" string="Giá Web (Regular)"/>
                 <field name="milwaukee_sale_price" string="Giá giảm Milwaukee"/>
                 <field name="milwaukee_id" readonly="1" optional="hide"/>
                 <button name="action_sync_to_milwaukee_single" string="Đồng bộ" type="object" icon="fa-refresh" class="btn-link"/>
