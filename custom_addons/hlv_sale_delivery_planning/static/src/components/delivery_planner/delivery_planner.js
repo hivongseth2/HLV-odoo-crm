@@ -63,7 +63,12 @@ export class DeliveryPlannerDashboard extends Component {
 
             // Pagination
             currentPage: 1,
-            itemsPerPage: 12,
+            itemsPerPage: (function(){
+                try{
+                    var v=parseInt(localStorage.getItem('hlv_dp_items_per_page'),10);
+                    return [12,25,50,100,200].indexOf(v)>=0 ? v : 12;
+                }catch(e){return 12;}
+            })(),
             totalCount: 0,
 
             // Drawer
@@ -421,7 +426,14 @@ export class DeliveryPlannerDashboard extends Component {
                 // Auto-load: refresh visible + auto-pull offscreen vào danh sách (không hỏi user)
                 await this._refreshSubset(ids);
                 if (offscreenIds.length) {
-                    await this._notifyOffscreenAutoLoaded(offscreenIds);
+                    // Sau khi backend lọc theo filter hiện tại, chỉ những offscreen
+                    // ids thật sự được thêm vào state mới đáng thông báo (tránh
+                    // báo nhầm đơn kho khác / không khớp filter).
+                    const visibleAfter = new Set(this.state.saleOrders.map(o => o.id));
+                    const addedOffscreen = offscreenIds.filter(i => visibleAfter.has(i));
+                    if (addedOffscreen.length) {
+                        await this._notifyOffscreenAutoLoaded(addedOffscreen);
+                    }
                 }
             } else {
                 // Fallback: full silent refresh (filters may have caused new matches)
@@ -462,8 +474,12 @@ export class DeliveryPlannerDashboard extends Component {
      */
     async _refreshSubset(soIds) {
         try {
+            // Truyền filter_kwargs để backend loại các SO không khớp filter
+            // hiện tại (vd: bus đẩy đơn kho A nhưng dashboard đang lọc kho B
+            // → backend trả về removed_ids → FE skip / remove khỏi state).
             const res = await this.orm.call(
-                "sale.order", "get_delivery_orders_subset", [], { order_ids: soIds }
+                "sale.order", "get_delivery_orders_subset", [],
+                { order_ids: soIds, filter_kwargs: this._buildFetchKwargs() }
             );
             const fresh = (res && res.orders) || [];
             const removed = new Set((res && res.removed_ids) || []);
@@ -882,11 +898,85 @@ export class DeliveryPlannerDashboard extends Component {
             this._applyResult(result);
             // Save to IndexedDB cache for instant restore on next page load
             await this._saveToCache(result);
+            // Auto-load all remaining orders in background — no spinner, no confirm.
+            // Ensures không xót đơn khi tổng số đơn > initial batch size.
+            this._autoLoadAllRemaining(); // intentionally NOT awaited
         } catch (error) {
             console.error("Lỗi khi tải dữ liệu bảng điều phối:", error);
         } finally {
             this.state.isLoading = false;
             this.state.isRefreshing = false;
+        }
+    }
+
+    // --- Background auto-load (no-spinner, no confirm) ---
+    _autoLoadSeq = 0;
+
+    /**
+     * Tải hết toàn bộ đơn còn lại vào state.saleOrders trong nền,
+     * ngay sau khi fetchData xong batch đầu.
+     * - Không cần user bấm nút "Tải hết" nữa.
+     * - Sequence token tự hủy load cũ khi filter thay đổi (tránh race condition).
+     * - Chỉ dùng cho internal dashboard (không public web).
+     */
+    async _autoLoadAllRemaining() {
+        const mySeq = ++this._autoLoadSeq;
+        // Đợi 1 tick để render ban đầu hoàn thành trước
+        await new Promise(r => setTimeout(r, 50));
+        if (mySeq !== this._autoLoadSeq) return;
+
+        const remaining = (this.state.totalCount || 0) - this.state.saleOrders.length;
+        if (remaining <= 0) return;
+
+        this.state.isLoadingMore = true;
+        try {
+            const offset = this.state.saleOrders.length;
+            const result = await this.orm.call(
+                "sale.order",
+                "get_delivery_dashboard_data",
+                [],
+                {
+                    ...this._buildFetchKwargs(),
+                    limit: remaining,
+                    offset: offset,
+                    include_stats: false,
+                }
+            );
+            if (mySeq !== this._autoLoadSeq) return; // stale — filter đổi trong lúc đang tải
+
+            const fresh = (result && result.orders) || [];
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const existingIds = new Set(this.state.saleOrders.map(o => o.id));
+            for (const so of fresh) {
+                if (existingIds.has(so.id)) continue;
+                so.flows = so.flows || [];
+                so.pickings = so.pickings || [];
+                so.lines = so.lines || [];
+                so.pos = so.pos || [];
+                this._applyFlowColors(so);
+                const orderDate = so.misa_order_date || (so.date_order ? so.date_order.substring(0, 10) : '');
+                so.is_new_order = orderDate === todayStr;
+                this.state.saleOrders.push(so);
+            }
+            if (typeof result.total_count === 'number') {
+                this.state.totalCount = result.total_count;
+            }
+            // Cập nhật kanbanBatchSize để cache biết full dataset đã được tải
+            this.state.kanbanBatchSize = this.state.saleOrders.length;
+            await this._saveToCache({
+                dashboard_stats: this.state.dashboardStats,
+                orders: this.state.saleOrders,
+                total_count: this.state.totalCount,
+                warehouses: this.state.warehouses,
+                tags: this.state.tags,
+            });
+            console.log('[DP AutoLoad] Loaded all', this.state.saleOrders.length, '/', this.state.totalCount, 'orders');
+        } catch (e) {
+            console.error('[DP AutoLoad] _autoLoadAllRemaining failed:', e);
+        } finally {
+            if (mySeq === this._autoLoadSeq) {
+                this.state.isLoadingMore = false;
+            }
         }
     }
 
@@ -1088,15 +1178,34 @@ export class DeliveryPlannerDashboard extends Component {
     async nextPage() {
         if (this.state.currentPage < this.totalPages) {
             this.state.currentPage++;
-            await this.fetchData();
+            // Khi đã tải hết đơn vào memory, phân trang client-side (không cần gọi server)
+            if (this.state.saleOrders.length < this.state.totalCount) {
+                await this.fetchData();
+            }
         }
     }
 
     async prevPage() {
         if (this.state.currentPage > 1) {
             this.state.currentPage--;
-            await this.fetchData();
+            // Khi đã tải hết đơn vào memory, phân trang client-side (không cần gọi server)
+            if (this.state.saleOrders.length < this.state.totalCount) {
+                await this.fetchData();
+            }
         }
+    }
+
+    /**
+     * Cho phép user tự chọn số dòng/trang ở bảng (Card/Table view).
+     * Lưu localStorage để nhớ pref qua các phiên.
+     */
+    async onItemsPerPageChange(ev) {
+        var n = parseInt(ev.target.value, 10);
+        if (![12, 25, 50, 100, 200].includes(n)) n = 12;
+        this.state.itemsPerPage = n;
+        this.state.currentPage = 1;
+        try { localStorage.setItem('hlv_dp_items_per_page', String(n)); } catch (e) { /* quota / private mode */ }
+        await this.fetchData();
     }
 
     async onFilterChange() {
@@ -1317,6 +1426,13 @@ export class DeliveryPlannerDashboard extends Component {
             }
             return String(va).localeCompare(String(vb), 'vi') * dir;
         });
+        // Khi toàn bộ đơn đã được tải vào memory (sau auto-load),
+        // phân trang client-side để tránh gọi server thêm.
+        const allLoaded = this.state.totalCount > 0 && arr.length >= this.state.totalCount;
+        if (allLoaded) {
+            const start = (this.state.currentPage - 1) * this.state.itemsPerPage;
+            return arr.slice(start, start + this.state.itemsPerPage);
+        }
         return arr;
     }
 

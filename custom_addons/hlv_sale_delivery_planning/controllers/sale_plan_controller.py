@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import time
+import pytz
 from collections import defaultdict
 from markupsafe import Markup
 from odoo import http
@@ -76,7 +77,15 @@ def _normalize_preview_text(text, limit=140):
   return plain[:limit] + ('...' if len(plain) > limit else '')
 
 
-_H = [("Content-Type", "text/html; charset=utf-8")]
+_H = [
+    ("Content-Type", "text/html; charset=utf-8"),
+    # Chống browser/proxy cache nguyên trang HTML chứa inline JS.
+    # Nếu thiếu, sau khi server cập nhật _PAGE, client cũ chạy JS lệch
+    # với backend → search "không ra" cho đến khi user Ctrl+F5.
+    ("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0"),
+    ("Pragma", "no-cache"),
+    ("Expires", "0"),
+]
 
 _ERR_PW = '<div class="alert alert-danger mb-3">Mật khẩu không đúng.</div>'
 _ERR_RATE = '<div class="alert alert-danger mb-3">Quá nhiều lần thử sai. Vui lòng thử lại sau 10 phút.</div>'
@@ -412,7 +421,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 (function(){
 "use strict";
 var S={limit:100,total:0,viewMode:'kanban',kanbanGroupBy:'packing_status',
-  orders:[],warehouses:[],stats:{},whLoaded:false,kanbanColPageSize:{},reportedIds:{},tagsLoaded:false};
+  orders:[],warehouses:[],stats:{},whSig:'',kanbanColPageSize:{},reportedIds:{},tagsSig:''};
 
 var DL={unshipped:'Chưa giao',pending:'Chưa giao',partial:'Giao 1 phần',full:'Đã giao đủ'};
 var DC={unshipped:'badge-del-pending',pending:'badge-del-pending',partial:'badge-del-partial',full:'badge-del-full'};
@@ -551,22 +560,32 @@ function load(append){
       var od=o.misa_order_date||(o.date_order?o.date_order.slice(0,10):'');
       o._is_new=(od===today);
     });
-    if(d.warehouses&&!S.whLoaded){
-      var sel=$('f-wh');
-      d.warehouses.forEach(function(w){
-        var o=document.createElement('option');o.value=w.id;o.textContent=w.name;sel.appendChild(o);
-      });
-      S.whLoaded=true;
-      S.warehouses=d.warehouses;
+    // Refresh dropdown kho/tag mỗi khi backend trả danh sách khác → tránh stale
+    if(d.warehouses){
+      var whSig=d.warehouses.map(function(w){return w.id;}).join(',');
+      if(whSig!==S.whSig){
+        var sel=$('f-wh');var cur=sel.value;
+        while(sel.options.length>1) sel.remove(1);
+        d.warehouses.forEach(function(w){
+          var o=document.createElement('option');o.value=w.id;o.textContent=w.name;sel.appendChild(o);
+        });
+        if(cur) sel.value=cur;
+        S.whSig=whSig;S.warehouses=d.warehouses;
+      }
     }
-    if(d.tags&&!S.tagsLoaded){
-      var tsel=$('f-tag');
-      S.tagsMap={};
-      d.tags.forEach(function(t){
-        S.tagsMap[t.id]=t;
-        var o=document.createElement('option');o.value=t.id;o.textContent=t.name;tsel.appendChild(o);
-      });
-      S.tagsLoaded=true;
+    if(d.tags){
+      var tagSig=d.tags.map(function(t){return t.id;}).join(',');
+      if(tagSig!==S.tagsSig){
+        var tsel=$('f-tag');var curT=tsel.value;
+        while(tsel.options.length>1) tsel.remove(1);
+        S.tagsMap={};
+        d.tags.forEach(function(t){
+          S.tagsMap[t.id]=t;
+          var o=document.createElement('option');o.value=t.id;o.textContent=t.name;tsel.appendChild(o);
+        });
+        if(curT) tsel.value=curT;
+        S.tagsSig=tagSig;
+      }
     }
     if(!append)_spSaveCache(d);
     updKPI();render();updLoadMore();updFilters();
@@ -1373,7 +1392,8 @@ if(_cachedData){
     _cachedData.warehouses.forEach(function(w){
       var opt=document.createElement('option');opt.value=w.id;opt.textContent=w.name;sel.appendChild(opt);
     });
-    S.whLoaded=true;S.warehouses=_cachedData.warehouses;
+    S.whSig=_cachedData.warehouses.map(function(w){return w.id;}).join(',');
+    S.warehouses=_cachedData.warehouses;
   }
   if(_cachedData.tags){
     var tsel=$('f-tag');S.tagsMap={};
@@ -1381,7 +1401,7 @@ if(_cachedData){
       S.tagsMap[t.id]=t;
       var opt=document.createElement('option');opt.value=t.id;opt.textContent=t.name;tsel.appendChild(opt);
     });
-    S.tagsLoaded=true;
+    S.tagsSig=_cachedData.tags.map(function(t){return t.id;}).join(',');
   }
   updKPI();render();updLoadMore();updFilters();
   hideLoading();
@@ -1511,6 +1531,12 @@ class SalePlanPublicController(http.Controller):
             so = request.env['sale.order'].sudo().browse(int(order_id))
             if not so.exists():
                 return {'status': 'error', 'message': 'Order not found'}
+            # Public page không có user login → mail.message.date lưu UTC, phải
+            # convert sang TZ VN để hiển thị đúng giờ thực tế (tránh lệch 7h).
+            try:
+                user_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+            except Exception:
+                user_tz = pytz.UTC
             picking_ids = so.picking_ids.ids
             domain = [
                 '|',
@@ -1539,9 +1565,16 @@ class SalePlanPublicController(http.Controller):
                 origin = ''
                 if msg.model == 'stock.picking':
                     origin = picking_name_map.get(msg.res_id, '')
+                date_str = ''
+                if msg.date:
+                    try:
+                        local_dt = msg.date.replace(tzinfo=pytz.UTC).astimezone(user_tz)
+                        date_str = local_dt.strftime('%d/%m/%Y %H:%M')
+                    except Exception:
+                        date_str = msg.date.strftime('%d/%m/%Y %H:%M')
                 result.append({
                     'id': msg.id,
-                    'date': msg.date.strftime('%d/%m/%Y %H:%M') if msg.date else '',
+                    'date': date_str,
                     'author': msg.author_id.name if msg.author_id else (msg.email_from or ''),
                     'body': msg.body or '',
                     'message_type': msg.message_type,

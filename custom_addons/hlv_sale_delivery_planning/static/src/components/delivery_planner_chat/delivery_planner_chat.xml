@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ================================================================
+         Delivery Planner Floating AI Chat — custom UI, no sidebar
+         ================================================================ -->
+    <t t-name="hlv_sale_delivery_planning.FloatingChat">
+        <t t-if="state.isOnDashboard">
+            <div class="hlv_dp_floating_chat_root">
+
+                <!-- Bubble -->
+                <button t-if="!state.isOpen"
+                        class="hlv_dp_chat_bubble shadow-lg"
+                        t-on-click="toggleOpen"
+                        title="Hỏi AI Dispatcher">
+                    <i class="fa fa-comments"/>
+                    <span class="hlv_dp_chat_bubble_label d-none d-md-inline ms-2">Hỏi AI</span>
+                </button>
+
+                <!-- Panel -->
+                <div t-if="state.isOpen"
+                     class="hlv_dp_chat_panel shadow-lg border bg-white d-flex flex-column"
+                     t-att-style="panelStyle">
+
+                    <!-- Resize -->
+                    <div class="hlv_dp_chat_resize_handle"
+                         t-on-mousedown="onResizeStart"
+                         title="Kéo để thay đổi kích thước"/>
+
+                    <!-- Header -->
+                    <div class="hlv_dp_chat_header d-flex align-items-center justify-content-between px-3 py-2 bg-primary text-white">
+                        <div class="d-flex align-items-center gap-2 fw-bold flex-grow-1 min-width-0">
+                            <i class="fa fa-magic"/>
+                            <span class="text-truncate">AI Dispatcher</span>
+                            <span t-if="state.assistantName"
+                                  class="badge bg-light text-primary small text-truncate"
+                                  t-att-title="state.assistantName + ' · ' + state.modelName">
+                                <t t-esc="state.assistantName"/>
+                            </span>
+                        </div>
+                        <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                            <button class="btn btn-sm btn-light"
+                                    t-on-click="toggleSettings"
+                                    title="Cấu hình Assistant">
+                                <i class="fa fa-cog"/>
+                            </button>
+                            <button class="btn btn-sm btn-light"
+                                    t-on-click="newChat"
+                                    title="Phiên chat mới">
+                                <i class="fa fa-plus"/>
+                            </button>
+                            <button class="btn btn-sm btn-light"
+                                    t-on-click="closePanel"
+                                    title="Đóng">
+                                <i class="fa fa-times"/>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Settings dropdown (assistant picker) -->
+                    <div t-if="state.isSettingsOpen"
+                         class="hlv_dp_chat_settings border-bottom bg-white p-2">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <strong class="small text-uppercase text-muted">Chọn Assistant</strong>
+                            <button class="btn btn-sm btn-link text-decoration-none p-0"
+                                    t-on-click="toggleSettings">
+                                <i class="fa fa-times"/>
+                            </button>
+                        </div>
+                        <div t-if="state.isLoadingAssistants" class="text-center text-muted py-2">
+                            <i class="fa fa-spinner fa-spin"/> Đang tải...
+                        </div>
+                        <div t-else="" class="d-flex flex-column gap-1">
+                            <t t-foreach="state.assistantsList" t-as="a" t-key="a.id">
+                                <button class="btn btn-sm text-start d-flex align-items-center justify-content-between"
+                                        t-att-class="a.id === state.assistantId ? 'btn-primary' : 'btn-outline-secondary'"
+                                        t-on-click="() => this.pickAssistant(a.id)">
+                                    <span class="text-truncate">
+                                        <i t-if="a.id === state.assistantId" class="fa fa-check me-1"/>
+                                        <strong t-esc="a.name"/>
+                                        <small class="text-muted ms-2">
+                                            <t t-if="a.provider" t-esc="a.provider"/>
+                                            <t t-if="a.model"> · <t t-esc="a.model"/></t>
+                                        </small>
+                                    </span>
+                                    <span t-if="a.is_default" class="badge bg-success ms-2">default</span>
+                                </button>
+                            </t>
+                            <div t-if="state.assistantsList.length === 0" class="text-muted small text-center py-2">
+                                Chưa có assistant nào. Hãy tạo trong menu LLM → Trợ lý.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Skills bar -->
+                    <div class="hlv_dp_chat_skills d-flex align-items-center gap-2 px-2 py-2 border-bottom bg-light flex-wrap">
+                        <span class="small text-muted fw-bold text-uppercase">Skill:</span>
+                        <button class="btn btn-sm btn-outline-secondary"
+                                t-on-click="runSkillPurchase"
+                                t-att-disabled="state.isPreparingSkill || !hasThread">
+                            <i class="fa fa-shopping-cart me-1"/> Gợi ý đi đơn
+                        </button>
+                        <button class="btn btn-sm btn-outline-success"
+                                t-on-click="runSkillDelivery"
+                                t-att-disabled="state.isPreparingSkill || !hasThread">
+                            <i t-attf-class="fa me-1 #{state.isPreparingSkill ? 'fa-spinner fa-spin' : 'fa-truck'}"/>
+                            Gợi ý giao hàng
+                        </button>
+                        <small t-if="state.skillError" class="text-danger ms-2" t-esc="state.skillError"/>
+                    </div>
+
+                    <!-- Body -->
+                    <div class="hlv_dp_chat_body flex-grow-1 d-flex flex-column overflow-hidden bg-light">
+
+                        <div t-if="state.isInitializing"
+                             class="d-flex flex-column align-items-center justify-content-center text-muted h-100 p-4">
+                            <i class="fa fa-spinner fa-spin fa-2x mb-2"/>
+                            <span>Đang khởi tạo phiên chat...</span>
+                        </div>
+
+                        <div t-elif="state.initError"
+                             class="d-flex flex-column align-items-center justify-content-center text-danger h-100 p-4 text-center">
+                            <i class="fa fa-exclamation-triangle fa-2x mb-2"/>
+                            <div t-esc="state.initError"/>
+                            <button class="btn btn-sm btn-outline-primary mt-3"
+                                    t-on-click="() => this._initChat()">
+                                <i class="fa fa-refresh me-1"/> Thử lại
+                            </button>
+                        </div>
+
+                        <t t-elif="hasThread">
+                            <!-- Messages -->
+                            <div class="hlv_dp_chat_messages flex-grow-1 overflow-auto p-3"
+                                 t-ref="messagesScroll">
+                                <Thread thread="activeThread" order="'asc'"/>
+                            </div>
+                            <div t-if="isStreaming"
+                                 class="hlv_dp_chat_thinking p-2 text-center text-muted small">
+                                <i class="fa fa-circle-o-notch fa-spin me-1"/> AI đang suy nghĩ...
+                            </div>
+                            <!-- Composer -->
+                            <div class="hlv_dp_chat_composer border-top p-2 bg-white">
+                                <Composer t-if="threadComposer"
+                                          composer="threadComposer"
+                                          mode="'compact'"
+                                          sidebar="false"/>
+                            </div>
+                        </t>
+
+                        <div t-else=""
+                             class="d-flex flex-column align-items-center justify-content-center text-muted h-100 p-4 text-center">
+                            <i class="fa fa-robot fa-3x mb-3"/>
+                            <div class="mb-3">Chưa có phiên chat.</div>
+                            <button class="btn btn-primary" t-on-click="() => this._initChat()">
+                                <i class="fa fa-play me-1"/> Bắt đầu
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </t>
+    </t>
+
+</templates>

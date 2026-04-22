@@ -13,6 +13,17 @@
 
 document.addEventListener("DOMContentLoaded", function () {
 
+  // [FIX-OVERFLOW] Guard against double-initialization. The script may be
+  // loaded twice (once via web.assets_frontend bundle, once via explicit
+  // <script src> tag in pack_scan_template.xml). Without this guard, two
+  // independent keypress listeners and two separate scanLock queues would
+  // run in parallel — defeating the serialization fix and allowing overflow.
+  if (window.__packScanInit) {
+    console.warn("[pack_scan] Already initialized, skipping duplicate load.");
+    return;
+  }
+  window.__packScanInit = true;
+
   // §2.1 — DOM references & focus management
   const input = document.getElementById("pack_barcode_input");
   const list = document.getElementById("product_list");
@@ -47,6 +58,24 @@ document.addEventListener("DOMContentLoaded", function () {
   let fastKeyCount = 0;
   // [NEW] Semaphore to prevent double-packing (race condition)
   let isProcessingPack = false;
+
+  // [FIX-OVERFLOW] Promise queue to serialize all scan operations.
+  // Prevents race condition when network is slow: multiple scans firing
+  // in parallel would all read the same stale qty_done from DOM and pass
+  // client-side validation, causing overflow on server.
+  // Stored on window so even if this module is somehow loaded twice the
+  // queue stays shared (extra defense in addition to __packScanInit guard).
+  if (!window.__scanLock) window.__scanLock = Promise.resolve();
+  function enqueueScan(fn) {
+    const prev = window.__scanLock;
+    let release;
+    const next = new Promise(r => release = r);
+    window.__scanLock = next;
+    return prev.then(() => {
+      try { return Promise.resolve(fn()).finally(release); }
+      catch (e) { release(); throw e; }
+    });
+  }
 
   document.addEventListener("keydown", (e) => {
     const now = Date.now();
@@ -259,6 +288,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // §2.6 — updateQty (core scan → server flow)
   async function updateQty(barcode, delta = 1, lineId = null, moveId = null, skipValidation = false) {
+    // [FIX-OVERFLOW] Serialize: only 1 scan in-flight at a time per page.
+    return enqueueScan(() => _doUpdateQty(barcode, delta, lineId, moveId, skipValidation));
+  }
+
+  async function _doUpdateQty(barcode, delta = 1, lineId = null, moveId = null, skipValidation = false) {
     if (!lineId) {
       const found = findLineToUpdate(barcode);
       lineId = found?.lineId || null;
@@ -295,6 +329,32 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
 
+    // [FIX-OVERFLOW] Optimistic UI update BEFORE fetch.
+    // Ensures the next queued scan reads the correct currentDone from DOM
+    // instead of the stale pre-fetch value. Reverted on error.
+    let optimisticInput = null;
+    let optimisticOldVal = null;
+    let optimisticOldDataset = null;
+    if (!skipValidation && delta !== 0) {
+      const targetEl = moveId
+        ? document.querySelector(`[data-move-id="${moveId}"]`)
+        : (lineId ? document.querySelector(`[data-line-id="${lineId}"]`) : null);
+      const inp = targetEl?.querySelector('.done-input');
+      if (inp) {
+        optimisticInput = inp;
+        optimisticOldVal = inp.value;
+        optimisticOldDataset = inp.dataset.currentQty;
+        const baseVal = parseFloat(
+          inp.dataset.currentQty !== undefined && inp.dataset.currentQty !== ''
+            ? inp.dataset.currentQty
+            : inp.value
+        ) || 0;
+        const optVal = parseFloat((baseVal + delta).toFixed(3));
+        inp.value = optVal;
+        inp.dataset.currentQty = optVal;
+      }
+    }
+
     try {
       const res = await fetch("/pack_scan/scan_item", {
         method: "POST",
@@ -321,12 +381,24 @@ document.addEventListener("DOMContentLoaded", function () {
         toast.error(result.error);
         playError();
         setFocus();
+        // [FIX-OVERFLOW] Revert optimistic update on server error
+        if (optimisticInput) {
+          optimisticInput.value = optimisticOldVal;
+          if (optimisticOldDataset === undefined) delete optimisticInput.dataset.currentQty;
+          else optimisticInput.dataset.currentQty = optimisticOldDataset;
+        }
         throw new Error(result.error);
       }
       if (!result?.scanned?.length) {
         toast.warn('Không có dòng nào được cập nhật');
         playError();
         setFocus();
+        // [FIX-OVERFLOW] Revert optimistic update if server didn't update anything
+        if (optimisticInput) {
+          optimisticInput.value = optimisticOldVal;
+          if (optimisticOldDataset === undefined) delete optimisticInput.dataset.currentQty;
+          else optimisticInput.dataset.currentQty = optimisticOldDataset;
+        }
         throw new Error("No lines updated");
       }
 
@@ -441,6 +513,13 @@ document.addEventListener("DOMContentLoaded", function () {
       toggleUnpackBtn();
 
     } catch (err) {
+      // [FIX-OVERFLOW] Revert optimistic update on network/exception errors
+      // (only if not already reverted above by the server-error branch)
+      if (optimisticInput && optimisticInput.value !== optimisticOldVal) {
+        optimisticInput.value = optimisticOldVal;
+        if (optimisticOldDataset === undefined) delete optimisticInput.dataset.currentQty;
+        else optimisticInput.dataset.currentQty = optimisticOldDataset;
+      }
       toast.error("Lỗi kết nối: " + err.message);
       playError();
       setFocus();
@@ -542,24 +621,42 @@ document.addEventListener("DOMContentLoaded", function () {
   // Nút Bỏ đóng gói toàn bộ
   document.getElementById('btnUnpackAll')?.addEventListener('click', async function () {
     if (!confirm('Bạn có chắc muốn bỏ đóng gói TOÀN BỘ sản phẩm trong phiếu này?')) return;
-    try {
-      const res = await fetch('/pack_scan/unpack_all', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: { picking_id: pickingId } }),
-      });
-      const json = await res.json();
-      const data = json.result || json;
-      if (data.error) {
-        toast.error(data.error);
-      } else {
+
+    // [FIX-OVERFLOW] Block scanning during unpack: disable input + drain queue.
+    // Without this, a scan in flight (or queued) could finish AFTER unpack
+    // resets DOM but BEFORE the page reloads, leaving stale qty_done on the
+    // server that the user can't see → looks like overflow after reload.
+    const btn = this;
+    btn.disabled = true;
+    if (input) {
+      input.disabled = true;
+      input.blur();
+    }
+
+    // Run inside the scan queue so any in-flight scan finishes first AND
+    // any new scan attempts wait until reload.
+    return enqueueScan(async () => {
+      try {
+        const res = await fetch('/pack_scan/unpack_all', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: { picking_id: pickingId } }),
+        });
+        const json = await res.json();
+        const data = json.result || json;
+        if (data.error) {
+          toast.error(data.error);
+          btn.disabled = false;
+          if (input) input.disabled = false;
+          return;
+        }
         toast.success(data.message || 'Đã bỏ đóng gói thành công!');
         // Reset toàn bộ DOM về 0 (để phản hồi tức thì cho người dùng)
         document.querySelectorAll('#product_list .product-item').forEach(el => {
-          const input = el.querySelector('.done-input');
-          if (input) {
-            input.value = 0;
-            input.dataset.currentQty = 0;
+          const inp = el.querySelector('.done-input');
+          if (inp) {
+            inp.value = 0;
+            inp.dataset.currentQty = 0;
           }
           el.setAttribute('data-packed-qty', 0);
           el.querySelector('.pkg-indicator')?.remove();
@@ -568,17 +665,16 @@ document.addEventListener("DOMContentLoaded", function () {
         });
         // Xóa tất cả thẻ kiện trong side panel
         document.querySelector('.panel-packages-list')?.remove();
-        // Ẩn nút "Làm lại" vì qty_done đã reset về 0
         toggleUnpackBtn();
 
-        // Reload lại trang sau khi reset DOM để đồng bộ lại toàn bộ dữ liệu từ server
-        setTimeout(() => {
-          window.location.reload();
-        }, 800);
+        // Reload (input vẫn disable để chặn quét trong khoảng chờ này)
+        setTimeout(() => { window.location.reload(); }, 800);
+      } catch (e) {
+        toast.error('Lỗi khi bỏ đóng gói: ' + e.message);
+        btn.disabled = false;
+        if (input) input.disabled = false;
       }
-    } catch (e) {
-      toast.error('Lỗi khi bỏ đóng gói: ' + e.message);
-    }
+    });
   });
 
 

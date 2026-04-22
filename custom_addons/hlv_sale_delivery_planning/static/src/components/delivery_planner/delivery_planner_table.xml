@@ -677,9 +677,9 @@
             </div>
 
             <!-- Pagination -->
-            <div t-if="this.totalPages > 1"
+            <div t-if="state.totalCount > 0"
                  class="position-sticky bottom-0 w-100 z-3 bg-light pt-2 pb-3 mb-0 border-top mt-3">
-                <div class="d-flex justify-content-between align-items-center bg-white p-3 rounded shadow-lg border">
+                <div class="d-flex justify-content-between align-items-center bg-white p-3 rounded shadow-lg border flex-wrap gap-2">
                     <div class="text-muted small">
                         Hiển thị
                         <span class="fw-bold">
@@ -691,27 +691,40 @@
                         trong số
                         <span class="fw-bold text-dark"><t t-esc="state.totalCount"/></span> đơn hàng
                     </div>
-                    <nav>
-                        <ul class="pagination mb-0">
-                            <li class="page-item"
-                                t-att-class="{'disabled': state.currentPage === 1}">
-                                <a class="page-link cursor-pointer" t-on-click="prevPage">
-                                    <i class="fa fa-chevron-left"/> Trang trước
-                                </a>
-                            </li>
-                            <li class="page-item active">
-                                <a class="page-link" href="#">
-                                    <t t-esc="state.currentPage"/> / <t t-esc="this.totalPages"/>
-                                </a>
-                            </li>
-                            <li class="page-item"
-                                t-att-class="{'disabled': state.currentPage === this.totalPages}">
-                                <a class="page-link cursor-pointer" t-on-click="nextPage">
-                                    Trang sau <i class="fa fa-chevron-right"/>
-                                </a>
-                            </li>
-                        </ul>
-                    </nav>
+                    <div class="d-flex align-items-center gap-2">
+                        <!-- Số dòng / trang (user configurable) -->
+                        <label class="text-muted small mb-0">Số dòng:</label>
+                        <select class="form-select form-select-sm"
+                                style="width:auto"
+                                t-on-change="onItemsPerPageChange">
+                            <option value="12" t-att-selected="state.itemsPerPage === 12">12</option>
+                            <option value="25" t-att-selected="state.itemsPerPage === 25">25</option>
+                            <option value="50" t-att-selected="state.itemsPerPage === 50">50</option>
+                            <option value="100" t-att-selected="state.itemsPerPage === 100">100</option>
+                            <option value="200" t-att-selected="state.itemsPerPage === 200">200</option>
+                        </select>
+                        <nav t-if="this.totalPages > 1">
+                            <ul class="pagination mb-0">
+                                <li class="page-item"
+                                    t-att-class="{'disabled': state.currentPage === 1}">
+                                    <a class="page-link cursor-pointer" t-on-click="prevPage">
+                                        <i class="fa fa-chevron-left"/> Trang trước
+                                    </a>
+                                </li>
+                                <li class="page-item active">
+                                    <a class="page-link" href="#">
+                                        <t t-esc="state.currentPage"/> / <t t-esc="this.totalPages"/>
+                                    </a>
+                                </li>
+                                <li class="page-item"
+                                    t-att-class="{'disabled': state.currentPage === this.totalPages}">
+                                    <a class="page-link cursor-pointer" t-on-click="nextPage">
+                                        Trang sau <i class="fa fa-chevron-right"/>
+                                    </a>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
                 </div>
             </div>
         </div>

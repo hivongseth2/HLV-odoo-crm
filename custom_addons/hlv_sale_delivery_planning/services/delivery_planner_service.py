@@ -3,6 +3,7 @@ import os
 from odoo import models, api
 from markupsafe import Markup
 import re
+import pytz
 
 _SKIP_MSG_RE = re.compile(
     r'Lệnh chuyển hàng được tạo'
@@ -180,7 +181,7 @@ class DeliveryPlannerService(models.AbstractModel):
         }
 
     @api.model
-    def get_orders_subset(self, order_ids):
+    def get_orders_subset(self, order_ids, filter_kwargs=None):
         """Lightweight partial refresh used by the bus update flow.
 
         Re-formats only the given sale.order ids using the same Phase 1+2
@@ -188,10 +189,17 @@ class DeliveryPlannerService(models.AbstractModel):
         the whole filtered set. Returns a list of formatted orders the
         frontend can merge into its existing state.
 
+        Khi `filter_kwargs` được truyền vào (frontend đẩy nguyên bộ lọc hiện
+        tại của user), backend sẽ chạy lại đúng search_domain + status compute
+        trên subset. Các SO không khớp filter sẽ rơi vào `removed_ids`, FE
+        dựa vào đó để bỏ qua (không add vào kanban) hoặc remove khỏi state
+        nếu đang hiển thị. Tránh trường hợp bus đẩy 1 SO kho A vào dashboard
+        đang lọc kho B.
+
         Returns:
             {
                 'orders': [...],   # formatted orders for ids that still exist
-                'removed_ids': [], # ids that no longer exist or were cancelled
+                'removed_ids': [], # ids that no longer exist or don't match filters
             }
         """
         if not order_ids:
@@ -205,19 +213,70 @@ class DeliveryPlannerService(models.AbstractModel):
         if not page_sales:
             return {'orders': [], 'removed_ids': removed_ids}
 
-        # Run the same batch status compute, but only over the subset.
-        # All filters set to defaults — this endpoint just refreshes data,
-        # filtering is the frontend's job (it can drop orders not matching).
-        page_sales, _matched_ids, _stats, product_availabilities, so_status_dict = \
-            self._calculate_po_and_stock_status(
-                page_sales,
-                po_date_from='', po_date_to='', po_status='all',
-                filter_delivery_status='all', filter_stock_status='all',
-                filter_packing_status='all',
-                show_completed=True,  # never drop subset orders
-                filter_need_transfer=False,
-                filter_new_orders=False,
+        fk = filter_kwargs or {}
+
+        # Khi FE truyền filter_kwargs: chạy lại search_domain trên subset để
+        # loại bớt các SO không match SQL-level filters (warehouse, ngày, htgh,
+        # delivery_type, tag, search_query, ...).
+        if fk:
+            search_domain = self._build_search_domain(
+                fk.get('search_query', ''),
+                fk.get('filter_warehouse_id', 'all'),
+                fk.get('filter_delivery_status', 'all'),
+                fk.get('filter_date_from', ''),
+                fk.get('filter_date_to', ''),
+                filter_saler_code=fk.get('filter_saler_code', ''),
+                filter_htgh=fk.get('filter_htgh', ''),
+                filter_delivery_type=fk.get('filter_delivery_type', 'all'),
+                filter_tag_ids=fk.get('filter_tag_ids', ''),
             )
+            search_domain = [('id', 'in', list(existing_ids))] + search_domain
+            page_sales = self.env['sale.order'].search(search_domain)
+            kept = set(page_sales.ids)
+            for i in existing_ids:
+                if i not in kept:
+                    removed_ids.append(i)
+            if not page_sales:
+                return {'orders': [], 'removed_ids': removed_ids}
+
+        # Run the same batch status compute, but only over the subset.
+        # Khi không có filter_kwargs (legacy callers): giữ nguyên hành vi cũ
+        # (show_completed=True, không filter status) — chỉ refresh data.
+        if fk:
+            page_sales, _matched_ids, _stats, product_availabilities, so_status_dict = \
+                self._calculate_po_and_stock_status(
+                    page_sales,
+                    fk.get('filter_po_date_from', ''),
+                    fk.get('filter_po_date_to', ''),
+                    fk.get('filter_po_status', 'all'),
+                    fk.get('filter_delivery_status', 'all'),
+                    fk.get('filter_stock_status', 'all'),
+                    fk.get('filter_packing_status', 'all'),
+                    show_completed=fk.get('show_completed', False),
+                    filter_need_transfer=fk.get('filter_need_transfer', False),
+                    filter_new_orders=fk.get('filter_new_orders', False),
+                    filter_done_date_from=fk.get('filter_done_date_from', ''),
+                    filter_done_date_to=fk.get('filter_done_date_to', ''),
+                    filter_print_status=fk.get('filter_print_status', 'all'),
+                    filter_shipper_received=fk.get('filter_shipper_received', 'all'),
+                )
+            kept_py = set(page_sales.ids)
+            for i in existing_ids:
+                if i not in kept_py and i not in removed_ids:
+                    removed_ids.append(i)
+            if not page_sales:
+                return {'orders': [], 'removed_ids': removed_ids}
+        else:
+            page_sales, _matched_ids, _stats, product_availabilities, so_status_dict = \
+                self._calculate_po_and_stock_status(
+                    page_sales,
+                    po_date_from='', po_date_to='', po_status='all',
+                    filter_delivery_status='all', filter_stock_status='all',
+                    filter_packing_status='all',
+                    show_completed=True,  # never drop subset orders
+                    filter_need_transfer=False,
+                    filter_new_orders=False,
+                )
 
         po_by_origin = self._fetch_pos_for_sales(page_sales)
         att_by_picking = self._fetch_attachments_for_pickings(page_sales.mapped('picking_ids').ids)
@@ -298,7 +357,14 @@ class DeliveryPlannerService(models.AbstractModel):
         so = self.env['sale.order'].browse(int(order_id))
         if not so.exists():
             return []
-            
+
+        # TZ user (fallback Asia/Ho_Chi_Minh) – mail.message.date lưu UTC,
+        # cells fronend hiển thị sai 7h nếu không convert.
+        try:
+            user_tz = pytz.timezone(self.env.context.get('tz') or self.env.user.tz or 'Asia/Ho_Chi_Minh')
+        except Exception:
+            user_tz = pytz.UTC
+
         picking_ids = so.picking_ids.ids
         domain = [
             '|',
@@ -323,9 +389,10 @@ class DeliveryPlannerService(models.AbstractModel):
             origin = ''
             if msg.model == 'stock.picking':
                 origin = picking_name_map.get(msg.res_id, '')
+            local_dt = msg.date.replace(tzinfo=pytz.UTC).astimezone(user_tz) if msg.date else None
             result.append({
                 'id': msg.id,
-                'date': msg.date.strftime('%d/%m/%Y %H:%M') if msg.date else '',
+                'date': local_dt.strftime('%d/%m/%Y %H:%M') if local_dt else '',
                 'author': msg.author_id.name if msg.author_id else (msg.email_from or ''),
                 'body': msg.body or '',
                 'origin': origin,
