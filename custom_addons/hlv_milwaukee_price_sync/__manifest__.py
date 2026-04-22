@@ -16,6 +16,7 @@
     'data': [
         'security/ir.model.access.csv',
         'views/milwaukee_config_views.xml',
+        'views/milwaukee_price_sync_wizard_views.xml',
         'views/milwaukee_pricing_views.xml',
         'views/product_template_views.xml',
     ],

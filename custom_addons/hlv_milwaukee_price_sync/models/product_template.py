@@ -20,19 +20,3 @@ class ProductTemplate(models.Model):
         help='Giá sale sẽ được đồng bộ lên website Milwaukee. Nếu để trống hoặc 0, salePrice sẽ là regularPrice.'
     )
 
-    def action_sync_to_milwaukee_single(self):
-        """Trigger sync for this specific product from the list view"""
-        self.ensure_one()
-        config = self.env['milwaukee.config'].search([('active', '=', True)], limit=1)
-        if not config:
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': 'Lỗi',
-                    'message': 'Chưa cấu hình Milwaukee. Vui lòng thiết lập trong Inventory > Configuration.',
-                    'type': 'danger',
-                }
-            }
-        
-        return config.with_context(active_ids=self.ids).action_push_prices()

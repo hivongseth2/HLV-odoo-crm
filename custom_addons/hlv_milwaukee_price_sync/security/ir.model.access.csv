@@ -1,2 +1,3 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_milwaukee_config_user,milwaukee.config.user,model_milwaukee_config,base.group_user,1,1,1,1
+access_milwaukee_price_sync_wizard_user,milwaukee.price.sync.wizard.user,model_milwaukee_price_sync_wizard,base.group_user,1,1,1,1
