@@ -3,14 +3,20 @@
 /**
  * Delivery Planner Floating AI Chat
  * ----------------------------------
- * Một widget chat AI nổi (floating) nhúng vào màn hình Delivery Planner Kanban.
- * KHÔNG chỉnh sửa bất kỳ file nào của module delivery_planner.
- * Component này được đăng ký vào registry "main_components" nên luôn hiện diện
- * ở root layout, nhưng chỉ render khi user đang đứng tại client action
- * `hlv_sale_delivery_planning.dashboard`.
+ * Floating widget chat AI nhúng vào màn hình Delivery Planner Kanban,
+ * KHÔNG chỉnh sửa file nào của module delivery_planner.
  *
- * Sử dụng LLMChatContainer của module `llm_thread` (đã có sẵn) để hiển thị
- * UI chat đầy đủ (sidebar threads, composer, header model/tool…).
+ * Đăng ký vào registry "main_components" để Web Client tự render ở root.
+ * Widget tự kiểm tra:
+ *   - Action hiện tại có phải `hlv_sale_delivery_planning.dashboard` không
+ *     (poll 500ms vì action service không reactive).
+ *   - DOM `.hlv_delivery_planner_dashboard` có tồn tại không (fallback).
+ *
+ * Skills:
+ *   1. "Gợi ý đi đơn (mua)"  — placeholder, chưa cấu hình logic.
+ *   2. "Gợi ý giao hàng"     — gom data context (ĐÃ ĐÓNG, CHỜ NHẬN GIAO)
+ *      từ backend `hlv.delivery.suggestion.get_delivery_suggestion_context`
+ *      rồi nhét vào prompt user gửi lên thread đang active.
  */
 
 import { Component, onMounted, onWillDestroy, onWillStart, useState } from "@odoo/owl";
@@ -21,8 +27,10 @@ import { useService } from "@web/core/utils/hooks";
 import { LLMChatContainer } from "@llm_thread/components/llm_chat_container/llm_chat_container";
 
 const DASHBOARD_ACTION_TAG = "hlv_sale_delivery_planning.dashboard";
+const DASHBOARD_DOM_SELECTOR = ".hlv_delivery_planner_dashboard";
 const STORAGE_KEY_OPEN = "hlv_dp_chat_open";
 const STORAGE_KEY_SIZE = "hlv_dp_chat_size";
+const ACTION_POLL_INTERVAL_MS = 500;
 
 export class DeliveryPlannerFloatingChat extends Component {
     static template = "hlv_sale_delivery_planning.FloatingChat";
@@ -31,12 +39,13 @@ export class DeliveryPlannerFloatingChat extends Component {
 
     setup() {
         this.actionService = useService("action");
+        this.orm = useService("orm");
         this.llmStore = useState(useService("llm.store"));
         this.mailStore = useState(useService("mail.store"));
         this.notification = useService("notification");
 
-        // Restore last size (mặc định kích thước vừa phải)
-        let savedSize = { width: 420, height: 600 };
+        // Restore last size
+        let savedSize = { width: 460, height: 640 };
         try {
             const raw = browser.localStorage.getItem(STORAGE_KEY_SIZE);
             if (raw) {
@@ -50,55 +59,60 @@ export class DeliveryPlannerFloatingChat extends Component {
         }
 
         this.state = useState({
-            // Hiển thị floating button / panel chỉ khi đang ở dashboard
-            isOnDashboard: this._checkIsOnDashboard(),
-            // Trạng thái panel chat đang mở/đóng
+            isOnDashboard: false,
             isOpen: browser.localStorage.getItem(STORAGE_KEY_OPEN) === "1",
-            // Đã khởi tạo dữ liệu LLM (providers/threads) chưa
             isInitialized: false,
             isInitializing: false,
             initError: null,
-            // Kích thước panel (px)
             width: savedSize.width,
             height: savedSize.height,
+            // Skills
+            isPreparingSkill: false,
+            skillError: null,
         });
 
-        // Lắng nghe thay đổi route/action
-        this._onActionChange = () => {
-            this.state.isOnDashboard = this._checkIsOnDashboard();
-        };
-
         onWillStart(() => {
-            // Nếu mở sẵn từ session trước & đang ở dashboard → init luôn
+            this.state.isOnDashboard = this._checkIsOnDashboard();
             if (this.state.isOpen && this.state.isOnDashboard) {
                 this._ensureInitialized();
             }
         });
 
         onMounted(() => {
-            // Subscribe vào hashchange / popstate để biết action thay đổi
-            browser.addEventListener("hashchange", this._onActionChange);
-            browser.addEventListener("popstate", this._onActionChange);
+            // Poll because actionService.currentController is NOT reactive
+            this._pollHandle = browser.setInterval(() => {
+                const onDash = this._checkIsOnDashboard();
+                if (onDash !== this.state.isOnDashboard) {
+                    this.state.isOnDashboard = onDash;
+                }
+            }, ACTION_POLL_INTERVAL_MS);
         });
 
         onWillDestroy(() => {
-            browser.removeEventListener("hashchange", this._onActionChange);
-            browser.removeEventListener("popstate", this._onActionChange);
+            if (this._pollHandle) {
+                browser.clearInterval(this._pollHandle);
+            }
             this._stopResize();
         });
     }
 
     // ──────────────────────────────────────────────────────────────────
-    // Action detection
+    // Dashboard detection (poll-based since action svc isn't reactive)
     // ──────────────────────────────────────────────────────────────────
     _checkIsOnDashboard() {
+        // 1) Check current action tag
         try {
             const ctrl = this.actionService.currentController;
             const action = ctrl && ctrl.action;
-            if (!action) {
-                return false;
+            if (action && action.tag === DASHBOARD_ACTION_TAG) {
+                return true;
             }
-            return action.tag === DASHBOARD_ACTION_TAG;
+        } catch (e) {
+            // ignore
+        }
+        // 2) Fallback: DOM check
+        try {
+            return !!document.querySelector(DASHBOARD_DOM_SELECTOR);
         } catch (e) {
             return false;
         }
@@ -119,7 +133,6 @@ export class DeliveryPlannerFloatingChat extends Component {
                 this.llmStore.isReady,
             ]);
 
-            // Nếu đang chưa có active LLM thread → chọn thread gần nhất nếu có
             const activeThread = this.mailStore.discuss?.thread;
             const isActiveLLM = activeThread && activeThread.model === "llm.thread";
             if (!isActiveLLM) {
@@ -144,9 +157,7 @@ export class DeliveryPlannerFloatingChat extends Component {
         this.state.isOpen = !this.state.isOpen;
         try {
             browser.localStorage.setItem(STORAGE_KEY_OPEN, this.state.isOpen ? "1" : "0");
-        } catch (e) {
-            // ignore
-        }
+        } catch (e) {}
         if (this.state.isOpen) {
             await this._ensureInitialized();
         }
@@ -156,9 +167,7 @@ export class DeliveryPlannerFloatingChat extends Component {
         this.state.isOpen = false;
         try {
             browser.localStorage.setItem(STORAGE_KEY_OPEN, "0");
-        } catch (e) {
-            // ignore
-        }
+        } catch (e) {}
     }
 
     async createNewThread() {
@@ -167,15 +176,139 @@ export class DeliveryPlannerFloatingChat extends Component {
             await this.llmStore.createNewThread();
         } catch (err) {
             console.error(err);
-            this.notification.add(
-                _t("Không tạo được hội thoại mới."),
-                { type: "danger" },
-            );
+            this.notification.add(_t("Không tạo được hội thoại mới."), { type: "danger" });
         }
     }
 
+    get hasActiveLLMThread() {
+        const t = this.mailStore.discuss?.thread;
+        return !!(t && t.model === "llm.thread");
+    }
+
+    get activeThreadId() {
+        const t = this.mailStore.discuss?.thread;
+        return (t && t.model === "llm.thread") ? t.id : null;
+    }
+
     // ──────────────────────────────────────────────────────────────────
-    // Resize (kéo góc trên-trái để thay đổi kích thước panel)
+    // Skills
+    // ──────────────────────────────────────────────────────────────────
+    async runSkillDelivery() {
+        await this._ensureInitialized();
+        if (!this.hasActiveLLMThread) {
+            await this.createNewThread();
+        }
+        const tid = this.activeThreadId;
+        if (!tid) {
+            this.notification.add(
+                _t("Chưa có hội thoại AI. Hãy tạo hội thoại mới rồi thử lại."),
+                { type: "warning" },
+            );
+            return;
+        }
+
+        this.state.isPreparingSkill = true;
+        this.state.skillError = null;
+        try {
+            const ctx = await this.orm.call(
+                "hlv.delivery.suggestion",
+                "get_delivery_suggestion_context",
+                [],
+                { history_days: 30, max_orders: 60 },
+            );
+            const prompt = this._buildDeliveryPrompt(ctx);
+            await this.llmStore.sendLLMMessage(tid, prompt);
+        } catch (err) {
+            console.error("[DeliveryPlannerFloatingChat] skill delivery error", err);
+            this.state.skillError = _t("Không lấy được dữ liệu đơn hàng để gợi ý.");
+            this.notification.add(this.state.skillError, { type: "danger" });
+        } finally {
+            this.state.isPreparingSkill = false;
+        }
+    }
+
+    async runSkillPurchase() {
+        // Placeholder — user chưa muốn viết logic
+        this.notification.add(
+            _t("Skill 'Gợi ý đi đơn' đang chờ cấu hình nghiệp vụ. Sẽ bổ sung sau."),
+            { type: "info" },
+        );
+    }
+
+    /**
+     * Build a structured Vietnamese prompt from backend context.
+     */
+    _buildDeliveryPrompt(ctx) {
+        const orders = ctx.orders || [];
+        const routes = ctx.route_summary || [];
+        const history = ctx.shipper_history || [];
+
+        const ordersBrief = orders.map((o, i) => {
+            const products = (o.products || []).map(p =>
+                `${p.name} x${p.qty}${p.uom ? ' ' + p.uom : ''}`
+            ).join('; ');
+            return [
+                `${i + 1}. [${o.name}] ${o.partner_name}`,
+                `   • Địa chỉ: ${o.address || '(thiếu)'}`,
+                `   • Tuyến/Tag: ${o.route || '(chưa phân)'} | HTGH: ${o.htgh || '(chưa)'}`,
+                `   • Hẹn giao: ${o.commitment_date || o.scheduled_date || '(chưa)'} | Kho: ${o.warehouse}`,
+                `   • Giá trị: ${(o.amount_total || 0).toLocaleString('vi-VN')} ${o.currency || 'VND'}`,
+                `   • Shipper hiện tại: ${o.shipper_name || '(chưa gán)'}`,
+                `   • Sản phẩm (${o.product_count}): ${products || '(không có)'}`,
+                `   • Phiếu: ${(o.picking_names || []).join(', ')}`,
+            ].join('\n');
+        }).join('\n\n');
+
+        const routesBrief = routes.length
+            ? routes.map(r => `   - ${r.route}: ${r.order_count} đơn, tổng ${(r.total_value || 0).toLocaleString('vi-VN')}đ`).join('\n')
+            : '   (không có dữ liệu tuyến)';
+
+        const historyBrief = history.length
+            ? history.map(h => {
+                const routeTop = Object.entries(h.routes || {})
+                    .map(([r, c]) => `${r}(${c})`).join(', ');
+                const onTimeRate = (h.on_time_count + h.late_count) > 0
+                    ? Math.round(100 * h.on_time_count / (h.on_time_count + h.late_count))
+                    : null;
+                return `   - ${h.name}: ${h.completed_orders} đơn/${ctx.history_days}ng, ` +
+                    `TB ${h.avg_delivery_hours ?? '?'}h/phiếu, ` +
+                    `đúng giờ ${onTimeRate ?? '?'}%, ` +
+                    `tuyến quen: ${routeTop || '(không)'}`;
+            }).join('\n')
+            : '   (chưa có lịch sử)';
+
+        return [
+            `[SKILL] Gợi ý giao hàng — Delivery Planner`,
+            ``,
+            `Bạn là AI dispatcher cho HLV. Mục tiêu:`,
+            `  • Gom đơn theo tuyến / khu vực / hãng vận chuyển để giao càng nhiều đơn cho 1 chuyến càng tốt.`,
+            `  • Ưu tiên đơn theo ngày hẹn giao (commitment_date), không để trễ.`,
+            `  • Cân nhắc giá trị đơn (đơn giá trị lớn cần độ tin cậy cao của shipper).`,
+            `  • Học từ lịch sử shipper: ai đi tuyến nào nhanh / đúng giờ → ưu tiên gán.`,
+            `  • Cảnh báo các đơn nguy cơ trễ hoặc thiếu thông tin (địa chỉ, tuyến, HTGH).`,
+            ``,
+            `Yêu cầu output (tiếng Việt, ngắn gọn, dạng bảng/markdown):`,
+            `  1. Đề xuất phân chuyến: mỗi chuyến gồm danh sách mã đơn + shipper đề cử + lý do.`,
+            `  2. Cảnh báo: đơn cần xử lý gấp / dữ liệu thiếu.`,
+            `  3. Ghi chú học máy: nếu thấy pattern shipper mạnh ở tuyến X → khuyến nghị.`,
+            ``,
+            `=== DỮ LIỆU SỐ HOÁ (do hệ thống cung cấp, ${ctx.generated_at}) ===`,
+            ``,
+            `>> Tổng số đơn ĐÃ ĐÓNG, CHỜ NHẬN GIAO: ${ctx.total_orders}`,
+            ``,
+            `>> Tóm tắt tuyến (route_summary):`,
+            routesBrief,
+            ``,
+            `>> Lịch sử shipper ${ctx.history_days} ngày gần nhất:`,
+            historyBrief,
+            ``,
+            `>> Chi tiết đơn:`,
+            ordersBrief || '(không có đơn)',
+        ].join('\n');
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // Resize (drag góc trên-trái)
     // ──────────────────────────────────────────────────────────────────
     onResizeStart(ev) {
         ev.preventDefault();
@@ -193,14 +326,11 @@ export class DeliveryPlannerFloatingChat extends Component {
     }
 
     _onResizeMove(ev) {
-        if (!this._resizing) {
-            return;
-        }
-        // Kéo từ góc trên-trái → tăng width khi kéo trái, tăng height khi kéo lên
+        if (!this._resizing) return;
         const dx = this._resizing.startX - ev.clientX;
         const dy = this._resizing.startY - ev.clientY;
-        const newW = Math.max(320, Math.min(900, this._resizing.startW + dx));
-        const newH = Math.max(360, Math.min(window.innerHeight - 80, this._resizing.startH + dy));
+        const newW = Math.max(340, Math.min(1000, this._resizing.startW + dx));
+        const newH = Math.max(380, Math.min(window.innerHeight - 80, this._resizing.startH + dy));
         this.state.width = newW;
         this.state.height = newH;
     }
@@ -221,27 +351,17 @@ export class DeliveryPlannerFloatingChat extends Component {
                     STORAGE_KEY_SIZE,
                     JSON.stringify({ width: this.state.width, height: this.state.height }),
                 );
-            } catch (e) {
-                // ignore
-            }
+            } catch (e) {}
         }
     }
 
-    // ──────────────────────────────────────────────────────────────────
-    // Computed
-    // ──────────────────────────────────────────────────────────────────
     get panelStyle() {
         return `width:${this.state.width}px; height:${this.state.height}px;`;
     }
-
-    get hasActiveLLMThread() {
-        const t = this.mailStore.discuss?.thread;
-        return !!(t && t.model === "llm.thread");
-    }
 }
 
-// Đăng ký vào registry main_components để widget tự render ở root.
-// Component sẽ tự kiểm tra current action và chỉ hiện khi đang ở dashboard.
+// Đăng ký vào main_components — webclient sẽ tự render. Component bên
+// trong tự kiểm tra route nên không xuất hiện ở các action khác.
 registry.category("main_components").add("hlv_sale_delivery_planning.FloatingChat", {
     Component: DeliveryPlannerFloatingChat,
     props: {},
