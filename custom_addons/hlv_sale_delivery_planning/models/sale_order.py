@@ -139,10 +139,16 @@ class SaleOrder(models.Model):
         )
 
     @api.model
-    def get_delivery_orders_subset(self, order_ids):
+    def get_delivery_orders_subset(self, order_ids, filter_kwargs=None):
         """RPC wrapper around hlv.delivery.planner.service.get_orders_subset.
-        Used by the bus-driven partial refresh."""
-        return self.env['hlv.delivery.planner.service'].get_orders_subset(order_ids)
+        Used by the bus-driven partial refresh.
+
+        `filter_kwargs` (optional): bộ lọc hiện tại của user (warehouse, ngày,
+        status, ...) để backend bỏ các SO không match (kho khác / ngày khác /
+        ...). Khi None: giữ hành vi cũ (chỉ refresh data, không filter)."""
+        return self.env['hlv.delivery.planner.service'].get_orders_subset(
+            order_ids, filter_kwargs=filter_kwargs,
+        )
 
     @api.model
     def get_delivery_so_flow(self, so_id):
