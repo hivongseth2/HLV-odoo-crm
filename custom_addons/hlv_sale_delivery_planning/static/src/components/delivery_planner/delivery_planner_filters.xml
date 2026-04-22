@@ -219,7 +219,6 @@
                         <option value="all">Tất cả</option>
                         <option value="waiting_stock">Không Có Hàng Đóng</option>
                         <option value="unpacked">Có Hàng Chưa Đóng Gói</option>
-                        <option value="has_unprinted">Có Phiếu Chưa In</option>
                         <option value="printed_waiting">Đã In, Chờ Đóng Gói</option>
                         <option value="fully_packed">Đã Đóng Gói Đủ</option>
                         <option value="packed_waiting_ship">Đã Gói, Chờ Nhận Giao</option>
