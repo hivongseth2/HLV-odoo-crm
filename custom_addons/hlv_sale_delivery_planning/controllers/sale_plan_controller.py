@@ -144,7 +144,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
 .badge-stk-partial{background:#ffc107;color:#000}
 .badge-stk-out{background:#dc3545;color:#fff}
 .badge-pack-waiting{background:#6c757d;color:#fff}
-.badge-pack-unprinted{background:#dc3545;color:#fff}
 .badge-pack-unpacked{background:#ffc107;color:#000}
 .badge-pack-printed{background:#0dcaf0;color:#000}
 .badge-pack-packed{background:#0d6efd;color:#fff}
@@ -260,10 +259,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
     <div class="kpi-pack-icon" style="background:#fed7d7;color:#c53030"><i class="fa fa-circle-xmark"></i></div>
     <div><div class="kpi-pack-label">Không có hàng đóng</div><div class="kpi-pack-val" id="kpi-pw">0</div></div>
   </div></div>
-  <div style="flex:1 1 0;min-width:130px"><div class="card kpi-pack" id="kpi-pack-unprinted" data-filter="has_unprinted">
-    <div class="kpi-pack-icon" style="background:#fed7d7;color:#dc3545"><i class="fa fa-print"></i></div>
-    <div><div class="kpi-pack-label">Có phiếu chưa in</div><div class="kpi-pack-val" id="kpi-pup">0</div></div>
-  </div></div>
   <div style="flex:1 1 0;min-width:130px"><div class="card kpi-pack" id="kpi-pack-unpacked" data-filter="unpacked">
     <div class="kpi-pack-icon" style="background:#fefcbf;color:#b7791f"><i class="fa fa-box-open"></i></div>
     <div><div class="kpi-pack-label">Có hàng chưa gói</div><div class="kpi-pack-val" id="kpi-pu">0</div></div>
@@ -314,7 +309,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5}
     <div class="col-md-3"><label class="form-label small fw-semibold text-muted mb-1">Đóng Gói</label>
       <select id="f-pack" class="form-select form-select-sm">
         <option value="all">Tất cả</option><option value="waiting_stock">Không có hàng đóng</option>
-        <option value="has_unprinted">Có phiếu chưa in</option>
         <option value="unpacked">Có hàng chưa đóng gói</option>
         <option value="printed_waiting">Đã in, chờ đóng gói</option>
         <option value="packed_waiting_ship">Đã gói, chờ nhận giao</option>
@@ -427,8 +421,8 @@ var DL={unshipped:'Chưa giao',pending:'Chưa giao',partial:'Giao 1 phần',full
 var DC={unshipped:'badge-del-pending',pending:'badge-del-pending',partial:'badge-del-partial',full:'badge-del-full'};
 var SL={ready:'Đủ hàng xuất',partial_ready:'Có hàng 1 phần',out_of_stock:'Không có hàng'};
 var SC={ready:'badge-stk-ready',partial_ready:'badge-stk-partial',out_of_stock:'badge-stk-out'};
-var PL={waiting_stock:'Không Có Hàng Đóng',has_unprinted:'Có Phiếu Chưa In',unpacked:'Có Hàng Chưa Đóng Gói',printed_waiting:'Đã In, Chờ Đóng Gói',packed_waiting_ship:'Đã Gói, Chờ Nhận Giao',delivered_today:'Đã Giao Trong Ngày',shipping:'Đang Giao',fully_packed:'Đã Đóng Gói Đủ'};
-var PC={waiting_stock:'badge-pack-waiting',has_unprinted:'badge-pack-unprinted',unpacked:'badge-pack-unpacked',printed_waiting:'badge-pack-printed',packed_waiting_ship:'badge-pack-packed',delivered_today:'badge-pack-deltoday',shipping:'badge-pack-shipping',fully_packed:'badge-pack-done'};
+var PL={waiting_stock:'Không Có Hàng Đóng',unpacked:'Có Hàng Chưa Đóng Gói',printed_waiting:'Đã In, Chờ Đóng Gói',packed_waiting_ship:'Đã Gói, Chờ Nhận Giao',delivered_today:'Đã Giao Trong Ngày',shipping:'Đang Giao',fully_packed:'Đã Đóng Gói Đủ'};
+var PC={waiting_stock:'badge-pack-waiting',unpacked:'badge-pack-unpacked',printed_waiting:'badge-pack-printed',packed_waiting_ship:'badge-pack-packed',delivered_today:'badge-pack-deltoday',shipping:'badge-pack-shipping',fully_packed:'badge-pack-done'};
 var POL={pending:'Chưa nhận',partial:'Nhận 1 phần',full:'Đã nhận đủ'};
 var POC={pending:'badge-po-pending',partial:'badge-po-partial',full:'badge-po-full'};
 
@@ -548,9 +542,8 @@ function load(append){
       // Đơn đã giao trong ngày (kể cả partial) VÀ không có PICK nào assigned sẵn hàng
       if(o.has_delivered_today&&(rd==='full'||!o.has_assigned_pick)) ep='delivered_today';
       else if(o.has_shipper_received) ep='shipping';
-      else if(o.has_new_unprinted_pickings) ep='has_unprinted';
       else if(ep==='fully_packed') ep='packed_waiting_ship';
-      else if(o.picking_slip_printed&&ep!=='delivered') ep='printed_waiting';
+      else if(o.has_active_pick_printed&&ep!=='delivered') ep='printed_waiting';
       else if(ep==='partial_packed') ep='unpacked';
       o.effective_packing=ep;
       // Shipper name from pickings
@@ -599,10 +592,9 @@ function updKPI(){
   $('kpi-partial').textContent=s.partial||0;
   $('kpi-outstock').textContent=s.out_of_stock||0;
   // Count effective packing from client-side computed values
-  var epCounts={waiting_stock:0,has_unprinted:0,unpacked:0,printed_waiting:0,packed_waiting_ship:0,delivered_today:0,shipping:0};
+  var epCounts={waiting_stock:0,unpacked:0,printed_waiting:0,packed_waiting_ship:0,delivered_today:0,shipping:0};
   S.orders.forEach(function(o){var ep=o.effective_packing;if(epCounts[ep]!==undefined)epCounts[ep]++;});
   $('kpi-pw').textContent=epCounts.waiting_stock;
-  $('kpi-pup').textContent=epCounts.has_unprinted;
   $('kpi-pu').textContent=epCounts.unpacked;
   $('kpi-pp').textContent=epCounts.printed_waiting;
   $('kpi-pf').textContent=epCounts.packed_waiting_ship;
@@ -642,7 +634,6 @@ function renderKanban(){
   var cols,gb=S.kanbanGroupBy;
   if(gb==='packing_status') cols=[
     {key:'waiting_stock',lbl:'KHÔNG CÓ HÀNG ĐÓNG',cls:'text-secondary'},
-    {key:'has_unprinted',lbl:'CÓ PHIẾU CHƯA IN',cls:'text-danger'},
     {key:'unpacked',lbl:'CÓ HÀNG CHƯA ĐÓNG GÓI',cls:'text-warning'},
     {key:'printed_waiting',lbl:'ĐÃ IN, CHỜ ĐÓNG GÓI',cls:'text-info'},
     {key:'packed_waiting_ship',lbl:'ĐÃ GÓI, CHỜ NHẬN GIAO',cls:'text-primary'},
@@ -1409,9 +1400,8 @@ if(_cachedData){
     var rd=o.real_delivery_status||o.delivery_status;
     if(o.has_delivered_today&&(rd==='full'||!o.has_assigned_pick)) ep='delivered_today';
     else if(o.has_shipper_received) ep='shipping';
-    else if(o.has_new_unprinted_pickings) ep='has_unprinted';
     else if(ep==='fully_packed') ep='packed_waiting_ship';
-    else if(o.picking_slip_printed&&ep!=='delivered') ep='printed_waiting';
+    else if(o.has_active_pick_printed&&ep!=='delivered') ep='printed_waiting';
     else if(ep==='partial_packed') ep='unpacked';
     o.effective_packing=ep;
     o._shipper_names=[];
@@ -1773,7 +1763,6 @@ class SalePlanPublicController(http.Controller):
                 'fully_packed': 'Đã đóng gói đủ',
                 'unpacked': 'Có hàng chưa đóng gói',
                 'waiting_stock': 'Không có hàng đóng',
-                'has_unprinted': 'Có phiếu chưa in',
                 'printed_waiting': 'Đã in, chờ đóng gói',
                 'packed_waiting_ship': 'Đã gói, chờ nhận giao',
                 'delivered_today': 'Đã giao trong ngày',
