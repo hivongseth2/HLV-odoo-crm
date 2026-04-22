@@ -329,7 +329,7 @@
                         <span t-if="so.has_unread_message" 
                               class="badge bg-danger ms-1 animate__animated animate__pulse animate__infinite"
                               style="vertical-align: middle; padding: 3px 6px; font-size: 0.65rem;" 
-                              title="Có tin nhắn mới từ khách hàng/shipper">
+                              title="Có tin nhắn mới">
                               <i class="fa fa-envelope me-1"></i> TIN MỚI
                         </span>
                     </h6>
