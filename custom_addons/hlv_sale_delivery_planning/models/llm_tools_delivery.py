@@ -17,6 +17,7 @@ NGUYÊN TẮC:
 Tất cả tool được gắn lên thread khi ``ensure_chat_thread`` chạy
 (xem ``delivery_suggestion.py``).
 """
+import base64
 import json
 import logging
 from collections import defaultdict
@@ -262,7 +263,7 @@ class HlvDeliveryPlannerTools(models.AbstractModel):
                          htgh: str = '',
                          search: str = '',
                          use_active_filter: bool = True,
-                         limit: int = 20,
+                         limit: int = 60,
                          offset: int = 0) -> dict:
         """Liệt kê các đơn bán theo filter.
 
@@ -280,7 +281,7 @@ class HlvDeliveryPlannerTools(models.AbstractModel):
             limit: tối đa 100. Mặc định 30.
             offset: pagination.
         """
-        limit = max(1, min(int(limit or 20), 50))
+        limit = max(1, min(int(limit or 60), 200))
         kwargs = self._build_kwargs(
             packing_status=packing_status or None,
             warehouse_name=warehouse_name or None,
@@ -539,3 +540,261 @@ class HlvDeliveryPlannerTools(models.AbstractModel):
             })
         out.sort(key=lambda x: -x['completed_orders'])
         return {'days': days, 'shippers': out}
+
+    # ──────────────────────────────────────────────────────────────────
+    # TOOL 7 — Rich Excel export (Claude điều khiển style)
+    # ──────────────────────────────────────────────────────────────────
+    @llm_tool(name='dp_export_excel')
+    def tool_export_excel(self, filename: str,
+                          headers: list,
+                          rows: list,
+                          sheet_name: str = 'Sheet1',
+                          merges: list = None,
+                          row_styles: list = None,
+                          cell_styles: list = None,
+                          column_widths: list = None,
+                          header_fill: str = '4472C4',
+                          header_font_color: str = 'FFFFFF',
+                          freeze_header: bool = True) -> str:
+        """Xuất Excel với toàn quyền styling (merge, fill color, font color).
+
+        Dùng tool này thay cho ``file_export`` mặc định khi cần bảng đẹp:
+        merge cell theo nhóm tuyến, tô màu hàng cảnh báo, set độ rộng cột…
+
+        Args:
+            filename: tên file (auto thêm .xlsx).
+            headers: list tên cột.
+            rows: list các hàng, mỗi hàng = list cell value (str/int/float/None).
+            sheet_name: tên sheet.
+            merges: list dải merge dạng "A2:A5" hoặc dict {"range":"A2:A5"}.
+                    Dùng để gộp ô cùng nhóm tuyến / cùng chuyến.
+            row_styles: list dict điều khiển style theo HÀNG (1-based, header
+                là row 1). Ví dụ:
+                  [{"row": 5, "fill": "FFEB9C", "font_color": "9C5700",
+                    "bold": false}]
+                Dùng để tô màu hàng cảnh báo, đơn quá hạn…
+            cell_styles: list dict điều khiển style theo Ô (cell-level, đè
+                row_styles). Ví dụ:
+                  [{"row": 5, "col": 6, "fill": "FFC7CE",
+                    "font_color": "9C0006", "bold": true,
+                    "number_format": "#,##0"}]
+                ``col`` là 1-based.
+            column_widths: list số (đơn vị Excel character width). Index khớp
+                với headers. Để None = auto theo nội dung. Ví dụ
+                ``[12, 8, 28, 24, 14, 12, 14, 18, 20]``.
+            header_fill: màu nền header (hex 6 ký tự, mặc định 4472C4).
+            header_font_color: màu chữ header (mặc định FFFFFF).
+            freeze_header: True = khoá hàng header khi cuộn.
+
+        Trả về 1 dòng tóm tắt (đã đính kèm file vào message).
+        """
+        if not headers:
+            return 'Error: headers cannot be empty'
+        if not rows:
+            return 'Error: rows cannot be empty'
+
+        try:
+            import openpyxl
+            from openpyxl.styles import (Alignment, Border, Font, PatternFill,
+                                          Side)
+            from openpyxl.utils import get_column_letter
+        except ImportError:
+            return 'Error: openpyxl chưa được cài đặt trên server.'
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = (sheet_name or 'Sheet1')[:31]
+
+        thin = Side(style='thin', color='CCCCCC')
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+        # Header
+        h_font = Font(bold=True, color=(header_font_color or 'FFFFFF').lstrip('#'),
+                      size=11)
+        h_fill = PatternFill(
+            start_color=(header_fill or '4472C4').lstrip('#'),
+            end_color=(header_fill or '4472C4').lstrip('#'),
+            fill_type='solid',
+        )
+        h_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        for ci, h in enumerate(headers, 1):
+            c = ws.cell(row=1, column=ci, value=h)
+            c.font = h_font
+            c.fill = h_fill
+            c.alignment = h_align
+            c.border = border
+
+        # Body
+        for ri, row in enumerate(rows, 2):
+            for ci, val in enumerate(row, 1):
+                if ci > len(headers):
+                    break
+                cell_val = self._coerce_cell_value(val)
+                c = ws.cell(row=ri, column=ci, value=cell_val)
+                c.border = border
+                if isinstance(cell_val, (int, float)) and not isinstance(cell_val, bool):
+                    c.alignment = Alignment(horizontal='right', vertical='center')
+                    c.number_format = '#,##0' if isinstance(cell_val, int) else '#,##0.00'
+                else:
+                    c.alignment = Alignment(vertical='center', wrap_text=True)
+
+        # Row styles
+        for rs in (row_styles or []):
+            try:
+                r = int(rs.get('row'))
+                fill = rs.get('fill')
+                font_color = rs.get('font_color')
+                bold = bool(rs.get('bold'))
+                italic = bool(rs.get('italic'))
+                for ci in range(1, len(headers) + 1):
+                    c = ws.cell(row=r, column=ci)
+                    if fill:
+                        hex_fill = fill.lstrip('#')
+                        c.fill = PatternFill(start_color=hex_fill,
+                                              end_color=hex_fill,
+                                              fill_type='solid')
+                    if font_color or bold or italic:
+                        existing = c.font
+                        c.font = Font(
+                            name=existing.name,
+                            size=existing.size,
+                            bold=bold or existing.bold,
+                            italic=italic or existing.italic,
+                            color=(font_color or '').lstrip('#') or existing.color,
+                        )
+            except Exception:
+                _logger.debug('row_style ignored: %s', rs, exc_info=True)
+
+        # Cell styles (override row)
+        for cs in (cell_styles or []):
+            try:
+                r = int(cs.get('row'))
+                ci = int(cs.get('col'))
+                c = ws.cell(row=r, column=ci)
+                fill = cs.get('fill')
+                if fill:
+                    hex_fill = fill.lstrip('#')
+                    c.fill = PatternFill(start_color=hex_fill,
+                                          end_color=hex_fill,
+                                          fill_type='solid')
+                font_color = cs.get('font_color')
+                bold = cs.get('bold')
+                italic = cs.get('italic')
+                if any(v is not None for v in (font_color, bold, italic)):
+                    existing = c.font
+                    c.font = Font(
+                        name=existing.name, size=existing.size,
+                        bold=bool(bold) if bold is not None else existing.bold,
+                        italic=bool(italic) if italic is not None else existing.italic,
+                        color=(font_color or '').lstrip('#') or existing.color,
+                    )
+                num_fmt = cs.get('number_format')
+                if num_fmt:
+                    c.number_format = num_fmt
+                align_h = cs.get('align')
+                if align_h:
+                    c.alignment = Alignment(horizontal=align_h, vertical='center',
+                                             wrap_text=True)
+            except Exception:
+                _logger.debug('cell_style ignored: %s', cs, exc_info=True)
+
+        # Merges
+        for m in (merges or []):
+            rng = m if isinstance(m, str) else (m or {}).get('range')
+            if not rng:
+                continue
+            try:
+                ws.merge_cells(rng)
+                # Center content in merged cell
+                first = ws[rng.split(':')[0]]
+                first.alignment = Alignment(horizontal='center',
+                                             vertical='center',
+                                             wrap_text=True)
+            except Exception:
+                _logger.debug('merge ignored: %s', rng, exc_info=True)
+
+        # Column widths
+        if column_widths:
+            for ci, w in enumerate(column_widths, 1):
+                if not w:
+                    continue
+                try:
+                    ws.column_dimensions[get_column_letter(ci)].width = float(w)
+                except Exception:
+                    pass
+        else:
+            # Auto-fit (cap 50)
+            for col in ws.columns:
+                max_len = 0
+                # col may contain MergedCell — use first non-merged cell
+                col_letter = None
+                for cell in col:
+                    if hasattr(cell, 'column_letter'):
+                        col_letter = cell.column_letter
+                        break
+                if not col_letter:
+                    continue
+                for cell in col:
+                    if cell.value is not None:
+                        max_len = max(max_len, len(str(cell.value)))
+                ws.column_dimensions[col_letter].width = min(max_len + 3, 50)
+
+        if freeze_header:
+            ws.freeze_panes = 'A2'
+
+        # Output
+        import io
+        buf = io.BytesIO()
+        wb.save(buf)
+        content = buf.getvalue()
+
+        if not filename.endswith('.xlsx'):
+            filename += '.xlsx'
+
+        attachment = self.env['ir.attachment'].create({
+            'name': filename,
+            'datas': base64.b64encode(content).decode(),
+            'mimetype': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'type': 'binary',
+        })
+        # Đính vào message giống file_export làm
+        msg = self.env.context.get('message')
+        if msg:
+            try:
+                msg.write({'attachment_ids': [(4, attachment.id)]})
+                if msg.model and msg.res_id:
+                    attachment.write({
+                        'res_model': msg.model,
+                        'res_id': msg.res_id,
+                    })
+            except Exception:
+                _logger.warning('Could not attach xlsx to message', exc_info=True)
+
+        return (
+            f"Đã xuất file '{filename}' ({len(rows)} hàng, "
+            f"{len(headers)} cột, {len(merges or [])} merge, "
+            f"{len(row_styles or [])} row style, "
+            f"{len(cell_styles or [])} cell style)."
+        )
+
+    @staticmethod
+    def _coerce_cell_value(value):
+        if value is None or isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value
+        if isinstance(value, str):
+            s = value.strip()
+            # Don't auto-convert codes that look numeric (DH001, 0123…)
+            if not s or s.startswith('0') and len(s) > 1:
+                return value
+            try:
+                if '.' not in s and ',' not in s:
+                    return int(s)
+            except (ValueError, TypeError):
+                pass
+            try:
+                return float(s.replace(',', ''))
+            except (ValueError, TypeError):
+                pass
+        return value
