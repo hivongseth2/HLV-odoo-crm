@@ -1268,8 +1268,9 @@ $('btn-list').addEventListener('click',function(){
   });
 });
 
-['kpi-pack-waiting','kpi-pack-unprinted','kpi-pack-unpacked','kpi-pack-printed','kpi-pack-done','kpi-pack-deltoday','kpi-pack-shipping'].forEach(function(id){
-  $(id).addEventListener('click',function(){
+['kpi-pack-waiting','kpi-pack-unpacked','kpi-pack-printed','kpi-pack-done','kpi-pack-deltoday','kpi-pack-shipping'].forEach(function(id){
+  var el=$(id);if(!el)return;
+  el.addEventListener('click',function(){
     var f=this.dataset.filter;
     var cur=gv('f-pack');
     $('f-pack').value=(cur===f)?'all':f;
