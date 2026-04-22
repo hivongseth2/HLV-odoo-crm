@@ -365,7 +365,7 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             )
             x_printed = so_rec.get('x_picking_slip_printed') or False
             has_new_unprinted = bool(x_printed) and bool(active_outflow) and any(
-                not p.get('x_printed') and p['state'] == 'assigned'
+                not p.get('x_printed') and p['state'] in ('assigned', 'confirmed', 'waiting')
                 for p in active_outflow if 'PICK' in p['seq_code']
             )
             has_assigned_pick = any(
