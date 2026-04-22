@@ -117,22 +117,41 @@
                     <i t-attf-class="fa me-1 #{state.isLoadingMore ? 'fa-spinner fa-spin' : 'fa-cloud-download'}"/>
                     Tải hết (<t t-esc="this.remainingKanbanCount"/>)
                 </button>
+                <!-- Đơn đã cất (không còn dùng) -->
                 <button class="btn btn-sm"
-                        t-att-class="state.showArchivedOnly ? 'btn-warning' : 'btn-outline-warning'"
-                        t-on-click="toggleShowArchivedOnly"
-                        t-att-title="state.showArchivedOnly ? 'Bấm để quay lại danh sách thường' : 'Xem các đơn đã cất'">
-                    <i t-attf-class="fa me-1 #{state.showArchivedOnly ? 'fa-list' : 'fa-archive'}"></i>
-                    <t t-if="state.showArchivedOnly">Quay lại</t>
+                        t-att-class="state.archivedView === 'archived' ? 'btn-warning' : 'btn-outline-warning'"
+                        t-on-click="() => this.setArchivedView(state.archivedView === 'archived' ? 'none' : 'archived')"
+                        t-att-title="state.archivedView === 'archived' ? 'Bấm để quay lại danh sách thường' : 'Xem các đơn đã cất (không còn dùng)'">
+                    <i t-attf-class="fa me-1 #{state.archivedView === 'archived' ? 'fa-list' : 'fa-archive'}"></i>
+                    <t t-if="state.archivedView === 'archived'">Quay lại</t>
                     <t t-else="">Đơn đã cất</t>
                     <span t-if="state.archivedSOIds.size" class="badge bg-light text-dark ms-1">
                         <t t-esc="state.archivedSOIds.size"/>
                     </span>
                 </button>
-                <button t-if="state.showArchivedOnly and state.archivedSOIds.size"
+                <!-- Đơn chờ gom (chờ KH xác nhận / chờ đi chung chuyến) -->
+                <button class="btn btn-sm"
+                        t-att-class="state.archivedView === 'consolidate' ? 'btn-info' : 'btn-outline-info'"
+                        t-on-click="() => this.setArchivedView(state.archivedView === 'consolidate' ? 'none' : 'consolidate')"
+                        t-att-title="state.archivedView === 'consolidate' ? 'Bấm để quay lại danh sách thường' : 'Xem các đơn chờ gom (đã đóng gói chờ khách / chờ đi chung 1 chuyến)'">
+                    <i t-attf-class="fa me-1 #{state.archivedView === 'consolidate' ? 'fa-list' : 'fa-cubes'}"></i>
+                    <t t-if="state.archivedView === 'consolidate'">Quay lại</t>
+                    <t t-else="">Chờ gom</t>
+                    <span t-if="state.consolidateSOIds.size" class="badge bg-light text-dark ms-1">
+                        <t t-esc="state.consolidateSOIds.size"/>
+                    </span>
+                </button>
+                <button t-if="state.archivedView === 'archived' and state.archivedSOIds.size"
                         class="btn btn-sm btn-outline-danger"
                         t-on-click="clearAllArchived"
                         title="Phục hồi tất cả đơn đã cất">
                     <i class="fa fa-undo me-1"></i> Phục hồi tất cả
+                </button>
+                <button t-if="state.archivedView === 'consolidate' and state.consolidateSOIds.size"
+                        class="btn btn-sm btn-outline-danger"
+                        t-on-click="clearAllConsolidate"
+                        title="Bỏ gom tất cả">
+                    <i class="fa fa-undo me-1"></i> Bỏ gom tất cả
                 </button>
                 <span class="text-muted small">
                     <i class="fa fa-arrows text-secondary me-1" title="Kéo thả"/>
@@ -497,6 +516,13 @@
 
 
                     <div class="d-flex justify-content-end align-items-end mb-1 gap-1"> 
+                     <button class="btn btn-link btn-sm p-0 ms-1 flex-shrink-0"
+                            style="font-size: 0.75rem; line-height:1;"
+                            t-att-class="this.isSOConsolidate(so.id) ? 'text-success' : 'text-info'"
+                            t-att-title="this.isSOConsolidate(so.id) ? 'Bỏ gom (đưa trở lại danh sách)' : 'Chờ gom đơn (ẩn khỏi danh sách chờ đi chung chuyến)'"
+                            t-on-click.stop="() => this.toggleConsolidateSO(so.id)">
+                        <i t-attf-class="fa #{this.isSOConsolidate(so.id) ? 'fa-undo' : 'fa-cubes'}"></i>
+                    </button>
                      <button class="btn btn-link btn-sm p-0 ms-1 flex-shrink-0"
                             style="font-size: 0.75rem; line-height:1;"
                             t-att-class="this.isSOArchived(so.id) ? 'text-success' : 'text-warning'"
