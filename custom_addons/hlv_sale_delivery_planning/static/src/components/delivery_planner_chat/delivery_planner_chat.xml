@@ -20,6 +20,7 @@
                 <!-- Panel -->
                 <div t-if="state.isOpen"
                      class="hlv_dp_chat_panel shadow-lg border bg-white d-flex flex-column"
+                     t-att-class="{ 'hlv_dp_chat_panel_max': state.isMaximized }"
                      t-att-style="panelStyle">
 
                     <!-- Resize -->
@@ -48,6 +49,11 @@
                                     t-on-click="newChat"
                                     title="Phiên chat mới">
                                 <i class="fa fa-plus"/>
+                            </button>
+                            <button class="btn btn-sm btn-light"
+                                    t-on-click="toggleMaximize"
+                                    t-att-title="state.isMaximized ? 'Thu nhỏ' : 'Phóng to'">
+                                <i t-attf-class="fa #{state.isMaximized ? 'fa-compress' : 'fa-expand'}"/>
                             </button>
                             <button class="btn btn-sm btn-light"
                                     t-on-click="closePanel"
