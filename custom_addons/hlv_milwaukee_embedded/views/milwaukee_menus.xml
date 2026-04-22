@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Root Menu -->
+    <menuitem id="menu_milwaukee_root"
+              name="Milwaukee"
+              sequence="55"/>
+
+    <!-- Client Actions -->
+    <record id="action_milwaukee_products" model="ir.actions.client">
+        <field name="name">Sản phẩm (Milwaukee)</field>
+        <field name="tag">milwaukee_iframe_action</field>
+        <field name="context">{'iframe_path': '/admin/products?embedded=1'}</field>
+    </record>
+
+    <record id="action_milwaukee_products_new" model="ir.actions.client">
+        <field name="name">Thêm sản phẩm mới</field>
+        <field name="tag">milwaukee_iframe_action</field>
+        <field name="context">{'iframe_path': '/admin/products/new?embedded=1'}</field>
+    </record>
+
+    <record id="action_milwaukee_orders" model="ir.actions.client">
+        <field name="name">Đơn hàng (Milwaukee)</field>
+        <field name="tag">milwaukee_iframe_action</field>
+        <field name="context">{'iframe_path': '/admin/orders?embedded=1'}</field>
+    </record>
+    
+    <record id="action_milwaukee_store_frontend" model="ir.actions.client">
+        <field name="name">Trang chủ Store (Frontend)</field>
+        <field name="tag">milwaukee_iframe_action</field>
+        <field name="context">{'iframe_path': '/?embedded=1'}</field>
+    </record>
+
+    <!-- Sub Menus -->
+    <menuitem id="menu_milwaukee_products"
+              name="M-Products"
+              parent="menu_milwaukee_root"
+              action="action_milwaukee_products"
+              sequence="10"/>
+
+    <menuitem id="menu_milwaukee_products_new"
+              name="New M-Product"
+              parent="menu_milwaukee_root"
+              action="action_milwaukee_products_new"
+              sequence="20"/>
+
+    <menuitem id="menu_milwaukee_orders"
+              name="M-Orders"
+              parent="menu_milwaukee_root"
+              action="action_milwaukee_orders"
+              sequence="30"/>
+              
+    <menuitem id="menu_milwaukee_store"
+              name="M-Store (Live)"
+              parent="menu_milwaukee_root"
+              action="action_milwaukee_store_frontend"
+              sequence="40"/>
+
+    <menuitem id="menu_milwaukee_settings_root"
+              name="Configuration"
+              parent="menu_milwaukee_root"
+              sequence="99"/>
+
+    <menuitem id="menu_milwaukee_settings"
+              name="Settings"
+              parent="menu_milwaukee_settings_root"
+              action="action_milwaukee_embedded_config"
+              sequence="10"/>
+</odoo>
