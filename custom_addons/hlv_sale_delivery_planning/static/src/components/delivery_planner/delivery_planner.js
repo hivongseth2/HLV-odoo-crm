@@ -1104,8 +1104,13 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     toggleShowArchivedOnly() {
-        // Backwards-compatible: cycle 'none' ↔ 'archived'
-        this.setArchivedView(this.state.archivedView === 'archived' ? 'none' : 'archived');
+        // Cycle through views: 'none' → 'archived' → 'consolidate' → 'none'
+        const nextView = {
+            'none': 'archived',
+            'archived': 'consolidate',
+            'consolidate': 'none'
+        }[this.state.archivedView] || 'none';
+        this.setArchivedView(nextView);
     }
 
     setArchivedView(mode) {
