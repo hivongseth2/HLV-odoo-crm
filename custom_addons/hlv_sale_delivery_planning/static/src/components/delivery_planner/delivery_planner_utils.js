@@ -62,7 +62,6 @@ export function translatePackingStatus(status) {
         waiting_stock: 'Không Có Hàng Đóng',
         unpacked: 'Có Hàng Chưa Đóng Gói',
         partial_packed: 'Đã Đóng 1 Phần',
-        has_unprinted: 'Có Phiếu Chưa In',
         printed_waiting: 'Đã In, Chờ Đóng Gói',
         fully_packed: 'Đã Đóng Gói Đủ',
         packed_waiting_ship: 'Đã Gói, Chờ Nhận Giao',

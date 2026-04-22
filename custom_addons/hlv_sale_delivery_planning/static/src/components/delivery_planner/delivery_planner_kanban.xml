@@ -284,13 +284,8 @@
              t-att-class="this.getSOCardColorClass(so)"
              t-att-style="so.has_delivered_today ? 'background:#62b1ff30;' : so.stock_status === 'ready' ? 'background:#21c22f17;' : so.is_new_order ? 'background:#e77d191c;' : ''">
 
-            <!-- Ribbon "Đã in phiếu" / "Có phiếu chưa in" -->
-            <div t-if="so.has_new_unprinted_pickings"
-                 class="position-absolute bg-danger text-center fw-bold"
-                 style="font-size:0.55rem; padding:1px 20px; color: #fff ;top:8px; right:-22px; transform:rotate(45deg); z-index:2; letter-spacing:0.5px; box-shadow: 0 1px 3px rgba(0,0,0,.2);">
-                <i class="fa fa-exclamation-circle me-1"></i>Chưa in
-            </div>
-            <div t-elif="so.picking_slip_printed"
+            <!-- Ribbon "Đã in phiếu" -->
+            <div t-if="so.has_active_pick_printed"
                  class="position-absolute bg-success  text-center fw-bold"
                  style="font-size:0.55rem; padding:1px 20px; top:8px; color: #fff ;right:-22px; transform:rotate(45deg); z-index:2; letter-spacing:0.5px; box-shadow: 0 1px 3px rgba(0,0,0,.2);">
                 <i class="fa fa-print me-1"></i>Đã in

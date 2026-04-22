@@ -1557,7 +1557,6 @@ export class DeliveryPlannerDashboard extends Component {
             case 'packing_status': return [
                 { value: 'waiting_stock',    label: 'Không Có Hàng Đóng',      badgeClass: 'bg-secondary',          textClass: 'text-secondary', iconClass: 'fa fa-hourglass-start', progressClass: 'bg-secondary' },
                 { value: 'unpacked',         label: 'Có Hàng Chưa Đóng Gói',   badgeClass: 'bg-warning text-dark',  textClass: 'text-warning',   iconClass: 'fa fa-exclamation-triangle', progressClass: 'bg-warning' },
-                { value: 'has_unprinted',    label: 'Có Phiếu Chưa In',        badgeClass: 'bg-danger',             textClass: 'text-danger',    iconClass: 'fa fa-exclamation-circle', progressClass: 'bg-danger' },
                 { value: 'printed_waiting',  label: 'Đã In, Chờ Đóng Gói',     badgeClass: 'bg-info',               textClass: 'text-info',      iconClass: 'fa fa-print', progressClass: 'bg-info' },
                 { value: 'packed_waiting_ship', label: 'Đã Gói, Chờ Nhận Giao', badgeClass: 'bg-primary',           textClass: 'text-primary',   iconClass: 'fa fa-archive', progressClass: 'bg-primary' },
                 { value: 'shipping',         label: 'Đang Giao',               badgeClass: 'bg-success',            textClass: 'text-success',   iconClass: 'fa fa-motorcycle', progressClass: 'bg-success' },
@@ -1600,13 +1599,10 @@ export class DeliveryPlannerDashboard extends Component {
                 }
                 // Shipper đã nhận → "Đang giao"
                 else if (so.has_shipper_received) val = 'shipping';
-                // Đã in nhưng có phiếu mới chưa in → "Có phiếu chưa in"
-                else if (so.has_new_unprinted_pickings) val = 'has_unprinted';
                 // Đã đóng gói đủ → chuyển sang cột "Đã gói, chờ nhận giao"
                 else if (val === 'fully_packed') val = 'packed_waiting_ship';
-                // Đã in tất cả phiếu, chờ đóng gói → "Đã in, chờ đóng gói"
-                // Loại trừ waiting_stock: đơn backorder đang chờ hàng về không được rơi vào cột này
-                else if (so.picking_slip_printed && val !== 'waiting_stock') val = 'printed_waiting';
+                // Active PICK đã in → "Đã in, chờ đóng gói"
+                else if (so.has_active_pick_printed) val = 'printed_waiting';
                 // Gơm nhóm: còn hàng chưa đóng = cần xử lý ngay.
                 else if (val === 'partial_packed') val = 'unpacked';
             }
@@ -1952,8 +1948,7 @@ export class DeliveryPlannerDashboard extends Component {
                     window.open(result.result.url, '_blank');
                     for (const so of this.state.saleOrders) {
                         if (selectedIds.includes(so.id)) {
-                            so.picking_slip_printed = true;
-                            so.has_new_unprinted_pickings = false;
+                            so.has_active_pick_printed = true;
                         }
                     }
                     this.clearAllSelections();
