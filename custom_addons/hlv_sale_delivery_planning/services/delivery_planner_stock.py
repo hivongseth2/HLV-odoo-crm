@@ -365,8 +365,23 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
             )
             # Dùng per-picking x_printed trên PICK active thay SO-level x_picking_slip_printed.
             # Backorder PICK của đợt sau không kế thừa trạng thái "đã in" từ đợt trước đã giao.
+            # Nếu PICK đã done và PACK đang active (hàng đã lấy xong, đang chờ đóng gói),
+            # dùng x_printed của done PICK để xác định "đã in, chờ đóng gói".
             active_pick_flows = [p for p in active_outflow if 'PICK' in p['seq_code']]
-            any_active_pick_printed = any(p.get('x_printed') for p in active_pick_flows)
+            active_pack_flows = [p for p in active_outflow if p['seq_code'] == 'PACK']
+            if active_pick_flows:
+                # PICK chưa xong: dùng x_printed của PICK đang active
+                any_active_pick_printed = any(p.get('x_printed') for p in active_pick_flows)
+            elif active_pack_flows:
+                # PICK đã done, PACK đang active: hàng đã lấy xong, chờ đóng gói
+                # → kiểm tra done PICK gần nhất có được in không
+                done_pick_pks_all = [
+                    p for p in pickings
+                    if p['state'] == 'done' and not p.get('return_id') and 'PICK' in p['seq_code']
+                ]
+                any_active_pick_printed = any(p.get('x_printed') for p in done_pick_pks_all)
+            else:
+                any_active_pick_printed = False
             has_assigned_pick = any(p['state'] == 'assigned' for p in active_pick_flows)
 
             so_status_dict[so_id] = {
