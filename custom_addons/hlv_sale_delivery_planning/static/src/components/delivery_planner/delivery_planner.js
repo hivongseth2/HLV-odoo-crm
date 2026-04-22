@@ -106,7 +106,17 @@ export class DeliveryPlannerDashboard extends Component {
 
             // Archive (cất đơn) — backend persisted (per user) via
             // hlv.delivery.planner.user.pref. Loaded in onWillStart.
+            //   - archivedSOIds: đơn đã cất vì không còn dùng
+            //   - consolidateSOIds: đơn chờ gom (đã đóng gói chờ KH xác
+            //     nhận / chờ đơn khác để đi 1 chuyến).
+            // Cả 2 đều bị loại khỏi kế hoạch giao hôm nay.
             archivedSOIds: new Set(),
+            consolidateSOIds: new Set(),
+            // 'none' = bình thường (loại cả 2),
+            // 'archived' = chỉ xem đơn đã cất,
+            // 'consolidate' = chỉ xem đơn chờ gom
+            archivedView: 'none',
+            // Backwards compat — một số chỗ cũ còn đọc state này
             showArchivedOnly: false,
             hasDefaultFilters: false,
 
@@ -1010,42 +1020,50 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     /**
-     * Apply the archive (cất đơn) view filter:
-     *  - showArchivedOnly = true  → only archived SOs
-     *  - showArchivedOnly = false → all SOs except archived
+     * Apply the archive / consolidate view filter:
+     *  - archivedView = 'archived'    → only archived SOs
+     *  - archivedView = 'consolidate' → only consolidate (chờ gom) SOs
+     *  - archivedView = 'none'        → all SOs except archived AND consolidate
      */
     _applyArchiveFilter(orders) {
         const archived = this.state.archivedSOIds;
-        if (this.state.showArchivedOnly) {
+        const consolidate = this.state.consolidateSOIds;
+        if (this.state.archivedView === 'archived') {
             return orders.filter(so => archived.has(so.id));
         }
-        if (!archived.size) return orders;
-        return orders.filter(so => !archived.has(so.id));
+        if (this.state.archivedView === 'consolidate') {
+            return orders.filter(so => consolidate.has(so.id));
+        }
+        if (!archived.size && !consolidate.size) return orders;
+        return orders.filter(so => !archived.has(so.id) && !consolidate.has(so.id));
     }
 
     isSOArchived(soId) {
         return this.state.archivedSOIds.has(soId);
     }
 
+    isSOConsolidate(soId) {
+        return this.state.consolidateSOIds.has(soId);
+    }
+
     async toggleArchiveSO(soId) {
         if (!soId) return;
-        // Optimistic UI update — flip immediately so user sees feedback,
-        // then sync to backend. Revert on failure.
         const wasArchived = this.state.archivedSOIds.has(soId);
+        // Optimistic UI: archive và consolidate là mutually exclusive.
         if (wasArchived) {
             this.state.archivedSOIds.delete(soId);
         } else {
             this.state.archivedSOIds.add(soId);
+            this.state.consolidateSOIds.delete(soId);
         }
         try {
             const res = await this.orm.call(
                 'hlv.delivery.planner.user.pref', 'toggle_archive', [], { so_id: soId }
             );
-            // Sync with server-truth (handles concurrent edits in another tab)
             this.state.archivedSOIds = new Set(res.archived_so_ids || []);
+            this.state.consolidateSOIds = new Set(res.consolidate_so_ids || []);
         } catch (e) {
             console.error('toggle_archive failed:', e);
-            // Revert
             if (wasArchived) {
                 this.state.archivedSOIds.add(soId);
             } else {
@@ -1057,22 +1075,76 @@ export class DeliveryPlannerDashboard extends Component {
         }
     }
 
+    async toggleConsolidateSO(soId) {
+        if (!soId) return;
+        const wasInBucket = this.state.consolidateSOIds.has(soId);
+        if (wasInBucket) {
+            this.state.consolidateSOIds.delete(soId);
+        } else {
+            this.state.consolidateSOIds.add(soId);
+            this.state.archivedSOIds.delete(soId);
+        }
+        try {
+            const res = await this.orm.call(
+                'hlv.delivery.planner.user.pref', 'toggle_consolidate', [], { so_id: soId }
+            );
+            this.state.archivedSOIds = new Set(res.archived_so_ids || []);
+            this.state.consolidateSOIds = new Set(res.consolidate_so_ids || []);
+        } catch (e) {
+            console.error('toggle_consolidate failed:', e);
+            if (wasInBucket) {
+                this.state.consolidateSOIds.add(soId);
+            } else {
+                this.state.consolidateSOIds.delete(soId);
+            }
+            this.notification.add('Không thể cập nhật đơn chờ gom', {
+                type: 'danger', title: 'Lỗi',
+            });
+        }
+    }
+
     toggleShowArchivedOnly() {
-        this.state.showArchivedOnly = !this.state.showArchivedOnly;
+        // Backwards-compatible: cycle 'none' ↔ 'archived'
+        this.setArchivedView(this.state.archivedView === 'archived' ? 'none' : 'archived');
+    }
+
+    setArchivedView(mode) {
+        // mode: 'none' | 'archived' | 'consolidate'
+        this.state.archivedView = (['archived', 'consolidate'].includes(mode)) ? mode : 'none';
+        this.state.showArchivedOnly = (this.state.archivedView === 'archived');
     }
 
     async clearAllArchived() {
         if (!this.state.archivedSOIds.size) return;
         if (!window.confirm('Phục hồi tất cả ' + this.state.archivedSOIds.size + ' đơn đã cất?')) return;
         try {
-            await this.orm.call(
+            const res = await this.orm.call(
                 'hlv.delivery.planner.user.pref', 'set_archived', [], { so_ids: [] }
             );
-            this.state.archivedSOIds = new Set();
-            this.state.showArchivedOnly = false;
+            this.state.archivedSOIds = new Set(res.archived_so_ids || []);
+            this.state.consolidateSOIds = new Set(res.consolidate_so_ids || []);
+            if (this.state.archivedView === 'archived') this.setArchivedView('none');
         } catch (e) {
             console.error('clearAllArchived failed:', e);
             this.notification.add('Không thể phục hồi đơn đã cất', {
+                type: 'danger', title: 'Lỗi',
+            });
+        }
+    }
+
+    async clearAllConsolidate() {
+        if (!this.state.consolidateSOIds.size) return;
+        if (!window.confirm('Bỏ gom tất cả ' + this.state.consolidateSOIds.size + ' đơn chờ gom?')) return;
+        try {
+            const res = await this.orm.call(
+                'hlv.delivery.planner.user.pref', 'set_consolidate', [], { so_ids: [] }
+            );
+            this.state.archivedSOIds = new Set(res.archived_so_ids || []);
+            this.state.consolidateSOIds = new Set(res.consolidate_so_ids || []);
+            if (this.state.archivedView === 'consolidate') this.setArchivedView('none');
+        } catch (e) {
+            console.error('clearAllConsolidate failed:', e);
+            this.notification.add('Không thể bỏ gom đơn', {
                 type: 'danger', title: 'Lỗi',
             });
         }
@@ -1090,6 +1162,7 @@ export class DeliveryPlannerDashboard extends Component {
                 'hlv.delivery.planner.user.pref', 'get_user_preferences', [], {}
             );
             this.state.archivedSOIds = new Set(res.archived_so_ids || []);
+            this.state.consolidateSOIds = new Set(res.consolidate_so_ids || []);
             const defaults = res.default_filters || {};
             if (defaults && Object.keys(defaults).length) {
                 this._applyFilterSnapshot(defaults);
