@@ -11,8 +11,8 @@
                 </header>
                 <field name="default_code" readonly="1"/>
                 <field name="name" readonly="1"/>
-                <field name="x_studio_gi_web" string="Giá Web (Regular)"/>
-                <field name="milwaukee_sale_price" string="Giá giảm Milwaukee"/>
+                <field name="x_studio_ga_hng_nim_yt" string="Giá Niêm Yết (Regular)"/>
+                <field name="x_studio_gi_web" string="Giá Web (Sale)"/>
                 <field name="milwaukee_id" readonly="1" optional="hide"/>
                 <!-- Inline button to sync ONLY this product instantly -->
                 <button name="action_milwaukee_fast_sync" string="Đồng bộ" type="object" icon="fa-refresh" class="btn-link"/>
@@ -45,15 +45,14 @@
             <p class="o_view_nocontent_smiling_face">
                 Chưa có sản phẩm nào được map với Milwaukee.
             </p>
-            <p>
-                Hãy vào Cấu hình > Milwaukee Pricing Sync và nhấn "Lấy danh sách sản phẩm" trước.
+                Hãy vào Kho (Inventory) > Cấu hình (Configuration) > Thiết lập (Settings) và nhấn "Đồng bộ Sản Phẩm Về" trước.
             </p>
         </field>
     </record>
 
     <!-- Menu Item -->
     <menuitem id="menu_milwaukee_pricing_mgmt"
-              name="Quản lý giá Website"
+              name="Quản lý giá Milwaukee"
               parent="stock.menu_stock_inventory_control"
               action="action_milwaukee_pricing_management"
               sequence="15"/>

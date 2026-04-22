@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_milwaukee_sync" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.milwaukee.sync</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="stock.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <!-- Add Milwaukee Sync settings inside Operations block -->
+            <xpath expr="//block[@name='operations_setting_container']" position="inside">
+                <setting id="milwaukee_api_setting"
+                         string="Đồng bộ Milwaukee"
+                         help="Cấu hình kết nối API đến website Milwaukee">
+                    <div class="content-group">
+                        <div class="row mt16">
+                            <label for="milwaukee_api_url" class="col-4 o_light_label"/>
+                            <field name="milwaukee_api_url" placeholder="http://localhost:3000"/>
+                        </div>
+                        <div class="row mt8">
+                            <label for="milwaukee_api_key" class="col-4 o_light_label"/>
+                            <field name="milwaukee_api_key" placeholder="Tùy chọn cho Production"/>
+                        </div>
+                        <div class="mt16">
+                            <button name="action_fetch_milwaukee_products" 
+                                    string="Đồng bộ Sản Phẩm Về" 
+                                    type="object" 
+                                    class="btn-primary" 
+                                    icon="fa-cloud-download"
+                                    help="Lấy danh sách SKU từ Website và lưu giá hiện hành vào Odoo"/>
+                        </div>
+                    </div>
+                </setting>
+            </xpath>
+        </field>
+    </record>
+</odoo>
