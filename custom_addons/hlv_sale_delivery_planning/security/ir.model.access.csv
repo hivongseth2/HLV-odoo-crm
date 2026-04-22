@@ -1,3 +1,5 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_hlv_sale_plan_message_user,access.hlv.sale.plan.message.user,model_hlv_sale_plan_message,base.group_user,1,1,1,1
 access_hlv_dp_user_pref_user,access.hlv.dp.user.pref.user,model_hlv_delivery_planner_user_pref,base.group_user,1,1,1,1
+access_hlv_dp_vehicle_user,access.hlv.dp.vehicle.user,model_hlv_delivery_planner_vehicle,base.group_user,1,0,0,0
+access_hlv_dp_vehicle_mgr,access.hlv.dp.vehicle.mgr,model_hlv_delivery_planner_vehicle,sales_team.group_sale_manager,1,1,1,1

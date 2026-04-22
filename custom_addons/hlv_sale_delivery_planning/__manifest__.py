@@ -9,6 +9,7 @@
     'data': [
         'security/ir.model.access.csv',
         'views/delivery_planner_views.xml',
+        'views/delivery_planner_vehicle_views.xml',
     ],
     'assets': {
         'web.assets_backend': [

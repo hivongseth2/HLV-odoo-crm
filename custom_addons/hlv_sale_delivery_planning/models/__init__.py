@@ -4,6 +4,7 @@ from . import stock_move
 from . import ir_actions_report
 from . import delivery_planner_message
 from . import delivery_planner_user_pref
+from . import delivery_planner_vehicle
 from . import delivery_suggestion
 from . import llm_tools_delivery
 from . import llm_thread_patch
