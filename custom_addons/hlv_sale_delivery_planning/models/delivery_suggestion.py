@@ -171,6 +171,12 @@ class HlvDeliverySuggestion(models.AbstractModel):
         except Exception:
             _logger.warning("Sanitize thread tools failed", exc_info=True)
 
+        # Gắn 6 tool data-only của Delivery Planner vào thread (idempotent).
+        try:
+            self._attach_delivery_planner_tools(thread)
+        except Exception:
+            _logger.warning("Attach delivery planner tools failed", exc_info=True)
+
         return {
             'thread_id': thread.id,
             'thread_name': thread.name,
@@ -188,6 +194,43 @@ class HlvDeliverySuggestion(models.AbstractModel):
     # là Anthropic/khác, model sẽ tự xem như function tool và gọi
     # `<impl>_execute` → llm_tool raise "Không tìm thấy phương thức thực thi".
     _NATIVE_OPENAI_ONLY_IMPLS = {'web_search'}
+
+    # Tên các tool LLM (decorator_method) thuộc Delivery Planner — auto
+    # attach vào thread khi user mở floating chat. Khớp với
+    # ``llm_tools_delivery.py``.
+    _DP_TOOL_METHODS = (
+        'tool_active_filter',
+        'tool_dashboard_summary',
+        'tool_list_orders',
+        'tool_order_detail',
+        'tool_list_routes',
+        'tool_shipper_history',
+    )
+
+    def _attach_delivery_planner_tools(self, thread):
+        """Đảm bảo thread có đủ 6 tool data-only của Delivery Planner."""
+        Tool = self.env['llm.tool'].sudo()
+        tools = Tool.search([
+            ('decorator_model', '=', 'hlv.delivery.planner.tools'),
+            ('decorator_method', 'in', list(self._DP_TOOL_METHODS)),
+            ('active', '=', True),
+        ])
+        if not tools:
+            _logger.warning(
+                "No Delivery Planner LLM tools found — chạy lại với "
+                "-u hlv_sale_delivery_planning để decorator @llm_tool "
+                "đăng ký tool vào DB.",
+            )
+            return
+        existing = set(thread.tool_ids.ids)
+        to_add = [t.id for t in tools if t.id not in existing]
+        if to_add:
+            thread.write({'tool_ids': [(4, tid) for tid in to_add]})
+            _logger.info(
+                "Attached %d Delivery Planner tool(s) to thread %s: %s",
+                len(to_add), thread.id,
+                Tool.browse(to_add).mapped('name'),
+            )
 
     def _sanitize_thread_tools(self, thread):
         """Bỏ các tool native-only khỏi thread khi provider không tương thích."""
@@ -255,6 +298,13 @@ class HlvDeliverySuggestion(models.AbstractModel):
         message) sau khi method này trả về.
         """
         df = dashboard_filters or {}
+        # Lưu filter snapshot cho các tool LLM (dp_active_filter,
+        # dp_list_orders... đọc từ ir.config_parameter theo uid).
+        if df:
+            try:
+                self.env['hlv.delivery.planner.tools'].set_user_dashboard_context(df)
+            except Exception:
+                _logger.debug("set_user_dashboard_context failed", exc_info=True)
         if skill == 'delivery':
             prompt = self.build_delivery_suggestion_prompt(dashboard_filters=df)
         elif skill == 'purchase':

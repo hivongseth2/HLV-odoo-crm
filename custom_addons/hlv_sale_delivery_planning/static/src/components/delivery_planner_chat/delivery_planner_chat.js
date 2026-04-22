@@ -22,6 +22,7 @@ import { useService } from "@web/core/utils/hooks";
 import { patch } from "@web/core/utils/patch";
 import { Thread } from "@mail/core/common/thread";
 import { Composer } from "@mail/core/common/composer";
+import { rpc } from "@web/core/network/rpc";
 import { DeliveryPlannerDashboard } from "@hlv_sale_delivery_planning/components/delivery_planner/delivery_planner";
 
 const DASHBOARD_ACTION_TAG = "hlv_sale_delivery_planning.dashboard";
@@ -33,11 +34,38 @@ const ACTION_POLL_INTERVAL_MS = 500;
 // ──────────────────────────────────────────────────────────────────
 // Snoop filter hiện tại của Dashboard mà KHÔNG sửa file delivery_planner.js
 // → patch prototype._buildFetchKwargs để stash kwargs vào module-level.
-// Chat đọc biến này khi gọi skill.
+// Chat đọc biến này khi gọi skill; đồng thời debounce-push snapshot
+// xuống backend (`hlv.delivery.planner.tools.set_user_dashboard_context`)
+// để các tool LLM (dp_list_orders, dp_active_filter…) đọc filter đúng.
 // ──────────────────────────────────────────────────────────────────
 let _currentDashboardFilters = null;
+let _filterPushTimer = null;
+let _lastPushedFiltersJson = "";
 export function getCurrentDashboardFilters() {
     return _currentDashboardFilters ? { ..._currentDashboardFilters } : null;
+}
+function _schedulePushFilters() {
+    if (_filterPushTimer) {
+        clearTimeout(_filterPushTimer);
+    }
+    _filterPushTimer = setTimeout(async () => {
+        _filterPushTimer = null;
+        try {
+            const snap = _currentDashboardFilters || {};
+            const json = JSON.stringify(snap);
+            if (json === _lastPushedFiltersJson) return; // no-op
+            _lastPushedFiltersJson = json;
+            await rpc("/web/dataset/call_kw", {
+                model: "hlv.delivery.planner.tools",
+                method: "set_user_dashboard_context",
+                args: [snap],
+                kwargs: {},
+            });
+        } catch (err) {
+            // Không phá flow Kanban nếu backend chưa restart hoặc model chưa có
+            console.debug("[DP Chat] push filter ctx failed", err);
+        }
+    }, 800);
 }
 try {
     patch(DeliveryPlannerDashboard.prototype, {
@@ -45,6 +73,7 @@ try {
             const kwargs = super._buildFetchKwargs(...arguments);
             try {
                 _currentDashboardFilters = kwargs;
+                _schedulePushFilters();
             } catch (e) {}
             return kwargs;
         },
