@@ -208,7 +208,7 @@ class HlvDeliveryPlannerTools(models.AbstractModel):
             packing_status=packing_status or None,
             warehouse_name=warehouse_name or None,
             use_active_filter=use_active_filter,
-            limit=500, offset=0,
+            limit=200, offset=0,
         )
         try:
             data = self._service().get_dashboard_data(**kwargs)
@@ -262,7 +262,7 @@ class HlvDeliveryPlannerTools(models.AbstractModel):
                          htgh: str = '',
                          search: str = '',
                          use_active_filter: bool = True,
-                         limit: int = 30,
+                         limit: int = 20,
                          offset: int = 0) -> dict:
         """Liệt kê các đơn bán theo filter.
 
@@ -280,7 +280,7 @@ class HlvDeliveryPlannerTools(models.AbstractModel):
             limit: tối đa 100. Mặc định 30.
             offset: pagination.
         """
-        limit = max(1, min(int(limit or 30), 100))
+        limit = max(1, min(int(limit or 20), 50))
         kwargs = self._build_kwargs(
             packing_status=packing_status or None,
             warehouse_name=warehouse_name or None,
@@ -425,7 +425,7 @@ class HlvDeliveryPlannerTools(models.AbstractModel):
             packing_status=packing_status or None,
             warehouse_name=warehouse_name or None,
             use_active_filter=use_active_filter,
-            limit=500, offset=0,
+            limit=200, offset=0,
         )
         try:
             data = self._service().get_dashboard_data(**kwargs)

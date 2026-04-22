@@ -118,12 +118,12 @@ class HlvDeliverySuggestion(models.AbstractModel):
 
     @api.model
     def ensure_chat_thread(self, force_new=False):
-        """Lấy thread chat AI Dispatcher cho user hiện tại.
+        """LUÔN tạo thread mới cho phiên chat AI Dispatcher của user hiện tại.
 
-        - Nếu ``force_new`` = True → tạo thread mới.
-        - Ngược lại: lấy thread mới nhất do user tạo có gắn assistant này;
-          nếu không có thì tạo mới.
-        Trả về dict ``{thread_id, thread_name, assistant_id, assistant_name}``.
+        Theo yêu cầu UX: mở chat = phiên mới, đóng chat = archive — nên
+        tham số ``force_new`` chỉ giữ cho tương thích, không còn ảnh hưởng:
+        method này LUÔN ``Thread.create()``. Thread cũ vẫn truy cập được
+        qua menu LLM → Cuộc hội thoại (lưu trữ).
         """
         assistant = self._get_default_assistant()
         if not assistant:
@@ -137,31 +137,21 @@ class HlvDeliverySuggestion(models.AbstractModel):
             )
 
         Thread = self.env['llm.thread']
-        thread = Thread
-
-        if not force_new:
-            thread = Thread.search([
-                ('user_id', '=', self.env.uid),
-                ('assistant_id', '=', assistant.id),
-            ], limit=1, order='write_date desc')
-
-        if not thread:
-            vals = {
-                'name': f"AI Dispatcher — {fields.Datetime.now().strftime('%Y-%m-%d %H:%M')}",
-                'assistant_id': assistant.id,
-            }
-            if assistant.provider_id:
-                vals['provider_id'] = assistant.provider_id.id
-            if assistant.model_id:
-                vals['model_id'] = assistant.model_id.id
-            if assistant.prompt_id:
-                vals['prompt_id'] = assistant.prompt_id.id
-            thread = Thread.create(vals)
-            # Đảm bảo tools / config sync như khi đổi assistant qua UI
-            try:
-                thread.set_assistant(assistant.id)
-            except Exception:
-                _logger.debug("set_assistant failed (non-fatal)", exc_info=True)
+        vals = {
+            'name': f"AI Dispatcher — {fields.Datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            'assistant_id': assistant.id,
+        }
+        if assistant.provider_id:
+            vals['provider_id'] = assistant.provider_id.id
+        if assistant.model_id:
+            vals['model_id'] = assistant.model_id.id
+        if assistant.prompt_id:
+            vals['prompt_id'] = assistant.prompt_id.id
+        thread = Thread.create(vals)
+        try:
+            thread.set_assistant(assistant.id)
+        except Exception:
+            _logger.debug("set_assistant failed (non-fatal)", exc_info=True)
 
         # Strip native-only tools (vd: web_search của OpenAI) khi provider
         # không phải OpenAI — tránh lỗi "Không tìm thấy phương thức thực thi
@@ -259,21 +249,62 @@ class HlvDeliverySuggestion(models.AbstractModel):
                                          warehouse_id=None,
                                          dashboard_filters=None,
                                          history_days=30, max_orders=60):
-        """Đọc template Markdown + gom data context → trả về prompt string."""
-        ctx = self._collect_delivery_context(
-            sale_order_ids=sale_order_ids,
-            warehouse_id=warehouse_id,
-            dashboard_filters=dashboard_filters,
-            history_days=history_days,
-            max_orders=max_orders,
-        )
+        """Render skill MD với BIẾN TỐI THIỂU (filter_brief + total_orders).
+
+        Tool-driven pipeline → KHÔNG đổ orders_brief/history_brief vào
+        prompt nữa (đã là 1 lý do gây 429 trước đây). AI tự gọi tool data.
+        """
+        df = dashboard_filters or {}
+        filter_brief = self._render_filter_brief(df)
+        # total_orders nhẹ: 1 search_count thay vì gọi get_dashboard_data đầy đủ
+        try:
+            total_orders = self._light_count_orders(df)
+        except Exception:
+            _logger.debug("light count failed", exc_info=True)
+            total_orders = '?'
+        ctx = {
+            'generated_at': fields.Datetime.now().isoformat(timespec='seconds'),
+            'history_days': history_days,
+            'total_orders': total_orders,
+            'filter_brief': filter_brief,
+            # các key cũ vẫn giữ để format không KeyError nếu MD còn dùng
+            'orders_brief': '_(AI tự gọi tool dp_list_orders để xem)_',
+            'routes_brief': '_(AI tự gọi tool dp_list_routes)_',
+            'history_brief': '_(AI tự gọi tool dp_shipper_history)_',
+        }
         template = _read_skill_template('delivery_suggestion.md')
         try:
             return template.format(**ctx)
         except KeyError as e:
-            _logger.warning("Skill template missing key %s — using safe fallback", e)
-            # safe fallback: chỉ thay biến tồn tại
+            _logger.warning("Skill template missing key %s — fallback raw", e)
             return template
+
+    def _light_count_orders(self, df):
+        """Đếm số đơn match filter mà KHÔNG load full payload."""
+        Service = self.env['hlv.delivery.planner.service']
+        kwargs = {
+            'filter_packing_status': 'packed_waiting_ship',
+            'limit': 1, 'offset': 0, 'include_stats': False,
+        }
+        for k in (
+            'search_query', 'filter_warehouse_id', 'filter_delivery_status',
+            'filter_stock_status', 'filter_date_from', 'filter_date_to',
+            'filter_done_date_from', 'filter_done_date_to',
+            'filter_po_date_from', 'filter_po_date_to', 'filter_po_status',
+            'filter_saler_code', 'filter_htgh', 'filter_delivery_type',
+            'filter_tag_ids', 'show_completed', 'filter_need_transfer',
+            'filter_new_orders', 'filter_print_status', 'filter_shipper_received',
+        ):
+            v = (df or {}).get(k)
+            if v not in (None, '', 'all', False):
+                kwargs[k] = v
+        if (df or {}).get('filter_packing_status') and df['filter_packing_status'] != 'all':
+            kwargs['filter_packing_status'] = df['filter_packing_status']
+        try:
+            data = Service.get_dashboard_data(**kwargs)
+            return data.get('total_count') or 0
+        except Exception:
+            return '?'
 
     @api.model
     def build_purchase_suggestion_prompt(self):
@@ -306,9 +337,17 @@ class HlvDeliverySuggestion(models.AbstractModel):
             except Exception:
                 _logger.debug("set_user_dashboard_context failed", exc_info=True)
         if skill == 'delivery':
-            prompt = self.build_delivery_suggestion_prompt(dashboard_filters=df)
+            system_prompt = self.build_delivery_suggestion_prompt(dashboard_filters=df)
+            user_kickoff = (
+                "Hãy phân tích và gợi ý kế hoạch giao hàng cho các đơn "
+                "ĐÃ ĐÓNG, CHỜ NHẬN GIAO theo filter tôi đang xem trên Kanban. "
+                "Tuân thủ skill phía system: gọi tool dp_active_filter trước, "
+                "rồi dp_dashboard_summary, dp_list_orders, dp_shipper_history. "
+                "KHÔNG nhắc lại quy trình hay xác nhận — chạy luôn và xuất kết quả."
+            )
         elif skill == 'purchase':
-            prompt = self.build_purchase_suggestion_prompt()
+            system_prompt = self.build_purchase_suggestion_prompt()
+            user_kickoff = "Hãy gợi ý đi đơn theo skill purchase phía system."
         else:
             raise UserError(f"Skill không hợp lệ: {skill}")
 
@@ -320,12 +359,28 @@ class HlvDeliverySuggestion(models.AbstractModel):
         if not thread.exists():
             raise UserError("Thread không tồn tại.")
 
+        # Post skill instructions as SYSTEM message (chỉ nếu thread chưa có
+        # system message nào) — tránh trùng lặp khi user bấm skill nhiều lần.
+        Message = self.env['mail.message']
+        existing_system = Message.search_count([
+            ('res_id', '=', thread.id),
+            ('model', '=', 'llm.thread'),
+            ('llm_role', '=', 'system'),
+        ])
+        if not existing_system:
+            thread.message_post(
+                body=system_prompt,
+                llm_role='system',
+                author_id=self.env.user.partner_id.id,
+            )
+
+        # Post a SHORT user kickoff message — đây là cái user thấy.
         thread.message_post(
-            body=prompt,
+            body=user_kickoff,
             llm_role='user',
             author_id=self.env.user.partner_id.id,
         )
-        return {'thread_id': thread.id, 'prompt_length': len(prompt)}
+        return {'thread_id': thread.id, 'prompt_length': len(user_kickoff)}
 
     @api.model
     def archive_chat_thread(self, thread_id):
