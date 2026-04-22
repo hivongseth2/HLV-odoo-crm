@@ -432,7 +432,12 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 effective_packing = 'has_unprinted'
             elif packing_status == 'fully_packed':
                 effective_packing = 'packed_waiting_ship'
-            elif bool(x_printed) and packing_status not in ('delivered',):
+            elif bool(x_printed) and packing_status not in ('delivered', 'waiting_stock'):
+                # Loại trừ waiting_stock: khi backorder PICK đang chờ hàng về (state=waiting),
+                # total_avail=0 → packing_status='waiting_stock'. Nếu không loại trừ, SO sẽ
+                # bị hiển thị sai là "đã in, chờ đóng gói" dù thực chất đang chờ hàng về kho.
+                # VD: đợt 1 in+giao xong (x_picking_slip_printed=True), backorder PICK đợt 2
+                # chưa có hàng → phải giữ nguyên 'waiting_stock', không phải 'printed_waiting'.
                 effective_packing = 'printed_waiting'
             else:
                 effective_packing = packing_status
