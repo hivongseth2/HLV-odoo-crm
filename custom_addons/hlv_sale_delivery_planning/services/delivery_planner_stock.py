@@ -350,7 +350,14 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                     p for p in pickings
                     if p['state'] == 'done' and not p.get('return_id') and p['seq_code'] == 'PACK'
                 ]
-                packing_status = 'fully_packed' if (done_pack_pks and not pack_pks) else 'unpacked'
+                # Nếu còn phiếu PICK đang active (backorder chưa lấy hàng),
+                # thì chưa thể coi là đã đóng gói đủ — dù PACK trước đó đã done.
+                # VD: PACK/03044 done + OUT/07604 done (đợt 1) nhưng PICK/05791
+                # vẫn assigned (backorder đợt 2) → phải là 'unpacked', không phải 'fully_packed'.
+                active_pick_pks = [p for p in active_outflow if 'PICK' in p['seq_code']]
+                packing_status = 'fully_packed' if (
+                    done_pack_pks and not pack_pks and not active_pick_pks
+                ) else 'unpacked'
 
             has_shipper = any(
                 p.get('shipper_received') and not p.get('shipper_returned')
