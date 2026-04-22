@@ -426,7 +426,14 @@ export class DeliveryPlannerDashboard extends Component {
                 // Auto-load: refresh visible + auto-pull offscreen vào danh sách (không hỏi user)
                 await this._refreshSubset(ids);
                 if (offscreenIds.length) {
-                    await this._notifyOffscreenAutoLoaded(offscreenIds);
+                    // Sau khi backend lọc theo filter hiện tại, chỉ những offscreen
+                    // ids thật sự được thêm vào state mới đáng thông báo (tránh
+                    // báo nhầm đơn kho khác / không khớp filter).
+                    const visibleAfter = new Set(this.state.saleOrders.map(o => o.id));
+                    const addedOffscreen = offscreenIds.filter(i => visibleAfter.has(i));
+                    if (addedOffscreen.length) {
+                        await this._notifyOffscreenAutoLoaded(addedOffscreen);
+                    }
                 }
             } else {
                 // Fallback: full silent refresh (filters may have caused new matches)
@@ -467,8 +474,12 @@ export class DeliveryPlannerDashboard extends Component {
      */
     async _refreshSubset(soIds) {
         try {
+            // Truyền filter_kwargs để backend loại các SO không khớp filter
+            // hiện tại (vd: bus đẩy đơn kho A nhưng dashboard đang lọc kho B
+            // → backend trả về removed_ids → FE skip / remove khỏi state).
             const res = await this.orm.call(
-                "sale.order", "get_delivery_orders_subset", [], { order_ids: soIds }
+                "sale.order", "get_delivery_orders_subset", [],
+                { order_ids: soIds, filter_kwargs: this._buildFetchKwargs() }
             );
             const fresh = (res && res.orders) || [];
             const removed = new Set((res && res.removed_ids) || []);

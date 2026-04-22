@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import time
+import pytz
 from collections import defaultdict
 from markupsafe import Markup
 from odoo import http
@@ -1530,6 +1531,12 @@ class SalePlanPublicController(http.Controller):
             so = request.env['sale.order'].sudo().browse(int(order_id))
             if not so.exists():
                 return {'status': 'error', 'message': 'Order not found'}
+            # Public page không có user login → mail.message.date lưu UTC, phải
+            # convert sang TZ VN để hiển thị đúng giờ thực tế (tránh lệch 7h).
+            try:
+                user_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+            except Exception:
+                user_tz = pytz.UTC
             picking_ids = so.picking_ids.ids
             domain = [
                 '|',
@@ -1558,9 +1565,16 @@ class SalePlanPublicController(http.Controller):
                 origin = ''
                 if msg.model == 'stock.picking':
                     origin = picking_name_map.get(msg.res_id, '')
+                date_str = ''
+                if msg.date:
+                    try:
+                        local_dt = msg.date.replace(tzinfo=pytz.UTC).astimezone(user_tz)
+                        date_str = local_dt.strftime('%d/%m/%Y %H:%M')
+                    except Exception:
+                        date_str = msg.date.strftime('%d/%m/%Y %H:%M')
                 result.append({
                     'id': msg.id,
-                    'date': msg.date.strftime('%d/%m/%Y %H:%M') if msg.date else '',
+                    'date': date_str,
                     'author': msg.author_id.name if msg.author_id else (msg.email_from or ''),
                     'body': msg.body or '',
                     'message_type': msg.message_type,
