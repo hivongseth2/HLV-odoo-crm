@@ -196,8 +196,12 @@ export class DeliveryPlannerFloatingChat extends Component {
             this.state.modelName = setup.model_name;
             this.state.providerName = setup.provider_name;
 
-            // Đảm bảo thread có trong mailStore
-            await this.llmStore.selectThread(setup.thread_id);
+            // Load thread vào mailStore bằng cách reload init_messaging
+            // (để Thread component render được), rồi mới activate.
+            // selectThread() đơn thuần thất bại với thread mới tạo vì nó
+            // chưa có trong store. refreshThreadsAndSelect reload stores
+            // trước rồi mới gọi selectThread → không còn lỗi "Could not load".
+            await this.llmStore.refreshThreadsAndSelect(setup.thread_id);
         } catch (err) {
             console.error("[DeliveryPlannerFloatingChat] init error", err);
             this.state.initError = (err && err.data && err.data.message)
