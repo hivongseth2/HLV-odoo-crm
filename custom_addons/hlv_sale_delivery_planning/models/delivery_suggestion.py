@@ -214,11 +214,13 @@ class HlvDeliverySuggestion(models.AbstractModel):
     @api.model
     def build_delivery_suggestion_prompt(self, sale_order_ids=None,
                                          warehouse_id=None,
+                                         dashboard_filters=None,
                                          history_days=30, max_orders=60):
         """Đọc template Markdown + gom data context → trả về prompt string."""
         ctx = self._collect_delivery_context(
             sale_order_ids=sale_order_ids,
             warehouse_id=warehouse_id,
+            dashboard_filters=dashboard_filters,
             history_days=history_days,
             max_orders=max_orders,
         )
@@ -240,16 +242,21 @@ class HlvDeliverySuggestion(models.AbstractModel):
     # SKILL submit — post prompt vào thread (không qua URL/SSE)
     # ──────────────────────────────────────────────────────────────────
     @api.model
-    def submit_skill_prompt(self, skill, thread_id=None, **kwargs):
+    def submit_skill_prompt(self, skill, thread_id=None, dashboard_filters=None,
+                            **kwargs):
         """Render prompt + post thẳng vào thread như user message.
 
+        ``dashboard_filters``: dict kiểu kwargs của ``get_dashboard_data``
+        (filter_warehouse_id, filter_tag_ids, filter_htgh, search_query...).
+        Nếu có → AI chỉ phân tích đúng đơn user đang xem trên Kanban.
         Mục đích: tránh nhét prompt (vài chục KB) vào querystring của
         EventSource (gây 414 Request-URI Too Large → "Lost connection").
         Frontend chỉ cần gọi ``startLLMStreaming(thread_id)`` (không kèm
         message) sau khi method này trả về.
         """
+        df = dashboard_filters or {}
         if skill == 'delivery':
-            prompt = self.build_delivery_suggestion_prompt(**kwargs)
+            prompt = self.build_delivery_suggestion_prompt(dashboard_filters=df)
         elif skill == 'purchase':
             prompt = self.build_purchase_suggestion_prompt()
         else:
@@ -270,17 +277,43 @@ class HlvDeliverySuggestion(models.AbstractModel):
         )
         return {'thread_id': thread.id, 'prompt_length': len(prompt)}
 
+    @api.model
+    def archive_chat_thread(self, thread_id):
+        """“Xóa” (= archive) thread chat — gọi khi user đóng panel hoặc bấm
+        nhụt New. Thread cũ vẫn truy vết được qua menu LLM → Threads.
+        Trả về True nếu OK, False nếu thread không tồn tại / không của user.
+        """
+        if not thread_id:
+            return False
+        Thread = self.env['llm.thread']
+        thread = Thread.search([
+            ('id', '=', int(thread_id)),
+            ('user_id', '=', self.env.uid),
+        ], limit=1)
+        if not thread:
+            return False
+        try:
+            thread.write({'active': False})
+        except Exception:
+            _logger.exception("archive_chat_thread failed for %s", thread_id)
+            return False
+        return True
+
     # ──────────────────────────────────────────────────────────────────
     # Internal: gather delivery context
     # ──────────────────────────────────────────────────────────────────
     def _collect_delivery_context(self, sale_order_ids=None, warehouse_id=None,
+                                  dashboard_filters=None,
                                   history_days=30, max_orders=60):
         """Gom dữ liệu cho cột "ĐÃ ĐÓNG, CHỜ NHẬN GIAO".
 
         Dùng lại service ``hlv.delivery.planner.service.get_dashboard_data``
         với ``filter_packing_status='packed_waiting_ship'`` để KHỚP CHÍNH XÁC
-        với danh sách đơn user đang thấy trên Kanban (tránh sai lệch về việc
-        xác định trạng thái phiếu / phiếu in / shipper nhận giao).
+        với danh sách đơn user đang thấy trên Kanban.
+
+        Khi ``dashboard_filters`` (snoop từ FE) có đủ các filter hợp lệ
+        (kho, tag, htgh, saler...) → mở rộng ``kwargs`` truyền thẳng cho
+        get_dashboard_data → AI chỉ phân tích đúng đơn user đang xem.
         """
         Service = self.env['hlv.delivery.planner.service']
         kwargs = {
@@ -289,10 +322,33 @@ class HlvDeliverySuggestion(models.AbstractModel):
             'offset': 0,
             'include_stats': False,
         }
-        if warehouse_id:
+        # Merge filter từ dashboard (snoop FE) — chỉ wl các key hợp lệ,
+        # không đặt khì giá trị rỗng / mặc định để bảo toàn default.
+        _PASSTHROUGH = {
+            'search_query', 'filter_warehouse_id',
+            'filter_delivery_status', 'filter_stock_status',
+            'filter_date_from', 'filter_date_to',
+            'filter_done_date_from', 'filter_done_date_to',
+            'filter_po_date_from', 'filter_po_date_to',
+            'filter_po_status',
+            'filter_saler_code', 'filter_htgh',
+            'filter_delivery_type', 'filter_tag_ids',
+            'show_completed', 'filter_need_transfer',
+            'filter_new_orders', 'filter_print_status',
+            'filter_shipper_received',
+        }
+        df = dashboard_filters or {}
+        for k in _PASSTHROUGH:
+            if k in df and df[k] not in (None, '', 'all'):
+                kwargs[k] = df[k]
+        # filter_packing_status: giữ “packed_waiting_ship” trừ khi user
+        # chủ động chọn cột khác có nghiĩa → vẫn cho ưu tiên dashboard.
+        if df.get('filter_packing_status') and df['filter_packing_status'] != 'all':
+            kwargs['filter_packing_status'] = df['filter_packing_status']
+
+        if warehouse_id and not df.get('filter_warehouse_id'):
             kwargs['filter_warehouse_id'] = warehouse_id
         if sale_order_ids:
-            # truyền domain bổ sung để chặn theo id
             kwargs['domain'] = [('id', 'in', list(sale_order_ids))]
 
         try:
@@ -474,10 +530,52 @@ class HlvDeliverySuggestion(models.AbstractModel):
             'generated_at': fields.Datetime.now().isoformat(),
             'history_days': history_days,
             'total_orders': len(orders_payload),
+            'filter_brief': self._render_filter_brief(df),
             'orders_brief': self._render_orders_brief(orders_payload),
             'routes_brief': self._render_routes_brief(route_counter, route_value),
             'history_brief': self._render_history_brief(shipper_history, history_days),
         }
+
+    def _render_filter_brief(self, df):
+        """Mô tả filter user đang dùng để AI biết scope."""
+        if not df:
+            return '_(không có filter — toàn hệ thống, packed_waiting_ship)_'
+        bits = []
+        wh_id = df.get('filter_warehouse_id')
+        if wh_id and wh_id != 'all':
+            try:
+                wh = self.env['stock.warehouse'].browse(int(wh_id))
+                if wh.exists():
+                    bits.append(f"Kho = **{wh.name}**")
+            except Exception:
+                pass
+        tag_ids = df.get('filter_tag_ids')
+        if tag_ids:
+            try:
+                ids = [int(x) for x in str(tag_ids).split(',') if str(x).strip()]
+                tags = self.env['crm.tag'].browse(ids)
+                names = [t.name for t in tags if t.exists()]
+                if names:
+                    bits.append(f"Tag = **{', '.join(names)}**")
+            except Exception:
+                pass
+        for k, label in [
+            ('filter_htgh', 'HTGH'),
+            ('filter_saler_code', 'Mã saler'),
+            ('filter_delivery_type', 'Loại VC'),
+            ('filter_delivery_status', 'Trạng thái giao'),
+            ('filter_stock_status', 'Trạng thái kho'),
+            ('filter_packing_status', 'Trạng thái đóng gói'),
+            ('filter_print_status', 'Trạng thái in'),
+            ('filter_shipper_received', 'Shipper nhận'),
+            ('search_query', 'Tìm kiếm'),
+            ('filter_date_from', 'Từ ngày'),
+            ('filter_date_to', 'Đến ngày'),
+        ]:
+            v = df.get(k)
+            if v and v != 'all':
+                bits.append(f"{label} = **{v}**")
+        return ' | '.join(bits) if bits else '_(không có filter — toàn hệ thống)_'
 
     def _render_orders_brief(self, orders):
         if not orders:

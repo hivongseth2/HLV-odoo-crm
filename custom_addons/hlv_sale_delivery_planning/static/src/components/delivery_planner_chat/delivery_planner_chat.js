@@ -19,14 +19,39 @@ import { _t } from "@web/core/l10n/translation";
 import { browser } from "@web/core/browser/browser";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
+import { patch } from "@web/core/utils/patch";
 import { Thread } from "@mail/core/common/thread";
 import { Composer } from "@mail/core/common/composer";
+import { DeliveryPlannerDashboard } from "@hlv_sale_delivery_planning/components/delivery_planner/delivery_planner";
 
 const DASHBOARD_ACTION_TAG = "hlv_sale_delivery_planning.dashboard";
 const DASHBOARD_DOM_SELECTOR = ".hlv_delivery_planner_dashboard";
 const STORAGE_KEY_OPEN = "hlv_dp_chat_open";
 const STORAGE_KEY_SIZE = "hlv_dp_chat_size";
 const ACTION_POLL_INTERVAL_MS = 500;
+
+// ──────────────────────────────────────────────────────────────────
+// Snoop filter hiện tại của Dashboard mà KHÔNG sửa file delivery_planner.js
+// → patch prototype._buildFetchKwargs để stash kwargs vào module-level.
+// Chat đọc biến này khi gọi skill.
+// ──────────────────────────────────────────────────────────────────
+let _currentDashboardFilters = null;
+export function getCurrentDashboardFilters() {
+    return _currentDashboardFilters ? { ..._currentDashboardFilters } : null;
+}
+try {
+    patch(DeliveryPlannerDashboard.prototype, {
+        _buildFetchKwargs() {
+            const kwargs = super._buildFetchKwargs(...arguments);
+            try {
+                _currentDashboardFilters = kwargs;
+            } catch (e) {}
+            return kwargs;
+        },
+    });
+} catch (e) {
+    console.warn("[DP Chat] Could not patch DeliveryPlannerDashboard for filter snoop", e);
+}
 
 export class DeliveryPlannerFloatingChat extends Component {
     static template = "hlv_sale_delivery_planning.FloatingChat";
@@ -84,7 +109,9 @@ export class DeliveryPlannerFloatingChat extends Component {
                 }
             }, ACTION_POLL_INTERVAL_MS);
             if (this.state.isOpen && this.state.isOnDashboard) {
-                this._initChat();
+                // Reload page với chat đang mở → vẫn coi là "phiên mới"
+                // (thread cũ đã được archive lúc close hoặc reload trước đó).
+                this._initChat({ forceNew: true });
             }
         });
 
@@ -181,24 +208,60 @@ export class DeliveryPlannerFloatingChat extends Component {
     // Open/Close + actions
     // ──────────────────────────────────────────────────────────────────
     async toggleOpen() {
-        this.state.isOpen = !this.state.isOpen;
-        try {
-            browser.localStorage.setItem(STORAGE_KEY_OPEN, this.state.isOpen ? "1" : "0");
-        } catch (e) {}
-        if (this.state.isOpen && !this.state.threadId) {
-            await this._initChat();
+        const willOpen = !this.state.isOpen;
+        if (willOpen) {
+            // Mỗi lần mở chat → archive thread cũ (nếu có) + tạo NEW.
+            // Đáp ứng yêu cầu: "khi tắt → lưu trữ; mở lại → mới".
+            this.state.isOpen = true;
+            try {
+                browser.localStorage.setItem(STORAGE_KEY_OPEN, "1");
+            } catch (e) {}
+            await this._initChat({ forceNew: true });
+        } else {
+            await this.closePanel();
         }
     }
 
-    closePanel() {
+    async closePanel() {
+        // Archive thread hiện tại trước khi đóng để lần sau mở là phiên mới.
+        const tid = this.state.threadId;
         this.state.isOpen = false;
         try {
             browser.localStorage.setItem(STORAGE_KEY_OPEN, "0");
         } catch (e) {}
+        if (tid) {
+            try {
+                await this.orm.call(
+                    "hlv.delivery.suggestion", "archive_chat_thread", [tid],
+                );
+            } catch (err) {
+                console.warn("[DP Chat] archive thread failed", err);
+            }
+        }
+        this.state.threadId = null;
     }
 
     async newChat() {
+        // "+" → archive cái cũ rồi tạo mới (giống đóng-mở nhưng giữ panel).
+        const oldTid = this.state.threadId;
+        if (oldTid) {
+            try {
+                await this.orm.call(
+                    "hlv.delivery.suggestion", "archive_chat_thread", [oldTid],
+                );
+            } catch (err) {
+                console.warn("[DP Chat] archive old thread failed", err);
+            }
+        }
         await this._initChat({ forceNew: true });
+    }
+
+    /**
+     * "Xóa" phiên chat từ góc nhìn user = archive (active=False) + clear UI.
+     * Sau khi xóa → tự tạo phiên mới ngay để không trống.
+     */
+    async deleteChat() {
+        await this.newChat();
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -264,11 +327,18 @@ export class DeliveryPlannerFloatingChat extends Component {
         this.state.isPreparingSkill = true;
         this.state.skillError = null;
         try {
+            // Snoop filter user đang dùng trên Kanban → đẩy xuống backend.
+            // AI sẽ chỉ phân tích đúng đơn user đang xem (kho, tag, htgh...).
+            const dashboardFilters = getCurrentDashboardFilters();
             // Bước 1: backend render prompt + post thẳng vào thread
             // (tránh nhét prompt dài vào querystring của EventSource → 414).
             await this.orm.call(
                 "hlv.delivery.suggestion", "submit_skill_prompt", [],
-                { skill: skillKey, thread_id: this.state.threadId },
+                {
+                    skill: skillKey,
+                    thread_id: this.state.threadId,
+                    dashboard_filters: dashboardFilters || {},
+                },
             );
             // Bước 2: chỉ trigger SSE generate, KHÔNG kèm message trong URL
             await this.llmStore.startLLMStreaming(this.state.threadId, "");
