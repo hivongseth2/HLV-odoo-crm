@@ -1,93 +1,296 @@
 # -*- coding: utf-8 -*-
 """
-Delivery Suggestion AI Helper
-=============================
-Cung cấp các method backend gom dữ liệu bối cảnh phục vụ AI Assistant
-trong floating chat của Delivery Planner.
+Delivery Planner — AI Suggestion Helper
+========================================
+Backend service cho floating chat AI Dispatcher trong Delivery Planner.
 
-KHÔNG đụng tới logic / file gốc của module — chỉ thêm 1 model mới cho
-phần "gợi ý" (skills).
+KHÔNG đụng tới logic / file gốc của module — chỉ thêm 1 model mới.
 
-Skills hiện có:
-1. ``get_delivery_suggestion_context()`` — Gợi ý giao hàng dựa vào:
-   - Các đơn ĐÃ ĐÓNG, CHỜ NHẬN GIAO (``packing_status='packed_waiting_ship'``)
-   - Tuyến / địa chỉ giao (``misa_shipping_address``)
-   - Giá trị đơn, sản phẩm
-   - Lịch sử hoàn thành theo tài xế (shipper) trong N ngày gần nhất
-2. (placeholder) ``get_purchase_suggestion_context()`` — gợi ý đi đơn mua,
-   sẽ implement sau theo yêu cầu của user.
+Trách nhiệm:
+1. Quản lý cấu hình chat (assistant mặc định, target sẵn vào "Knowledge Bot"
+   hoặc bất kỳ assistant nào user chọn) qua ``ir.config_parameter``.
+2. Khởi tạo / lấy thread của user hiện tại đã gắn assistant đó.
+3. Gom dữ liệu bối cảnh + render prompt từ template Markdown trong
+   ``data/skills/`` để dễ maintain.
 """
 import logging
+import os
 from collections import defaultdict
 from datetime import timedelta
 
 from odoo import api, fields, models
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
+
+# Khoá ir.config_parameter
+_PARAM_ASSISTANT_ID = 'hlv_dp.chat.assistant_id'
+_DEFAULT_ASSISTANT_NAME = 'Knowledge Bot'
+
+# Đường dẫn tới folder skills (tương đối với file này)
+_SKILLS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    'data', 'skills',
+)
+
+
+def _read_skill_template(filename):
+    """Đọc nội dung markdown skill từ disk. Cache bộ nhớ đơn giản."""
+    path = os.path.join(_SKILLS_DIR, filename)
+    if not os.path.exists(path):
+        raise UserError(
+            f"Không tìm thấy template skill: {filename}. Path: {path}"
+        )
+    with open(path, 'r', encoding='utf-8') as f:
+        return f.read()
 
 
 class HlvDeliverySuggestion(models.AbstractModel):
     _name = 'hlv.delivery.suggestion'
-    _description = 'HLV Delivery Planner — AI Suggestion Context Builder'
+    _description = 'HLV Delivery Planner — AI Suggestion Backend'
 
-    # ────────────────────────────────────────────────────────────────────
-    # SKILL 2: Gợi ý giao hàng
-    # ────────────────────────────────────────────────────────────────────
+    # ──────────────────────────────────────────────────────────────────
+    # CHAT SETUP — config & thread bootstrap
+    # ──────────────────────────────────────────────────────────────────
     @api.model
-    def get_delivery_suggestion_context(self, sale_order_ids=None,
-                                        warehouse_id=None, history_days=30,
-                                        max_orders=80):
-        """Gom dữ liệu cho prompt "gợi ý giao hàng".
+    def _get_default_assistant(self):
+        """Tìm assistant mặc định: ưu tiên config_parameter → Knowledge Bot
+        → assistant đầu tiên public/active."""
+        ICP = self.env['ir.config_parameter'].sudo()
+        assistant_id = int(ICP.get_param(_PARAM_ASSISTANT_ID, '0') or 0)
+        Assistant = self.env['llm.assistant'].sudo()
 
-        :param sale_order_ids: list[int] | None — nếu user chọn subset thì truyền
-            vào, không thì lấy toàn bộ SO đang ở trạng thái "packed_waiting_ship"
-            (đã đóng, chờ nhận giao).
-        :param warehouse_id: int | None — lọc theo kho (tuỳ chọn).
-        :param history_days: int — số ngày lùi lại để tính lịch sử shipper.
-        :param max_orders: int — giới hạn số đơn để tránh prompt quá dài.
+        if assistant_id:
+            rec = Assistant.browse(assistant_id).exists()
+            if rec and rec.active:
+                return rec
+        # fallback theo tên
+        rec = Assistant.search(
+            [('name', '=', _DEFAULT_ASSISTANT_NAME), ('active', '=', True)],
+            limit=1,
+        )
+        if rec:
+            return rec
+        # fallback: assistant đầu tiên có model_id (có thể chạy được)
+        return Assistant.search(
+            [('active', '=', True), ('model_id', '!=', False)],
+            limit=1,
+            order='is_default desc, id asc',
+        )
 
-        :returns: dict gồm:
-            - generated_at, warehouse, history_days, total_orders
-            - orders: [ {id, name, partner, address, route, amount, scheduled_date,
-                         shipper_user, shipper_name, products, pickings, ...} ]
-            - shipper_history: { shipper_user_id: { name, completed_orders,
-                                 avg_delivery_hours, routes:{route: count} } }
+    @api.model
+    def get_chat_setup(self):
+        """Trả về cấu hình hiện tại + danh sách assistant cho UI picker."""
+        Assistant = self.env['llm.assistant'].sudo()
+        assistants = Assistant.search(
+            [('active', '=', True)], order='is_default desc, name asc'
+        )
+        current = self._get_default_assistant()
+        return {
+            'current_assistant_id': current.id if current else False,
+            'current_assistant_name': current.name if current else '',
+            'current_model_name': current.model_id.name if (current and current.model_id) else '',
+            'current_provider_name': current.provider_id.name if (current and current.provider_id) else '',
+            'assistants': [
+                {
+                    'id': a.id,
+                    'name': a.name,
+                    'provider': a.provider_id.name or '',
+                    'model': a.model_id.name or '',
+                    'is_default': a.is_default,
+                }
+                for a in assistants
+            ],
+        }
+
+    @api.model
+    def set_chat_assistant(self, assistant_id):
+        """Lưu assistant mặc định vào ir.config_parameter (sudo)."""
+        if not assistant_id:
+            raise UserError("Thiếu assistant_id.")
+        rec = self.env['llm.assistant'].sudo().browse(int(assistant_id)).exists()
+        if not rec:
+            raise UserError("Assistant không tồn tại hoặc đã bị xoá.")
+        self.env['ir.config_parameter'].sudo().set_param(
+            _PARAM_ASSISTANT_ID, str(rec.id),
+        )
+        return self.get_chat_setup()
+
+    @api.model
+    def ensure_chat_thread(self, force_new=False):
+        """Lấy thread chat AI Dispatcher cho user hiện tại.
+
+        - Nếu ``force_new`` = True → tạo thread mới.
+        - Ngược lại: lấy thread mới nhất do user tạo có gắn assistant này;
+          nếu không có thì tạo mới.
+        Trả về dict ``{thread_id, thread_name, assistant_id, assistant_name}``.
         """
-        # 1) Tìm các SO có phiếu OUT đã đóng (state=assigned, x_printed=True)
-        #    nhưng shipper chưa nhận → đây chính là cột "ĐÃ ĐÓNG, CHỜ NHẬN GIAO".
-        Picking = self.env['stock.picking']
-        picking_domain = [
-            ('picking_type_id.code', '=', 'outgoing'),
-            ('state', '=', 'assigned'),
-            ('x_printed', '=', True),
-            ('shipper_received', '=', False),
-        ]
+        assistant = self._get_default_assistant()
+        if not assistant:
+            raise UserError(
+                "Chưa có AI Assistant nào được cấu hình. "
+                "Vui lòng vào menu LLM → Trợ lý để tạo Knowledge Bot."
+            )
+        if not assistant.model_id:
+            raise UserError(
+                f"Assistant '{assistant.name}' chưa có model. Vui lòng cấu hình."
+            )
+
+        Thread = self.env['llm.thread']
+        thread = Thread
+
+        if not force_new:
+            thread = Thread.search([
+                ('user_id', '=', self.env.uid),
+                ('assistant_id', '=', assistant.id),
+            ], limit=1, order='write_date desc')
+
+        if not thread:
+            vals = {
+                'name': f"AI Dispatcher — {fields.Datetime.now().strftime('%Y-%m-%d %H:%M')}",
+                'assistant_id': assistant.id,
+            }
+            if assistant.provider_id:
+                vals['provider_id'] = assistant.provider_id.id
+            if assistant.model_id:
+                vals['model_id'] = assistant.model_id.id
+            if assistant.prompt_id:
+                vals['prompt_id'] = assistant.prompt_id.id
+            thread = Thread.create(vals)
+            # Đảm bảo tools / config sync như khi đổi assistant qua UI
+            try:
+                thread.set_assistant(assistant.id)
+            except Exception:
+                _logger.debug("set_assistant failed (non-fatal)", exc_info=True)
+
+        # Strip native-only tools (vd: web_search của OpenAI) khi provider
+        # không phải OpenAI — tránh lỗi "Không tìm thấy phương thức thực thi
+        # web_search_execute" khi Anthropic/Claude tự gọi như function.
+        try:
+            self._sanitize_thread_tools(thread)
+        except Exception:
+            _logger.warning("Sanitize thread tools failed", exc_info=True)
+
+        return {
+            'thread_id': thread.id,
+            'thread_name': thread.name,
+            'assistant_id': assistant.id,
+            'assistant_name': assistant.name,
+            'model_name': assistant.model_id.name or '',
+            'provider_name': assistant.provider_id.name or '',
+        }
+
+    # ──────────────────────────────────────────────────────────────────
+    # Internal: sanitize tools to avoid provider mismatches
+    # ──────────────────────────────────────────────────────────────────
+    # Các implementation chỉ chạy native trên provider OpenAI (không có
+    # method *_execute trong Python). Nếu giữ lại trong thread khi provider
+    # là Anthropic/khác, model sẽ tự xem như function tool và gọi
+    # `<impl>_execute` → llm_tool raise "Không tìm thấy phương thức thực thi".
+    _NATIVE_OPENAI_ONLY_IMPLS = {'web_search'}
+
+    def _sanitize_thread_tools(self, thread):
+        """Bỏ các tool native-only khỏi thread khi provider không tương thích."""
+        if not thread or not thread.tool_ids:
+            return
+        provider_service = (
+            thread.provider_id and thread.provider_id.service or ''
+        ).lower()
+        if provider_service == 'openai':
+            return  # OpenAI hỗ trợ native, giữ nguyên
+        bad = thread.tool_ids.filtered(
+            lambda t: (t.implementation or '') in self._NATIVE_OPENAI_ONLY_IMPLS
+        )
+        if bad:
+            thread.write({'tool_ids': [(3, t.id) for t in bad]})
+            _logger.info(
+                "Stripped %d native-only tool(s) from thread %s (provider=%s): %s",
+                len(bad), thread.id, provider_service, bad.mapped('name'),
+            )
+
+    # ──────────────────────────────────────────────────────────────────
+    # SKILL 2 — Gợi ý giao hàng
+    # ──────────────────────────────────────────────────────────────────
+    @api.model
+    def build_delivery_suggestion_prompt(self, sale_order_ids=None,
+                                         warehouse_id=None,
+                                         history_days=30, max_orders=60):
+        """Đọc template Markdown + gom data context → trả về prompt string."""
+        ctx = self._collect_delivery_context(
+            sale_order_ids=sale_order_ids,
+            warehouse_id=warehouse_id,
+            history_days=history_days,
+            max_orders=max_orders,
+        )
+        template = _read_skill_template('delivery_suggestion.md')
+        try:
+            return template.format(**ctx)
+        except KeyError as e:
+            _logger.warning("Skill template missing key %s — using safe fallback", e)
+            # safe fallback: chỉ thay biến tồn tại
+            return template
+
+    @api.model
+    def build_purchase_suggestion_prompt(self):
+        """Placeholder skill 1."""
+        template = _read_skill_template('purchase_suggestion.md')
+        return template.format(placeholder_data='(chưa có dữ liệu — đang phát triển)')
+
+    # ──────────────────────────────────────────────────────────────────
+    # Internal: gather delivery context
+    # ──────────────────────────────────────────────────────────────────
+    def _collect_delivery_context(self, sale_order_ids=None, warehouse_id=None,
+                                  history_days=30, max_orders=60):
+        """Gom dữ liệu cho cột "ĐÃ ĐÓNG, CHỜ NHẬN GIAO".
+
+        Dùng lại service ``hlv.delivery.planner.service.get_dashboard_data``
+        với ``filter_packing_status='packed_waiting_ship'`` để KHỚP CHÍNH XÁC
+        với danh sách đơn user đang thấy trên Kanban (tránh sai lệch về việc
+        xác định trạng thái phiếu / phiếu in / shipper nhận giao).
+        """
+        Service = self.env['hlv.delivery.planner.service']
+        kwargs = {
+            'filter_packing_status': 'packed_waiting_ship',
+            'limit': max_orders,
+            'offset': 0,
+            'include_stats': False,
+        }
         if warehouse_id:
-            picking_domain.append(('picking_type_id.warehouse_id', '=', warehouse_id))
+            kwargs['filter_warehouse_id'] = warehouse_id
         if sale_order_ids:
-            picking_domain.append(('sale_id', 'in', list(sale_order_ids)))
+            # truyền domain bổ sung để chặn theo id
+            kwargs['domain'] = [('id', 'in', list(sale_order_ids))]
 
-        pickings = Picking.search(picking_domain, limit=max_orders * 5)
-        sale_orders = pickings.mapped('sale_id')
-        if sale_order_ids:
-            # Đảm bảo đúng tập user chọn (kể cả SO không có phiếu match)
-            sale_orders |= self.env['sale.order'].browse(sale_order_ids).exists()
-        sale_orders = sale_orders[:max_orders]
+        try:
+            dashboard = Service.get_dashboard_data(**kwargs)
+        except Exception:
+            _logger.exception("get_dashboard_data failed in suggestion")
+            dashboard = {'orders': [], 'total_count': 0}
 
-        # 2) Build orders payload
+        raw_orders = dashboard.get('orders') or []
+        order_ids = [o['id'] for o in raw_orders if o.get('id')]
+        sale_orders = self.env['sale.order'].browse(order_ids)
+        so_by_id = {so.id: so for so in sale_orders}
+
         orders_payload = []
         route_counter = defaultdict(int)
         route_value = defaultdict(float)
 
-        for so in sale_orders:
-            so_pickings = pickings.filtered(lambda p, sid=so.id: p.sale_id.id == sid)
+        for o in raw_orders:
+            so = so_by_id.get(o['id'])
+            if not so:
+                continue
             partner = so.partner_shipping_id or so.partner_id
 
-            address = ''
-            try:
-                address = so.misa_shipping_address or ''
-            except Exception:
-                address = ''
+            # Tuyến = tag_ids (đã có trong payload)
+            tag_pairs = o.get('tag_ids') or []
+            route_tags = [t[1] for t in tag_pairs if isinstance(t, (list, tuple)) and len(t) > 1]
+            route_label = ' / '.join(route_tags) if route_tags else (
+                (partner.city or '') if partner else ''
+            )
+
+            # Địa chỉ: ưu tiên misa_shipping_address (đã có trong payload)
+            address = o.get('misa_shipping_address') or ''
             if not address and partner:
                 parts = [
                     partner.street, partner.street2, partner.city,
@@ -96,74 +299,71 @@ class HlvDeliverySuggestion(models.AbstractModel):
                 ]
                 address = ', '.join([p for p in parts if p])
 
-            # Tuyến: lấy từ tag (tuyến thường được tag), fallback theo
-            # city/state để AI có manh mối phân tuyến.
-            route_tags = []
-            try:
-                route_tags = [t.name for t in so.tag_ids]
-            except Exception:
-                route_tags = []
-            route_label = ', '.join(route_tags) if route_tags else (
-                (partner.city or '') + (
-                    (' / ' + partner.state_id.name) if partner and partner.state_id else ''
-                )
-            )
+            htgh = (o.get('x_studio_htgh') or '').strip()
+            commitment = o.get('commitment_date') or ''
+            scheduled_date = ''
 
-            # HTGH (hãng vận chuyển) lấy từ free text (nếu có)
-            htgh = ''
-            for fld in ('x_htgh', 'x_studio_hinh_th_c_giao_hang', 'misa_htgh', 'note'):
-                if fld in so._fields:
-                    val = getattr(so, fld, None)
-                    if val:
-                        htgh = str(val)[:120]
-                        break
+            # Pickings flat từ payload (đã chứa shipper)
+            pks = o.get('pickings') or []
+            shipper_name = ''
+            picking_names = []
+            scheduled_candidates = []
+            for p in pks:
+                picking_names.append(p.get('name') or '')
+                if p.get('shipper_user_id'):
+                    su = p['shipper_user_id']
+                    if isinstance(su, (list, tuple)) and len(su) > 1:
+                        shipper_name = shipper_name or su[1]
+                if p.get('scheduled_date'):
+                    scheduled_candidates.append(p['scheduled_date'])
+            if scheduled_candidates:
+                scheduled_date = min(scheduled_candidates)
 
-            # Shipper hiện tại (nếu có ai đã được gán)
-            shipper = so_pickings.mapped('shipper_user_id')[:1]
-
-            # Sản phẩm
+            # Sản phẩm: lấy pending từ order lines của SO (live)
             products = []
-            for ml in so_pickings.mapped('move_ids'):
-                if ml.state in ('done', 'cancel'):
+            for ml in so.order_line:
+                if ml.product_id.type == 'service':
+                    continue
+                pending = (ml.product_uom_qty or 0) - (ml.qty_delivered or 0)
+                if pending <= 0:
                     continue
                 products.append({
                     'name': ml.product_id.display_name,
-                    'qty': ml.product_uom_qty,
+                    'qty': pending,
                     'uom': ml.product_uom.name if ml.product_uom else '',
                 })
 
-            # Ngày hẹn giao: ưu tiên commitment_date > scheduled (picking)
-            commitment = so.commitment_date or False
-            sched = min(so_pickings.mapped('scheduled_date'), default=False)
+            wh_name = ''
+            wh = o.get('warehouse_id')
+            if isinstance(wh, (list, tuple)) and len(wh) > 1:
+                wh_name = wh[1]
 
-            order_dict = {
-                'id': so.id,
-                'name': so.name,
-                'partner_id': partner.id if partner else False,
+            orders_payload.append({
+                'id': o['id'],
+                'name': o.get('name') or so.name,
                 'partner_name': partner.display_name if partner else '',
                 'partner_phone': (partner.phone or partner.mobile or '') if partner else '',
                 'address': address,
                 'route': route_label,
                 'tags': route_tags,
                 'htgh': htgh,
-                'amount_total': so.amount_total,
+                'amount_total': o.get('amount_total') or 0.0,
                 'currency': so.currency_id.name if so.currency_id else 'VND',
-                'commitment_date': str(commitment) if commitment else '',
-                'scheduled_date': str(sched) if sched else '',
-                'warehouse': so_pickings.mapped('picking_type_id.warehouse_id')[:1].name or '',
-                'shipper_user_id': shipper.id if shipper else False,
-                'shipper_name': shipper.name if shipper else '',
+                'commitment_date': commitment,
+                'scheduled_date': scheduled_date,
+                'warehouse': wh_name,
+                'shipper_name': shipper_name,
                 'product_count': len(products),
-                'products': products[:25],  # cap
-                'picking_names': so_pickings.mapped('name'),
-            }
-            orders_payload.append(order_dict)
+                'products': products[:25],
+                'picking_names': [n for n in picking_names if n],
+            })
 
             if route_label:
                 route_counter[route_label] += 1
-                route_value[route_label] += so.amount_total or 0.0
+                route_value[route_label] += o.get('amount_total') or 0.0
 
-        # 3) Lịch sử shipper (N ngày gần nhất) — học thời gian hoàn thành
+        # Lịch sử shipper 30 ngày gần nhất (giữ logic cũ)
+        Picking = self.env['stock.picking']
         date_from = fields.Datetime.now() - timedelta(days=history_days)
         hist_pickings = Picking.search([
             ('picking_type_id.code', '=', 'outgoing'),
@@ -178,7 +378,6 @@ class HlvDeliverySuggestion(models.AbstractModel):
             if not su:
                 continue
             entry = shipper_history.setdefault(su.id, {
-                'shipper_user_id': su.id,
                 'name': su.name,
                 'completed_orders': 0,
                 '_total_hours': 0.0,
@@ -190,10 +389,10 @@ class HlvDeliverySuggestion(models.AbstractModel):
             })
             entry['completed_orders'] += 1
 
-            # Tính giờ giao thực tế: từ lúc shipper nhận (shipper_received_date
-            # nếu có) đến date_done. Nếu không có field, dùng scheduled_date.
+            # Thời gian giao thực tế
             start = None
-            for fld in ('shipper_received_date', 'shipper_received_at', 'date_pack', 'scheduled_date'):
+            for fld in ('shipper_received_date', 'shipper_received_at',
+                        'date_pack', 'scheduled_date'):
                 if fld in p._fields:
                     val = getattr(p, fld, None)
                     if val:
@@ -201,15 +400,13 @@ class HlvDeliverySuggestion(models.AbstractModel):
                         break
             if start and p.date_done:
                 try:
-                    delta = p.date_done - start
-                    hours = delta.total_seconds() / 3600.0
-                    if 0 < hours < 240:  # bỏ outlier
+                    hours = (p.date_done - start).total_seconds() / 3600.0
+                    if 0 < hours < 240:
                         entry['_total_hours'] += hours
                         entry['_count_with_duration'] += 1
                 except Exception:
                     pass
 
-            # Late vs on-time so với scheduled
             try:
                 if p.scheduled_date and p.date_done:
                     if p.date_done > p.scheduled_date:
@@ -219,7 +416,6 @@ class HlvDeliverySuggestion(models.AbstractModel):
             except Exception:
                 pass
 
-            # Route history (qua tag SO)
             try:
                 so = p.sale_id
                 if so:
@@ -228,8 +424,7 @@ class HlvDeliverySuggestion(models.AbstractModel):
             except Exception:
                 pass
 
-        # Finalize shipper history
-        for k, v in shipper_history.items():
+        for v in shipper_history.values():
             if v['_count_with_duration']:
                 v['avg_delivery_hours'] = round(
                     v['_total_hours'] / v['_count_with_duration'], 2,
@@ -240,32 +435,69 @@ class HlvDeliverySuggestion(models.AbstractModel):
             v.pop('_total_hours', None)
             v.pop('_count_with_duration', None)
 
-        # 4) Route summary
-        route_summary = []
-        for r, cnt in sorted(route_counter.items(), key=lambda kv: kv[1], reverse=True):
-            route_summary.append({
-                'route': r,
-                'order_count': cnt,
-                'total_value': round(route_value[r], 0),
-            })
-
+        # Render brief strings (template chỉ cần str)
         return {
             'generated_at': fields.Datetime.now().isoformat(),
-            'warehouse_id': warehouse_id,
             'history_days': history_days,
             'total_orders': len(orders_payload),
-            'orders': orders_payload,
-            'route_summary': route_summary,
-            'shipper_history': list(shipper_history.values()),
+            'orders_brief': self._render_orders_brief(orders_payload),
+            'routes_brief': self._render_routes_brief(route_counter, route_value),
+            'history_brief': self._render_history_brief(shipper_history, history_days),
         }
 
-    # ────────────────────────────────────────────────────────────────────
-    # SKILL 1 (placeholder): Gợi ý đi đơn mua
-    # ────────────────────────────────────────────────────────────────────
-    @api.model
-    def get_purchase_suggestion_context(self):
-        """Sẽ implement sau khi có yêu cầu chi tiết."""
-        return {
-            'generated_at': fields.Datetime.now().isoformat(),
-            'note': 'Chưa triển khai. Hãy hỏi nghiệp vụ rồi quay lại.',
-        }
+    def _render_orders_brief(self, orders):
+        if not orders:
+            return '_(không có đơn nào ở trạng thái ĐÃ ĐÓNG, CHỜ NHẬN GIAO)_'
+        lines = []
+        for i, o in enumerate(orders, 1):
+            products = '; '.join(
+                f"{p['name']} x{p['qty']}{(' ' + p['uom']) if p['uom'] else ''}"
+                for p in o['products']
+            )
+            try:
+                amount_str = f"{int(o['amount_total'] or 0):,}".replace(',', '.')
+            except Exception:
+                amount_str = str(o['amount_total'])
+            lines.append(
+                f"{i}. **[{o['name']}]** {o['partner_name']}\n"
+                f"   - Địa chỉ: {o['address'] or '_(thiếu)_'}\n"
+                f"   - Tuyến/Tag: {o['route'] or '_(chưa phân)_'} | HTGH: {o['htgh'] or '_(chưa)_'}\n"
+                f"   - Hẹn giao: {o['commitment_date'] or o['scheduled_date'] or '_(chưa)_'} | Kho: {o['warehouse']}\n"
+                f"   - Giá trị: {amount_str} {o['currency']}\n"
+                f"   - Shipper hiện tại: {o['shipper_name'] or '_(chưa gán)_'}\n"
+                f"   - Sản phẩm ({o['product_count']}): {products or '_(không có)_'}\n"
+                f"   - Phiếu: {', '.join(o['picking_names'])}"
+            )
+        return '\n\n'.join(lines)
+
+    def _render_routes_brief(self, route_counter, route_value):
+        if not route_counter:
+            return '_(không có dữ liệu tuyến)_'
+        rows = sorted(route_counter.items(), key=lambda kv: kv[1], reverse=True)
+        lines = []
+        for r, cnt in rows:
+            try:
+                val_str = f"{int(route_value[r] or 0):,}".replace(',', '.')
+            except Exception:
+                val_str = str(route_value[r])
+            lines.append(f"- **{r}**: {cnt} đơn, tổng {val_str}đ")
+        return '\n'.join(lines)
+
+    def _render_history_brief(self, shipper_history, history_days):
+        if not shipper_history:
+            return '_(chưa có lịch sử shipper)_'
+        lines = []
+        for h in shipper_history.values():
+            on_time_total = h['on_time_count'] + h['late_count']
+            on_time_rate = (
+                round(100 * h['on_time_count'] / on_time_total)
+                if on_time_total else None
+            )
+            route_top = ', '.join(f"{r}({c})" for r, c in h['routes'].items())
+            lines.append(
+                f"- **{h['name']}**: {h['completed_orders']} đơn/{history_days} ngày, "
+                f"TB **{h['avg_delivery_hours'] or '?'}h/phiếu**, "
+                f"đúng giờ **{on_time_rate if on_time_rate is not None else '?'}%**, "
+                f"tuyến quen: {route_top or '_(không)_'}"
+            )
+        return '\n'.join(lines)
