@@ -237,6 +237,40 @@ class HlvDeliverySuggestion(models.AbstractModel):
         return template.format(placeholder_data='(chưa có dữ liệu — đang phát triển)')
 
     # ──────────────────────────────────────────────────────────────────
+    # SKILL submit — post prompt vào thread (không qua URL/SSE)
+    # ──────────────────────────────────────────────────────────────────
+    @api.model
+    def submit_skill_prompt(self, skill, thread_id=None, **kwargs):
+        """Render prompt + post thẳng vào thread như user message.
+
+        Mục đích: tránh nhét prompt (vài chục KB) vào querystring của
+        EventSource (gây 414 Request-URI Too Large → "Lost connection").
+        Frontend chỉ cần gọi ``startLLMStreaming(thread_id)`` (không kèm
+        message) sau khi method này trả về.
+        """
+        if skill == 'delivery':
+            prompt = self.build_delivery_suggestion_prompt(**kwargs)
+        elif skill == 'purchase':
+            prompt = self.build_purchase_suggestion_prompt()
+        else:
+            raise UserError(f"Skill không hợp lệ: {skill}")
+
+        # Đảm bảo có thread của user hiện tại
+        if not thread_id:
+            info = self.ensure_chat_thread()
+            thread_id = info['thread_id']
+        thread = self.env['llm.thread'].browse(int(thread_id))
+        if not thread.exists():
+            raise UserError("Thread không tồn tại.")
+
+        thread.message_post(
+            body=prompt,
+            llm_role='user',
+            author_id=self.env.user.partner_id.id,
+        )
+        return {'thread_id': thread.id, 'prompt_length': len(prompt)}
+
+    # ──────────────────────────────────────────────────────────────────
     # Internal: gather delivery context
     # ──────────────────────────────────────────────────────────────────
     def _collect_delivery_context(self, sale_order_ids=None, warehouse_id=None,

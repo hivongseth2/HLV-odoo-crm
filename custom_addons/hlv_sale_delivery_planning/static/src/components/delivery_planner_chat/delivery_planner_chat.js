@@ -256,7 +256,7 @@ export class DeliveryPlannerFloatingChat extends Component {
     // ──────────────────────────────────────────────────────────────────
     // Skills — render prompt từ backend (.md template) → gửi tin nhắn
     // ──────────────────────────────────────────────────────────────────
-    async _runSkill(backendMethod, label) {
+    async _runSkill(skillKey, label) {
         if (!this.state.threadId) {
             await this._initChat();
             if (!this.state.threadId) return;
@@ -264,10 +264,14 @@ export class DeliveryPlannerFloatingChat extends Component {
         this.state.isPreparingSkill = true;
         this.state.skillError = null;
         try {
-            const prompt = await this.orm.call(
-                "hlv.delivery.suggestion", backendMethod, [],
+            // Bước 1: backend render prompt + post thẳng vào thread
+            // (tránh nhét prompt dài vào querystring của EventSource → 414).
+            await this.orm.call(
+                "hlv.delivery.suggestion", "submit_skill_prompt", [],
+                { skill: skillKey, thread_id: this.state.threadId },
             );
-            await this.llmStore.sendLLMMessage(this.state.threadId, prompt);
+            // Bước 2: chỉ trigger SSE generate, KHÔNG kèm message trong URL
+            await this.llmStore.startLLMStreaming(this.state.threadId, "");
         } catch (err) {
             console.error(`[Skill ${label}] error`, err);
             this.state.skillError = (err && err.data && err.data.message)
@@ -280,11 +284,11 @@ export class DeliveryPlannerFloatingChat extends Component {
     }
 
     runSkillDelivery() {
-        return this._runSkill("build_delivery_suggestion_prompt", "Gợi ý giao hàng");
+        return this._runSkill("delivery", "Gợi ý giao hàng");
     }
 
     runSkillPurchase() {
-        return this._runSkill("build_purchase_suggestion_prompt", "Gợi ý đi đơn");
+        return this._runSkill("purchase", "Gợi ý đi đơn");
     }
 
     // ──────────────────────────────────────────────────────────────────
