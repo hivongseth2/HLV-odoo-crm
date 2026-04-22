@@ -25,16 +25,18 @@ class MilwaukeePriceSyncWizard(models.TransientModel):
 
     def action_sync(self):
         self.ensure_one()
-        config = self.env['milwaukee.config'].search([('active', '=', True)], limit=1)
-        
-        if not config:
-            raise UserError(_("Chưa cấu hình Milwaukee. Vui lòng thiết lập trong Inventory > Configuration."))
+        api_url = self.env['ir.config_parameter'].sudo().get_param('hlv_milwaukee_price_sync.api_url')
+        if not api_url:
+            raise UserError(_("Chưa cấu hình Milwaukee API URL. Vui lòng thiết lập trong Inventory > Configuration > Settings."))
             
         if self.sync_mode == 'selected':
             if not self.product_ids:
                  raise UserError(_("Vui lòng chọn ít nhất 1 sản phẩm để đồng bộ."))
-            # Use action_push_prices logic but pass our specific product_ids
-            return config.with_context(active_ids=self.product_ids.ids, active_model='product.template').action_push_prices()
+            
+            return self.product_ids.action_push_prices_to_milwaukee(api_url)
         else:
             # Sync All mapped
-            return config.action_push_prices()
+            mapped_products = self.env['product.template'].search([('milwaukee_id', '!=', False)])
+            if not mapped_products:
+                raise UserError(_("Không tìm thấy sản phẩm nào đã được map Milwaukee ID để đồng bộ."))
+            return mapped_products.action_push_prices_to_milwaukee(api_url)

@@ -8,17 +8,18 @@
             <xpath expr="//page[@name='inventory']" position="after">
                 <page string="Milwaukee Pricing" name="milwaukee_pricing">
                     <group>
-                        <group name="milwaukee_sync_fields" string="Đồng bộ Website">
+                        <group name="milwaukee_sync_fields" string="Đồng bộ Website: Các trường được liên kết">
                             <field name="milwaukee_id" readonly="1"/>
-                            <field name="milwaukee_sale_price" widget="monetary"/>
+                            <field name="x_studio_ga_hng_nim_yt" string="Giá Niêm Yết" readonly="1"/>
+                            <field name="x_studio_gi_web" string="Giá Web" readonly="1"/>
                         </group>
                         <group name="milwaukee_info" string="Thông tin mapping">
                             <p class="text-muted">
-                                <strong>Milwaukee ID:</strong> ID được lấy tự động từ website thông qua SKU.
+                                <strong>Milwaukee ID:</strong> Lấy tự động thông qua SKU khi nhấn Đồng Bộ Sản Phẩm Về.
                                 <br/>
-                                <strong>Giá Web (x_studio_gi_web):</strong> Sẽ được gửi làm <i>regularPrice</i>.
+                                <strong>Giá Niêm Yết (x_studio_ga_hng_nim_yt):</strong> Trị giá trên Web là <i>regularPrice</i>.
                                 <br/>
-                                <strong>Giá giảm Milwaukee:</strong> Sẽ được gửi làm <i>salePrice</i>.
+                                <strong>Giá Web (x_studio_gi_web):</strong> Trị giá trên Web là <i>salePrice</i>.
                             </p>
                         </group>
                     </group>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="hlv_milwaukee_embedded.IframeAction">
+        <div class="h-100 w-100 flex-grow-1" style="min-height: calc(100vh - 50px);">
+            <iframe t-if="state.url" t-att-src="state.url" style="width:100%; height:100%; border:none; min-height: calc(100vh - 55px); display: block;" allowfullscreen="true"/>
+        </div>
+    </t>
+</templates>
