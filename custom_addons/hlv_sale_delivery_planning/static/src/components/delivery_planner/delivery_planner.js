@@ -1678,7 +1678,8 @@ export class DeliveryPlannerDashboard extends Component {
                 // Đã đóng gói đủ → chuyển sang cột "Đã gói, chờ nhận giao"
                 else if (val === 'fully_packed') val = 'packed_waiting_ship';
                 // Đã in tất cả phiếu, chờ đóng gói → "Đã in, chờ đóng gói"
-                else if (so.picking_slip_printed) val = 'printed_waiting';
+                // Loại trừ waiting_stock: đơn backorder đang chờ hàng về không được rơi vào cột này
+                else if (so.picking_slip_printed && val !== 'waiting_stock') val = 'printed_waiting';
                 // Gơm nhóm: còn hàng chưa đóng = cần xử lý ngay.
                 else if (val === 'partial_packed') val = 'unpacked';
             }
