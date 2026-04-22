@@ -20,6 +20,7 @@ Tất cả tool được gắn lên thread khi ``ensure_chat_thread`` chạy
 import base64
 import json
 import logging
+import re
 from collections import defaultdict
 from datetime import timedelta
 
@@ -94,6 +95,17 @@ class HlvDeliveryPlannerTools(models.AbstractModel):
             return json.loads(raw) or {}
         except Exception:
             return {}
+
+    @api.model
+    def _get_archived_so_ids(self):
+        """Trả về set id các đơn user đã 'cất' (đóng gói chờ KH xác nhận).
+        Các đơn này KHÔNG được đưa vào kế hoạch giao hôm nay.
+        """
+        Pref = self.env['hlv.delivery.planner.user.pref'].sudo()
+        rec = Pref.search([('user_id', '=', self.env.uid)], limit=1)
+        if not rec:
+            return set()
+        return set(rec.archived_so_ids.ids)
 
     # ──────────────────────────────────────────────────────────────────
     # Internal helpers
@@ -217,6 +229,10 @@ class HlvDeliveryPlannerTools(models.AbstractModel):
             _logger.exception("dp_dashboard_summary failed")
             return {'error': str(e), 'orders': []}
         orders = data.get('orders') or []
+        archived = self._get_archived_so_ids()
+        if archived:
+            orders = [o for o in orders if o.get('id') not in archived]
+        archived_skipped = len(data.get('orders') or []) - len(orders)
         by_wh = defaultdict(lambda: {'count': 0, 'value': 0.0})
         by_route = defaultdict(lambda: {'count': 0, 'value': 0.0})
         total_value = 0.0
@@ -236,8 +252,9 @@ class HlvDeliveryPlannerTools(models.AbstractModel):
                     by_route[t[1]]['count'] += 1
                     by_route[t[1]]['value'] += v
         return {
-            'total_orders': data.get('total_count') or len(orders),
+            'total_orders': max((data.get('total_count') or len(orders)) - archived_skipped, len(orders)),
             'sample_size': len(orders),
+            'archived_excluded': archived_skipped,
             'total_value': total_value,
             'total_value_str': _money(total_value),
             'by_warehouse': [
@@ -297,6 +314,16 @@ class HlvDeliveryPlannerTools(models.AbstractModel):
             _logger.exception("dp_list_orders failed")
             return {'error': str(e), 'orders': []}
         raw = data.get('orders') or []
+        archived = self._get_archived_so_ids()
+        archived_in_page = 0
+        if archived:
+            filtered = []
+            for o in raw:
+                if o.get('id') in archived:
+                    archived_in_page += 1
+                    continue
+                filtered.append(o)
+            raw = filtered
         out = []
         for o in raw:
             wh = o.get('warehouse_id')
@@ -329,13 +356,15 @@ class HlvDeliveryPlannerTools(models.AbstractModel):
                 'shipper': shipper,
                 'pickings': [n for n in picking_names if n][:5],
             })
-        total = data.get('total_count') or len(raw)
+        total = max((data.get('total_count') or len(raw)) - len(archived), len(raw))
         return {
             'orders': out,
             'total': total,
             'returned': len(out),
+            'archived_excluded_in_page': archived_in_page,
+            'archived_excluded_total': len(archived),
             'offset': int(offset or 0),
-            'has_more': (int(offset or 0) + len(out)) < total,
+            'has_more': (int(offset or 0) + len(out) + archived_in_page) < (data.get('total_count') or len(out)),
             'filter_applied': self._get_user_dashboard_context() if use_active_filter else {},
         }
 
@@ -542,7 +571,198 @@ class HlvDeliveryPlannerTools(models.AbstractModel):
         return {'days': days, 'shippers': out}
 
     # ──────────────────────────────────────────────────────────────────
-    # TOOL 7 — Rich Excel export (Claude điều khiển style)
+    # TOOL 7 — Warehouse info (địa chỉ kho xuất phát)
+    # ──────────────────────────────────────────────────────────────────
+    @llm_tool(name='dp_warehouse_info', read_only_hint=True)
+    def tool_warehouse_info(self, warehouse_name: str = '') -> dict:
+        """Trả về thông tin kho (tên + địa chỉ đầy đủ).
+
+        Dùng để biết điểm xuất phát của shipper khi lập tuyến.
+
+        Args:
+            warehouse_name: tên kho. Để trống = lấy theo filter user
+                đang xem trên Kanban (filter_warehouse_id).
+        """
+        wh_id = None
+        if warehouse_name:
+            wh_id = self._resolve_warehouse_id(warehouse_name)
+        if not wh_id:
+            ctx = self._get_user_dashboard_context()
+            wh_id = ctx.get('filter_warehouse_id')
+        if not wh_id:
+            return {'has_warehouse': False,
+                    'message': 'User không filter kho — không xác định được điểm xuất phát.'}
+        wh = self.env['stock.warehouse'].browse(int(wh_id)).exists()
+        if not wh:
+            return {'has_warehouse': False, 'message': f'Không tồn tại warehouse_id {wh_id}'}
+        partner = wh.partner_id
+        full_addr = ''
+        street = (partner.street or '') if partner else ''
+        if partner:
+            parts = [partner.street, partner.street2,
+                     partner.city,
+                     partner.state_id.name if partner.state_id else '',
+                     partner.country_id.name if partner.country_id else '']
+            full_addr = ', '.join([p for p in parts if p])
+        return {
+            'has_warehouse': True,
+            'id': wh.id,
+            'name': wh.name,
+            'code': wh.code,
+            'street': street,
+            'address_full': full_addr or street,
+            'phone': partner.phone if partner else '',
+        }
+
+    # ──────────────────────────────────────────────────────────────────
+    # TOOL 8 — Fleet (đội xe)
+    # ──────────────────────────────────────────────────────────────────
+    @llm_tool(name='dp_fleet', read_only_hint=True)
+    def tool_fleet(self, warehouse_name: str = '') -> dict:
+        """Liệt kê đội xe khả dụng để phân chuyến.
+
+        Args:
+            warehouse_name: lọc xe theo kho gốc. Để trống = lấy theo
+                filter user (nếu có), nếu không có thì lấy tất cả xe.
+
+        Trả về list xe với: type, capacity_kg, max_orders_per_trip,
+        preferred_for, driver. AI dùng để chia chuyến cho phù hợp loại xe.
+        """
+        wh_id = None
+        if warehouse_name:
+            wh_id = self._resolve_warehouse_id(warehouse_name)
+        if not wh_id:
+            ctx = self._get_user_dashboard_context()
+            wh_id = ctx.get('filter_warehouse_id')
+        Vehicle = self.env['hlv.delivery.planner.vehicle']
+        fleet = Vehicle.get_active_fleet(warehouse_id=wh_id)
+        return {
+            'count': len(fleet),
+            'warehouse_id': wh_id,
+            'vehicles': fleet,
+            'planning_hint': (
+                'Chia chuyến theo loại xe: xe máy → đơn nhẹ <30kg gần kho; '
+                'sedan → đơn vừa nội thành; van/truck → đơn lớn / KCN xa, '
+                'gom nhiều đơn cùng tuyến.'
+            ),
+        }
+
+    # ──────────────────────────────────────────────────────────────────
+    # TOOL 9 — Locality breakdown (phân tích địa chỉ thô — không cần geocode)
+    # ──────────────────────────────────────────────────────────────────
+    _LOCALITY_PATTERNS = [
+        # Industrial parks first (most specific)
+        (r'\bKCN\s+([A-ZÀ-Ỹ][A-Za-zÀ-ỹ\s\-\d]{1,30}?)(?=,|\s*-|\s*\.|$|\s+(?:huyện|xã|phường|quận|tỉnh|tp|thành phố))',
+         'KCN'),
+        (r'\b(?:Khu Công Nghiệp)\s+([A-ZÀ-Ỹ][A-Za-zÀ-ỹ\s\-\d]{1,30}?)(?=,|\s*-|\s*\.|$)', 'KCN'),
+        # Districts
+        (r'\b(?:Huyện|H\.)\s+([A-ZÀ-Ỹ][A-Za-zÀ-ỹ\s\-]{1,25}?)(?=,|\s*-|\s*\.|$)', 'Huyện'),
+        (r'\b(?:Quận|Q\.)\s*([0-9]{1,2}|[A-ZÀ-Ỹ][A-Za-zÀ-ỹ\s\-]{1,25}?)(?=,|\s*-|\s*\.|$)', 'Quận'),
+        (r'\b(?:Thị xã|TX\.)\s+([A-ZÀ-Ỹ][A-Za-zÀ-ỹ\s\-]{1,25}?)(?=,|\s*-|\s*\.|$)', 'TX'),
+        # Wards / communes
+        (r'\b(?:Phường|P\.)\s*([0-9]{1,2}|[A-ZÀ-Ỹ][A-Za-zÀ-ỹ\s\-]{1,25}?)(?=,|\s*-|\s*\.|$)', 'Phường'),
+        (r'\b(?:Xã|X\.)\s+([A-ZÀ-Ỹ][A-Za-zÀ-ỹ\s\-]{1,25}?)(?=,|\s*-|\s*\.|$)', 'Xã'),
+        # Province / city as last resort
+        (r'\b(?:TP|Tp|Thành phố|T\.P\.)\s*([A-ZÀ-Ỹ][A-Za-zÀ-ỹ\s\-]{1,25}?)(?=,|\s*-|\s*\.|$)', 'TP'),
+        (r'\b(?:Tỉnh|T\.)\s+([A-ZÀ-Ỹ][A-Za-zÀ-ỹ\s\-]{1,25}?)(?=,|\s*-|\s*\.|$)', 'Tỉnh'),
+    ]
+
+    def _extract_locality(self, address):
+        """Trích locality token từ string địa chỉ tiếng Việt.
+
+        Trả về (kind, name) — vd ('KCN', 'Nhơn Trạch 3'), ('Huyện', 'Nhơn Trạch'),
+        ('Quận', '7'), hoặc (None, None) nếu không match.
+        """
+        if not address:
+            return (None, None)
+        s = ' ' + str(address).strip() + ' '
+        for pat, kind in self._LOCALITY_PATTERNS:
+            m = re.search(pat, s, flags=re.IGNORECASE)
+            if m:
+                name = m.group(1).strip(' ,.-').title()
+                if name and len(name) <= 40:
+                    return (kind, name)
+        return (None, None)
+
+    @llm_tool(name='dp_locality_breakdown', read_only_hint=True)
+    def tool_locality_breakdown(self, use_active_filter: bool = True,
+                                limit: int = 200) -> dict:
+        """Gom các đơn theo locality (KCN / Huyện / Quận / Xã / Phường) trích
+        từ ``misa_shipping_address``. Dùng để lập tuyến tối ưu **mà không cần
+        geocode** — gom đơn cùng locality đi 1 chuyến.
+
+        Args:
+            use_active_filter: True = áp filter user đang xem.
+            limit: số đơn tối đa quét (default 200).
+
+        Trả về:
+            {groups: [{key, kind, name, count, value, value_str,
+                       sample_orders: [{name, partner, address}]}],
+             unparsed_count, total}
+        """
+        kwargs = self._build_kwargs(
+            use_active_filter=use_active_filter,
+            limit=int(limit), offset=0,
+        )
+        try:
+            data = self._service().get_dashboard_data(**kwargs)
+        except Exception as e:
+            _logger.exception("dp_locality_breakdown failed")
+            return {'error': str(e), 'groups': []}
+        archived = self._get_archived_so_ids()
+        orders = [o for o in (data.get('orders') or []) if o.get('id') not in archived]
+
+        groups = defaultdict(lambda: {'count': 0, 'value': 0.0, 'samples': []})
+        unparsed = 0
+        for o in orders:
+            addr = o.get('misa_shipping_address') or ''
+            kind, name = self._extract_locality(addr)
+            if not name:
+                unparsed += 1
+                key = '(không xác định)'
+                kind = None
+                name = '(không xác định)'
+            else:
+                key = f"{kind}: {name}"
+            g = groups[key]
+            g['count'] += 1
+            g['value'] += o.get('amount_total') or 0.0
+            if len(g['samples']) < 3:
+                partner = o.get('partner_id')
+                pname = partner[1] if isinstance(partner, (list, tuple)) and len(partner) > 1 else ''
+                g['samples'].append({
+                    'name': o.get('name'),
+                    'partner': pname,
+                    'address': (addr or '')[:80],
+                })
+            g['_kind'] = kind
+            g['_name'] = name
+
+        out = []
+        for key, g in sorted(groups.items(), key=lambda kv: -kv[1]['count']):
+            out.append({
+                'key': key,
+                'kind': g['_kind'],
+                'name': g['_name'],
+                'count': g['count'],
+                'value': g['value'],
+                'value_str': _money(g['value']),
+                'sample_orders': g['samples'],
+            })
+        return {
+            'total': len(orders),
+            'unparsed_count': unparsed,
+            'groups': out,
+            'hint': (
+                'Gom các group cùng KCN / Huyện / Quận → 1 chuyến. Group nhỏ '
+                '(1-2 đơn) cùng khu vực gần nhau có thể merge. Chuyến lớn '
+                '(KCN xa, nhiều đơn) → ưu tiên van/truck. Group ít đơn nội '
+                'thành → xe máy / sedan.'
+            ),
+        }
+
+    # ──────────────────────────────────────────────────────────────────
+    # TOOL 10 — Rich Excel export (Claude điều khiển style)
     # ──────────────────────────────────────────────────────────────────
     @llm_tool(name='dp_export_excel')
     def tool_export_excel(self, filename: str,

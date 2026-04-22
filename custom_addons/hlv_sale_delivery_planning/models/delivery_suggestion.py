@@ -195,6 +195,9 @@ class HlvDeliverySuggestion(models.AbstractModel):
         'tool_order_detail',
         'tool_list_routes',
         'tool_shipper_history',
+        'tool_warehouse_info',
+        'tool_fleet',
+        'tool_locality_breakdown',
         'tool_export_excel',
     )
 

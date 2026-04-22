@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ============================================================
+         Vehicle (Đội xe giao hàng) — cấu hình cho AI Dispatcher
+         ============================================================ -->
+    <record id="view_dp_vehicle_list" model="ir.ui.view">
+        <field name="name">hlv.delivery.planner.vehicle.list</field>
+        <field name="model">hlv.delivery.planner.vehicle</field>
+        <field name="arch" type="xml">
+            <list string="Đội xe giao hàng" editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="vehicle_type"/>
+                <field name="capacity_kg"/>
+                <field name="capacity_volume" optional="show"/>
+                <field name="max_orders_per_trip"/>
+                <field name="warehouse_id"/>
+                <field name="user_id" optional="show"/>
+                <field name="preferred_for"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_dp_vehicle_form" model="ir.ui.view">
+        <field name="name">hlv.delivery.planner.vehicle.form</field>
+        <field name="model">hlv.delivery.planner.vehicle</field>
+        <field name="arch" type="xml">
+            <form string="Xe giao hàng">
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name" class="oe_edit_only"/>
+                        <h1><field name="name" placeholder="Vd: Van 1 tấn #1"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="vehicle_type"/>
+                            <field name="capacity_kg"/>
+                            <field name="capacity_volume"/>
+                            <field name="max_orders_per_trip"/>
+                        </group>
+                        <group>
+                            <field name="warehouse_id"/>
+                            <field name="user_id"/>
+                            <field name="active"/>
+                            <field name="sequence"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="preferred_for"
+                               placeholder="Vd: Đơn nhẹ &lt;30kg, gần kho. Hoặc: Đơn KCN xa, hàng cồng kềnh."/>
+                        <field name="notes" placeholder="Ghi chú thêm (biển số, kích thước thùng…)"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_dp_vehicle" model="ir.actions.act_window">
+        <field name="name">Đội xe giao hàng</field>
+        <field name="res_model">hlv.delivery.planner.vehicle</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Cấu hình đội xe của bạn</p>
+            <p>Khai báo các xe khả dụng (van, xe máy, xe ô tô…) để AI Dispatcher
+               phân chuyến phù hợp với loại / sức chứa.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_dp_vehicle"
+              name="Đội xe giao hàng"
+              action="action_dp_vehicle"
+              parent="sale.sale_order_menu"
+              sequence="16"/>
+
+    <!-- ============================================================
+         Seed data: 3 xe mặc định (van, xe máy, ô tô con) — chỉ tạo
+         lần đầu install, không ghi đè khi upgrade.
+         ============================================================ -->
+    <record id="seed_vehicle_van" model="hlv.delivery.planner.vehicle"
+            forcecreate="True">
+        <field name="name">Van 1 tấn</field>
+        <field name="vehicle_type">van</field>
+        <field name="capacity_kg">1000</field>
+        <field name="capacity_volume">~1 m³ thùng kín</field>
+        <field name="max_orders_per_trip">15</field>
+        <field name="preferred_for">Đơn lớn, KCN xa, gom nhiều đơn cùng tuyến</field>
+        <field name="sequence">10</field>
+    </record>
+    <record id="seed_vehicle_sedan" model="hlv.delivery.planner.vehicle"
+            forcecreate="True">
+        <field name="name">Vinfast 4 chỗ</field>
+        <field name="vehicle_type">sedan</field>
+        <field name="capacity_kg">300</field>
+        <field name="capacity_volume">Cốp + ghế sau</field>
+        <field name="max_orders_per_trip">8</field>
+        <field name="preferred_for">Đơn vừa, khoảng cách trung bình, khách thành phố</field>
+        <field name="sequence">20</field>
+    </record>
+    <record id="seed_vehicle_motorbike" model="hlv.delivery.planner.vehicle"
+            forcecreate="True">
+        <field name="name">Xe máy (dự phòng)</field>
+        <field name="vehicle_type">motorbike</field>
+        <field name="capacity_kg">30</field>
+        <field name="capacity_volume">Thùng sau xe máy</field>
+        <field name="max_orders_per_trip">5</field>
+        <field name="preferred_for">Đơn nhẹ &lt;30kg, gần kho, giao gấp / lẻ</field>
+        <field name="sequence">30</field>
+    </record>
+</odoo>
