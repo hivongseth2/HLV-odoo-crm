@@ -34,7 +34,7 @@ class MilwaukeePriceSyncWizard(models.TransientModel):
             if not self.product_ids:
                  raise UserError(_("Vui lòng chọn ít nhất 1 sản phẩm để đồng bộ."))
             # Use action_push_prices logic but pass our specific product_ids
-            return config.with_context(active_ids=self.product_ids.ids).action_push_prices()
+            return config.with_context(active_ids=self.product_ids.ids, active_model='product.template').action_push_prices()
         else:
             # Sync All mapped
             return config.action_push_prices()

@@ -20,3 +20,13 @@ class ProductTemplate(models.Model):
         help='Giá sale sẽ được đồng bộ lên website Milwaukee. Nếu để trống hoặc 0, salePrice sẽ là regularPrice.'
     )
 
+    def action_milwaukee_fast_sync(self):
+        """Đồng bộ nhanh trực tiếp 1 sản phẩm từ danh sách"""
+        self.ensure_one()
+        config = self.env['milwaukee.config'].search([('active', '=', True)], limit=1)
+        if not config:
+            from odoo.exceptions import UserError
+            raise UserError("Chưa cấu hình Milwaukee. Vui lòng thiết lập trong Inventory > Configuration.")
+        
+        return config.with_context(active_ids=self.ids, active_model='product.template').action_push_prices()
+
