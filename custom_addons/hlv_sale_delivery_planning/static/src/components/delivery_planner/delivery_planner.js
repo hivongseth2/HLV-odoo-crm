@@ -234,6 +234,7 @@ export class DeliveryPlannerDashboard extends Component {
                 _preview: n.last_message_preview || '',
                 _isRead: !!n.is_read,
                 last_message_date: n.last_message_date,
+                _time_str: this._formatMsgDate(n.last_message_date),
             }));
 
             // Giữ lại trạng thái read/unread đã cập nhật local cho đến khi DB trả về trạng thái mới.
@@ -277,6 +278,25 @@ export class DeliveryPlannerDashboard extends Component {
             }
         } catch (e) {
             console.warn("Polling unread failed", e);
+        }
+    }
+
+    /**
+     * Format Odoo Datetime string (UTC) sang giờ VN (UTC+7).
+     * Odoo trả về dạng "YYYY-MM-DD HH:MM:SS" hoặc false.
+     */
+    _formatMsgDate(dateStr) {
+        if (!dateStr) return '';
+        try {
+            // Odoo Datetime field trả về dạng "2026-04-22 07:30:00" — UTC, không có 'Z'
+            // Thêm 'Z' để browser parse đúng UTC rồi cộng +7h.
+            const utc = new Date(dateStr.replace(' ', 'T') + 'Z');
+            if (isNaN(utc.getTime())) return '';
+            const vn = new Date(utc.getTime() + 7 * 60 * 60 * 1000);
+            const pad = n => String(n).padStart(2, '0');
+            return `${pad(vn.getUTCDate())}/${pad(vn.getUTCMonth() + 1)} ${pad(vn.getUTCHours())}:${pad(vn.getUTCMinutes())}`;
+        } catch (e) {
+            return '';
         }
     }
 
