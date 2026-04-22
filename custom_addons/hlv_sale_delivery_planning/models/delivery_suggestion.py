@@ -195,7 +195,13 @@ class HlvDeliverySuggestion(models.AbstractModel):
         'tool_order_detail',
         'tool_list_routes',
         'tool_shipper_history',
+        'tool_export_excel',
     )
+
+    # Các tool implementation cần bỏ khỏi thread Delivery Planner để
+    # AI luôn dùng tool DP riêng (vd: `file_export` mặc định không
+    # hỗ trợ merge cell/màu hàng theo tuyến — dùng `dp_export_excel`).
+    _DP_BLOCKED_IMPLS = {'file_export'}
 
     def _attach_delivery_planner_tools(self, thread):
         """Đảm bảo thread có đủ 6 tool data-only của Delivery Planner."""
@@ -220,6 +226,17 @@ class HlvDeliverySuggestion(models.AbstractModel):
                 "Attached %d Delivery Planner tool(s) to thread %s: %s",
                 len(to_add), thread.id,
                 Tool.browse(to_add).mapped('name'),
+            )
+        # Bỏ các tool bị block (vd file_export mặc định) để AI buộc
+        # phải dùng dp_export_excel với styling nâng cao.
+        blocked = thread.tool_ids.filtered(
+            lambda t: (t.implementation or '') in self._DP_BLOCKED_IMPLS
+        )
+        if blocked:
+            thread.write({'tool_ids': [(3, t.id) for t in blocked]})
+            _logger.info(
+                "Removed %d blocked tool(s) from DP thread %s: %s",
+                len(blocked), thread.id, blocked.mapped('name'),
             )
 
     def _sanitize_thread_tools(self, thread):

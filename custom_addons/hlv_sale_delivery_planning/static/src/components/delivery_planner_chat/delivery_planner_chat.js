@@ -29,6 +29,7 @@ const DASHBOARD_ACTION_TAG = "hlv_sale_delivery_planning.dashboard";
 const DASHBOARD_DOM_SELECTOR = ".hlv_delivery_planner_dashboard";
 const STORAGE_KEY_OPEN = "hlv_dp_chat_open";
 const STORAGE_KEY_SIZE = "hlv_dp_chat_size";
+const STORAGE_KEY_MAX = "hlv_dp_chat_max";
 const ACTION_POLL_INTERVAL_MS = 500;
 
 // ──────────────────────────────────────────────────────────────────
@@ -94,15 +95,26 @@ export class DeliveryPlannerFloatingChat extends Component {
         this.llmStore = useState(useService("llm.store"));
         this.mailStore = useState(useService("mail.store"));
 
-        let savedSize = { width: 460, height: 640 };
+        // Default lớn hơn để bảng HTML / phân tích đơn dễ đọc.
+        // Người dùng có thể bấm "Maximize" để mở rộng gần full màn hình.
+        const defaultW = Math.max(720, Math.min(1100, Math.round(window.innerWidth * 0.55)));
+        const defaultH = Math.max(620, Math.min(900, Math.round(window.innerHeight * 0.82)));
+        let savedSize = { width: defaultW, height: defaultH };
         try {
             const raw = browser.localStorage.getItem(STORAGE_KEY_SIZE);
             if (raw) {
                 const parsed = JSON.parse(raw);
                 if (parsed && parsed.width && parsed.height) {
-                    savedSize = parsed;
+                    savedSize = {
+                        width: Math.max(560, Math.min(parsed.width, window.innerWidth - 32)),
+                        height: Math.max(520, Math.min(parsed.height, window.innerHeight - 40)),
+                    };
                 }
             }
+        } catch (e) {}
+        let savedMaximized = false;
+        try {
+            savedMaximized = browser.localStorage.getItem(STORAGE_KEY_MAX) === "1";
         } catch (e) {}
 
         this.state = useState({
@@ -127,6 +139,7 @@ export class DeliveryPlannerFloatingChat extends Component {
             // Resize
             width: savedSize.width,
             height: savedSize.height,
+            isMaximized: savedMaximized,
         });
 
         onMounted(() => {
@@ -234,7 +247,19 @@ export class DeliveryPlannerFloatingChat extends Component {
     }
 
     get panelStyle() {
+        if (this.state.isMaximized) {
+            const w = Math.max(640, window.innerWidth - 40);
+            const h = Math.max(560, window.innerHeight - 60);
+            return `width:${w}px; height:${h}px; right:20px; bottom:20px;`;
+        }
         return `width:${this.state.width}px; height:${this.state.height}px;`;
+    }
+
+    toggleMaximize() {
+        this.state.isMaximized = !this.state.isMaximized;
+        try {
+            browser.localStorage.setItem(STORAGE_KEY_MAX, this.state.isMaximized ? "1" : "0");
+        } catch (e) {}
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -416,8 +441,8 @@ export class DeliveryPlannerFloatingChat extends Component {
         if (!this._resizing) return;
         const dx = this._resizing.startX - ev.clientX;
         const dy = this._resizing.startY - ev.clientY;
-        const newW = Math.max(340, Math.min(1000, this._resizing.startW + dx));
-        const newH = Math.max(380, Math.min(window.innerHeight - 80, this._resizing.startH + dy));
+        const newW = Math.max(560, Math.min(window.innerWidth - 32, this._resizing.startW + dx));
+        const newH = Math.max(520, Math.min(window.innerHeight - 40, this._resizing.startH + dy));
         this.state.width = newW;
         this.state.height = newH;
     }
