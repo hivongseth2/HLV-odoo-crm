@@ -4,18 +4,17 @@ from odoo import models, fields, api
 
 _logger = logging.getLogger(__name__)
 
+_PARAM_GLOBAL_ARCHIVED = 'hlv_dp.global_archived_so_ids'
+_PARAM_GLOBAL_CONSOLIDATE = 'hlv_dp.global_consolidate_so_ids'
+
 
 class DeliveryPlannerUserPref(models.Model):
     """Per-user preferences for the Delivery Planner dashboard.
 
-    Stores:
-      - archived_so_ids: SOs the user hàs "cất" (không còn dùng / bỏ
-        khỏi danh sách).
-      - consolidate_so_ids: SOs the user đặt vào "chờ gom đơn" — đồng
-        nghĩa với tạm ẩn khỏi kế hoạch giao hôm nay nhưng vẫn
-        giữ lại để gộp chuyến sau.
-      - default_filters_json: snapshot of the filter form the user wants to
-        apply automatically on dashboard open.
+        Stores:
+            - archived/consolidate buckets: GLOBAL cho toàn hệ thống (shared giữa
+                các user), lưu trong ir.config_parameter.
+            - default_filters_json: snapshot filter riêng theo từng user.
 
     Cả archived lẫn consolidate đều được loại khỏi kế hoạch AI
     Dispatcher.
@@ -52,26 +51,86 @@ class DeliveryPlannerUserPref(models.Model):
             rec = self.sudo().create({'user_id': self.env.uid})
         return rec
 
+    @api.model
+    def _sanitize_so_ids(self, ids):
+        raw_ids = []
+        for value in (ids or []):
+            try:
+                i = int(value)
+            except (TypeError, ValueError):
+                continue
+            if i > 0:
+                raw_ids.append(i)
+        if not raw_ids:
+            return []
+        return self.env['sale.order'].sudo().browse(list(set(raw_ids))).exists().ids
+
+    @api.model
+    def _get_global_bucket_ids(self, param_key):
+        ICP = self.env['ir.config_parameter'].sudo()
+        try:
+            data = json.loads(ICP.get_param(param_key, '[]') or '[]')
+        except (ValueError, TypeError):
+            data = []
+        return self._sanitize_so_ids(data)
+
+    @api.model
+    def _set_global_bucket_ids(self, param_key, so_ids):
+        clean_ids = self._sanitize_so_ids(so_ids)
+        self.env['ir.config_parameter'].sudo().set_param(
+            param_key, json.dumps(clean_ids)
+        )
+        return clean_ids
+
+    @api.model
+    def _bootstrap_global_buckets_from_legacy(self):
+        """One-time migration helper from old per-user bucket fields."""
+        records = self.sudo().search([])
+        if not records:
+            return set(), set()
+        archived = set(records.mapped('archived_so_ids').ids)
+        consolidate = set(records.mapped('consolidate_so_ids').ids)
+        consolidate -= archived
+        archived, consolidate = self._save_global_buckets(archived, consolidate)
+        return archived, consolidate
+
+    @api.model
+    def _get_global_buckets(self):
+        archived = set(self._get_global_bucket_ids(_PARAM_GLOBAL_ARCHIVED))
+        consolidate = set(self._get_global_bucket_ids(_PARAM_GLOBAL_CONSOLIDATE))
+        if not archived and not consolidate:
+            archived, consolidate = self._bootstrap_global_buckets_from_legacy()
+        overlap = archived.intersection(consolidate)
+        if overlap:
+            # Keep archive as winner on overlap to preserve old behavior.
+            consolidate -= overlap
+            self._set_global_bucket_ids(_PARAM_GLOBAL_ARCHIVED, list(archived))
+            self._set_global_bucket_ids(_PARAM_GLOBAL_CONSOLIDATE, list(consolidate))
+        return archived, consolidate
+
+    @api.model
+    def _save_global_buckets(self, archived, consolidate):
+        archived = set(self._sanitize_so_ids(list(archived)))
+        consolidate = set(self._sanitize_so_ids(list(consolidate)))
+        consolidate -= archived
+        archived_ids = self._set_global_bucket_ids(_PARAM_GLOBAL_ARCHIVED, list(archived))
+        consolidate_ids = self._set_global_bucket_ids(_PARAM_GLOBAL_CONSOLIDATE, list(consolidate))
+        return set(archived_ids), set(consolidate_ids)
+
     # ---------------- Public RPC API ----------------
 
     @api.model
     def get_user_preferences(self):
         """Return current user's archived + consolidate SO ids + default filters."""
         rec = self._get_or_create_for_current_user()
-        # Filter out SOs that no longer exist (cancelled/deleted).
-        existing_archived = rec.archived_so_ids.exists().ids
-        if len(existing_archived) != len(rec.archived_so_ids):
-            rec.sudo().write({'archived_so_ids': [(6, 0, existing_archived)]})
-        existing_consolidate = rec.consolidate_so_ids.exists().ids
-        if len(existing_consolidate) != len(rec.consolidate_so_ids):
-            rec.sudo().write({'consolidate_so_ids': [(6, 0, existing_consolidate)]})
+        archived, consolidate = self._get_global_buckets()
         try:
             default_filters = json.loads(rec.default_filters_json or '{}')
         except (ValueError, TypeError):
             default_filters = {}
         return {
-            'archived_so_ids': existing_archived,
-            'consolidate_so_ids': existing_consolidate,
+            'archived_so_ids': list(archived),
+            'consolidate_so_ids': list(consolidate),
             'default_filters': default_filters,
         }
 
@@ -85,20 +144,15 @@ class DeliveryPlannerUserPref(models.Model):
         if not so_id:
             return self._snapshot()
         so_id = int(so_id)
-        rec = self._get_or_create_for_current_user()
-        current = set(rec.archived_so_ids.ids)
-        consolidate = set(rec.consolidate_so_ids.ids)
+        current, consolidate = self._get_global_buckets()
         if so_id in current:
             current.discard(so_id)
         else:
             if self.env['sale.order'].browse(so_id).exists():
                 current.add(so_id)
                 consolidate.discard(so_id)
-        rec.sudo().write({
-            'archived_so_ids': [(6, 0, list(current))],
-            'consolidate_so_ids': [(6, 0, list(consolidate))],
-        })
-        return self._snapshot(rec)
+        self._save_global_buckets(current, consolidate)
+        return self._snapshot()
 
     @api.model
     def toggle_consolidate(self, so_id):
@@ -109,42 +163,39 @@ class DeliveryPlannerUserPref(models.Model):
         if not so_id:
             return self._snapshot()
         so_id = int(so_id)
-        rec = self._get_or_create_for_current_user()
-        current = set(rec.consolidate_so_ids.ids)
-        archived = set(rec.archived_so_ids.ids)
+        archived, current = self._get_global_buckets()
         if so_id in current:
             current.discard(so_id)
         else:
             if self.env['sale.order'].browse(so_id).exists():
                 current.add(so_id)
                 archived.discard(so_id)
-        rec.sudo().write({
-            'consolidate_so_ids': [(6, 0, list(current))],
-            'archived_so_ids': [(6, 0, list(archived))],
-        })
-        return self._snapshot(rec)
+        self._save_global_buckets(archived, current)
+        return self._snapshot()
 
     @api.model
     def set_archived(self, so_ids):
         """Replace the archived set (used by 'phục hồi tất cả' / bulk ops)."""
-        ids = [int(i) for i in (so_ids or []) if i]
-        rec = self._get_or_create_for_current_user()
-        rec.sudo().write({'archived_so_ids': [(6, 0, ids)]})
-        return self._snapshot(rec)
+        archived = set(self._sanitize_so_ids(so_ids or []))
+        _, consolidate = self._get_global_buckets()
+        consolidate -= archived
+        self._save_global_buckets(archived, consolidate)
+        return self._snapshot()
 
     @api.model
     def set_consolidate(self, so_ids):
         """Replace the consolidate set (used by 'phục hồi tất cả' / bulk ops)."""
-        ids = [int(i) for i in (so_ids or []) if i]
-        rec = self._get_or_create_for_current_user()
-        rec.sudo().write({'consolidate_so_ids': [(6, 0, ids)]})
-        return self._snapshot(rec)
+        consolidate = set(self._sanitize_so_ids(so_ids or []))
+        archived, _ = self._get_global_buckets()
+        archived -= consolidate
+        self._save_global_buckets(archived, consolidate)
+        return self._snapshot()
 
     def _snapshot(self, rec=None):
-        rec = rec or self._get_or_create_for_current_user()
+        archived, consolidate = self._get_global_buckets()
         return {
-            'archived_so_ids': rec.archived_so_ids.ids,
-            'consolidate_so_ids': rec.consolidate_so_ids.ids,
+            'archived_so_ids': list(archived),
+            'consolidate_so_ids': list(consolidate),
         }
 
     @api.model
