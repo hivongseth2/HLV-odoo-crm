@@ -3,7 +3,7 @@ from odoo import models, fields, api, _
 
 class MilwaukeeBanner(models.Model):
     _name = 'milwaukee.banner'
-    _inherit = ['milwaukee.master.mixin', 'mail.thread', 'mail.activity.mixin']
+    _inherit = ['milwaukee.master.mixin', 'mail.thread']
     _description = 'Milwaukee Website Banner'
     _order = 'sequence, id'
 
