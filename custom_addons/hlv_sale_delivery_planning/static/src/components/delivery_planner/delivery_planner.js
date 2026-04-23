@@ -166,8 +166,10 @@ export class DeliveryPlannerDashboard extends Component {
                 // Odoo 18: use subscribe(type, callback) — addEventListener("notification") is internal-only
                 this._onBusDataChanged = (payload) => this._onDataChanged(payload);
                 this._onBusNewPortalMessage = (payload) => this.onNewPortalMessage(payload);
+                this._onBusPrefChanged = (payload) => this._onPreferenceChanged(payload);
                 this.busService.subscribe("delivery_planner_data_changed", this._onBusDataChanged);
                 this.busService.subscribe("new_portal_message", this._onBusNewPortalMessage);
+                this.busService.subscribe("delivery_planner_pref_changed", this._onBusPrefChanged);
             }
 
             // Load per-user preferences (archived SOs + default filters) BEFORE
@@ -212,6 +214,9 @@ export class DeliveryPlannerDashboard extends Component {
                 if (this._onBusNewPortalMessage) {
                     this.busService.unsubscribe("new_portal_message", this._onBusNewPortalMessage);
                 }
+                if (this._onBusPrefChanged) {
+                    this.busService.unsubscribe("delivery_planner_pref_changed", this._onBusPrefChanged);
+                }
                 this.busService.deleteChannel("delivery_planner_channel");
             }
             if (this.messagePollingInterval) {
@@ -225,11 +230,11 @@ export class DeliveryPlannerDashboard extends Component {
 
     async pollUnreadMessages(isInitial = false) {
         try {
-            const notifications = await this.orm.searchRead(
+            const notifications = await this.orm.call(
                 'hlv.sale.plan.message',
+                'list_for_current_user',
                 [],
-                ['id', 'sale_order_id', 'last_message_author', 'last_message_preview', 'last_message_date', 'is_read'],
-                { limit: 100, order: 'last_message_date desc, id desc' }
+                { limit: 100 }
             );
 
             const prevByOrderId = new Map(
@@ -313,7 +318,6 @@ export class DeliveryPlannerDashboard extends Component {
     async markOrderAsRead(soId) {
         try {
             await this.orm.call('hlv.sale.plan.message', 'mark_read_for_sale_order', [soId]);
-            await this.orm.write('sale.order', [soId], { x_plan_unread_message: false });
         } catch (e) {
             console.warn('markOrderAsRead failed', e);
         }
@@ -474,6 +478,14 @@ export class DeliveryPlannerDashboard extends Component {
                 { type: "info", title: "Cập nhật xong" }
             );
         }, 800);
+    }
+
+    _onPreferenceChanged(payload) {
+        if (!payload) return;
+        const archived = Array.isArray(payload.archived_so_ids) ? payload.archived_so_ids : [];
+        const consolidate = Array.isArray(payload.consolidate_so_ids) ? payload.consolidate_so_ids : [];
+        this.state.archivedSOIds = new Set(archived);
+        this.state.consolidateSOIds = new Set(consolidate);
     }
 
     /**
@@ -1654,16 +1666,7 @@ export class DeliveryPlannerDashboard extends Component {
         };
         const field = fieldMap[dim];
 
-        const needTransfer = this.state.filterNeedTransfer;
-        const archived = this.state.archivedSOIds;
-        const showArchivedOnly = this.state.showArchivedOnly;
-        const base = this.state.saleOrders.filter(so => {
-            // Archive (cất đơn) — apply BEFORE column grouping so card counts reflect view.
-            if (showArchivedOnly) {
-                if (!archived.has(so.id)) return false;
-            } else if (archived.has(so.id)) {
-                return false;
-            }
+        const base = this._applyArchiveFilter(this.state.saleOrders || []).filter(so => {
             if (so.is_returned_or_stopped) return false;   // hiện riêng trong cột "Trả hàng"
             let val = so[field];
             if (dim === 'delivery_status' && val === 'unshipped') val = 'pending';
