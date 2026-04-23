@@ -12,6 +12,9 @@
                         <setting string="Milwaukee Base URL" help="Base URL of the Milwaukee website (e.g., https://your-site.com or http://localhost:3000)">
                             <field name="milwaukee_base_url"/>
                         </setting>
+                        <setting string="Master API Key" help="Master API secret for CMS CRUD operations">
+                            <field name="milwaukee_master_key" password="True"/>
+                        </setting>
                     </block>
                 </app>
             </xpath>

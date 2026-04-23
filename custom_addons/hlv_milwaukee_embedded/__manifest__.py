@@ -5,10 +5,13 @@
     'summary': 'Nhúng website Milwaukee vào Odoo thông qua Iframe (OWL 2.0 Client Action)',
     'description': '',
     'author': 'Hoang Long Vu',
-    'depends': ['base', 'web'],
+    'depends': ['product', 'mail', 'stock', 'web'],
     'data': [
+        'security/ir.model.access.csv',
         'views/res_config_settings_views.xml',
+        'views/milwaukee_master_views.xml',
         'views/milwaukee_menus.xml',
+        'static/src/xml/milwaukee_iframe.xml',
     ],
     'assets': {
         'web.assets_backend': [

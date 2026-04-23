@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_milwaukee_banner,milwaukee.banner,model_milwaukee_banner,base.group_user,1,1,1,1
+access_milwaukee_blog_post,milwaukee.blog.post,model_milwaukee_blog_post,base.group_user,1,1,1,1
+access_milwaukee_master_mixin,milwaukee.master.mixin,model_milwaukee_master_mixin,base.group_user,1,1,1,1

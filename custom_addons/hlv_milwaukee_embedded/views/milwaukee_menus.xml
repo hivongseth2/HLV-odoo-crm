@@ -3,65 +3,84 @@
     <!-- Root Menu -->
     <menuitem id="menu_milwaukee_root"
               name="Milwaukee"
-              sequence="55"/>
+              sequence="55"
+              web_icon="hlv_milwaukee_embedded,static/description/icon.png"/>
 
-    <!-- Client Actions -->
-    <record id="action_milwaukee_products" model="ir.actions.client">
-        <field name="name">Sản phẩm (Milwaukee)</field>
-        <field name="tag">milwaukee_iframe_action</field>
-        <field name="context">{'iframe_path': '/admin/products?embedded=1'}</field>
+    <!-- Native Actions -->
+    <record id="action_milwaukee_native_products" model="ir.actions.act_window">
+        <field name="name">Sản phẩm (Master)</field>
+        <field name="res_model">product.template</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="domain">[('milwaukee_id', '!=', 0)]</field>
     </record>
 
-    <record id="action_milwaukee_products_new" model="ir.actions.client">
-        <field name="name">Thêm sản phẩm mới</field>
-        <field name="tag">milwaukee_iframe_action</field>
-        <field name="context">{'iframe_path': '/admin/products/new?embedded=1'}</field>
+    <record id="action_milwaukee_native_banners" model="ir.actions.act_window">
+        <field name="name">Website Banners</field>
+        <field name="res_model">milwaukee.banner</field>
+        <field name="view_mode">list,form</field>
     </record>
 
-    <record id="action_milwaukee_orders" model="ir.actions.client">
-        <field name="name">Đơn hàng (Milwaukee)</field>
-        <field name="tag">milwaukee_iframe_action</field>
-        <field name="context">{'iframe_path': '/admin/orders?embedded=1'}</field>
+    <record id="action_milwaukee_native_blog_posts" model="ir.actions.act_window">
+        <field name="name">Website Articles</field>
+        <field name="res_model">milwaukee.blog.post</field>
+        <field name="view_mode">list,form</field>
     </record>
-    
+
+    <!-- Original Iframe Actions (keeping some for Dashboard/Live view) -->
     <record id="action_milwaukee_store_frontend" model="ir.actions.client">
-        <field name="name">Trang chủ Store (Frontend)</field>
+        <field name="name">Trang chủ Store (Live)</field>
         <field name="tag">milwaukee_iframe_action</field>
         <field name="context">{'iframe_path': '/?embedded=1'}</field>
     </record>
 
+    <record id="action_milwaukee_admin_dashboard" model="ir.actions.client">
+        <field name="name">Admin Dashboard (Live)</field>
+        <field name="tag">milwaukee_iframe_action</field>
+        <field name="context">{'iframe_path': '/admin?embedded=1'}</field>
+    </record>
+
     <!-- Sub Menus -->
-    <menuitem id="menu_milwaukee_products"
-              name="M-Products"
-              parent="menu_milwaukee_root"
-              action="action_milwaukee_products"
+    <menuitem id="menu_milwaukee_cms" name="Website Content" parent="menu_milwaukee_root" sequence="10"/>
+
+    <menuitem id="menu_milwaukee_native_products"
+              name="Sản phẩm"
+              parent="menu_milwaukee_cms"
+              action="action_milwaukee_native_products"
               sequence="10"/>
 
-    <menuitem id="menu_milwaukee_products_new"
-              name="New M-Product"
-              parent="menu_milwaukee_root"
-              action="action_milwaukee_products_new"
+    <menuitem id="menu_milwaukee_native_banners"
+              name="Banners"
+              parent="menu_milwaukee_cms"
+              action="action_milwaukee_native_banners"
               sequence="20"/>
 
-    <menuitem id="menu_milwaukee_orders"
-              name="M-Orders"
-              parent="menu_milwaukee_root"
-              action="action_milwaukee_orders"
+    <menuitem id="menu_milwaukee_native_blog_posts"
+              name="Bài viết"
+              parent="menu_milwaukee_cms"
+              action="action_milwaukee_native_blog_posts"
               sequence="30"/>
-              
+
+    <menuitem id="menu_milwaukee_live" name="Live Preview" parent="menu_milwaukee_root" sequence="20"/>
+
     <menuitem id="menu_milwaukee_store"
-              name="M-Store (Live)"
-              parent="menu_milwaukee_root"
+              name="Trang chủ Milwaukee"
+              parent="menu_milwaukee_live"
               action="action_milwaukee_store_frontend"
-              sequence="40"/>
+              sequence="10"/>
+
+    <menuitem id="menu_milwaukee_admin"
+              name="Quản trị Hệ thống"
+              parent="menu_milwaukee_live"
+              action="action_milwaukee_admin_dashboard"
+              sequence="20"/>
 
     <menuitem id="menu_milwaukee_settings_root"
-              name="Configuration"
+              name="Cấu hình"
               parent="menu_milwaukee_root"
               sequence="99"/>
 
     <menuitem id="menu_milwaukee_settings"
-              name="Settings"
+              name="Thiết lập API"
               parent="menu_milwaukee_settings_root"
               action="action_milwaukee_embedded_config"
               sequence="10"/>

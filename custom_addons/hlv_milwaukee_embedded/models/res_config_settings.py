@@ -8,3 +8,8 @@ class ResConfigSettings(models.TransientModel):
         config_parameter='milwaukee.base_url',
         default='http://localhost:3000'
     )
+    milwaukee_master_key = fields.Char(
+        string='Master API Key',
+        config_parameter='milwaukee.master_key',
+        default='milwaukee-master-odoo-secret-2026'
+    )

@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Product Template Extension -->
+    <record id="product_template_form_view_master" model="ir.ui.view">
+        <field name="name">product.template.form.milwaukee.master</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_only_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='inventory']" position="after">
+                <page string="Master Sync (Milwaukee)" name="master_sync">
+                    <header>
+                        <button name="action_milwaukee_push" string="Sync to Website" type="object" class="btn-primary" icon="fa-cloud-upload"/>
+                        <field name="milwaukee_status" widget="statusbar" statusbar_visible="draft,publish"/>
+                    </header>
+                    <group>
+                        <group string="Website Mapping">
+                            <field name="milwaukee_id" readonly="1"/>
+                            <field name="milwaukee_slug"/>
+                            <field name="last_sync_date"/>
+                        </group>
+                        <group string="Content JSON (Master API)">
+                            <field name="milwaukee_specs" widget="ace" options="{'mode': 'python'}"/>
+                            <field name="milwaukee_gallery_urls" widget="ace" options="{'mode': 'python'}"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Milwaukee Banner Views -->
+    <record id="view_milwaukee_banner_list" model="ir.ui.view">
+        <field name="name">milwaukee.banner.list</field>
+        <field name="model">milwaukee.banner</field>
+        <field name="arch" type="xml">
+            <list string="Banners" editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="image_url"/>
+                <field name="link_url"/>
+                <field name="status" widget="badge" decoration-success="status == 'publish'" decoration-info="status == 'draft'"/>
+                <field name="milwaukee_id" readonly="1"/>
+                <button name="action_milwaukee_push" type="object" icon="fa-refresh" string="Sync"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_milwaukee_banner_form" model="ir.ui.view">
+        <field name="name">milwaukee.banner.form</field>
+        <field name="model">milwaukee.banner</field>
+        <field name="arch" type="xml">
+            <form string="Banner">
+                <header>
+                    <button name="action_milwaukee_push" string="Push to Website" type="object" class="btn-primary"/>
+                    <field name="status" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="image_url"/>
+                            <field name="link_url"/>
+                        </group>
+                        <group>
+                            <field name="sequence"/>
+                            <field name="milwaukee_id" readonly="1"/>
+                            <field name="last_sync_date"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Mô tả">
+                            <field name="description"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- Milwaukee Blog Post Views -->
+    <record id="view_milwaukee_blog_post_list" model="ir.ui.view">
+        <field name="name">milwaukee.blog.post.list</field>
+        <field name="model">milwaukee.blog.post</field>
+        <field name="arch" type="xml">
+            <list string="Blog Posts">
+                <field name="name"/>
+                <field name="slug"/>
+                <field name="author_name"/>
+                <field name="status" widget="badge" decoration-success="status == 'publish'"/>
+                <field name="last_sync_date"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_milwaukee_blog_post_form" model="ir.ui.view">
+        <field name="name">milwaukee.blog.post.form</field>
+        <field name="model">milwaukee.blog.post</field>
+        <field name="arch" type="xml">
+            <form string="Blog Post">
+                <header>
+                    <button name="action_milwaukee_push" string="Push to Website" type="object" class="btn-primary"/>
+                    <field name="status" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="slug"/>
+                            <field name="author_name"/>
+                        </group>
+                        <group>
+                            <field name="image_url"/>
+                            <field name="milwaukee_id" readonly="1"/>
+                            <field name="last_sync_date"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Nội dung bài viết">
+                            <field name="content_html" widget="html" options="{'safe': True}"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+</odoo>
