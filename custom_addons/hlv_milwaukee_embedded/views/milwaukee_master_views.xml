@@ -33,7 +33,7 @@
         <field name="name">milwaukee.banner.list</field>
         <field name="model">milwaukee.banner</field>
         <field name="arch" type="xml">
-            <list editable="bottom">
+            <tree editable="bottom">
                 <field name="sequence" widget="handle"/>
                 <field name="name"/>
                 <field name="image_url"/>
@@ -41,7 +41,7 @@
                 <field name="status" widget="badge" decoration-success="status == 'publish'" decoration-info="status == 'draft'"/>
                 <field name="milwaukee_id" readonly="1"/>
                 <button name="action_milwaukee_push" type="object" icon="fa-refresh" string="Sync"/>
-            </list>
+            </tree>
         </field>
     </record>
 
@@ -87,13 +87,13 @@
         <field name="name">milwaukee.blog.post.list</field>
         <field name="model">milwaukee.blog.post</field>
         <field name="arch" type="xml">
-            <list>
+            <tree>
                 <field name="name"/>
                 <field name="slug"/>
                 <field name="author_name"/>
                 <field name="status" widget="badge" decoration-success="status == 'publish'"/>
                 <field name="last_sync_date"/>
-            </list>
+            </tree>
         </field>
     </record>
 

@@ -9,20 +9,21 @@
     <record id="action_milwaukee_native_products" model="ir.actions.act_window">
         <field name="name">Sản phẩm (Master)</field>
         <field name="res_model">product.template</field>
-        <field name="view_mode">list,kanban,form</field>
+        <field name="view_mode">tree,kanban,form</field>
         <field name="domain">[('milwaukee_id', '!=', False)]</field>
     </record>
 
     <record id="action_milwaukee_native_banners" model="ir.actions.act_window">
         <field name="name">Website Banners</field>
         <field name="res_model">milwaukee.banner</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">tree,form</field>
     </record>
 
     <record id="action_milwaukee_native_blog_posts" model="ir.actions.act_window">
         <field name="name">Website Articles</field>
         <field name="res_model">milwaukee.blog.post</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">tree,form</field>
+        <field name="view_id" ref="view_milwaukee_blog_post_list"/>
     </record>
 
     <!-- Original Iframe Actions (keeping some for Dashboard/Live view) -->
