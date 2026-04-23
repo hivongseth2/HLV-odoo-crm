@@ -61,6 +61,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         other_warehouses = self.env['stock.warehouse'].search([
             ('id', '!=', so.warehouse_id.id),
         ])
+        other_warehouses = self._order_source_warehouses(so.warehouse_id, other_warehouses)
         if not other_warehouses:
             return []
 
