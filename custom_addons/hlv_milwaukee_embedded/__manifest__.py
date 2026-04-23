@@ -11,7 +11,6 @@
         'views/res_config_settings_views.xml',
         'views/milwaukee_master_views.xml',
         'views/milwaukee_menus.xml',
-        'static/src/xml/milwaukee_iframe.xml',
     ],
     'assets': {
         'web.assets_backend': [
