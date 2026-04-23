@@ -6,11 +6,13 @@
         <field name="model">product.template</field>
         <field name="inherit_id" ref="product.product_template_only_form_view"/>
         <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_milwaukee_push" string="Sync to Website" type="object" class="btn-primary" icon="fa-cloud-upload"/>
+            </xpath>
             <xpath expr="//page[@name='inventory']" position="after">
                 <page string="Master Sync (Milwaukee)" name="master_sync">
                     <group>
                         <group string="Website Mapping">
-                            <button name="action_milwaukee_push" string="Sync to Website" type="object" class="btn-primary" icon="fa-cloud-upload"/>
                             <field name="milwaukee_status"/>
                             <field name="milwaukee_id" readonly="1"/>
                             <field name="milwaukee_slug"/>
@@ -31,12 +33,12 @@
         <field name="name">milwaukee.banner.list</field>
         <field name="model">milwaukee.banner</field>
         <field name="arch" type="xml">
-            <list string="Banners" editable="bottom">
+            <list editable="bottom">
                 <field name="sequence" widget="handle"/>
                 <field name="name"/>
                 <field name="image_url"/>
                 <field name="link_url"/>
-                <field name="status" widget="badge" decoration-success="status == 'publish'" decoration-info="status == 'draft'"/>
+                <field name="status"/>
                 <field name="milwaukee_id" readonly="1"/>
                 <button name="action_milwaukee_push" type="object" icon="fa-refresh" string="Sync"/>
             </list>
@@ -85,11 +87,11 @@
         <field name="name">milwaukee.blog.post.list</field>
         <field name="model">milwaukee.blog.post</field>
         <field name="arch" type="xml">
-            <list string="Blog Posts">
+            <list>
                 <field name="name"/>
                 <field name="slug"/>
                 <field name="author_name"/>
-                <field name="status" widget="badge" decoration-success="status == 'publish'"/>
+                <field name="status"/>
                 <field name="last_sync_date"/>
             </list>
         </field>
@@ -119,7 +121,7 @@
                     </group>
                     <notebook>
                         <page string="Nội dung bài viết">
-                            <field name="content_html" widget="html" options="{'safe': True}"/>
+                            <field name="content_html" widget="html"/>
                         </page>
                     </notebook>
                 </sheet>

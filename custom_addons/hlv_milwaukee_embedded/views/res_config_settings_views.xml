@@ -7,7 +7,7 @@
         <field name="inherit_id" ref="base.res_config_settings_view_form"/>
         <field name="arch" type="xml">
             <xpath expr="//form" position="inside">
-                <app data-string="Milwaukee App" string="Milwaukee App" name="hlv_milwaukee_embedded">
+                <app string="Milwaukee App" name="hlv_milwaukee_embedded">
                     <block title="API &amp; URL Configuration" name="milwaukee_url_config">
                         <setting string="Milwaukee Base URL" help="Base URL of the Milwaukee website (e.g., https://your-site.com or http://localhost:3000)">
                             <field name="milwaukee_base_url"/>
