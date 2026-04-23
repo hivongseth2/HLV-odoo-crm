@@ -166,8 +166,10 @@ export class DeliveryPlannerDashboard extends Component {
                 // Odoo 18: use subscribe(type, callback) — addEventListener("notification") is internal-only
                 this._onBusDataChanged = (payload) => this._onDataChanged(payload);
                 this._onBusNewPortalMessage = (payload) => this.onNewPortalMessage(payload);
+                this._onBusPrefChanged = (payload) => this._onPreferenceChanged(payload);
                 this.busService.subscribe("delivery_planner_data_changed", this._onBusDataChanged);
                 this.busService.subscribe("new_portal_message", this._onBusNewPortalMessage);
+                this.busService.subscribe("delivery_planner_pref_changed", this._onBusPrefChanged);
             }
 
             // Load per-user preferences (archived SOs + default filters) BEFORE
@@ -211,6 +213,9 @@ export class DeliveryPlannerDashboard extends Component {
                 }
                 if (this._onBusNewPortalMessage) {
                     this.busService.unsubscribe("new_portal_message", this._onBusNewPortalMessage);
+                }
+                if (this._onBusPrefChanged) {
+                    this.busService.unsubscribe("delivery_planner_pref_changed", this._onBusPrefChanged);
                 }
                 this.busService.deleteChannel("delivery_planner_channel");
             }
@@ -474,6 +479,14 @@ export class DeliveryPlannerDashboard extends Component {
                 { type: "info", title: "Cập nhật xong" }
             );
         }, 800);
+    }
+
+    _onPreferenceChanged(payload) {
+        if (!payload) return;
+        const archived = Array.isArray(payload.archived_so_ids) ? payload.archived_so_ids : [];
+        const consolidate = Array.isArray(payload.consolidate_so_ids) ? payload.consolidate_so_ids : [];
+        this.state.archivedSOIds = new Set(archived);
+        this.state.consolidateSOIds = new Set(consolidate);
     }
 
     /**

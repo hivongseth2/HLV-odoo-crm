@@ -117,6 +117,24 @@ class DeliveryPlannerUserPref(models.Model):
         consolidate_ids = self._set_global_bucket_ids(_PARAM_GLOBAL_CONSOLIDATE, list(consolidate))
         return set(archived_ids), set(consolidate_ids)
 
+    @api.model
+    def _broadcast_pref_changed(self, snapshot, action='update', so_id=False):
+        payload = {
+            'action': action,
+            'so_id': int(so_id) if so_id else False,
+            'actor_uid': self.env.uid,
+            'archived_so_ids': snapshot.get('archived_so_ids', []),
+            'consolidate_so_ids': snapshot.get('consolidate_so_ids', []),
+        }
+        try:
+            self.env['bus.bus']._sendone(
+                'delivery_planner_channel',
+                'delivery_planner_pref_changed',
+                payload,
+            )
+        except Exception:
+            _logger.debug('Failed to send delivery_planner_pref_changed notification', exc_info=True)
+
     # ---------------- Public RPC API ----------------
 
     @api.model
@@ -152,7 +170,9 @@ class DeliveryPlannerUserPref(models.Model):
                 current.add(so_id)
                 consolidate.discard(so_id)
         self._save_global_buckets(current, consolidate)
-        return self._snapshot()
+        snap = self._snapshot()
+        self._broadcast_pref_changed(snap, action='toggle_archive', so_id=so_id)
+        return snap
 
     @api.model
     def toggle_consolidate(self, so_id):
@@ -171,7 +191,9 @@ class DeliveryPlannerUserPref(models.Model):
                 current.add(so_id)
                 archived.discard(so_id)
         self._save_global_buckets(archived, current)
-        return self._snapshot()
+        snap = self._snapshot()
+        self._broadcast_pref_changed(snap, action='toggle_consolidate', so_id=so_id)
+        return snap
 
     @api.model
     def set_archived(self, so_ids):
@@ -180,7 +202,9 @@ class DeliveryPlannerUserPref(models.Model):
         _, consolidate = self._get_global_buckets()
         consolidate -= archived
         self._save_global_buckets(archived, consolidate)
-        return self._snapshot()
+        snap = self._snapshot()
+        self._broadcast_pref_changed(snap, action='set_archived')
+        return snap
 
     @api.model
     def set_consolidate(self, so_ids):
@@ -189,7 +213,9 @@ class DeliveryPlannerUserPref(models.Model):
         archived, _ = self._get_global_buckets()
         archived -= consolidate
         self._save_global_buckets(archived, consolidate)
-        return self._snapshot()
+        snap = self._snapshot()
+        self._broadcast_pref_changed(snap, action='set_consolidate')
+        return snap
 
     def _snapshot(self, rec=None):
         archived, consolidate = self._get_global_buckets()
