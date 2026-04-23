@@ -1654,16 +1654,7 @@ export class DeliveryPlannerDashboard extends Component {
         };
         const field = fieldMap[dim];
 
-        const needTransfer = this.state.filterNeedTransfer;
-        const archived = this.state.archivedSOIds;
-        const showArchivedOnly = this.state.showArchivedOnly;
-        const base = this.state.saleOrders.filter(so => {
-            // Archive (cất đơn) — apply BEFORE column grouping so card counts reflect view.
-            if (showArchivedOnly) {
-                if (!archived.has(so.id)) return false;
-            } else if (archived.has(so.id)) {
-                return false;
-            }
+        const base = this._applyArchiveFilter(this.state.saleOrders || []).filter(so => {
             if (so.is_returned_or_stopped) return false;   // hiện riêng trong cột "Trả hàng"
             let val = so[field];
             if (dim === 'delivery_status' && val === 'unshipped') val = 'pending';
