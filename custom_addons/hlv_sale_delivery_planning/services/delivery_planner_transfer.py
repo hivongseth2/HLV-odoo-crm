@@ -24,37 +24,48 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
           - Bến Cam      -> ưu tiên Hiền Đức
           - Hiền Đức     -> random (không có ưu tiên chuyển kho cố định)
         """
-        warehouses = list(other_warehouses)
-        if not warehouses:
-            return warehouses
+        
+        if not other_warehouses or not dest_wh:
+            return other_warehouses
+       
 
         dest_name = self._normalize_wh_name(dest_wh.name if dest_wh else '')
+        
+        
         preferred_map = {
             'tan son nhi': 'ben cam',
             'ben cam': 'hien duc',
         }
+        target_source_keyword = None
+        
+        for key, val in preferred_map.items():
+            if key in dest_name:
+                target_source_keyword = val
+                break
 
         # Hiền Đức: intentionally random (no fixed transfer preference).
         if 'hien duc' in dest_name:
-            random.shuffle(warehouses)
-            return warehouses
-
-        preferred_name = None
-        for key, preferred in preferred_map.items():
-            if key in dest_name:
-                preferred_name = preferred
-                break
-        if not preferred_name:
-            return warehouses
+            # Chuyển sang list để shuffle vì Recordset không cho shuffle
+            wh_list = list(other_warehouses)
+            random.shuffle(wh_list)
+            return wh_list
+        
+        if not target_source_keyword:
+            return other_warehouses
+        
+        
+       
 
         preferred = []
         others = []
-        for wh in warehouses:
-            wh_name = self._normalize_wh_name(wh.name)
-            if preferred_name in wh_name:
+        for wh in other_warehouses:
+            wh_norm = self._normalize_wh_name(wh.name)
+            if target_source_keyword in wh_norm:
                 preferred.append(wh)
             else:
                 others.append(wh)
+
+    # Trả về list các bản ghi (giữ nguyên thứ tự này trong vòng lặp for wh in ...)
         return preferred + others
 
     def prepare_transfer_modal_data(self, sale_order_ids):
