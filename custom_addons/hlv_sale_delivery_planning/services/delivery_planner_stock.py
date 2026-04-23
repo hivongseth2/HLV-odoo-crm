@@ -350,27 +350,46 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                     p for p in pickings
                     if p['state'] == 'done' and not p.get('return_id') and p['seq_code'] == 'PACK'
                 ]
-                packing_status = 'fully_packed' if (done_pack_pks and not pack_pks) else 'unpacked'
+                # Nếu còn phiếu PICK đang active (backorder chưa lấy hàng),
+                # thì chưa thể coi là đã đóng gói đủ — dù PACK trước đó đã done.
+                # VD: PACK/03044 done + OUT/07604 done (đợt 1) nhưng PICK/05791
+                # vẫn assigned (backorder đợt 2) → phải là 'unpacked', không phải 'fully_packed'.
+                active_pick_pks = [p for p in active_outflow if 'PICK' in p['seq_code']]
+                packing_status = 'fully_packed' if (
+                    done_pack_pks and not pack_pks and not active_pick_pks
+                ) else 'unpacked'
 
             has_shipper = any(
                 p.get('shipper_received') and not p.get('shipper_returned')
                 for p in active_outflow if p['picking_type_code'] == 'outgoing'
             )
-            x_printed = so_rec.get('x_picking_slip_printed') or False
-            has_new_unprinted = bool(x_printed) and bool(active_outflow) and any(
-                not p.get('x_printed') and p['state'] == 'assigned'
-                for p in active_outflow if 'PICK' in p['seq_code']
-            )
-            has_assigned_pick = any(
-                p['state'] == 'assigned' for p in active_outflow if 'PICK' in p['seq_code']
-            )
+            # Dùng per-picking x_printed trên PICK active thay SO-level x_picking_slip_printed.
+            # Backorder PICK của đợt sau không kế thừa trạng thái "đã in" từ đợt trước đã giao.
+            # Nếu PICK đã done và PACK đang active (hàng đã lấy xong, đang chờ đóng gói),
+            # dùng x_printed của done PICK để xác định "đã in, chờ đóng gói".
+            active_pick_flows = [p for p in active_outflow if 'PICK' in p['seq_code']]
+            active_pack_flows = [p for p in active_outflow if p['seq_code'] == 'PACK']
+            if active_pick_flows:
+                # PICK chưa xong: dùng x_printed của PICK đang active
+                any_active_pick_printed = any(p.get('x_printed') for p in active_pick_flows)
+            elif active_pack_flows:
+                # PICK đã done, PACK đang active: hàng đã lấy xong, chờ đóng gói
+                # → kiểm tra done PICK gần nhất có được in không
+                done_pick_pks_all = [
+                    p for p in pickings
+                    if p['state'] == 'done' and not p.get('return_id') and 'PICK' in p['seq_code']
+                ]
+                any_active_pick_printed = any(p.get('x_printed') for p in done_pick_pks_all)
+            else:
+                any_active_pick_printed = False
+            has_assigned_pick = any(p['state'] == 'assigned' for p in active_pick_flows)
 
             so_status_dict[so_id] = {
                 'stock_status': stock_status,
                 'packing_status': packing_status,
                 'real_delivery_status': real_delivery_status,
                 'is_returned_or_stopped': no_active_outflow and real_delivery_status != 'full',
-                'has_new_unprinted_pickings': has_new_unprinted,
+                'has_active_pick_printed': any_active_pick_printed,
                 'has_shipper_received': has_shipper,
                 'has_delivered_today': has_delivered_today,
                 'has_assigned_pick': has_assigned_pick,
@@ -421,26 +440,25 @@ class DeliveryPlannerServiceStock(models.AbstractModel):
                 delivery_ok = True
             elif has_shipper:
                 effective_packing = 'shipping'
-            elif has_new_unprinted:
-                effective_packing = 'has_unprinted'
             elif packing_status == 'fully_packed':
                 effective_packing = 'packed_waiting_ship'
-            elif bool(x_printed) and packing_status not in ('delivered',):
+            elif any_active_pick_printed and packing_status not in ('delivered',):
+                # Chỉ "đã in, chờ đóng gói" khi PHIẾU PICK ĐANG ACTIVE đã được in.
+                # Backorder PICK chưa in → rơi về packing_status (waiting_stock/unpacked).
                 effective_packing = 'printed_waiting'
             else:
                 effective_packing = packing_status
 
-            if filter_packing_status in ('has_unprinted', 'printed_waiting', 'packed_waiting_ship', 'shipping', 'delivered_today'):
+            if filter_packing_status in ('printed_waiting', 'packed_waiting_ship', 'shipping', 'delivered_today'):
                 packing_ok = effective_packing == filter_packing_status
             else:
                 packing_ok = filter_packing_status == 'all' or packing_status == filter_packing_status
 
             # --- New: Tình trạng phiếu in (per-column filter on Bảng) ---
             if filter_print_status == 'has_unprinted':
-                print_ok = bool(has_new_unprinted)
+                print_ok = bool(active_pick_flows) and not any_active_pick_printed
             elif filter_print_status == 'all_printed':
-                # SO has at least one assigned PICK and none of them is unprinted
-                print_ok = bool(has_assigned_pick) and not bool(has_new_unprinted)
+                print_ok = bool(active_pick_flows) and any_active_pick_printed
             else:
                 print_ok = True
 

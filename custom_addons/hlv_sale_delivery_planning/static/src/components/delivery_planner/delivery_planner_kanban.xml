@@ -117,22 +117,41 @@
                     <i t-attf-class="fa me-1 #{state.isLoadingMore ? 'fa-spinner fa-spin' : 'fa-cloud-download'}"/>
                     Tải hết (<t t-esc="this.remainingKanbanCount"/>)
                 </button>
+                <!-- Đơn đã cất (không còn dùng) -->
                 <button class="btn btn-sm"
-                        t-att-class="state.showArchivedOnly ? 'btn-warning' : 'btn-outline-warning'"
-                        t-on-click="toggleShowArchivedOnly"
-                        t-att-title="state.showArchivedOnly ? 'Bấm để quay lại danh sách thường' : 'Xem các đơn đã cất'">
-                    <i t-attf-class="fa me-1 #{state.showArchivedOnly ? 'fa-list' : 'fa-archive'}"></i>
-                    <t t-if="state.showArchivedOnly">Quay lại</t>
+                        t-att-class="state.archivedView === 'archived' ? 'btn-warning' : 'btn-outline-warning'"
+                        t-on-click="() => this.setArchivedView(state.archivedView === 'archived' ? 'none' : 'archived')"
+                        t-att-title="state.archivedView === 'archived' ? 'Bấm để quay lại danh sách thường' : 'Xem các đơn đã cất (không còn dùng)'">
+                    <i t-attf-class="fa me-1 #{state.archivedView === 'archived' ? 'fa-list' : 'fa-archive'}"></i>
+                    <t t-if="state.archivedView === 'archived'">Quay lại</t>
                     <t t-else="">Đơn đã cất</t>
                     <span t-if="state.archivedSOIds.size" class="badge bg-light text-dark ms-1">
                         <t t-esc="state.archivedSOIds.size"/>
                     </span>
                 </button>
-                <button t-if="state.showArchivedOnly and state.archivedSOIds.size"
+                <!-- Đơn chờ gom (chờ KH xác nhận / chờ đi chung chuyến) -->
+                <button class="btn btn-sm"
+                        t-att-class="state.archivedView === 'consolidate' ? 'btn-info' : 'btn-outline-info'"
+                        t-on-click="() => this.setArchivedView(state.archivedView === 'consolidate' ? 'none' : 'consolidate')"
+                        t-att-title="state.archivedView === 'consolidate' ? 'Bấm để quay lại danh sách thường' : 'Xem các đơn chờ gom (đã đóng gói chờ khách / chờ đi chung 1 chuyến)'">
+                    <i t-attf-class="fa me-1 #{state.archivedView === 'consolidate' ? 'fa-list' : 'fa-cubes'}"></i>
+                    <t t-if="state.archivedView === 'consolidate'">Quay lại</t>
+                    <t t-else="">Chờ gom</t>
+                    <span t-if="state.consolidateSOIds.size" class="badge bg-light text-dark ms-1">
+                        <t t-esc="state.consolidateSOIds.size"/>
+                    </span>
+                </button>
+                <button t-if="state.archivedView === 'archived' and state.archivedSOIds.size"
                         class="btn btn-sm btn-outline-danger"
                         t-on-click="clearAllArchived"
                         title="Phục hồi tất cả đơn đã cất">
                     <i class="fa fa-undo me-1"></i> Phục hồi tất cả
+                </button>
+                <button t-if="state.archivedView === 'consolidate' and state.consolidateSOIds.size"
+                        class="btn btn-sm btn-outline-danger"
+                        t-on-click="clearAllConsolidate"
+                        title="Bỏ gom tất cả">
+                    <i class="fa fa-undo me-1"></i> Bỏ gom tất cả
                 </button>
                 <span class="text-muted small">
                     <i class="fa fa-arrows text-secondary me-1" title="Kéo thả"/>
@@ -282,15 +301,10 @@
     <t t-name="hlv_sale_delivery_planning.KanbanSOCard">
         <div class="card border-1 shadow-sm hlv-kanban-card-inner position-relative overflow-hidden"
              t-att-class="this.getSOCardColorClass(so)"
-             t-att-style="so.has_delivered_today ? 'background:#62b1ff30;' : so.stock_status === 'ready' ? 'background:#21c22f17;' : so.is_new_order ? 'background:#e77d191c;' : ''">
+             t-att-style="(so.x_studio_htgh &amp;&amp; typeof so.x_studio_htgh === 'string' &amp;&amp; so.x_studio_htgh.toLowerCase().includes('ncc')) ? 'background:#ffd6d6;border-left:4px solid #dc3545 !important;' : so.has_delivered_today ? 'background:#62b1ff30;' : so.stock_status === 'ready' ? 'background:#21c22f17;' : so.is_new_order ? 'background:#e77d191c;' : ''">
 
-            <!-- Ribbon "Đã in phiếu" / "Có phiếu chưa in" -->
-            <div t-if="so.has_new_unprinted_pickings"
-                 class="position-absolute bg-danger text-center fw-bold"
-                 style="font-size:0.55rem; padding:1px 20px; color: #fff ;top:8px; right:-22px; transform:rotate(45deg); z-index:2; letter-spacing:0.5px; box-shadow: 0 1px 3px rgba(0,0,0,.2);">
-                <i class="fa fa-exclamation-circle me-1"></i>Chưa in
-            </div>
-            <div t-elif="so.picking_slip_printed"
+            <!-- Ribbon "Đã in phiếu" -->
+            <div t-if="so.has_active_pick_printed"
                  class="position-absolute bg-success  text-center fw-bold"
                  style="font-size:0.55rem; padding:1px 20px; top:8px; color: #fff ;right:-22px; transform:rotate(45deg); z-index:2; letter-spacing:0.5px; box-shadow: 0 1px 3px rgba(0,0,0,.2);">
                 <i class="fa fa-print me-1"></i>Đã in
@@ -329,7 +343,7 @@
                         <span t-if="so.has_unread_message" 
                               class="badge bg-danger ms-1 animate__animated animate__pulse animate__infinite"
                               style="vertical-align: middle; padding: 3px 6px; font-size: 0.65rem;" 
-                              title="Có tin nhắn mới từ khách hàng/shipper">
+                              title="Có tin nhắn mới">
                               <i class="fa fa-envelope me-1"></i> TIN MỚI
                         </span>
                     </h6>
@@ -502,6 +516,13 @@
 
 
                     <div class="d-flex justify-content-end align-items-end mb-1 gap-1"> 
+                     <button class="btn btn-link btn-sm p-0 ms-1 flex-shrink-0"
+                            style="font-size: 0.75rem; line-height:1;"
+                            t-att-class="this.isSOConsolidate(so.id) ? 'text-success' : 'text-info'"
+                            t-att-title="this.isSOConsolidate(so.id) ? 'Bỏ gom (đưa trở lại danh sách)' : 'Chờ gom đơn (ẩn khỏi danh sách chờ đi chung chuyến)'"
+                            t-on-click.stop="() => this.toggleConsolidateSO(so.id)">
+                        <i t-attf-class="fa #{this.isSOConsolidate(so.id) ? 'fa-undo' : 'fa-cubes'}"></i>
+                    </button>
                      <button class="btn btn-link btn-sm p-0 ms-1 flex-shrink-0"
                             style="font-size: 0.75rem; line-height:1;"
                             t-att-class="this.isSOArchived(so.id) ? 'text-success' : 'text-warning'"

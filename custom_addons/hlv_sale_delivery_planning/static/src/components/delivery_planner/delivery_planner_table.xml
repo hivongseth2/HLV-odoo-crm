@@ -297,7 +297,6 @@
                                     <option value="all" t-att-selected="state.filterPackingStatus === 'all'">Tất cả</option>
                                     <option value="waiting_stock" t-att-selected="state.filterPackingStatus === 'waiting_stock'">Không có hàng đóng</option>
                                     <option value="unpacked" t-att-selected="state.filterPackingStatus === 'unpacked'">Chưa đóng gói</option>
-                                    <option value="has_unprinted" t-att-selected="state.filterPackingStatus === 'has_unprinted'">Có phiếu chưa in</option>
                                     <option value="printed_waiting" t-att-selected="state.filterPackingStatus === 'printed_waiting'">Đã in, chờ gói</option>
                                     <option value="fully_packed" t-att-selected="state.filterPackingStatus === 'fully_packed'">Đã đóng đủ</option>
                                     <option value="packed_waiting_ship" t-att-selected="state.filterPackingStatus === 'packed_waiting_ship'">Đã gói, chờ giao</option>
@@ -359,8 +358,8 @@
                                 <select t-on-change="(ev) => { this.state.filterPrintStatus = ev.target.value; this.onFilterChange(); }"
                                         t-on-click.stop="">
                                     <option value="all" t-att-selected="state.filterPrintStatus === 'all'">Tất cả</option>
-                                    <option value="has_unprinted" t-att-selected="state.filterPrintStatus === 'has_unprinted'">Có phiếu chưa in</option>
-                                    <option value="all_printed" t-att-selected="state.filterPrintStatus === 'all_printed'">Đã in hết</option>
+                                    <option value="has_unprinted" t-att-selected="state.filterPrintStatus === 'has_unprinted'">Chưa in phiếu lấy hàng</option>
+                                    <option value="all_printed" t-att-selected="state.filterPrintStatus === 'all_printed'">Đã in phiếu lấy hàng</option>
                                 </select>
                             </th>
                             <th class="hlv-col-search">
@@ -512,13 +511,13 @@
 
                                 <!-- Tình trạng phiếu in -->
                                 <td>
-                                    <span t-if="so.has_new_unprinted_pickings"
-                                          class="badge bg-danger" title="Có phiếu chưa in">
-                                        <i class="fa fa-exclamation-circle me-1"/>Chưa in
+                                    <span t-if="so.has_active_pick_printed"
+                                          class="badge bg-success" title="Phiếu lấy hàng đã in">
+                                        <i class="fa fa-print me-1"/>Đã in
                                     </span>
                                     <span t-elif="so.pickings and so.pickings.length"
-                                          class="badge bg-success" title="Đã in hết">
-                                        <i class="fa fa-print me-1"/>Đã in
+                                          class="badge bg-warning text-dark" title="Chưa in phiếu lấy hàng">
+                                        <i class="fa fa-print me-1"/>Chưa in
                                     </span>
                                     <span t-else="" class="text-muted">—</span>
                                 </td>

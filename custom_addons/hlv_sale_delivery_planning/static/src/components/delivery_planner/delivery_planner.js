@@ -106,7 +106,17 @@ export class DeliveryPlannerDashboard extends Component {
 
             // Archive (cất đơn) — backend persisted (per user) via
             // hlv.delivery.planner.user.pref. Loaded in onWillStart.
+            //   - archivedSOIds: đơn đã cất vì không còn dùng
+            //   - consolidateSOIds: đơn chờ gom (đã đóng gói chờ KH xác
+            //     nhận / chờ đơn khác để đi 1 chuyến).
+            // Cả 2 đều bị loại khỏi kế hoạch giao hôm nay.
             archivedSOIds: new Set(),
+            consolidateSOIds: new Set(),
+            // 'none' = bình thường (loại cả 2),
+            // 'archived' = chỉ xem đơn đã cất,
+            // 'consolidate' = chỉ xem đơn chờ gom
+            archivedView: 'none',
+            // Backwards compat — một số chỗ cũ còn đọc state này
             showArchivedOnly: false,
             hasDefaultFilters: false,
 
@@ -234,6 +244,7 @@ export class DeliveryPlannerDashboard extends Component {
                 _preview: n.last_message_preview || '',
                 _isRead: !!n.is_read,
                 last_message_date: n.last_message_date,
+                _time_str: this._formatMsgDate(n.last_message_date),
             }));
 
             // Giữ lại trạng thái read/unread đã cập nhật local cho đến khi DB trả về trạng thái mới.
@@ -277,6 +288,25 @@ export class DeliveryPlannerDashboard extends Component {
             }
         } catch (e) {
             console.warn("Polling unread failed", e);
+        }
+    }
+
+    /**
+     * Format Odoo Datetime string (UTC) sang giờ VN (UTC+7).
+     * Odoo trả về dạng "YYYY-MM-DD HH:MM:SS" hoặc false.
+     */
+    _formatMsgDate(dateStr) {
+        if (!dateStr) return '';
+        try {
+            // Odoo Datetime field trả về dạng "2026-04-22 07:30:00" — UTC, không có 'Z'
+            // Thêm 'Z' để browser parse đúng UTC rồi cộng +7h.
+            const utc = new Date(dateStr.replace(' ', 'T') + 'Z');
+            if (isNaN(utc.getTime())) return '';
+            const vn = new Date(utc.getTime() + 7 * 60 * 60 * 1000);
+            const pad = n => String(n).padStart(2, '0');
+            return `${pad(vn.getUTCDate())}/${pad(vn.getUTCMonth() + 1)} ${pad(vn.getUTCHours())}:${pad(vn.getUTCMinutes())}`;
+        } catch (e) {
+            return '';
         }
     }
 
@@ -990,42 +1020,50 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     /**
-     * Apply the archive (cất đơn) view filter:
-     *  - showArchivedOnly = true  → only archived SOs
-     *  - showArchivedOnly = false → all SOs except archived
+     * Apply the archive / consolidate view filter:
+     *  - archivedView = 'archived'    → only archived SOs
+     *  - archivedView = 'consolidate' → only consolidate (chờ gom) SOs
+     *  - archivedView = 'none'        → all SOs except archived AND consolidate
      */
     _applyArchiveFilter(orders) {
         const archived = this.state.archivedSOIds;
-        if (this.state.showArchivedOnly) {
+        const consolidate = this.state.consolidateSOIds;
+        if (this.state.archivedView === 'archived') {
             return orders.filter(so => archived.has(so.id));
         }
-        if (!archived.size) return orders;
-        return orders.filter(so => !archived.has(so.id));
+        if (this.state.archivedView === 'consolidate') {
+            return orders.filter(so => consolidate.has(so.id));
+        }
+        if (!archived.size && !consolidate.size) return orders;
+        return orders.filter(so => !archived.has(so.id) && !consolidate.has(so.id));
     }
 
     isSOArchived(soId) {
         return this.state.archivedSOIds.has(soId);
     }
 
+    isSOConsolidate(soId) {
+        return this.state.consolidateSOIds.has(soId);
+    }
+
     async toggleArchiveSO(soId) {
         if (!soId) return;
-        // Optimistic UI update — flip immediately so user sees feedback,
-        // then sync to backend. Revert on failure.
         const wasArchived = this.state.archivedSOIds.has(soId);
+        // Optimistic UI: archive và consolidate là mutually exclusive.
         if (wasArchived) {
             this.state.archivedSOIds.delete(soId);
         } else {
             this.state.archivedSOIds.add(soId);
+            this.state.consolidateSOIds.delete(soId);
         }
         try {
             const res = await this.orm.call(
                 'hlv.delivery.planner.user.pref', 'toggle_archive', [], { so_id: soId }
             );
-            // Sync with server-truth (handles concurrent edits in another tab)
             this.state.archivedSOIds = new Set(res.archived_so_ids || []);
+            this.state.consolidateSOIds = new Set(res.consolidate_so_ids || []);
         } catch (e) {
             console.error('toggle_archive failed:', e);
-            // Revert
             if (wasArchived) {
                 this.state.archivedSOIds.add(soId);
             } else {
@@ -1037,22 +1075,81 @@ export class DeliveryPlannerDashboard extends Component {
         }
     }
 
+    async toggleConsolidateSO(soId) {
+        if (!soId) return;
+        const wasInBucket = this.state.consolidateSOIds.has(soId);
+        if (wasInBucket) {
+            this.state.consolidateSOIds.delete(soId);
+        } else {
+            this.state.consolidateSOIds.add(soId);
+            this.state.archivedSOIds.delete(soId);
+        }
+        try {
+            const res = await this.orm.call(
+                'hlv.delivery.planner.user.pref', 'toggle_consolidate', [], { so_id: soId }
+            );
+            this.state.archivedSOIds = new Set(res.archived_so_ids || []);
+            this.state.consolidateSOIds = new Set(res.consolidate_so_ids || []);
+        } catch (e) {
+            console.error('toggle_consolidate failed:', e);
+            if (wasInBucket) {
+                this.state.consolidateSOIds.add(soId);
+            } else {
+                this.state.consolidateSOIds.delete(soId);
+            }
+            this.notification.add('Không thể cập nhật đơn chờ gom', {
+                type: 'danger', title: 'Lỗi',
+            });
+        }
+    }
+
     toggleShowArchivedOnly() {
-        this.state.showArchivedOnly = !this.state.showArchivedOnly;
+        // Cycle through views: 'none' → 'archived' → 'consolidate' → 'none'
+        const nextView = {
+            'none': 'archived',
+            'archived': 'consolidate',
+            'consolidate': 'none'
+        }[this.state.archivedView] || 'none';
+        this.setArchivedView(nextView);
+    }
+
+    setArchivedView(mode) {
+        // mode: 'none' | 'archived' | 'consolidate'
+        this.state.archivedView = (['archived', 'consolidate'].includes(mode)) ? mode : 'none';
+        this.state.showArchivedOnly = (this.state.archivedView === 'archived');
     }
 
     async clearAllArchived() {
         if (!this.state.archivedSOIds.size) return;
         if (!window.confirm('Phục hồi tất cả ' + this.state.archivedSOIds.size + ' đơn đã cất?')) return;
         try {
-            await this.orm.call(
+            const res = await this.orm.call(
                 'hlv.delivery.planner.user.pref', 'set_archived', [], { so_ids: [] }
             );
-            this.state.archivedSOIds = new Set();
-            this.state.showArchivedOnly = false;
+            this.state.archivedSOIds = new Set(res.archived_so_ids || []);
+            this.state.consolidateSOIds = new Set(res.consolidate_so_ids || []);
+            if (this.state.archivedView === 'archived') this.setArchivedView('none');
         } catch (e) {
             console.error('clearAllArchived failed:', e);
             this.notification.add('Không thể phục hồi đơn đã cất', {
+                type: 'danger', title: 'Lỗi',
+            });
+        }
+    }
+
+    async clearAllConsolidate() {
+        if (!this.state.consolidateSOIds.size) return;
+        if (!window.confirm('Bỏ gom tất cả ' + this.state.consolidateSOIds.size + ' đơn chờ gom?')) return;
+        try {
+            const res = await this.orm.call(
+                'hlv.delivery.planner.user.pref', 'set_consolidate', [], { so_ids: [] }
+            );
+            this.state.archivedSOIds = new Set(res.archived_so_ids || []);
+            this.state.consolidateSOIds = new Set(res.consolidate_so_ids || []);
+            if (this.state.archivedView === 'consolidate') this.setArchivedView('none');
+        } catch (e) {
+            console.error('clearAllConsolidate failed:', e);
+            this.notification.add('Không thể bỏ gom đơn', {
                 type: 'danger', title: 'Lỗi',
             });
         }
@@ -1070,6 +1167,7 @@ export class DeliveryPlannerDashboard extends Component {
                 'hlv.delivery.planner.user.pref', 'get_user_preferences', [], {}
             );
             this.state.archivedSOIds = new Set(res.archived_so_ids || []);
+            this.state.consolidateSOIds = new Set(res.consolidate_so_ids || []);
             const defaults = res.default_filters || {};
             if (defaults && Object.keys(defaults).length) {
                 this._applyFilterSnapshot(defaults);
@@ -1537,7 +1635,6 @@ export class DeliveryPlannerDashboard extends Component {
             case 'packing_status': return [
                 { value: 'waiting_stock',    label: 'Không Có Hàng Đóng',      badgeClass: 'bg-secondary',          textClass: 'text-secondary', iconClass: 'fa fa-hourglass-start', progressClass: 'bg-secondary' },
                 { value: 'unpacked',         label: 'Có Hàng Chưa Đóng Gói',   badgeClass: 'bg-warning text-dark',  textClass: 'text-warning',   iconClass: 'fa fa-exclamation-triangle', progressClass: 'bg-warning' },
-                { value: 'has_unprinted',    label: 'Có Phiếu Chưa In',        badgeClass: 'bg-danger',             textClass: 'text-danger',    iconClass: 'fa fa-exclamation-circle', progressClass: 'bg-danger' },
                 { value: 'printed_waiting',  label: 'Đã In, Chờ Đóng Gói',     badgeClass: 'bg-info',               textClass: 'text-info',      iconClass: 'fa fa-print', progressClass: 'bg-info' },
                 { value: 'packed_waiting_ship', label: 'Đã Gói, Chờ Nhận Giao', badgeClass: 'bg-primary',           textClass: 'text-primary',   iconClass: 'fa fa-archive', progressClass: 'bg-primary' },
                 { value: 'shipping',         label: 'Đang Giao',               badgeClass: 'bg-success',            textClass: 'text-success',   iconClass: 'fa fa-motorcycle', progressClass: 'bg-success' },
@@ -1580,12 +1677,10 @@ export class DeliveryPlannerDashboard extends Component {
                 }
                 // Shipper đã nhận → "Đang giao"
                 else if (so.has_shipper_received) val = 'shipping';
-                // Đã in nhưng có phiếu mới chưa in → "Có phiếu chưa in"
-                else if (so.has_new_unprinted_pickings) val = 'has_unprinted';
                 // Đã đóng gói đủ → chuyển sang cột "Đã gói, chờ nhận giao"
                 else if (val === 'fully_packed') val = 'packed_waiting_ship';
-                // Đã in tất cả phiếu, chờ đóng gói → "Đã in, chờ đóng gói"
-                else if (so.picking_slip_printed) val = 'printed_waiting';
+                // Active PICK đã in → "Đã in, chờ đóng gói"
+                else if (so.has_active_pick_printed) val = 'printed_waiting';
                 // Gơm nhóm: còn hàng chưa đóng = cần xử lý ngay.
                 else if (val === 'partial_packed') val = 'unpacked';
             }
@@ -1931,8 +2026,7 @@ export class DeliveryPlannerDashboard extends Component {
                     window.open(result.result.url, '_blank');
                     for (const so of this.state.saleOrders) {
                         if (selectedIds.includes(so.id)) {
-                            so.picking_slip_printed = true;
-                            so.has_new_unprinted_pickings = false;
+                            so.has_active_pick_printed = true;
                         }
                     }
                     this.clearAllSelections();

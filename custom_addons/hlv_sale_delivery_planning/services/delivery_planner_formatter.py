@@ -61,6 +61,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         other_warehouses = self.env['stock.warehouse'].search([
             ('id', '!=', so.warehouse_id.id),
         ])
+        other_warehouses = self._order_source_warehouses(so.warehouse_id, other_warehouses)
         if not other_warehouses:
             return []
 
@@ -465,8 +466,7 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
             'tag_ids': [[t.id, t.name, t.color] for t in so.tag_ids] if so.tag_ids else [],
             'transfer_suggestions': transfer_suggestions,
             'is_returned_or_stopped': so_status_dict.get('is_returned_or_stopped', False),
-            'picking_slip_printed': bool(so.x_picking_slip_printed),
-            'has_new_unprinted_pickings': so_status_dict.get('has_new_unprinted_pickings', False),
+            'has_active_pick_printed': so_status_dict.get('has_active_pick_printed', False),
             'has_delivered_today': so_status_dict.get('has_delivered_today', False),
             'has_assigned_pick': so_status_dict.get('has_assigned_pick', False),
             'has_shipper_received': so_status_dict.get('has_shipper_received', False),

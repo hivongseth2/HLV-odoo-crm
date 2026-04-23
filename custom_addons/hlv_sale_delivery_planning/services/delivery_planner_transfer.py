@@ -1,8 +1,72 @@
+import random
+import unicodedata
+
 from odoo import models
 
 
 class DeliveryPlannerServiceTransfer(models.AbstractModel):
     _inherit = 'hlv.delivery.planner.service'
+
+    def _normalize_wh_name(self, value):
+        """Normalize warehouse name for accent-insensitive matching."""
+        text = (value or '').strip().lower()
+        if not text:
+            return ''
+        text = unicodedata.normalize('NFD', text)
+        text = ''.join(ch for ch in text if unicodedata.category(ch) != 'Mn')
+        return text.replace('đ', 'd')
+
+    def _order_source_warehouses(self, dest_wh, other_warehouses):
+        """Business priority for transfer suggestion source warehouse.
+
+        Rules:
+          - Tân Sơn Nhì  -> ưu tiên Bến Cam
+          - Bến Cam      -> ưu tiên Hiền Đức
+          - Hiền Đức     -> random (không có ưu tiên chuyển kho cố định)
+        """
+        
+        if not other_warehouses or not dest_wh:
+            return other_warehouses
+       
+
+        dest_name = self._normalize_wh_name(dest_wh.name if dest_wh else '')
+        
+        
+        preferred_map = {
+            'tan son nhi': 'ben cam',
+            'ben cam': 'hien duc',
+        }
+        target_source_keyword = None
+        
+        for key, val in preferred_map.items():
+            if key in dest_name:
+                target_source_keyword = val
+                break
+
+        # Hiền Đức: intentionally random (no fixed transfer preference).
+        if 'hien duc' in dest_name:
+            # Chuyển sang list để shuffle vì Recordset không cho shuffle
+            wh_list = list(other_warehouses)
+            random.shuffle(wh_list)
+            return wh_list
+        
+        if not target_source_keyword:
+            return other_warehouses
+        
+        
+       
+
+        preferred = []
+        others = []
+        for wh in other_warehouses:
+            wh_norm = self._normalize_wh_name(wh.name)
+            if target_source_keyword in wh_norm:
+                preferred.append(wh)
+            else:
+                others.append(wh)
+
+    # Trả về list các bản ghi (giữ nguyên thứ tự này trong vòng lặp for wh in ...)
+        return preferred + others
 
     def prepare_transfer_modal_data(self, sale_order_ids):
         """
@@ -70,6 +134,7 @@ class DeliveryPlannerServiceTransfer(models.AbstractModel):
                 # Tìm kho nguồn có hàng
                 remaining = shortage
                 other_warehouses = self.env['stock.warehouse'].search([('id', '!=', dest_wh_id)])
+                other_warehouses = self._order_source_warehouses(so.warehouse_id, other_warehouses)
                 for wh in other_warehouses:
                     if remaining <= 0:
                         break

@@ -98,14 +98,21 @@ class HlvDeliveryPlannerTools(models.AbstractModel):
 
     @api.model
     def _get_archived_so_ids(self):
-        """Trả về set id các đơn user đã 'cất' (đóng gói chờ KH xác nhận).
-        Các đơn này KHÔNG được đưa vào kế hoạch giao hôm nay.
+        """Trả về set id các đơn user đã loại khỏi kế hoạch giao hôm nay.
+
+        Bao gồm CẢ 2 nhóm:
+          - archived_so_ids   : đơn 'cất' (không còn dùng).
+          - consolidate_so_ids: đơn 'chờ gom' (đóng gói chờ KH xác nhận
+            hoặc chờ ghép thêm đơn để đi chung 1 chuyến).
+
+        Tên hàm giữ nguyên để tránh sửa nhiều call site; ý nghĩa thực
+        tế là "các SO bị LOẠI khỏi việc lập kế hoạch".
         """
         Pref = self.env['hlv.delivery.planner.user.pref'].sudo()
         rec = Pref.search([('user_id', '=', self.env.uid)], limit=1)
         if not rec:
             return set()
-        return set(rec.archived_so_ids.ids)
+        return set(rec.archived_so_ids.ids) | set(rec.consolidate_so_ids.ids)
 
     # ──────────────────────────────────────────────────────────────────
     # Internal helpers
