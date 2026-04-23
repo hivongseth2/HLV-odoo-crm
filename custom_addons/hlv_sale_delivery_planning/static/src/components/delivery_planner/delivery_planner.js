@@ -230,11 +230,11 @@ export class DeliveryPlannerDashboard extends Component {
 
     async pollUnreadMessages(isInitial = false) {
         try {
-            const notifications = await this.orm.searchRead(
+            const notifications = await this.orm.call(
                 'hlv.sale.plan.message',
+                'list_for_current_user',
                 [],
-                ['id', 'sale_order_id', 'last_message_author', 'last_message_preview', 'last_message_date', 'is_read'],
-                { limit: 100, order: 'last_message_date desc, id desc' }
+                { limit: 100 }
             );
 
             const prevByOrderId = new Map(
@@ -318,7 +318,6 @@ export class DeliveryPlannerDashboard extends Component {
     async markOrderAsRead(soId) {
         try {
             await this.orm.call('hlv.sale.plan.message', 'mark_read_for_sale_order', [soId]);
-            await this.orm.write('sale.order', [soId], { x_plan_unread_message: false });
         } catch (e) {
             console.warn('markOrderAsRead failed', e);
         }
