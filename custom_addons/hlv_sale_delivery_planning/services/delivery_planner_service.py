@@ -717,11 +717,13 @@ class DeliveryPlannerService(models.AbstractModel):
         so_wh_name = {so.id: so.warehouse_id.name for so in page_sales if so.warehouse_id}
         result = {}
         for so_id, shortages in so_shortages.items():
+            dest_wh = self.env['stock.warehouse'].browse(dest_wh_by_so.get(so_id))
+            ordered_other_whs = self._order_source_warehouses(dest_wh, other_whs)
             suggestions = []
             for sp in shortages:
                 pid, remaining = sp['product_id'], sp['shortage']
                 sources = []
-                for wh in other_whs:
+                for wh in ordered_other_whs:
                     if remaining <= 0:
                         break
                     available = other_avail.get((pid, wh.id), 0.0)
