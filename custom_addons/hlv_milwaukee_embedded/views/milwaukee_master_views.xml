@@ -8,19 +8,17 @@
         <field name="arch" type="xml">
             <xpath expr="//page[@name='inventory']" position="after">
                 <page string="Master Sync (Milwaukee)" name="master_sync">
-                    <header>
-                        <button name="action_milwaukee_push" string="Sync to Website" type="object" class="btn-primary" icon="fa-cloud-upload"/>
-                        <field name="milwaukee_status" widget="statusbar" statusbar_visible="draft,publish"/>
-                    </header>
                     <group>
                         <group string="Website Mapping">
+                            <button name="action_milwaukee_push" string="Sync to Website" type="object" class="btn-primary" icon="fa-cloud-upload"/>
+                            <field name="milwaukee_status"/>
                             <field name="milwaukee_id" readonly="1"/>
                             <field name="milwaukee_slug"/>
                             <field name="last_sync_date"/>
                         </group>
                         <group string="Content JSON (Master API)">
-                            <field name="milwaukee_specs" widget="ace" options="{'mode': 'python'}"/>
-                            <field name="milwaukee_gallery_urls" widget="ace" options="{'mode': 'python'}"/>
+                            <field name="milwaukee_specs"/>
+                            <field name="milwaukee_gallery_urls"/>
                         </group>
                     </group>
                 </page>
@@ -73,7 +71,11 @@
                         </page>
                     </notebook>
                 </sheet>
-                <chatter/>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
             </form>
         </field>
     </record>
@@ -121,7 +123,11 @@
                         </page>
                     </notebook>
                 </sheet>
-                <chatter/>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
             </form>
         </field>
     </record>

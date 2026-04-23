@@ -3,15 +3,14 @@
     <!-- Root Menu -->
     <menuitem id="menu_milwaukee_root"
               name="Milwaukee"
-              sequence="55"
-              web_icon="hlv_milwaukee_embedded,static/description/icon.png"/>
+              sequence="55"/>
 
     <!-- Native Actions -->
     <record id="action_milwaukee_native_products" model="ir.actions.act_window">
         <field name="name">Sản phẩm (Master)</field>
         <field name="res_model">product.template</field>
         <field name="view_mode">list,kanban,form</field>
-        <field name="domain">[('milwaukee_id', '!=', 0)]</field>
+        <field name="domain">[('milwaukee_id', '!=', False)]</field>
     </record>
 
     <record id="action_milwaukee_native_banners" model="ir.actions.act_window">
