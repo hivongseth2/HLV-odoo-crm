@@ -1,5 +1,4 @@
 /** @odoo-module **/
-
 import { patch } from "@web/core/utils/patch";
 import { ActionMenus } from "@web/search/action_menus/action_menus";
 
@@ -10,20 +9,24 @@ patch(ActionMenus.prototype, {
         const activeIds = this.props.getActiveIds();
         const resModel = this.props.resModel;
 
-        if (activeIds.length > 0 && printItems && printItems.length > 0) {
-            const context = {
-                ...this.props.context,
-                active_ids: activeIds,
-                active_id: activeIds[0],
-                active_model: resModel,
-            };
+        // Nếu không có model hoặc không có item nào để in thì thôi, trả về luôn
+        if (!resModel || !activeIds.length || !printItems?.length) {
+            return printItems;
+        }
 
-            // Sửa ở đây: Truyền context vào object kwargs
+        const context = {
+            ...this.props.context,
+            active_ids: activeIds,
+            active_id: activeIds[0],
+            active_model: resModel,
+        };
+
+        try {
             const bindings = await this.orm.call(
                 "ir.actions.actions",
                 "get_bindings",
-                [resModel],
-                { context: context } 
+                [resModel], // Tham số model_name
+                { context: context }
             );
 
             const allowedReports = bindings.report || [];
@@ -32,8 +35,9 @@ patch(ActionMenus.prototype, {
             );
 
             return printItems.filter((item) => allowedIds.has(item.id));
+        } catch (error) {
+            console.error("Lỗi khi lọc danh sách in:", error);
+            return printItems; // Nếu lỗi thì cho hiện hết, đừng để crash giao diện
         }
-
-        return printItems;
     },
 });
