@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import api, fields, models, _
+from odoo import api, fields, models
 from odoo.osv import expression
 
 
@@ -77,10 +77,10 @@ class StockPicking(models.Model):
         ])
         
         if not related_pickings:
-            return self._action_print_picking()
+            return self.with_context(allow_non_outgoing_print=True)._action_print_picking()
         
         # In phiếu bàn giao liên quan
-        return related_pickings._action_print_picking()
+        return related_pickings.with_context(allow_non_outgoing_print=True)._action_print_picking()
 
     def _action_print_picking(self):
         """In phiếu"""
