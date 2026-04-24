@@ -57,8 +57,21 @@ class IrActionsActions(models.Model):
         Report = self.env["ir.actions.report"].sudo()
 
         picking_type_ids = set()
+        picking_type_sequence_codes = set()
         if model_name == "stock.picking":
             picking_type_ids = self._extract_picking_type_ids()
+            if picking_type_ids:
+                picking_types = (
+                    self.env["stock.picking.type"]
+                    .sudo()
+                    .browse(list(picking_type_ids))
+                    .exists()
+                )
+                picking_type_sequence_codes = set(
+                    code
+                    for code in picking_types.mapped("sequence_code")
+                    if code
+                )
 
         custom_reports = (
             self.env["report.access.right"]
@@ -116,9 +129,16 @@ class IrActionsActions(models.Model):
                             rule.hide_based_on == "operation_type"
                             and model_name == "stock.picking"
                             and picking_type_ids
-                            and bool(
-                                picking_type_ids
-                                & set(rule.hide_picking_type_ids.ids)
+                            and (
+                                bool(picking_type_ids & set(rule.hide_picking_type_ids.ids))
+                                or bool(
+                                    picking_type_sequence_codes
+                                    & set(
+                                        code
+                                        for code in rule.hide_picking_type_ids.mapped("sequence_code")
+                                        if code
+                                    )
+                                )
                             )
                         ):
                             add_to_visible = False
