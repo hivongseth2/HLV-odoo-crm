@@ -21,26 +21,28 @@ patch(ActionMenus.prototype, {
         };
 
         try {
-            // Cách gọi này ép Python phải nhận model_name từ kwargs 
-            // nếu nó không tìm thấy trong positional args
+            // FIX: Truyền chính xác resModel vào mảng args và KHÔNG truyền gì thêm vào args
+            // Odoo sẽ map [resModel] tương ứng với tham số model_name của Python
             const bindings = await this.orm.call(
                 "ir.actions.actions",
                 "get_bindings",
-                [], // Để trống args
-                { 
-                    model_name: resModel, // Truyền trực tiếp vào đây
-                    context: context 
-                }
+                [resModel], 
+                { context: context }
             );
 
-            const allowedReports = bindings.report || [];
+            if (!bindings || !bindings.report) {
+                return printItems;
+            }
+
+            const allowedReports = bindings.report;
             const allowedIds = new Set(
                 allowedReports.map((r) => (typeof r === "object" ? r.id : r))
             );
 
             return printItems.filter((item) => allowedIds.has(item.id));
         } catch (error) {
-            console.error("Lỗi lọc báo cáo:", error);
+            // Log lỗi ra console để debug nếu vẫn tạch
+            console.error("Lỗi filter báo cáo:", error);
             return printItems;
         }
     },
