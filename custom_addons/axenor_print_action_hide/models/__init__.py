@@ -2,4 +2,5 @@
 
 from . import ir_actions_actions
 from . import report_access_right
+from . import stock_picking
 

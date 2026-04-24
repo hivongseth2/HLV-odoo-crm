@@ -5,6 +5,30 @@ from odoo import models
 class IrActionsActions(models.Model):
     _inherit = "ir.actions.actions"
 
+    @staticmethod
+    def _extract_report_id(report_item):
+        if isinstance(report_item, int):
+            return report_item
+
+        if isinstance(report_item, str) and report_item.strip().isdigit():
+            return int(report_item)
+
+        if isinstance(report_item, (list, tuple)) and report_item:
+            first = report_item[0]
+            if isinstance(first, int):
+                return first
+            if isinstance(first, str) and first.strip().isdigit():
+                return int(first)
+
+        if isinstance(report_item, dict) and "id" in report_item:
+            report_id = report_item.get("id")
+            if isinstance(report_id, int):
+                return report_id
+            if isinstance(report_id, str) and report_id.strip().isdigit():
+                return int(report_id)
+
+        return None
+
     def _extract_active_ids(self):
         active_ids = self.env.context.get("active_ids") or []
         if not active_ids and self.env.context.get("active_id"):
@@ -85,23 +109,17 @@ class IrActionsActions(models.Model):
 
         for rec in custom_reports:
             if rec.report_id:
-                if rec.report_id.id not in [
-                    r["id"] if isinstance(r, dict) else r for r in reports
-                ]:
+                existing_report_ids = {
+                    report_id
+                    for report_id in (self._extract_report_id(item) for item in reports)
+                    if report_id
+                }
+                if rec.report_id.id not in existing_report_ids:
                     reports.append({"id": rec.report_id.id})
 
         visible_reports = []
         for rep in reports:
-            rep_id = None
-
-            if isinstance(rep, int):
-                rep_id = rep
-            elif isinstance(rep, str) and rep.strip().isdigit():
-                rep_id = int(rep)
-            elif isinstance(rep, (list, tuple)) and rep and isinstance(rep[0], int):
-                rep_id = rep[0]
-            elif isinstance(rep, dict) and "id" in rep and isinstance(rep["id"], int):
-                rep_id = rep["id"]
+            rep_id = self._extract_report_id(rep)
 
             add_to_visible = True
             if rep_id:
