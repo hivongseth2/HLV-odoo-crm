@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_stock_picking_visibility_user,stock.picking access user,stock.model_stock_picking,base.group_user,1,0,0,0
+access_stock_picking_visibility_manager,stock.picking access manager,stock.model_stock_picking,stock.group_stock_manager,1,1,1,1
+access_stock_picking_type_visibility_user,stock.picking.type access user,stock.model_stock_picking_type,base.group_user,1,0,0,0
+access_stock_picking_type_visibility_manager,stock.picking.type access manager,stock.model_stock_picking_type,stock.group_stock_manager,1,1,1,1
