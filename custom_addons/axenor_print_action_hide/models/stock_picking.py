@@ -36,6 +36,13 @@ class StockPicking(models.Model):
             active_ids = [self.env.context.get("active_id")]
 
         if not active_ids:
+            for key in ("id", "res_id", "resId"):
+                value = self.env.context.get(key)
+                if value:
+                    active_ids = [value]
+                    break
+
+        if not active_ids:
             params = self.env.context.get("params") or {}
             for key in ("id", "resId", "res_id", "active_id"):
                 if params.get(key):
