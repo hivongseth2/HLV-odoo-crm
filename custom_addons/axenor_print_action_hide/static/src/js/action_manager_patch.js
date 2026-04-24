@@ -5,7 +5,6 @@ import { ActionMenus } from "@web/search/action_menus/action_menus";
 
 patch(ActionMenus.prototype, {
     async loadAvailablePrintItems() {
-        // 1. Gọi hàm gốc để lấy danh sách print items ban đầu
         const printItems = await super.loadAvailablePrintItems();
         
         const activeIds = this.props.getActiveIds();
@@ -19,18 +18,19 @@ patch(ActionMenus.prototype, {
                 active_model: resModel,
             };
 
-            // 2. Gọi server để kiểm tra các báo cáo được phép (get_bindings)
-            const bindings = await this.orm.withContext(context).call(
-                    "ir.actions.actions",
-                    "get_bindings",
-                    [resModel]
-                );
+            // Sửa ở đây: Truyền context vào object kwargs
+            const bindings = await this.orm.call(
+                "ir.actions.actions",
+                "get_bindings",
+                [resModel],
+                { context: context } 
+            );
+
             const allowedReports = bindings.report || [];
             const allowedIds = new Set(
                 allowedReports.map((r) => (typeof r === "object" ? r.id : r))
             );
 
-            // 3. Trả về danh sách đã lọc mà không cần ghi đè this.props
             return printItems.filter((item) => allowedIds.has(item.id));
         }
 
