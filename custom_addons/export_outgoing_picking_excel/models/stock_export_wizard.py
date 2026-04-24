@@ -4,6 +4,7 @@ from odoo.exceptions import UserError
 import base64
 import datetime
 import json
+import re
 from io import BytesIO
 
 try:
@@ -108,6 +109,49 @@ class StockExportWizard(models.TransientModel):
         if getattr(picking, 'sale_id', False):
             return picking.sale_id
         return False
+
+    def _get_misa_formatted_name(self, picking, so):
+        """
+        Logic đổi tên phiếu xuất kho cho Excel MISA.
+        Định dạng: DH[Mã SO (8 ký tự số cuối)]-[Số thứ tự phiếu]
+        """
+        if not picking:
+            return ""
+            
+        # Lấy tên SO/văn bản gốc
+        so_name = so.name if so else (picking.origin or "")
+        # Nếu không có nguồn gốc SO thì giữ nguyên tên picking
+        if not so_name:
+            return picking.name or ""
+            
+        # 1. Trích xuất đoạn mã SO (lấy 8 ký tự cuối và giữ DH ở đầu)
+        suffix = so_name[-8:] if len(so_name) >= 8 else so_name
+        # Đảm bảo so_segment bắt đầu bằng DH
+        so_segment = suffix if suffix.startswith('DH') else f"DH{suffix}"
+            
+        # 2. Lấy số thứ tự từ tên hiện tại (ví dụ: TSN/OUT/07823 -> 07823)
+        current_name = picking.name or ""
+        
+        # Nếu tên đã đúng định dạng (có dấu gạch ngang nối với SO segment và kết thúc bằng số), trả về luôn
+        if '-' in current_name and current_name.startswith(so_segment):
+            suffix = current_name.split('-')[-1]
+            if suffix.isdigit():
+                return current_name
+
+        # Lấy phần số thứ tự từ tên gốc Odoo (thường là phần cuối sau dấu /)
+        name_parts = current_name.split('/')
+        seq_num = name_parts[-1] if name_parts else ''
+        
+        if not seq_num or not any(char.isdigit() for char in seq_num):
+            # Fallback dùng ID nếu tên không chứa số
+            seq_num = str(picking.id).zfill(5)
+        else:
+            # Nếu seq_num có chuỗi phi số ở trước (VD: OUT/08839), lấy phần số cuối
+            digit_match = re.search(r'(\d+)$', seq_num)
+            if digit_match:
+                seq_num = digit_match.group(1)
+        
+        return f"{so_segment}-{seq_num}"
 
     def _domain(self):
         self.ensure_one()
@@ -364,7 +408,7 @@ class StockExportWizard(models.TransientModel):
                 'loai_xuat_kho': loai_xuat,
                 'ngay_hach_toan': date_hach_toan_str,
                 'ngay_chung_tu': date_str,
-                'so_chung_tu': f"{don_hang_goc}_{picking.name}" if don_hang_goc else picking.name,
+                'so_chung_tu': self._get_misa_formatted_name(picking, so),
                 'don_hang_goc': don_hang_goc,
                 'ma_doi_tuong': partner_code,
                 'ten_doi_tuong': partner_name,
