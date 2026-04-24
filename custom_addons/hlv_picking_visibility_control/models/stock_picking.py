@@ -58,6 +58,10 @@ class StockPicking(models.Model):
         if not active_ids and self.env.context.get('active_id'):
             active_ids = [self.env.context.get('active_id')]
         if not active_ids:
+            params = self.env.context.get('params') or {}
+            if params.get('id'):
+                active_ids = [params.get('id')]
+        if not active_ids:
             return None
 
         pickings = self.browse(active_ids).exists()
