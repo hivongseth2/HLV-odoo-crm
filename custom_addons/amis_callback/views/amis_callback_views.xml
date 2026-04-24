@@ -152,7 +152,7 @@
         <field name="target">current</field>
     </record>
 
-    <menuitem id="menu_amis_callback_root" name="AMIS Callback" sequence="30"/>
+    <menuitem id="menu_amis_callback_root" name="AMIS Callback" sequence="30" web_icon="amis_callback,static/description/icon.svg"/>
     <menuitem id="menu_amis_callback_logs" name="Callback Logs" parent="menu_amis_callback_root" action="action_amis_callback_log" sequence="10"/>
     <menuitem id="menu_amis_callback_config" name="Configuration" parent="menu_amis_callback_root" action="action_amis_callback_config" sequence="20" groups="base.group_system"/>
 </odoo>
