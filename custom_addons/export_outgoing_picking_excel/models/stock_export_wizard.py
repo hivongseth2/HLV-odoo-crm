@@ -113,7 +113,7 @@ class StockExportWizard(models.TransientModel):
     def _get_misa_formatted_name(self, picking, so):
         """
         Logic đổi tên phiếu xuất kho cho Excel MISA.
-        Định dạng: [Mã SO (8 số đầu)]-[Số thứ tự phiếu]
+        Định dạng: DH[Mã SO (8 ký tự số cuối)]-[Số thứ tự phiếu]
         """
         if not picking:
             return ""
@@ -124,13 +124,10 @@ class StockExportWizard(models.TransientModel):
         if not so_name:
             return picking.name or ""
             
-        # 1. Trích xuất đoạn mã SO (lấy đến chữ số thứ 8)
-        so_match = re.search(r'^(.*?\d{8})', so_name)
-        if not so_match:
-            # Fallback nếu không khớp regex (VD: SO ngắn hoặc POS)
-            so_segment = so_name[:10]
-        else:
-            so_segment = so_match.group(1)
+        # 1. Trích xuất đoạn mã SO (lấy 8 ký tự cuối và giữ DH ở đầu)
+        suffix = so_name[-8:] if len(so_name) >= 8 else so_name
+        # Đảm bảo so_segment bắt đầu bằng DH
+        so_segment = suffix if suffix.startswith('DH') else f"DH{suffix}"
             
         # 2. Lấy số thứ tự từ tên hiện tại (ví dụ: TSN/OUT/07823 -> 07823)
         current_name = picking.name or ""
