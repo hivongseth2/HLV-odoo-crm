@@ -39,6 +39,7 @@ Thông tin kỹ thuật:
         "security/security.xml",
         "security/ir.model.access.csv",
         "views/report_access_right_view.xml",
+        "static/src/js/action_manager_patch.js"
     ],
     "images": ["static/description/banner.png"],
     "installable": True,
