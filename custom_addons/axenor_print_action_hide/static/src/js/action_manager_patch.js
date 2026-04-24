@@ -5,11 +5,13 @@ import { ActionMenus } from "@web/search/action_menus/action_menus";
 
 patch(ActionMenus.prototype, {
     async loadAvailablePrintItems() {
+        // 1. Gọi hàm gốc để lấy danh sách print items ban đầu
+        const printItems = await super.loadAvailablePrintItems();
+        
         const activeIds = this.props.getActiveIds();
         const resModel = this.props.resModel;
 
-        // Gọi get_bindings lại với active_ids đúng để filter operation_type
-        if (activeIds.length > 0) {
+        if (activeIds.length > 0 && printItems && printItems.length > 0) {
             const context = {
                 ...this.props.context,
                 active_ids: activeIds,
@@ -17,6 +19,7 @@ patch(ActionMenus.prototype, {
                 active_model: resModel,
             };
 
+            // 2. Gọi server để kiểm tra các báo cáo được phép (get_bindings)
             const bindings = await this.orm.call(
                 "ir.actions.actions",
                 "get_bindings",
@@ -29,18 +32,10 @@ patch(ActionMenus.prototype, {
                 allowedReports.map((r) => (typeof r === "object" ? r.id : r))
             );
 
-            // Filter lại props.items.print theo allowedIds
-            const filteredPrint = (this.props.items.print || []).filter((a) =>
-                allowedIds.has(a.id)
-            );
-
-            // Tạm thời override items để super() dùng list đã filter
-            const originalItems = this.props.items;
-            this.props = Object.assign(Object.create(Object.getPrototypeOf(this.props)), this.props, {
-                items: { ...originalItems, print: filteredPrint },
-            });
+            // 3. Trả về danh sách đã lọc mà không cần ghi đè this.props
+            return printItems.filter((item) => allowedIds.has(item.id));
         }
 
-        return super.loadAvailablePrintItems();
+        return printItems;
     },
 });

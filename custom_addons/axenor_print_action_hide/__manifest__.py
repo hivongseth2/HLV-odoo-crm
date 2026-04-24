@@ -43,8 +43,7 @@ Thông tin kỹ thuật:
     ],
     "assets": {
         "web.assets_backend": [
-            "static/src/js/action_manager_patch.js",
-        ]
+            "axenor_print_action_hide/static/src/js/action_manager_patch.js",        ]
     },
     "images": ["static/description/banner.png"],
     "installable": True,
