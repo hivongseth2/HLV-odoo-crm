@@ -29,18 +29,6 @@
             </field>
         </record>
 
-        <!-- Danh sách phiếu với filter ẩn phiếu bàn giao -->
-        <record id="view_picking_tree_inherit_visibility" model="ir.ui.view">
-            <field name="name">stock.picking.tree.inherit.visibility</field>
-            <field name="model">stock.picking</field>
-            <field name="inherit_id" ref="stock.view_picking_tree"/>
-            <field name="arch" type="xml">
-                <xpath expr="//tree | //list" position="attributes">
-                    <attribute name="decoration-muted">is_hidden_picking == True</attribute>
-                </xpath>
-            </field>
-        </record>
-
         <!-- Search view với filter để ẩn/hiển thị phiếu bàn giao -->
         <record id="view_picking_search_inherit_visibility" model="ir.ui.view">
             <field name="name">stock.picking.search.inherit.visibility</field>
