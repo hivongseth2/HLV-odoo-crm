@@ -9,7 +9,6 @@ patch(ActionMenus.prototype, {
         const activeIds = this.props.getActiveIds();
         const resModel = this.props.resModel;
 
-        // Nếu không có model hoặc không có item nào để in thì thôi, trả về luôn
         if (!resModel || !activeIds.length || !printItems?.length) {
             return printItems;
         }
@@ -22,11 +21,16 @@ patch(ActionMenus.prototype, {
         };
 
         try {
+            // Cách gọi này ép Python phải nhận model_name từ kwargs 
+            // nếu nó không tìm thấy trong positional args
             const bindings = await this.orm.call(
                 "ir.actions.actions",
                 "get_bindings",
-                [resModel], // Tham số model_name
-                { context: context }
+                [], // Để trống args
+                { 
+                    model_name: resModel, // Truyền trực tiếp vào đây
+                    context: context 
+                }
             );
 
             const allowedReports = bindings.report || [];
@@ -36,8 +40,8 @@ patch(ActionMenus.prototype, {
 
             return printItems.filter((item) => allowedIds.has(item.id));
         } catch (error) {
-            console.error("Lỗi khi lọc danh sách in:", error);
-            return printItems; // Nếu lỗi thì cho hiện hết, đừng để crash giao diện
+            console.error("Lỗi lọc báo cáo:", error);
+            return printItems;
         }
     },
 });
