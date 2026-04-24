@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_amis_callback_log_tree" model="ir.ui.view">
+        <field name="name">amis.callback.log.tree</field>
+        <field name="model">amis.callback.log</field>
+        <field name="arch" type="xml">
+            <tree string="AMIS Callback Logs" default_order="received_at desc">
+                <field name="received_at"/>
+                <field name="name"/>
+                <field name="state"/>
+                <field name="signature_valid"/>
+                <field name="data_type"/>
+                <field name="org_company_code"/>
+                <field name="input_success"/>
+                <field name="response_success"/>
+                <field name="detail_count"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_amis_callback_log_form" model="ir.ui.view">
+        <field name="name">amis.callback.log.form</field>
+        <field name="model">amis.callback.log</field>
+        <field name="arch" type="xml">
+            <form string="AMIS Callback Log">
+                <header>
+                    <field name="state" widget="statusbar" statusbar_visible="received,validated,rejected,failed"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name" readonly="1"/>
+                            <field name="received_at" readonly="1"/>
+                            <field name="request_path" readonly="1"/>
+                            <field name="remote_addr" readonly="1"/>
+                            <field name="app_id" readonly="1"/>
+                            <field name="org_company_code" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="data_type" readonly="1"/>
+                            <field name="input_success" readonly="1"/>
+                            <field name="input_error_code" readonly="1"/>
+                            <field name="signature_valid" readonly="1"/>
+                            <field name="response_success" readonly="1"/>
+                            <field name="response_error_code" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Input">
+                            <group>
+                                <field name="input_error_message" readonly="1" nolabel="1"/>
+                                <field name="signature" readonly="1"/>
+                            </group>
+                            <field name="data_payload" readonly="1" widget="text" nolabel="1"/>
+                        </page>
+                        <page string="Response">
+                            <field name="response_error_message" readonly="1" nolabel="1"/>
+                            <field name="raw_payload" readonly="1" widget="text" nolabel="1"/>
+                        </page>
+                        <page string="Details">
+                            <field name="detail_line_ids" readonly="1">
+                                <tree>
+                                    <field name="sequence"/>
+                                    <field name="org_refid"/>
+                                    <field name="success"/>
+                                    <field name="error_code"/>
+                                    <field name="error_message"/>
+                                    <field name="session_id"/>
+                                    <field name="voucher_type"/>
+                                </tree>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_amis_callback_log_search" model="ir.ui.view">
+        <field name="name">amis.callback.log.search</field>
+        <field name="model">amis.callback.log</field>
+        <field name="arch" type="xml">
+            <search string="Search AMIS Callback Logs">
+                <field name="name"/>
+                <field name="org_company_code"/>
+                <field name="data_type"/>
+                <field name="state"/>
+                <field name="signature_valid"/>
+                <filter name="filter_valid" string="Signature valid" domain="[('signature_valid', '=', True)]"/>
+                <filter name="filter_invalid" string="Signature invalid" domain="[('signature_valid', '=', False)]"/>
+                <filter name="filter_error" string="Failed" domain="[('state', '=', 'failed')]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_state" string="State" context="{'group_by': 'state'}"/>
+                    <filter name="group_data_type" string="Data Type" context="{'group_by': 'data_type'}"/>
+                    <filter name="group_company" string="Company Code" context="{'group_by': 'org_company_code'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_amis_callback_log" model="ir.actions.act_window">
+        <field name="name">AMIS Callback Logs</field>
+        <field name="res_model">amis.callback.log</field>
+        <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="view_amis_callback_log_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Chưa có callback nào được nhận.</p>
+            <p>Các request từ MISA sẽ hiển thị ở đây sau khi webhook được gọi.</p>
+        </field>
+    </record>
+
+    <record id="view_amis_callback_config_form" model="ir.ui.view">
+        <field name="name">amis.callback.config.form</field>
+        <field name="model">amis.callback.config</field>
+        <field name="arch" type="xml">
+            <form string="AMIS Callback Configuration">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="app_id"/>
+                            <field name="active"/>
+                        </group>
+                        <group>
+                            <field name="callback_route" readonly="1"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="note" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_amis_callback_config_tree" model="ir.ui.view">
+        <field name="name">amis.callback.config.tree</field>
+        <field name="model">amis.callback.config</field>
+        <field name="arch" type="xml">
+            <tree string="AMIS Callback Configuration">
+                <field name="name"/>
+                <field name="app_id"/>
+                <field name="active"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="action_amis_callback_config" model="ir.actions.act_window">
+        <field name="name">AMIS Callback Configuration</field>
+        <field name="res_model">amis.callback.config</field>
+        <field name="view_mode">tree,form</field>
+        <field name="target">current</field>
+    </record>
+
+    <menuitem id="menu_amis_callback_root" name="AMIS Callback" sequence="30"/>
+    <menuitem id="menu_amis_callback_logs" name="Callback Logs" parent="menu_amis_callback_root" action="action_amis_callback_log" sequence="10"/>
+    <menuitem id="menu_amis_callback_config" name="Configuration" parent="menu_amis_callback_root" action="action_amis_callback_config" sequence="20" groups="base.group_system"/>
+</odoo>
