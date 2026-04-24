@@ -7,14 +7,12 @@
             <field name="model">stock.picking.type</field>
             <field name="inherit_id" ref="stock.view_picking_type_form"/>
             <field name="arch" type="xml">
-                <xpath expr="//page" position="inside">
+                <field name="return_picking_type_id" position="after">
                     <group string="Kiểm soát Hiển thị" name="visibility_control">
-                        <group>
-                            <field name="is_hidden_from_menu" />
-                            <field name="is_delivery_note_type" />
-                        </group>
+                        <field name="is_hidden_from_menu"/>
+                        <field name="is_delivery_note_type"/>
                     </group>
-                </xpath>
+                </field>
             </field>
         </record>
 
@@ -24,7 +22,7 @@
             <field name="model">stock.picking.type</field>
             <field name="inherit_id" ref="stock.view_picking_type_tree"/>
             <field name="arch" type="xml">
-                <xpath expr="//tree" position="attributes">
+                <xpath expr="//tree | //list" position="attributes">
                     <attribute name="decoration-warning">is_hidden_from_menu == True</attribute>
                 </xpath>
                 <xpath expr="//field[@name='name']" position="after">
@@ -40,8 +38,7 @@
             <field name="model">stock.picking.type</field>
             <field name="inherit_id" ref="stock.view_picking_type_search"/>
             <field name="arch" type="xml">
-                <xpath expr="//filter" position="after">
-                    <separator/>
+            <xpath expr="//search" position="inside">
                     <filter name="is_hidden" string="Phiếu bị ẩn" 
                             domain="[('is_hidden_from_menu', '=', True)]"/>
                     <filter name="is_delivery_note" string="Loại phiếu bàn giao" 

@@ -8,21 +8,23 @@
             <field name="inherit_id" ref="stock.view_picking_form"/>
             <field name="arch" type="xml">
                 <xpath expr="//sheet" position="before">
-                    <div class="alert alert-info" role="alert" attrs="{'invisible': [('is_hidden_picking', '=', False)]}">
+                    <div class="alert alert-info" role="alert" invisible="not is_hidden_picking">
                         <strong>Thông báo:</strong> Phiếu này bị ẩn khỏi menu chính. 
                         Chỉ có thể xem thông qua phiếu xuất kho gốc.
                     </div>
                 </xpath>
-                <xpath expr="//div[@name='buttons']" position="inside">
+                <xpath expr="//header" position="inside">
                     <button name="action_open_hidden_picking" type="object" 
                             string="Mở Phiếu gốc" 
-                            attrs="{'invisible': [('is_hidden_picking', '=', False)]}"
+                            invisible="not is_hidden_picking"
                             class="btn-warning"/>
                 </xpath>
-                <xpath expr="//group[@name='references']" position="inside">
+                <xpath expr="//sheet" position="inside">
+                    <group invisible="1">
                     <field name="is_hidden_picking" invisible="1"/>
-                    <field name="allow_menu_access" attrs="{'invisible': [('picking_type_id.is_hidden_from_menu', '=', False)]}" 
+                    <field name="allow_menu_access" invisible="not picking_type_id.is_hidden_from_menu" 
                            string="Cho phép xem từ menu"/>
+                    </group>
                 </xpath>
             </field>
         </record>
@@ -33,7 +35,7 @@
             <field name="model">stock.picking</field>
             <field name="inherit_id" ref="stock.view_picking_tree"/>
             <field name="arch" type="xml">
-                <xpath expr="//tree" position="attributes">
+                <xpath expr="//tree | //list" position="attributes">
                     <attribute name="decoration-muted">is_hidden_picking == True</attribute>
                 </xpath>
             </field>
@@ -92,11 +94,11 @@
             <field name="model">stock.picking</field>
             <field name="inherit_id" ref="stock.view_picking_form"/>
             <field name="arch" type="xml">
-                <xpath expr="//button[@name='button_validate']" position="after">
+                <xpath expr="//header/button[@name='button_validate']" position="after">
                     <button name="button_print_delivery_note" type="object" 
                             string="In Phiếu Bàn Giao" 
                             icon="fa-print"
-                            attrs="{'invisible': [('picking_type_id.sequence_code', '!=', 'OUT')]}"
+                            invisible="picking_type_code != 'outgoing'"
                             class="btn-primary"/>
                 </xpath>
             </field>
