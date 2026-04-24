@@ -5,10 +5,7 @@ from odoo import models
 class IrActionsActions(models.Model):
     _inherit = 'ir.actions.actions'
 
-    def _is_outgoing_picking_context(self):
-        if self.env.context.get('active_model') != 'stock.picking':
-            return None
-
+    def _extract_active_ids(self):
         active_ids = self.env.context.get('active_ids') or []
         if not active_ids and self.env.context.get('active_id'):
             active_ids = [self.env.context.get('active_id')]
@@ -16,6 +13,17 @@ class IrActionsActions(models.Model):
             params = self.env.context.get('params') or {}
             if params.get('id'):
                 active_ids = [params.get('id')]
+
+        normalized_ids = []
+        for value in active_ids:
+            try:
+                normalized_ids.append(int(value))
+            except (TypeError, ValueError):
+                continue
+        return normalized_ids
+
+    def _is_outgoing_picking_context(self):
+        active_ids = self._extract_active_ids()
         if not active_ids:
             return None
 
@@ -33,7 +41,7 @@ class IrActionsActions(models.Model):
             return res
 
         is_outgoing = self._is_outgoing_picking_context()
-        if is_outgoing is False:
+        if is_outgoing is not True:
             if 'report' in res:
                 res['report'] = []
             if 'reports' in res:

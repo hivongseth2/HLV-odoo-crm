@@ -6,6 +6,24 @@ from odoo.osv import expression
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
 
+    @api.model
+    def _extract_active_ids(self):
+        active_ids = self.env.context.get('active_ids') or []
+        if not active_ids and self.env.context.get('active_id'):
+            active_ids = [self.env.context.get('active_id')]
+        if not active_ids:
+            params = self.env.context.get('params') or {}
+            if params.get('id'):
+                active_ids = [params.get('id')]
+
+        normalized_ids = []
+        for value in active_ids:
+            try:
+                normalized_ids.append(int(value))
+            except (TypeError, ValueError):
+                continue
+        return normalized_ids
+
     is_hidden_picking = fields.Boolean(
         string='Ẩn khỏi menu',
         compute='_compute_is_hidden_picking',
@@ -54,13 +72,7 @@ class StockPicking(models.Model):
     @api.model
     def _is_outgoing_from_context(self):
         """Return True/False when resolvable, or None when no active picking in context."""
-        active_ids = self.env.context.get('active_ids') or []
-        if not active_ids and self.env.context.get('active_id'):
-            active_ids = [self.env.context.get('active_id')]
-        if not active_ids:
-            params = self.env.context.get('params') or {}
-            if params.get('id'):
-                active_ids = [params.get('id')]
+        active_ids = self._extract_active_ids()
         if not active_ids:
             return None
 
@@ -77,7 +89,7 @@ class StockPicking(models.Model):
         toolbar = form_payload.get('toolbar') or {}
 
         is_outgoing = self._is_outgoing_from_context()
-        if toolbar.get('print') and is_outgoing is False:
+        if toolbar.get('print') and is_outgoing is not True:
             toolbar['print'] = []
             form_payload['toolbar'] = toolbar
             views_payload['form'] = form_payload
