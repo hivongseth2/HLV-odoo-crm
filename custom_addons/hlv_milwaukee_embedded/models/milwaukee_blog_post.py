@@ -3,7 +3,7 @@ from odoo import models, fields, api, _
 
 class MilwaukeeBlogPost(models.Model):
     _name = 'milwaukee.blog.post'
-    _inherit = ['milwaukee.master.mixin', 'mail.thread']
+    _inherit = ['milwaukee.master.mixin']
     _description = 'Milwaukee Blog Post'
 
     name = fields.Char(string='Tiêu đề bài viết', required=True, tracking=True)
