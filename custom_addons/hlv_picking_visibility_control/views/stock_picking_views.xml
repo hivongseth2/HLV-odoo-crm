@@ -29,22 +29,6 @@
             </field>
         </record>
 
-        <!-- Search view với filter để ẩn/hiển thị phiếu bàn giao -->
-        <record id="view_picking_search_inherit_visibility" model="ir.ui.view">
-            <field name="name">stock.picking.search.inherit.visibility</field>
-            <field name="model">stock.picking</field>
-            <field name="inherit_id" ref="stock.view_picking_search"/>
-            <field name="arch" type="xml">
-                <xpath expr="//filter[@name='draft']" position="after">
-                    <separator/>
-                    <filter name="show_hidden" string="Hiển thị Phiếu ẩn" 
-                            domain="[('is_hidden_picking', '=', True)]"/>
-                    <filter name="hidden_only" string="Chỉ Phiếu ẩn" 
-                            domain="[('picking_type_id.is_hidden_from_menu', '=', True)]"/>
-                </xpath>
-            </field>
-        </record>
-
         <!-- Action cho danh sách phiếu xuất kho chính -->
         <record id="action_picking_main_list" model="ir.actions.act_window">
             <field name="name">Phiếu Xuất kho</field>
