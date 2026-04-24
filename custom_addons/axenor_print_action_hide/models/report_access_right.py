@@ -4,38 +4,43 @@ from odoo import models, fields
 
 class ReportAccessRight(models.Model):
     _name = "report.access.right"
-    _description = "Report Access Rights"
+    _description = "Quyền truy cập báo cáo"
     _rec_name = "report_id"
 
     report_id = fields.Many2one(
         "ir.actions.report",
-        string="Report",
+        string="Báo cáo",
         required=True,
         ondelete="cascade",
     )
     hide_based_on = fields.Selection(
         [
-            ("user", "Users"),
-            ("company", "Companies"),
+            ("user", "Người dùng"),
+            ("company", "Công ty"),
+            ("operation_type", "Loại hoạt động"),
         ],
-        string="Hide Report Based On",
+        string="Ẩn báo cáo theo",
     )
     hide_user_ids = fields.Many2many(
         comodel_name="res.users",
-        string="Hidden for Users",
+        string="Ẩn cho người dùng",
     )
     hide_company_ids = fields.Many2many(
         comodel_name="res.company",
-        string="Hidden for Companies",
+        string="Ẩn cho công ty",
+    )
+    hide_picking_type_ids = fields.Many2many(
+        comodel_name="stock.picking.type",
+        string="Ẩn cho loại hoạt động",
     )
 
     status = fields.Selection(
         [
-            ("draft", "Draft"),
-            ("active", "Active"),
-            ("inactive", "Inactive"),
+            ("draft", "Nháp"),
+            ("active", "Hoạt động"),
+            ("inactive", "Ngừng"),
         ],
-        string="Status",
+        string="Trạng thái",
         default="draft",
         tracking=True,
     )

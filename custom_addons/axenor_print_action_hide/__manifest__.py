@@ -1,32 +1,32 @@
 # -*- coding: utf-8 -*-
 {
-    "name": "AxenorSuite: Show/Hide Print Actions",
-    "summary": "Dynamically control visibility of QWeb report print actions by User or Company.",
+    "name": "AxenorSuite: Ẩn/Hiện tác vụ In",
+    "summary": "Kiểm soát hiển thị tác vụ in báo cáo QWeb theo Người dùng, Công ty hoặc Loại hoạt động.",
     "description": """
-AxenorSuite: Show/Hide Print Actions
-=====================================
+AxenorSuite: Ẩn/Hiện tác vụ In
+==============================
 
-This module provides flexible control over Odoo QWeb report print actions.
+Module cho phép kiểm soát linh hoạt các báo cáo trong menu In của Odoo.
 
-Key Features:
--------------
-- Dynamically **show or hide reports** for specific Users or Companies.
-- Works with **any ir.actions.report** (e.g., Sales Order, Delivery Slip, Invoices, etc.).
-- Easy configuration from the backend — only accessible to Settings/Administration users.
-- Ensures users only see the reports relevant to their role and company.
-- Improves system security and reduces clutter in the "Print" dropdown.
+Tính năng chính:
+----------------
+- **Ẩn hoặc hiện báo cáo** theo Người dùng, Công ty hoặc Loại hoạt động phiếu kho.
+- Áp dụng cho **mọi ir.actions.report** (ví dụ: Đơn bán, Phiếu giao, Hóa đơn...).
+- Cấu hình dễ dàng tại backend, dành cho nhóm quản trị.
+- Giúp người dùng chỉ thấy các mẫu in phù hợp vai trò và công ty.
+- Tăng bảo mật và giảm rối trong danh sách menu "In".
 
-Use Cases:
-----------
-- Hide sensitive financial reports for non-finance users.
-- Restrict company-specific reports in multi-company environments.
-- Provide different reporting visibility for different departments.
+Trường hợp sử dụng:
+-------------------
+- Ẩn báo cáo nhạy cảm với người dùng không thuộc phòng ban liên quan.
+- Giới hạn báo cáo theo từng công ty trong môi trường đa công ty.
+- Ẩn mẫu in theo loại hoạt động phiếu kho (Lấy hàng, Đóng gói, Giao hàng...).
 
-Technical Information:
-----------------------
-- Extends `ir.actions.report` with new access configuration.
-- Integrated with Odoo security rules and access control.
-- Fully compatible with Odoo CE/EE v18.0.
+Thông tin kỹ thuật:
+-------------------
+- Mở rộng cấu hình quyền hiển thị cho `ir.actions.report`.
+- Tích hợp với cơ chế bảo mật và phân quyền của Odoo.
+- Tương thích Odoo CE/EE v18.0.
 
 """,
     "version": "18.0.0.1.0",
@@ -34,7 +34,7 @@ Technical Information:
     "author": "AxenorSuite Consultancy Services LLP",
     "website": "https://axenorsuite.com",
     "category": "Administration/Reporting",
-    "depends": ["base"],
+    "depends": ["base", "stock"],
     "data": [
         "security/security.xml",
         "security/ir.model.access.csv",

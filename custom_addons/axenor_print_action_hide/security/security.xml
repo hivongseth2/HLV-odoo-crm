@@ -2,6 +2,6 @@
 <odoo>
     <!-- Security Group -->
     <record id="group_report_access_user_company" model="res.groups">
-        <field name="name">Report Access : USER &amp; COMPANY</field>
+        <field name="name">Quyền ẩn báo cáo theo Người dùng &amp; Công ty</field>
     </record>
 </odoo>
