@@ -51,6 +51,36 @@ class StockPicking(models.Model):
         
         return super().search(args, offset=offset, limit=limit, order=order, count=count)
 
+    @api.model
+    def _is_outgoing_from_context(self):
+        """Return True/False when resolvable, or None when no active picking in context."""
+        active_ids = self.env.context.get('active_ids') or []
+        if not active_ids and self.env.context.get('active_id'):
+            active_ids = [self.env.context.get('active_id')]
+        if not active_ids:
+            return None
+
+        pickings = self.browse(active_ids).exists()
+        return bool(pickings) and all(p.picking_type_code == 'outgoing' for p in pickings)
+
+    @api.model
+    def get_views(self, views, options=None):
+        """Hide toolbar print menu when current picking is not outgoing."""
+        result = super().get_views(views, options=options)
+
+        views_payload = result.get('views') or {}
+        form_payload = views_payload.get('form') or {}
+        toolbar = form_payload.get('toolbar') or {}
+
+        is_outgoing = self._is_outgoing_from_context()
+        if toolbar.get('print') and is_outgoing is False:
+            toolbar['print'] = []
+            form_payload['toolbar'] = toolbar
+            views_payload['form'] = form_payload
+            result['views'] = views_payload
+
+        return result
+
     def action_open_hidden_picking(self):
         """
         Action để mở các phiếu bị ẩn (dùng từ phiếu xuất kho chính)

@@ -20,7 +20,11 @@
         'views/stock_picking_views.xml',
         'views/stock_picking_type_views.xml',
     ],
-    'assets': {},
+    'assets': {
+        'web.assets_backend': [
+            'hlv_picking_visibility_control/static/src/js/hide_print_menu_non_outgoing.js',
+        ],
+    },
     'installable': True,
     'application': False,
     'license': 'LGPL-3',
