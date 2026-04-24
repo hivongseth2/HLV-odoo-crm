@@ -11,8 +11,17 @@ class IrActionsActions(models.Model):
             active_ids = [self.env.context.get("active_id")]
         if not active_ids:
             params = self.env.context.get("params") or {}
-            if params.get("id"):
-                active_ids = [params.get("id")]
+            for key in ("id", "resId", "res_id", "active_id"):
+                if params.get(key):
+                    active_ids = [params.get(key)]
+                    break
+
+            if not active_ids:
+                for key in ("ids", "resIds", "res_ids", "active_ids"):
+                    value = params.get(key)
+                    if isinstance(value, (list, tuple)) and value:
+                        active_ids = list(value)
+                        break
 
         normalized_ids = []
         for value in active_ids:
@@ -21,6 +30,24 @@ class IrActionsActions(models.Model):
             except (TypeError, ValueError):
                 continue
         return normalized_ids
+
+    def _extract_picking_type_ids(self):
+        picking_type_ids = set()
+
+        active_ids = self._extract_active_ids()
+        if active_ids:
+            pickings = self.env["stock.picking"].sudo().browse(active_ids).exists()
+            picking_type_ids = set(pickings.mapped("picking_type_id").ids)
+
+        if not picking_type_ids:
+            default_picking_type_id = self.env.context.get("default_picking_type_id")
+            try:
+                if default_picking_type_id:
+                    picking_type_ids.add(int(default_picking_type_id))
+            except (TypeError, ValueError):
+                pass
+
+        return picking_type_ids
 
     def get_bindings(self, model_name):
         res = super().get_bindings(model_name)
@@ -31,10 +58,7 @@ class IrActionsActions(models.Model):
 
         picking_type_ids = set()
         if model_name == "stock.picking":
-            active_ids = self._extract_active_ids()
-            if active_ids:
-                pickings = self.env["stock.picking"].sudo().browse(active_ids).exists()
-                picking_type_ids = set(pickings.mapped("picking_type_id").ids)
+            picking_type_ids = self._extract_picking_type_ids()
 
         custom_reports = (
             self.env["report.access.right"]
