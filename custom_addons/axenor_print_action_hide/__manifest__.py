@@ -38,9 +38,14 @@ Thông tin kỹ thuật:
     "data": [
         "security/security.xml",
         "security/ir.model.access.csv",
-        "views/report_access_right_view.xml",
-        "static/src/js/action_manager_patch.js"
+        "views/report_access_right_view.xml"
+        
     ],
+    "assets": {
+        "web.assets_backend": [
+            "axenor_print_action_hide/static/src/js/action_manager_patch.js",
+        ]
+    },
     "images": ["static/description/banner.png"],
     "installable": True,
     "application": False,
