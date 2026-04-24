@@ -33,12 +33,13 @@ _RL_WINDOW = 600
 
 _ALLOWED_CHAT_ATTACHMENT_MIMES = {
   'application/msword',
+  'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'text/csv',
 }
-_ALLOWED_CHAT_ATTACHMENT_EXTS = {'.doc', '.docx', '.xls', '.xlsx', '.csv'}
+_ALLOWED_CHAT_ATTACHMENT_EXTS = {'.doc', '.docx', '.pdf', '.xls', '.xlsx', '.csv'}
 _ALLOWED_CHAT_MEDIA_EXTS = {
   '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.heic', '.heif',
   '.jfif', '.svg', '.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.3gp'
