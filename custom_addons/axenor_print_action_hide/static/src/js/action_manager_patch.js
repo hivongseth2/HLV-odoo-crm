@@ -20,13 +20,11 @@ patch(ActionMenus.prototype, {
             };
 
             // 2. Gọi server để kiểm tra các báo cáo được phép (get_bindings)
-            const bindings = await this.orm.call(
-                "ir.actions.actions",
-                "get_bindings",
-                [resModel],
-                { context }
-            );
-
+            const bindings = await this.orm.withContext(context).call(
+                    "ir.actions.actions",
+                    "get_bindings",
+                    [resModel]
+                );
             const allowedReports = bindings.report || [];
             const allowedIds = new Set(
                 allowedReports.map((r) => (typeof r === "object" ? r.id : r))
