@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo import models
-
+import logging
+_logger = logging.getLogger(__name__)
 
 class IrActionsActions(models.Model):
     _inherit = "ir.actions.actions"
@@ -23,6 +24,9 @@ class IrActionsActions(models.Model):
         return normalized_ids
 
     def get_bindings(self, model_name):
+        _logger.warning("=== get_bindings called ===")
+        _logger.warning("model_name: %s", model_name)
+        _logger.warning("context: %s", self.env.context)
         res = super().get_bindings(model_name)
         reports = res.get("reports") or res.get("report") or []
         user = self.env.user
