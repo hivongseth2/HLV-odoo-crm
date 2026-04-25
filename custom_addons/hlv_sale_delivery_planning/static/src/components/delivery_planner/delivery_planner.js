@@ -2205,18 +2205,17 @@ export class DeliveryPlannerDashboard extends Component {
             right: window.innerWidth - rect.right,
         };
 
-        // Filter reports theo picking_type_id của picking này
-        const context = {
-            ...this.env.services.user.context,
-            active_ids: [pickingId],
-            active_id: pickingId,
-            active_model: 'stock.picking',
-        };
         const allowedIds = await this.orm.call(
             'ir.actions.actions',
             'get_allowed_picking_reports',
             [],
-            { context }
+            { 
+                context: {
+                    active_ids: [pickingId],
+                    active_id: pickingId,
+                    active_model: 'stock.picking',
+                }
+            }
         );
         const allowedSet = new Set(allowedIds);
         this.state.printMenuReports = this.state.pickingReports.filter((r) =>
