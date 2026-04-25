@@ -1,7 +1,7 @@
 /** @odoo-module **/
 
 import { registry } from "@web/core/registry";
-import { Component, useState, onWillStart, onMounted, onWillDestroy, markup } from "@odoo/owl";
+import { Component, useState, onWillStart, onMounted, onWillDestroy, markup,useEffect  } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import {
     translateDeliveryStatus, translatePickingState, translatePickingStatus,
@@ -18,7 +18,9 @@ export class DeliveryPlannerDashboard extends Component {
         this.orm = useService("orm");
         this.actionService = useService("action");
         this.state = useState({
+            // menu print từng phiếu lấy theo axenor rule
             printMenuReports: [],
+            // menu in nhiều hard theo tên lấy hàng
             selectedPrintMenuReports: [],
 
             saleOrders: [],
@@ -162,6 +164,17 @@ export class DeliveryPlannerDashboard extends Component {
         } catch (e) {
             console.warn("bus_service not available");
         }
+
+        // click ra ngoài thì dóng menu
+        useEffect(() => {
+                const handler = () => {
+                    if (this.state.selectedPrintMenuPos) {
+                        this.state.selectedPrintMenuPos = null;
+                    }
+                };
+                document.addEventListener('click', handler);
+                return () => document.removeEventListener('click', handler);
+            }, () => []);
 
         onWillStart(async () => {
             if (this.busService) {
