@@ -18,6 +18,7 @@ export class DeliveryPlannerDashboard extends Component {
         this.orm = useService("orm");
         this.actionService = useService("action");
         this.state = useState({
+            printMenuReports: [],
             saleOrders: [],
             warehouses: [],
             tags: [],
