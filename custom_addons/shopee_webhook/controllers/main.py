@@ -64,6 +64,17 @@ class ShopeeWebhookController(http.Controller):
 
             if not data:
                  return {'code': 1, 'msg': 'Empty payload'}
+            
+            
+            # pass bài test
+             
+            shopee_data = data.get('data', {})
+            if shopee_data and 'verify_info' in shopee_data:
+                _logger.info("Shopee Webhook: Processing Verification Message")
+                # Trả về đúng format Shopee yêu cầu để pass bài test
+                return {
+                    "verify_info": shopee_data['verify_info']
+                }
 
             # The payload structure usually has a 'data' key or matches generic format.
             # Adjust these keys based on actual Shopee documentation if needed.
@@ -112,7 +123,7 @@ class ShopeeWebhookController(http.Controller):
 
             if not ordersn and not tracking_no:
                 _logger.warning("Shopee Webhook: Could not find 'ordersn' or 'tracking_no' in payload.")
-                return {'code': 2, 'msg': 'Missing identifier'}
+                return {'code': 0, 'msg': 'Ignored: No identifier'}
 
             # Find the Sale Order
             orders = request.env['sale.order'].sudo()
