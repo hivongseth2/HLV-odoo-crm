@@ -185,23 +185,14 @@ export class DeliveryPlannerDashboard extends Component {
             }
 
             // Only load lightweight reports here — heavy fetchData moves to onMounted
-            const [reports, allowedIds] = await Promise.all([
-                this.orm.searchRead(
-                    'ir.actions.report',
-                    [['model', '=', 'stock.picking'], ['binding_model_id', '!=', false]],
-                    ['id', 'name', 'report_type'],
-                    { order: 'name' }
-                ),
-                this.orm.call(
-                    'ir.actions.actions',
-                    'get_allowed_picking_reports',
-                    [],
-                    { context: this.env.services.user.context }
-                ),
-            ]);
-            const allowedSet = new Set(allowedIds);
-            this.state.pickingReports = reports.filter((r) => allowedSet.has(r.id));
-            });
+            const reports = await this.orm.searchRead(
+                'ir.actions.report',
+                [['model', '=', 'stock.picking'], ['binding_model_id', '!=', false]],
+                ['id', 'name', 'report_type'],
+                { order: 'name' }
+            );
+            this.state.pickingReports = reports;
+        });
 
         // fetchData runs AFTER mount so cached data shows instantly
         onMounted(async () => {
@@ -2199,7 +2190,7 @@ export class DeliveryPlannerDashboard extends Component {
         });
     }
 
-    togglePickingPrintMenu(ev, pickingId) {
+    async togglePickingPrintMenu(ev, pickingId) {
         ev.stopPropagation();
         if (this.state.printMenuPickingId === pickingId) {
             this.state.printMenuPickingId = null;
@@ -2212,6 +2203,24 @@ export class DeliveryPlannerDashboard extends Component {
             top: rect.bottom + window.scrollY,
             right: window.innerWidth - rect.right,
         };
+
+        // Filter reports theo picking_type_id của picking này
+        const context = {
+            ...this.env.services.user.context,
+            active_ids: [pickingId],
+            active_id: pickingId,
+            active_model: 'stock.picking',
+        };
+        const allowedIds = await this.orm.call(
+            'ir.actions.actions',
+            'get_allowed_picking_reports',
+            [],
+            { context }
+        );
+        const allowedSet = new Set(allowedIds);
+        this.state.printMenuReports = this.state.pickingReports.filter((r) =>
+            allowedSet.has(r.id)
+        );
     }
 
     async doPrintPickingReport(ev, pickingId, reportId) {
