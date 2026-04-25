@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_misa_crm_log_user,misa.crm.webhook.log user,model_misa_crm_webhook_log,base.group_user,1,0,0,0
+access_misa_crm_log_manager,misa.crm.webhook.log manager,model_misa_crm_webhook_log,base.group_system,1,1,1,1
+access_misa_crm_processor,misa.crm.processor,model_misa_crm_processor,base.group_user,1,1,1,0

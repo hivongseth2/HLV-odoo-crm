@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="param_misa_crm_verify" model="ir.config_parameter">
+        <field name="key">misa_crm.verify_signature</field>
+        <field name="value">False</field>
+    </record>
+    <record id="param_misa_crm_auto_partner" model="ir.config_parameter">
+        <field name="key">misa_crm.auto_create_partner</field>
+        <field name="value">True</field>
+    </record>
+    <record id="param_misa_crm_auto_order" model="ir.config_parameter">
+        <field name="key">misa_crm.auto_create_order</field>
+        <field name="value">True</field>
+    </record>
+</odoo>

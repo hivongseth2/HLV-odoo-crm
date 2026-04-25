@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_misa_crm" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.misa.crm</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app string="MISA CRM Webhook" name="misa_crm_webhook"
+                     groups="base.group_system">
+
+                    <block title="Kết nối MISA AMIS CRM" name="misa_crm_connection_block">
+
+                        <setting string="Webhook URL"
+                                 help="Copy URL này vào AMIS CRM → Thiết lập → Kết nối → API → Địa chỉ Webhook">
+                            <button name="action_copy_webhook_url"
+                                    string="📋 Xem Webhook URL"
+                                    type="object"
+                                    class="btn-secondary"/>
+                        </setting>
+
+                        <setting string="AppID"
+                                 help="AppID bạn đã đặt trong AMIS CRM khi thiết lập kết nối API">
+                            <field name="misa_crm_app_id"
+                                   placeholder="Ví dụ: OdooConnector2024"/>
+                        </setting>
+
+                        <setting string="Secret Key"
+                                 help="Khóa bí mật để xác thực chữ ký webhook (HMAC-SHA256)">
+                            <field name="misa_crm_secret" password="True"/>
+                        </setting>
+
+                        <setting string="Bật xác thực chữ ký"
+                                 help="Kiểm tra AppID và HMAC-SHA256 trong mỗi request. Tắt khi debug.">
+                            <field name="misa_crm_verify_signature"/>
+                        </setting>
+
+                    </block>
+
+                    <block title="Tự động hóa" name="misa_crm_automation_block">
+
+                        <setting string="Tự động tạo khách hàng"
+                                 help="Tạo mới res.partner nếu chưa có khi nhận sự kiện customer.*">
+                            <field name="misa_crm_auto_create_partner"/>
+                        </setting>
+
+                        <setting string="Tự động tạo đơn hàng"
+                                 help="Tạo mới sale.order nếu chưa có khi nhận sự kiện order.*">
+                            <field name="misa_crm_auto_create_order"/>
+                        </setting>
+
+                    </block>
+
+                </app>
+            </xpath>
+        </field>
+    </record>
+</odoo>
