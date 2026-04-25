@@ -19,6 +19,8 @@ export class DeliveryPlannerDashboard extends Component {
         this.actionService = useService("action");
         this.state = useState({
             printMenuReports: [],
+            selectedPrintMenuReports: [],
+
             saleOrders: [],
             warehouses: [],
             tags: [],
@@ -1931,7 +1933,7 @@ export class DeliveryPlannerDashboard extends Component {
     }
 
     // toggle select print menu
-    async toggleSelectedPickingPrintMenu(ev) {
+    toggleSelectedPickingPrintMenu(ev) {
         ev.stopPropagation();
         if (this.state.selectedPrintMenuPos) {
             this.state.selectedPrintMenuPos = null;
