@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<odoo>
-    <!-- Security Group -->
-    <record id="group_report_access_user_company" model="res.groups">
-        <field name="name">Report Access : USER &amp; COMPANY</field>
-    </record>
-</odoo>

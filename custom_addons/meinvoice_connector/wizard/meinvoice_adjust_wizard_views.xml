@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_meinvoice_adjust_wizard_form" model="ir.ui.view">
+        <field name="name">meinvoice.adjust.wizard.form</field>
+        <field name="model">meinvoice.adjust.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Điều Chỉnh Hóa Đơn Điện Tử">
+                <sheet>
+                    <group>
+                        <field name="move_id" readonly="1"/>
+                        <field name="adjust_type" widget="radio"/>
+                        <field name="reason" placeholder="Nhập lý do điều chỉnh..."/>
+                        <field name="new_move_id"
+                               placeholder="Để trống sẽ dùng lại dữ liệu hóa đơn gốc"
+                               options="{'no_create': True}"/>
+                    </group>
+                    <div class="alert alert-info" role="alert">
+                        ℹ️ <strong>Hướng dẫn:</strong><br/>
+                        • <strong>Điều chỉnh tăng/giảm:</strong> Chọn hóa đơn Odoo mới có nội dung chênh lệch.<br/>
+                        • <strong>Thay thế:</strong> Chọn hóa đơn Odoo mới có nội dung thay thế toàn bộ hóa đơn gốc.<br/>
+                        • Nếu không chọn hóa đơn mới, hệ thống sẽ gửi lại dữ liệu hóa đơn gốc.
+                    </div>
+                </sheet>
+                <footer>
+                    <button name="action_confirm_adjust"
+                            string="Xác nhận Điều Chỉnh"
+                            type="object"
+                            class="btn-warning"/>
+                    <button string="Đóng" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>
