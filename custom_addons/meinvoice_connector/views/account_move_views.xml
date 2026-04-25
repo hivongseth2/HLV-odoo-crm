@@ -101,20 +101,20 @@
 
     <!-- ─── List view – thêm cột trạng thái MEinvoice ─── -->
     <record id="view_out_invoice_tree_meinvoice" model="ir.ui.view">
-        <field name="name">account.move.list.meinvoice</field>
-        <field name="model">account.move</field>
-        <field name="inherit_id" ref="account.view_out_invoice_tree"/>
-        <field name="arch" type="xml">
-            <xpath expr="//field[@name='payment_state']" position="after">
-                <field name="meinvoice_state"
-                       optional="show"
-                       string="HĐĐT"
-                       widget="badge"
-                       decoration-success="meinvoice_state == 'published'"
-                       decoration-danger="meinvoice_state == 'cancelled'"
-                       decoration-warning="meinvoice_state == 'adjusted'"
-                       decoration-muted="meinvoice_state == 'not_sent'"/>
-            </xpath>
-        </field>
-    </record>
+    <field name="name">account.move.list.meinvoice</field>
+    <field name="model">account.move</field>
+    <field name="inherit_id" ref="account.view_out_invoice_tree"/>
+    <field name="arch" type="xml">
+        <xpath expr="//field[@name='status_in_payment']" position="after">
+            <field name="meinvoice_state"
+                   optional="show"
+                   string="HĐĐT"
+                   widget="badge"
+                   decoration-success="meinvoice_state == 'published'"
+                   decoration-danger="meinvoice_state == 'cancelled'"
+                   decoration-warning="meinvoice_state == 'adjusted'"
+                   decoration-muted="meinvoice_state == 'not_sent'"/>
+        </xpath>
+    </field>
+</record>
 </odoo>
