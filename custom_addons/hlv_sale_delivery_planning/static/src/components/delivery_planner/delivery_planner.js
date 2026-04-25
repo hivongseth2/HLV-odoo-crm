@@ -185,14 +185,23 @@ export class DeliveryPlannerDashboard extends Component {
             }
 
             // Only load lightweight reports here — heavy fetchData moves to onMounted
-            const reports = await this.orm.searchRead(
-                'ir.actions.report',
-                [['model', '=', 'stock.picking'], ['binding_model_id', '!=', false]],
-                ['id', 'name', 'report_type'],
-                { order: 'name' }
-            );
-            this.state.pickingReports = reports;
-        });
+            const [reports, allowedIds] = await Promise.all([
+                this.orm.searchRead(
+                    'ir.actions.report',
+                    [['model', '=', 'stock.picking'], ['binding_model_id', '!=', false]],
+                    ['id', 'name', 'report_type'],
+                    { order: 'name' }
+                ),
+                this.orm.call(
+                    'ir.actions.actions',
+                    'get_allowed_picking_reports',
+                    [],
+                    { context: this.env.services.user.context }
+                ),
+            ]);
+            const allowedSet = new Set(allowedIds);
+            this.state.pickingReports = reports.filter((r) => allowedSet.has(r.id));
+            });
 
         // fetchData runs AFTER mount so cached data shows instantly
         onMounted(async () => {

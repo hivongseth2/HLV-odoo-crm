@@ -128,3 +128,46 @@ class IrActionsActions(models.Model):
         """Wrapper được gọi từ JS với active_ids trong context"""
         model_name = self.env.context.get('active_model', '')
         return self.get_bindings(model_name)
+    
+    
+    @api.model
+    def get_allowed_picking_reports(self):
+        """Trả về danh sách report được phép hiển thị cho user hiện tại"""
+        user = self.env.user
+        company = self.env.company
+        active_ids = self.env.context.get('active_ids') or []
+        
+        picking_type_ids = set()
+        if active_ids:
+            pickings = self.env['stock.picking'].sudo().browse(active_ids).exists()
+            picking_type_ids = set(pickings.mapped('picking_type_id').ids)
+
+        reports = self.env['ir.actions.report'].sudo().search([
+            ('model', '=', 'stock.picking'),
+            ('binding_model_id', '!=', False),
+        ])
+
+        allowed_ids = []
+        for r in reports:
+            access_rules = self.env['report.access.right'].sudo().search([
+                ('report_id', '=', r.id),
+                ('status', '=', 'active'),
+            ])
+            visible = True
+            for rule in access_rules:
+                if rule.hide_based_on == 'user' and user in rule.hide_user_ids:
+                    visible = False
+                elif rule.hide_based_on == 'company' and company in rule.hide_company_ids:
+                    visible = False
+                elif (
+                    rule.hide_based_on == 'operation_type'
+                    and picking_type_ids
+                    and picking_type_ids & set(rule.hide_picking_type_ids.ids)
+                ):
+                    visible = False
+                if not visible:
+                    break
+            if visible:
+                allowed_ids.append(r.id)
+
+        return allowed_ids
