@@ -20,7 +20,7 @@
                 <div class="px-3 py-2 bg-light border-bottom small fw-bold text-muted">
                     <i class="fa fa-print me-1"></i> Chọn mẫu in
                 </div>
-                <t t-foreach="state.pickingReports" t-as="report" t-key="report.id">
+                <t t-foreach="state.printMenuReports" t-as="report" t-key="report.id">
                     <div class="px-3 py-2 small cursor-pointer"
                          style="border-bottom:1px solid #f3f3f3;"
                          t-on-click="(ev) => this.doPrintPickingReport(ev, state.printMenuPickingId, report.id)">
@@ -32,7 +32,7 @@
                         <t t-esc="report.name"/>
                     </div>
                 </t>
-                <div t-if="!state.pickingReports.length"
+                <div t-if="!state.printMenuReports.length"
                      class="px-3 py-2 text-muted small">Không có mẫu in</div>
             </div>
 
