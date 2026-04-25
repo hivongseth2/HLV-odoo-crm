@@ -24,18 +24,12 @@ patch(ActionMenus.prototype, {
         };
 
         let bindings;
-        try {
-            bindings = await rpc("/web/dataset/call_kw", {
-                model: "ir.actions.actions",
-                method: "get_bindings",
-                args: [resModel],
-                kwargs: { context },
-            });
-        } catch (e) {
-            console.warn("axenor: get_bindings failed", e);
-            return originalItems;
-        }
-
+        bindings = await this.orm.call(
+                "ir.actions.actions",
+                "get_bindings",
+                [resModel],
+                { context: context }
+            );
         const allowedReports = bindings.report || bindings.reports || [];
         const allowedIds = new Set(
             allowedReports.map((r) => (typeof r === "object" ? r.id : r))
