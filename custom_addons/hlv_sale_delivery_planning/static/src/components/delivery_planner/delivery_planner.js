@@ -1930,7 +1930,8 @@ export class DeliveryPlannerDashboard extends Component {
         return pickingIds;
     }
 
-    toggleSelectedPickingPrintMenu(ev) {
+    // toggle select print menu
+    async toggleSelectedPickingPrintMenu(ev) {
         ev.stopPropagation();
         if (this.state.selectedPrintMenuPos) {
             this.state.selectedPrintMenuPos = null;
@@ -1941,6 +1942,11 @@ export class DeliveryPlannerDashboard extends Component {
             top: rect.bottom + window.scrollY,
             right: window.innerWidth - rect.right,
         };
+
+        // Chỉ show report có tên chứa "lấy hàng"
+        this.state.selectedPrintMenuReports = this.state.pickingReports.filter((r) =>
+            r.name.toLowerCase().includes('lấy hàng')
+        );
     }
 
     closeSelectedPickingPrintMenu() {
@@ -1952,7 +1958,17 @@ export class DeliveryPlannerDashboard extends Component {
         if (this.state.isPrintingPickingSlips) return;
 
         const selectedIds = Array.from(this.state.selectedSOIds);
-        const pickingIds = this.getSelectedPickingIds();
+        const pickingIds = this.getSelectedPickingIds().filter((id) => {
+        const picking = this.state.saleOrders
+            .flatMap((so) => so.pickings || [])
+            .find((p) => p.id === id);
+            return picking && picking.state === 'assigned';
+        });
+
+        if (!pickingIds.length) {
+            alert('Không có phiếu lấy hàng nào ở trạng thái sẵn sàng để in');
+            return;
+        }
         this.state.selectedPrintMenuPos = null;
 
         try {
