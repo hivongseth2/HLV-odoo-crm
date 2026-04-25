@@ -25,11 +25,11 @@ patch(ActionMenus.prototype, {
 
         let bindings;
         bindings = await this.orm.call(
-                "ir.actions.actions",
-                "get_bindings",
-                [resModel],
-                { context: context }
-            );
+            "ir.actions.actions",
+            "get_bindings_with_context",
+            [],
+            { context: context }
+        );
         const allowedReports = bindings.report || bindings.reports || [];
         const allowedIds = new Set(
             allowedReports.map((r) => (typeof r === "object" ? r.id : r))

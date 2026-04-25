@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import models
+from odoo import models, api
 import logging
 _logger = logging.getLogger(__name__)
 
@@ -121,3 +121,10 @@ class IrActionsActions(models.Model):
         res["report"] = visible_reports
         res["reports"] = visible_reports
         return res
+
+
+    @api.model
+    def get_bindings_with_context(self):
+        """Wrapper được gọi từ JS với active_ids trong context"""
+        model_name = self.env.context.get('active_model', '')
+        return self.get_bindings(model_name)
