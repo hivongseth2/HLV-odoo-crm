@@ -5,11 +5,16 @@ import { ActionMenus } from "@web/search/action_menus/action_menus";
 
 patch(ActionMenus.prototype, {
     async loadAvailablePrintItems() {
-        // Gọi super() trước để lấy danh sách gốc
-        const originalItems = await super.loadAvailablePrintItems();
-        
         const activeIds = this.props.getActiveIds();
         const resModel = this.props.resModel;
+        
+        console.log("=== axenor patch loadAvailablePrintItems ===");
+        console.log("resModel:", resModel);
+        console.log("activeIds:", activeIds);
+        console.log("props.items.print:", this.props.items.print);
+
+        const originalItems = await super.loadAvailablePrintItems();
+        console.log("originalItems:", originalItems);
 
         if (!activeIds.length) {
             return originalItems;
@@ -30,6 +35,7 @@ patch(ActionMenus.prototype, {
                 [resModel],
                 { context }
             );
+            console.log("bindings:", bindings);
         } catch (e) {
             console.warn("axenor: get_bindings failed", e);
             return originalItems;
@@ -40,9 +46,7 @@ patch(ActionMenus.prototype, {
             allowedReports.map((r) => (typeof r === "object" ? r.id : r))
         );
 
-        // Filter items trả về từ super()
         return originalItems.filter((item) => {
-            // Giữ lại item không phải report (vd: "No report available")
             if (!item.action?.id) return true;
             return allowedIds.has(item.action.id);
         });
