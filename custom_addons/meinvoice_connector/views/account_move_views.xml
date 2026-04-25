@@ -57,7 +57,7 @@
                                 string="🔍 Tra cứu trạng thái"
                                 type="object"
                                 class="btn btn-secondary me-2"
-                                invisible="meinvoice_transaction_id = False"/>
+                                invisible="meinvoice_transaction_id == False"/>
                         <button name="action_meinvoice_download_pdf"
                                 string="⬇️ Tải PDF"
                                 type="object"
