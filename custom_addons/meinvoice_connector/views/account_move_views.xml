@@ -13,7 +13,7 @@
                         type="object"
                         class="oe_stat_button"
                         icon="fa-list-alt"
-                        attrs="{'invisible': [('move_type', 'not in', ['out_invoice','out_refund'])]}">
+                        invisible="move_type not in ['out_invoice', 'out_refund']">
                     <div class="o_field_widget o_stat_info">
                         <span class="o_stat_value">
                             <field name="meinvoice_log_count"/>
@@ -27,14 +27,14 @@
             <xpath expr="//widget[@name='web_ribbon']" position="after">
                 <field name="meinvoice_state" widget="statusbar"
                        statusbar_visible="not_sent,published,cancelled,adjusted"
-                       attrs="{'invisible': [('move_type', 'not in', ['out_invoice','out_refund'])]}"/>
+                       invisible="move_type not in ['out_invoice', 'out_refund']"/>
             </xpath>
 
             <!-- MEinvoice tab inside the notebook -->
             <xpath expr="//notebook" position="inside">
                 <page string="Hóa Đơn Điện Tử (MEinvoice)"
                       name="meinvoice_page"
-                      attrs="{'invisible': [('move_type', 'not in', ['out_invoice','out_refund'])]}">
+                      invisible="move_type not in ['out_invoice', 'out_refund']">
 
                     <!-- Action buttons -->
                     <div class="o_row mb-3">
@@ -42,32 +42,32 @@
                                 string="🚀 Phát hành HĐĐT"
                                 type="object"
                                 class="btn btn-primary me-2"
-                                attrs="{'invisible': [('meinvoice_state', '!=', 'not_sent')]}"/>
+                                invisible="meinvoice_state != 'not_sent'"/>
                         <button name="action_meinvoice_cancel"
                                 string="🚫 Hủy HĐĐT"
                                 type="object"
                                 class="btn btn-danger me-2"
-                                attrs="{'invisible': [('meinvoice_state', '!=', 'published')]}"/>
+                                invisible="meinvoice_state != 'published'"/>
                         <button name="action_meinvoice_adjust"
                                 string="✏️ Điều chỉnh HĐĐT"
                                 type="object"
                                 class="btn btn-warning me-2"
-                                attrs="{'invisible': [('meinvoice_state', '!=', 'published')]}"/>
+                                invisible="meinvoice_state != 'published'"/>
                         <button name="action_meinvoice_search"
                                 string="🔍 Tra cứu trạng thái"
                                 type="object"
                                 class="btn btn-secondary me-2"
-                                attrs="{'invisible': [('meinvoice_transaction_id', '=', False)]}"/>
+                                invisible="meinvoice_transaction_id = False"/>
                         <button name="action_meinvoice_download_pdf"
                                 string="⬇️ Tải PDF"
                                 type="object"
                                 class="btn btn-outline-secondary me-2"
-                                attrs="{'invisible': [('meinvoice_state', 'not in', ['published','adjusted'])]}"/>
+                                invisible="meinvoice_state not in ['published', 'adjusted']"/>
                         <button name="action_meinvoice_download_xml"
                                 string="⬇️ Tải XML"
                                 type="object"
                                 class="btn btn-outline-secondary"
-                                attrs="{'invisible': [('meinvoice_state', 'not in', ['published','adjusted'])]}"/>
+                                invisible="meinvoice_state not in ['published', 'adjusted']"/>
                     </div>
 
                     <group>
@@ -84,7 +84,7 @@
                         </group>
                         <group string="Cấu hình">
                             <field name="meinvoice_inv_series"
-                                   attrs="{'readonly': [('meinvoice_state', '!=', 'not_sent')]}"
+                                   readonly= "meinvoice_state != 'not_sent'"
                                    placeholder="Để trống = dùng cấu hình mặc định"/>
                         </group>
                     </group>
