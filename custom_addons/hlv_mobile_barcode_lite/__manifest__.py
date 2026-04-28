@@ -1,6 +1,6 @@
 {
     "name": "HLV Mobile Barcode Lite",
-    "version": "18.0.1.0.1",
+    "version": "18.0.1.0.2",
     "summary": "Mobile UI for picking, receiving, transfer, product-location and shipment scan",
     "author": "HLV",
     "license": "LGPL-3",
