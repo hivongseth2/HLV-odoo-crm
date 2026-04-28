@@ -16,20 +16,7 @@ class MilwaukeeBlogPost(models.Model):
     ], string='Trạng thái', default='draft', tracking=True)
     author_name = fields.Char(string='Tác giả', default='Admin')
 
-    @api.model_create_multi
-    def create(self, vals_list):
-        records = super(MilwaukeeBlogPost, self).create(vals_list)
-        for record in records:
-            record._sync_to_milwaukee()
-        return records
-
-    def write(self, vals):
-        res = super(MilwaukeeBlogPost, self).write(vals)
-        if self.env.context.get('milwaukee_sync_done'):
-            return res
-        for record in self:
-            record._sync_to_milwaukee()
-        return res
+    # Tắt tự động sync. Người dùng sẽ bấm nút "Push to Milwaukee" thủ công.
 
     def _sync_to_milwaukee(self):
         self.ensure_one()

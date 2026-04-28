@@ -46,17 +46,20 @@ class MilwaukeeMasterMixin(models.AbstractModel):
             if not res_data.get('success'):
                 error_msg = res_data.get('error', 'Unknown error')
                 _logger.error("API Error [%s]: %s", entity, error_msg)
-                raise UserError(_("Lỗi từ API Milwaukee: %s") % error_msg)
+                if not self.env.context.get('milwaukee_sync_silent'):
+                    raise UserError(_("Lỗi từ API Milwaukee: %s") % error_msg)
             
             # API trả về dữ liệu đã tạo/cập nhật (mảng hoặc object)
             return res_data.get('data')
             
         except requests.exceptions.RequestException as e:
             _logger.error("Connection Error [%s]: %s", entity, str(e))
-            raise UserError(_("Không thể kết nối đến API Milwaukee. Vui lòng kiểm tra Server và Base URL."))
+            if not self.env.context.get('milwaukee_sync_silent'):
+                raise UserError(_("Không thể kết nối đến API Milwaukee. Vui lòng kiểm tra Server và Base URL."))
         except Exception as e:
             _logger.error("Unexpected Error [%s]: %s", entity, str(e))
-            raise UserError(_("Lỗi không mong muốn: %s") % str(e))
+            if not self.env.context.get('milwaukee_sync_silent'):
+                raise UserError(_("Lỗi không mong muốn: %s") % str(e))
 
     def action_milwaukee_push(self):
         """Action trigger tay từ button"""
