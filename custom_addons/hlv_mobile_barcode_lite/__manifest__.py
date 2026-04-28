@@ -4,7 +4,7 @@
     "summary": "Mobile UI for picking, receiving, transfer, product-location and shipment scan",
     "author": "HLV",
     "license": "LGPL-3",
-    "depends": ["base", "stock", "sale_management", "purchase", "middleware_rest_controller"],
+    "depends": ["base", "stock", "sale_management", "purchase"],
     "data": [
         "views/mobile_barcode_views.xml",
         "views/mobile_barcode_templates.xml"
