@@ -1,7 +1,7 @@
 /** @odoo-module **/
 
 import { registry } from "@web/core/registry";
-import { Component, useState, onWillStart, onMounted, onWillDestroy, markup } from "@odoo/owl";
+import { Component, useState, onWillStart, onMounted, onWillDestroy, markup,useEffect  } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import {
     translateDeliveryStatus, translatePickingState, translatePickingStatus,
@@ -18,6 +18,11 @@ export class DeliveryPlannerDashboard extends Component {
         this.orm = useService("orm");
         this.actionService = useService("action");
         this.state = useState({
+            // menu print từng phiếu lấy theo axenor rule
+            printMenuReports: [],
+            // menu in nhiều hard theo tên lấy hàng
+            selectedPrintMenuReports: [],
+
             saleOrders: [],
             warehouses: [],
             tags: [],
@@ -159,6 +164,17 @@ export class DeliveryPlannerDashboard extends Component {
         } catch (e) {
             console.warn("bus_service not available");
         }
+
+        // click ra ngoài thì dóng menu
+        useEffect(() => {
+                const handler = () => {
+                    if (this.state.selectedPrintMenuPos) {
+                        this.state.selectedPrintMenuPos = null;
+                    }
+                };
+                document.addEventListener('click', handler);
+                return () => document.removeEventListener('click', handler);
+            }, () => []);
 
         onWillStart(async () => {
             if (this.busService) {
@@ -1929,6 +1945,7 @@ export class DeliveryPlannerDashboard extends Component {
         return pickingIds;
     }
 
+    // toggle select print menu
     toggleSelectedPickingPrintMenu(ev) {
         ev.stopPropagation();
         if (this.state.selectedPrintMenuPos) {
@@ -1940,6 +1957,11 @@ export class DeliveryPlannerDashboard extends Component {
             top: rect.bottom + window.scrollY,
             right: window.innerWidth - rect.right,
         };
+
+        // Chỉ show report có tên chứa "lấy hàng"
+        this.state.selectedPrintMenuReports = this.state.pickingReports.filter((r) =>
+            r.name.toLowerCase().includes('lấy hàng')
+        );
     }
 
     closeSelectedPickingPrintMenu() {
@@ -1951,7 +1973,17 @@ export class DeliveryPlannerDashboard extends Component {
         if (this.state.isPrintingPickingSlips) return;
 
         const selectedIds = Array.from(this.state.selectedSOIds);
-        const pickingIds = this.getSelectedPickingIds();
+        const pickingIds = this.getSelectedPickingIds().filter((id) => {
+        const picking = this.state.saleOrders
+            .flatMap((so) => so.pickings || [])
+            .find((p) => p.id === id);
+            return picking && picking.state === 'assigned';
+        });
+
+        if (!pickingIds.length) {
+            alert('Không có phiếu lấy hàng nào ở trạng thái sẵn sàng để in');
+            return;
+        }
         this.state.selectedPrintMenuPos = null;
 
         try {
@@ -2190,7 +2222,7 @@ export class DeliveryPlannerDashboard extends Component {
         });
     }
 
-    togglePickingPrintMenu(ev, pickingId) {
+    async togglePickingPrintMenu(ev, pickingId) {
         ev.stopPropagation();
         if (this.state.printMenuPickingId === pickingId) {
             this.state.printMenuPickingId = null;
@@ -2203,6 +2235,23 @@ export class DeliveryPlannerDashboard extends Component {
             top: rect.bottom + window.scrollY,
             right: window.innerWidth - rect.right,
         };
+
+        const allowedIds = await this.orm.call(
+            'ir.actions.actions',
+            'get_allowed_picking_reports',
+            [],
+            { 
+                context: {
+                    active_ids: [pickingId],
+                    active_id: pickingId,
+                    active_model: 'stock.picking',
+                }
+            }
+        );
+        const allowedSet = new Set(allowedIds);
+        this.state.printMenuReports = this.state.pickingReports.filter((r) =>
+            allowedSet.has(r.id)
+        );
     }
 
     async doPrintPickingReport(ev, pickingId, reportId) {

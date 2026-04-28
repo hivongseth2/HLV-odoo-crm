@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_meinvoice_output" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.meinvoice.output</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app string="meInvoice Đầu Ra" name="meinvoice_output"
+                     groups="base.group_system">
+
+                    <block title="Kết nối MISA meInvoice (Inbot API – Hóa đơn đầu ra)"
+                           name="meinvoice_output_connection">
+
+                        <setting string="Môi trường">
+                            <field name="meinvoice_output_environment" widget="radio"/>
+                        </setting>
+                        <setting string="ClientID"
+                                 help="ClientID do MISA cung cấp khi đăng ký tích hợp">
+                            <field name="meinvoice_output_client_id"
+                                   placeholder="Ví dụ: MISA_CLIENT_001"/>
+                        </setting>
+                        <setting string="AppID"
+                                 help="AppID do MISA cung cấp">
+                            <field name="meinvoice_output_app_id"
+                                   placeholder="Ví dụ: APP_001"/>
+                        </setting>
+                        <setting string="Mã số thuế">
+                            <field name="meinvoice_output_tax_code"
+                                   placeholder="Ví dụ: 0101243150"/>
+                        </setting>
+                        <setting string="Tài khoản meInvoice">
+                            <field name="meinvoice_output_username"
+                                   placeholder="Email đăng nhập meInvoice"/>
+                        </setting>
+                        <setting string="Mật khẩu">
+                            <field name="meinvoice_output_password" password="True"/>
+                        </setting>
+                        <setting string="Kiểm tra kết nối">
+                            <button name="action_test_meinvoice_output_connection"
+                                    string="🔌 Kiểm tra kết nối"
+                                    type="object"
+                                    class="btn-secondary"/>
+                        </setting>
+
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+</odoo>

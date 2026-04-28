@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_meinvoice" model="ir.ui.view">
+        <field name="name">res.config.settings.view.meinvoice</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="account.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+
+                <app string="MEinvoice" name="meinvoice_connector">
+                    <block title="Kết nối MEinvoice (MISA)">
+                        <setting string="Môi trường" help="Chọn sandbox để test, production khi đi live">
+                            <field name="meinvoice_environment" widget="radio"/>
+                        </setting>
+                        <setting string="App ID" help="Chuỗi ký tự do MISA cung cấp khi đăng ký tích hợp">
+                            <field name="meinvoice_app_id" placeholder="Ví dụ: F7E8D7E5-BB5A-421B-8B39-..."/>
+                        </setting>
+                        <setting string="Mã số thuế">
+                            <field name="meinvoice_tax_code" placeholder="Ví dụ: 0101243150"/>
+                        </setting>
+                        <setting string="Tài khoản đăng nhập">
+                            <field name="meinvoice_username" placeholder="Email hoặc số điện thoại"/>
+                        </setting>
+                        <setting string="Mật khẩu">
+                            <field name="meinvoice_password" password="True"/>
+                        </setting>
+                        <setting>
+                            <button name="action_test_meinvoice_connection"
+                                    string="Kiểm tra kết nối"
+                                    type="object"
+                                    class="btn-secondary"/>
+                        </setting>
+                    </block>
+                    <block title="Cấu hình Hóa Đơn Điện Tử">
+                        <setting string="Ký hiệu hóa đơn mặc định" help="Ví dụ: 1K24TAA">
+                            <field name="meinvoice_inv_series" placeholder="1K24TAA"/>
+                        </setting>
+                        <setting string="Tên hóa đơn mặc định">
+                            <field name="meinvoice_invoice_name"/>
+                        </setting>
+                        <setting string="Tự động phát hành"
+                                 help="Tự động gửi hóa đơn lên MEinvoice khi xác nhận hóa đơn trong Odoo">
+                            <field name="meinvoice_auto_publish"/>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+</odoo>

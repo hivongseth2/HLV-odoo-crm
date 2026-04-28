@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ─── Form view – thêm tab MEinvoice và smart buttons ─── -->
+    <record id="view_move_form_meinvoice" model="ir.ui.view">
+        <field name="name">account.move.form.meinvoice</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+
+            <!-- Smart buttons -->
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_meinvoice_view_logs"
+                        type="object"
+                        class="oe_stat_button"
+                        icon="fa-list-alt"
+                        invisible="move_type not in ['out_invoice', 'out_refund']">
+                    <div class="o_field_widget o_stat_info">
+                        <span class="o_stat_value">
+                            <field name="meinvoice_log_count"/>
+                        </span>
+                        <span class="o_stat_text">MEinvoice Log</span>
+                    </div>
+                </button>
+            </xpath>
+
+            <!-- MEinvoice status bar badge -->
+            <xpath expr="//widget[@name='web_ribbon']" position="after">
+                <field name="meinvoice_state" widget="statusbar"
+                       statusbar_visible="not_sent,published,cancelled,adjusted"
+                       invisible="move_type not in ['out_invoice', 'out_refund']"/>
+            </xpath>
+
+            <!-- MEinvoice tab inside the notebook -->
+            <xpath expr="//notebook" position="inside">
+                <page string="Hóa Đơn Điện Tử (MEinvoice)"
+                      name="meinvoice_page"
+                      invisible="move_type not in ['out_invoice', 'out_refund']">
+
+                    <!-- Action buttons -->
+                    <div class="o_row mb-3">
+                        <button name="action_meinvoice_publish"
+                                string="🚀 Phát hành HĐĐT"
+                                type="object"
+                                class="btn btn-primary me-2"
+                                invisible="meinvoice_state != 'not_sent'"/>
+                        <button name="action_meinvoice_cancel"
+                                string="🚫 Hủy HĐĐT"
+                                type="object"
+                                class="btn btn-danger me-2"
+                                invisible="meinvoice_state != 'published'"/>
+                        <button name="action_meinvoice_adjust"
+                                string="✏️ Điều chỉnh HĐĐT"
+                                type="object"
+                                class="btn btn-warning me-2"
+                                invisible="meinvoice_state != 'published'"/>
+                        <button name="action_meinvoice_search"
+                                string="🔍 Tra cứu trạng thái"
+                                type="object"
+                                class="btn btn-secondary me-2"
+                                invisible="meinvoice_transaction_id == False"/>
+                        <button name="action_meinvoice_download_pdf"
+                                string="⬇️ Tải PDF"
+                                type="object"
+                                class="btn btn-outline-secondary me-2"
+                                invisible="meinvoice_state not in ['published', 'adjusted']"/>
+                        <button name="action_meinvoice_download_xml"
+                                string="⬇️ Tải XML"
+                                type="object"
+                                class="btn btn-outline-secondary"
+                                invisible="meinvoice_state not in ['published', 'adjusted']"/>
+                    </div>
+
+                    <group>
+                        <group string="Thông tin MEinvoice">
+                            <field name="meinvoice_state"
+                                   widget="badge"
+                                   decoration-success="meinvoice_state == 'published'"
+                                   decoration-danger="meinvoice_state == 'cancelled'"
+                                   decoration-warning="meinvoice_state == 'adjusted'"
+                                   decoration-muted="meinvoice_state == 'not_sent'"/>
+                            <field name="meinvoice_transaction_id" readonly="1"/>
+                            <field name="meinvoice_inv_no" readonly="1"/>
+                            <field name="meinvoice_published_date" readonly="1"/>
+                        </group>
+                        <group string="Cấu hình">
+                            <field name="meinvoice_inv_series"
+                                   readonly= "meinvoice_state != 'not_sent'"
+                                   placeholder="Để trống = dùng cấu hình mặc định"/>
+                        </group>
+                    </group>
+
+                    <group string="File hóa đơn điện tử">
+                        <field name="meinvoice_pdf_attachment_id" readonly="1" widget="many2one"/>
+                        <field name="meinvoice_xml_attachment_id" readonly="1" widget="many2one"/>
+                    </group>
+                </page>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!-- ─── List view – thêm cột trạng thái MEinvoice ─── -->
+    <record id="view_out_invoice_tree_meinvoice" model="ir.ui.view">
+    <field name="name">account.move.list.meinvoice</field>
+    <field name="model">account.move</field>
+    <field name="inherit_id" ref="account.view_out_invoice_tree"/>
+    <field name="arch" type="xml">
+        <xpath expr="//field[@name='status_in_payment']" position="after">
+            <field name="meinvoice_state"
+                   optional="show"
+                   string="HĐĐT"
+                   widget="badge"
+                   decoration-success="meinvoice_state == 'published'"
+                   decoration-danger="meinvoice_state == 'cancelled'"
+                   decoration-warning="meinvoice_state == 'adjusted'"
+                   decoration-muted="meinvoice_state == 'not_sent'"/>
+        </xpath>
+    </field>
+</record>
+</odoo>

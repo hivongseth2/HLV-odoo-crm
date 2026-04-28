@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Menu chính dưới Sales hoặc Technical -->
+    <menuitem id="menu_misa_crm_root"
+              name="MISA CRM"
+              parent="sale.sale_menu_root"
+              sequence="99"
+              groups="base.group_system"/>
+
+    <menuitem id="menu_misa_crm_webhook_log"
+              name="Webhook Logs"
+              parent="menu_misa_crm_root"
+              action="action_misa_crm_webhook_log"
+              sequence="10"
+              groups="base.group_system"/>
+</odoo>

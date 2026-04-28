@@ -1,39 +1,69 @@
+import hashlib
+import hmac
+import json
+import logging
+
 from odoo import http
 from odoo.http import request
-import hmac
-import hashlib
-import logging
 
 _logger = logging.getLogger(__name__)
 
-class AmisCallbackController(http.Controller):
-    _app_id = "0e0a14cf-9e4b-4af9-875b-c490f34a581b"  # Thay bằng app_id thật khi triển khai
 
-    @http.route('/api/amis/callback', type='http', auth='public', methods=['POST'], csrf=False)
+class AmisCallbackController(http.Controller):
+    @http.route([
+        '/api/oauth/actopensupport/call_back_data_demo',
+        '/api/oauth/actopensupport/call_back_data',
+    ], type='http', auth='public', methods=['POST'], csrf=False)
     def amis_callback(self, **kwargs):
         try:
-            raw_body = request.httprequest.get_data()
-            data = request.httprequest.get_json(force=True, silent=True)
-            _logger.info("Received AMIS callback RAW BODY: %s", raw_body)
-            _logger.info("Parsed JSON: %s", data)
+            raw_body = request.httprequest.get_data(as_text=True) or ''
+            payload = request.httprequest.get_json(silent=True)
+            if payload is None and raw_body:
+                try:
+                    payload = json.loads(raw_body)
+                except Exception:
+                    payload = None
 
-            expected_signature = self._generate_signature(data.get("data", ""), self._app_id)
-            if data.get("signature") != expected_signature:
+            if not isinstance(payload, dict):
+                _logger.warning("AMIS callback received invalid JSON body: %s", raw_body)
+                request.env['amis.callback.log'].sudo().create_from_payload(
+                    payload={},
+                    raw_body=raw_body,
+                    request_path=request.httprequest.path,
+                    remote_addr=request.httprequest.remote_addr,
+                    parse_error='Invalid JSON payload',
+                )
                 return request.make_json_response({
                     "Success": False,
                     "ErrorCode": "InvalidParam",
-                    "ErrorMessage": "Signature invalid"
-                }, status=400)
+                    "ErrorMessage": "Invalid JSON payload",
+                })
 
-            return request.make_json_response({"Success": True, "ErrorMessage": ""})
+            response = request.env['amis.callback.log'].sudo().create_from_payload(
+                payload=payload,
+                raw_body=raw_body,
+                request_path=request.httprequest.path,
+                remote_addr=request.httprequest.remote_addr,
+            )
+            return request.make_json_response(response)
 
         except Exception as e:
-            _logger.exception("Exception in callback")
+            _logger.exception("Exception in AMIS callback")
+            try:
+                request.env['amis.callback.log'].sudo().create_from_payload(
+                    payload={},
+                    raw_body=request.httprequest.get_data(as_text=True) or '',
+                    request_path=request.httprequest.path,
+                    remote_addr=request.httprequest.remote_addr,
+                    parse_error=str(e),
+                )
+            except Exception:
+                _logger.exception("Failed to persist AMIS callback error log")
             return request.make_json_response({
                 "Success": False,
                 "ErrorCode": "Exception",
                 "ErrorMessage": str(e)
-            }, status=500)
+            })
 
     def _generate_signature(self, data_string, key):
         if not data_string:

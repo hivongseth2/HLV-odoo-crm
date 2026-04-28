@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_meinvoice_fetch_wizard_form" model="ir.ui.view">
+        <field name="name">meinvoice.fetch.wizard.form</field>
+        <field name="model">meinvoice.fetch.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Lấy hóa đơn từ meInvoice">
+                <sheet>
+                    <group string="Bộ lọc">
+                        <group>
+                            <field name="from_date"/>
+                            <field name="to_date"/>
+                        </group>
+                        <group>
+                            <field name="accounting_status" widget="radio"/>
+                            <field name="organization_id"
+                                   placeholder="Để trống = lấy tất cả"/>
+                        </group>
+                    </group>
+                    <div class="alert alert-info" role="alert">
+                        ℹ️ <strong>Lưu ý:</strong>
+                        Khoảng thời gian tối đa <strong>30 ngày</strong> mỗi lần lấy (giới hạn API meInvoice).
+                        Hóa đơn đã có trong Odoo sẽ được bỏ qua (không tạo trùng).
+                    </div>
+                </sheet>
+                <footer>
+                    <button name="action_fetch"
+                            string="📥 Lấy hóa đơn"
+                            type="object"
+                            class="btn-primary"/>
+                    <button string="Đóng" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

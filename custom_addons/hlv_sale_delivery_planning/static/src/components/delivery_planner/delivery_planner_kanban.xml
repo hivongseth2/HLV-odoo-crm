@@ -60,7 +60,7 @@
                     <div class="px-3 py-2 bg-light border-bottom small fw-bold text-muted">
                         <i class="fa fa-print me-1"></i> Chọn mẫu in
                     </div>
-                    <t t-foreach="state.pickingReports" t-as="report" t-key="report.id">
+                    <t t-foreach="state.selectedPrintMenuReports" t-as="report" t-key="report.id">
                         <div class="px-3 py-2 small cursor-pointer"
                              style="border-bottom:1px solid #f3f3f3;"
                              t-on-click="(ev) => this.printSelectedPickingSlips(report.id, report.report_type)">
@@ -72,7 +72,7 @@
                             <t t-esc="report.name"/>
                         </div>
                     </t>
-                    <div t-if="!state.pickingReports.length"
+                    <div t-if="!state.selectedPrintMenuReports.length"
                          class="px-3 py-2 text-muted small">Không có mẫu in</div>
                 </div>
                 <!-- Tạo phiếu luân chuyển -->
@@ -456,20 +456,21 @@
                             </span>
                         </t>
                     </div>
-                    <!-- Biên bản: tách hẳn ra dòng riêng để dễ nhìn -->
-                    <t t-set="bbPickings" t-value="pickPickings.filter(p =&gt; p.bien_ban_printed)"/>
-                    <div t-if="bbPickings.length" class="mt-1">
-                        <div class="text-muted fw-bold mb-1" style="font-size:0.58rem;"><i class="fa fa-file-text-o me-1"></i>Đã in biên bản</div>
-                        <div class="d-flex flex-wrap gap-1">
-                            <t t-foreach="bbPickings" t-as="bb" t-key="bb.id">
-                                <span class="badge d-inline-flex align-items-center gap-1 bg-info text-white"
-                                      style="font-size:0.6rem; padding:2px 5px;"
-                                      t-att-title="bb.name + ' — Đã in biên bản'">
-                                    <i class="fa fa-file-text-o"></i>
-                                    <t t-esc="bb.name"/>
-                                </span>
-                            </t>
-                        </div>
+                </div>
+
+                <!-- Biên bản: chỉ lấy theo phiếu outgoing -->
+                <t t-set="bbPickings" t-value="(so.pickings || []).filter(p =&gt; p.code === 'outgoing' &amp;&amp; p.bien_ban_printed &amp;&amp; !p.return_of_id &amp;&amp; p.state !== 'cancel')"/>
+                <div t-if="bbPickings.length" class="mt-1" style="font-size:0.62rem;">
+                    <div class="text-muted fw-bold mb-1" style="font-size:0.58rem;"><i class="fa fa-file-text-o me-1"></i>Đã in biên bản</div>
+                    <div class="d-flex flex-wrap gap-1">
+                        <t t-foreach="bbPickings" t-as="bb" t-key="bb.id">
+                            <span class="badge d-inline-flex align-items-center gap-1 bg-info text-white"
+                                  style="font-size:0.6rem; padding:2px 5px;"
+                                  t-att-title="bb.name + ' — Đã in biên bản'">
+                                <i class="fa fa-file-text-o"></i>
+                                <t t-esc="bb.name"/>
+                            </span>
+                        </t>
                     </div>
                 </div>
 
@@ -515,7 +516,7 @@
                 </div>
 
 
-                    <div class="d-flex justify-content-end align-items-end mb-1 gap-1"> 
+                    <div class="d-flex justify-content-start align-items-start mb-1 gap-1"> 
                      <button class="btn btn-link btn-sm p-0 ms-1 flex-shrink-0"
                             style="font-size: 0.75rem; line-height:1;"
                             t-att-class="this.isSOConsolidate(so.id) ? 'text-success' : 'text-info'"

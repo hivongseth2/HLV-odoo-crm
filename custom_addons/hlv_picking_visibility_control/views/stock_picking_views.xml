@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Mở rộng danh sách phiếu xuất kho để ẩn phiếu bàn giao -->
+        <record id="view_picking_form_inherit_visibility" model="ir.ui.view">
+            <field name="name">stock.picking.form.inherit.visibility</field>
+            <field name="model">stock.picking</field>
+            <field name="inherit_id" ref="stock.view_picking_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//sheet" position="before">
+                    <div class="alert alert-info" role="alert" invisible="not is_hidden_picking">
+                        <strong>Thông báo:</strong> Phiếu này bị ẩn khỏi menu chính. 
+                        Chỉ có thể xem thông qua phiếu xuất kho gốc.
+                    </div>
+                </xpath>
+                <xpath expr="//header" position="inside">
+                    <button name="action_open_hidden_picking" type="object" 
+                            string="Mở Phiếu gốc" 
+                            invisible="not is_hidden_picking"
+                            class="btn-warning"/>
+                </xpath>
+                <xpath expr="//sheet" position="inside">
+                    <group invisible="1">
+                    <field name="is_hidden_picking" invisible="1"/>
+                    <field name="allow_menu_access" invisible="not picking_type_id.is_hidden_from_menu" 
+                           string="Cho phép xem từ menu"/>
+                    </group>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Action cho danh sách phiếu xuất kho chính -->
+        <record id="action_picking_main_list" model="ir.actions.act_window">
+            <field name="name">Phiếu Xuất kho</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">stock.picking</field>
+            <field name="view_mode">tree,form,kanban</field>
+            <field name="context">{'search_default_picking_type_id': [1], 'show_all_pickings': False}</field>
+            <field name="help" type="html">
+              <p class="o_view_nocontent_smiling_face">
+                Tạo phiếu xuất kho mới
+              </p><p>
+                Dùng các phiếu xuất kho để quản lý kho hàng của bạn.
+                Các phiếu bàn giao sẽ bị ẩn và chỉ có thể xem từ phiếu xuất kho.
+              </p>
+            </field>
+        </record>
+
+        <!-- Action cho xem tất cả phiếu (bao gồm cả phiếu ẩn) - dành cho quản lý -->
+        <record id="action_picking_all_list" model="ir.actions.act_window">
+            <field name="name">Tất cả Phiếu</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">stock.picking</field>
+            <field name="view_mode">tree,form,kanban</field>
+            <field name="context">{'show_all_pickings': True}</field>
+            <field name="help" type="html">
+              <p class="o_view_nocontent_smiling_face">
+                Xem tất cả các phiếu (bao gồm phiếu ẩn)
+              </p>
+            </field>
+        </record>
+
+        <!-- Button in phiếu bàn giao từ phiếu xuất kho -->
+        <record id="view_picking_form_add_button" model="ir.ui.view">
+            <field name="name">stock.picking.form.add.print.button</field>
+            <field name="model">stock.picking</field>
+            <field name="inherit_id" ref="stock.view_picking_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//header/button[@name='button_validate']" position="after">
+                    <button name="button_print_delivery_note" type="object" 
+                            string="In Phiếu Bàn Giao" 
+                            icon="fa-print"
+                            invisible="picking_type_code != 'outgoing'"
+                            class="btn-primary"/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

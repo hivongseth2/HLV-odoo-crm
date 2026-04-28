@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="seq_amis_callback_log" model="ir.sequence">
+        <field name="name">AMIS Callback Log</field>
+        <field name="code">amis.callback.log</field>
+        <field name="prefix">MISA-CB/</field>
+        <field name="padding">5</field>
+    </record>
+
+    <record id="amis_callback_config_singleton" model="amis.callback.config">
+        <field name="name">AMIS Callback</field>
+        <field name="app_id">0e0a14cf-9e4b-4af9-875b-c490f34a581b</field>
+    </record>
+</odoo>

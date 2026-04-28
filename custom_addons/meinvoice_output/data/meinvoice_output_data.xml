@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="param_meinvoice_output_env" model="ir.config_parameter">
+        <field name="key">meinvoice_output.environment</field>
+        <field name="value">sandbox</field>
+    </record>
+</odoo>
