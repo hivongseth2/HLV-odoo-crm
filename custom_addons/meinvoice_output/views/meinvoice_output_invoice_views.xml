@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ─── List view ──────────────────────────────────────────────────────── -->
+    <record id="view_meinvoice_output_invoice_list" model="ir.ui.view">
+        <field name="name">meinvoice.output.invoice.list</field>
+        <field name="model">meinvoice.output.invoice</field>
+        <field name="arch" type="xml">
+            <list string="Hóa đơn điện tử đầu ra (meInvoice)"
+                  multi_edit="1"
+                  decoration-success="accounting_status == '1'"
+                  decoration-muted="inv_status != '1'">
+
+                <!-- Checkbox để chọn nhiều rồi hạch toán hàng loạt -->
+                <field name="inv_date"         string="Ngày HĐ" optional="show"/>
+                <field name="inv_series"       string="Ký hiệu" optional="show"/>
+                <field name="inv_no"           string="Số HĐ"   optional="show"/>
+                <field name="buyer_name"       string="Khách hàng"/>
+                <field name="buyer_tax_code"   string="MST KH"  optional="show"/>
+                <field name="total_amount"     string="Tổng tiền"
+                       widget="monetary" options="{'currency_field': 'currency_code'}"/>
+                <field name="currency_code"    string="Tiền tệ" optional="hide"/>
+                <field name="payment_method"   string="PTTT"    optional="hide"/>
+                <field name="inv_status" string="Trạng thái HĐ"
+                       widget="badge"
+                       decoration-success="inv_status == '1'"
+                       decoration-danger="inv_status == '2'"
+                       decoration-warning="inv_status in ('3','4')"
+                       optional="show"/>
+                <field name="accounting_status" string="Hạch toán"
+                       widget="badge"
+                       decoration-success="accounting_status == '1'"
+                       decoration-muted="accounting_status == '0'"
+                       optional="show"/>
+                <field name="odoo_accounting_state" string="Trạng thái Odoo"
+                       widget="badge"
+                       decoration-success="odoo_accounting_state == 'accounted'"
+                       decoration-info="odoo_accounting_state == 'linked'"
+                       decoration-muted="odoo_accounting_state == 'pending'"
+                       optional="show"/>
+                <field name="sale_order_id"    string="Sale Order" optional="show"/>
+                <field name="accounted_date"   string="Ngày HT"    optional="hide"/>
+
+                <!-- Action buttons trong list -->
+                <button name="action_mark_accounting"
+                        string="✅ Hạch toán"
+                        type="object"
+                        icon="fa-check-circle"
+                        invisible="accounting_status == '1'"
+                        class="btn-success btn-sm"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ─── Form view ──────────────────────────────────────────────────────── -->
+    <record id="view_meinvoice_output_invoice_form" model="ir.ui.view">
+        <field name="name">meinvoice.output.invoice.form</field>
+        <field name="model">meinvoice.output.invoice</field>
+        <field name="arch" type="xml">
+            <form string="Hóa đơn điện tử đầu ra">
+                <header>
+                    <button name="action_mark_accounting"
+                            string="✅ Đánh dấu Hạch toán"
+                            type="object"
+                            class="btn-success"
+                            invisible="accounting_status == '1'"/>
+                    <button name="action_link_sale_order"
+                            string="🔗 Tự động liên kết SO"
+                            type="object"
+                            class="btn-secondary"
+                            invisible="sale_order_id != False"/>
+                    <button name="action_view_raw"
+                            string="{ } Raw JSON"
+                            type="object"
+                            class="btn-link"/>
+                    <!-- Status bar -->
+                    <field name="accounting_status" widget="statusbar"
+                           statusbar_visible="0,1"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="inv_series" readonly="1"
+                                   class="me-1"/>
+                            <field name="inv_no" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Thông tin hóa đơn">
+                            <field name="inv_date"       readonly="1"/>
+                            <field name="inv_status"     readonly="1" widget="badge"
+                                   decoration-success="inv_status == '1'"
+                                   decoration-danger="inv_status == '2'"/>
+                            <field name="transaction_id" readonly="1"/>
+                            <field name="invoice_id_misa" readonly="1"/>
+                            <field name="payment_method" readonly="1"/>
+                            <field name="currency_code"  readonly="1"/>
+                        </group>
+                        <group string="Khách hàng">
+                            <field name="buyer_name"     readonly="1"/>
+                            <field name="buyer_tax_code" readonly="1"/>
+                            <field name="buyer_address"  readonly="1"/>
+                            <field name="buyer_email"    readonly="1"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Giá trị">
+                            <field name="total_amount_without_vat" readonly="1"/>
+                            <field name="total_vat_amount"         readonly="1"/>
+                            <field name="total_amount"             readonly="1"/>
+                        </group>
+                        <group string="Liên kết Odoo">
+                            <field name="sale_order_id"
+                                   options="{'no_create': True}"/>
+                            <field name="odoo_accounting_state" readonly="1" widget="badge"
+                                   decoration-success="odoo_accounting_state == 'accounted'"
+                                   decoration-info="odoo_accounting_state == 'linked'"
+                                   decoration-muted="odoo_accounting_state == 'pending'"/>
+                            <field name="accounted_date" readonly="1"/>
+                            <field name="fetched_date"   readonly="1"/>
+                        </group>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ─── Search view ────────────────────────────────────────────────────── -->
+    <record id="view_meinvoice_output_invoice_search" model="ir.ui.view">
+        <field name="name">meinvoice.output.invoice.search</field>
+        <field name="model">meinvoice.output.invoice</field>
+        <field name="arch" type="xml">
+            <search string="Tìm kiếm hóa đơn">
+                <field name="inv_no"          string="Số hóa đơn"/>
+                <field name="buyer_name"      string="Khách hàng"/>
+                <field name="buyer_tax_code"  string="MST khách hàng"/>
+                <field name="sale_order_id"   string="Sale Order"/>
+                <separator/>
+                <filter name="filter_not_accounted" string="⏳ Chưa hạch toán"
+                        domain="[('accounting_status','=','0')]"/>
+                <filter name="filter_accounted" string="✅ Đã hạch toán"
+                        domain="[('accounting_status','=','1')]"/>
+                <separator/>
+                <filter name="filter_valid" string="Hợp lệ"
+                        domain="[('inv_status','=','1')]"/>
+                <filter name="filter_cancelled" string="Đã hủy"
+                        domain="[('inv_status','=','2')]"/>
+                <separator/>
+                <filter name="filter_no_so" string="Chưa liên kết SO"
+                        domain="[('sale_order_id','=',False)]"/>
+                <filter name="filter_today" string="Hôm nay"
+                        domain="[('inv_date','=',context_today().strftime('%Y-%m-%d'))]"/>
+                <filter name="filter_this_month" string="Tháng này"
+                        domain="[('inv_date','&gt;=', (context_today().replace(day=1)).strftime('%Y-%m-%d'))]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_accounting" string="Trạng thái hạch toán"
+                            context="{'group_by': 'accounting_status'}"/>
+                    <filter name="group_inv_date" string="Ngày hóa đơn"
+                            context="{'group_by': 'inv_date:month'}"/>
+                    <filter name="group_buyer" string="Khách hàng"
+                            context="{'group_by': 'buyer_name'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ─── Action ─────────────────────────────────────────────────────────── -->
+    <record id="action_meinvoice_output_invoice" model="ir.actions.act_window">
+        <field name="name">Hóa đơn điện tử đầu ra</field>
+        <field name="res_model">meinvoice.output.invoice</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_meinvoice_output_invoice_search"/>
+        <field name="context">{'search_default_filter_valid': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Chưa có hóa đơn nào.
+            </p>
+            <p>Nhấn <b>Lấy hóa đơn từ meInvoice</b> để đồng bộ dữ liệu.</p>
+        </field>
+    </record>
+
+    <!-- ─── Action: Lấy hóa đơn (mở wizard) ──────────────────────────────── -->
+    <record id="action_meinvoice_fetch_wizard" model="ir.actions.act_window">
+        <field name="name">Lấy hóa đơn từ meInvoice</field>
+        <field name="res_model">meinvoice.fetch.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

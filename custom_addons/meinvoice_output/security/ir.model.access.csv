@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_meinvoice_output_invoice_user,meinvoice.output.invoice user,model_meinvoice_output_invoice,base.group_user,1,1,1,0
+access_meinvoice_output_invoice_manager,meinvoice.output.invoice manager,model_meinvoice_output_invoice,base.group_system,1,1,1,1
+access_meinvoice_output_api,meinvoice.output.api,model_meinvoice_output_api,base.group_user,1,1,1,0
+access_meinvoice_fetch_wizard,meinvoice.fetch.wizard,model_meinvoice_fetch_wizard,base.group_user,1,1,1,1

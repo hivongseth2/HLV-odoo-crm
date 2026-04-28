@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Root menu dưới Sales -->
+    <menuitem id="menu_meinvoice_output_root"
+              name="MISA meInvoice"
+              parent="sale.sale_menu_root"
+              sequence="98"
+              groups="base.group_user"/>
+
+    <!-- Danh sách hóa đơn -->
+    <menuitem id="menu_meinvoice_output_invoice_list"
+              name="Hóa đơn điện tử đầu ra"
+              parent="menu_meinvoice_output_root"
+              action="action_meinvoice_output_invoice"
+              sequence="10"/>
+
+    <!-- Lấy hóa đơn (wizard) -->
+    <menuitem id="menu_meinvoice_output_fetch"
+              name="📥 Lấy hóa đơn từ meInvoice"
+              parent="menu_meinvoice_output_root"
+              action="action_meinvoice_fetch_wizard"
+              sequence="20"/>
+</odoo>
