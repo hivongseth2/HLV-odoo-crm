@@ -1,5 +1,6 @@
 import requests
 import logging
+import time
 from odoo import models
 import re
 from dateutil import parser as dtparser
@@ -839,6 +840,7 @@ class MisaApiUtils(models.AbstractModel):
         """
         Lấy TOÀN BỘ sản phẩm của đơn hàng từ MISA CRM.
         Xử lý phân trang dựa vào Total (vì PageCount không tin cậy).
+        Có retry khi MISA trả về Success=False (chờ 5s giữa các lần).
         """
         session = requests.Session()
         all_products = []
@@ -846,6 +848,8 @@ class MisaApiUtils(models.AbstractModel):
         page_size = 20  # MISA cố định
         max_pages = 100  # Giới hạn an toàn
         total_expected = None  # Sẽ được set từ response đầu tiên
+        max_retry_per_page = 3  # Tối đa 3 lần retry per page
+        retry_delay = 5  # Chờ 5 giây giữa các lần retry
         
         while page <= max_pages:
             # Cập nhật payload cho trang hiện tại
@@ -853,66 +857,95 @@ class MisaApiUtils(models.AbstractModel):
             current_payload['Page'] = page
             current_payload['Start'] = (page - 1) * page_size
             
-            try:
-                _logger.info("📄 Fetching MISA products: Page %d (Start=%d)", page, current_payload['Start'])
-                
-                response = session.post(api_url, headers=header, json=current_payload)
-                
-                if response.status_code != 200:
-                    _logger.error("❌ API call failed at page %d: %s - %s", 
-                                page, response.status_code, response.text)
+            retry_count = 0
+            success_response = None
+            
+            # ===== RETRY LOOP cho Success=False =====
+            while retry_count < max_retry_per_page:
+                try:
+                    _logger.info("📄 Fetching MISA products: Page %d (Start=%d) [Attempt %d/%d]", 
+                                page, current_payload['Start'], retry_count + 1, max_retry_per_page)
+                    
+                    response = session.post(api_url, headers=header, json=current_payload)
+                    
+                    if response.status_code != 200:
+                        _logger.error("❌ API call failed at page %d: %s - %s", 
+                                    page, response.status_code, response.text)
+                        break  # Thoát vòng retry nếu lỗi HTTP
+                    
+                    data = response.json()
+                    
+                    if not data.get("Success", True):
+                        retry_count += 1
+                        err_msg = data.get("Message", "Unknown error")
+                        _logger.warning("⚠️ MISA returned Success=False at page %d [Attempt %d/%d]: %s", 
+                                    page, retry_count, max_retry_per_page, err_msg)
+                        
+                        if retry_count < max_retry_per_page:
+                            _logger.info("⏳ Chờ %d giây rồi retry...", retry_delay)
+                            time.sleep(retry_delay)
+                            continue  # Retry
+                        else:
+                            _logger.error("❌ Đã retry %d lần mà MISA vẫn Success=False. Dừng.", max_retry_per_page)
+                            break  # Thoát vòng retry sau khi hết lần retry
+                    
+                    # ✅ Success=True → lưu response và thoát vòng retry
+                    success_response = data
                     break
-                
-                data = response.json()
-                
-                if not data.get("Success", True):
-                    _logger.warning("⚠️ MISA returned Success=False at page %d: %s", 
-                                page, data.get("Message"))
-                    break
-                
-                # Lấy dữ liệu trang hiện tại
-                products = data.get("Data", []) or []
-                page_count_api = data.get("PageCount", 1)  # Không tin cậy
-                total_api = data.get("Total", 0)
-                
-                # Lưu total từ lần đầu
-                if total_expected is None:
-                    total_expected = total_api
-                
-                # Tính số trang thực tế dựa vào Total
-                actual_pages_needed = (total_expected + page_size - 1) // page_size  # Làm tròn lên
-                
-                _logger.info("   ✓ Page %d/%d: %d products | Total=%d (API PageCount=%d - IGNORED)", 
-                            page, actual_pages_needed, len(products), total_api, page_count_api)
-                
-                # Thêm vào danh sách tổng
-                all_products.extend(products)
-                
-                # ===== ĐIỀU KIỆN DỪNG (DỰA VÀO TOTAL, KHÔNG DỰA VÀO PageCount) =====
-                # Dừng nếu:
-                # 1. Không còn data trong response
-                if len(products) == 0:
-                    _logger.info("   → Dừng: Trang %d không có dữ liệu", page)
-                    break
-                
-                # 2. Đã lấy đủ số lượng theo Total
-                if len(all_products) >= total_expected:
-                    _logger.info("   → Dừng: Đã đủ %d/%d sản phẩm", len(all_products), total_expected)
-                    break
-                
-                # 3. Đã fetch đủ số trang tính toán
-                if page >= actual_pages_needed:
-                    _logger.info("   → Dừng: Đã fetch đủ %d trang", actual_pages_needed)
-                    break
-                
-                page += 1
-                
-            except requests.exceptions.RequestException as e:
-                _logger.exception("❌ Request error at page %d: %s", page, e)
+                    
+                except requests.exceptions.RequestException as e:
+                    _logger.exception("❌ Request error at page %d (Attempt %d): %s", page, retry_count + 1, e)
+                    break  # Không retry cho network error
+                except Exception as e:
+                    _logger.exception("❌ Unexpected error at page %d (Attempt %d): %s", page, retry_count + 1, e)
+                    break  # Không retry cho lỗi khác
+            
+            # Nếu không lấy được response sau retry → break khỏi main loop
+            if success_response is None:
                 break
-            except Exception as e:
-                _logger.exception("❌ Unexpected error at page %d: %s", page, e)
+                
+            # Xử lý response từ retry loop
+            if success_response is None:
+                continue  # Skip nếu không lấy được response sau tất cả retry
+            
+            data = success_response
+            
+            # Lấy dữ liệu trang hiện tại
+            products = data.get("Data", []) or []
+            page_count_api = data.get("PageCount", 1)  # Không tin cậy
+            total_api = data.get("Total", 0)
+            
+            # Lưu total từ lần đầu
+            if total_expected is None:
+                total_expected = total_api
+            
+            # Tính số trang thực tế dựa vào Total
+            actual_pages_needed = (total_expected + page_size - 1) // page_size  # Làm tròn lên
+            
+            _logger.info("   ✓ Page %d/%d: %d products | Total=%d (API PageCount=%d - IGNORED)", 
+                        page, actual_pages_needed, len(products), total_api, page_count_api)
+            
+            # Thêm vào danh sách tổng
+            all_products.extend(products)
+            
+            # ===== ĐIỀU KIỆN DỪNG (DỰA VÀO TOTAL, KHÔNG DỰA VÀO PageCount) =====
+            # Dừng nếu:
+            # 1. Không còn data trong response
+            if len(products) == 0:
+                _logger.info("   → Dừng: Trang %d không có dữ liệu", page)
                 break
+            
+            # 2. Đã lấy đủ số lượng theo Total
+            if len(all_products) >= total_expected:
+                _logger.info("   → Dừng: Đã đủ %d/%d sản phẩm", len(all_products), total_expected)
+                break
+            
+            # 3. Đã fetch đủ số trang tính toán
+            if page >= actual_pages_needed:
+                _logger.info("   → Dừng: Đã fetch đủ %d trang", actual_pages_needed)
+                break
+            
+            page += 1
         
         if page > max_pages:
             _logger.warning("⚠️ Reached max_pages limit (%d), may have missing data!", max_pages)
