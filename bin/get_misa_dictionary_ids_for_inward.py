@@ -7,8 +7,8 @@ Chạy:
     odoo-bin shell -c <odoo.conf> --no-http < bin/get_misa_dictionary_ids_for_inward.py
 """
 
-PICKING_NAME = "KBC/IN/09169"
-PO_NAME = "DMH18228"
+PICKING_NAME = "KBC/IN/09189"
+PO_NAME = "DMH18241"
 STOCK_CODE = "HLV"
 
 cfg = env["amis.callback.config"].sudo().ensure_singleton()
@@ -33,70 +33,85 @@ print("- Partner code :", partner_code)
 print("- Stock code   :", STOCK_CODE)
 print("=" * 70)
 
-# 1) Branch (data_type=2): lấy page đầu để xem branch khả dụng
-branches = cfg.get_dictionary(data_type=2, take=100).get("items") or []
-print("\n[Branch - data_type=2]")
-if branches:
-    for b in branches[:10]:
-        print("-", b.get("branch_id"), "|", b.get("branch_name"), "|", b.get("branch_code"))
+import json as _json
+
+# data_type đúng theo tài liệu MISA ACT OpenAPI:
+# 1=Đối tượng, 2=Vật tư, 3=Kho, 4=Đơn vị tính
+DT_ACCOUNT_OBJECT = 1
+DT_INVENTORY_ITEM = 2
+DT_STOCK         = 3
+DT_UNIT          = 4
+
+# ── Kho (data_type=3) ─────────────────────────────────────────────────────────
+print("\n[Kho - data_type=3]")
+st_result = cfg.get_dictionary(data_type=DT_STOCK, take=100)
+stocks = st_result.get("items") or []
+print(f"  {len(stocks)} kho tìm thấy")
+for s in stocks:
+    print(" -", repr(s.get("stock_code")), "|", s.get("stock_name"), "| stock_id:", s.get("stock_id"), "| branch_id:", s.get("branch_id"))
+if stocks:
+    print("  (raw 1st item):", _json.dumps(stocks[0], ensure_ascii=False)[:400])
+
+# ── Đơn vị tính (data_type=4) ─────────────────────────────────────────────────
+print("\n[Đơn vị tính - data_type=4]")
+unit_result = cfg.get_dictionary(data_type=DT_UNIT, take=100)
+units = unit_result.get("items") or []
+print(f"  {len(units)} đơn vị")
+for u in units[:30]:
+    print(" -", repr(u.get("unit_name")), "| unit_id:", u.get("unit_id"))
+
+# ── Vật tư (data_type=2) - tìm code 7447 ──────────────────────────────────────
+print("\n[Vật tư - data_type=2] tìm code='7447'")
+found_prod = None
+skip = 0
+while not found_prod:
+    r = cfg.get_dictionary(data_type=DT_INVENTORY_ITEM, skip=skip, take=100)
+    items = r.get("items") or []
+    if not items:
+        break
+    for p in items:
+        if (p.get("inventory_item_code") or "").strip() == "7447":
+            found_prod = p
+            break
+    if found_prod or len(items) < 100:
+        break
+    skip += 100
+
+if found_prod:
+    print("  inventory_item_id:", found_prod.get("inventory_item_id"))
+    print("  unit_id          :", found_prod.get("unit_id"))
+    print("  raw:", _json.dumps(found_prod, ensure_ascii=False)[:300])
 else:
-    print("- Không có dữ liệu branch hoặc tài khoản không được quyền xem")
+    print("  Không tìm thấy code=7447")
+    r0 = cfg.get_dictionary(data_type=DT_INVENTORY_ITEM, take=3)
+    print("  Mẫu:", [(p.get("inventory_item_code"), p.get("inventory_item_name")) for p in r0.get("items") or []])
 
-# 2) Stock (data_type=5)
-stock_item = cfg.find_dictionary_item_by_code(
-    data_type=5,
-    code_field="stock_code",
-    code_value=STOCK_CODE,
-    branch_id=None,
-)
-print("\n[Stock - data_type=5]")
-if stock_item:
-    print("- stock_id   :", stock_item.get("stock_id"))
-    print("- stock_code :", stock_item.get("stock_code"))
-    print("- stock_name :", stock_item.get("stock_name"))
-    print("- branch_id  :", stock_item.get("branch_id"))
+# ── Đối tượng (data_type=1) - tìm DAVITA ──────────────────────────────────────
+print("\n[Đối tượng - data_type=1] tìm DAVITA")
+found_acc = None
+skip = 0
+while not found_acc:
+    r = cfg.get_dictionary(data_type=DT_ACCOUNT_OBJECT, skip=skip, take=100)
+    items = r.get("items") or []
+    if not items:
+        break
+    for a in items:
+        aname = (a.get("account_object_name") or "").upper()
+        acode = (a.get("account_object_code") or "").upper()
+        if "DAVITA" in aname or "DAVITA" in acode:
+            found_acc = a
+            break
+    if found_acc or len(items) < 100:
+        break
+    skip += 100
+
+if found_acc:
+    print("  account_object_id  :", found_acc.get("account_object_id"))
+    print("  account_object_code:", found_acc.get("account_object_code"))
+    print("  account_object_name:", found_acc.get("account_object_name"))
 else:
-    print("- Không tìm thấy kho theo stock_code =", STOCK_CODE)
+    print("  Không tìm thấy DAVITA - thử với VAT/mã số thuế của partner:")
+    print("  - partner.vat:", partner.vat if partner else "N/A")
+    print("  - partner.ref:", partner.ref if partner else "N/A")
 
-# 3) Account object (data_type=1)
-acc_item = cfg.find_dictionary_item_by_code(
-    data_type=1,
-    code_field="account_object_code",
-    code_value=partner_code,
-    branch_id=None,
-)
-print("\n[Account Object - data_type=1]")
-if acc_item:
-    print("- account_object_id   :", acc_item.get("account_object_id"))
-    print("- account_object_code :", acc_item.get("account_object_code"))
-    print("- account_object_name :", acc_item.get("account_object_name"))
-else:
-    print("- Không tìm thấy account object theo code =", partner_code)
-
-# 4) Product + UoM cho từng dòng picking
-print("\n[Products/UoM]")
-for mv in picking.move_ids_without_package.filtered(lambda m: m.quantity > 0):
-    code = (mv.product_id.default_code or "").strip()
-    uom_name = (mv.product_uom.name or "").strip()
-
-    prod_item = cfg.find_dictionary_item_by_code(
-        data_type=3,
-        code_field="inventory_item_code",
-        code_value=code,
-        branch_id=None,
-    ) if code else False
-
-    unit_item = cfg.find_dictionary_item_by_code(
-        data_type=6,
-        code_field="unit_name",
-        code_value=uom_name,
-        branch_id=None,
-    ) if uom_name else False
-
-    print("-", mv.product_id.display_name)
-    print("    inventory_item_code:", code)
-    print("    inventory_item_id  :", prod_item.get("inventory_item_id") if prod_item else "(không tìm thấy)")
-    print("    unit_name          :", uom_name)
-    print("    unit_id            :", unit_item.get("unit_id") if unit_item else "(không tìm thấy)")
-
-print("\nHoàn tất. Dùng các ID trên để build payload có link chuẩn.")
+print("\nHoàn tất.")

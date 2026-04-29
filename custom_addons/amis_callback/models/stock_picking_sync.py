@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import threading
 import uuid
 from datetime import datetime
 
@@ -29,12 +30,38 @@ class StockPickingAmisSync(models.Model):
         for picking in self:
             try:
                 if picking.picking_type_code == 'incoming':
-                    picking._sync_incoming_po_to_misa()
+                    picking._sync_misa_async('incoming')
                 elif picking.picking_type_code == 'outgoing':
-                    picking._sync_outgoing_so_to_misa()
+                    picking._sync_misa_async('outgoing')
             except Exception:
                 _logger.exception('AMIS sync failed for picking %s', picking.name)
         return res
+
+    def _sync_misa_async(self, direction):
+        """Chạy sync MISA trong thread riêng để không block UI."""
+        self.ensure_one()
+        picking_id = self.id
+        dbname = self.env.cr.dbname
+        uid = self.env.uid
+        context = dict(self.env.context)
+
+        def _run():
+            import odoo
+            with odoo.registry(dbname).cursor() as cr:
+                new_env = odoo.api.Environment(cr, uid, context)
+                pick = new_env['stock.picking'].browse(picking_id)
+                try:
+                    if direction == 'incoming':
+                        pick._sync_incoming_po_to_misa()
+                    else:
+                        pick._sync_outgoing_so_to_misa()
+                    cr.commit()
+                except Exception:
+                    cr.rollback()
+                    _logger.exception('AMIS async sync failed for picking id=%s', picking_id)
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
 
     def action_test_outgoing_push(self):
         """Action de test manual push outgoing picking len MISA (chi dung khi da done)"""
