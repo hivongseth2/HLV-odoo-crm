@@ -110,25 +110,14 @@ class HlvRedeemVoucherWizard(models.TransientModel):
             partner.name, package.points_required, voucher.code, package.name,
         )
 
-        # Thông báo thành công
         return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Đổi Voucher thành công!',
-                'message': (
-                    f'Mã Voucher: {voucher.code}\n'
-                    f'Giá trị: {self.discount_info}\n'
-                    f'Hết hạn: {date_expiry.strftime("%d/%m/%Y")}'
-                ),
-                'type': 'success',
-                'sticky': True,
-                'next': {
-                    'type': 'ir.actions.act_window',
-                    'res_model': 'hlv.loyalty.voucher',
-                    'res_id': voucher.id,
-                    'view_mode': 'form',
-                    'target': 'current',
-                },
+            'type': 'ir.actions.act_window',
+            'name': 'Voucher Loyalty',
+            'res_model': 'hlv.loyalty.voucher',
+            'res_id': voucher.id,
+            'view_mode': 'form',
+            'target': 'current',
+            'context': {
+                'default_partner_id': partner.id,
             },
         }
