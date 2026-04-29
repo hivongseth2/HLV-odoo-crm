@@ -88,24 +88,39 @@ class SaleOrder(models.Model):
 
     def _apply_free_shipping_voucher(self, voucher):
         self.ensure_one()
-        delivery_lines = self.order_line.filtered(
-            lambda l: l.is_delivery and not l.is_loyalty_reward_line
+        delivery_lines = self._get_delivery_charge_lines().filtered(
+            lambda l: l.price_unit > 0 and l.product_uom_qty > 0
         )
-        delivery_amount = sum(delivery_lines.mapped('price_subtotal'))
-        if delivery_amount <= 0:
+        if not delivery_lines:
             raise UserError('Đơn hàng chưa có phí vận chuyển để áp dụng voucher miễn phí vận chuyển!')
 
         shipping_discount_product = self._get_voucher_shipping_discount_product()
-        self.env['sale.order.line'].create({
-            'order_id': self.id,
-            'product_id': shipping_discount_product.id,
-            'name': f'Miễn phí vận chuyển Voucher [{voucher.code}]',
-            'product_uom_qty': 1,
-            'price_unit': -delivery_amount,
-            'tax_id': [(5, 0, 0)],
-            'is_loyalty_reward_line': True,
-            'loyalty_reward_voucher_id': voucher.id,
-        })
+        for line in delivery_lines:
+            self.env['sale.order.line'].create({
+                'order_id': self.id,
+                'product_id': shipping_discount_product.id,
+                'name': f'Miễn phí vận chuyển Voucher [{voucher.code}] - {line.name}',
+                'product_uom_qty': line.product_uom_qty,
+                'price_unit': -line.price_unit,
+                'tax_id': [(6, 0, line.tax_id.ids)],
+                'is_loyalty_reward_line': True,
+                'loyalty_reward_voucher_id': voucher.id,
+            })
+
+    def _get_delivery_charge_lines(self):
+        """Tìm dòng phí vận chuyển từ delivery carrier product hoặc cờ is_delivery."""
+        self.ensure_one()
+        carrier_product = self.carrier_id.product_id if self.carrier_id else False
+        return self.order_line.filtered(
+            lambda l: (
+                not l.display_type
+                and not l.is_loyalty_reward_line
+                and (
+                    bool(getattr(l, 'is_delivery', False))
+                    or (carrier_product and l.product_id == carrier_product)
+                )
+            )
+        )
 
     def _apply_gift_voucher(self, voucher):
         self.ensure_one()
