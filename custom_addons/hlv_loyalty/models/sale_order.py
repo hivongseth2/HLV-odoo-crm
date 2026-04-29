@@ -54,13 +54,15 @@ class SaleOrder(models.Model):
         self.loyalty_voucher_code = voucher.code
 
         return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Thành công',
-                'message': message,
-                'type': 'success',
-                'sticky': False,
+            'type': 'ir.actions.act_window',
+            'name': 'Đơn bán hàng',
+            'res_model': 'sale.order',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'current',
+            'context': {
+                'default_loyalty_voucher_code': self.loyalty_voucher_code,
+                'hlv_loyalty_message': message,
             },
         }
 
@@ -191,6 +193,14 @@ class SaleOrder(models.Model):
         self._remove_loyalty_reward_lines()
         self.loyalty_voucher_id = False
         self.loyalty_voucher_code = False
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Đơn bán hàng',
+            'res_model': 'sale.order',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'current',
+        }
 
     def _remove_loyalty_reward_lines(self):
         self.ensure_one()
