@@ -17,20 +17,7 @@ class MilwaukeeBanner(models.Model):
     sequence = fields.Integer(string='Thứ tự hiển thị', default=10)
     description = fields.Text(string='Mô tả ngắn')
 
-    @api.model_create_multi
-    def create(self, vals_list):
-        records = super(MilwaukeeBanner, self).create(vals_list)
-        for record in records:
-            record._sync_to_milwaukee()
-        return records
-
-    def write(self, vals):
-        res = super(MilwaukeeBanner, self).write(vals)
-        if self.env.context.get('milwaukee_sync_done'):
-            return res
-        for record in self:
-            record._sync_to_milwaukee()
-        return res
+    # Tắt tự động sync. Người dùng sẽ bấm nút "Push to Milwaukee" thủ công.
 
     def _sync_to_milwaukee(self):
         self.ensure_one()

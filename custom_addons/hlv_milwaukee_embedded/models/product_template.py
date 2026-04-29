@@ -15,24 +15,8 @@ class ProductTemplate(models.Model):
         ('archived', 'Lưu trữ')
     ], string='Trạng thái Website', default='draft')
 
-    @api.model_create_multi
-    def create(self, vals_list):
-        records = super(ProductTemplate, self).create(vals_list)
-        for record in records:
-            if not record.milwaukee_id:
-                 record._sync_to_milwaukee()
-        return records
-
-    def write(self, vals):
-        res = super(ProductTemplate, self).write(vals)
-        if self.env.context.get('milwaukee_sync_done'):
-            return res
-        # Chỉ sync nếu thay đổi các trường quan trọng đến Milwaukee
-        sync_fields = ['name', 'default_code', 'list_price', 'milwaukee_slug', 'milwaukee_specs', 'milwaukee_gallery_urls', 'milwaukee_status']
-        if any(f in vals for f in sync_fields):
-            for record in self:
-                record._sync_to_milwaukee()
-        return res
+    # Tắt tự động sync để tránh ảnh hưởng đến các module khác (như MISA sync)
+    # Người dùng sẽ bấm nút "Push to Milwaukee" thủ công khi cần.
 
     def _sync_to_milwaukee(self):
         """Prepare data and push to master API"""
