@@ -1,6 +1,6 @@
 {
     "name": "AMIS Callback Verified",
-    "version": "1.1",
+    "version": "1.2",
     "category": "Custom",
     "summary": "Nhận callback từ MISA, xác thực chữ ký SHA256 HMAC và xem log trong Odoo",
     "author": "ChatGPT",
