@@ -61,6 +61,11 @@ class AmisCallbackConfig(models.Model):
         default=False,
         help='Bat de tu dong day phieu nhap kho (incoming) co nguon tu don mua hang len MISA.',
     )
+    sync_outgoing_so_enabled = fields.Boolean(
+        string='Dong bo phieu xuat kho tu SO',
+        default=False,
+        help='Bat de tu dong day phieu xuat kho (outgoing) co nguon tu don hang ban len MISA.',
+    )
 
     def ensure_singleton(self):
         record = self.search([], limit=1)
@@ -153,6 +158,20 @@ class AmisCallbackConfig(models.Model):
         }
         return self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
 
+    def push_outgoing_voucher(self, voucher_payload, dictionary_items=None):
+        """Dua phieu xuat kho sang MISA.
+        
+        Tuong tu push_inward_voucher, dung de dua chung tu xuat kho (outgoing) len MISA.
+        """
+        self.ensure_one()
+        payload = {
+            'app_id': self.app_id,
+            'org_company_code': self.org_company_code,
+            'voucher': [voucher_payload],
+            'dictionary': dictionary_items or [],
+        }
+        return self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
+
     def ensure_sync_ready(self):
         self.ensure_one()
         if not self.sync_incoming_po_enabled:
@@ -199,3 +218,7 @@ class AmisCallbackConfig(models.Model):
             'org_company_code': self.org_company_code,
         }
         return self._post_actopen('/api/oauth/actopensupport/check_call_back_data', payload, include_token=False)
+
+    def action_test_outgoing_push(self):
+        """Action de test push outgoing (dung cho test)"""
+        return True

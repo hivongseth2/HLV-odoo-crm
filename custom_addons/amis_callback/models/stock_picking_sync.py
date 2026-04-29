@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 
 from odoo import models
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -17,10 +18,22 @@ class StockPickingAmisSync(models.Model):
         res = super().button_validate()
         for picking in self:
             try:
-                picking._sync_incoming_po_to_misa()
+                if picking.picking_type_code == 'incoming':
+                    picking._sync_incoming_po_to_misa()
+                elif picking.picking_type_code == 'outgoing':
+                    picking._sync_outgoing_so_to_misa()
             except Exception:
                 _logger.exception('AMIS sync failed for picking %s', picking.name)
         return res
+
+    def action_test_outgoing_push(self):
+        """Action de test manual push outgoing picking len MISA (chi dung khi da done)"""
+        self.ensure_one()
+        if self.state != 'done':
+            raise UserError('Phieu phai o trang thai "Done" truoc khi day len MISA.')
+        
+        self._sync_outgoing_so_to_misa()
+        return True
 
     def _sync_incoming_po_to_misa(self):
         self.ensure_one()
@@ -49,6 +62,39 @@ class StockPickingAmisSync(models.Model):
         if self.origin:
             return self.env['purchase.order'].sudo().search([('name', '=', self.origin)], limit=1)
         return self.env['purchase.order']
+
+    def _sync_outgoing_so_to_misa(self):
+        self.ensure_one()
+        if self.state != 'done' or self.picking_type_code != 'outgoing':
+            return
+
+        sales_order = self._get_related_sales_order()
+        if not sales_order:
+            return
+
+        config = self.env['amis.callback.config'].sudo().ensure_singleton()
+        if not config.sync_outgoing_so_enabled:
+            return False
+        
+        if not config.ensure_sync_ready():
+            return
+
+        voucher_payload, dictionary_items = self._prepare_misa_outgoing_payload(config, sales_order)
+
+        # Theo tai lieu ACT OpenAPI: dong bo danh muc truoc, sau do cất de nghi sinh chung tu.
+        config.push_dictionary(dictionary_items)
+        config.push_outgoing_voucher(voucher_payload, dictionary_items=dictionary_items)
+
+    def _get_related_sales_order(self):
+        self.ensure_one()
+        # Tim SO tu sale_line_ids (neu co)
+        so = self.move_ids_without_package.mapped('sale_line_ids.order_id')[:1]
+        if so:
+            return so
+        # Tim theo origin (ten SO)
+        if self.origin:
+            return self.env['sale.order'].sudo().search([('name', '=', self.origin)], limit=1)
+        return self.env['sale.order']
 
     def _stable_uuid(self, *parts):
         base = '|'.join(str(p or '') for p in parts)
@@ -242,6 +288,198 @@ class StockPickingAmisSync(models.Model):
             'account_object_address': partner.contact_address_complete if partner else '',
             'journal_memo': 'Nhap kho tu don mua %s (Odoo: %s)' % (purchase_order.name, self.name),
             'currency_id': (purchase_order.currency_id.name or 'VND'),
+            'account_object_code': partner.ref or (partner.name if partner else ''),
+            'is_executed': False,
+            'is_adjust_value': False,
+            'state': 0,
+            'detail': detail,
+        }
+        return voucher, list(dedup.values())
+
+    def _prepare_misa_outgoing_payload(self, config, sales_order):
+        """Chuan bi payload de dua phieu xuat kho len MISA.
+        
+        Tuong tu nhu nhap kho, nhung dung cho outgoing picking (xuat kho).
+        Voucher_type dung la 8 (xuat kho) thay vi 7 (nhap kho).
+        """
+        self.ensure_one()
+        partner = self.partner_id or sales_order.partner_id
+
+        account_object_id = self._stable_uuid('partner', partner.id)
+        branch_id = self._stable_uuid('company', self.company_id.id)
+        refid = self._stable_uuid('picking', self.id)
+        
+        # Kho MISA co dinh: HLV
+        misa_warehouse_code = 'HLV'
+        stock_id = self._stable_uuid('warehouse_hlv', 'hlv')
+
+        detail = []
+        dictionary = []
+        total_amount = 0.0
+
+        for idx, move in enumerate(self.move_ids_without_package.filtered(lambda m: m.quantity > 0), start=1):
+            product = move.product_id
+            qty_done = float(move.quantity)
+            price_unit = float(move.sale_line_id.price_unit if move.sale_line_id else 0.0)
+            amount = qty_done * price_unit
+            total_amount += amount
+
+            # Map product theo default_code MISA -> Odoo
+            inventory_item_id = self._stable_uuid('product', product.default_code or product.id)
+            unit_id = self._stable_uuid('uom', move.product_uom.id)
+
+            # Tai khoan co dinh theo yeu cau: Kho 1561, Cong no 331
+            debit_account = '1561'
+            credit_account = '331'
+
+            detail.append({
+                'ref_detail_id': self._stable_uuid('move', move.id),
+                'refid': refid,
+                'inventory_item_id': inventory_item_id,
+                'stock_id': stock_id,
+                'unit_id': unit_id,
+                'main_unit_id': unit_id,
+                'account_object_id': account_object_id,
+                'sort_order': idx,
+                'inventory_resale_type_id': 0,
+                'un_resonable_cost': False,
+                'is_promotion': False,
+                'quantity': qty_done,
+                'unit_price_finance': price_unit,
+                'amount_finance': amount,
+                'unit_price_management': price_unit,
+                'amount_management': amount,
+                'main_unit_price_finance': price_unit,
+                'main_unit_price_management': price_unit,
+                'main_convert_rate': 1.0,
+                'main_quantity': qty_done,
+                'amount_finance_oc': amount,
+                'amount_management_oc': amount,
+                'description': product.display_name,
+                'debit_account': debit_account,
+                'credit_account': credit_account,
+                'exchange_rate_operator': '*',
+                'account_object_name': partner.display_name if partner else '',
+                'account_object_code': partner.ref or (partner.name if partner else ''),
+                'inventory_item_code': product.default_code or str(product.id),
+                'inventory_item_type': 0,
+                'unit_name': move.product_uom.name,
+                'stock_code': misa_warehouse_code,
+                'main_unit_name': move.product_uom.name,
+                'inventory_item_name': product.display_name,
+                'stock_name': misa_warehouse_code,
+                'account_name': debit_account,
+                'is_follow_serial_number': False,
+                'is_allow_duplicate_serial_number': False,
+                'is_description': False,
+                'is_description_import': False,
+                'is_promotion_import': False,
+                'un_resonable_cost_import': False,
+                'state': 0,
+            })
+
+            dictionary.append({
+                'dictionary_type': 3,
+                'inventory_item_id': inventory_item_id,
+                'inventory_item_name': product.display_name,
+                'inventory_item_code': product.default_code or str(product.id),
+                'inventory_item_type': 0,
+                'unit_id': unit_id,
+                'inactive': False,
+                'inventory_account': debit_account,
+                'cogs_account': '632',
+                'sale_account': '5111',
+                'reftype': 0,
+                'reftype_category': 0,
+                'state': 0,
+            })
+            dictionary.append({
+                'dictionary_type': 6,
+                'unit_id': unit_id,
+                'unit_name': move.product_uom.name,
+                'inactive': False,
+                'reftype_category': 0,
+                'state': 0,
+            })
+
+        dictionary.append({
+            'dictionary_type': 1,
+            'account_object_id': account_object_id,
+            'account_object_type': 0,
+            'is_vendor': False,
+            'is_customer': True,
+            'is_employee': False,
+            'inactive': False,
+            'account_object_code': partner.ref or (partner.name if partner else ''),
+            'account_object_name': partner.display_name if partner else '',
+            'address': partner.contact_address_complete if partner else '',
+            'country': partner.country_id.name if partner and partner.country_id else 'Viet Nam',
+            'pay_account': '3111',
+            'receive_account': '1111',
+            'reftype': 0,
+            'reftype_category': 0,
+            'branch_id': branch_id,
+            'state': 0,
+        })
+        dictionary.append({
+            'dictionary_type': 5,
+            'stock_id': stock_id,
+            'branch_id': branch_id,
+            'inactive': False,
+            'stock_code': misa_warehouse_code,
+            'stock_name': misa_warehouse_code,
+            'reftype': 0,
+            'reftype_category': 0,
+            'state': 0,
+        })
+
+        # Khử trùng lặp theo (dictionary_type, id chính) để payload gọn và đúng giới hạn tài liệu.
+        dedup = {}
+        for item in dictionary:
+            key_field = {
+                1: 'account_object_id',
+                3: 'inventory_item_id',
+                5: 'stock_id',
+                6: 'unit_id',
+            }.get(item.get('dictionary_type'))
+            key = (item.get('dictionary_type'), item.get(key_field))
+            dedup[key] = item
+
+        voucher = {
+            'voucher_type': 8,
+            'is_get_new_id': True,
+            'org_refid': refid,
+            'is_allow_group': False,
+            'org_refno': self.name,
+            'org_reftype': 2015,
+            'org_reftype_name': 'Phieu xuat kho',
+            'refid': refid,
+            'act_voucher_type': 0,
+            'reftype': 2015,
+            'reftype_name': 'Xuat kho',
+            'branch_id': branch_id,
+            'account_object_id': account_object_id,
+            'display_on_book': 0,
+            'unit_price_method': 0,
+            'reforder': int(datetime.utcnow().timestamp() * 1000),
+            'refdate': self._to_misa_date(self.date_done),
+            'posted_date': self._to_misa_date(self.date_done),
+            'is_posted_finance': False,
+            'is_posted_management': False,
+            'is_posted_inventory_book_finance': False,
+            'is_posted_inventory_book_management': False,
+            'is_return_with_inward': False,
+            'is_created_sa_return_last_year': False,
+            'total_amount': total_amount,
+            'total_amount_finance': total_amount,
+            'total_amount_management': total_amount,
+            'exchange_rate': 1.0,
+            'refno_finance': '',
+            'refno_management': '',
+            'account_object_name': partner.display_name if partner else '',
+            'account_object_address': partner.contact_address_complete if partner else '',
+            'journal_memo': 'Xuat kho tu don hang %s (Odoo: %s)' % (sales_order.name, self.name),
+            'currency_id': (sales_order.currency_id.name or 'VND'),
             'account_object_code': partner.ref or (partner.name if partner else ''),
             'is_executed': False,
             'is_adjust_value': False,

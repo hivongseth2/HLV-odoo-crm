@@ -116,6 +116,8 @@
             <form string="Cau hinh AMIS Callback">
                 <header>
                     <button name="action_connect_misa" type="object" string="Ket noi MISA" class="btn-primary"/>
+                    <button name="check_call_back_data" type="object" string="Kiem tra Callback" class="btn-secondary"/>
+                    <button name="delete_call_back_data" type="object" string="Xoa Callback" class="btn-secondary"/>
                 </header>
                 <sheet>
                     <group>
@@ -128,10 +130,15 @@
                             <field name="access_code" password="True"/>
                             <field name="access_token" readonly="1"/>
                             <field name="token_expired_time" readonly="1"/>
-                            <field name="sync_incoming_po_enabled"/>
                         </group>
                         <group>
                             <field name="callback_route" readonly="1"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group>
+                            <field name="sync_incoming_po_enabled"/>
+                            <field name="sync_outgoing_so_enabled"/>
                         </group>
                     </group>
                     <group>
@@ -159,6 +166,21 @@
         <field name="res_model">amis.callback.config</field>
         <field name="view_mode">list,form</field>
         <field name="target">current</field>
+    </record>
+
+    <!-- Stock Picking View inherit - add MISA sync button -->
+    <record id="view_picking_form_amis_inherit" model="ir.ui.view">
+        <field name="name">stock.picking.form.amis.inherit</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id">stock.view_picking_form</field>
+        <field name="arch" type="xml">
+            <data>
+                <xpath expr="//button[@name='button_validate']" position="after">
+                    <button name="action_test_outgoing_push" type="object" string="Xuat kho MISA" class="btn-secondary"
+                        attrs="{'invisible': [('picking_type_code', '!=', 'outgoing')]}"/>
+                </xpath>
+            </data>
+        </field>
     </record>
 
     <menuitem id="menu_amis_callback_root" name="AMIS Callback" sequence="30" web_icon="amis_callback,static/description/icon.svg"/>
