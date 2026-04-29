@@ -30,7 +30,7 @@ class StockPickingAmisSync(models.Model):
         """Action de test manual push outgoing picking len MISA (chi dung khi da done)"""
         self.ensure_one()
         if self.state != 'done':
-            raise UserError('Phieu phai o trang thai "Done" truoc khi day len MISA.')
+            raise UserError('Phiếu phải ở trạng thái "Hoàn thành" trước khi đẩy lên MISA.')
         
         self._sync_outgoing_so_to_misa()
         return True

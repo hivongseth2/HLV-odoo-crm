@@ -99,7 +99,7 @@
     </record>
 
     <record id="action_amis_callback_log" model="ir.actions.act_window">
-        <field name="name">Nhat ky AMIS Callback</field>
+        <field name="name">Nhật ký AMIS Callback</field>
         <field name="res_model">amis.callback.log</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_amis_callback_log_search"/>
@@ -113,11 +113,11 @@
         <field name="name">amis.callback.config.form</field>
         <field name="model">amis.callback.config</field>
         <field name="arch" type="xml">
-            <form string="Cau hinh AMIS Callback">
+            <form string="Cấu hình AMIS Callback">
                 <header>
-                    <button name="action_connect_misa" type="object" string="Ket noi MISA" class="btn-primary"/>
-                    <button name="check_call_back_data" type="object" string="Kiem tra Callback" class="btn-secondary"/>
-                    <button name="delete_call_back_data" type="object" string="Xoa Callback" class="btn-secondary"/>
+                    <button name="action_connect_misa" type="object" string="Kết nối MISA" class="btn-primary"/>
+                    <button name="check_call_back_data" type="object" string="Kiểm tra Callback" class="btn-secondary"/>
+                    <button name="delete_call_back_data" type="object" string="Xóa Callback" class="btn-secondary"/>
                 </header>
                 <sheet>
                     <group>
@@ -153,7 +153,7 @@
         <field name="name">amis.callback.config.tree</field>
         <field name="model">amis.callback.config</field>
         <field name="arch" type="xml">
-            <list string="Cau hinh AMIS Callback">
+            <list string="Cấu hình AMIS Callback">
                 <field name="name"/>
                 <field name="app_id"/>
                 <field name="active"/>
@@ -162,7 +162,7 @@
     </record>
 
     <record id="action_amis_callback_config" model="ir.actions.act_window">
-        <field name="name">Cau hinh AMIS Callback</field>
+        <field name="name">Cấu hình AMIS Callback</field>
         <field name="res_model">amis.callback.config</field>
         <field name="view_mode">list,form</field>
         <field name="target">current</field>
@@ -176,7 +176,7 @@
         <field name="arch" type="xml">
             <data>
                 <xpath expr="//button[@name='button_validate']" position="after">
-                    <button name="action_test_outgoing_push" type="object" string="Xuat kho MISA" class="btn-secondary"
+                    <button name="action_test_outgoing_push" type="object" string="Xuất kho MISA" class="btn-secondary"
                         invisible="picking_type_code != 'outgoing'"/>
                 </xpath>
             </data>
@@ -184,6 +184,6 @@
     </record>
 
     <menuitem id="menu_amis_callback_root" name="AMIS Callback" sequence="30" web_icon="amis_callback,static/description/icon.svg"/>
-    <menuitem id="menu_amis_callback_logs" name="Nhat ky callback" parent="menu_amis_callback_root" action="action_amis_callback_log" sequence="10"/>
-    <menuitem id="menu_amis_callback_config" name="Cau hinh" parent="menu_amis_callback_root" action="action_amis_callback_config" sequence="20" groups="base.group_system"/>
+    <menuitem id="menu_amis_callback_logs" name="Nhật ký callback" parent="menu_amis_callback_root" action="action_amis_callback_log" sequence="10"/>
+    <menuitem id="menu_amis_callback_config" name="Cấu hình" parent="menu_amis_callback_root" action="action_amis_callback_config" sequence="20" groups="base.group_system"/>
 </odoo>

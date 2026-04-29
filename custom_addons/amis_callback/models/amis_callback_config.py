@@ -12,39 +12,39 @@ _logger = logging.getLogger(__name__)
 
 class AmisCallbackConfig(models.Model):
     _name = 'amis.callback.config'
-    _description = 'Cau hinh AMIS Callback'
+    _description = 'Cấu hình AMIS Callback'
 
-    name = fields.Char(string='Ten cau hinh', default='AMIS Callback', required=True)
+    name = fields.Char(string='Tên cấu hình', default='AMIS Callback', required=True)
     app_id = fields.Char(
-        string='Ma ung dung (App ID)',
+        string='Mã ứng dụng (App ID)',
         help='MISA app_id dùng làm key để xác thực signature HMAC SHA256.',
         required=True,
         default='cfd435c9-b5c9-484f-b86d-ddbba36dc0f4',
     )
     callback_route = fields.Char(
-        string='Duong dan callback',
+        string='Đường dẫn callback',
         default='/api/oauth/actopensupport/call_back_data',
         readonly=True,
     )
-    active = fields.Boolean(string='Kich hoat', default=True)
+    active = fields.Boolean(string='Kích hoạt', default=True)
     note = fields.Text(
-        string='Ghi chu',
-        default='Cập nhật app_id đúng với giá trị MISA cấp cho hệ thống của bạn.',
+        string='Ghi chú',
+        default='Hàm kết nối token: https://actapp.misa.vn/api/oauth/actopen/connect. Cập nhật app_id và access_code đúng với giá trị MISA cấp cho hệ thống của bạn.',
     )
     api_url = fields.Char(
         string='API URL',
         required=True,
-        default='https://actapi.misa.vn',
-        help='URL goc API ACT OpenAPI, vi du: https://actapi.misa.vn',
+        default='https://actapp.misa.vn',
+        help='URL gốc API ACT OpenAPI, ví dụ: https://actapp.misa.vn',
     )
     org_company_code = fields.Char(
-        string='Org Company Code',
+        string='Mã miền công ty (org_company_code)',
         default='',
-        help='Domain don vi doi tac tren AMIS Ke toan.',
+        help='Domain đơn vị đối tác trên AMIS Kế toán.',
     )
     access_code = fields.Char(
-        string='Access Code',
-        help='Ma ket noi lay tu man hinh thiet lap API ket noi cua AMIS Ke toan.',
+        string='Mã kết nối (access_code)',
+        help='Mã kết nối lấy từ màn hình thiết lập API kết nối của AMIS Kế toán.',
     )
     access_token = fields.Text(
         string='Access Token',
@@ -52,19 +52,19 @@ class AmisCallbackConfig(models.Model):
         copy=False,
     )
     token_expired_time = fields.Char(
-        string='Han token',
+        string='Hạn token',
         readonly=True,
         copy=False,
     )
     sync_incoming_po_enabled = fields.Boolean(
-        string='Dong bo phieu nhap tu PO',
+        string='Đồng bộ phiếu nhập từ PO',
         default=False,
-        help='Bat de tu dong day phieu nhap kho (incoming) co nguon tu don mua hang len MISA.',
+        help='Bật để tự động đẩy phiếu nhập kho (incoming) có nguồn từ đơn mua hàng lên MISA.',
     )
     sync_outgoing_so_enabled = fields.Boolean(
-        string='Dong bo phieu xuat kho tu SO',
+        string='Đồng bộ phiếu xuất kho từ SO',
         default=False,
-        help='Bat de tu dong day phieu xuat kho (outgoing) co nguon tu don hang ban len MISA.',
+        help='Bật để tự động đẩy phiếu xuất kho (outgoing) có nguồn từ đơn hàng bán lên MISA.',
     )
 
     def ensure_singleton(self):
@@ -78,7 +78,7 @@ class AmisCallbackConfig(models.Model):
     def action_connect_misa(self):
         self.ensure_one()
         if not self.access_code:
-            raise UserError('Vui long nhap Access Code truoc khi ket noi.')
+            raise UserError('Vui lòng nhập Access Code trước khi kết nối.')
         payload = {
             'app_id': self.app_id,
             'access_code': self.access_code,
@@ -98,7 +98,7 @@ class AmisCallbackConfig(models.Model):
         token = data_obj.get('access_token')
         expired = data_obj.get('expired_time')
         if not token:
-            raise UserError('Khong lay duoc access_token tu ham connect.')
+            raise UserError('Không lấy được access_token từ hàm connect.')
 
         self.sudo().write({
             'access_token': token,
@@ -113,7 +113,7 @@ class AmisCallbackConfig(models.Model):
         }
         if include_token:
             if not self.access_token:
-                raise UserError('Chua co access_token. Vui long bam "Ket noi MISA" truoc.')
+                raise UserError('Chưa có access_token. Vui lòng bấm "Kết nối MISA" trước.')
             headers['X-MISA-AccessToken'] = self.access_token
         return headers
 
@@ -121,7 +121,7 @@ class AmisCallbackConfig(models.Model):
         self.ensure_one()
         api_url = (self.api_url or '').rstrip('/')
         if not api_url:
-            raise UserError('Thieu API URL.')
+            raise UserError('Thiếu API URL.')
         url = f'{api_url}{path}'
         headers = self._build_headers(include_token=include_token)
         try:
@@ -130,11 +130,11 @@ class AmisCallbackConfig(models.Model):
             body = response.json()
         except Exception as exc:
             _logger.exception('AMIS call failed: %s %s', path, exc)
-            raise UserError(f'Goi API MISA that bai: {exc}')
+            raise UserError(f'Gọi API MISA thất bại: {exc}')
 
         if not body.get('Success'):
-            err = body.get('ErrorMessage') or body.get('ErrorCode') or 'Khong ro loi'
-            raise UserError(f'MISA tra ve loi: {err}')
+            err = body.get('ErrorMessage') or body.get('ErrorCode') or 'Không rõ lỗi'
+            raise UserError(f'MISA trả về lỗi: {err}')
         return body
 
     def push_dictionary(self, dictionary_items):
@@ -174,8 +174,6 @@ class AmisCallbackConfig(models.Model):
 
     def ensure_sync_ready(self):
         self.ensure_one()
-        if not self.sync_incoming_po_enabled:
-            return False
         missing = []
         if not self.app_id:
             missing.append('App ID')
@@ -186,7 +184,7 @@ class AmisCallbackConfig(models.Model):
         if not self.access_token:
             missing.append('Access Token')
         if missing:
-            raise UserError('Thieu cau hinh MISA: %s' % ', '.join(missing))
+            raise UserError('Thiếu cấu hình MISA: %s' % ', '.join(missing))
         return True
 
     def delete_call_back_data(self):
