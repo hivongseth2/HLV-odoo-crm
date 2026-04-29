@@ -3,7 +3,7 @@ import logging
 import uuid
 from datetime import datetime
 
-from odoo import models
+from odoo import fields, models
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
@@ -13,6 +13,16 @@ ZERO_UUID = '00000000-0000-0000-0000-000000000000'
 
 class StockPickingAmisSync(models.Model):
     _inherit = 'stock.picking'
+
+    misa_inward_synced = fields.Boolean(
+        string='Đã đồng bộ phiếu nhập MISA',
+        default=False,
+        copy=False,
+    )
+    misa_inward_org_refid = fields.Char(
+        string='MISA org_refid phiếu nhập',
+        copy=False,
+    )
 
     def button_validate(self):
         res = super().button_validate()
@@ -40,19 +50,32 @@ class StockPickingAmisSync(models.Model):
         if self.state != 'done' or self.picking_type_code != 'incoming':
             return
 
+        if self.misa_inward_synced:
+            _logger.info('Skip incoming sync for %s: already synced to MISA.', self.name)
+            return
+
         purchase_order = self._get_related_purchase_order()
         if not purchase_order:
             return
 
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
+        if not config.sync_incoming_po_enabled:
+            return
+
         if not config.ensure_sync_ready():
             return
 
         voucher_payload, dictionary_items = self._prepare_misa_inward_payload(config, purchase_order)
+        org_refid = voucher_payload.get('org_refid')
 
-        # Theo tai lieu ACT OpenAPI: dong bo danh muc truoc, sau do cất de nghi sinh chung tu.
+        # Theo tài liệu ACT OpenAPI: đồng bộ danh mục trước, sau đó cất đề nghị sinh chứng từ.
         config.push_dictionary(dictionary_items)
         config.push_inward_voucher(voucher_payload, dictionary_items=dictionary_items)
+
+        self.sudo().write({
+            'misa_inward_synced': True,
+            'misa_inward_org_refid': org_refid or '',
+        })
 
     def _get_related_purchase_order(self):
         self.ensure_one()
