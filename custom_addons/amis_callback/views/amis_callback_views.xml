@@ -4,7 +4,7 @@
         <field name="name">amis.callback.log.tree</field>
         <field name="model">amis.callback.log</field>
         <field name="arch" type="xml">
-            <list string="AMIS Callback Logs" default_order="received_at desc">
+            <list string="Nhat ky AMIS Callback" default_order="received_at desc">
                 <field name="received_at"/>
                 <field name="name"/>
                 <field name="state"/>
@@ -22,7 +22,7 @@
         <field name="name">amis.callback.log.form</field>
         <field name="model">amis.callback.log</field>
         <field name="arch" type="xml">
-            <form string="AMIS Callback Log">
+            <form string="Chi tiet AMIS Callback">
                 <header>
                     <field name="state" widget="statusbar" statusbar_visible="received,validated,rejected,failed"/>
                 </header>
@@ -46,18 +46,18 @@
                         </group>
                     </group>
                     <notebook>
-                        <page string="Input">
+                        <page string="Du lieu nhan vao">
                             <group>
                                 <field name="input_error_message" readonly="1" nolabel="1"/>
                                 <field name="signature" readonly="1"/>
                             </group>
                             <field name="data_payload" readonly="1" widget="text" nolabel="1"/>
                         </page>
-                        <page string="Response">
+                        <page string="Phan hoi">
                             <field name="response_error_message" readonly="1" nolabel="1"/>
                             <field name="raw_payload" readonly="1" widget="text" nolabel="1"/>
                         </page>
-                        <page string="Details">
+                        <page string="Chi tiet">
                             <field name="detail_line_ids" readonly="1">
                                 <list>
                                     <field name="sequence"/>
@@ -80,26 +80,26 @@
         <field name="name">amis.callback.log.search</field>
         <field name="model">amis.callback.log</field>
         <field name="arch" type="xml">
-            <search string="Search AMIS Callback Logs">
+            <search string="Tim kiem nhat ky callback">
                 <field name="name"/>
                 <field name="org_company_code"/>
                 <field name="data_type"/>
                 <field name="state"/>
                 <field name="signature_valid"/>
-                <filter name="filter_valid" string="Signature valid" domain="[('signature_valid', '=', True)]"/>
-                <filter name="filter_invalid" string="Signature invalid" domain="[('signature_valid', '=', False)]"/>
-                <filter name="filter_error" string="Failed" domain="[('state', '=', 'failed')]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_state" string="State" context="{'group_by': 'state'}"/>
-                    <filter name="group_data_type" string="Data Type" context="{'group_by': 'data_type'}"/>
-                    <filter name="group_company" string="Company Code" context="{'group_by': 'org_company_code'}"/>
+                <filter name="filter_valid" string="Signature hop le" domain="[('signature_valid', '=', True)]"/>
+                <filter name="filter_invalid" string="Signature khong hop le" domain="[('signature_valid', '=', False)]"/>
+                <filter name="filter_error" string="That bai" domain="[('state', '=', 'failed')]"/>
+                <group expand="0" string="Nhom theo">
+                    <filter name="group_state" string="Trang thai" context="{'group_by': 'state'}"/>
+                    <filter name="group_data_type" string="Loai du lieu" context="{'group_by': 'data_type'}"/>
+                    <filter name="group_company" string="Ma cong ty" context="{'group_by': 'org_company_code'}"/>
                 </group>
             </search>
         </field>
     </record>
 
     <record id="action_amis_callback_log" model="ir.actions.act_window">
-        <field name="name">AMIS Callback Logs</field>
+        <field name="name">Nhat ky AMIS Callback</field>
         <field name="res_model">amis.callback.log</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_amis_callback_log_search"/>
@@ -113,13 +113,22 @@
         <field name="name">amis.callback.config.form</field>
         <field name="model">amis.callback.config</field>
         <field name="arch" type="xml">
-            <form string="AMIS Callback Configuration">
+            <form string="Cau hinh AMIS Callback">
+                <header>
+                    <button name="action_connect_misa" type="object" string="Ket noi MISA" class="btn-primary"/>
+                </header>
                 <sheet>
                     <group>
                         <group>
                             <field name="name"/>
                             <field name="app_id"/>
                             <field name="active"/>
+                            <field name="api_url"/>
+                            <field name="org_company_code"/>
+                            <field name="access_code" password="True"/>
+                            <field name="access_token" readonly="1"/>
+                            <field name="token_expired_time" readonly="1"/>
+                            <field name="sync_incoming_po_enabled"/>
                         </group>
                         <group>
                             <field name="callback_route" readonly="1"/>
@@ -137,7 +146,7 @@
         <field name="name">amis.callback.config.tree</field>
         <field name="model">amis.callback.config</field>
         <field name="arch" type="xml">
-            <list string="AMIS Callback Configuration">
+            <list string="Cau hinh AMIS Callback">
                 <field name="name"/>
                 <field name="app_id"/>
                 <field name="active"/>
@@ -146,13 +155,13 @@
     </record>
 
     <record id="action_amis_callback_config" model="ir.actions.act_window">
-        <field name="name">AMIS Callback Configuration</field>
+        <field name="name">Cau hinh AMIS Callback</field>
         <field name="res_model">amis.callback.config</field>
         <field name="view_mode">list,form</field>
         <field name="target">current</field>
     </record>
 
     <menuitem id="menu_amis_callback_root" name="AMIS Callback" sequence="30" web_icon="amis_callback,static/description/icon.svg"/>
-    <menuitem id="menu_amis_callback_logs" name="Callback Logs" parent="menu_amis_callback_root" action="action_amis_callback_log" sequence="10"/>
-    <menuitem id="menu_amis_callback_config" name="Configuration" parent="menu_amis_callback_root" action="action_amis_callback_config" sequence="20" groups="base.group_system"/>
+    <menuitem id="menu_amis_callback_logs" name="Nhat ky callback" parent="menu_amis_callback_root" action="action_amis_callback_log" sequence="10"/>
+    <menuitem id="menu_amis_callback_config" name="Cau hinh" parent="menu_amis_callback_root" action="action_amis_callback_config" sequence="20" groups="base.group_system"/>
 </odoo>

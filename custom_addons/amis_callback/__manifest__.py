@@ -4,7 +4,7 @@
     "category": "Custom",
     "summary": "Nhận callback từ MISA, xác thực chữ ký SHA256 HMAC và xem log trong Odoo",
     "author": "ChatGPT",
-    "depends": ["base"],
+    "depends": ["base", "stock", "purchase"],
     "data": [
         "security/ir.model.access.csv",
         "data/sequence.xml",
