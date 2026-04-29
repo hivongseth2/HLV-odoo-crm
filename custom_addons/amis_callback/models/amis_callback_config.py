@@ -127,7 +127,7 @@ class AmisCallbackConfig(models.Model):
             headers['X-MISA-AccessToken'] = self.access_token
         return headers
 
-    def _post_actopen(self, path, payload, include_token=True, timeout=60):
+    def _post_actopen(self, path, payload, include_token=True, timeout=15):
         self.ensure_one()
         api_url = (self.api_url or '').rstrip('/')
         if not api_url:

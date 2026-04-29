@@ -33,12 +33,25 @@ class AmisSyncJob(models.Model):
     @api.model
     def _process_pending(self):
         """Được gọi bởi ir.cron. Xử lý tất cả job pending theo thứ tự."""
-        jobs = self.search([('status', '=', 'pending'), ('retry_count', '<', MAX_RETRY)])
-        _logger.info('AMIS sync queue: xử lý %d jobs', len(jobs))
-        for job in jobs:
-            job._execute()
-            # Commit mỗi job để tránh 1 lỗi cuốn tất cả
-            self.env.cr.commit()
+        # Chỉ lấy IDs trước, không giữ recordset trong suốt vòng lặp
+        job_ids = self.search([
+            ('status', '=', 'pending'),
+            ('retry_count', '<', MAX_RETRY),
+        ]).ids
+        _logger.info('AMIS sync queue: xử lý %d jobs', len(job_ids))
+        for job_id in job_ids:
+            # Mỗi job dùng cursor riêng để tránh 1 HTTP timeout làm block cả batch
+            try:
+                import odoo
+                with odoo.registry(self.env.cr.dbname).cursor() as cr:
+                    env = odoo.api.Environment(cr, self.env.uid, {})
+                    job = env['amis.sync.job'].browse(job_id)
+                    if job.status != 'pending':
+                        continue
+                    job._execute()
+                    cr.commit()
+            except Exception:
+                _logger.exception('AMIS sync job %d: unhandled error in cursor', job_id)
 
     def _execute(self):
         self.ensure_one()
