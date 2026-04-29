@@ -35,34 +35,20 @@ class SaleOrder(models.Model):
         # Validate
         self._validate_voucher(voucher)
 
-        # Tính giá trị giảm giá
-        order_amount = self.amount_untaxed
-        discount_amount = voucher.compute_discount_amount(order_amount)
-        if discount_amount <= 0:
-            raise UserError('Không tính được giá trị giảm giá cho Voucher này!')
+        # Gỡ hiệu lực voucher cũ trước khi áp mới
+        self._remove_loyalty_reward_lines()
 
-        # Đảm bảo giảm giá không vượt quá giá trị đơn hàng
-        discount_amount = min(discount_amount, order_amount)
-
-        # Tìm hoặc tạo sản phẩm dịch vụ "Giảm giá Voucher"
-        discount_product = self._get_voucher_discount_product()
-
-        # Xóa dòng giảm giá cũ nếu có
-        old_lines = self.order_line.filtered(
-            lambda l: l.product_id == discount_product
-        )
-        if old_lines:
-            old_lines.unlink()
-
-        # Tạo dòng giảm giá
-        self.env['sale.order.line'].create({
-            'order_id': self.id,
-            'product_id': discount_product.id,
-            'name': f'Giảm giá Voucher [{voucher.code}]',
-            'product_uom_qty': 1,
-            'price_unit': -discount_amount,
-            'tax_id': [(5, 0, 0)],  # Không thuế
-        })
+        if voucher.reward_type == 'discount':
+            self._apply_discount_voucher(voucher)
+            message = f'Áp dụng Voucher {voucher.code} thành công (giảm giá)!'
+        elif voucher.reward_type == 'free_shipping':
+            self._apply_free_shipping_voucher(voucher)
+            message = f'Áp dụng Voucher {voucher.code} thành công (miễn phí vận chuyển)!'
+        elif voucher.reward_type == 'gift':
+            self._apply_gift_voucher(voucher)
+            message = f'Áp dụng Voucher {voucher.code} thành công (tặng quà)!'
+        else:
+            raise UserError('Loại chương trình voucher chưa được hỗ trợ!')
 
         self.loyalty_voucher_id = voucher.id
         self.loyalty_voucher_code = voucher.code
@@ -72,11 +58,70 @@ class SaleOrder(models.Model):
             'tag': 'display_notification',
             'params': {
                 'title': 'Thành công',
-                'message': f'Áp dụng Voucher {voucher.code} giảm {discount_amount:,.0f} VNĐ!',
+                'message': message,
                 'type': 'success',
                 'sticky': False,
             },
         }
+
+    def _apply_discount_voucher(self, voucher):
+        self.ensure_one()
+        order_amount = self.amount_untaxed
+        discount_amount = voucher.compute_discount_amount(order_amount)
+        if discount_amount <= 0:
+            raise UserError('Không tính được giá trị giảm giá cho Voucher này!')
+
+        # Đảm bảo giảm giá không vượt quá giá trị đơn hàng
+        discount_amount = min(discount_amount, order_amount)
+        discount_product = self._get_voucher_discount_product()
+
+        self.env['sale.order.line'].create({
+            'order_id': self.id,
+            'product_id': discount_product.id,
+            'name': f'Giảm giá Voucher [{voucher.code}]',
+            'product_uom_qty': 1,
+            'price_unit': -discount_amount,
+            'tax_id': [(5, 0, 0)],
+            'is_loyalty_reward_line': True,
+            'loyalty_reward_voucher_id': voucher.id,
+        })
+
+    def _apply_free_shipping_voucher(self, voucher):
+        self.ensure_one()
+        delivery_lines = self.order_line.filtered(
+            lambda l: l.is_delivery and not l.is_loyalty_reward_line
+        )
+        delivery_amount = sum(delivery_lines.mapped('price_subtotal'))
+        if delivery_amount <= 0:
+            raise UserError('Đơn hàng chưa có phí vận chuyển để áp dụng voucher miễn phí vận chuyển!')
+
+        shipping_discount_product = self._get_voucher_shipping_discount_product()
+        self.env['sale.order.line'].create({
+            'order_id': self.id,
+            'product_id': shipping_discount_product.id,
+            'name': f'Miễn phí vận chuyển Voucher [{voucher.code}]',
+            'product_uom_qty': 1,
+            'price_unit': -delivery_amount,
+            'tax_id': [(5, 0, 0)],
+            'is_loyalty_reward_line': True,
+            'loyalty_reward_voucher_id': voucher.id,
+        })
+
+    def _apply_gift_voucher(self, voucher):
+        self.ensure_one()
+        if not voucher.gift_product_id:
+            raise UserError('Voucher quà tặng chưa được cấu hình sản phẩm quà tặng!')
+
+        self.env['sale.order.line'].create({
+            'order_id': self.id,
+            'product_id': voucher.gift_product_id.id,
+            'name': f'Quà tặng từ Voucher [{voucher.code}]',
+            'product_uom_qty': voucher.gift_qty or 1,
+            'price_unit': 0,
+            'tax_id': [(5, 0, 0)],
+            'is_loyalty_reward_line': True,
+            'loyalty_reward_voucher_id': voucher.id,
+        })
 
     def _validate_voucher(self, voucher):
         """Kiểm tra hợp lệ Voucher."""
@@ -118,14 +163,15 @@ class SaleOrder(models.Model):
     def action_remove_loyalty_voucher(self):
         """Xóa Voucher đã áp dụng khỏi đơn hàng."""
         self.ensure_one()
-        discount_product = self._get_voucher_discount_product()
-        old_lines = self.order_line.filtered(
-            lambda l: l.product_id == discount_product
-        )
-        if old_lines:
-            old_lines.unlink()
+        self._remove_loyalty_reward_lines()
         self.loyalty_voucher_id = False
         self.loyalty_voucher_code = False
+
+    def _remove_loyalty_reward_lines(self):
+        self.ensure_one()
+        reward_lines = self.order_line.filtered(lambda l: l.is_loyalty_reward_line)
+        if reward_lines:
+            reward_lines.unlink()
 
     def action_confirm(self):
         """Override: Đánh dấu Voucher đã sử dụng khi xác nhận đơn hàng."""
@@ -159,3 +205,32 @@ class SaleOrder(models.Model):
                 'taxes_id': [(5, 0, 0)],
             })
         return product
+
+    @api.model
+    def _get_voucher_shipping_discount_product(self):
+        """Lấy hoặc tạo sản phẩm dịch vụ cho dòng miễn phí vận chuyển voucher."""
+        product = self.env['product.product'].sudo().search([
+            ('default_code', '=', 'LOYALTY_FREE_SHIPPING_DISCOUNT'),
+        ], limit=1)
+        if not product:
+            product = self.env['product.product'].sudo().create({
+                'name': 'Miễn phí vận chuyển Voucher Loyalty',
+                'default_code': 'LOYALTY_FREE_SHIPPING_DISCOUNT',
+                'type': 'service',
+                'list_price': 0,
+                'sale_ok': True,
+                'purchase_ok': False,
+                'taxes_id': [(5, 0, 0)],
+            })
+        return product
+
+
+class SaleOrderLine(models.Model):
+    _inherit = 'sale.order.line'
+
+    is_loyalty_reward_line = fields.Boolean(
+        string='Dòng thưởng Loyalty', default=False, copy=False,
+    )
+    loyalty_reward_voucher_id = fields.Many2one(
+        'hlv.loyalty.voucher', string='Voucher thưởng', copy=False,
+    )

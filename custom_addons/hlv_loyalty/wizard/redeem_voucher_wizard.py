@@ -44,7 +44,14 @@ class HlvRedeemVoucherWizard(models.TransientModel):
             if not pkg:
                 wiz.discount_info = ''
                 continue
-            if pkg.discount_type == 'fixed':
+            if pkg.reward_type == 'free_shipping':
+                wiz.discount_info = 'Miễn phí vận chuyển'
+            elif pkg.reward_type == 'gift':
+                if pkg.gift_product_id:
+                    wiz.discount_info = f'Tặng {pkg.gift_qty:g} x {pkg.gift_product_id.display_name}'
+                else:
+                    wiz.discount_info = 'Quà tặng kèm'
+            elif pkg.discount_type == 'fixed':
                 wiz.discount_info = f'Giảm {pkg.discount_value:,.0f} VNĐ'
             else:
                 info = f'Giảm {pkg.discount_value:.0f}%'

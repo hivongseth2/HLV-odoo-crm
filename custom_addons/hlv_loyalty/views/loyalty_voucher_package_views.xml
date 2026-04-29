@@ -30,11 +30,9 @@
                         </div>
                         <div class="col bg-success text-white p-4 text-center">
                             <div class="fw-bold small text-uppercase mb-2"
-                                 style="letter-spacing:1px; opacity:.8">Voucher giảm</div>
+                                 style="letter-spacing:1px; opacity:.8">Phần thưởng</div>
                             <div class="fs-2 fw-bold">
-                                <field name="discount_value" nolabel="1"/>
-                                <span class="fw-normal fs-4" invisible="discount_type != 'percent'">%</span>
-                                <span class="fw-normal fs-4" invisible="discount_type == 'percent'"> đ</span>
+                                <field name="reward_type" nolabel="1"/>
                             </div>
                         </div>
                         <div class="col bg-info text-white p-4 text-center">
@@ -55,12 +53,19 @@
                         </group>
                         <group string="Giá trị quy đổi">
                             <field name="points_required"/>
+                            <field name="reward_type" widget="badge"
+                                decoration-success="reward_type == 'discount'"
+                                decoration-info="reward_type == 'free_shipping'"
+                                decoration-warning="reward_type == 'gift'"/>
                             <field name="discount_type" widget="badge"
+                                invisible="reward_type != 'discount'"
                                    decoration-success="discount_type == 'fixed'"
                                    decoration-info="discount_type == 'percent'"/>
-                            <field name="discount_value"/>
+                            <field name="discount_value" invisible="reward_type != 'discount'"/>
                             <field name="max_discount_amount"
-                                   invisible="discount_type != 'percent'"/>
+                                invisible="reward_type != 'discount' or discount_type != 'percent'"/>
+                            <field name="gift_product_id" invisible="reward_type != 'gift'"/>
+                            <field name="gift_qty" invisible="reward_type != 'gift'"/>
                             <field name="validity_days"/>
                         </group>
                     </group>
@@ -84,11 +89,18 @@
                 <field name="name"/>
                 <field name="program_id"/>
                 <field name="points_required" string="Điểm cần"/>
+                  <field name="reward_type" widget="badge"
+                      decoration-success="reward_type == 'discount'"
+                      decoration-info="reward_type == 'free_shipping'"
+                      decoration-warning="reward_type == 'gift'"/>
                 <field name="discount_type" widget="badge"
+                      optional="show"
                        decoration-success="discount_type == 'fixed'"
                        decoration-info="discount_type == 'percent'"/>
                 <field name="discount_value" string="Giá trị giảm"/>
                 <field name="max_discount_amount" optional="show"/>
+                  <field name="gift_product_id" optional="show"/>
+                  <field name="gift_qty" optional="hide"/>
                 <field name="min_order_amount" string="Đơn tối thiểu"/>
                 <field name="validity_days" string="Hiệu lực (ngày)"/>
                 <field name="active" widget="boolean_toggle"/>

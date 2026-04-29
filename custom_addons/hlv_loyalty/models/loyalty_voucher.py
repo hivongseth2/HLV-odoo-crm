@@ -45,6 +45,9 @@ class HlvLoyaltyVoucher(models.Model):
     ], string='Trạng thái', default='active', required=True, tracking=True, index=True)
 
     # Giá trị giảm giá
+    reward_type = fields.Selection(
+        related='package_id.reward_type', store=True, readonly=True,
+    )
     discount_type = fields.Selection(
         related='package_id.discount_type', store=True, readonly=True,
     )
@@ -59,6 +62,12 @@ class HlvLoyaltyVoucher(models.Model):
     )
     apply_on = fields.Selection(
         related='package_id.apply_on', store=True, readonly=True,
+    )
+    gift_product_id = fields.Many2one(
+        related='package_id.gift_product_id', store=True, readonly=True,
+    )
+    gift_qty = fields.Float(
+        related='package_id.gift_qty', store=True, readonly=True,
     )
     product_category_ids = fields.Many2many(
         related='package_id.product_category_ids', readonly=True,
@@ -96,6 +105,8 @@ class HlvLoyaltyVoucher(models.Model):
     def compute_discount_amount(self, order_amount):
         """Tính giá trị giảm giá thực tế cho 1 đơn hàng."""
         self.ensure_one()
+        if self.reward_type != 'discount':
+            return 0
         if self.discount_type == 'fixed':
             return self.discount_value
         elif self.discount_type == 'percent':

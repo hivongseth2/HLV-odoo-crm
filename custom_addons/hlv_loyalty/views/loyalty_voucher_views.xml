@@ -9,8 +9,11 @@
                 <field name="code"/>
                 <field name="partner_id"/>
                 <field name="state"/>
+                <field name="reward_type"/>
                 <field name="discount_type"/>
                 <field name="discount_value"/>
+                <field name="gift_product_id"/>
+                <field name="gift_qty"/>
                 <field name="date_expiry"/>
                 <field name="package_id"/>
                 <field name="min_order_amount"/>
@@ -36,7 +39,13 @@
                         </div>
                         <div class="d-flex justify-content-between align-items-end mt-2">
                             <div class="fw-bold text-success fs-5">
-                                <t t-if="record.discount_type.raw_value == 'fixed'">
+                                <t t-if="record.reward_type.raw_value == 'free_shipping'">
+                                    Miễn phí vận chuyển
+                                </t>
+                                <t t-elif="record.reward_type.raw_value == 'gift'">
+                                    Quà tặng kèm
+                                </t>
+                                <t t-elif="record.discount_type.raw_value == 'fixed'">
                                     <field name="discount_value"/> đ
                                 </t>
                                 <t t-else="">
@@ -84,9 +93,12 @@
                             <div class="fw-bold small text-uppercase mb-2"
                                  style="letter-spacing:1px; opacity:.8">Giá trị giảm</div>
                             <div class="fs-2 fw-bold">
-                                <field name="discount_value" readonly="1" nolabel="1"/>
-                                <span invisible="discount_type != 'percent'">%</span>
-                                <span invisible="discount_type == 'percent'"> đ</span>
+                                <field name="reward_type" readonly="1" nolabel="1"
+                                       invisible="reward_type == 'discount'"/>
+                                <field name="discount_value" readonly="1" nolabel="1"
+                                       invisible="reward_type != 'discount'"/>
+                                <span invisible="reward_type != 'discount' or discount_type != 'percent'">%</span>
+                                <span invisible="reward_type != 'discount' or discount_type == 'percent'"> đ</span>
                             </div>
                         </div>
                         <div class="col bg-warning text-dark p-4 text-center border border-start-0">
@@ -107,12 +119,19 @@
                             <field name="company_id" groups="base.group_multi_company"/>
                         </group>
                         <group string="Điều kiện áp dụng">
+                            <field name="reward_type" widget="badge"
+                                decoration-success="reward_type == 'discount'"
+                                decoration-info="reward_type == 'free_shipping'"
+                                decoration-warning="reward_type == 'gift'"/>
                             <field name="discount_type" widget="badge"
+                                invisible="reward_type != 'discount'"
                                    decoration-success="discount_type == 'fixed'"
                                    decoration-info="discount_type == 'percent'"/>
-                            <field name="discount_value"/>
+                            <field name="discount_value" invisible="reward_type != 'discount'"/>
                             <field name="max_discount_amount"
-                                   invisible="discount_type != 'percent'"/>
+                                invisible="reward_type != 'discount' or discount_type != 'percent'"/>
+                            <field name="gift_product_id" invisible="reward_type != 'gift'"/>
+                            <field name="gift_qty" invisible="reward_type != 'gift'"/>
                             <field name="min_order_amount"/>
                             <field name="date_issued"/>
                             <field name="date_expiry"/>
@@ -143,10 +162,16 @@
                 <field name="code" widget="badge"/>
                 <field name="partner_id"/>
                 <field name="package_id"/>
+                  <field name="reward_type" widget="badge"
+                      decoration-success="reward_type == 'discount'"
+                      decoration-info="reward_type == 'free_shipping'"
+                      decoration-warning="reward_type == 'gift'"/>
                 <field name="discount_type" widget="badge"
                        decoration-success="discount_type == 'fixed'"
                        decoration-info="discount_type == 'percent'"/>
                 <field name="discount_value"/>
+                  <field name="gift_product_id" optional="show"/>
+                  <field name="gift_qty" optional="hide"/>
                 <field name="date_issued"/>
                 <field name="date_expiry"
                        decoration-danger="date_expiry and date_expiry &lt; current_date and state == 'active'"/>
