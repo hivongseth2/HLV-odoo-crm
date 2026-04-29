@@ -102,15 +102,23 @@ class SaleOrder(models.Model):
                 'name': f'Miễn phí vận chuyển Voucher [{voucher.code}] - {line.name}',
                 'product_uom_qty': line.product_uom_qty,
                 'price_unit': -line.price_unit,
+                'discount': line.discount,
                 'tax_id': [(6, 0, line.tax_id.ids)],
                 'is_loyalty_reward_line': True,
                 'loyalty_reward_voucher_id': voucher.id,
             })
 
     def _get_delivery_charge_lines(self):
-        """Tìm dòng phí vận chuyển từ delivery carrier product hoặc cờ is_delivery."""
+        """Tìm dòng phí vận chuyển từ carrier product, is_delivery hoặc tên dòng giao hàng."""
         self.ensure_one()
         carrier_product = self.carrier_id.product_id if self.carrier_id else False
+        carrier_product_ids = set(self.env['delivery.carrier'].sudo().search([]).mapped('product_id').ids)
+
+        def _is_delivery_keyword_line(line):
+            name = (line.name or '').lower()
+            keywords = ('giao hàng', 'vận chuyển', 'shipping', 'delivery', 'phí ship', 'ship')
+            return any(k in name for k in keywords)
+
         return self.order_line.filtered(
             lambda l: (
                 not l.display_type
@@ -118,6 +126,8 @@ class SaleOrder(models.Model):
                 and (
                     bool(getattr(l, 'is_delivery', False))
                     or (carrier_product and l.product_id == carrier_product)
+                    or (l.product_id and l.product_id.id in carrier_product_ids)
+                    or _is_delivery_keyword_line(l)
                 )
             )
         )
