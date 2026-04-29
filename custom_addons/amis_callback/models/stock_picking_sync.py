@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import logging
-import threading
 import uuid
 from datetime import datetime
 
@@ -29,47 +28,42 @@ class StockPickingAmisSync(models.Model):
         res = super().button_validate()
         for picking in self:
             try:
-                if picking.picking_type_code == 'incoming':
-                    picking._sync_misa_async('incoming')
-                elif picking.picking_type_code == 'outgoing':
-                    picking._sync_misa_async('outgoing')
+                if picking.picking_type_code in ('incoming', 'outgoing'):
+                    picking._enqueue_misa_sync(picking.picking_type_code)
             except Exception:
-                _logger.exception('AMIS sync failed for picking %s', picking.name)
+                _logger.exception('AMIS enqueue failed for picking %s', picking.name)
         return res
 
-    def _sync_misa_async(self, direction):
-        """Chạy sync MISA trong thread riêng để không block UI."""
+    def _enqueue_misa_sync(self, direction):
+        """Tạo job trong hàng đợi amis.sync.job thay vì push trực tiếp."""
         self.ensure_one()
-        picking_id = self.id
-        dbname = self.env.cr.dbname
-        uid = self.env.uid
-        context = dict(self.env.context)
+        config = self.env['amis.callback.config'].sudo().ensure_singleton()
+        enabled = (config.sync_incoming_po_enabled if direction == 'incoming'
+                   else config.sync_outgoing_so_enabled)
+        if not enabled:
+            return
+        # Tránh tạo job trùng nếu picking đã được enqueue và chưa xử lý
+        existing = self.env['amis.sync.job'].sudo().search([
+            ('picking_id', '=', self.id),
+            ('direction', '=', direction),
+            ('status', '=', 'pending'),
+        ], limit=1)
+        if existing:
+            return
+        self.env['amis.sync.job'].sudo().create({
+            'picking_id': self.id,
+            'direction': direction,
+            'status': 'pending',
+        })
+        _logger.info('AMIS sync job enqueued for picking %s (%s)', self.name, direction)
 
-        def _run():
-            import odoo
-            with odoo.registry(dbname).cursor() as cr:
-                new_env = odoo.api.Environment(cr, uid, context)
-                pick = new_env['stock.picking'].browse(picking_id)
-                try:
-                    if direction == 'incoming':
-                        pick._sync_incoming_po_to_misa()
-                    else:
-                        pick._sync_outgoing_so_to_misa()
-                    cr.commit()
-                except Exception:
-                    cr.rollback()
-                    _logger.exception('AMIS async sync failed for picking id=%s', picking_id)
-
-        t = threading.Thread(target=_run, daemon=True)
-        t.start()
 
     def action_test_outgoing_push(self):
         """Action de test manual push outgoing picking len MISA (chi dung khi da done)"""
         self.ensure_one()
         if self.state != 'done':
             raise UserError('Phiếu phải ở trạng thái "Hoàn thành" trước khi đẩy lên MISA.')
-        
-        self._sync_outgoing_so_to_misa()
+        self._enqueue_misa_sync('outgoing')
         return True
 
     def _sync_incoming_po_to_misa(self):
@@ -146,10 +140,6 @@ class StockPickingAmisSync(models.Model):
             return self.env['sale.order'].sudo().search([('name', '=', self.origin)], limit=1)
         return self.env['sale.order']
 
-    def _stable_uuid(self, *parts):
-        base = '|'.join(str(p or '') for p in parts)
-        return str(uuid.uuid5(uuid.NAMESPACE_DNS, base))
-
     def _to_misa_date(self, value):
         if not value:
             value = datetime.utcnow()
@@ -167,7 +157,11 @@ class StockPickingAmisSync(models.Model):
 
         branch_id = (config.misa_branch_id or '').strip()
         stock_id = (config.misa_stock_id or '').strip()
+
+        # Auto-lookup account_object_id nếu chưa có trên partner
         account_object_id = (partner.misa_account_object_id or '').strip() if partner else ''
+        if not account_object_id and partner:
+            account_object_id = self._misa_lookup_account_object(config, partner)
 
         missing_header = []
         if not branch_id:
@@ -175,7 +169,7 @@ class StockPickingAmisSync(models.Model):
         if not stock_id:
             missing_header.append('MISA Stock ID (cấu hình)')
         if not account_object_id:
-            missing_header.append('MISA Account Object ID (nhà cung cấp)')
+            missing_header.append('MISA Account Object ID (nhà cung cấp: %s)' % (partner.name if partner else '?'))
         if missing_header:
             raise UserError('Thiếu mapping ID MISA ở phần đầu chứng từ: %s' % ', '.join(missing_header))
 
@@ -194,15 +188,31 @@ class StockPickingAmisSync(models.Model):
 
             inventory_item_id = (product.misa_inventory_item_id or '').strip()
             unit_id = (move.product_uom.misa_unit_id or '').strip()
+
+            # Auto-lookup nếu thiếu
+            if not inventory_item_id and product.default_code:
+                inventory_item_id, fetched_unit_id = self._misa_lookup_inventory_item(
+                    config, product, move.product_uom
+                )
+                if not unit_id and fetched_unit_id:
+                    unit_id = fetched_unit_id
+            if not unit_id:
+                unit_id = self._misa_lookup_unit(config, move.product_uom)
+
             ref_detail_id = (move.misa_ref_detail_id or '').strip()
+            if not ref_detail_id:
+                # Sinh ref_detail_id dạng stable UUID từ picking+move để idempotent
+                ref_detail_id = str(uuid.uuid5(
+                    uuid.NAMESPACE_DNS,
+                    'ref_detail|%s|%d' % (self.name, move.id)
+                ))
+                move.sudo().write({'misa_ref_detail_id': ref_detail_id})
 
             missing_line = []
-            if not ref_detail_id:
-                missing_line.append('MISA Ref Detail ID')
             if not inventory_item_id:
-                missing_line.append('MISA Inventory Item ID')
+                missing_line.append('MISA Inventory Item ID (product: %s)' % (product.default_code or product.name))
             if not unit_id:
-                missing_line.append('MISA Unit ID')
+                missing_line.append('MISA Unit ID (uom: %s)' % move.product_uom.name)
             if missing_line:
                 raise UserError(
                     'Thiếu mapping ID MISA ở dòng hàng %s (%s): %s' % (
@@ -304,6 +314,78 @@ class StockPickingAmisSync(models.Model):
             'detail': detail,
         }
         return voucher, []
+
+    # ── Auto-lookup helpers ────────────────────────────────────────────────────
+
+    def _misa_lookup_account_object(self, config, partner):
+        """Tìm account_object_id MISA theo tên partner, lưu vào partner."""
+        if not partner:
+            return ''
+        search_name = (partner.name or '').upper()
+        skip = 0
+        while True:
+            r = config.get_dictionary(data_type=1, skip=skip, take=100)
+            items = r.get('items') or []
+            if not items:
+                break
+            for a in items:
+                aname = (a.get('account_object_name') or '').upper()
+                acode = (a.get('account_object_code') or '').upper()
+                if search_name and (search_name in aname or search_name in acode):
+                    misa_id = a.get('account_object_id') or ''
+                    if misa_id:
+                        partner.sudo().write({'misa_account_object_id': misa_id})
+                        _logger.info('Auto-mapped partner %s → account_object_id=%s', partner.name, misa_id)
+                    return misa_id
+            if len(items) < 100:
+                break
+            skip += 100
+        _logger.warning('MISA account_object not found for partner: %s', partner.name)
+        return ''
+
+    def _misa_lookup_inventory_item(self, config, product, uom):
+        """Tìm inventory_item_id MISA theo default_code, lưu vào product + uom."""
+        code = (product.default_code or '').strip()
+        if not code:
+            return '', ''
+        skip = 0
+        while True:
+            r = config.get_dictionary(data_type=2, skip=skip, take=100)
+            items = r.get('items') or []
+            if not items:
+                break
+            for p in items:
+                if (p.get('inventory_item_code') or '').strip() == code:
+                    item_id = p.get('inventory_item_id') or ''
+                    unit_id = p.get('unit_id') or ''
+                    if item_id:
+                        product.sudo().write({'misa_inventory_item_id': item_id})
+                        _logger.info('Auto-mapped product %s → inventory_item_id=%s', code, item_id)
+                    if unit_id and uom and not uom.misa_unit_id:
+                        uom.sudo().write({'misa_unit_id': unit_id})
+                        _logger.info('Auto-mapped uom %s → unit_id=%s', uom.name, unit_id)
+                    return item_id, unit_id
+            if len(items) < 100:
+                break
+            skip += 100
+        _logger.warning('MISA inventory_item not found for product code: %s', code)
+        return '', ''
+
+    def _misa_lookup_unit(self, config, uom):
+        """Tìm unit_id MISA theo tên uom, lưu vào uom."""
+        if not uom:
+            return ''
+        name = (uom.name or '').strip()
+        r = config.get_dictionary(data_type=4, take=100)
+        for u in (r.get('items') or []):
+            if (u.get('unit_name') or '').strip() == name:
+                unit_id = u.get('unit_id') or ''
+                if unit_id:
+                    uom.sudo().write({'misa_unit_id': unit_id})
+                    _logger.info('Auto-mapped uom %s → unit_id=%s', name, unit_id)
+                return unit_id
+        _logger.warning('MISA unit not found for uom: %s', name)
+        return ''
 
 
 class ResPartnerAmisMapping(models.Model):

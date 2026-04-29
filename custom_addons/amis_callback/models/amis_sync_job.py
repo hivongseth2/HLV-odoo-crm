@@ -1,0 +1,69 @@
+# -*- coding: utf-8 -*-
+import logging
+from odoo import api, fields, models
+
+_logger = logging.getLogger(__name__)
+
+MAX_RETRY = 5
+
+
+class AmisSyncJob(models.Model):
+    _name = 'amis.sync.job'
+    _description = 'Hàng đợi đồng bộ MISA'
+    _order = 'create_date asc'
+    _rec_name = 'picking_id'
+
+    picking_id = fields.Many2one(
+        'stock.picking', string='Phiếu kho', required=True, ondelete='cascade', index=True,
+    )
+    direction = fields.Selection([
+        ('incoming', 'Nhập kho'),
+        ('outgoing', 'Xuất kho'),
+    ], string='Chiều', required=True)
+    status = fields.Selection([
+        ('pending', 'Chờ xử lý'),
+        ('done', 'Thành công'),
+        ('error', 'Lỗi'),
+        ('skipped', 'Bỏ qua'),
+    ], string='Trạng thái', default='pending', index=True)
+    retry_count = fields.Integer(string='Số lần thử', default=0)
+    error_msg = fields.Text(string='Lỗi cuối')
+    processed_at = fields.Datetime(string='Xử lý lúc')
+
+    @api.model
+    def _process_pending(self):
+        """Được gọi bởi ir.cron. Xử lý tất cả job pending theo thứ tự."""
+        jobs = self.search([('status', '=', 'pending'), ('retry_count', '<', MAX_RETRY)])
+        _logger.info('AMIS sync queue: xử lý %d jobs', len(jobs))
+        for job in jobs:
+            job._execute()
+            # Commit mỗi job để tránh 1 lỗi cuốn tất cả
+            self.env.cr.commit()
+
+    def _execute(self):
+        self.ensure_one()
+        pick = self.picking_id
+        try:
+            if self.direction == 'incoming':
+                pick._sync_incoming_po_to_misa()
+            else:
+                pick._sync_outgoing_so_to_misa()
+            self.write({
+                'status': 'done',
+                'error_msg': False,
+                'processed_at': fields.Datetime.now(),
+            })
+        except Exception as e:
+            self.write({
+                'retry_count': self.retry_count + 1,
+                'error_msg': str(e)[:2000],
+                'processed_at': fields.Datetime.now(),
+                'status': 'error' if self.retry_count + 1 >= MAX_RETRY else 'pending',
+            })
+            _logger.exception('AMIS sync job %d failed (retry %d/%d)', self.id, self.retry_count, MAX_RETRY)
+
+    def action_retry(self):
+        """Nút retry thủ công từ UI."""
+        for job in self:
+            job.write({'status': 'pending', 'retry_count': 0, 'error_msg': False})
+        return True

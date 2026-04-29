@@ -185,7 +185,67 @@
         </field>
     </record>
 
+    <!-- Queue View -->
+    <record id="view_amis_sync_job_list" model="ir.ui.view">
+        <field name="name">amis.sync.job.list</field>
+        <field name="model">amis.sync.job</field>
+        <field name="arch" type="xml">
+            <list string="Hàng đợi đồng bộ MISA" default_order="create_date desc"
+                  decoration-danger="status == 'error'"
+                  decoration-success="status == 'done'"
+                  decoration-muted="status == 'skipped'">
+                <field name="create_date" string="Tạo lúc"/>
+                <field name="picking_id"/>
+                <field name="direction"/>
+                <field name="status"/>
+                <field name="retry_count"/>
+                <field name="processed_at" string="Xử lý lúc"/>
+                <field name="error_msg" string="Lỗi" optional="show"/>
+                <button name="action_retry" type="object" string="Thử lại"
+                        invisible="status not in ('error',)" icon="fa-refresh"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_amis_sync_job_form" model="ir.ui.view">
+        <field name="name">amis.sync.job.form</field>
+        <field name="model">amis.sync.job</field>
+        <field name="arch" type="xml">
+            <form string="Sync Job MISA">
+                <header>
+                    <button name="action_retry" type="object" string="Thử lại"
+                            invisible="status not in ('error',)" class="btn-primary"/>
+                    <field name="status" widget="statusbar" statusbar_visible="pending,done,error"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="picking_id"/>
+                            <field name="direction"/>
+                            <field name="status"/>
+                        </group>
+                        <group>
+                            <field name="retry_count"/>
+                            <field name="processed_at"/>
+                        </group>
+                    </group>
+                    <group string="Lỗi" invisible="not error_msg">
+                        <field name="error_msg" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_amis_sync_job" model="ir.actions.act_window">
+        <field name="name">Hàng đợi đồng bộ MISA</field>
+        <field name="res_model">amis.sync.job</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_pending': 1}</field>
+    </record>
+
     <menuitem id="menu_amis_callback_root" name="AMIS Callback" sequence="30" web_icon="amis_callback,static/description/icon.svg"/>
     <menuitem id="menu_amis_callback_logs" name="Nhật ký callback" parent="menu_amis_callback_root" action="action_amis_callback_log" sequence="10"/>
+    <menuitem id="menu_amis_sync_jobs" name="Hàng đợi đồng bộ MISA" parent="menu_amis_callback_root" action="action_amis_sync_job" sequence="15"/>
     <menuitem id="menu_amis_callback_config" name="Cấu hình" parent="menu_amis_callback_root" action="action_amis_callback_config" sequence="20" groups="base.group_system"/>
 </odoo>

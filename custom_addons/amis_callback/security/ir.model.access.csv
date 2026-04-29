@@ -2,3 +2,5 @@ id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_amis_callback_log_user,amis.callback.log,model_amis_callback_log,base.group_user,1,0,0,0
 access_amis_callback_log_line_user,amis.callback.log.line,model_amis_callback_log_line,base.group_user,1,0,0,0
 access_amis_callback_config_admin,amis.callback.config,model_amis_callback_config,base.group_system,1,1,1,1
+access_amis_sync_job_user,amis.sync.job,model_amis_sync_job,base.group_user,1,0,0,0
+access_amis_sync_job_admin,amis.sync.job admin,model_amis_sync_job,base.group_system,1,1,1,1
