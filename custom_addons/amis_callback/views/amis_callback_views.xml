@@ -130,6 +130,8 @@
                             <field name="access_code" password="True"/>
                             <field name="access_token" readonly="1"/>
                             <field name="token_expired_time" readonly="1"/>
+                            <field name="misa_branch_id"/>
+                            <field name="misa_stock_id"/>
                         </group>
                         <group>
                             <field name="callback_route" readonly="1"/>

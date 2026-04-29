@@ -66,6 +66,16 @@ class AmisCallbackConfig(models.Model):
         default=False,
         help='Bật để tự động đẩy phiếu xuất kho (outgoing) có nguồn từ đơn hàng bán lên MISA.',
     )
+    misa_branch_id = fields.Char(
+        string='MISA Branch ID',
+        default='53a073a0-5381-4493-820f-51ea32ebe990',
+        help='Branch ID thật trên MISA dùng cho chứng từ nhập kho.',
+    )
+    misa_stock_id = fields.Char(
+        string='MISA Stock ID',
+        default='de167b2d-ec5f-404a-8532-08257193bc91',
+        help='Stock ID thật trên MISA (kho HLV).',
+    )
 
     def ensure_singleton(self):
         record = self.search([], limit=1)
@@ -147,6 +157,89 @@ class AmisCallbackConfig(models.Model):
             'dictionary': dictionary_items,
         }
         return self._post_actopen('/apir/sync/actopen/save_dictionary', payload, include_token=True)
+
+    def get_dictionary(self, data_type, branch_id=None, skip=0, take=100, last_sync_time=None):
+        """Lay danh muc tu AMIS ke toan theo endpoint get_dictionary.
+
+        Returns:
+            dict: {
+                'raw': body goc,
+                'items': danh sach item da parse tu Data,
+                'custom_data': dict parse tu CustomData,
+                'last_sync_time': gia tri LastSyncTime neu co,
+            }
+        """
+        self.ensure_one()
+
+        take = int(take or 0)
+        if take <= 0:
+            take = 100
+        if take > 100:
+            take = 100
+
+        payload = {
+            'data_type': int(data_type),
+            'branch_id': branch_id or None,
+            'skip': int(skip or 0),
+            'take': take,
+            'app_id': self.app_id,
+            'last_sync_time': last_sync_time or None,
+        }
+        body = self._post_actopen('/apir/sync/actopen/get_dictionary', payload, include_token=True)
+
+        data_raw = body.get('Data')
+        items = []
+        if isinstance(data_raw, str):
+            try:
+                parsed = json.loads(data_raw)
+                if isinstance(parsed, list):
+                    items = parsed
+            except Exception:
+                items = []
+        elif isinstance(data_raw, list):
+            items = data_raw
+
+        custom_raw = body.get('CustomData')
+        custom_data = {}
+        if isinstance(custom_raw, str):
+            try:
+                custom_data = json.loads(custom_raw) or {}
+            except Exception:
+                custom_data = {}
+        elif isinstance(custom_raw, dict):
+            custom_data = custom_raw
+
+        return {
+            'raw': body,
+            'items': items,
+            'custom_data': custom_data,
+            'last_sync_time': custom_data.get('LastSyncTime'),
+        }
+
+    def find_dictionary_item_by_code(self, data_type, code_field, code_value, branch_id=None, take=100, max_pages=30):
+        """Tim 1 item danh muc theo code voi phan trang get_dictionary."""
+        self.ensure_one()
+        if not code_value:
+            return False
+
+        skip = 0
+        take = min(max(int(take or 100), 1), 100)
+        for _page in range(max(1, int(max_pages or 1))):
+            result = self.get_dictionary(
+                data_type=data_type,
+                branch_id=branch_id,
+                skip=skip,
+                take=take,
+                last_sync_time=None,
+            )
+            items = result.get('items') or []
+            for item in items:
+                if str(item.get(code_field) or '').strip() == str(code_value).strip():
+                    return item
+            if len(items) < take:
+                break
+            skip += take
+        return False
 
     def push_inward_voucher(self, voucher_payload, dictionary_items=None):
         self.ensure_one()

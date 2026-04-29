@@ -68,9 +68,9 @@ class StockPickingAmisSync(models.Model):
         voucher_payload, dictionary_items = self._prepare_misa_inward_payload(config, purchase_order)
         org_refid = voucher_payload.get('org_refid')
 
-        # Theo tài liệu ACT OpenAPI: đồng bộ danh mục trước, sau đó cất đề nghị sinh chứng từ.
-        config.push_dictionary(dictionary_items)
-        config.push_inward_voucher(voucher_payload, dictionary_items=dictionary_items)
+        # Nghiep vu hien tai uu tien map theo ma (code), tranh dung cac GUID tu sinh de khong lech du lieu MISA.
+        # Neu danh muc da co san ben MISA, khong can goi save_dictionary.
+        config.push_inward_voucher(voucher_payload, dictionary_items=[])
 
         self.sudo().write({
             'misa_inward_synced': True,
@@ -134,16 +134,28 @@ class StockPickingAmisSync(models.Model):
         self.ensure_one()
         partner = self.partner_id or purchase_order.partner_id
 
-        account_object_id = self._stable_uuid('partner', partner.id)
-        branch_id = self._stable_uuid('company', self.company_id.id)
-        refid = self._stable_uuid('picking', self.id)
-        
+        refid = (self.misa_inward_org_refid or '').strip()
+        if not refid:
+            raise UserError('Thiếu MISA org_refid phiếu nhập. Vui lòng điền trường "MISA org_refid phiếu nhập" trên phiếu nhập trước khi đồng bộ.')
+
+        branch_id = (config.misa_branch_id or '').strip()
+        stock_id = (config.misa_stock_id or '').strip()
+        account_object_id = (partner.misa_account_object_id or '').strip() if partner else ''
+
+        missing_header = []
+        if not branch_id:
+            missing_header.append('MISA Branch ID (cấu hình)')
+        if not stock_id:
+            missing_header.append('MISA Stock ID (cấu hình)')
+        if not account_object_id:
+            missing_header.append('MISA Account Object ID (nhà cung cấp)')
+        if missing_header:
+            raise UserError('Thiếu mapping ID MISA ở phần đầu chứng từ: %s' % ', '.join(missing_header))
+
         # Kho MISA co dinh: HLV
         misa_warehouse_code = 'HLV'
-        stock_id = self._stable_uuid('warehouse_hlv', 'hlv')
 
         detail = []
-        dictionary = []
         total_amount = 0.0
 
         for idx, move in enumerate(self.move_ids_without_package.filtered(lambda m: m.quantity > 0), start=1):
@@ -153,18 +165,32 @@ class StockPickingAmisSync(models.Model):
             amount = qty_done * price_unit
             total_amount += amount
 
-            # Map product theo default_code MISA -> Odoo
-            # Neu product co default_code, su dung do lam inventory_item_code
-            # inventory_item_id dung UUID de tham chieu trong MISA
-            inventory_item_id = self._stable_uuid('product', product.default_code or product.id)
-            unit_id = self._stable_uuid('uom', move.product_uom.id)
+            inventory_item_id = (product.misa_inventory_item_id or '').strip()
+            unit_id = (move.product_uom.misa_unit_id or '').strip()
+            ref_detail_id = (move.misa_ref_detail_id or '').strip()
+
+            missing_line = []
+            if not ref_detail_id:
+                missing_line.append('MISA Ref Detail ID')
+            if not inventory_item_id:
+                missing_line.append('MISA Inventory Item ID')
+            if not unit_id:
+                missing_line.append('MISA Unit ID')
+            if missing_line:
+                raise UserError(
+                    'Thiếu mapping ID MISA ở dòng hàng %s (%s): %s' % (
+                        move.display_name,
+                        product.display_name,
+                        ', '.join(missing_line),
+                    )
+                )
 
             # Tai khoan co dinh theo yeu cau: Kho 1561, Cong no 331
             debit_account = '1561'
             credit_account = '331'
 
             detail.append({
-                'ref_detail_id': self._stable_uuid('move', move.id),
+                'ref_detail_id': ref_detail_id,
                 'refid': refid,
                 'inventory_item_id': inventory_item_id,
                 'stock_id': stock_id,
@@ -209,73 +235,6 @@ class StockPickingAmisSync(models.Model):
                 'state': 0,
             })
 
-            dictionary.append({
-                'dictionary_type': 3,
-                'inventory_item_id': inventory_item_id,
-                'inventory_item_name': product.display_name,
-                'inventory_item_code': product.default_code or str(product.id),
-                'inventory_item_type': 0,
-                'unit_id': unit_id,
-                'inactive': False,
-                'inventory_account': debit_account,
-                'cogs_account': '632',
-                'sale_account': '5111',
-                'reftype': 0,
-                'reftype_category': 0,
-                'state': 0,
-            })
-            dictionary.append({
-                'dictionary_type': 6,
-                'unit_id': unit_id,
-                'unit_name': move.product_uom.name,
-                'inactive': False,
-                'reftype_category': 0,
-                'state': 0,
-            })
-
-        dictionary.append({
-            'dictionary_type': 1,
-            'account_object_id': account_object_id,
-            'account_object_type': 0,
-            'is_vendor': True,
-            'is_customer': False,
-            'is_employee': False,
-            'inactive': False,
-            'account_object_code': partner.ref or (partner.name if partner else ''),
-            'account_object_name': partner.display_name if partner else '',
-            'address': partner.contact_address_complete if partner else '',
-            'country': partner.country_id.name if partner and partner.country_id else 'Viet Nam',
-            'pay_account': '3311',
-            'receive_account': '1311',
-            'reftype': 0,
-            'reftype_category': 0,
-            'branch_id': branch_id,
-            'state': 0,
-        })
-        dictionary.append({
-            'dictionary_type': 5,
-            'stock_id': stock_id,
-            'branch_id': branch_id,
-            'inactive': False,
-            'stock_code': misa_warehouse_code,
-            'stock_name': misa_warehouse_code,
-            'reftype': 0,
-            'reftype_category': 0,
-            'state': 0,
-        })
-
-        # Khử trùng lặp theo (dictionary_type, id chính) để payload gọn và đúng giới hạn tài liệu.
-        dedup = {}
-        for item in dictionary:
-            key_field = {
-                1: 'account_object_id',
-                3: 'inventory_item_id',
-                5: 'stock_id',
-                6: 'unit_id',
-            }.get(item.get('dictionary_type'))
-            key = (item.get('dictionary_type'), item.get(key_field))
-            dedup[key] = item
-
         voucher = {
             'voucher_type': 7,
             'is_get_new_id': True,
@@ -317,7 +276,43 @@ class StockPickingAmisSync(models.Model):
             'state': 0,
             'detail': detail,
         }
-        return voucher, list(dedup.values())
+        return voucher, []
+
+
+class ResPartnerAmisMapping(models.Model):
+    _inherit = 'res.partner'
+
+    misa_account_object_id = fields.Char(
+        string='MISA Account Object ID',
+        help='ID thật của đối tượng (nhà cung cấp/khách hàng) trên MISA.',
+    )
+
+
+class ProductProductAmisMapping(models.Model):
+    _inherit = 'product.product'
+
+    misa_inventory_item_id = fields.Char(
+        string='MISA Inventory Item ID',
+        help='ID thật của vật tư/hàng hóa trên MISA.',
+    )
+
+
+class UomUomAmisMapping(models.Model):
+    _inherit = 'uom.uom'
+
+    misa_unit_id = fields.Char(
+        string='MISA Unit ID',
+        help='ID thật của đơn vị tính trên MISA.',
+    )
+
+
+class StockMoveAmisMapping(models.Model):
+    _inherit = 'stock.move'
+
+    misa_ref_detail_id = fields.Char(
+        string='MISA Ref Detail ID',
+        help='ID thật của dòng chi tiết chứng từ trên MISA.',
+    )
 
     def _prepare_misa_outgoing_payload(self, config, sales_order):
         """Chuan bi payload de dua phieu xuat kho len MISA.
