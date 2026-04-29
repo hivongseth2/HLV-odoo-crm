@@ -68,6 +68,10 @@ class StockPickingAmisSync(models.Model):
         account_object_id = self._stable_uuid('partner', partner.id)
         branch_id = self._stable_uuid('company', self.company_id.id)
         refid = self._stable_uuid('picking', self.id)
+        
+        # Kho MISA co dinh: HLV
+        misa_warehouse_code = 'HLV'
+        stock_id = self._stable_uuid('warehouse_hlv', 'hlv')
 
         detail = []
         dictionary = []
@@ -80,12 +84,15 @@ class StockPickingAmisSync(models.Model):
             amount = qty_done * price_unit
             total_amount += amount
 
-            inventory_item_id = self._stable_uuid('product', product.id)
-            stock_id = self._stable_uuid('location', self.location_dest_id.id)
+            # Map product theo default_code MISA -> Odoo
+            # Neu product co default_code, su dung do lam inventory_item_code
+            # inventory_item_id dung UUID de tham chieu trong MISA
+            inventory_item_id = self._stable_uuid('product', product.default_code or product.id)
             unit_id = self._stable_uuid('uom', move.product_uom.id)
 
-            debit_account = (product.categ_id.property_stock_valuation_account_id.code or '1561') if product.categ_id else '1561'
-            credit_account = (partner.property_account_payable_id.code or '3311') if partner else '3311'
+            # Tai khoan co dinh theo yeu cau: Kho 1561, Cong no 331
+            debit_account = '1561'
+            credit_account = '331'
 
             detail.append({
                 'ref_detail_id': self._stable_uuid('move', move.id),
@@ -119,10 +126,10 @@ class StockPickingAmisSync(models.Model):
                 'inventory_item_code': product.default_code or str(product.id),
                 'inventory_item_type': 0,
                 'unit_name': move.product_uom.name,
-                'stock_code': self.location_dest_id.complete_name,
+                'stock_code': misa_warehouse_code,
                 'main_unit_name': move.product_uom.name,
                 'inventory_item_name': product.display_name,
-                'stock_name': self.location_dest_id.complete_name,
+                'stock_name': misa_warehouse_code,
                 'account_name': debit_account,
                 'is_follow_serial_number': False,
                 'is_allow_duplicate_serial_number': False,
@@ -178,11 +185,11 @@ class StockPickingAmisSync(models.Model):
         })
         dictionary.append({
             'dictionary_type': 5,
-            'stock_id': self._stable_uuid('location', self.location_dest_id.id),
+            'stock_id': stock_id,
             'branch_id': branch_id,
             'inactive': False,
-            'stock_code': self.location_dest_id.complete_name,
-            'stock_name': self.location_dest_id.complete_name,
+            'stock_code': misa_warehouse_code,
+            'stock_name': misa_warehouse_code,
             'reftype': 0,
             'reftype_category': 0,
             'state': 0,

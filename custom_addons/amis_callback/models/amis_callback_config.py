@@ -169,3 +169,33 @@ class AmisCallbackConfig(models.Model):
         if missing:
             raise UserError('Thieu cau hinh MISA: %s' % ', '.join(missing))
         return True
+
+    def delete_call_back_data(self):
+        """Xoa ket qua goi callback cua tai khoan ung dung ACT.
+        
+        Endpoint: POST /api/oauth/actopensupport/delete_call_back_data
+        Dung de xoa cac ket qua callback da ghi nhan de test.
+        """
+        self.ensure_one()
+        payload = {
+            'app_id': self.app_id,
+            'org_company_code': self.org_company_code,
+        }
+        return self._post_actopen('/api/oauth/actopensupport/delete_call_back_data', payload, include_token=False)
+
+    def check_call_back_data(self):
+        """Kiem tra cac ket qua goi callback cua tai khoan ung dung demo.
+        
+        Endpoint: POST /api/oauth/actopensupport/check_call_back_data
+        Dung de kiem tra cac loi goi da tu phat toi ham call_back_data,
+        dung de test thong luong callback.
+        
+        Returns:
+            dict: Trai ve Success, ErrorMessage, va Data (danh sach ket qua callback).
+        """
+        self.ensure_one()
+        payload = {
+            'app_id': self.app_id,
+            'org_company_code': self.org_company_code,
+        }
+        return self._post_actopen('/api/oauth/actopensupport/check_call_back_data', payload, include_token=False)
