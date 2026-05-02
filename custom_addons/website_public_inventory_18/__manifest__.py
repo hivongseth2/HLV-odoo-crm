@@ -2,7 +2,7 @@
 {
     "name": "Website Public Inventory (Odoo 18)",
     "summary": "Public inventory lookup and order lookup pages with search & pagination.",
-    "version": "18.0.1.0.0", 
+    "version": "18.0.1.0.1", 
     "author": "Your Company",
     "website": "https://example.com",
     "category": "Website/Inventory",
