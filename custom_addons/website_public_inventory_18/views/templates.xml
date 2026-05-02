@@ -577,7 +577,9 @@
                    var qtyInfo = (q > 0) ? ('<span class="badge ' + badgeClass + ' text-white border ms-2">Tồn: ' + fmt(q) + '</span>') : '<span class="badge bg-light text-muted border ms-2">Hết hàng</span>';
                    if (q > 0 && q <= 5) qtyInfo = '<span class="badge ' + badgeClass + ' border ms-2">Tồn: ' + fmt(q) + '</span>';
                    
-                   html += '<div class="suggestion-item border-bottom p-2" data-name="' + displayName + '" style="cursor:pointer;">';
+                   // data-code: dùng default_code để search chính xác, tránh ilike 'Dù' match 'dùng'
+                   var searchTerm = (p.default_code && p.default_code.trim()) ? p.default_code.trim() : displayName;
+                   html += '<div class="suggestion-item border-bottom p-2" data-name="' + displayName + '" data-code="' + (p.default_code || '') + '" data-search-term="' + searchTerm + '" style="cursor:pointer;">';
                    html += '  <div class="d-flex align-items-center">';
                    html += '    <img src="' + imgUrl + '" class=" me-2 flex-shrink-0" style="width:40px; height:40px; object-fit:cover;"/>';
                    html += '    <div class="flex-grow-1 overflow-hidden">';
@@ -637,8 +639,10 @@
                   else $dropdown.hide();
                 }, 300));
                 $(document).on('click', '.suggestion-item', function() {
-                  var name = $(this).data('name');
-                  if (name) { window.addSearchChip(name); $dropdown.hide(); $('#search-form').submit(); }
+                  // Dùng default_code (ví dụ: DU_MIL) để search, không dùng name (Dù MILWAUKEE)
+                  // vì ilike 'Dù' sẽ match cả 'từ dùng' → hàng trăm sản phẩm MILWAUKEE
+                  var term = $(this).data('search-term') || $(this).data('name');
+                  if (term) { window.addSearchChip(term); $dropdown.hide(); $('#search-form').submit(); }
                 });
                 $(document).on('click', function(e) { if (!$(e.target).closest('#chip-container, #search-suggestions').length) $dropdown.hide(); });
                 

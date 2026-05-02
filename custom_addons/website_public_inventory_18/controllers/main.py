@@ -224,7 +224,9 @@ class PublicInventory(http.Controller):
 
         # 4. SEARCH
         found_products = Product.search(domain, order="name asc") 
-        final_product_ids = set()
+        # Dùng list + seen set để giữ nguyên thứ tự DB (name asc), không sort lại theo ID
+        ordered_product_ids = []
+        seen_pids = set()
         
         # Pre-fetch BoM status for found products to avoid N+1 queries loop
         # Map tmpl_id -> is_combo
@@ -238,7 +240,9 @@ class PublicInventory(http.Controller):
         combo_tmpl_ids = set(boms.mapped('product_tmpl_id').ids)
 
         for p in found_products:
-            final_product_ids.add(p.id)
+            if p.id not in seen_pids:
+                ordered_product_ids.append(p.id)
+                seen_pids.add(p.id)
             if combo_search_mode:
                 is_combo = p.product_tmpl_id.id in combo_tmpl_ids
                 # Nếu là combo (và đang bật search combo), bung children (nếu cần show con)
@@ -248,10 +252,12 @@ class PublicInventory(http.Controller):
                     # Optimized: filter boms in memory
                     product_bom = next((b for b in boms if b.product_tmpl_id.id == p.product_tmpl_id.id), None)
                     if product_bom:
-                         child_ids = product_bom.bom_line_ids.mapped('product_id').ids
-                         final_product_ids.update(child_ids)
+                        for child_id in product_bom.bom_line_ids.mapped('product_id').ids:
+                            if child_id not in seen_pids:
+                                ordered_product_ids.append(child_id)
+                                seen_pids.add(child_id)
 
-        sorted_pids = sorted(list(final_product_ids))
+        sorted_pids = ordered_product_ids  # Giữ nguyên thứ tự name asc từ DB
         
         # 5. PAGINATION
         total = len(sorted_pids)
