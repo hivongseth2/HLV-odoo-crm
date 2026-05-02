@@ -3,6 +3,7 @@ import hmac
 import logging
 import math
 import base64
+import re
 from odoo import http
 from odoo.http import request
 from odoo.osv import expression
@@ -585,8 +586,37 @@ class PublicInventory(http.Controller):
                 "is_combo": is_combo,
             })
         
-        # Sort by quantity (stock first), then limit to 10
-        results.sort(key=lambda x: (-x['qty_total'], x['name']))  # Negative for descending qty, then name ascending
+        # Sort: relevance score (cao hơn = match chính xác hơn) > qty > name
+        # Ví dụ: "dù mil" → "Dù MILWAUKEE" (exact word) > "Bi sắt dùng..." ("dù" là substring "dùng")
+        tokens_lower = [t.lower() for t in tokens]
+
+        def _relevance_score(item):
+            """Tính điểm match: exact word >> word-prefix >> substring."""
+            name_lower  = (item['name'] or '').lower()
+            code_lower  = (item['default_code'] or '').lower()
+            barcode_low = (item['barcode'] or '').lower()
+            # Tách tên thành các từ để check word boundary
+            name_words  = re.split(r'[\s\-_/\\]+', name_lower)
+            code_words  = re.split(r'[\s\-_/\\]+', code_lower)
+            total = 0
+            for t in tokens_lower:
+                s = 0
+                # --- default_code ---
+                if code_lower == t:                    s = max(s, 200)  # exact full code
+                elif any(w == t for w in code_words):  s = max(s, 180)  # exact word in code
+                elif any(w.startswith(t) for w in code_words): s = max(s, 120)  # code word prefix
+                elif t in code_lower:                   s = max(s, 60)   # code substring
+                # --- name ---
+                if any(w == t for w in name_words):     s = max(s, 160)  # exact word in name
+                elif any(w.startswith(t) for w in name_words): s = max(s, 80)  # name word prefix
+                elif t in name_lower:                   s = max(s, 20)   # name substring
+                # --- barcode ---
+                if barcode_low.startswith(t):           s = max(s, 50)
+                elif t in barcode_low:                  s = max(s, 10)
+                total += s
+            return total
+
+        results.sort(key=lambda x: (-_relevance_score(x), -x['qty_total'], x['name']))
         results = results[:10]
         
         return {"ok": True, "products": results}
