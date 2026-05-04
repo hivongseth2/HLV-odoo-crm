@@ -642,21 +642,13 @@ class StockPickingAmisSync(models.Model):
 
     def _misa_lookup_account_object_by_id(self, config, account_object_id):
         """Tìm item account_object trong MISA dictionary theo ID (UUID).
-        Trả về dict item hoặc None. Dùng để lấy tên/mã thật khi chỉ có ID."""
+        Trả về dict item hoặc None. Dùng cached list (không call API thêm)."""
         if not account_object_id:
             return None
-        skip = 0
-        while True:
-            r = config.get_dictionary(data_type=1, skip=skip, take=100)
-            items = r.get('items') or []
-            if not items:
-                break
-            for a in items:
-                if (a.get('account_object_id') or '').lower() == account_object_id.lower():
-                    return a
-            if len(items) < 100:
-                break
-            skip += 100
+        uid_lower = account_object_id.lower()
+        for a in config._get_all_dictionary(1):
+            if (a.get('account_object_id') or '').lower() == uid_lower:
+                return a
         return None
 
     def _misa_lookup_account_object(self, config, partner):
@@ -664,24 +656,15 @@ class StockPickingAmisSync(models.Model):
         if not partner:
             return ''
         search_name = (partner.name or '').upper()
-        skip = 0
-        while True:
-            r = config.get_dictionary(data_type=1, skip=skip, take=100)
-            items = r.get('items') or []
-            if not items:
-                break
-            for a in items:
-                aname = (a.get('account_object_name') or '').upper()
-                acode = (a.get('account_object_code') or '').upper()
-                if search_name and (search_name in aname or search_name in acode):
-                    misa_id = a.get('account_object_id') or ''
-                    if misa_id:
-                        partner.sudo().write({'misa_account_object_id': misa_id})
-                        _logger.info('Auto-mapped partner %s → account_object_id=%s', partner.name, misa_id)
-                    return misa_id
-            if len(items) < 100:
-                break
-            skip += 100
+        for a in config._get_all_dictionary(1):
+            aname = (a.get('account_object_name') or '').upper()
+            acode = (a.get('account_object_code') or '').upper()
+            if search_name and (search_name in aname or search_name in acode):
+                misa_id = a.get('account_object_id') or ''
+                if misa_id:
+                    partner.sudo().write({'misa_account_object_id': misa_id})
+                    _logger.info('Auto-mapped partner %s → account_object_id=%s', partner.name, misa_id)
+                return misa_id
         _logger.warning('MISA account_object not found for partner: %s', partner.name)
         return ''
 
@@ -690,26 +673,17 @@ class StockPickingAmisSync(models.Model):
         code = (product.default_code or '').strip()
         if not code:
             return '', ''
-        skip = 0
-        while True:
-            r = config.get_dictionary(data_type=2, skip=skip, take=100)
-            items = r.get('items') or []
-            if not items:
-                break
-            for p in items:
-                if (p.get('inventory_item_code') or '').strip() == code:
-                    item_id = p.get('inventory_item_id') or ''
-                    unit_id = p.get('unit_id') or ''
-                    if item_id:
-                        product.sudo().write({'misa_inventory_item_id': item_id})
-                        _logger.info('Auto-mapped product %s → inventory_item_id=%s', code, item_id)
-                    if unit_id and uom and not uom.misa_unit_id:
-                        uom.sudo().write({'misa_unit_id': unit_id})
-                        _logger.info('Auto-mapped uom %s → unit_id=%s', uom.name, unit_id)
-                    return item_id, unit_id
-            if len(items) < 100:
-                break
-            skip += 100
+        for p in config._get_all_dictionary(2):
+            if (p.get('inventory_item_code') or '').strip() == code:
+                item_id = p.get('inventory_item_id') or ''
+                unit_id = p.get('unit_id') or ''
+                if item_id:
+                    product.sudo().write({'misa_inventory_item_id': item_id})
+                    _logger.info('Auto-mapped product %s → inventory_item_id=%s', code, item_id)
+                if unit_id and uom and not uom.misa_unit_id:
+                    uom.sudo().write({'misa_unit_id': unit_id})
+                    _logger.info('Auto-mapped uom %s → unit_id=%s', uom.name, unit_id)
+                return item_id, unit_id
         _logger.warning('MISA inventory_item not found for product code: %s', code)
         return '', ''
 
@@ -718,8 +692,7 @@ class StockPickingAmisSync(models.Model):
         if not uom:
             return ''
         name = (uom.name or '').strip()
-        r = config.get_dictionary(data_type=4, take=100)
-        for u in (r.get('items') or []):
+        for u in config._get_all_dictionary(4):
             if (u.get('unit_name') or '').strip() == name:
                 unit_id = u.get('unit_id') or ''
                 if unit_id:

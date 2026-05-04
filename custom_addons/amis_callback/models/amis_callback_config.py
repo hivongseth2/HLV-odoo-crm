@@ -141,26 +141,17 @@ class AmisCallbackConfig(models.Model):
         if cached_id:
             return cached_id, '', expected_name
 
-        # Chưa cache → lookup MISA dictionary
+        # Chưa cache → lookup MISA dictionary (dùng cache trong transaction này)
         search_name = expected_name.upper()
-        skip = 0
-        while True:
-            r = self.get_dictionary(data_type=1, skip=skip, take=100)
-            items = r.get('items') or []
-            if not items:
-                break
-            for a in items:
-                aname = (a.get('account_object_name') or '').upper()
-                if search_name == aname:
-                    misa_id = a.get('account_object_id') or ''
-                    acode = a.get('account_object_code') or ''
-                    if misa_id:
-                        self.sudo().write({field_name: misa_id})
-                        _logger.info('Auto-cached shopee shop %s → %s = %s', identifier, field_name, misa_id)
-                    return misa_id, acode, expected_name
-            if len(items) < 100:
-                break
-            skip += 100
+        for a in self._get_all_dictionary(1):
+            aname = (a.get('account_object_name') or '').upper()
+            if search_name == aname:
+                misa_id = a.get('account_object_id') or ''
+                acode = a.get('account_object_code') or ''
+                if misa_id:
+                    self.sudo().write({field_name: misa_id})
+                    _logger.info('Auto-cached shopee shop %s → %s = %s', identifier, field_name, misa_id)
+                return misa_id, acode, expected_name
         _logger.warning('MISA: không tìm được account_object cho shopee shop %s (%s)', identifier, expected_name)
         return '', '', expected_name
 
@@ -244,6 +235,37 @@ class AmisCallbackConfig(models.Model):
             'dictionary': dictionary_items,
         }
         return self._post_actopen('/apir/sync/actopen/save_dictionary', payload, include_token=True)
+
+    def _get_all_dictionary(self, data_type):
+        """Tải toàn bộ 1 loại danh mục MISA và cache trong memory cho transaction này.
+
+        Thay vì gọi get_dictionary nhiều lần (N page × M lần lookup),
+        chỉ gọi 1 lần rồi cache list items vào self._misa_dict_cache.
+        Cache tự động hết hiệu lực khi transaction/cursor kết thúc.
+        """
+        self.ensure_one()
+        cache = getattr(self, '_misa_dict_cache', None)
+        if cache is None:
+            # pylint: disable=attribute-defined-outside-init
+            self._misa_dict_cache = {}
+            cache = self._misa_dict_cache
+
+        key = int(data_type)
+        if key in cache:
+            return cache[key]
+
+        all_items = []
+        skip = 0
+        while True:
+            r = self.get_dictionary(data_type=data_type, skip=skip, take=100)
+            items = r.get('items') or []
+            all_items.extend(items)
+            if len(items) < 100:
+                break
+            skip += 100
+        cache[key] = all_items
+        _logger.info('MISA dictionary type=%d: fetched %d items (cached for this transaction)', data_type, len(all_items))
+        return all_items
 
     def get_dictionary(self, data_type, branch_id=None, skip=0, take=100, last_sync_time=None):
         """Lay danh muc tu AMIS ke toan theo endpoint get_dictionary.
