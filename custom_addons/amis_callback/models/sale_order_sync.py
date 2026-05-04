@@ -100,7 +100,8 @@ class SaleOrderAmisSync(models.Model):
             sa_invoice_refid = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'sa_invoice|%d' % self.id))
 
         detail = []
-        total_sale = 0.0
+        total_gross = 0.0
+        total_discount = 0.0
         total_vat = 0.0
 
         for idx, line in enumerate(
@@ -111,7 +112,9 @@ class SaleOrderAmisSync(models.Model):
             qty = float(line.qty_delivered) if float(line.qty_delivered) > 0 else float(line.product_uom_qty)
             price_unit = float(line.price_unit)
             discount = float(line.discount or 0.0)
-            amount_oc = qty * price_unit * (1.0 - discount / 100.0)
+            gross_amount = qty * price_unit
+            discount_amount = gross_amount * discount / 100.0
+            amount_oc = gross_amount - discount_amount
 
             vat_rate = 0.0
             for tax in line.tax_id:
@@ -119,7 +122,8 @@ class SaleOrderAmisSync(models.Model):
                     vat_rate = float(tax.amount)
                     break
             vat_amount = amount_oc * vat_rate / 100.0
-            total_sale += amount_oc
+            total_gross += gross_amount
+            total_discount += discount_amount
             total_vat += vat_amount
 
             inventory_item_id = (product.misa_inventory_item_id or '').strip()
@@ -142,19 +146,19 @@ class SaleOrderAmisSync(models.Model):
                 'amount_oc': amount_oc,
                 'amount': amount_oc,
                 'discount_rate': discount,
-                'discount_amount_oc': qty * price_unit * discount / 100.0,
-                'discount_amount': qty * price_unit * discount / 100.0,
+                'discount_amount_oc': discount_amount,
+                'discount_amount': discount_amount,
                 'vat_rate': vat_rate,
                 'vat_amount_oc': vat_amount,
                 'vat_amount': vat_amount,
                 'main_convert_rate': 1.0,
                 'main_quantity': qty,
                 'amount_after_tax': 0.0,
-                'description': product.display_name,
+                'description': product.name,
                 'debit_account': '131',
                 'credit_account': '5111',
                 'vat_account': '3331',
-                'vat_description': 'Thue GTGT - %s' % product.display_name,
+                'vat_description': 'Thue GTGT - %s' % product.name,
                 'exchange_rate_operator': '*',
                 'account_object_id': account_object_id,
                 'account_object_name': account_object_name,
@@ -164,7 +168,7 @@ class SaleOrderAmisSync(models.Model):
                 'inventory_item_type': 0,
                 'unit_name': line.product_uom.name,
                 'main_unit_name': line.product_uom.name,
-                'inventory_item_name': product.display_name,
+                'inventory_item_name': product.name,
                 'is_follow_serial_number': False,
                 'is_allow_duplicate_serial_number': False,
                 'is_unit_price_after_tax': False,
@@ -174,6 +178,7 @@ class SaleOrderAmisSync(models.Model):
                 'state': 0,
             })
 
+        total_sale = total_gross - total_discount
         total_amount = total_sale + total_vat
         refdate = self._to_misa_date(datetime.utcnow())
 
@@ -206,10 +211,10 @@ class SaleOrderAmisSync(models.Model):
             'is_posted_last_year': False,
             'is_invoice_replace': False,
             'exchange_rate': 1.0,
-            'total_sale_amount_oc': total_sale,
-            'total_sale_amount': total_sale,
-            'total_discount_amount_oc': 0.0,
-            'total_discount_amount': 0.0,
+            'total_sale_amount_oc': total_gross,
+            'total_sale_amount': total_gross,
+            'total_discount_amount_oc': total_discount,
+            'total_discount_amount': total_discount,
             'total_vat_amount_oc': total_vat,
             'total_vat_amount': total_vat,
             'total_amount_oc': total_amount,
@@ -223,7 +228,7 @@ class SaleOrderAmisSync(models.Model):
             'currency_id': self.currency_id.name or 'VND',
             'refno_finance': '',
             'refno_management': '',
-            'is_created_savoucher': 0,
+            'is_created_savoucher': 1 if self.misa_sa_voucher_org_refid else 0,
             'send_email_status': 0,
             'is_invoice_receipted': False,
             'invoice_status': 0,
