@@ -167,78 +167,9 @@ class StockPickingAmisSync(models.Model):
         if not stock_id:
             raise UserError('Thiếu MISA Stock ID trong cấu hình.')
 
-        # Auto-lookup account_object_id nếu chưa có trên partner
-        account_object_id = (partner.misa_account_object_id or '').strip() if partner else ''
-        account_object_code = (partner.ref or (partner.name if partner else '')) if partner else ''
-        account_object_name = partner.display_name if partner else ''
-
-        if not account_object_id and partner:
-            account_object_id = self._misa_lookup_account_object(config, partner)
-            if account_object_id:
-                account_object_code = partner.ref or partner.name or ''
-                account_object_name = partner.display_name or ''
-
-        # Fallback: map theo shopee_shop_id.identifier (cứng)
-        if not account_object_id:
-            shop = getattr(sales_order, 'shopee_shop_id', None)
-            shop_identifier = str(getattr(shop, 'identifier', '') or '').strip() if shop else ''
-            if shop_identifier:
-                misa_id, misa_code, misa_name = config.get_shopee_account_object_id(shop_identifier)
-                if misa_id:
-                    account_object_id = misa_id
-                    account_object_code = misa_code or misa_name
-                    account_object_name = misa_name
-
-        # Fallback cuối: dùng config fallback (test)
-        if not account_object_id:
-            fallback_id = (config.misa_fallback_account_object_id or '').strip()
-            if fallback_id:
-                account_object_id = fallback_id
-                account_object_code = (config.misa_fallback_account_object_code or '').strip()
-                account_object_name = (config.misa_fallback_account_object_name or '').strip()
-                _logger.warning('SAVoucher %s: dùng fallback account_object_id=%s', self.name, fallback_id)
-
-        if not account_object_id:
-            raise UserError(
-                'Không tìm được MISA Account Object ID cho khách hàng: %s. '
-                'Vui lòng điền MISA Account Object - Fallback (Test) trong cấu hình để test.' % (
-                    partner.name if partner else '?'
-                )
-            )
-
-        # Nếu code/name trống hoặc giống UUID → lookup MISA lấy tên thật rồi cache vào config
-        import re
-        _uuid_re = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
-
-        def _is_uuid(s):
-            return bool(_uuid_re.match(s or ''))
-
-        if not account_object_code or not account_object_name or _is_uuid(account_object_code) or _is_uuid(account_object_name):
-            resolved = self._misa_lookup_account_object_by_id(config, account_object_id)
-            if resolved:
-                real_code = resolved.get('account_object_code') or ''
-                real_name = resolved.get('account_object_name') or ''
-                if real_code and not _is_uuid(real_code):
-                    account_object_code = real_code
-                if real_name and not _is_uuid(real_name):
-                    account_object_name = real_name
-                # Ghi cache vào config fallback để lần sau không cần lookup nữa
-                fb_id = (config.misa_fallback_account_object_id or '').strip()
-                if fb_id == account_object_id:
-                    update = {}
-                    if real_code and not _is_uuid(real_code) and _is_uuid(config.misa_fallback_account_object_code or ''):
-                        update['misa_fallback_account_object_code'] = real_code
-                    if real_name and not _is_uuid(real_name) and _is_uuid(config.misa_fallback_account_object_name or ''):
-                        update['misa_fallback_account_object_name'] = real_name
-                    if update:
-                        config.sudo().write(update)
-                _logger.info('SAVoucher: resolved account_object name=%s code=%s', account_object_name, account_object_code)
-            else:
-                _logger.warning('SAVoucher: không resolve được tên MISA cho account_object_id=%s, dùng tên partner', account_object_id)
-                if not account_object_name or _is_uuid(account_object_name):
-                    account_object_name = partner.display_name if partner else account_object_id
-                if not account_object_code or _is_uuid(account_object_code):
-                    account_object_code = partner.ref or (partner.name if partner else account_object_id)
+        # Resolve account_object qua config (logic chung với SAInvoice)
+        account_object_id, account_object_code, account_object_name = \
+            config.resolve_misa_account_object(partner, sale_order=sales_order)
 
         # Dùng org_refid từ SO nếu đã có (idempotent), hoặc sinh mới
         sa_voucher_refid = (sales_order.misa_sa_voucher_org_refid or '').strip()

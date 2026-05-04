@@ -86,20 +86,10 @@ class SaleOrderAmisSync(models.Model):
             return
 
         partner = self.partner_id
-        account_object_id = (partner.misa_account_object_id or '').strip() if partner else ''
-        if not account_object_id and partner:
-            # Dùng lookup tương tự như outgoing picking
-            picking = self.env['stock.picking'].search([
-                ('origin', 'like', self.name),
-                ('picking_type_code', '=', 'outgoing'),
-                ('state', '=', 'done'),
-            ], limit=1)
-            if picking:
-                account_object_id = picking._misa_lookup_account_object(config, partner)
-            if not account_object_id:
-                raise UserError(
-                    'Không tìm được MISA Account Object ID cho khách hàng: %s' % (partner.name if partner else '?')
-                )
+
+        # Resolve account_object qua config (logic chung với SAVoucher)
+        account_object_id, account_object_code, account_object_name = \
+            config.resolve_misa_account_object(partner, sale_order=self)
 
         branch_id = (config.misa_branch_id or '').strip()
         if not branch_id:
@@ -166,8 +156,8 @@ class SaleOrderAmisSync(models.Model):
                 'vat_account': '3331',
                 'vat_description': 'Thue GTGT - %s' % product.display_name,
                 'exchange_rate_operator': '*',
-                'account_object_name': partner.display_name if partner else '',
-                'account_object_code': partner.ref or (partner.name if partner else ''),
+                'account_object_name': account_object_name,
+                'account_object_code': account_object_code,
                 'account_object_address': partner.contact_address_complete if partner else '',
                 'inventory_item_code': product.default_code or str(product.id),
                 'inventory_item_type': 0,
@@ -220,8 +210,8 @@ class SaleOrderAmisSync(models.Model):
             'total_vat_amount': total_vat,
             'total_amount_oc': total_amount,
             'total_amount': total_amount,
-            'account_object_name': partner.display_name if partner else '',
-            'account_object_code': partner.ref or (partner.name if partner else ''),
+            'account_object_name': account_object_name,
+            'account_object_code': account_object_code,
             'account_object_address': partner.contact_address_complete if partner else '',
             'account_object_tax_code': (partner.vat or '') if partner else '',
             'payment_method': 'TM/CK',

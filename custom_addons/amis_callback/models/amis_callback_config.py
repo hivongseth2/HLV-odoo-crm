@@ -113,6 +113,105 @@ class AmisCallbackConfig(models.Model):
         '1357810112': 'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE DEWALT',
     }
 
+    def resolve_misa_account_object(self, partner, sale_order=None):
+        """Giải quyết account_object_id/code/name từ MISA theo thứ tự ưu tiên.
+
+        Dùng chung cho cả SAVoucher (stock.picking) và SAInvoice (sale.order).
+
+        Returns:
+            (account_object_id, account_object_code, account_object_name)
+        Raises:
+            UserError nếu không tìm được account_object_id.
+        """
+        from odoo.exceptions import UserError
+        import re
+        _uuid_re = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
+
+        def _is_uuid(s):
+            return bool(_uuid_re.match(s or ''))
+
+        account_object_id = (partner.misa_account_object_id or '').strip() if partner else ''
+        account_object_code = (partner.ref or (partner.name if partner else '')) if partner else ''
+        account_object_name = partner.display_name if partner else ''
+
+        # 1. Lookup MISA theo tên partner nếu chưa có ID
+        if not account_object_id and partner:
+            search_name = (partner.name or '').upper()
+            for a in self._get_all_dictionary(1):
+                aname = (a.get('account_object_name') or '').upper()
+                acode = (a.get('account_object_code') or '').upper()
+                if search_name and (search_name in aname or search_name in acode):
+                    misa_id = a.get('account_object_id') or ''
+                    if misa_id:
+                        partner.sudo().write({'misa_account_object_id': misa_id})
+                        account_object_id = misa_id
+                        account_object_code = a.get('account_object_code') or account_object_code
+                        account_object_name = a.get('account_object_name') or account_object_name
+                        _logger.info('Resolved partner %s → account_object_id=%s', partner.name, misa_id)
+                    break
+
+        # 2. Fallback theo shopee_shop_id.identifier
+        if not account_object_id and sale_order:
+            shop = getattr(sale_order, 'shopee_shop_id', None)
+            shop_identifier = str(getattr(shop, 'identifier', '') or '').strip() if shop else ''
+            if shop_identifier:
+                misa_id, misa_code, misa_name = self.get_shopee_account_object_id(shop_identifier)
+                if misa_id:
+                    account_object_id = misa_id
+                    account_object_code = misa_code or misa_name
+                    account_object_name = misa_name
+
+        # 3. Fallback config (môi trường test)
+        if not account_object_id:
+            fallback_id = (self.misa_fallback_account_object_id or '').strip()
+            if fallback_id:
+                account_object_id = fallback_id
+                account_object_code = (self.misa_fallback_account_object_code or '').strip()
+                account_object_name = (self.misa_fallback_account_object_name or '').strip()
+                _logger.warning('SAVoucher/SAInvoice: dùng fallback account_object_id=%s', fallback_id)
+
+        if not account_object_id:
+            raise UserError(
+                'Không tìm được MISA Account Object ID cho khách hàng: %s. '
+                'Vui lòng điền MISA Account Object - Fallback (Test) trong cấu hình để test.' % (
+                    partner.name if partner else '?'
+                )
+            )
+
+        # 4. Nếu code/name trống hoặc là UUID → lookup MISA lấy tên thật rồi cache
+        if not account_object_code or not account_object_name or _is_uuid(account_object_code) or _is_uuid(account_object_name):
+            uid_lower = account_object_id.lower()
+            resolved = next(
+                (a for a in self._get_all_dictionary(1)
+                 if (a.get('account_object_id') or '').lower() == uid_lower),
+                None
+            )
+            if resolved:
+                real_code = resolved.get('account_object_code') or ''
+                real_name = resolved.get('account_object_name') or ''
+                if real_code and not _is_uuid(real_code):
+                    account_object_code = real_code
+                if real_name and not _is_uuid(real_name):
+                    account_object_name = real_name
+                # Cập nhật cache fallback nếu đang chứa UUID
+                update = {}
+                fb_id = (self.misa_fallback_account_object_id or '').strip()
+                if fb_id == account_object_id:
+                    if real_code and not _is_uuid(real_code) and _is_uuid(self.misa_fallback_account_object_code or ''):
+                        update['misa_fallback_account_object_code'] = real_code
+                    if real_name and not _is_uuid(real_name) and _is_uuid(self.misa_fallback_account_object_name or ''):
+                        update['misa_fallback_account_object_name'] = real_name
+                if update:
+                    self.sudo().write(update)
+                _logger.info('Resolved account_object name=%s code=%s', account_object_name, account_object_code)
+            else:
+                if not account_object_name or _is_uuid(account_object_name):
+                    account_object_name = partner.display_name if partner else account_object_id
+                if not account_object_code or _is_uuid(account_object_code):
+                    account_object_code = partner.ref or (partner.name if partner else account_object_id)
+
+        return account_object_id, account_object_code, account_object_name
+
     def get_shopee_account_object_id(self, shop_identifier):
         """Lấy account_object_id MISA cho kênh Shopee dựa vào shop identifier.
 
