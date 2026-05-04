@@ -294,10 +294,18 @@ class StockPickingAmisSync(models.Model):
             cost_price = float(move.price_unit or 0.0)  # giá vốn (standard/average cost)
             cost_amount = qty_done * cost_price
 
+            # Giá bán từ sale line
+            sale_line = move.sale_line_id
+            sale_price_unit = float(sale_line.price_unit) if sale_line else 0.0
+            sale_discount = float(sale_line.discount or 0.0) if sale_line else 0.0
+            sale_amount_line = qty_done * sale_price_unit * (1.0 - sale_discount / 100.0)
+
             inventory_item_id = (product.misa_inventory_item_id or '').strip()
             unit_id = (move.product_uom.misa_unit_id or '').strip()
 
             ref_outward_detail_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'outward_detail|%d|%d' % (self.id, move.id)))
+            # Link về dòng chi tiết SAVoucher tương ứng
+            sa_v_ref_detail_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'sa_v_detail|%d|%d' % (self.id, move.id)))
 
             outward_detail.append({
                 'ref_detail_id': ref_outward_detail_id,
@@ -305,11 +313,16 @@ class StockPickingAmisSync(models.Model):
                 'inventory_item_id': inventory_item_id,
                 'unit_id': unit_id,
                 'main_unit_id': unit_id,
-                'from_stock_id': stock_id,
+                'stock_id': stock_id,
                 'sort_order': idx,
                 'quantity': qty_done,
-                'unit_price': cost_price,
-                'amount': cost_amount,
+                'unit_price_finance': cost_price,
+                'unit_price_management': cost_price,
+                'main_unit_price_finance': cost_price,
+                'amount_finance': cost_amount,
+                'amount_management': cost_amount,
+                'sale_price': sale_price_unit,
+                'sale_amount': sale_amount_line,
                 'main_convert_rate': 1.0,
                 'main_quantity': qty_done,
                 'debit_account': '632',
@@ -322,8 +335,15 @@ class StockPickingAmisSync(models.Model):
                 'stock_code': 'HLV',
                 'stock_name': 'HLV',
                 'description': product.name,
-                'is_follow_serial_number': False,
-                'is_allow_duplicate_serial_number': False,
+                'account_object_id': account_object_id,
+                'account_object_code': account_object_code,
+                'account_object_name': account_object_name,
+                'sa_voucher_refid': sa_voucher_refid,
+                'sa_voucher_ref_detail_id': sa_v_ref_detail_id,
+                'is_promotion': False,
+                'is_un_update_outward_price': False,
+                'inventory_resale_type_id': 0,
+                'un_resonable_cost': False,
                 'is_description': False,
                 'state': 0,
             })
@@ -338,6 +358,7 @@ class StockPickingAmisSync(models.Model):
             'refid': outward_refid,
             'account_object_id': account_object_id,
             'branch_id': branch_id,
+            'from_stock_id': stock_id,
             'display_on_book': 0,
             'reforder': int(datetime.utcnow().timestamp() * 1000),
             'refdate': refdate,
