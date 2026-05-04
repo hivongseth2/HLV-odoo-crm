@@ -176,6 +176,9 @@ class StockPickingAmisSync(models.Model):
         if not sa_voucher_refid:
             sa_voucher_refid = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'sa_voucher|%d' % self.id))
 
+        # Pre-calculate SAInvoice refid (deterministic từ SO.id) để link 2 chiều
+        sa_invoice_refid_link = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'sa_invoice|%d' % sales_order.id))
+
         outward_refid = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'outward|%d' % self.id))
 
         detail = []
@@ -375,6 +378,7 @@ class StockPickingAmisSync(models.Model):
             'is_remind_debt': True,
             'is_un_limit': False,
             'outward_refid': outward_refid,
+            'sa_invoice_refid': sa_invoice_refid_link,
             'reftype': 3530,
             'auto_refno': False,
             'state': 0,

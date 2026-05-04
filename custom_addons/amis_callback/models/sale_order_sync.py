@@ -240,7 +240,6 @@ class SaleOrderAmisSync(models.Model):
             'currency_id': self.currency_id.name or 'VND',
             'refno_finance': '',
             'refno_management': '',
-            'is_created_savoucher': 1 if self.misa_sa_voucher_org_refid else 0,
             'send_email_status': 0,
             'is_invoice_receipted': False,
             'invoice_status': 0,
