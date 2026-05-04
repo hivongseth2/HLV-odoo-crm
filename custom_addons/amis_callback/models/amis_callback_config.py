@@ -77,6 +77,93 @@ class AmisCallbackConfig(models.Model):
         help='Stock ID thật trên MISA (kho HLV).',
     )
 
+    # ── Mapping khách hàng Shopee → Account Object MISA ───────────────────────
+    misa_shopee_milwaukee_account_object_id = fields.Char(
+        string='MISA Account Object - Shopee Milwaukee (796817584)',
+        help='account_object_id MISA cho kênh Shopee Milwaukee (identifier=796817584). '
+             'Tên MISA: KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE MILWAUKEE',
+    )
+    misa_shopee_hlv_account_object_id = fields.Char(
+        string='MISA Account Object - Shopee HLV (326259406)',
+        help='account_object_id MISA cho kênh Shopee HLV (identifier=326259406). '
+             'Tên MISA: KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE HLV',
+    )
+    misa_shopee_dewalt_account_object_id = fields.Char(
+        string='MISA Account Object - Shopee Dewalt (1357810112)',
+        help='account_object_id MISA cho kênh Shopee Dewalt (identifier=1357810112). '
+             'Tên MISA: KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE DEWALT',
+    )
+    # Fallback dùng khi test (môi trường không có cấu hình Shopee)
+    misa_fallback_account_object_id = fields.Char(
+        string='MISA Account Object - Fallback (Test)',
+        help='account_object_id MISA dùng làm fallback khi không xác định được kênh Shopee. '
+             'Chỉ dùng cho môi trường test.',
+    )
+    misa_fallback_account_object_code = fields.Char(
+        string='MISA Account Object Code - Fallback (Test)',
+    )
+    misa_fallback_account_object_name = fields.Char(
+        string='MISA Account Object Name - Fallback (Test)',
+    )
+
+    # Mapping cứng: shopee.shop.identifier → account_object_name MISA
+    SHOPEE_SHOP_ACCOUNT_MAP = {
+        '796817584': 'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE MILWAUKEE',
+        '326259406': 'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE HLV',
+        '1357810112': 'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE DEWALT',
+    }
+
+    def get_shopee_account_object_id(self, shop_identifier):
+        """Lấy account_object_id MISA cho kênh Shopee dựa vào shop identifier.
+
+        Ưu tiên lấy từ field config (đã cache), nếu chưa có thì lookup MISA theo tên.
+        """
+        self.ensure_one()
+        identifier = str(shop_identifier or '').strip()
+        if not identifier:
+            return '', '', ''
+
+        field_map = {
+            '796817584': ('misa_shopee_milwaukee_account_object_id',
+                          'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE MILWAUKEE'),
+            '326259406': ('misa_shopee_hlv_account_object_id',
+                          'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE HLV'),
+            '1357810112': ('misa_shopee_dewalt_account_object_id',
+                           'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE DEWALT'),
+        }
+        entry = field_map.get(identifier)
+        if not entry:
+            _logger.warning('MISA: không có mapping cho shopee identifier %s', identifier)
+            return '', '', ''
+
+        field_name, expected_name = entry
+        cached_id = (getattr(self, field_name) or '').strip()
+        if cached_id:
+            return cached_id, '', expected_name
+
+        # Chưa cache → lookup MISA dictionary
+        search_name = expected_name.upper()
+        skip = 0
+        while True:
+            r = self.get_dictionary(data_type=1, skip=skip, take=100)
+            items = r.get('items') or []
+            if not items:
+                break
+            for a in items:
+                aname = (a.get('account_object_name') or '').upper()
+                if search_name == aname:
+                    misa_id = a.get('account_object_id') or ''
+                    acode = a.get('account_object_code') or ''
+                    if misa_id:
+                        self.sudo().write({field_name: misa_id})
+                        _logger.info('Auto-cached shopee shop %s → %s = %s', identifier, field_name, misa_id)
+                    return misa_id, acode, expected_name
+            if len(items) < 100:
+                break
+            skip += 100
+        _logger.warning('MISA: không tìm được account_object cho shopee shop %s (%s)', identifier, expected_name)
+        return '', '', expected_name
+
     def ensure_singleton(self):
         record = self.search([], limit=1)
         if record:

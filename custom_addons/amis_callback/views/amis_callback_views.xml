@@ -143,6 +143,18 @@
                             <field name="sync_outgoing_so_enabled"/>
                         </group>
                     </group>
+                    <group string="Mapping khách hàng Shopee → MISA">
+                        <group>
+                            <field name="misa_shopee_milwaukee_account_object_id"/>
+                            <field name="misa_shopee_hlv_account_object_id"/>
+                            <field name="misa_shopee_dewalt_account_object_id"/>
+                        </group>
+                        <group string="Fallback (Test)">
+                            <field name="misa_fallback_account_object_id"/>
+                            <field name="misa_fallback_account_object_code"/>
+                            <field name="misa_fallback_account_object_name"/>
+                        </group>
+                    </group>
                     <group>
                         <field name="note" nolabel="1"/>
                     </group>

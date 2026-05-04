@@ -161,10 +161,42 @@ class StockPickingAmisSync(models.Model):
 
         # Auto-lookup account_object_id nếu chưa có trên partner
         account_object_id = (partner.misa_account_object_id or '').strip() if partner else ''
+        account_object_code = (partner.ref or (partner.name if partner else '')) if partner else ''
+        account_object_name = partner.display_name if partner else ''
+
         if not account_object_id and partner:
             account_object_id = self._misa_lookup_account_object(config, partner)
+            if account_object_id:
+                account_object_code = partner.ref or partner.name or ''
+                account_object_name = partner.display_name or ''
+
+        # Fallback: map theo shopee_shop_id.identifier (cứng)
         if not account_object_id:
-            raise UserError('Không tìm được MISA Account Object ID cho khách hàng: %s' % (partner.name if partner else '?'))
+            shop = getattr(sales_order, 'shopee_shop_id', None)
+            shop_identifier = str(getattr(shop, 'identifier', '') or '').strip() if shop else ''
+            if shop_identifier:
+                misa_id, misa_code, misa_name = config.get_shopee_account_object_id(shop_identifier)
+                if misa_id:
+                    account_object_id = misa_id
+                    account_object_code = misa_code or misa_name
+                    account_object_name = misa_name
+
+        # Fallback cuối: dùng config fallback (test)
+        if not account_object_id:
+            fallback_id = (config.misa_fallback_account_object_id or '').strip()
+            if fallback_id:
+                account_object_id = fallback_id
+                account_object_code = (config.misa_fallback_account_object_code or '').strip() or fallback_id
+                account_object_name = (config.misa_fallback_account_object_name or '').strip() or 'Fallback Test'
+                _logger.warning('SAVoucher %s: dùng fallback account_object_id=%s', self.name, fallback_id)
+
+        if not account_object_id:
+            raise UserError(
+                'Không tìm được MISA Account Object ID cho khách hàng: %s. '
+                'Vui lòng điền MISA Account Object - Fallback (Test) trong cấu hình để test.' % (
+                    partner.name if partner else '?'
+                )
+            )
 
         # Dùng org_refid từ SO nếu đã có (idempotent), hoặc sinh mới
         sa_voucher_refid = (sales_order.misa_sa_voucher_org_refid or '').strip()
@@ -250,9 +282,9 @@ class StockPickingAmisSync(models.Model):
                 'vat_account': '33311',
                 'exchange_rate_operator': '*',
                 'vat_description': 'Thue GTGT - %s' % product.display_name,
-                'account_object_name': partner.display_name if partner else '',
-                'account_object_code': partner.ref or (partner.name if partner else ''),
-                'account_object_address': partner.contact_address_complete if partner else '',
+                'account_object_name': account_object_name,
+                'account_object_code': account_object_code,
+                'account_object_address': partner.contact_address_complete if partner else '',,
                 'inventory_item_code': product.default_code or str(product.id),
                 'inventory_item_type': 0,
                 'unit_name': move.product_uom.name,
@@ -302,8 +334,8 @@ class StockPickingAmisSync(models.Model):
             'total_amount_management': 0,
             'refno_finance': '',
             'refno_management': '',
-            'account_object_name': partner.display_name if partner else '',
-            'account_object_code': partner.ref or (partner.name if partner else ''),
+            'account_object_name': account_object_name,
+            'account_object_code': account_object_code,
             'account_object_address': partner.contact_address_complete if partner else '',
             'journal_memo': 'Xuat kho ban hang %s (Odoo: %s)' % (sales_order.name, self.name),
             'reftype': 2020,
@@ -358,8 +390,8 @@ class StockPickingAmisSync(models.Model):
             'total_export_tax_amount': 0.0,
             'refno_finance': '',
             'refno_management': '',
-            'account_object_name': partner.display_name if partner else '',
-            'account_object_code': partner.ref or (partner.name if partner else ''),
+            'account_object_name': account_object_name,
+            'account_object_code': account_object_code,
             'account_object_address': partner.contact_address_complete if partner else '',
             'account_object_tax_code': (partner.vat or '') if partner else '',
             'journal_memo': 'Ban hang %s (Shopee: %s) (Odoo: %s)' % (sales_order.name, shopee_ref, self.name),
