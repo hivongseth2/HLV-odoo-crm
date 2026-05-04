@@ -196,7 +196,7 @@ class SaleOrderAmisSync(models.Model):
             'inv_date': refdate,
             'is_paid': False,
             'is_posted': True,
-            'include_invoice': 1,
+            'include_invoice': 0,
             'is_attach_list': False,
             'is_branch_issued': False,
             'is_posted_last_year': False,
