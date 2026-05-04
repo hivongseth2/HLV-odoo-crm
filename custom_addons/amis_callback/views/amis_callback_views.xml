@@ -230,6 +230,15 @@
                             <span class="o_stat_text">Hóa đơn MISA</span>
                         </div>
                     </button>
+                    <button name="action_reset_misa_sa_invoice" type="object"
+                            class="oe_stat_button" icon="fa-refresh"
+                            invisible="not misa_sa_invoice_synced"
+                            confirm="Reset sẽ cho phép sync lại SAInvoice. Tiếp tục?">
+                        <div class="o_field_widget o_stat_info">
+                            <span class="o_stat_text">Reset</span>
+                            <span class="o_stat_text">SAInvoice</span>
+                        </div>
+                    </button>
                 </xpath>
                 <xpath expr="//notebook" position="inside">
                     <page string="MISA" name="misa_info"

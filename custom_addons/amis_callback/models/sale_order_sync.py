@@ -156,6 +156,7 @@ class SaleOrderAmisSync(models.Model):
                 'vat_account': '3331',
                 'vat_description': 'Thue GTGT - %s' % product.display_name,
                 'exchange_rate_operator': '*',
+                'account_object_id': account_object_id,
                 'account_object_name': account_object_name,
                 'account_object_code': account_object_code,
                 'account_object_address': partner.contact_address_complete if partner else '',
@@ -243,6 +244,20 @@ class SaleOrderAmisSync(models.Model):
             'misa_sa_invoice_org_refid': sa_invoice_refid,
         })
         _logger.info('SAInvoice synced for SO %s, org_refid=%s', self.name, sa_invoice_refid)
+
+    def action_reset_misa_sa_invoice(self):
+        """Reset cờ SAInvoice để cho phép sync lại (dùng khi MISA báo lỗi async)."""
+        for order in self:
+            order.sudo().write({
+                'misa_sa_invoice_synced': False,
+                'misa_sa_invoice_org_refid': False,
+            })
+            # Xóa job sa_invoice cũ nếu còn
+            self.env['amis.sync.job'].sudo().search([
+                ('sale_order_id', '=', order.id),
+                ('direction', '=', 'sa_invoice'),
+            ]).unlink()
+        return True
 
     def _to_misa_date(self, value):
         if not value:
