@@ -110,19 +110,30 @@ class SaleOrderAmisSync(models.Model):
         ):
             product = line.product_id
             qty = float(line.qty_delivered) if float(line.qty_delivered) > 0 else float(line.product_uom_qty)
-            price_unit = float(line.price_unit)
+            price_unit_with_tax = float(line.price_unit)  # Đơn giá đã có thuế (Odoo lưu có thuế)
             discount = float(line.discount or 0.0)
-            gross_amount = qty * price_unit
-            discount_amount = gross_amount * discount / 100.0
-            amount_oc = gross_amount - discount_amount
 
+            # Lấy thuế suất trước để tính ngược giá trước thuế
             vat_rate = 0.0
             for tax in line.tax_id:
                 if tax.amount_type == 'percent':
                     vat_rate = float(tax.amount)
                     break
-            vat_amount = amount_oc * vat_rate / 100.0
-            total_gross += gross_amount
+
+            # Đơn giá trước thuế = Đơn giá (đã có thuế) / (1 + Thuế suất)
+            price_before_tax = price_unit_with_tax / (1.0 + vat_rate / 100.0) if vat_rate else price_unit_with_tax
+
+            # Thành tiền (trước CK, trước thuế) = Đơn giá trước thuế * Số lượng
+            amount_oc = price_before_tax * qty
+
+            # Tiền CK = Thành tiền * Tỷ lệ CK
+            discount_amount = amount_oc * discount / 100.0
+
+            # Tiền thuế tính trên (Thành tiền - Tiền CK)
+            net_amount = amount_oc - discount_amount
+            vat_amount = net_amount * vat_rate / 100.0
+
+            total_gross += amount_oc
             total_discount += discount_amount
             total_vat += vat_amount
 
@@ -141,8 +152,8 @@ class SaleOrderAmisSync(models.Model):
                 'is_promotion': False,
                 'not_in_vat_declaration': False,
                 'quantity': qty,
-                'unit_price': price_unit,
-                'unit_price_after_tax': 0.0,
+                'unit_price': price_before_tax,
+                'unit_price_after_tax': price_unit_with_tax,
                 'amount_oc': amount_oc,
                 'amount': amount_oc,
                 'discount_rate': discount,
@@ -153,7 +164,7 @@ class SaleOrderAmisSync(models.Model):
                 'vat_amount': vat_amount,
                 'main_convert_rate': 1.0,
                 'main_quantity': qty,
-                'amount_after_tax': 0.0,
+                'amount_after_tax': net_amount + vat_amount,
                 'description': product.name,
                 'debit_account': '131',
                 'credit_account': '5111',
