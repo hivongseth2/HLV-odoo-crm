@@ -50,11 +50,19 @@ class StockPickingAmisSync(models.Model):
         ], limit=1)
         if existing:
             return
-        self.env['amis.sync.job'].sudo().create({
+
+        vals = {
             'picking_id': self.id,
             'direction': direction,
             'status': 'pending',
-        })
+        }
+        # Gắn sale_order_id để hiển thị trên queue
+        if direction == 'outgoing':
+            so = self._get_related_sales_order()
+            if so:
+                vals['sale_order_id'] = so.id
+
+        self.env['amis.sync.job'].sudo().create(vals)
         _logger.info('AMIS sync job enqueued for picking %s (%s)', self.name, direction)
 
 
@@ -186,8 +194,8 @@ class StockPickingAmisSync(models.Model):
             fallback_id = (config.misa_fallback_account_object_id or '').strip()
             if fallback_id:
                 account_object_id = fallback_id
-                account_object_code = (config.misa_fallback_account_object_code or '').strip() or fallback_id
-                account_object_name = (config.misa_fallback_account_object_name or '').strip() or 'Fallback Test'
+                account_object_code = (config.misa_fallback_account_object_code or '').strip()
+                account_object_name = (config.misa_fallback_account_object_name or '').strip()
                 _logger.warning('SAVoucher %s: dùng fallback account_object_id=%s', self.name, fallback_id)
 
         if not account_object_id:
@@ -198,21 +206,39 @@ class StockPickingAmisSync(models.Model):
                 )
             )
 
-        # Nếu name hoặc code trông giống UUID (= account_object_id), lookup MISA để lấy tên thật
-        def _looks_like_uuid(s):
-            import re
-            return bool(re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', (s or '').lower()))
+        # Nếu code/name trống hoặc giống UUID → lookup MISA lấy tên thật rồi cache vào config
+        import re
+        _uuid_re = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
 
-        if _looks_like_uuid(account_object_name) or _looks_like_uuid(account_object_code):
-            item = config.find_dictionary_item_by_code(1, 'account_object_id', account_object_id)
-            if item:
-                fetched_code = (item.get('account_object_code') or '').strip()
-                fetched_name = (item.get('account_object_name') or '').strip()
-                if fetched_code and not _looks_like_uuid(fetched_code):
-                    account_object_code = fetched_code
-                if fetched_name and not _looks_like_uuid(fetched_name):
-                    account_object_name = fetched_name
+        def _is_uuid(s):
+            return bool(_uuid_re.match(s or ''))
+
+        if not account_object_code or not account_object_name or _is_uuid(account_object_code) or _is_uuid(account_object_name):
+            resolved = self._misa_lookup_account_object_by_id(config, account_object_id)
+            if resolved:
+                real_code = resolved.get('account_object_code') or ''
+                real_name = resolved.get('account_object_name') or ''
+                if real_code and not _is_uuid(real_code):
+                    account_object_code = real_code
+                if real_name and not _is_uuid(real_name):
+                    account_object_name = real_name
+                # Ghi cache vào config fallback để lần sau không cần lookup nữa
+                fb_id = (config.misa_fallback_account_object_id or '').strip()
+                if fb_id == account_object_id:
+                    update = {}
+                    if real_code and not _is_uuid(real_code) and _is_uuid(config.misa_fallback_account_object_code or ''):
+                        update['misa_fallback_account_object_code'] = real_code
+                    if real_name and not _is_uuid(real_name) and _is_uuid(config.misa_fallback_account_object_name or ''):
+                        update['misa_fallback_account_object_name'] = real_name
+                    if update:
+                        config.sudo().write(update)
                 _logger.info('SAVoucher: resolved account_object name=%s code=%s', account_object_name, account_object_code)
+            else:
+                _logger.warning('SAVoucher: không resolve được tên MISA cho account_object_id=%s, dùng tên partner', account_object_id)
+                if not account_object_name or _is_uuid(account_object_name):
+                    account_object_name = partner.display_name if partner else account_object_id
+                if not account_object_code or _is_uuid(account_object_code):
+                    account_object_code = partner.ref or (partner.name if partner else account_object_id)
 
         # Dùng org_refid từ SO nếu đã có (idempotent), hoặc sinh mới
         sa_voucher_refid = (sales_order.misa_sa_voucher_org_refid or '').strip()
@@ -613,6 +639,25 @@ class StockPickingAmisSync(models.Model):
         return voucher, []
 
     # ── Auto-lookup helpers ────────────────────────────────────────────────────
+
+    def _misa_lookup_account_object_by_id(self, config, account_object_id):
+        """Tìm item account_object trong MISA dictionary theo ID (UUID).
+        Trả về dict item hoặc None. Dùng để lấy tên/mã thật khi chỉ có ID."""
+        if not account_object_id:
+            return None
+        skip = 0
+        while True:
+            r = config.get_dictionary(data_type=1, skip=skip, take=100)
+            items = r.get('items') or []
+            if not items:
+                break
+            for a in items:
+                if (a.get('account_object_id') or '').lower() == account_object_id.lower():
+                    return a
+            if len(items) < 100:
+                break
+            skip += 100
+        return None
 
     def _misa_lookup_account_object(self, config, partner):
         """Tìm account_object_id MISA theo tên partner, lưu vào partner."""
