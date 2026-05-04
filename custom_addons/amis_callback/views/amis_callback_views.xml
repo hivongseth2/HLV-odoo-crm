@@ -202,7 +202,7 @@
                         </div>
                     </button>
                     <button name="action_sync_misa_sa_invoice" type="object"
-                            class="oe_stat_button" icon="fa-check-circle" attrs="{'invisible': [('misa_sa_invoice_synced', '=', False)]}"
+                            class="oe_stat_button" icon="fa-check-circle"
                             invisible="not misa_sa_invoice_synced">
                         <div class="o_field_widget o_stat_info">
                             <span class="o_stat_text">Đã sync</span>
