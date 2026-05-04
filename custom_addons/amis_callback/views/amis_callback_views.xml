@@ -155,6 +155,15 @@
                             <field name="misa_fallback_account_object_name"/>
                         </group>
                     </group>
+                    <group string="Hóa đơn VAT kèm SAInvoice">
+                        <group>
+                            <field name="sa_invoice_include_vat"/>
+                            <field name="misa_inv_template_id"
+                                   invisible="not sa_invoice_include_vat"/>
+                            <field name="misa_inv_series"
+                                   invisible="not sa_invoice_include_vat"/>
+                        </group>
+                    </group>
                     <group>
                         <field name="note" nolabel="1"/>
                     </group>

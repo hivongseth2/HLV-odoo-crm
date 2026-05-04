@@ -106,6 +106,22 @@ class AmisCallbackConfig(models.Model):
         string='MISA Account Object Name - Fallback (Test)',
     )
 
+    # ── Cấu hình sinh hóa đơn VAT kèm SAInvoice ─────────────────────────────────
+    sa_invoice_include_vat = fields.Boolean(
+        string='Sinh hóa đơn VAT kèm SAInvoice',
+        default=False,
+        help='Bật để tự động xuất hóa đơn điện tử (include_invoice=1) khi đẩy SAInvoice. '
+             'Cần điền đầy đủ thông tin mẫu hóa đơn phía dưới.',
+    )
+    misa_inv_template_id = fields.Char(
+        string='Mẫu hóa đơn (Invoice Template ID)',
+        help='UUID của mẫu hóa đơn điện tử trên MISA (invoice_template_id).',
+    )
+    misa_inv_series = fields.Char(
+        string='Ký hiệu hóa đơn (Series)',
+        help='Ký hiệu hóa đơn (inv_series), ví dụ: 1C25TAA, C25TAA...',
+    )
+
     # Mapping cứng: shopee.shop.identifier → account_object_name MISA
     SHOPEE_SHOP_ACCOUNT_MAP = {
         '796817584': 'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE MILWAUKEE',
