@@ -185,7 +185,7 @@ class SaleOrderAmisSync(models.Model):
                 'is_unit_price_after_tax': False,
                 'is_description': False,
                 'is_description_import': False,
-                'discount_type': 0,
+                'discount_type': 1,
                 'state': 0,
             })
 
@@ -208,8 +208,9 @@ class SaleOrderAmisSync(models.Model):
             'branch_id': branch_id,
             'account_object_id': account_object_id,
             'display_on_book': 0,
-            'discount_type': 0,
+            'discount_type': 1,
             'discount_rate_voucher': 0.0,
+            'inv_type_id': 1,
             'inv_date': refdate,
             'is_paid': False,
             'is_posted': True,
@@ -245,7 +246,6 @@ class SaleOrderAmisSync(models.Model):
             'invoice_status': 0,
             'is_invoice_deleted': False,
             'is_update_template': False,
-            'is_increase_invno': False,
             'ccy_exchange_operator': False,
             'auto_refno': False,
             'publish_status': 0,
