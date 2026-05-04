@@ -240,15 +240,14 @@ class AmisCallbackConfig(models.Model):
         """Tải toàn bộ 1 loại danh mục MISA và cache trong memory cho transaction này.
 
         Thay vì gọi get_dictionary nhiều lần (N page × M lần lookup),
-        chỉ gọi 1 lần rồi cache list items vào self._misa_dict_cache.
-        Cache tự động hết hiệu lực khi transaction/cursor kết thúc.
+        chỉ gọi 1 lần rồi cache trên cursor. Cache tự xóa khi transaction/cursor kết thúc.
         """
         self.ensure_one()
-        cache = getattr(self, '_misa_dict_cache', None)
-        if cache is None:
-            # pylint: disable=attribute-defined-outside-init
-            self._misa_dict_cache = {}
-            cache = self._misa_dict_cache
+        # Cache trên cursor — lifecycle khớp với transaction, không bị giới hạn bởi Odoo ORM
+        cr = self.env.cr
+        if not hasattr(cr, '_amis_dict_cache'):
+            cr._amis_dict_cache = {}
+        cache = cr._amis_dict_cache
 
         key = int(data_type)
         if key in cache:
