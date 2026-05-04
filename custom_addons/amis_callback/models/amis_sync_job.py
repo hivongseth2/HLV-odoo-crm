@@ -97,12 +97,12 @@ class AmisSyncJob(models.Model):
         for job in self:
             if job.status not in ('pending', 'error'):
                 continue
-            # Reset về pending trước khi chạy
-            job.write({'status': 'pending', 'retry_count': 0, 'error_msg': False})
             try:
                 with odoo.registry(self.env.cr.dbname).cursor() as cr:
                     env = odoo.api.Environment(cr, self.env.uid, {})
                     j = env['amis.sync.job'].browse(job.id)
+                    # Reset trong cursor riêng — tránh SerializationFailure
+                    j.write({'status': 'pending', 'retry_count': 0, 'error_msg': False})
                     j._execute()
                     cr.commit()
             except Exception:

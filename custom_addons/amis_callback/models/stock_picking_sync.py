@@ -198,6 +198,22 @@ class StockPickingAmisSync(models.Model):
                 )
             )
 
+        # Nếu name hoặc code trông giống UUID (= account_object_id), lookup MISA để lấy tên thật
+        def _looks_like_uuid(s):
+            import re
+            return bool(re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', (s or '').lower()))
+
+        if _looks_like_uuid(account_object_name) or _looks_like_uuid(account_object_code):
+            item = config.find_dictionary_item_by_code(1, 'account_object_id', account_object_id)
+            if item:
+                fetched_code = (item.get('account_object_code') or '').strip()
+                fetched_name = (item.get('account_object_name') or '').strip()
+                if fetched_code and not _looks_like_uuid(fetched_code):
+                    account_object_code = fetched_code
+                if fetched_name and not _looks_like_uuid(fetched_name):
+                    account_object_name = fetched_name
+                _logger.info('SAVoucher: resolved account_object name=%s code=%s', account_object_name, account_object_code)
+
         # Dùng org_refid từ SO nếu đã có (idempotent), hoặc sinh mới
         sa_voucher_refid = (sales_order.misa_sa_voucher_org_refid or '').strip()
         if not sa_voucher_refid:
