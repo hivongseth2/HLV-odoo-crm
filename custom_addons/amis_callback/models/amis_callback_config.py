@@ -510,6 +510,71 @@ class AmisCallbackConfig(models.Model):
         }
         return self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
 
+    def action_fetch_invoice_templates(self):
+        """Lấy danh sách mẫu hóa đơn điện tử từ MISA và hiển thị để user copy."""
+        self.ensure_one()
+        self.ensure_sync_ready()
+
+        # MISA ACT OpenAPI: data_type=14 là mẫu hóa đơn (invoice template)
+        # Thử lần lượt các data_type có thể chứa template
+        templates = []
+        for dt in (14, 15, 16):
+            try:
+                r = self.get_dictionary(data_type=dt, take=100)
+                items = r.get('items') or []
+                if items:
+                    _logger.info('Invoice templates found at data_type=%d: %s', dt, items[:3])
+                    templates.extend(items)
+            except Exception as e:
+                _logger.warning('data_type=%d: %s', dt, e)
+
+        if not templates:
+            # Fallback: thử endpoint riêng của meInvoice qua ACT
+            try:
+                body = self._post_actopen('/apir/einvoice/actopen/get_invoice_template', {
+                    'app_id': self.app_id,
+                    'org_company_code': self.org_company_code,
+                }, include_token=True)
+                data = body.get('Data') or body.get('data') or []
+                if isinstance(data, str):
+                    import json as _json
+                    data = _json.loads(data) or []
+                templates = data if isinstance(data, list) else []
+            except Exception as e:
+                _logger.warning('get_invoice_template endpoint failed: %s', e)
+
+        if not templates:
+            raise UserError(
+                'Không lấy được danh sách mẫu hóa đơn từ MISA.\n\n'
+                'Vui lòng lấy thủ công:\n'
+                '1. Vào meInvoice → Đăng ký phát hành\n'
+                '2. Click vào mẫu hóa đơn đang dùng\n'
+                '3. Nhìn URL: phần UUID sau /template/ là Invoice Template ID\n'
+                '4. Ký hiệu (series) ví dụ: 1C25TAA hiển thị trong cột Ký hiệu'
+            )
+
+        lines = []
+        for t in templates:
+            tid = (t.get('invoice_template_id') or t.get('template_id') or t.get('id') or '')
+            series = (t.get('inv_series') or t.get('serial') or t.get('invoice_series') or
+                      t.get('inv_symbol') or t.get('symbol') or '')
+            name = (t.get('invoice_template_name') or t.get('template_name') or t.get('name') or '')
+            lines.append('• ID: %s\n  Ký hiệu: %s\n  Tên: %s' % (tid, series, name))
+
+        msg = 'Danh sách mẫu hóa đơn MISA:\n\n' + '\n\n'.join(lines)
+        _logger.info(msg)
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Mẫu hóa đơn MISA (%d mẫu)' % len(templates),
+                'message': msg,
+                'type': 'info',
+                'sticky': True,
+            },
+        }
+
     def ensure_sync_ready(self):
         self.ensure_one()
         missing = []

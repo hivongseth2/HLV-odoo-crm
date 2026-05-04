@@ -163,6 +163,13 @@
                             <field name="misa_inv_series"
                                    invisible="not sa_invoice_include_vat"/>
                         </group>
+                        <group>
+                            <button string="Xem mẫu hóa đơn từ MISA"
+                                    name="action_fetch_invoice_templates"
+                                    type="object"
+                                    class="btn-secondary"
+                                    help="Lấy danh sách Invoice Template ID và Ký hiệu từ MISA để điền vào 2 trường trên"/>
+                        </group>
                     </group>
                     <group>
                         <field name="note" nolabel="1"/>
