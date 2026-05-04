@@ -381,8 +381,8 @@ class StockPickingAmisSync(models.Model):
 
     def _get_related_sales_order(self):
         self.ensure_one()
-        # Tim SO tu sale_line_ids (neu co)
-        so = self.move_ids_without_package.mapped('sale_line_ids.order_id')[:1]
+        # Tim SO tu sale_line_id (Many2one tren stock.move)
+        so = self.move_ids_without_package.mapped('sale_line_id.order_id')[:1]
         if so:
             return so
         # Tim theo origin (ten SO)
