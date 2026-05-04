@@ -10,7 +10,7 @@
                            invisible="not message"
                            class="text-muted"/>
                     <field name="line_ids" readonly="1" nolabel="1">
-                        <list string="Mẫu hóa đơn" editable="false">
+                        <list string="Mẫu hóa đơn">
                             <field name="series" string="Ký hiệu"/>
                             <field name="name" string="Tên mẫu"/>
                             <field name="template_id" string="Invoice Template ID"/>
