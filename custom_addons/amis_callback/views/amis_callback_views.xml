@@ -260,6 +260,8 @@
                 <field name="error_msg" string="Lỗi" optional="show"/>
                 <button name="action_retry" type="object" string="Thử lại"
                         invisible="status not in ('error',)" icon="fa-refresh"/>
+                <button name="action_run_now" type="object" string="Chạy ngay"
+                        invisible="status not in ('pending','error')" icon="fa-play"/>
             </list>
         </field>
     </record>
@@ -270,8 +272,10 @@
         <field name="arch" type="xml">
             <form string="Sync Job MISA">
                 <header>
+                    <button name="action_run_now" type="object" string="Chạy ngay"
+                            invisible="status not in ('pending','error')" class="btn-primary"/>
                     <button name="action_retry" type="object" string="Thử lại"
-                            invisible="status not in ('error',)" class="btn-primary"/>
+                            invisible="status not in ('error',)" class="btn-secondary"/>
                     <field name="status" widget="statusbar" statusbar_visible="pending,done,error"/>
                 </header>
                 <sheet>

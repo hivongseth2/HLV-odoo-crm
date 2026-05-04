@@ -90,3 +90,21 @@ class AmisSyncJob(models.Model):
         for job in self:
             job.write({'status': 'pending', 'retry_count': 0, 'error_msg': False})
         return True
+
+    def action_run_now(self):
+        """Chạy ngay job này trong cursor riêng (không cần đợi cron)."""
+        import odoo
+        for job in self:
+            if job.status not in ('pending', 'error'):
+                continue
+            # Reset về pending trước khi chạy
+            job.write({'status': 'pending', 'retry_count': 0, 'error_msg': False})
+            try:
+                with odoo.registry(self.env.cr.dbname).cursor() as cr:
+                    env = odoo.api.Environment(cr, self.env.uid, {})
+                    j = env['amis.sync.job'].browse(job.id)
+                    j._execute()
+                    cr.commit()
+            except Exception:
+                _logger.exception('AMIS sync job %d: action_run_now failed', job.id)
+        return True

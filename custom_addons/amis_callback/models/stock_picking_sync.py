@@ -284,7 +284,7 @@ class StockPickingAmisSync(models.Model):
                 'vat_description': 'Thue GTGT - %s' % product.display_name,
                 'account_object_name': account_object_name,
                 'account_object_code': account_object_code,
-                'account_object_address': partner.contact_address_complete if partner else '',,
+                'account_object_address': partner.contact_address_complete if partner else '',
                 'inventory_item_code': product.default_code or str(product.id),
                 'inventory_item_type': 0,
                 'unit_name': move.product_uom.name,
