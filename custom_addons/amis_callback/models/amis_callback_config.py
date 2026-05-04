@@ -516,36 +516,44 @@ class AmisCallbackConfig(models.Model):
         self.ensure_sync_ready()
 
         templates = []
-        for dt in (14, 15, 16):
+        # Thử các endpoint meInvoice ACT OpenAPI
+        endpoints = [
+            '/apir/einvoice/actopen/get_invoice_template',
+            '/apir/einvoice/actopen/invoice_template/list',
+            '/apir/einvoice/actopen/template',
+        ]
+        last_error = ''
+        for ep in endpoints:
             try:
-                r = self.get_dictionary(data_type=dt, take=100)
-                items = r.get('items') or []
-                if items:
-                    _logger.info('Invoice templates found at data_type=%d: %s', dt, items[:2])
-                    templates.extend(items)
-            except Exception as e:
-                _logger.warning('data_type=%d: %s', dt, e)
-
-        if not templates:
-            try:
-                body = self._post_actopen('/apir/einvoice/actopen/get_invoice_template', {
+                body = self._post_actopen(ep, {
                     'app_id': self.app_id,
                     'org_company_code': self.org_company_code,
                 }, include_token=True)
                 data = body.get('Data') or body.get('data') or []
                 if isinstance(data, str):
                     data = json.loads(data) or []
-                templates = data if isinstance(data, list) else []
+                if isinstance(data, list) and data:
+                    templates = data
+                    _logger.info('Invoice templates from %s: %d items', ep, len(templates))
+                    break
+                elif isinstance(data, dict):
+                    # Có thể là {"items": [...]}
+                    items = data.get('items') or data.get('Items') or []
+                    if items:
+                        templates = items
+                        break
             except Exception as e:
-                _logger.warning('get_invoice_template endpoint failed: %s', e)
+                last_error = str(e)
+                _logger.warning('meInvoice endpoint %s failed: %s', ep, e)
 
         message = False
         if not templates:
             message = (
-                'Không lấy được danh sách mẫu hóa đơn từ API MISA. '
-                'Vui lòng lấy thủ công: vào meInvoice → Đăng ký phát hành → '
-                'click vào mẫu đang dùng → copy UUID từ URL (invoice_template_id) '
-                'và ký hiệu hiển thị trong cột Ký hiệu.'
+                'Không lấy được danh sách mẫu hóa đơn từ API MISA (lỗi: %s).\n\n'
+                'Lấy thủ công:\n'
+                '1. Vào meInvoice → Đăng ký phát hành\n'
+                '2. Click vào mẫu hóa đơn đang dùng → nhìn URL lấy UUID = Invoice Template ID\n'
+                '3. Ký hiệu (series) ví dụ 1C25TAA hiển thị trong cột Ký hiệu' % last_error
             )
 
         line_vals = []
