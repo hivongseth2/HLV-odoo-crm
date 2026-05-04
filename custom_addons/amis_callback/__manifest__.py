@@ -9,6 +9,7 @@
         "security/ir.model.access.csv",
         "data/sequence.xml",
         "data/ir_cron.xml",
+        "views/misa_invoice_template_wizard_views.xml",
         "views/amis_callback_views.xml",
     ],
     "installable": True,

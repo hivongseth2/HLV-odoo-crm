@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_misa_invoice_template_wizard_form" model="ir.ui.view">
+        <field name="name">misa.invoice.template.wizard.form</field>
+        <field name="model">misa.invoice.template.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Mẫu hóa đơn MISA">
+                <sheet>
+                    <field name="message" readonly="1" nolabel="1"
+                           invisible="not message"
+                           class="text-muted"/>
+                    <field name="line_ids" readonly="1" nolabel="1">
+                        <list string="Mẫu hóa đơn" editable="false">
+                            <field name="series" string="Ký hiệu"/>
+                            <field name="name" string="Tên mẫu"/>
+                            <field name="template_id" string="Invoice Template ID"/>
+                            <field name="status" string="Trạng thái"/>
+                        </list>
+                    </field>
+                </sheet>
+                <footer>
+                    <button string="Đóng" class="btn-primary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

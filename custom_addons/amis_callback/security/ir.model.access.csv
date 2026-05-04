@@ -4,3 +4,5 @@ access_amis_callback_log_line_user,amis.callback.log.line,model_amis_callback_lo
 access_amis_callback_config_admin,amis.callback.config,model_amis_callback_config,base.group_system,1,1,1,1
 access_amis_sync_job_user,amis.sync.job,model_amis_sync_job,base.group_user,1,0,0,0
 access_amis_sync_job_admin,amis.sync.job admin,model_amis_sync_job,base.group_system,1,1,1,1
+access_misa_invoice_template_wizard,misa.invoice.template.wizard,model_misa_invoice_template_wizard,base.group_system,1,1,1,1
+access_misa_invoice_template_wizard_line,misa.invoice.template.wizard.line,model_misa_invoice_template_wizard_line,base.group_system,1,1,1,1
