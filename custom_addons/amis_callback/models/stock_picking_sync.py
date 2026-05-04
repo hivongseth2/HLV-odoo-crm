@@ -284,6 +284,50 @@ class StockPickingAmisSync(models.Model):
         refdate = self._to_misa_date(self.date_done)
         shopee_ref = getattr(sales_order, 'shopee_order_ref', '') or ''
 
+        # Build in_outward_detail: dùng giá vốn (move.price_unit = standard cost)
+        outward_detail = []
+        for idx, move in enumerate(
+            self.move_ids_without_package.filtered(lambda m: m.quantity > 0), start=1
+        ):
+            product = move.product_id
+            qty_done = float(move.quantity)
+            cost_price = float(move.price_unit or 0.0)  # giá vốn (standard/average cost)
+            cost_amount = qty_done * cost_price
+
+            inventory_item_id = (product.misa_inventory_item_id or '').strip()
+            unit_id = (move.product_uom.misa_unit_id or '').strip()
+
+            ref_outward_detail_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'outward_detail|%d|%d' % (self.id, move.id)))
+
+            outward_detail.append({
+                'ref_detail_id': ref_outward_detail_id,
+                'refid': outward_refid,
+                'inventory_item_id': inventory_item_id,
+                'unit_id': unit_id,
+                'main_unit_id': unit_id,
+                'from_stock_id': stock_id,
+                'sort_order': idx,
+                'quantity': qty_done,
+                'unit_price': cost_price,
+                'amount': cost_amount,
+                'main_convert_rate': 1.0,
+                'main_quantity': qty_done,
+                'debit_account': '632',
+                'credit_account': '1561',
+                'exchange_rate_operator': '*',
+                'inventory_item_code': product.default_code or str(product.id),
+                'inventory_item_name': product.name,
+                'unit_name': move.product_uom.name,
+                'main_unit_name': move.product_uom.name,
+                'stock_code': 'HLV',
+                'stock_name': 'HLV',
+                'description': product.name,
+                'is_follow_serial_number': False,
+                'is_allow_duplicate_serial_number': False,
+                'is_description': False,
+                'state': 0,
+            })
+
         in_outward = {
             'voucher_type': 8,
             'is_get_new_id': True,
@@ -322,6 +366,7 @@ class StockPickingAmisSync(models.Model):
             'is_reject_handler': False,
             'auto_refno': False,
             'state': 0,
+            'detail': outward_detail,
         }
 
         voucher = {
