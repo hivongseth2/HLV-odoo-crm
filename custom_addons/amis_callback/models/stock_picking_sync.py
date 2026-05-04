@@ -23,6 +23,10 @@ class StockPickingAmisSync(models.Model):
         string='MISA org_refid phiếu nhập',
         copy=False,
     )
+    misa_outward_org_refid = fields.Char(
+        string='MISA org_refid phiếu xuất kho',
+        copy=False,
+    )
 
     def button_validate(self):
         res = super().button_validate()
@@ -176,10 +180,14 @@ class StockPickingAmisSync(models.Model):
         if not sa_voucher_refid:
             sa_voucher_refid = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'sa_voucher|%d' % self.id))
 
+        # outward_refid: dùng refid đã lưu hoặc sinh mới (mỗi sync mới = refid mới để MISA tạo lại detail)
+        outward_refid = (self.misa_outward_org_refid or '').strip()
+        if not outward_refid:
+            outward_refid = str(uuid.uuid4())
+            self.sudo().write({'misa_outward_org_refid': outward_refid})
+
         # Pre-calculate SAInvoice refid (deterministic từ SO.id) để link 2 chiều
         sa_invoice_refid_link = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'sa_invoice|%d' % sales_order.id))
-
-        outward_refid = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'outward|%d' % self.id))
 
         detail = []
         total_sale = 0.0
