@@ -185,6 +185,50 @@
         </field>
     </record>
 
+    <!-- Sale Order View inherit - add SAInvoice button -->
+    <record id="view_sale_order_form_amis_inherit" model="ir.ui.view">
+        <field name="name">sale.order.form.amis.inherit</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <data>
+                <xpath expr="//div[@name='button_box']" position="inside">
+                    <button name="action_sync_misa_sa_invoice" type="object"
+                            class="oe_stat_button" icon="fa-file-text-o"
+                            invisible="not misa_sa_voucher_synced or misa_sa_invoice_synced or state not in ('sale','done')">
+                        <div class="o_field_widget o_stat_info">
+                            <span class="o_stat_text">Sync</span>
+                            <span class="o_stat_text">Hóa đơn MISA</span>
+                        </div>
+                    </button>
+                    <button name="action_sync_misa_sa_invoice" type="object"
+                            class="oe_stat_button" icon="fa-check-circle" attrs="{'invisible': [('misa_sa_invoice_synced', '=', False)]}"
+                            invisible="not misa_sa_invoice_synced">
+                        <div class="o_field_widget o_stat_info">
+                            <span class="o_stat_text">Đã sync</span>
+                            <span class="o_stat_text">Hóa đơn MISA</span>
+                        </div>
+                    </button>
+                </xpath>
+                <xpath expr="//notebook" position="inside">
+                    <page string="MISA" name="misa_info"
+                          invisible="not misa_sa_voucher_synced and not misa_sa_invoice_synced">
+                        <group>
+                            <group string="SAVoucher (Bán hàng)">
+                                <field name="misa_sa_voucher_synced" readonly="1"/>
+                                <field name="misa_sa_voucher_org_refid" readonly="1"/>
+                            </group>
+                            <group string="SAInvoice (Hóa đơn)">
+                                <field name="misa_sa_invoice_synced" readonly="1"/>
+                                <field name="misa_sa_invoice_org_refid" readonly="1"/>
+                            </group>
+                        </group>
+                    </page>
+                </xpath>
+            </data>
+        </field>
+    </record>
+
     <!-- Queue View -->
     <record id="view_amis_sync_job_list" model="ir.ui.view">
         <field name="name">amis.sync.job.list</field>
@@ -195,7 +239,8 @@
                   decoration-success="status == 'done'"
                   decoration-muted="status == 'skipped'">
                 <field name="create_date" string="Tạo lúc"/>
-                <field name="picking_id"/>
+                <field name="picking_id" optional="show"/>
+                <field name="sale_order_id" optional="show"/>
                 <field name="direction"/>
                 <field name="status"/>
                 <field name="retry_count"/>
@@ -221,6 +266,7 @@
                     <group>
                         <group>
                             <field name="picking_id"/>
+                            <field name="sale_order_id"/>
                             <field name="direction"/>
                             <field name="status"/>
                         </group>

@@ -11,15 +11,19 @@ class AmisSyncJob(models.Model):
     _name = 'amis.sync.job'
     _description = 'Hàng đợi đồng bộ MISA'
     _order = 'create_date asc'
-    _rec_name = 'picking_id'
+    _rec_name = 'create_date'
 
     picking_id = fields.Many2one(
-        'stock.picking', string='Phiếu kho', required=True, ondelete='cascade', index=True,
+        'stock.picking', string='Phiếu kho', required=False, ondelete='cascade', index=True,
+    )
+    sale_order_id = fields.Many2one(
+        'sale.order', string='Đơn bán hàng', required=False, ondelete='cascade', index=True,
     )
     direction = fields.Selection([
-        ('incoming', 'Nhập kho'),
-        ('outgoing', 'Xuất kho'),
-    ], string='Chiều', required=True)
+        ('incoming', 'Nhập kho (InwardVoucher)'),
+        ('outgoing', 'Xuất kho / Bán hàng (SAVoucher)'),
+        ('sa_invoice', 'Hóa đơn bán hàng (SAInvoice)'),
+    ], string='Loại đồng bộ', required=True)
     status = fields.Selection([
         ('pending', 'Chờ xử lý'),
         ('done', 'Thành công'),
@@ -56,11 +60,17 @@ class AmisSyncJob(models.Model):
     def _execute(self):
         self.ensure_one()
         pick = self.picking_id
+        so = self.sale_order_id
         try:
             if self.direction == 'incoming':
                 pick._sync_incoming_po_to_misa()
-            else:
+            elif self.direction == 'outgoing':
                 pick._sync_outgoing_so_to_misa()
+            elif self.direction == 'sa_invoice':
+                if so:
+                    so._sync_sa_invoice_to_misa()
+                else:
+                    raise ValueError('sa_invoice job thiếu sale_order_id')
             self.write({
                 'status': 'done',
                 'error_msg': False,

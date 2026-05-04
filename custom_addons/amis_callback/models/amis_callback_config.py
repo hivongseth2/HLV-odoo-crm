@@ -265,6 +265,28 @@ class AmisCallbackConfig(models.Model):
         }
         return self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
 
+    def push_sa_voucher(self, voucher_payload):
+        """Push SAVoucher (ban hang kiem xuat kho, voucher_type=13) len MISA."""
+        self.ensure_one()
+        payload = {
+            'app_id': self.app_id,
+            'org_company_code': self.org_company_code,
+            'voucher': [voucher_payload],
+            'dictionary': [],
+        }
+        return self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
+
+    def push_sa_invoice(self, voucher_payload):
+        """Push SAInvoice (hoa don ban hang, voucher_type=11) len MISA."""
+        self.ensure_one()
+        payload = {
+            'app_id': self.app_id,
+            'org_company_code': self.org_company_code,
+            'voucher': [voucher_payload],
+            'dictionary': [],
+        }
+        return self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
+
     def ensure_sync_ready(self):
         self.ensure_one()
         missing = []

@@ -108,26 +108,276 @@ class StockPickingAmisSync(models.Model):
         return self.env['purchase.order']
 
     def _sync_outgoing_so_to_misa(self):
+        """Push SAVoucher (bán hàng kiêm xuất kho, voucher_type=13) lên MISA."""
         self.ensure_one()
         if self.state != 'done' or self.picking_type_code != 'outgoing':
             return
 
         sales_order = self._get_related_sales_order()
         if not sales_order:
+            _logger.info('Skip outgoing sync for %s: không tìm được đơn bán hàng.', self.name)
+            return
+
+        # Chỉ sync đơn hàng có shopee_order_ref
+        if not getattr(sales_order, 'shopee_order_ref', None):
+            _logger.info('Skip outgoing sync for %s: đơn %s không có shopee_order_ref.', self.name, sales_order.name)
             return
 
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
         if not config.sync_outgoing_so_enabled:
-            return False
-        
+            return
+
         if not config.ensure_sync_ready():
             return
 
-        voucher_payload, dictionary_items = self._prepare_misa_outgoing_payload(config, sales_order)
+        # Bỏ qua nếu đã sync SAVoucher
+        if sales_order.misa_sa_voucher_synced:
+            _logger.info('Skip outgoing sync for %s: đơn %s đã sync SAVoucher.', self.name, sales_order.name)
+            return
 
-        # Theo tai lieu ACT OpenAPI: dong bo danh muc truoc, sau do cất de nghi sinh chung tu.
-        config.push_dictionary(dictionary_items)
-        config.push_outgoing_voucher(voucher_payload, dictionary_items=dictionary_items)
+        voucher_payload = self._prepare_misa_sa_voucher_payload(config, sales_order)
+        org_refid = voucher_payload.get('org_refid', '')
+
+        config.push_sa_voucher(voucher_payload)
+
+        sales_order.sudo().write({
+            'misa_sa_voucher_synced': True,
+            'misa_sa_voucher_org_refid': org_refid,
+        })
+        _logger.info('SAVoucher synced for SO %s (picking %s), org_refid=%s', sales_order.name, self.name, org_refid)
+
+    def _prepare_misa_sa_voucher_payload(self, config, sales_order):
+        """Chuẩn bị payload SAVoucher (voucher_type=13) kèm in_outward (voucher_type=8)."""
+        self.ensure_one()
+        partner = self.partner_id or sales_order.partner_id
+
+        branch_id = (config.misa_branch_id or '').strip()
+        stock_id = (config.misa_stock_id or '').strip()
+
+        if not branch_id:
+            raise UserError('Thiếu MISA Branch ID trong cấu hình.')
+        if not stock_id:
+            raise UserError('Thiếu MISA Stock ID trong cấu hình.')
+
+        # Auto-lookup account_object_id nếu chưa có trên partner
+        account_object_id = (partner.misa_account_object_id or '').strip() if partner else ''
+        if not account_object_id and partner:
+            account_object_id = self._misa_lookup_account_object(config, partner)
+        if not account_object_id:
+            raise UserError('Không tìm được MISA Account Object ID cho khách hàng: %s' % (partner.name if partner else '?'))
+
+        # Dùng org_refid từ SO nếu đã có (idempotent), hoặc sinh mới
+        sa_voucher_refid = (sales_order.misa_sa_voucher_org_refid or '').strip()
+        if not sa_voucher_refid:
+            sa_voucher_refid = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'sa_voucher|%d' % self.id))
+
+        outward_refid = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'outward|%d' % self.id))
+
+        detail = []
+        total_sale = 0.0
+        total_vat = 0.0
+
+        for idx, move in enumerate(
+            self.move_ids_without_package.filtered(lambda m: m.quantity > 0), start=1
+        ):
+            product = move.product_id
+            qty_done = float(move.quantity)
+
+            sale_line = move.sale_line_id
+            price_unit = float(sale_line.price_unit) if sale_line else 0.0
+            discount = float(sale_line.discount) if sale_line and sale_line.discount else 0.0
+            amount_oc = qty_done * price_unit * (1.0 - discount / 100.0)
+
+            vat_rate = 0.0
+            if sale_line:
+                for tax in sale_line.tax_id:
+                    if tax.amount_type == 'percent':
+                        vat_rate = float(tax.amount)
+                        break
+            vat_amount = amount_oc * vat_rate / 100.0
+            total_sale += amount_oc
+            total_vat += vat_amount
+
+            inventory_item_id = (product.misa_inventory_item_id or '').strip()
+            unit_id = (move.product_uom.misa_unit_id or '').strip()
+            if not inventory_item_id and product.default_code:
+                inventory_item_id, fetched_unit_id = self._misa_lookup_inventory_item(config, product, move.product_uom)
+                if not unit_id and fetched_unit_id:
+                    unit_id = fetched_unit_id
+            if not unit_id:
+                unit_id = self._misa_lookup_unit(config, move.product_uom)
+
+            ref_detail_id = (move.misa_ref_detail_id or '').strip()
+            if not ref_detail_id:
+                ref_detail_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'sa_v_detail|%d|%d' % (self.id, move.id)))
+                move.sudo().write({'misa_ref_detail_id': ref_detail_id})
+
+            detail.append({
+                'ref_detail_id': ref_detail_id,
+                'refid': sa_voucher_refid,
+                'inventory_item_id': inventory_item_id,
+                'unit_id': unit_id,
+                'main_unit_id': unit_id,
+                'stock_id': stock_id,
+                'account_object_id': account_object_id,
+                'sort_order': idx,
+                'is_promotion': False,
+                'un_resonable_cost': False,
+                'not_in_vat_declaration': False,
+                'quantity': qty_done,
+                'unit_price': price_unit,
+                'unit_price_after_tax': 0.0,
+                'unit_price_after_discount': price_unit * (1.0 - discount / 100.0),
+                'amount_oc': amount_oc,
+                'amount': amount_oc,
+                'discount_rate': discount,
+                'discount_amount_oc': qty_done * price_unit * discount / 100.0,
+                'discount_amount': qty_done * price_unit * discount / 100.0,
+                'vat_rate': vat_rate,
+                'vat_amount_oc': vat_amount,
+                'vat_amount': vat_amount,
+                'main_convert_rate': 1.0,
+                'main_quantity': qty_done,
+                'amount_after_tax': 0.0,
+                'invoiced_quantity': qty_done,
+                'main_invoiced_quantity': 0.0,
+                'export_tax_rate': 0.0,
+                'export_tax_amount': 0.0,
+                'description': product.display_name,
+                'debit_account': '1311',
+                'credit_account': '5111',
+                'discount_account': '5211',
+                'vat_account': '33311',
+                'exchange_rate_operator': '*',
+                'vat_description': 'Thue GTGT - %s' % product.display_name,
+                'account_object_name': partner.display_name if partner else '',
+                'account_object_code': partner.ref or (partner.name if partner else ''),
+                'account_object_address': partner.contact_address_complete if partner else '',
+                'inventory_item_code': product.default_code or str(product.id),
+                'inventory_item_type': 0,
+                'unit_name': move.product_uom.name,
+                'main_unit_name': move.product_uom.name,
+                'stock_code': 'HLV',
+                'stock_name': 'HLV',
+                'inventory_item_name': product.display_name,
+                'is_follow_serial_number': False,
+                'is_allow_duplicate_serial_number': False,
+                'is_unit_price_after_tax': False,
+                'is_description': False,
+                'is_description_import': False,
+                'discount_type': 0,
+                'exported_invoice_at_least_one': False,
+                'inventory_resale_type_id': 0,
+                'return_quantity': 0.0,
+                'is_un_update_outward_price': False,
+                'state': 0,
+            })
+
+        total_amount = total_sale + total_vat
+        refdate = self._to_misa_date(self.date_done)
+        shopee_ref = getattr(sales_order, 'shopee_order_ref', '') or ''
+
+        in_outward = {
+            'voucher_type': 8,
+            'is_get_new_id': True,
+            'is_allow_group': False,
+            'org_reftype': 0,
+            'act_voucher_type': 0,
+            'total_amount': 0,
+            'refid': outward_refid,
+            'account_object_id': account_object_id,
+            'branch_id': branch_id,
+            'display_on_book': 0,
+            'reforder': int(datetime.utcnow().timestamp() * 1000),
+            'refdate': refdate,
+            'posted_date': refdate,
+            'is_posted_finance': False,
+            'is_posted_management': False,
+            'is_posted_inventory_book_finance': False,
+            'is_posted_inventory_book_management': False,
+            'is_branch_issued': False,
+            'is_sale_with_outward': True,
+            'is_invoice_replace': False,
+            'total_amount_finance': 0,
+            'total_amount_management': 0,
+            'refno_finance': '',
+            'refno_management': '',
+            'account_object_name': partner.display_name if partner else '',
+            'account_object_code': partner.ref or (partner.name if partner else ''),
+            'account_object_address': partner.contact_address_complete if partner else '',
+            'journal_memo': 'Xuat kho ban hang %s (Odoo: %s)' % (sales_order.name, self.name),
+            'reftype': 2020,
+            'is_executed': False,
+            'publish_status': 0,
+            'is_invoice_deleted': False,
+            'invoice_status': 0,
+            'is_invoice_receipted': False,
+            'is_reject_handler': False,
+            'auto_refno': False,
+            'state': 0,
+        }
+
+        voucher = {
+            'voucher_type': 13,
+            'is_get_new_id': True,
+            'org_refid': sa_voucher_refid,
+            'is_allow_group': False,
+            'org_refno': sales_order.name,
+            'org_reftype': 3530,
+            'org_reftype_name': 'Ban hang',
+            'refno': '',
+            'act_voucher_type': 0,
+            'refid': sa_voucher_refid,
+            'branch_id': branch_id,
+            'account_object_id': account_object_id,
+            'display_on_book': 0,
+            'outward_exported_status': 1,
+            'debt_status': 0,
+            'reforder': int(datetime.utcnow().timestamp() * 1000),
+            'discount_rate_voucher': 0.0,
+            'refdate': refdate,
+            'posted_date': refdate,
+            'inv_date': refdate,
+            'is_posted_finance': False,
+            'is_posted_management': False,
+            'include_invoice': 0,
+            'include_invoice_import': False,
+            'is_invoice_exported': False,
+            'is_paid': False,
+            'is_sale_with_outward': True,
+            'is_invoice_exported_last_year': False,
+            'exchange_rate': 1.0,
+            'total_sale_amount_oc': total_sale,
+            'total_sale_amount': total_sale,
+            'total_amount_oc': total_amount,
+            'total_amount': total_amount,
+            'total_discount_amount_oc': 0.0,
+            'total_discount_amount': 0.0,
+            'total_vat_amount_oc': total_vat,
+            'total_vat_amount': total_vat,
+            'total_export_tax_amount': 0.0,
+            'refno_finance': '',
+            'refno_management': '',
+            'account_object_name': partner.display_name if partner else '',
+            'account_object_code': partner.ref or (partner.name if partner else ''),
+            'account_object_address': partner.contact_address_complete if partner else '',
+            'account_object_tax_code': (partner.vat or '') if partner else '',
+            'journal_memo': 'Ban hang %s (Shopee: %s) (Odoo: %s)' % (sales_order.name, shopee_ref, self.name),
+            'currency_id': sales_order.currency_id.name or 'VND',
+            'discount_type': 0,
+            'paid_type': 0,
+            'publish_status': 0,
+            'send_email_status': 0,
+            'is_remind_debt': True,
+            'is_un_limit': False,
+            'outward_refid': outward_refid,
+            'reftype': 3530,
+            'auto_refno': False,
+            'state': 0,
+            'detail': detail,
+            'in_outward': in_outward,
+        }
+        return voucher
 
     def _get_related_sales_order(self):
         self.ensure_one()
@@ -422,195 +672,3 @@ class StockMoveAmisMapping(models.Model):
         string='MISA Ref Detail ID',
         help='ID thật của dòng chi tiết chứng từ trên MISA.',
     )
-
-    def _prepare_misa_outgoing_payload(self, config, sales_order):
-        """Chuan bi payload de dua phieu xuat kho len MISA.
-        
-        Tuong tu nhu nhap kho, nhung dung cho outgoing picking (xuat kho).
-        Voucher_type dung la 8 (xuat kho) thay vi 7 (nhap kho).
-        """
-        self.ensure_one()
-        partner = self.partner_id or sales_order.partner_id
-
-        account_object_id = self._stable_uuid('partner', partner.id)
-        branch_id = self._stable_uuid('company', self.company_id.id)
-        refid = self._stable_uuid('picking', self.id)
-        
-        # Kho MISA co dinh: HLV
-        misa_warehouse_code = 'HLV'
-        stock_id = self._stable_uuid('warehouse_hlv', 'hlv')
-
-        detail = []
-        dictionary = []
-        total_amount = 0.0
-
-        for idx, move in enumerate(self.move_ids_without_package.filtered(lambda m: m.quantity > 0), start=1):
-            product = move.product_id
-            qty_done = float(move.quantity)
-            price_unit = float(move.sale_line_id.price_unit if move.sale_line_id else 0.0)
-            amount = qty_done * price_unit
-            total_amount += amount
-
-            # Map product theo default_code MISA -> Odoo
-            inventory_item_id = self._stable_uuid('product', product.default_code or product.id)
-            unit_id = self._stable_uuid('uom', move.product_uom.id)
-
-            # Tai khoan co dinh theo yeu cau: Kho 1561, Cong no 331
-            debit_account = '1561'
-            credit_account = '331'
-
-            detail.append({
-                'ref_detail_id': self._stable_uuid('move', move.id),
-                'refid': refid,
-                'inventory_item_id': inventory_item_id,
-                'stock_id': stock_id,
-                'unit_id': unit_id,
-                'main_unit_id': unit_id,
-                'account_object_id': account_object_id,
-                'sort_order': idx,
-                'inventory_resale_type_id': 0,
-                'un_resonable_cost': False,
-                'is_promotion': False,
-                'quantity': qty_done,
-                'unit_price_finance': price_unit,
-                'amount_finance': amount,
-                'unit_price_management': price_unit,
-                'amount_management': amount,
-                'main_unit_price_finance': price_unit,
-                'main_unit_price_management': price_unit,
-                'main_convert_rate': 1.0,
-                'main_quantity': qty_done,
-                'amount_finance_oc': amount,
-                'amount_management_oc': amount,
-                'description': product.display_name,
-                'debit_account': debit_account,
-                'credit_account': credit_account,
-                'exchange_rate_operator': '*',
-                'account_object_name': partner.display_name if partner else '',
-                'account_object_code': partner.ref or (partner.name if partner else ''),
-                'inventory_item_code': product.default_code or str(product.id),
-                'inventory_item_type': 0,
-                'unit_name': move.product_uom.name,
-                'stock_code': misa_warehouse_code,
-                'main_unit_name': move.product_uom.name,
-                'inventory_item_name': product.display_name,
-                'stock_name': misa_warehouse_code,
-                'account_name': debit_account,
-                'is_follow_serial_number': False,
-                'is_allow_duplicate_serial_number': False,
-                'is_description': False,
-                'is_description_import': False,
-                'is_promotion_import': False,
-                'un_resonable_cost_import': False,
-                'state': 0,
-            })
-
-            dictionary.append({
-                'dictionary_type': 3,
-                'inventory_item_id': inventory_item_id,
-                'inventory_item_name': product.display_name,
-                'inventory_item_code': product.default_code or str(product.id),
-                'inventory_item_type': 0,
-                'unit_id': unit_id,
-                'inactive': False,
-                'inventory_account': debit_account,
-                'cogs_account': '632',
-                'sale_account': '5111',
-                'reftype': 0,
-                'reftype_category': 0,
-                'state': 0,
-            })
-            dictionary.append({
-                'dictionary_type': 6,
-                'unit_id': unit_id,
-                'unit_name': move.product_uom.name,
-                'inactive': False,
-                'reftype_category': 0,
-                'state': 0,
-            })
-
-        dictionary.append({
-            'dictionary_type': 1,
-            'account_object_id': account_object_id,
-            'account_object_type': 0,
-            'is_vendor': False,
-            'is_customer': True,
-            'is_employee': False,
-            'inactive': False,
-            'account_object_code': partner.ref or (partner.name if partner else ''),
-            'account_object_name': partner.display_name if partner else '',
-            'address': partner.contact_address_complete if partner else '',
-            'country': partner.country_id.name if partner and partner.country_id else 'Viet Nam',
-            'pay_account': '3111',
-            'receive_account': '1111',
-            'reftype': 0,
-            'reftype_category': 0,
-            'branch_id': branch_id,
-            'state': 0,
-        })
-        dictionary.append({
-            'dictionary_type': 5,
-            'stock_id': stock_id,
-            'branch_id': branch_id,
-            'inactive': False,
-            'stock_code': misa_warehouse_code,
-            'stock_name': misa_warehouse_code,
-            'reftype': 0,
-            'reftype_category': 0,
-            'state': 0,
-        })
-
-        # Khử trùng lặp theo (dictionary_type, id chính) để payload gọn và đúng giới hạn tài liệu.
-        dedup = {}
-        for item in dictionary:
-            key_field = {
-                1: 'account_object_id',
-                3: 'inventory_item_id',
-                5: 'stock_id',
-                6: 'unit_id',
-            }.get(item.get('dictionary_type'))
-            key = (item.get('dictionary_type'), item.get(key_field))
-            dedup[key] = item
-
-        voucher = {
-            'voucher_type': 8,
-            'is_get_new_id': True,
-            'org_refid': refid,
-            'is_allow_group': False,
-            'org_refno': self.name,
-            'org_reftype': 2015,
-            'org_reftype_name': 'Phieu xuat kho',
-            'refid': refid,
-            'act_voucher_type': 0,
-            'reftype': 2015,
-            'reftype_name': 'Xuat kho',
-            'branch_id': branch_id,
-            'account_object_id': account_object_id,
-            'display_on_book': 0,
-            'unit_price_method': 0,
-            'reforder': int(datetime.utcnow().timestamp() * 1000),
-            'refdate': self._to_misa_date(self.date_done),
-            'posted_date': self._to_misa_date(self.date_done),
-            'is_posted_finance': False,
-            'is_posted_management': False,
-            'is_posted_inventory_book_finance': False,
-            'is_posted_inventory_book_management': False,
-            'is_return_with_inward': False,
-            'is_created_sa_return_last_year': False,
-            'total_amount': total_amount,
-            'total_amount_finance': total_amount,
-            'total_amount_management': total_amount,
-            'exchange_rate': 1.0,
-            'refno_finance': '',
-            'refno_management': '',
-            'account_object_name': partner.display_name if partner else '',
-            'account_object_address': partner.contact_address_complete if partner else '',
-            'journal_memo': 'Xuat kho tu don hang %s (Odoo: %s)' % (sales_order.name, self.name),
-            'currency_id': (sales_order.currency_id.name or 'VND'),
-            'account_object_code': partner.ref or (partner.name if partner else ''),
-            'is_executed': False,
-            'is_adjust_value': False,
-            'state': 0,
-            'detail': detail,
-        }
-        return voucher, list(dedup.values())
