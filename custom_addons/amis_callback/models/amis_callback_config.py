@@ -551,7 +551,7 @@ class AmisCallbackConfig(models.Model):
         self.ensure_sync_ready()
 
         # ---- Pre-load toàn bộ product + uom vào dict 1 lần (tránh N DB query) ----
-        product_env = self.env['product.template'].sudo()
+        product_env = self.env['product.product'].sudo()
         uom_env = self.env['uom.uom'].sudo()
 
         # {default_code: [product_ids]}
