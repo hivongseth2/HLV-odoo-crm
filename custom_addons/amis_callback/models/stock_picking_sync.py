@@ -182,10 +182,11 @@ class StockPickingAmisSync(models.Model):
         account_object_id, account_object_code, account_object_name = \
             config.resolve_misa_account_object(partner, sale_order=sales_order)
 
-        # Dùng org_refid từ SO nếu đã có (idempotent), hoặc sinh mới
+        # Dùng org_refid từ SO nếu đã có (idempotent), hoặc sinh mới bằng uuid4 và persist ngay
         sa_voucher_refid = (sales_order.misa_sa_voucher_org_refid or '').strip()
         if not sa_voucher_refid:
-            sa_voucher_refid = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'sa_voucher|%d' % self.id))
+            sa_voucher_refid = str(uuid.uuid4())
+            sales_order.sudo().write({'misa_sa_voucher_org_refid': sa_voucher_refid})
 
         # outward_refid: dùng refid đã lưu hoặc sinh mới (mỗi sync mới = refid mới để MISA tạo lại detail)
         outward_refid = (self.misa_outward_org_refid or '').strip()
