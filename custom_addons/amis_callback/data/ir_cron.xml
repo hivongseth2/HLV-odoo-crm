@@ -1,5 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
+    <record id="ir_cron_amis_sync_catalog_unmapped" model="ir.cron">
+        <field name="name">AMIS: Tự động đồng bộ sản phẩm chưa map (30 phút)</field>
+        <field name="model_id" ref="model_amis_callback_config"/>
+        <field name="state">code</field>
+        <field name="code">records = model.search([], limit=1)
+if records:
+    records.action_sync_catalog_unmapped_only()</field>
+        <field name="interval_number">30</field>
+        <field name="interval_type">minutes</field>
+        <field name="active">True</field>
+    </record>
+
     <record id="ir_cron_amis_sync_queue" model="ir.cron">
         <field name="name">AMIS: Xử lý hàng đợi đồng bộ kho</field>
         <field name="model_id" ref="model_amis_sync_job"/>

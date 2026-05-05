@@ -105,8 +105,22 @@ class SaleOrderAmisSync(models.Model):
         total_discount = 0.0
         total_vat = 0.0
 
+        # --- Kiểm tra tất cả sản phẩm đã có MISA mapping chưa ---
+        lines_to_sync = self.order_line.filtered(lambda l: not l.display_type and l.product_uom_qty > 0)
+        unmapped = [
+            l.product_id.display_name
+            for l in lines_to_sync
+            if not (l.product_id.misa_inventory_item_id or '').strip()
+        ]
+        if unmapped:
+            raise UserError(
+                'Đơn hàng "%s" có sản phẩm chưa được map với MISA, không thể đồng bộ:\n%s\n\n'
+                'Vui lòng bấm "Đồng bộ sản phẩm mới" trong Cấu hình AMIS để cập nhật mapping.'
+                % (self.name, '\n'.join('• ' + n for n in unmapped))
+            )
+
         for idx, line in enumerate(
-            self.order_line.filtered(lambda l: not l.display_type and l.product_uom_qty > 0),
+            lines_to_sync,
             start=1,
         ):
             product = line.product_id
