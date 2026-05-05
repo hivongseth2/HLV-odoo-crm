@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 import logging
+import time
 
 import requests
 
@@ -8,6 +9,11 @@ from odoo import fields, models
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
+
+# Module-level cache: {(db_name, data_type): (timestamp, [items])}
+# Tồn tại trong suốt vòng đời worker process — tránh 429 khi cron xử lý nhiều picking
+_DICT_CACHE_TTL = 300  # seconds (5 phút)
+_DICT_CACHE: dict = {}
 
 
 class AmisCallbackConfig(models.Model):
@@ -358,15 +364,22 @@ class AmisCallbackConfig(models.Model):
         chỉ gọi 1 lần rồi cache trên cursor. Cache tự xóa khi transaction/cursor kết thúc.
         """
         self.ensure_one()
-        # Cache trên cursor — lifecycle khớp với transaction, không bị giới hạn bởi Odoo ORM
+        # Thử module-level cache trước (tồn tại qua nhiều transaction, TTL 5 phút)
+        db_name = self.env.cr.dbname
+        cache_key = (db_name, int(data_type))
+        now = time.monotonic()
+        cached = _DICT_CACHE.get(cache_key)
+        if cached and (now - cached[0]) < _DICT_CACHE_TTL:
+            return cached[1]
+
+        # Fallback: cursor-level cache (transaction scope)
         cr = self.env.cr
         if not hasattr(cr, '_amis_dict_cache'):
             cr._amis_dict_cache = {}
-        cache = cr._amis_dict_cache
-
+        tx_cache = cr._amis_dict_cache
         key = int(data_type)
-        if key in cache:
-            return cache[key]
+        if key in tx_cache:
+            return tx_cache[key]
 
         all_items = []
         skip = 0
@@ -377,7 +390,10 @@ class AmisCallbackConfig(models.Model):
             if len(items) < 100:
                 break
             skip += 100
-        cache[key] = all_items
+
+        # Lưu cả hai cache
+        _DICT_CACHE[cache_key] = (now, all_items)
+        tx_cache[key] = all_items
         _logger.info('MISA dictionary type=%d: fetched %d items (cached for this transaction)', data_type, len(all_items))
         return all_items
 
