@@ -224,12 +224,7 @@ class StockPickingAmisSync(models.Model):
 
             inventory_item_id = (product.misa_inventory_item_id or '').strip()
             unit_id = (move.product_uom.misa_unit_id or '').strip()
-            if not inventory_item_id and product.default_code:
-                inventory_item_id, fetched_unit_id = self._misa_lookup_inventory_item(config, product, move.product_uom)
-                if not unit_id and fetched_unit_id:
-                    unit_id = fetched_unit_id
-            if not unit_id:
-                unit_id = self._misa_lookup_unit(config, move.product_uom)
+            # Không gọi get_dictionary lúc sync (tránh 429). MISA match theo inventory_item_code nếu id trống.
 
             ref_detail_id = (move.misa_ref_detail_id or '').strip()
             if not ref_detail_id:
