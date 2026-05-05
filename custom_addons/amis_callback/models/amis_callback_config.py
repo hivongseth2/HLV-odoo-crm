@@ -542,6 +542,72 @@ class AmisCallbackConfig(models.Model):
         }
         return self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
 
+    def action_sync_catalog_to_odoo(self):
+        """Đồng bộ danh mục hàng hóa (type=2) và đơn vị tính (type=4) từ MISA
+        → ghi misa_inventory_item_id lên product.template / misa_unit_id lên uom.uom.
+        Chạy thủ công một lần, không gọi trong cron/sync phiếu.
+        """
+        self.ensure_one()
+        self.ensure_sync_ready()
+
+        # ---- 1. Lấy toàn bộ hàng hóa (data_type=2) ----
+        inv_items = self._get_all_dictionary(2)
+        product_env = self.env['product.template'].sudo()
+        item_updated = 0
+        for item in inv_items:
+            code = (item.get('inventory_item_code') or '').strip()
+            item_id = (item.get('inventory_item_id') or '').strip()
+            if not code or not item_id:
+                continue
+            products = product_env.search([('default_code', '=', code)])
+            if not products:
+                continue
+            needs_update = products.filtered(lambda p: p.misa_inventory_item_id != item_id)
+            if needs_update:
+                needs_update.write({'misa_inventory_item_id': item_id})
+                item_updated += len(needs_update)
+
+        # ---- 2. Lấy toàn bộ đơn vị tính (data_type=4) ----
+        unit_items = self._get_all_dictionary(4)
+        uom_env = self.env['uom.uom'].sudo()
+        unit_updated = 0
+        for item in unit_items:
+            name = (item.get('unit_name') or '').strip()
+            unit_id = (item.get('unit_id') or '').strip()
+            if not name or not unit_id:
+                continue
+            uoms = uom_env.search([('name', '=', name)])
+            if not uoms:
+                continue
+            needs_update = uoms.filtered(lambda u: u.misa_unit_id != unit_id)
+            if needs_update:
+                needs_update.write({'misa_unit_id': unit_id})
+                unit_updated += len(needs_update)
+
+        # Xóa module cache để lần sau fetch mới
+        db = self.env.cr.dbname
+        _DICT_CACHE.pop((db, 2), None)
+        _DICT_CACHE.pop((db, 4), None)
+
+        msg = (
+            f'Đồng bộ danh mục hoàn tất!\n'
+            f'• Hàng hóa: đã cập nhật {item_updated} sản phẩm '
+            f'(trên tổng {len(inv_items)} mục MISA).\n'
+            f'• Đơn vị tính: đã cập nhật {unit_updated} UoM '
+            f'(trên tổng {len(unit_items)} mục MISA).'
+        )
+        _logger.info('MISA catalog sync: %s', msg)
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Đồng bộ danh mục MISA',
+                'message': msg,
+                'type': 'success',
+                'sticky': True,
+            },
+        }
+
     def action_fetch_invoice_templates(self):
         """Lấy danh sách mẫu hóa đơn điện tử từ MISA và hiển thị dạng bảng."""
         self.ensure_one()
