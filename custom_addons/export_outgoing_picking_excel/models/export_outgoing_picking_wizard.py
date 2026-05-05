@@ -1150,7 +1150,7 @@ class PickingExportWizard(models.TransientModel):
                         partner_name = "KHÁCH LẺ CỬA HÀNG BẾN CAM"
                 
                 # Mapping for TSN (HCM)
-                elif warehouse_code in ["TSN", "HCM"]:
+                elif warehouse_code in ["TSN", "HCM","TSNSR"]:
                     if "tiền mặt" in payment_method_lower and not is_multiple:
                         ma_khach_hang = "KH27182013176"
                         phuong_thuc_excel = "Thu tiền ngay - Tiền mặt"
