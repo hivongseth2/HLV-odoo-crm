@@ -4,6 +4,7 @@ import logging
 import time
 
 import requests
+from requests.exceptions import HTTPError
 
 from odoo import fields, models
 from odoo.exceptions import UserError
@@ -333,18 +334,33 @@ class AmisCallbackConfig(models.Model):
             raise UserError('Thiếu API URL.')
         url = f'{api_url}{path}'
         headers = self._build_headers(include_token=include_token)
-        try:
-            response = requests.post(url, json=payload, headers=headers, timeout=timeout)
-            response.raise_for_status()
-            body = response.json()
-        except Exception as exc:
-            _logger.exception('AMIS call failed: %s %s', path, exc)
-            raise UserError(f'Gọi API MISA thất bại: {exc}')
+        max_retries = 3
+        delay = 5  # seconds
+        last_exc = None
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(url, json=payload, headers=headers, timeout=timeout)
+                if response.status_code == 429:
+                    wait = delay * (2 ** attempt)  # 5s, 10s, 20s
+                    _logger.warning('AMIS 429 Too Many Requests: %s (attempt %d/%d) — waiting %ds', path, attempt + 1, max_retries, wait)
+                    time.sleep(wait)
+                    last_exc = HTTPError(f'429 Client Error: Too Many Requests for url: {url}', response=response)
+                    continue
+                response.raise_for_status()
+                body = response.json()
+            except HTTPError:
+                raise
+            except Exception as exc:
+                _logger.exception('AMIS call failed: %s %s', path, exc)
+                raise UserError(f'Gọi API MISA thất bại: {exc}')
 
-        if not body.get('Success'):
-            err = body.get('ErrorMessage') or body.get('ErrorCode') or 'Không rõ lỗi'
-            raise UserError(f'MISA trả về lỗi: {err}')
-        return body
+            if not body.get('Success'):
+                err = body.get('ErrorMessage') or body.get('ErrorCode') or 'Không rõ lỗi'
+                raise UserError(f'MISA trả về lỗi: {err}')
+            return body
+
+        _logger.error('AMIS call failed after %d retries (429): %s', max_retries, path)
+        raise UserError(f'Gọi API MISA thất bại sau {max_retries} lần thử: 429 Too Many Requests ({path})')
 
     def push_dictionary(self, dictionary_items):
         self.ensure_one()

@@ -691,6 +691,12 @@ class StockPickingAmisSync(models.Model):
 
     def _misa_lookup_inventory_item(self, config, product, uom):
         """Tìm inventory_item_id MISA theo default_code, lưu vào product + uom."""
+        # Nếu đã có sẵn trên product, trả về ngay không gọi API
+        existing_item_id = (product.misa_inventory_item_id or '').strip()
+        existing_unit_id = (uom.misa_unit_id or '').strip() if uom else ''
+        if existing_item_id:
+            return existing_item_id, existing_unit_id
+
         code = (product.default_code or '').strip()
         if not code:
             return '', ''
