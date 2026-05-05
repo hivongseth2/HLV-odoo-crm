@@ -150,6 +150,13 @@ class StockPickingAmisSync(models.Model):
         voucher_payload = self._prepare_misa_sa_voucher_payload(config, sales_order)
         org_refid = voucher_payload.get('org_refid', '')
 
+        import json
+        _logger.info(
+            'SAVoucher payload for %s:\n%s',
+            self.name,
+            json.dumps(voucher_payload, ensure_ascii=False, default=str, indent=2),
+        )
+
         config.push_sa_voucher(voucher_payload)
 
         sales_order.sudo().write({
@@ -300,6 +307,8 @@ class StockPickingAmisSync(models.Model):
             product = move.product_id
             qty_done = float(move.quantity)
             cost_price = float(move.price_unit or 0.0)  # giá vốn (standard/average cost)
+            if cost_price == 0.0:
+                cost_price = float(move.product_id.standard_price or 0.0)
             cost_amount = qty_done * cost_price
 
             # Giá bán từ sale line
@@ -395,6 +404,7 @@ class StockPickingAmisSync(models.Model):
             'is_reject_handler': False,
             'auto_refno': False,
             'state': 0,
+            'detail': outward_detail,
         }
 
         voucher = {
@@ -457,7 +467,6 @@ class StockPickingAmisSync(models.Model):
             'state': 0,
             'detail': detail,
             'in_outward': in_outward,
-            'in_outward_detail': outward_detail,
         }
         return voucher
 
