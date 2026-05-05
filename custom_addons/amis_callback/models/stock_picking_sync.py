@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import re
 import uuid
 from datetime import datetime
 
@@ -46,6 +47,31 @@ class StockPickingAmisSync(models.Model):
                    else config.sync_outgoing_so_enabled)
         if not enabled:
             return
+
+        so = None
+        if direction == 'outgoing':
+            so = self._get_related_sales_order()
+            # Không enqueue nếu SO đã sync SAVoucher thành công
+            if so and so.misa_sa_voucher_synced:
+                _logger.info(
+                    'Skip enqueue outgoing for picking %s: SO %s đã sync SAVoucher rồi.',
+                    self.name, so.name,
+                )
+                return
+            # Không enqueue nếu SO đã có job outgoing đang pending/done/error
+            if so:
+                so_job = self.env['amis.sync.job'].sudo().search([
+                    ('sale_order_id', '=', so.id),
+                    ('direction', '=', 'outgoing'),
+                    ('status', 'in', ('pending', 'done')),
+                ], limit=1)
+                if so_job:
+                    _logger.info(
+                        'Skip enqueue outgoing for picking %s: SO %s đã có job outgoing (status=%s).',
+                        self.name, so.name, so_job.status,
+                    )
+                    return
+
         # Tránh tạo job trùng nếu picking đã được enqueue và chưa xử lý
         existing = self.env['amis.sync.job'].sudo().search([
             ('picking_id', '=', self.id),
@@ -60,11 +86,8 @@ class StockPickingAmisSync(models.Model):
             'direction': direction,
             'status': 'pending',
         }
-        # Gắn sale_order_id để hiển thị trên queue
-        if direction == 'outgoing':
-            so = self._get_related_sales_order()
-            if so:
-                vals['sale_order_id'] = so.id
+        if so:
+            vals['sale_order_id'] = so.id
 
         self.env['amis.sync.job'].sudo().create(vals)
         _logger.info('AMIS sync job enqueued for picking %s (%s)', self.name, direction)
@@ -146,6 +169,21 @@ class StockPickingAmisSync(models.Model):
         if sales_order.misa_sa_voucher_synced:
             _logger.info('Skip outgoing sync for %s: đơn %s đã sync SAVoucher.', self.name, sales_order.name)
             return
+
+        # Kiểm tra sản phẩm chưa map MISA — bỏ qua đơn và raise lỗi rõ ràng
+        moves_to_sync = self.move_ids_without_package.filtered(lambda m: m.quantity > 0)
+        unmapped = [
+            m.product_id.display_name
+            for m in moves_to_sync
+            if not (m.product_id.misa_inventory_item_id or '').strip()
+        ]
+        if unmapped:
+            raise UserError(
+                'Đơn hàng "%s" có sản phẩm chưa map với MISA, bỏ qua đồng bộ:\n%s\n\n'
+                'Hệ thống sẽ tự động map lại sau 30 phút. '
+                'Hoặc bấm "Đồng bộ sản phẩm mới" trong Cấu hình AMIS rồi retry job này.'
+                % (sales_order.name, '\n'.join('• ' + n for n in unmapped))
+            )
 
         voucher_payload = self._prepare_misa_sa_voucher_payload(config, sales_order)
         org_refid = voucher_payload.get('org_refid', '')
@@ -262,12 +300,12 @@ class StockPickingAmisSync(models.Model):
                 'main_invoiced_quantity': 0.0,
                 'export_tax_rate': 0.0,
                 'export_tax_amount': 0.0,
-                'description': product.display_name,
+                'description': re.sub(r'^\[.*?\]\s*', '', product.name or ''),
                 'debit_account': '131',
                 'credit_account': '5111',
                 'vat_account': '3331',
                 'exchange_rate_operator': '*',
-                'vat_description': 'Thue GTGT - %s' % product.display_name,
+                'vat_description': 'Thue GTGT - %s' % re.sub(r'^\[.*?\]\s*', '', product.name or ''),
                 'account_object_name': account_object_name,
                 'account_object_code': account_object_code,
                 'account_object_address': partner.contact_address_complete if partner else '',
@@ -277,7 +315,7 @@ class StockPickingAmisSync(models.Model):
                 'main_unit_name': move.product_uom.name,
                 'stock_code': 'HLV',
                 'stock_name': 'HLV',
-                'inventory_item_name': product.display_name,
+                'inventory_item_name': re.sub(r'^\[.*?\]\s*', '', product.name or ''),
                 'is_follow_serial_number': False,
                 'is_allow_duplicate_serial_number': False,
                 'is_unit_price_after_tax': False,
@@ -342,12 +380,12 @@ class StockPickingAmisSync(models.Model):
                 'credit_account': '1561',
                 'exchange_rate_operator': '*',
                 'inventory_item_code': product.default_code or str(product.id),
-                'inventory_item_name': product.name,
+                'inventory_item_name': re.sub(r'^\[.*?\]\s*', '', product.name or ''),
                 'unit_name': move.product_uom.name,
                 'main_unit_name': move.product_uom.name,
                 'stock_code': 'HLV',
                 'stock_name': 'HLV',
-                'description': product.name,
+                'description': re.sub(r'^\[.*?\]\s*', '', product.name or ''),
                 'account_object_id': account_object_id,
                 'account_object_code': account_object_code,
                 'account_object_name': account_object_name,
