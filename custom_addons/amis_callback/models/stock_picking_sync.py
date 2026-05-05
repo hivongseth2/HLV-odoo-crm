@@ -365,13 +365,15 @@ class StockPickingAmisSync(models.Model):
                 'state': 0,
             })
 
+        total_cost = sum(d.get('amount_finance', 0.0) for d in outward_detail)
+
         in_outward = {
             'voucher_type': 8,
             'is_get_new_id': True,
             'is_allow_group': False,
             'org_reftype': 0,
             'act_voucher_type': 0,
-            'total_amount': 0,
+            'total_amount': total_cost,
             'refid': outward_refid,
             'account_object_id': account_object_id,
             'branch_id': branch_id,
@@ -387,8 +389,8 @@ class StockPickingAmisSync(models.Model):
             'is_branch_issued': False,
             'is_sale_with_outward': True,
             'is_invoice_replace': False,
-            'total_amount_finance': 0,
-            'total_amount_management': 0,
+            'total_amount_finance': total_cost,
+            'total_amount_management': total_cost,
             'refno_finance': '',
             'refno_management': '',
             'account_object_name': account_object_name,
