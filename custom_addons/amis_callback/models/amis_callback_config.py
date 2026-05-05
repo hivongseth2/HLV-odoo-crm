@@ -620,6 +620,82 @@ class AmisCallbackConfig(models.Model):
             },
         }
 
+    def action_sync_catalog_unmapped_only(self):
+        """Chỉ đồng bộ sản phẩm/UoM chưa có MISA ID (bỏ qua những cái đã map).
+        Nhanh hơn full sync vì chỉ write những record thực sự thiếu.
+        """
+        self.ensure_one()
+        self.ensure_sync_ready()
+
+        product_env = self.env['product.product'].sudo()
+        uom_env = self.env['uom.uom'].sudo()
+
+        # Chỉ load sản phẩm chưa có mapping
+        unmapped_products = product_env.search([
+            ('default_code', '!=', False),
+            ('misa_inventory_item_id', 'in', [False, '']),
+        ])
+        code_to_products = {}
+        for p in unmapped_products:
+            code = (p.default_code or '').strip()
+            if code:
+                code_to_products.setdefault(code, []).append(p)
+
+        # Chỉ load UoM chưa có mapping
+        unmapped_uoms = uom_env.search([('misa_unit_id', 'in', [False, ''])])
+        name_to_uoms = {}
+        for u in unmapped_uoms:
+            name = (u.name or '').strip()
+            if name:
+                name_to_uoms.setdefault(name, []).append(u)
+
+        item_updated = 0
+        unit_updated = 0
+
+        if code_to_products:
+            inv_items = self._get_all_dictionary(2)
+            for item in inv_items:
+                code = (item.get('inventory_item_code') or '').strip()
+                item_id = (item.get('inventory_item_id') or '').strip()
+                if not code or not item_id:
+                    continue
+                for p in code_to_products.get(code, []):
+                    p.write({'misa_inventory_item_id': item_id})
+                    item_updated += 1
+
+        if name_to_uoms:
+            unit_items = self._get_all_dictionary(4)
+            for item in unit_items:
+                name = (item.get('unit_name') or '').strip()
+                unit_id = (item.get('unit_id') or '').strip()
+                if not name or not unit_id:
+                    continue
+                for u in name_to_uoms.get(name, []):
+                    u.write({'misa_unit_id': unit_id})
+                    unit_updated += 1
+
+        # Xóa cache sau khi dùng
+        db = self.env.cr.dbname
+        _DICT_CACHE.pop((db, 2), None)
+        _DICT_CACHE.pop((db, 4), None)
+
+        msg = (
+            f'Đồng bộ sản phẩm chưa map hoàn tất!\n'
+            f'• Hàng hóa: đã map {item_updated}/{len(unmapped_products)} sản phẩm chưa có ID.\n'
+            f'• Đơn vị tính: đã map {unit_updated}/{len(unmapped_uoms)} UoM chưa có ID.'
+        )
+        _logger.info('MISA catalog sync (unmapped only): %s', msg)
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Đồng bộ sản phẩm mới',
+                'message': msg,
+                'type': 'success',
+                'sticky': True,
+            },
+        }
+
     def action_fetch_invoice_templates(self):
         """Lấy danh sách mẫu hóa đơn điện tử từ MISA và hiển thị dạng bảng."""
         self.ensure_one()
