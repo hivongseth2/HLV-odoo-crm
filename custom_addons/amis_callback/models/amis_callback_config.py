@@ -550,39 +550,51 @@ class AmisCallbackConfig(models.Model):
         self.ensure_one()
         self.ensure_sync_ready()
 
-        # ---- 1. Lấy toàn bộ hàng hóa (data_type=2) ----
-        inv_items = self._get_all_dictionary(2)
+        # ---- Pre-load toàn bộ product + uom vào dict 1 lần (tránh N DB query) ----
         product_env = self.env['product.template'].sudo()
+        uom_env = self.env['uom.uom'].sudo()
+
+        # {default_code: [product_ids]}
+        all_products = product_env.search([('default_code', '!=', False)])
+        code_to_products = {}
+        for p in all_products:
+            code = (p.default_code or '').strip()
+            if code:
+                code_to_products.setdefault(code, []).append(p)
+
+        # {uom_name: [uom_ids]}
+        all_uoms = uom_env.search([])
+        name_to_uoms = {}
+        for u in all_uoms:
+            name = (u.name or '').strip()
+            if name:
+                name_to_uoms.setdefault(name, []).append(u)
+
+        # ---- 1. Lấy toàn bộ hàng hóa (data_type=2) — 1 lần fetch, cached ----
+        inv_items = self._get_all_dictionary(2)
         item_updated = 0
         for item in inv_items:
             code = (item.get('inventory_item_code') or '').strip()
             item_id = (item.get('inventory_item_id') or '').strip()
             if not code or not item_id:
                 continue
-            products = product_env.search([('default_code', '=', code)])
-            if not products:
-                continue
-            needs_update = products.filtered(lambda p: p.misa_inventory_item_id != item_id)
-            if needs_update:
-                needs_update.write({'misa_inventory_item_id': item_id})
-                item_updated += len(needs_update)
+            for p in code_to_products.get(code, []):
+                if p.misa_inventory_item_id != item_id:
+                    p.write({'misa_inventory_item_id': item_id})
+                    item_updated += 1
 
-        # ---- 2. Lấy toàn bộ đơn vị tính (data_type=4) ----
+        # ---- 2. Lấy toàn bộ đơn vị tính (data_type=4) — 1 lần fetch, cached ----
         unit_items = self._get_all_dictionary(4)
-        uom_env = self.env['uom.uom'].sudo()
         unit_updated = 0
         for item in unit_items:
             name = (item.get('unit_name') or '').strip()
             unit_id = (item.get('unit_id') or '').strip()
             if not name or not unit_id:
                 continue
-            uoms = uom_env.search([('name', '=', name)])
-            if not uoms:
-                continue
-            needs_update = uoms.filtered(lambda u: u.misa_unit_id != unit_id)
-            if needs_update:
-                needs_update.write({'misa_unit_id': unit_id})
-                unit_updated += len(needs_update)
+            for u in name_to_uoms.get(name, []):
+                if u.misa_unit_id != unit_id:
+                    u.write({'misa_unit_id': unit_id})
+                    unit_updated += 1
 
         # Xóa module cache để lần sau fetch mới
         db = self.env.cr.dbname
