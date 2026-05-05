@@ -319,7 +319,7 @@ class StockPickingAmisSync(models.Model):
                 'vat_amount': vat_amount,
                 'main_convert_rate': 1.0,
                 'main_quantity': qty_done,
-                'amount_after_tax': 0.0,
+                'amount_after_tax': round(net_amount + vat_amount, 2),
                 'invoiced_quantity': qty_done,
                 'main_invoiced_quantity': 0.0,
                 'export_tax_rate': 0.0,
