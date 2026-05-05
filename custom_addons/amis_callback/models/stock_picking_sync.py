@@ -395,7 +395,6 @@ class StockPickingAmisSync(models.Model):
             'is_reject_handler': False,
             'auto_refno': False,
             'state': 0,
-            'detail': outward_detail,
         }
 
         voucher = {
@@ -458,6 +457,7 @@ class StockPickingAmisSync(models.Model):
             'state': 0,
             'detail': detail,
             'in_outward': in_outward,
+            'in_outward_detail': outward_detail,
         }
         return voucher
 
