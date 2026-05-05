@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import re
 import uuid
 import logging
 from datetime import datetime
@@ -179,7 +180,7 @@ class SaleOrderAmisSync(models.Model):
                 'inventory_item_type': 0,
                 'unit_name': line.product_uom.name,
                 'main_unit_name': line.product_uom.name,
-                'inventory_item_name': product.name,
+                'inventory_item_name': re.sub(r'^\[.*?\]\s*', '', product.name or ''),
                 'is_follow_serial_number': False,
                 'is_allow_duplicate_serial_number': False,
                 'is_unit_price_after_tax': False,
