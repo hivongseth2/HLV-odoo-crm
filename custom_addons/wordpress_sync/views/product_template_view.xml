@@ -8,7 +8,7 @@
         <field name="priority">100</field>
         <field name="arch" type="xml">
             <!-- Add button in header area -->
-            <xpath expr="//form/sheet" position="before">
+            <!-- <xpath expr="//form/sheet" position="before">
                 <header>
                     <button name="action_sync_to_wordpress"
                             type="object"
@@ -21,7 +21,7 @@
                             class="btn-secondary"
                             title="Đồng bộ tình trạng kho lên WordPress"/>
                 </header>
-            </xpath>
+            </xpath> -->
             
             <!-- Add combo price field in pricing section (New Row after List Price) -->
             <xpath expr="//div[field[@name='list_price']]" position="after">
