@@ -270,17 +270,17 @@ class StockPickingAmisSync(models.Model):
             # Đơn giá theo đơn vị chính (main_unit_price) = giá trước thuế
             main_unit_price = round(price_before_tax, 2)
 
-            # Thành tiền trước CK, trước thuế
-            gross_oc = round(qty_done * price_before_tax, 2)
-            # Tiền CK = Thành tiền trước thuế * % CK
-            discount_amount_line = round(gross_oc * discount / 100.0, 2)
-            amount_oc = round(gross_oc - discount_amount_line, 2)
+            # Thành tiền = đơn giá trước thuế * số lượng (trước CK, trước thuế)
+            amount_oc = round(qty_done * price_before_tax, 2)
+            # Tiền CK = amount_oc * % CK
+            discount_amount_line = round(amount_oc * discount / 100.0, 2)
+            net_amount = amount_oc - discount_amount_line
 
             # Thuế tính trên (Thành tiền - Tiền CK)
-            vat_amount = round(amount_oc * vat_rate / 100.0, 2)
-            total_gross += gross_oc
+            vat_amount = round(net_amount * vat_rate / 100.0, 2)
+            total_gross += amount_oc
             total_discount += discount_amount_line
-            total_sale += amount_oc
+            total_sale += net_amount
             total_vat += vat_amount
 
             inventory_item_id = (product.misa_inventory_item_id or '').strip()
