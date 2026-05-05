@@ -255,11 +255,8 @@ class StockPickingAmisSync(models.Model):
             qty_done = float(move.quantity)
 
             sale_line = move.sale_line_id
-            price_unit = float(sale_line.price_unit) if sale_line else 0.0
+            price_unit_after_tax = float(sale_line.price_unit) if sale_line else 0.0  # Đơn giá có thuế (Odoo lưu)
             discount = float(sale_line.discount) if sale_line and sale_line.discount else 0.0
-            gross_oc = round(qty_done * price_unit, 2)
-            discount_amount_line = round(gross_oc * discount / 100.0, 2)
-            amount_oc = round(gross_oc - discount_amount_line, 2)
 
             vat_rate = 0.0
             if sale_line:
@@ -267,6 +264,19 @@ class StockPickingAmisSync(models.Model):
                     if tax.amount_type == 'percent':
                         vat_rate = float(tax.amount)
                         break
+
+            # Đơn giá trước thuế = Đơn giá có thuế / (1 + thuế suất)
+            price_before_tax = price_unit_after_tax / (1.0 + vat_rate / 100.0) if vat_rate else price_unit_after_tax
+            # Đơn giá theo đơn vị chính (main_unit_price) = giá trước thuế
+            main_unit_price = round(price_before_tax, 2)
+
+            # Thành tiền trước CK, trước thuế
+            gross_oc = round(qty_done * price_before_tax, 2)
+            # Tiền CK = Thành tiền trước thuế * % CK
+            discount_amount_line = round(gross_oc * discount / 100.0, 2)
+            amount_oc = round(gross_oc - discount_amount_line, 2)
+
+            # Thuế tính trên (Thành tiền - Tiền CK)
             vat_amount = round(amount_oc * vat_rate / 100.0, 2)
             total_gross += gross_oc
             total_discount += discount_amount_line
@@ -295,9 +305,10 @@ class StockPickingAmisSync(models.Model):
                 'un_resonable_cost': False,
                 'not_in_vat_declaration': False,
                 'quantity': qty_done,
-                'unit_price': price_unit,
-                'unit_price_after_tax': 0.0,
-                'unit_price_after_discount': price_unit * (1.0 - discount / 100.0),
+                'unit_price': price_before_tax,
+                'unit_price_after_tax': price_unit_after_tax,
+                'main_unit_price': main_unit_price,
+                'unit_price_after_discount': round(price_before_tax * (1.0 - discount / 100.0), 2),
                 'amount_oc': amount_oc,
                 'amount': amount_oc,
                 'discount_rate': discount,
