@@ -195,7 +195,14 @@ class StockPickingAmisSync(models.Model):
             json.dumps(voucher_payload, ensure_ascii=False, default=str, indent=2),
         )
 
-        config.push_sa_voucher(voucher_payload)
+        result = config.push_sa_voucher(voucher_payload)
+        _logger.info(
+            'SAVoucher MISA response for %s: Success=%s ErrorCode=%s ErrorMessage=%s',
+            self.name,
+            result.get('Success') if isinstance(result, dict) else result,
+            (result or {}).get('ErrorCode', ''),
+            (result or {}).get('ErrorMessage', ''),
+        )
 
         sales_order.sudo().write({
             'misa_sa_voucher_synced': True,
@@ -236,6 +243,8 @@ class StockPickingAmisSync(models.Model):
         sa_invoice_refid_link = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'sa_invoice|%d' % sales_order.id))
 
         detail = []
+        total_gross = 0.0
+        total_discount = 0.0
         total_sale = 0.0
         total_vat = 0.0
 
@@ -248,7 +257,9 @@ class StockPickingAmisSync(models.Model):
             sale_line = move.sale_line_id
             price_unit = float(sale_line.price_unit) if sale_line else 0.0
             discount = float(sale_line.discount) if sale_line and sale_line.discount else 0.0
-            amount_oc = qty_done * price_unit * (1.0 - discount / 100.0)
+            gross_oc = round(qty_done * price_unit, 2)
+            discount_amount_line = round(gross_oc * discount / 100.0, 2)
+            amount_oc = round(gross_oc - discount_amount_line, 2)
 
             vat_rate = 0.0
             if sale_line:
@@ -256,7 +267,9 @@ class StockPickingAmisSync(models.Model):
                     if tax.amount_type == 'percent':
                         vat_rate = float(tax.amount)
                         break
-            vat_amount = amount_oc * vat_rate / 100.0
+            vat_amount = round(amount_oc * vat_rate / 100.0, 2)
+            total_gross += gross_oc
+            total_discount += discount_amount_line
             total_sale += amount_oc
             total_vat += vat_amount
 
@@ -288,8 +301,8 @@ class StockPickingAmisSync(models.Model):
                 'amount_oc': amount_oc,
                 'amount': amount_oc,
                 'discount_rate': discount,
-                'discount_amount_oc': qty_done * price_unit * discount / 100.0,
-                'discount_amount': qty_done * price_unit * discount / 100.0,
+                'discount_amount_oc': discount_amount_line,
+                'discount_amount': discount_amount_line,
                 'vat_rate': vat_rate,
                 'vat_amount_oc': vat_amount,
                 'vat_amount': vat_amount,
@@ -329,7 +342,10 @@ class StockPickingAmisSync(models.Model):
                 'state': 0,
             })
 
-        total_amount = total_sale + total_vat
+        total_sale = round(total_sale, 2)
+        total_discount = round(total_discount, 2)
+        total_vat = round(total_vat, 2)
+        total_amount = round(total_sale + total_vat, 2)
         refdate = self._to_misa_date(self.date_done)
         shopee_ref = getattr(sales_order, 'shopee_order_ref', '') or ''
 
@@ -473,12 +489,12 @@ class StockPickingAmisSync(models.Model):
             'is_sale_with_outward': True,
             'is_invoice_exported_last_year': False,
             'exchange_rate': 1.0,
-            'total_sale_amount_oc': total_sale,
-            'total_sale_amount': total_sale,
+            'total_sale_amount_oc': round(total_gross, 2),
+            'total_sale_amount': round(total_gross, 2),
             'total_amount_oc': total_amount,
             'total_amount': total_amount,
-            'total_discount_amount_oc': 0.0,
-            'total_discount_amount': 0.0,
+            'total_discount_amount_oc': total_discount,
+            'total_discount_amount': total_discount,
             'total_vat_amount_oc': total_vat,
             'total_vat_amount': total_vat,
             'total_export_tax_amount': 0.0,
