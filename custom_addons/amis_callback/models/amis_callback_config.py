@@ -185,6 +185,11 @@ class AmisCallbackConfig(models.Model):
         string='Địa chỉ kho xuất hàng (meInvoice)',
         help='Địa chỉ kho xuất hàng điền vào hóa đơn điện tử. Ví dụ: Tổ 2, Ấp Hiền Đức, Đồng Nai.',
     )
+    meinvoice_stock_in_address = fields.Char(
+        string='Địa chỉ kho nhận hàng (meInvoice)',
+        default='Khách hàng không cung cấp thông tin',
+        help='Địa chỉ kho nhận hàng điền vào hóa đơn điện tử. Mặc định: Khách hàng không cung cấp thông tin.',
+    )
 
     # Mapping cứng: shopee.shop.identifier → account_object_name MISA
     SHOPEE_SHOP_ACCOUNT_MAP = {

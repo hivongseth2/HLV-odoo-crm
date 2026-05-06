@@ -517,6 +517,8 @@ class SaleOrderAmisSync(models.Model):
         company_partner = company.partner_id
         stock_out_address = (config.meinvoice_stock_out_address or '').strip() or \
             company_partner.contact_address_complete or company.street or ''
+        stock_in_address = (config.meinvoice_stock_in_address or '').strip() or \
+            'Khách hàng không cung cấp thông tin'
 
         invoice_data = {
             'RefID': ref_id,
@@ -533,6 +535,7 @@ class SaleOrderAmisSync(models.Model):
             'SellerPhoneNumber': company.phone or '',
             'SellerEmail': company.email or '',
             'StockOutAddress': stock_out_address,
+            'StockInAddress': stock_in_address,
             'BuyerLegalName': partner.name or 'Khách lẻ',
             'BuyerTaxCode': partner.vat or '',
             'BuyerAddress': partner.contact_address_complete or '',
