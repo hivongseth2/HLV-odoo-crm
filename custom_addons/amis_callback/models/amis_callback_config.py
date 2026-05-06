@@ -618,7 +618,7 @@ class AmisCallbackConfig(models.Model):
             'password': self.meinvoice_password,
         }
         result = self._post_meinvoice('/auth/token', payload)
-        token = result.get('Data') or ''
+        token = result.get('Data') or result.get('data') or ''
         if not token:
             raise UserError('Không lấy được token từ meInvoice. Kiểm tra lại thông tin đăng nhập.')
 
