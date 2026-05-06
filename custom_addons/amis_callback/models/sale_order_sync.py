@@ -513,6 +513,9 @@ class SaleOrderAmisSync(models.Model):
             for rate_name, vals in tax_groups.items()
         ]
 
+        company = self.company_id or self.env.company
+        company_partner = company.partner_id
+
         invoice_data = {
             'RefID': ref_id,
             'InvSeries': inv_series,
@@ -522,6 +525,11 @@ class SaleOrderAmisSync(models.Model):
             'PaymentMethodName': 'TM/CK',
             'IsInvoiceSummary': False,
             'IsInvoiceCalculatingMachine': is_mtt,
+            'SellerLegalName': company.name or '',
+            'SellerTaxCode': company.vat or '',
+            'SellerAddress': company_partner.contact_address_complete or company.street or '',
+            'SellerPhoneNumber': company.phone or '',
+            'SellerEmail': company.email or '',
             'BuyerLegalName': partner.name or 'Khách lẻ',
             'BuyerTaxCode': partner.vat or '',
             'BuyerAddress': partner.contact_address_complete or '',
