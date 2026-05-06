@@ -556,6 +556,8 @@ class SaleOrderAmisSync(models.Model):
             'OriginalInvoiceDetail': detail,
             'TaxRateInfo': tax_rate_info,
         }
+        if config.meinvoice_is_pxk:
+            invoice_data['TransportMeans'] = (config.meinvoice_transport_means or '').strip()
         return invoice_data
 
     @staticmethod

@@ -190,6 +190,16 @@ class AmisCallbackConfig(models.Model):
         default='Khách hàng không cung cấp thông tin',
         help='Địa chỉ kho nhận hàng điền vào hóa đơn điện tử. Mặc định: Khách hàng không cung cấp thông tin.',
     )
+    meinvoice_is_pxk = fields.Boolean(
+        string='Xuất kèm Phiếu Xuất Kho (PXK)',
+        default=False,
+        help='Bật khi ký hiệu hóa đơn là loại PXK (phiếu xuất kho kiêm vận chuyển nội bộ). '
+             'Khi bật, trường Phương tiện vận chuyển sẽ được gửi lên meInvoice.',
+    )
+    meinvoice_transport_means = fields.Char(
+        string='Phương tiện vận chuyển (PXK)',
+        help='Điền phương tiện vận chuyển khi hóa đơn là loại PXK. Ví dụ: Xe ô tô, Giao hàng nhanh.',
+    )
 
     # Mapping cứng: shopee.shop.identifier → account_object_name MISA
     SHOPEE_SHOP_ACCOUNT_MAP = {

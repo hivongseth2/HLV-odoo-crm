@@ -184,6 +184,9 @@
                             <field name="meinvoice_sign_type"/>
                             <field name="meinvoice_stock_out_address"/>
                             <field name="meinvoice_stock_in_address"/>
+                            <field name="meinvoice_is_pxk"/>
+                            <field name="meinvoice_transport_means"
+                                   invisible="not meinvoice_is_pxk"/>
                         </group>
                     </group>
                     <group>
