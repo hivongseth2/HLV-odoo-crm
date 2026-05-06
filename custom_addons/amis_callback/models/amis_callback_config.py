@@ -221,6 +221,12 @@ class AmisCallbackConfig(models.Model):
         string='Tên người mua mặc định (meInvoice)',
         help='Tên BuyerLegalName/BuyerFullName fallback khi không xác định được kênh Shopee.',
     )
+    meinvoice_shopee_only = fields.Boolean(
+        string='Chỉ phát hành HĐĐT cho đơn Shopee (meInvoice)',
+        default=True,
+        help='Bật: chỉ phát hành hóa đơn meInvoice cho đơn có shopee_order_ref. '
+             'Tắt: phát hành cho tất cả đơn hàng.',
+    )
 
     # Mapping cứng: shopee.shop.identifier → account_object_name MISA
     SHOPEE_SHOP_ACCOUNT_MAP = {
@@ -798,23 +804,18 @@ class AmisCallbackConfig(models.Model):
         if not invoice_data_list:
             raise UserError('Không có dữ liệu hóa đơn để phát hành.')
 
-        # Tự động xác định SignType từ InvSeries nếu không override qua config
-        # MTT (Máy tính tiền): ký tự thứ 5 (index 4) là 'M' → SignType=5
-        # Còn lại: SignType=2 (HSM server-side)
+        # SignType: luôn dùng giá trị cấu hình, ngoại trừ series MTT (char[4]='M') → buộc SignType=5
         configured_sign_type = int(self.meinvoice_sign_type or 2)
-        if configured_sign_type not in (2, 5):
-            sign_type = configured_sign_type
+        first_series = (invoice_data_list[0].get('InvSeries') or '').strip() if invoice_data_list else ''
+        is_mtt_series = len(first_series) >= 5 and first_series[4].upper() == 'M'
+        if is_mtt_series and configured_sign_type != 5:
+            sign_type = 5
+            _logger.info(
+                'meInvoice: auto-corrected SignType from %d to 5 (MTT) based on InvSeries "%s"',
+                configured_sign_type, first_series,
+            )
         else:
-            first_series = ''
-            if invoice_data_list:
-                first_series = (invoice_data_list[0].get('InvSeries') or '').strip()
-            is_mtt_series = len(first_series) >= 5 and first_series[4].upper() == 'M'
-            sign_type = 5 if is_mtt_series else 2
-            if sign_type != configured_sign_type:
-                _logger.info(
-                    'meInvoice: auto-corrected SignType from %d to %d based on InvSeries "%s"',
-                    configured_sign_type, sign_type, first_series,
-                )
+            sign_type = configured_sign_type
         payload = {
             'SignType': sign_type,
             'InvoiceData': invoice_data_list,

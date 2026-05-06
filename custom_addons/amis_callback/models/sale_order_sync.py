@@ -375,6 +375,13 @@ class SaleOrderAmisSync(models.Model):
             _logger.info('Skip meInvoice publish for SO %s: tính năng chưa bật.', self.name)
             return
 
+        if config.meinvoice_shopee_only and not (getattr(self, 'shopee_order_ref', None) or ''):
+            _logger.info(
+                'Skip meInvoice publish for SO %s: đơn không có shopee_order_ref (chế độ chỉ sync Shopee).',
+                self.name,
+            )
+            return
+
         invoice_data = self._build_meinvoice_invoice_data(config)
         _logger.info(
             'meInvoice invoice payload for SO %s:\n%s',

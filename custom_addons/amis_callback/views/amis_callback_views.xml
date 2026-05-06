@@ -161,6 +161,7 @@
                     </group>
                     <group string="meInvoice - Tên người mua mặc định theo kênh Shopee">
                         <group>
+                            <field name="meinvoice_shopee_only"/>
                             <field name="meinvoice_shopee_milwaukee_buyer_name"/>
                             <field name="meinvoice_shopee_hlv_buyer_name"/>
                             <field name="meinvoice_shopee_dewalt_buyer_name"/>
