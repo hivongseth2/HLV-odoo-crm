@@ -158,7 +158,9 @@ class AmisCallbackConfig(models.Model):
         account_object_name = partner.display_name if partner else ''
 
         # 1. Lookup MISA theo tên partner nếu chưa có ID
-        if not account_object_id and partner:
+        # Bỏ qua cho đơn Shopee — sẽ resolve ở bước 2 theo shopee_shop_id (tránh gọi get_dictionary)
+        has_shopee_shop = sale_order and getattr(sale_order, 'shopee_shop_id', None)
+        if not account_object_id and partner and not has_shopee_shop:
             search_name = (partner.name or '').upper()
             for a in self._get_all_dictionary(1):
                 aname = (a.get('account_object_name') or '').upper()
@@ -769,8 +771,26 @@ class AmisCallbackConfig(models.Model):
             'target': 'new',
         }
 
+    def _ensure_token_valid(self):
+        """Tự động refresh token nếu hết hạn (dùng access_code đã lưu)."""
+        self.ensure_one()
+        expired_str = (self.token_expired_time or '').strip()
+        if not expired_str or not self.access_code:
+            return
+        try:
+            from datetime import datetime
+            # MISA thường trả về ISO format: "2026-05-06T10:30:00" hoặc có Z
+            expired_dt = datetime.fromisoformat(expired_str.replace('Z', '').strip()[:19])
+            if datetime.utcnow() >= expired_dt:
+                _logger.info('MISA token hết hạn (%s), đang tự động làm mới...', expired_str)
+                self.sudo().action_connect_misa()
+                _logger.info('MISA token đã được làm mới thành công.')
+        except Exception:
+            _logger.warning('Không thể parse token_expired_time "%s", bỏ qua auto-refresh.', expired_str)
+
     def ensure_sync_ready(self):
         self.ensure_one()
+        self._ensure_token_valid()
         missing = []
         if not self.app_id:
             missing.append('App ID')
