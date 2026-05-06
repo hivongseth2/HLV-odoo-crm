@@ -515,6 +515,8 @@ class SaleOrderAmisSync(models.Model):
 
         company = self.company_id or self.env.company
         company_partner = company.partner_id
+        stock_out_address = (config.meinvoice_stock_out_address or '').strip() or \
+            company_partner.contact_address_complete or company.street or ''
 
         invoice_data = {
             'RefID': ref_id,
@@ -530,6 +532,7 @@ class SaleOrderAmisSync(models.Model):
             'SellerAddress': company_partner.contact_address_complete or company.street or '',
             'SellerPhoneNumber': company.phone or '',
             'SellerEmail': company.email or '',
+            'StockOutAddress': stock_out_address,
             'BuyerLegalName': partner.name or 'Khách lẻ',
             'BuyerTaxCode': partner.vat or '',
             'BuyerAddress': partner.contact_address_complete or '',

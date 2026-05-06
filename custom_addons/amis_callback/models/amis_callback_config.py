@@ -181,6 +181,10 @@ class AmisCallbackConfig(models.Model):
         default=2,
         help='2: HSM có hiển thị CKS (hóa đơn thường).\n5: Không hiển thị CKS (hóa đơn MTT/máy tính tiền).',
     )
+    meinvoice_stock_out_address = fields.Char(
+        string='Địa chỉ kho xuất hàng (meInvoice)',
+        help='Địa chỉ kho xuất hàng điền vào hóa đơn điện tử. Ví dụ: Tổ 2, Ấp Hiền Đức, Đồng Nai.',
+    )
 
     # Mapping cứng: shopee.shop.identifier → account_object_name MISA
     SHOPEE_SHOP_ACCOUNT_MAP = {
