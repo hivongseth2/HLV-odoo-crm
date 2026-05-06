@@ -853,6 +853,23 @@ class AmisCallbackConfig(models.Model):
         _logger.info('meInvoice publishInvoiceResult: %s', publish_results)
         return publish_results
 
+    def get_meinvoice_publishview_url(self, transaction_ids):
+        """Lấy link xem hóa đơn đã phát hành từ meInvoice (tồn tại 5 phút).
+
+        Args:
+            transaction_ids: list[str] — danh sách TransactionID.
+
+        Returns:
+            str — URL xem hóa đơn, hoặc '' nếu không lấy được.
+        """
+        self.ensure_one()
+        if not transaction_ids:
+            raise UserError('Không có TransactionID để tra cứu hóa đơn.')
+        body = self._post_meinvoice('/invoice/publishview', payload=transaction_ids)
+        url = body.get('data') or body.get('Data') or ''
+        _logger.info('meInvoice publishview URL: %s', url)
+        return url
+
     def action_sync_catalog_to_odoo(self):
         """Đồng bộ danh mục hàng hóa (type=2) và đơn vị tính (type=4) từ MISA
         → ghi misa_inventory_item_id lên product.template / misa_unit_id lên uom.uom.

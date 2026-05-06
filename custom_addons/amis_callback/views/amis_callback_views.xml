@@ -258,9 +258,10 @@
                             <span class="o_stat_text">HĐĐT</span>
                         </div>
                     </button>
-                    <button name="action_view_meinvoice_detail" type="object"
+                    <button name="action_view_meinvoice_invoice" type="object"
                             class="oe_stat_button" icon="fa-file-text"
-                            invisible="not misa_meinvoice_synced">
+                            invisible="not misa_meinvoice_synced"
+                            title="Xem hóa đơn trên meInvoice (link tồn tại 5 phút)">
                         <div class="o_field_widget o_stat_info">
                             <field name="misa_meinvoice_inv_no" widget="statinfo" string="Số HĐ"/>
                         </div>
@@ -412,6 +413,8 @@
                 <field name="misa_meinvoice_inv_code" string="Mã CQT"/>
                 <field name="amount_total" string="Tổng tiền" widget="monetary"/>
                 <field name="misa_meinvoice_transaction_id" string="Transaction ID" optional="show"/>
+                <button name="action_view_meinvoice_invoice" type="object" string="Xem HĐ"
+                        icon="fa-eye" title="Mở link xem hóa đơn trên meInvoice"/>
             </list>
         </field>
     </record>

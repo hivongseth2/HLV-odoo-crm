@@ -342,19 +342,6 @@ class SaleOrderAmisSync(models.Model):
 
     # ── meInvoice: Phát hành hóa đơn điện tử ──────────────────────────────────
 
-    def action_view_meinvoice_detail(self):
-        """Mở popup hiển thị thông tin hóa đơn meInvoice đã phát hành."""
-        self.ensure_one()
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Hóa đơn điện tử meInvoice',
-            'res_model': 'sale.order',
-            'res_id': self.id,
-            'view_mode': 'form',
-            'target': 'current',
-            'flags': {'mode': 'readonly'},
-        }
-
     def action_publish_meinvoice_invoice(self):
         """Phát hành hóa đơn điện tử qua MISA meInvoice API (gọi từ nút bấm)."""
         for order in self:
@@ -378,6 +365,23 @@ class SaleOrderAmisSync(models.Model):
                 'type': 'success',
                 'sticky': False,
             },
+        }
+
+    def action_view_meinvoice_invoice(self):
+        """Lấy link xem hóa đơn đã phát hành từ meInvoice và mở trên trình duyệt."""
+        self.ensure_one()
+        if not self.misa_meinvoice_synced or not self.misa_meinvoice_transaction_id:
+            raise UserError('Đơn hàng chưa phát hành hóa đơn meInvoice hoặc thiếu TransactionID.')
+
+        config = self.env['amis.callback.config'].sudo().ensure_singleton()
+        view_url = config.get_meinvoice_publishview_url([self.misa_meinvoice_transaction_id])
+        if not view_url:
+            raise UserError('meInvoice không trả về link xem hóa đơn.')
+
+        return {
+            'type': 'ir.actions.act_url',
+            'url': view_url,
+            'target': 'new',
         }
 
     def action_reset_meinvoice_invoice(self):
