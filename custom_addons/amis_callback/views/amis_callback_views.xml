@@ -258,6 +258,13 @@
                             <span class="o_stat_text">HĐĐT</span>
                         </div>
                     </button>
+                    <button name="action_view_meinvoice_detail" type="object"
+                            class="oe_stat_button" icon="fa-file-text"
+                            invisible="not misa_meinvoice_synced">
+                        <div class="o_field_widget o_stat_info">
+                            <field name="misa_meinvoice_inv_no" widget="statinfo" string="Số HĐ"/>
+                        </div>
+                    </button>
                     <button name="action_reset_meinvoice_invoice" type="object"
                             class="oe_stat_button" icon="fa-refresh"
                             invisible="not misa_meinvoice_synced"
@@ -306,11 +313,18 @@
                                 <field name="misa_sa_invoice_synced" readonly="1"/>
                                 <field name="misa_sa_invoice_org_refid" readonly="1"/>
                             </group>
-                            <group string="meInvoice (Hóa đơn điện tử)">
+                        </group>
+                        <group string="meInvoice (Hóa đơn điện tử)" invisible="not misa_meinvoice_synced">
+                            <group>
                                 <field name="misa_meinvoice_synced" readonly="1"/>
-                                <field name="misa_meinvoice_ref_id" readonly="1"/>
-                                <field name="misa_meinvoice_transaction_id" readonly="1"/>
-                                <field name="misa_meinvoice_inv_no" readonly="1"/>
+                                <field name="misa_meinvoice_inv_series" readonly="1" string="Ký hiệu"/>
+                                <field name="misa_meinvoice_inv_no" readonly="1" string="Số hóa đơn"/>
+                                <field name="misa_meinvoice_inv_date" readonly="1" string="Ngày HĐ"/>
+                            </group>
+                            <group>
+                                <field name="misa_meinvoice_inv_code" readonly="1" string="Mã CQT"/>
+                                <field name="misa_meinvoice_transaction_id" readonly="1" string="Transaction ID"/>
+                                <field name="misa_meinvoice_ref_id" readonly="1" string="Ref ID"/>
                             </group>
                         </group>
                     </page>
@@ -384,8 +398,36 @@
         <field name="context">{'search_default_pending': 1}</field>
     </record>
 
+    <!-- Danh sách hóa đơn meInvoice đã phát hành -->
+    <record id="view_meinvoice_invoice_list" model="ir.ui.view">
+        <field name="name">sale.order.meinvoice.list</field>
+        <field name="model">sale.order</field>
+        <field name="arch" type="xml">
+            <list string="Hóa đơn điện tử meInvoice" default_order="misa_meinvoice_inv_date desc" create="false" delete="false">
+                <field name="name" string="Đơn hàng"/>
+                <field name="partner_id" string="Khách hàng"/>
+                <field name="misa_meinvoice_inv_date" string="Ngày HĐ"/>
+                <field name="misa_meinvoice_inv_series" string="Ký hiệu"/>
+                <field name="misa_meinvoice_inv_no" string="Số hóa đơn"/>
+                <field name="misa_meinvoice_inv_code" string="Mã CQT"/>
+                <field name="amount_total" string="Tổng tiền" widget="monetary"/>
+                <field name="misa_meinvoice_transaction_id" string="Transaction ID" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_meinvoice_invoice_list" model="ir.actions.act_window">
+        <field name="name">Danh sách hóa đơn điện tử</field>
+        <field name="res_model">sale.order</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_ids" eval="[(5, 0, 0), (0, 0, {'view_mode': 'list', 'view_id': ref('view_meinvoice_invoice_list')})]" />
+        <field name="domain">[('misa_meinvoice_synced', '=', True)]</field>
+        <field name="context">{'search_default_misa_meinvoice_synced': 1}</field>
+    </record>
+
     <menuitem id="menu_amis_callback_root" name="AMIS Callback" sequence="30" web_icon="amis_callback,static/description/icon.png"/>
     <menuitem id="menu_amis_callback_logs" name="Nhật ký callback" parent="menu_amis_callback_root" action="action_amis_callback_log" sequence="10"/>
     <menuitem id="menu_amis_sync_jobs" name="Hàng đợi đồng bộ MISA" parent="menu_amis_callback_root" action="action_amis_sync_job" sequence="15"/>
+    <menuitem id="menu_meinvoice_invoices" name="Hóa đơn điện tử" parent="menu_amis_callback_root" action="action_meinvoice_invoice_list" sequence="18"/>
     <menuitem id="menu_amis_callback_config" name="Cấu hình" parent="menu_amis_callback_root" action="action_amis_callback_config" sequence="20" groups="base.group_system"/>
 </odoo>

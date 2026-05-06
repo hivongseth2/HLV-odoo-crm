@@ -58,6 +58,21 @@ class SaleOrderAmisSync(models.Model):
         copy=False,
         help='Số hóa đơn được meInvoice cấp sau khi phát hành thành công.',
     )
+    misa_meinvoice_inv_code = fields.Char(
+        string='Mã hóa đơn CQT',
+        copy=False,
+        help='Mã tra cứu hóa đơn do Cơ quan Thuế cấp (InvCode).',
+    )
+    misa_meinvoice_inv_series = fields.Char(
+        string='Ký hiệu hóa đơn',
+        copy=False,
+        help='Ký hiệu (series) hóa đơn điện tử.',
+    )
+    misa_meinvoice_inv_date = fields.Date(
+        string='Ngày hóa đơn',
+        copy=False,
+        help='Ngày phát hành hóa đơn điện tử.',
+    )
 
     def action_sync_misa_sa_invoice(self):
         """Tạo job sync hóa đơn bán hàng (SAInvoice) lên MISA — được gọi bởi nút bấm."""
@@ -327,6 +342,19 @@ class SaleOrderAmisSync(models.Model):
 
     # ── meInvoice: Phát hành hóa đơn điện tử ──────────────────────────────────
 
+    def action_view_meinvoice_detail(self):
+        """Mở popup hiển thị thông tin hóa đơn meInvoice đã phát hành."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Hóa đơn điện tử meInvoice',
+            'res_model': 'sale.order',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'current',
+            'flags': {'mode': 'readonly'},
+        }
+
     def action_publish_meinvoice_invoice(self):
         """Phát hành hóa đơn điện tử qua MISA meInvoice API (gọi từ nút bấm)."""
         for order in self:
@@ -359,6 +387,9 @@ class SaleOrderAmisSync(models.Model):
                 'misa_meinvoice_synced': False,
                 'misa_meinvoice_transaction_id': False,
                 'misa_meinvoice_inv_no': False,
+                'misa_meinvoice_inv_code': False,
+                'misa_meinvoice_inv_series': False,
+                'misa_meinvoice_inv_date': False,
             })
         return True
 
@@ -393,10 +424,21 @@ class SaleOrderAmisSync(models.Model):
 
         transaction_id = ''
         inv_no = ''
+        inv_code = ''
+        inv_series = ''
+        inv_date = False
         if results and isinstance(results, list):
             first = results[0] if results else {}
             transaction_id = str(first.get('TransactionID') or first.get('transactionID') or '')
             inv_no = str(first.get('InvNo') or first.get('invNo') or '')
+            inv_code = str(first.get('InvCode') or first.get('invCode') or '')
+            inv_series = str(first.get('InvSeries') or first.get('invSeries') or '')
+            raw_date = first.get('InvDate') or first.get('invDate') or ''
+            if raw_date:
+                try:
+                    inv_date = str(raw_date)[:10]  # lấy phần YYYY-MM-DD
+                except Exception:
+                    inv_date = False
             err_code = first.get('ErrorCode') or first.get('errorCode') or ''
             if err_code:
                 raise UserError('meInvoice phát hành lỗi: %s' % err_code)
@@ -405,6 +447,9 @@ class SaleOrderAmisSync(models.Model):
             'misa_meinvoice_synced': True,
             'misa_meinvoice_transaction_id': transaction_id,
             'misa_meinvoice_inv_no': inv_no,
+            'misa_meinvoice_inv_code': inv_code,
+            'misa_meinvoice_inv_series': inv_series,
+            'misa_meinvoice_inv_date': inv_date,
         })
         _logger.info(
             'meInvoice published for SO %s: TransactionID=%s InvNo=%s',
