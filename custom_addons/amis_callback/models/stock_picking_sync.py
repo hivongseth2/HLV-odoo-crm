@@ -265,19 +265,31 @@ class StockPickingAmisSync(models.Model):
                         vat_rate = float(tax.amount)
                         break
 
+            # Sản phẩm khuyến mãi: price_subtotal = 0 → tất cả giá trị = 0
+            is_promo = sale_line and float(sale_line.price_subtotal) == 0.0
+
             # Đơn giá trước thuế = Đơn giá có thuế / (1 + thuế suất)
             price_before_tax = price_unit_after_tax / (1.0 + vat_rate / 100.0) if vat_rate else price_unit_after_tax
             # Đơn giá theo đơn vị chính (main_unit_price) = giá trước thuế
             main_unit_price = round(price_before_tax, 2)
 
-            # Thành tiền = đơn giá trước thuế * số lượng (trước CK, trước thuế)
-            amount_oc = round(qty_done * price_before_tax, 2)
-            # Tiền CK = amount_oc * % CK
-            discount_amount_line = round(amount_oc * discount / 100.0, 2)
-            net_amount = amount_oc - discount_amount_line
+            if is_promo:
+                price_before_tax = 0.0
+                main_unit_price = 0.0
+                amount_oc = 0.0
+                discount_amount_line = 0.0
+                net_amount = 0.0
+                vat_amount = 0.0
+            else:
+                # Thành tiền = đơn giá trước thuế * số lượng (trước CK, trước thuế)
+                amount_oc = round(qty_done * price_before_tax, 2)
+                # Tiền CK = amount_oc * % CK
+                discount_amount_line = round(amount_oc * discount / 100.0, 2)
+                net_amount = amount_oc - discount_amount_line
 
-            # Thuế tính trên (Thành tiền - Tiền CK)
-            vat_amount = round(net_amount * vat_rate / 100.0, 2)
+                # Thuế tính trên (Thành tiền - Tiền CK)
+                vat_amount = round(net_amount * vat_rate / 100.0, 2)
+
             total_gross += amount_oc
             total_discount += discount_amount_line
             total_sale += net_amount
@@ -301,25 +313,25 @@ class StockPickingAmisSync(models.Model):
                 'stock_id': stock_id,
                 'account_object_id': account_object_id,
                 'sort_order': idx,
-                'is_promotion': False,
+                'is_promotion': is_promo,
                 'un_resonable_cost': False,
                 'not_in_vat_declaration': False,
                 'quantity': qty_done,
                 'unit_price': price_before_tax,
-                'unit_price_after_tax': price_unit_after_tax,
+                'unit_price_after_tax': price_unit_after_tax if not is_promo else 0.0,
                 'main_unit_price': main_unit_price,
-                'unit_price_after_discount': round(price_before_tax * (1.0 - discount / 100.0), 2),
+                'unit_price_after_discount': round(price_before_tax * (1.0 - discount / 100.0), 2) if not is_promo else 0.0,
                 'amount_oc': amount_oc,
                 'amount': amount_oc,
-                'discount_rate': discount,
+                'discount_rate': discount if not is_promo else 0.0,
                 'discount_amount_oc': discount_amount_line,
                 'discount_amount': discount_amount_line,
-                'vat_rate': vat_rate,
+                'vat_rate': vat_rate if not is_promo else 0.0,
                 'vat_amount_oc': vat_amount,
                 'vat_amount': vat_amount,
                 'main_convert_rate': 1.0,
                 'main_quantity': qty_done,
-                'amount_after_tax': round(net_amount + vat_amount, 2),
+                'amount_after_tax': 0.0,
                 'invoiced_quantity': qty_done,
                 'main_invoiced_quantity': 0.0,
                 'export_tax_rate': 0.0,
@@ -517,7 +529,7 @@ class StockPickingAmisSync(models.Model):
             'account_object_tax_code': (partner.vat or '') if partner else '',
             'journal_memo': 'Ban hang %s (Shopee: %s) (Odoo: %s)' % (sales_order.name, shopee_ref, self.name),
             'currency_id': sales_order.currency_id.name or 'VND',
-            'discount_type': 0,
+            'discount_type': 1,
             'paid_type': 0,
             'publish_status': 0,
             'send_email_status': 0,
