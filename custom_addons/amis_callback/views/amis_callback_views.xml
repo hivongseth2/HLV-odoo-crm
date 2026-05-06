@@ -143,6 +143,7 @@
                         <group>
                             <field name="sync_incoming_po_enabled"/>
                             <field name="sync_outgoing_so_enabled"/>
+                            <field name="sync_shopee_only"/>
                         </group>
                     </group>
                     <group string="Mapping khách hàng Shopee → MISA">

@@ -86,6 +86,12 @@ class SaleOrderAmisSync(models.Model):
             _logger.info('Skip SAInvoice for SO %s: đã sync rồi.', self.name)
             return
 
+        # Lọc theo cấu hình: chỉ sync đơn Shopee hoặc tất cả đơn
+        has_shopee_ref = bool(getattr(self, 'shopee_order_ref', None))
+        if config.sync_shopee_only and not has_shopee_ref:
+            _logger.info('Skip SAInvoice for SO %s: không có shopee_order_ref (chế độ chỉ sync Shopee).', self.name)
+            return
+
         partner = self.partner_id
 
         # Resolve account_object qua config (logic chung với SAVoucher)

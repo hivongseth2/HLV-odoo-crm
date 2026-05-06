@@ -153,9 +153,10 @@ class StockPickingAmisSync(models.Model):
             _logger.info('Skip outgoing sync for %s: không tìm được đơn bán hàng.', self.name)
             return
 
-        # Chỉ sync đơn hàng có shopee_order_ref
-        if not getattr(sales_order, 'shopee_order_ref', None):
-            _logger.info('Skip outgoing sync for %s: đơn %s không có shopee_order_ref.', self.name, sales_order.name)
+        # Lọc theo cấu hình: chỉ sync đơn Shopee hoặc tất cả đơn
+        has_shopee_ref = bool(getattr(sales_order, 'shopee_order_ref', None))
+        if config.sync_shopee_only and not has_shopee_ref:
+            _logger.info('Skip outgoing sync for %s: đơn %s không có shopee_order_ref (chế độ chỉ sync Shopee).', self.name, sales_order.name)
             return
 
         config = self.env['amis.callback.config'].sudo().ensure_singleton()

@@ -73,6 +73,11 @@ class AmisCallbackConfig(models.Model):
         default=False,
         help='Bật để tự động đẩy phiếu xuất kho (outgoing) có nguồn từ đơn hàng bán lên MISA.',
     )
+    sync_shopee_only = fields.Boolean(
+        string='Chỉ sync đơn Shopee',
+        default=True,
+        help='Bật: chỉ sync các đơn có shopee_order_ref (đơn Shopee). Tắt: sync tất cả đơn bán.',
+    )
     misa_branch_id = fields.Char(
         string='MISA Branch ID',
         default='53a073a0-5381-4493-820f-51ea32ebe990',
