@@ -690,16 +690,26 @@ class AmisCallbackConfig(models.Model):
 
         try:
             resp = requests.post(url, json=payload or {}, headers=headers, params=params, timeout=timeout)
+            _logger.info('meInvoice %s → HTTP %s', path, resp.status_code)
+            try:
+                body = resp.json()
+            except Exception:
+                body = {}
+            _logger.info('meInvoice %s response body: %s', path, json.dumps(body, ensure_ascii=False, default=str))
             resp.raise_for_status()
-            body = resp.json()
         except requests.HTTPError as exc:
-            raise UserError('meInvoice API lỗi HTTP %s: %s' % (exc.response.status_code, exc))
+            status = exc.response.status_code if exc.response is not None else '?'
+            raise UserError('meInvoice API lỗi HTTP %s: %s' % (status, exc))
         except Exception as exc:
             _logger.exception('meInvoice API call failed: %s', path)
             raise UserError('Gọi meInvoice API thất bại: %s' % exc)
 
-        if not body.get('Success'):
-            err = body.get('ErrorCode') or body.get('descriptionErrorCode') or 'Không rõ lỗi'
+        # meInvoice dùng 'Success' (capitalized) cho auth, 'success' (lowercase) cho các endpoint khác
+        success = body.get('Success') if body.get('Success') is not None else body.get('success')
+        if not success:
+            err = (body.get('ErrorCode') or body.get('errorCode') or
+                   body.get('descriptionErrorCode') or body.get('Errors') or
+                   body.get('errors') or str(body) or 'Không rõ lỗi')
             raise UserError('meInvoice trả về lỗi: %s' % err)
         return body
 
