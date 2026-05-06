@@ -414,6 +414,8 @@ class SaleOrderAmisSync(models.Model):
 
         # Hóa đơn MTT: ký tự thứ 5 (index 4) là 'M'
         is_mtt = len(inv_series) >= 5 and inv_series[4].upper() == 'M'
+        # Phiếu xuất kho: ký tự đầu tiên là '6' (theo spec meInvoice)
+        is_pxk = inv_series[0] == '6'
 
         # RefID (idempotent)
         ref_id = (self.misa_meinvoice_ref_id or '').strip()
@@ -422,7 +424,10 @@ class SaleOrderAmisSync(models.Model):
             self.sudo().write({'misa_meinvoice_ref_id': ref_id})
 
         partner = self.partner_id
-        inv_date = self._to_misa_date(self.date_order or datetime.utcnow())
+        inv_date = self._to_misa_date(datetime.utcnow())
+
+        # Tên người mua: dùng tên mặc định theo kênh Shopee nếu có config
+        buyer_name = config.get_meinvoice_buyer_name(self)
 
         lines = self.order_line.filtered(lambda l: not l.display_type and l.product_uom_qty > 0)
         if not lines:
@@ -530,10 +535,10 @@ class SaleOrderAmisSync(models.Model):
             'SellerAddress': company_partner.contact_address_complete or company.street or '',
             'SellerPhoneNumber': company.phone or '',
             'SellerEmail': company.email or '',
-            'BuyerLegalName': partner.name or 'Khách lẻ',
+            'BuyerLegalName': buyer_name,
             'BuyerTaxCode': partner.vat or '',
             'BuyerAddress': partner.contact_address_complete or '',
-            'BuyerFullName': partner.name or '',
+            'BuyerFullName': buyer_name,
             'BuyerPhoneNumber': partner.phone or partner.mobile or '',
             'BuyerEmail': partner.email or '',
             'TotalSaleAmountOC': total_sale_oc,
@@ -550,7 +555,7 @@ class SaleOrderAmisSync(models.Model):
             'OriginalInvoiceDetail': detail,
             'TaxRateInfo': tax_rate_info,
         }
-        if config.meinvoice_is_pxk:
+        if config.meinvoice_is_pxk or is_pxk:
             stock_out_address = (config.meinvoice_stock_out_address or '').strip() or \
                 company_partner.contact_address_complete or company.street or ''
             stock_in_address = (config.meinvoice_stock_in_address or '').strip() or \

@@ -201,6 +201,27 @@ class AmisCallbackConfig(models.Model):
         help='Điền phương tiện vận chuyển khi hóa đơn là loại PXK. Ví dụ: Xe ô tô, Giao hàng nhanh.',
     )
 
+    # ── meInvoice: Tên người mua mặc định theo kênh Shopee ──────────────────────
+    meinvoice_shopee_milwaukee_buyer_name = fields.Char(
+        string='Tên người mua - Shopee Milwaukee (meInvoice)',
+        default='KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE MILWAUKEE',
+        help='Tên BuyerLegalName/BuyerFullName gửi lên meInvoice cho đơn Shopee Milwaukee.',
+    )
+    meinvoice_shopee_hlv_buyer_name = fields.Char(
+        string='Tên người mua - Shopee HLV (meInvoice)',
+        default='KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE HLV',
+        help='Tên BuyerLegalName/BuyerFullName gửi lên meInvoice cho đơn Shopee HLV.',
+    )
+    meinvoice_shopee_dewalt_buyer_name = fields.Char(
+        string='Tên người mua - Shopee Dewalt (meInvoice)',
+        default='KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE DEWALT',
+        help='Tên BuyerLegalName/BuyerFullName gửi lên meInvoice cho đơn Shopee Dewalt.',
+    )
+    meinvoice_default_buyer_name = fields.Char(
+        string='Tên người mua mặc định (meInvoice)',
+        help='Tên BuyerLegalName/BuyerFullName fallback khi không xác định được kênh Shopee.',
+    )
+
     # Mapping cứng: shopee.shop.identifier → account_object_name MISA
     SHOPEE_SHOP_ACCOUNT_MAP = {
         '796817584': 'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE MILWAUKEE',
@@ -308,6 +329,36 @@ class AmisCallbackConfig(models.Model):
                     account_object_code = partner.ref or (partner.name if partner else account_object_id)
 
         return account_object_id, account_object_code, account_object_name
+
+    def get_meinvoice_buyer_name(self, sale_order):
+        """Trả về tên người mua cho meInvoice dựa theo kênh Shopee của đơn hàng.
+
+        Thứ tự ưu tiên:
+        1. Tên theo shop identifier (Milwaukee / HLV / Dewalt) từ config
+        2. Tên mặc định fallback từ config
+        3. Tên partner trên đơn hàng
+        """
+        self.ensure_one()
+        shop = getattr(sale_order, 'shopee_shop_id', None) if sale_order else None
+        shop_identifier = str(getattr(shop, 'identifier', '') or '').strip() if shop else ''
+
+        field_map = {
+            '796817584': 'meinvoice_shopee_milwaukee_buyer_name',
+            '326259406': 'meinvoice_shopee_hlv_buyer_name',
+            '1357810112': 'meinvoice_shopee_dewalt_buyer_name',
+        }
+        if shop_identifier and shop_identifier in field_map:
+            name = (getattr(self, field_map[shop_identifier]) or '').strip()
+            if name:
+                return name
+
+        fallback = (self.meinvoice_default_buyer_name or '').strip()
+        if fallback:
+            return fallback
+
+        if sale_order:
+            return (sale_order.partner_id.name or 'Khách lẻ')
+        return 'Khách lẻ'
 
     def get_shopee_account_object_id(self, shop_identifier):
         """Lấy account_object_id MISA cho kênh Shopee dựa vào shop identifier.
