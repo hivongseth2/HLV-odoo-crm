@@ -134,6 +134,54 @@ class AmisCallbackConfig(models.Model):
         help='Ký hiệu hóa đơn (inv_series), ví dụ: 1C25TAA, C25TAA...',
     )
 
+    # ── meInvoice API (Hóa đơn điện tử đầu ra) ─────────────────────────────────
+    meinvoice_enabled = fields.Boolean(
+        string='Phát hành HĐĐT qua meInvoice',
+        default=False,
+        help='Bật để dùng MISA meInvoice API phát hành hóa đơn điện tử đầu ra thay vì SAInvoice ACT.',
+    )
+    meinvoice_api_url = fields.Char(
+        string='meInvoice API URL',
+        default='https://api.meinvoice.vn/api/integration',
+        help='URL gốc meInvoice API.\nProduction: https://api.meinvoice.vn/api/integration\nTest: https://testapi.meinvoice.vn/api/integration',
+    )
+    meinvoice_app_id = fields.Char(
+        string='meInvoice App ID',
+        help='app_id do MISA cấp khi đăng ký tích hợp meInvoice.',
+    )
+    meinvoice_taxcode = fields.Char(
+        string='Mã số thuế (meInvoice)',
+        help='Mã số thuế doanh nghiệp dùng để xác thực meInvoice.',
+    )
+    meinvoice_username = fields.Char(
+        string='Tài khoản meInvoice',
+        help='Tài khoản đăng nhập trên app.meinvoice.vn.',
+    )
+    meinvoice_password = fields.Char(
+        string='Mật khẩu meInvoice',
+        help='Mật khẩu đăng nhập meInvoice (lưu mã hoá).',
+    )
+    meinvoice_token = fields.Text(
+        string='meInvoice Token',
+        readonly=True,
+        copy=False,
+    )
+    meinvoice_token_acquired = fields.Datetime(
+        string='Thời điểm lấy token meInvoice',
+        readonly=True,
+        copy=False,
+        help='Token meInvoice có hiệu lực 14 ngày kể từ thời điểm này.',
+    )
+    meinvoice_inv_series = fields.Char(
+        string='Ký hiệu hóa đơn (meInvoice)',
+        help='Ký hiệu hóa đơn điện tử, ví dụ: 1C25MLT (MTT có mã), 1C25TYY (thường).',
+    )
+    meinvoice_sign_type = fields.Integer(
+        string='SignType (meInvoice)',
+        default=2,
+        help='2: HSM có hiển thị CKS (hóa đơn thường).\n5: Không hiển thị CKS (hóa đơn MTT/máy tính tiền).',
+    )
+
     # Mapping cứng: shopee.shop.identifier → account_object_name MISA
     SHOPEE_SHOP_ACCOUNT_MAP = {
         '796817584': 'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE MILWAUKEE',
@@ -548,6 +596,140 @@ class AmisCallbackConfig(models.Model):
             'dictionary': [],
         }
         return self._post_actopen('/apir/sync/actopen/save', payload, include_token=True)
+
+    # ── meInvoice API methods ─────────────────────────────────────────────────
+
+    def action_connect_meinvoice(self):
+        """Lấy token từ MISA meInvoice API và lưu vào cấu hình."""
+        self.ensure_one()
+        if not self.meinvoice_app_id:
+            raise UserError('Vui lòng điền meInvoice App ID trước khi kết nối.')
+        if not self.meinvoice_taxcode:
+            raise UserError('Vui lòng điền Mã số thuế (meInvoice) trước khi kết nối.')
+        if not self.meinvoice_username:
+            raise UserError('Vui lòng điền Tài khoản meInvoice trước khi kết nối.')
+        if not self.meinvoice_password:
+            raise UserError('Vui lòng điền Mật khẩu meInvoice trước khi kết nối.')
+
+        payload = {
+            'appid': self.meinvoice_app_id,
+            'taxcode': self.meinvoice_taxcode,
+            'username': self.meinvoice_username,
+            'password': self.meinvoice_password,
+        }
+        result = self._post_meinvoice('/auth/token', payload)
+        token = result.get('Data') or ''
+        if not token:
+            raise UserError('Không lấy được token từ meInvoice. Kiểm tra lại thông tin đăng nhập.')
+
+        from datetime import datetime as _dt
+        self.sudo().write({
+            'meinvoice_token': token,
+            'meinvoice_token_acquired': _dt.utcnow(),
+        })
+        _logger.info('meInvoice token acquired successfully.')
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Kết nối meInvoice thành công',
+                'message': 'Token đã được lưu, có hiệu lực 14 ngày.',
+                'type': 'success',
+                'sticky': False,
+            },
+        }
+
+    def _ensure_meinvoice_token(self):
+        """Tự động refresh token meInvoice nếu đã quá 13 ngày."""
+        self.ensure_one()
+        if not self.meinvoice_enabled:
+            return
+        if not self.meinvoice_token or not self.meinvoice_token_acquired:
+            if self.meinvoice_username and self.meinvoice_password:
+                _logger.info('meInvoice: token chưa có, tự động lấy mới...')
+                self.action_connect_meinvoice()
+            return
+        from datetime import datetime as _dt, timedelta as _td
+        acquired = self.meinvoice_token_acquired
+        if isinstance(acquired, str):
+            try:
+                acquired = _dt.fromisoformat(acquired[:19])
+            except Exception:
+                return
+        if (_dt.utcnow() - acquired) >= _td(days=13):
+            _logger.info('meInvoice: token hết hạn (>13 ngày), tự động refresh...')
+            self.action_connect_meinvoice()
+
+    def _get_meinvoice_headers(self):
+        """Build Authorization header cho meInvoice API."""
+        self.ensure_one()
+        self._ensure_meinvoice_token()
+        if not self.meinvoice_token:
+            raise UserError('Chưa có token meInvoice. Vui lòng bấm "Kết nối meInvoice" trước.')
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer %s' % self.meinvoice_token,
+        }
+
+    def _post_meinvoice(self, path, payload=None, params=None, timeout=30):
+        """Gọi meInvoice API và trả về response body (dict).
+
+        Gọi trực tiếp (không dùng ACT token), dùng riêng cho meInvoice.
+        """
+        self.ensure_one()
+        api_url = (self.meinvoice_api_url or '').rstrip('/')
+        if not api_url:
+            raise UserError('Thiếu meInvoice API URL trong cấu hình.')
+        url = '%s%s' % (api_url, path)
+
+        # Auth token header — chỉ dùng cho các endpoint trừ /auth/token
+        if path == '/auth/token':
+            headers = {'Content-Type': 'application/json'}
+        else:
+            headers = self._get_meinvoice_headers()
+
+        try:
+            resp = requests.post(url, json=payload or {}, headers=headers, params=params, timeout=timeout)
+            resp.raise_for_status()
+            body = resp.json()
+        except requests.HTTPError as exc:
+            raise UserError('meInvoice API lỗi HTTP %s: %s' % (exc.response.status_code, exc))
+        except Exception as exc:
+            _logger.exception('meInvoice API call failed: %s', path)
+            raise UserError('Gọi meInvoice API thất bại: %s' % exc)
+
+        if not body.get('Success'):
+            err = body.get('ErrorCode') or body.get('descriptionErrorCode') or 'Không rõ lỗi'
+            raise UserError('meInvoice trả về lỗi: %s' % err)
+        return body
+
+    def push_meinvoice_invoice(self, invoice_data_list):
+        """Phát hành hóa đơn qua MISA meInvoice API (SignType HSM).
+
+        Args:
+            invoice_data_list: list[dict] — danh sách InvoiceData theo spec meInvoice.
+
+        Returns:
+            list[dict] — publishInvoiceResult từ meInvoice.
+        """
+        self.ensure_one()
+        if not self.meinvoice_enabled:
+            raise UserError('Tính năng phát hành HĐĐT meInvoice chưa được bật trong cấu hình.')
+        if not invoice_data_list:
+            raise UserError('Không có dữ liệu hóa đơn để phát hành.')
+
+        sign_type = int(self.meinvoice_sign_type or 2)
+        payload = {
+            'SignType': sign_type,
+            'InvoiceData': invoice_data_list,
+            'PublishInvoiceData': None,
+        }
+        _logger.info('meInvoice push_invoice: SignType=%d, count=%d', sign_type, len(invoice_data_list))
+        body = self._post_meinvoice('/invoice', payload)
+
+        publish_results = body.get('publishInvoiceResult') or []
+        _logger.info('meInvoice publishInvoiceResult: %s', publish_results)
+        return publish_results
 
     def action_sync_catalog_to_odoo(self):
         """Đồng bộ danh mục hàng hóa (type=2) và đơn vị tính (type=4) từ MISA

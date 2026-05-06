@@ -36,6 +36,29 @@ class SaleOrderAmisSync(models.Model):
         help='org_refid dùng khi push SAInvoice lên MISA.',
     )
 
+    # ── meInvoice (Hóa đơn điện tử đầu ra) ─────────────────────────────────
+    misa_meinvoice_synced = fields.Boolean(
+        string='Đã phát hành HĐĐT meInvoice',
+        default=False,
+        copy=False,
+        help='Hóa đơn điện tử đã được phát hành qua MISA meInvoice API.',
+    )
+    misa_meinvoice_ref_id = fields.Char(
+        string='meInvoice RefID',
+        copy=False,
+        help='RefID (uuid) dùng khi phát hành hóa đơn meInvoice (chống trùng).',
+    )
+    misa_meinvoice_transaction_id = fields.Char(
+        string='meInvoice Transaction ID',
+        copy=False,
+        help='Mã tra cứu hóa đơn (TransactionID) do hệ thống meInvoice cấp sau khi phát hành.',
+    )
+    misa_meinvoice_inv_no = fields.Char(
+        string='Số hóa đơn meInvoice',
+        copy=False,
+        help='Số hóa đơn được meInvoice cấp sau khi phát hành thành công.',
+    )
+
     def action_sync_misa_sa_invoice(self):
         """Tạo job sync hóa đơn bán hàng (SAInvoice) lên MISA — được gọi bởi nút bấm."""
         for order in self:
@@ -301,3 +324,279 @@ class SaleOrderAmisSync(models.Model):
         if hasattr(value, 'strftime'):
             return value.strftime('%Y-%m-%d')
         return str(value)[:10]
+
+    # ── meInvoice: Phát hành hóa đơn điện tử ──────────────────────────────────
+
+    def action_publish_meinvoice_invoice(self):
+        """Phát hành hóa đơn điện tử qua MISA meInvoice API (gọi từ nút bấm)."""
+        for order in self:
+            if order.state not in ('sale', 'done'):
+                raise UserError('Đơn hàng "%s" phải ở trạng thái Đã xác nhận hoặc Hoàn thành.' % order.name)
+            if order.misa_meinvoice_synced:
+                raise UserError('Đơn hàng "%s" đã được phát hành hóa đơn meInvoice rồi.' % order.name)
+
+            config = self.env['amis.callback.config'].sudo().ensure_singleton()
+            if not config.meinvoice_enabled:
+                raise UserError('Tính năng phát hành HĐĐT meInvoice chưa được bật trong cấu hình.')
+
+            order._publish_meinvoice_invoice()
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Phát hành HĐĐT thành công',
+                'message': 'Hóa đơn điện tử đã được phát hành qua meInvoice.',
+                'type': 'success',
+                'sticky': False,
+            },
+        }
+
+    def action_reset_meinvoice_invoice(self):
+        """Reset cờ meInvoice để phát hành lại (dùng khi phát hành lỗi)."""
+        for order in self:
+            order.sudo().write({
+                'misa_meinvoice_synced': False,
+                'misa_meinvoice_transaction_id': False,
+                'misa_meinvoice_inv_no': False,
+            })
+        return True
+
+    def _publish_meinvoice_invoice(self):
+        """Xây dựng InvoiceData và gọi meInvoice API phát hành hóa đơn điện tử."""
+        self.ensure_one()
+        config = self.env['amis.callback.config'].sudo().ensure_singleton()
+
+        if self.misa_meinvoice_synced:
+            _logger.info('Skip meInvoice publish for SO %s: đã phát hành rồi.', self.name)
+            return
+
+        if not config.meinvoice_enabled:
+            _logger.info('Skip meInvoice publish for SO %s: tính năng chưa bật.', self.name)
+            return
+
+        invoice_data = self._build_meinvoice_invoice_data(config)
+        _logger.info(
+            'meInvoice invoice payload for SO %s:\n%s',
+            self.name,
+            __import__('json').dumps(invoice_data, ensure_ascii=False, default=str, indent=2),
+        )
+
+        results = config.push_meinvoice_invoice([invoice_data])
+
+        transaction_id = ''
+        inv_no = ''
+        if results and isinstance(results, list):
+            first = results[0] if results else {}
+            transaction_id = str(first.get('TransactionID') or first.get('transactionID') or '')
+            inv_no = str(first.get('InvNo') or first.get('invNo') or '')
+            err_code = first.get('ErrorCode') or first.get('errorCode') or ''
+            if err_code:
+                raise UserError('meInvoice phát hành lỗi: %s' % err_code)
+
+        self.sudo().write({
+            'misa_meinvoice_synced': True,
+            'misa_meinvoice_transaction_id': transaction_id,
+            'misa_meinvoice_inv_no': inv_no,
+        })
+        _logger.info(
+            'meInvoice published for SO %s: TransactionID=%s InvNo=%s',
+            self.name, transaction_id, inv_no,
+        )
+
+    def _build_meinvoice_invoice_data(self, config):
+        """Xây dựng đối tượng InvoiceData theo spec MISA meInvoice Đầu ra."""
+        self.ensure_one()
+
+        inv_series = (config.meinvoice_inv_series or '').strip()
+        if not inv_series:
+            raise UserError('Thiếu Ký hiệu hóa đơn (meInvoice) trong cấu hình.')
+
+        # Hóa đơn MTT: ký tự thứ 5 (index 4) là 'M'
+        is_mtt = len(inv_series) >= 5 and inv_series[4].upper() == 'M'
+
+        # RefID (idempotent)
+        ref_id = (self.misa_meinvoice_ref_id or '').strip()
+        if not ref_id:
+            ref_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, 'meinvoice|%d' % self.id))
+            self.sudo().write({'misa_meinvoice_ref_id': ref_id})
+
+        partner = self.partner_id
+        inv_date = self._to_misa_date(self.date_order or datetime.utcnow())
+
+        lines = self.order_line.filtered(lambda l: not l.display_type and l.product_uom_qty > 0)
+        if not lines:
+            raise UserError('Đơn hàng "%s" không có dòng sản phẩm hợp lệ để phát hành hóa đơn.' % self.name)
+
+        # ── Tính toán từng dòng ──────────────────────────────────────────────
+        detail = []
+        total_sale_oc = 0.0
+        total_discount_oc = 0.0
+        total_vat_oc = 0.0
+        tax_groups = {}  # {vat_rate_name: {'AmountWithoutVATOC': ..., 'VATAmountOC': ...}}
+
+        for idx, line in enumerate(lines, start=1):
+            product = line.product_id
+            qty = float(line.product_uom_qty)
+            price_with_tax = float(line.price_unit)
+            discount = float(line.discount or 0.0)
+
+            vat_rate = 0.0
+            for tax in line.tax_id:
+                if tax.amount_type == 'percent':
+                    vat_rate = float(tax.amount)
+                    break
+
+            price_before_tax = price_with_tax / (1.0 + vat_rate / 100.0) if vat_rate else price_with_tax
+            amount_oc = round(price_before_tax * qty, 2)
+            discount_oc = round(amount_oc * discount / 100.0, 2)
+            net_oc = round(amount_oc - discount_oc, 2)
+            vat_oc = round(net_oc * vat_rate / 100.0, 2)
+
+            total_sale_oc += amount_oc
+            total_discount_oc += discount_oc
+            total_vat_oc += vat_oc
+
+            # Xác định VATRateName theo spec meInvoice
+            if vat_rate == 0.0:
+                vat_rate_name = '0%'
+            elif vat_rate == 5.0:
+                vat_rate_name = '5%'
+            elif vat_rate == 8.0:
+                vat_rate_name = '8%'
+            elif vat_rate == 10.0:
+                vat_rate_name = '10%'
+            elif vat_rate < 0:
+                vat_rate_name = 'KKKNT'
+            else:
+                vat_rate_name = 'KHAC:%.1f%%' % vat_rate
+
+            # Nhóm thuế cho TaxRateInfo
+            tg = tax_groups.setdefault(vat_rate_name, {'AmountWithoutVATOC': 0.0, 'VATAmountOC': 0.0})
+            tg['AmountWithoutVATOC'] = round(tg['AmountWithoutVATOC'] + net_oc, 2)
+            tg['VATAmountOC'] = round(tg['VATAmountOC'] + vat_oc, 2)
+
+            item_name = re.sub(r'^\[.*?\]\s*', '', product.name or '')
+            detail.append({
+                'ItemType': 1,
+                'SortOrder': idx,
+                'LineNumber': idx,
+                'ItemCode': product.default_code or '',
+                'ItemName': item_name,
+                'UnitName': line.product_uom.name or '',
+                'Quantity': qty,
+                'UnitPrice': round(price_before_tax, 2),
+                'AmountOC': amount_oc,
+                'Amount': amount_oc,
+                'DiscountRate': discount,
+                'DiscountAmountOC': discount_oc,
+                'DiscountAmount': discount_oc,
+                'AmountWithoutVATOC': net_oc,
+                'AmountWithoutVAT': net_oc,
+                'VATRateName': vat_rate_name,
+                'VATAmountOC': vat_oc,
+                'VATAmount': vat_oc,
+            })
+
+        total_sale_oc = round(total_sale_oc, 2)
+        total_discount_oc = round(total_discount_oc, 2)
+        total_vat_oc = round(total_vat_oc, 2)
+        total_net_oc = round(total_sale_oc - total_discount_oc, 2)
+        total_amount_oc = round(total_net_oc + total_vat_oc, 2)
+
+        tax_rate_info = [
+            {
+                'VATRateName': rate_name,
+                'AmountWithoutVATOC': vals['AmountWithoutVATOC'],
+                'VATAmountOC': vals['VATAmountOC'],
+            }
+            for rate_name, vals in tax_groups.items()
+        ]
+
+        invoice_data = {
+            'RefID': ref_id,
+            'InvSeries': inv_series,
+            'InvDate': inv_date,
+            'CurrencyCode': self.currency_id.name or 'VND',
+            'ExchangeRate': 1.0,
+            'PaymentMethodName': 'TM/CK',
+            'IsInvoiceSummary': False,
+            'IsInvoiceCalculatingMachine': is_mtt,
+            'BuyerLegalName': partner.name or 'Khách lẻ',
+            'BuyerTaxCode': partner.vat or '',
+            'BuyerAddress': partner.contact_address_complete or '',
+            'BuyerFullName': partner.name or '',
+            'BuyerPhoneNumber': partner.phone or partner.mobile or '',
+            'BuyerEmail': partner.email or '',
+            'TotalSaleAmountOC': total_sale_oc,
+            'TotalSaleAmount': total_sale_oc,
+            'TotalDiscountAmountOC': total_discount_oc,
+            'TotalDiscountAmount': total_discount_oc,
+            'TotalAmountWithoutVATOC': total_net_oc,
+            'TotalAmountWithoutVAT': total_net_oc,
+            'TotalVATAmountOC': total_vat_oc,
+            'TotalVATAmount': total_vat_oc,
+            'TotalAmountOC': total_amount_oc,
+            'TotalAmount': total_amount_oc,
+            'TotalAmountInWords': self._amount_in_words_vi(total_amount_oc),
+            'OriginalInvoiceDetail': detail,
+            'TaxRateInfo': tax_rate_info,
+        }
+        return invoice_data
+
+    @staticmethod
+    def _amount_in_words_vi(amount):
+        """Chuyển số tiền (VND) thành chữ tiếng Việt."""
+        n = int(round(float(amount or 0)))
+        if n == 0:
+            return 'Không đồng'
+
+        _ones = ['', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín']
+
+        def _read_group(g, is_first=False):
+            if g == 0:
+                return ''
+            h, r = divmod(g, 100)
+            t, u = divmod(r, 10)
+            parts = []
+            if h:
+                parts.append(_ones[h] + ' trăm')
+            elif not is_first:
+                parts.append('không trăm')
+            if t == 1:
+                s = 'mười'
+                if u == 5:
+                    s += ' lăm'
+                elif u:
+                    s += ' ' + _ones[u]
+                parts.append(s)
+            elif t > 1:
+                s = _ones[t] + ' mươi'
+                if u == 1:
+                    s += ' mốt'
+                elif u == 5:
+                    s += ' lăm'
+                elif u:
+                    s += ' ' + _ones[u]
+                parts.append(s)
+            else:
+                if u:
+                    if h or not is_first:
+                        parts.append('lẻ ' + _ones[u])
+                    else:
+                        parts.append(_ones[u])
+            return ' '.join(parts)
+
+        units = [(10 ** 9, 'tỷ'), (10 ** 6, 'triệu'), (10 ** 3, 'nghìn'), (1, '')]
+        parts = []
+        remaining = n
+        for div, unit_name in units:
+            g = remaining // div
+            remaining %= div
+            if g == 0:
+                continue
+            text = _read_group(g, is_first=not parts)
+            parts.append((text + ' ' + unit_name).strip() if unit_name else text)
+
+        result = ' '.join(parts)
+        return result[:1].upper() + result[1:] + ' đồng'

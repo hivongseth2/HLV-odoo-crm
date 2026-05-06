@@ -116,6 +116,7 @@
             <form string="Cấu hình AMIS Callback">
                 <header>
                     <button name="action_connect_misa" type="object" string="Kết nối MISA" class="btn-primary"/>
+                    <button name="action_connect_meinvoice" type="object" string="Kết nối meInvoice" class="btn-secondary"/>
                     <button name="action_sync_catalog_to_odoo" type="object" string="Đồng bộ danh mục hàng hóa" class="btn-secondary"/>
                     <button name="action_sync_catalog_unmapped_only" type="object" string="Đồng bộ sản phẩm mới" class="btn-secondary"/>
                     <button name="check_call_back_data" type="object" string="Kiểm tra Callback" class="btn-secondary"/>
@@ -158,13 +159,29 @@
                             <field name="misa_fallback_account_object_name"/>
                         </group>
                     </group>
-                    <group string="Hóa đơn VAT kèm SAInvoice">
+                    <group string="Hóa đơn VAT kèm SAInvoice (cũ - ACT)">
                         <group>
                             <field name="sa_invoice_include_vat"/>
                             <field name="misa_inv_template_id"
                                    invisible="not sa_invoice_include_vat"/>
                             <field name="misa_inv_series"
                                    invisible="not sa_invoice_include_vat"/>
+                        </group>
+                    </group>
+                    <group string="meInvoice - Hóa đơn điện tử đầu ra">
+                        <group>
+                            <field name="meinvoice_enabled"/>
+                            <field name="meinvoice_api_url"/>
+                            <field name="meinvoice_app_id"/>
+                            <field name="meinvoice_taxcode"/>
+                            <field name="meinvoice_username"/>
+                            <field name="meinvoice_password" password="True"/>
+                            <field name="meinvoice_token" readonly="1" invisible="not meinvoice_token"/>
+                            <field name="meinvoice_token_acquired" readonly="1" invisible="not meinvoice_token_acquired"/>
+                        </group>
+                        <group>
+                            <field name="meinvoice_inv_series"/>
+                            <field name="meinvoice_sign_type"/>
                         </group>
                     </group>
                     <group>
@@ -217,9 +234,27 @@
         <field name="arch" type="xml">
             <data>
                 <xpath expr="//div[@name='button_box']" position="inside">
+                    <button name="action_publish_meinvoice_invoice" type="object"
+                            class="oe_stat_button" icon="fa-file-text-o"
+                            invisible="not misa_sa_voucher_synced or misa_meinvoice_synced or state not in ('sale','done')">
+                        <div class="o_field_widget o_stat_info">
+                            <span class="o_stat_text">Phát hành</span>
+                            <span class="o_stat_text">HĐĐT</span>
+                        </div>
+                    </button>
+                    <button name="action_reset_meinvoice_invoice" type="object"
+                            class="oe_stat_button" icon="fa-refresh"
+                            invisible="not misa_meinvoice_synced"
+                            confirm="Reset sẽ cho phép phát hành lại HĐĐT meInvoice. Tiếp tục?">
+                        <div class="o_field_widget o_stat_info">
+                            <span class="o_stat_text">Reset</span>
+                            <span class="o_stat_text">meInvoice</span>
+                        </div>
+                    </button>
+                    <!-- SA Invoice (ẩn, giữ code) -->
                     <button name="action_sync_misa_sa_invoice" type="object"
                             class="oe_stat_button" icon="fa-file-text-o"
-                            invisible="not misa_sa_voucher_synced or misa_sa_invoice_synced or state not in ('sale','done')">
+                            invisible="True">
                         <div class="o_field_widget o_stat_info">
                             <span class="o_stat_text">Sync</span>
                             <span class="o_stat_text">Hóa đơn MISA</span>
@@ -227,7 +262,7 @@
                     </button>
                     <button name="action_sync_misa_sa_invoice" type="object"
                             class="oe_stat_button" icon="fa-check-circle"
-                            invisible="not misa_sa_invoice_synced">
+                            invisible="True">
                         <div class="o_field_widget o_stat_info">
                             <span class="o_stat_text">Đã sync</span>
                             <span class="o_stat_text">Hóa đơn MISA</span>
@@ -235,7 +270,7 @@
                     </button>
                     <button name="action_reset_misa_sa_invoice" type="object"
                             class="oe_stat_button" icon="fa-refresh"
-                            invisible="not misa_sa_invoice_synced"
+                            invisible="True"
                             confirm="Reset sẽ cho phép sync lại SAInvoice. Tiếp tục?">
                         <div class="o_field_widget o_stat_info">
                             <span class="o_stat_text">Reset</span>
@@ -245,15 +280,21 @@
                 </xpath>
                 <xpath expr="//notebook" position="inside">
                     <page string="MISA" name="misa_info"
-                          invisible="not misa_sa_voucher_synced and not misa_sa_invoice_synced">
+                          invisible="not misa_sa_voucher_synced and not misa_sa_invoice_synced and not misa_meinvoice_synced">
                         <group>
                             <group string="SAVoucher (Bán hàng)">
                                 <field name="misa_sa_voucher_synced" readonly="1"/>
                                 <field name="misa_sa_voucher_org_refid" readonly="1"/>
                             </group>
-                            <group string="SAInvoice (Hóa đơn)">
+                            <group string="SAInvoice (Hóa đơn - ACT)">
                                 <field name="misa_sa_invoice_synced" readonly="1"/>
                                 <field name="misa_sa_invoice_org_refid" readonly="1"/>
+                            </group>
+                            <group string="meInvoice (Hóa đơn điện tử)">
+                                <field name="misa_meinvoice_synced" readonly="1"/>
+                                <field name="misa_meinvoice_ref_id" readonly="1"/>
+                                <field name="misa_meinvoice_transaction_id" readonly="1"/>
+                                <field name="misa_meinvoice_inv_no" readonly="1"/>
                             </group>
                         </group>
                     </page>
