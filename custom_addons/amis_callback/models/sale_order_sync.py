@@ -515,10 +515,6 @@ class SaleOrderAmisSync(models.Model):
 
         company = self.company_id or self.env.company
         company_partner = company.partner_id
-        stock_out_address = (config.meinvoice_stock_out_address or '').strip() or \
-            company_partner.contact_address_complete or company.street or ''
-        stock_in_address = (config.meinvoice_stock_in_address or '').strip() or \
-            'Khách hàng không cung cấp thông tin'
 
         invoice_data = {
             'RefID': ref_id,
@@ -534,8 +530,6 @@ class SaleOrderAmisSync(models.Model):
             'SellerAddress': company_partner.contact_address_complete or company.street or '',
             'SellerPhoneNumber': company.phone or '',
             'SellerEmail': company.email or '',
-            'StockOutAddress': stock_out_address,
-            'StockInAddress': stock_in_address,
             'BuyerLegalName': partner.name or 'Khách lẻ',
             'BuyerTaxCode': partner.vat or '',
             'BuyerAddress': partner.contact_address_complete or '',
@@ -557,7 +551,13 @@ class SaleOrderAmisSync(models.Model):
             'TaxRateInfo': tax_rate_info,
         }
         if config.meinvoice_is_pxk:
-            invoice_data['TransportMeans'] = (config.meinvoice_transport_means or '').strip()
+            stock_out_address = (config.meinvoice_stock_out_address or '').strip() or \
+                company_partner.contact_address_complete or company.street or ''
+            stock_in_address = (config.meinvoice_stock_in_address or '').strip() or \
+                'Khách hàng không cung cấp thông tin'
+            invoice_data['StockOutAddress'] = stock_out_address
+            invoice_data['StockInAddress'] = stock_in_address
+            invoice_data['Transport'] = (config.meinvoice_transport_means or '').strip()
         return invoice_data
 
     @staticmethod
