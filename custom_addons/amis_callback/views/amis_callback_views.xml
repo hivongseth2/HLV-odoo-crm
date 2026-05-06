@@ -193,6 +193,7 @@
                         <group>
                             <field name="meinvoice_inv_series"/>
                             <field name="meinvoice_sign_type"/>
+                            <field name="meinvoice_skip_api"/>
                             <field name="meinvoice_stock_out_address"/>
                             <field name="meinvoice_stock_in_address"/>
                             <field name="meinvoice_is_pxk"/>

@@ -343,28 +343,73 @@ class SaleOrderAmisSync(models.Model):
     # ── meInvoice: Phát hành hóa đơn điện tử ──────────────────────────────────
 
     def action_publish_meinvoice_invoice(self):
-        """Phát hành hóa đơn điện tử qua MISA meInvoice API (gọi từ nút bấm)."""
-        for order in self:
-            if order.state not in ('sale', 'done'):
-                raise UserError('Đơn hàng "%s" phải ở trạng thái Đã xác nhận hoặc Hoàn thành.' % order.name)
-            if order.misa_meinvoice_synced:
-                raise UserError('Đơn hàng "%s" đã được phát hành hóa đơn meInvoice rồi.' % order.name)
+        """Mở wizard xem trước và xác nhận phát hành hóa đơn điện tử meInvoice."""
+        self.ensure_one()
+        if self.state not in ('sale', 'done'):
+            raise UserError('Đơn hàng phải ở trạng thái Đã xác nhận hoặc Hoàn thành.')
+        if self.misa_meinvoice_synced:
+            raise UserError('Đơn hàng "%s" đã được phát hành hóa đơn meInvoice rồi.' % self.name)
 
-            config = self.env['amis.callback.config'].sudo().ensure_singleton()
-            if not config.meinvoice_enabled:
-                raise UserError('Tính năng phát hành HĐĐT meInvoice chưa được bật trong cấu hình.')
+        config = self.env['amis.callback.config'].sudo().ensure_singleton()
+        if not config.meinvoice_enabled:
+            raise UserError('Tính năng phát hành HĐĐT meInvoice chưa được bật trong cấu hình.')
 
-            order._publish_meinvoice_invoice()
+        # Tính invoice_data để pre-fill wizard
+        invoice_data = self._build_meinvoice_invoice_data(config)
+
+        # Tạo wizard lines từ OriginalInvoiceDetail
+        line_vals = []
+        for item in invoice_data.get('OriginalInvoiceDetail', []):
+            line_vals.append((0, 0, {
+                'sort_order': item.get('SortOrder', 0),
+                'item_code': item.get('ItemCode', ''),
+                'item_name': item.get('ItemName', ''),
+                'unit_name': item.get('UnitName', ''),
+                'quantity': item.get('Quantity', 0),
+                'unit_price': item.get('UnitPrice', 0),
+                'discount_rate': item.get('DiscountRate', 0),
+                'discount_amount_oc': item.get('DiscountAmountOC', 0),
+                'amount_oc': item.get('AmountOC', 0),
+                'amount_without_vat_oc': item.get('AmountWithoutVATOC', 0),
+                'vat_rate_name': item.get('VATRateName', ''),
+                'vat_amount_oc': item.get('VATAmountOC', 0),
+            }))
+
+        from datetime import date as _date
+        inv_date_str = invoice_data.get('InvDate', '')
+        try:
+            inv_date = _date.fromisoformat(inv_date_str)
+        except Exception:
+            inv_date = _date.today()
+
+        wizard = self.env['meinvoice.publish.wizard'].create({
+            'sale_order_id': self.id,
+            'inv_series': invoice_data.get('InvSeries', ''),
+            'inv_date': inv_date,
+            'payment_method': invoice_data.get('PaymentMethodName', 'TM/CK'),
+            'buyer_legal_name': invoice_data.get('BuyerLegalName', ''),
+            'buyer_full_name': invoice_data.get('BuyerFullName', ''),
+            'buyer_tax_code': invoice_data.get('BuyerTaxCode', ''),
+            'buyer_address': invoice_data.get('BuyerAddress', ''),
+            'buyer_phone': invoice_data.get('BuyerPhoneNumber', ''),
+            'buyer_email': invoice_data.get('BuyerEmail', ''),
+            'total_sale_oc': invoice_data.get('TotalSaleAmountOC', 0),
+            'total_discount_oc': invoice_data.get('TotalDiscountAmountOC', 0),
+            'total_net_oc': invoice_data.get('TotalAmountWithoutVATOC', 0),
+            'total_vat_oc': invoice_data.get('TotalVATAmountOC', 0),
+            'total_amount_oc': invoice_data.get('TotalAmountOC', 0),
+            'total_amount_in_words': invoice_data.get('TotalAmountInWords', ''),
+            'line_ids': line_vals,
+            'invoice_data_json': __import__('json').dumps(invoice_data, ensure_ascii=False, default=str),
+        })
 
         return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Phát hành HĐĐT thành công',
-                'message': 'Hóa đơn điện tử đã được phát hành qua meInvoice.',
-                'type': 'success',
-                'sticky': False,
-            },
+            'type': 'ir.actions.act_window',
+            'name': 'Xem trước hóa đơn điện tử — %s' % self.name,
+            'res_model': 'meinvoice.publish.wizard',
+            'res_id': wizard.id,
+            'view_mode': 'form',
+            'target': 'new',
         }
 
     def action_view_meinvoice_invoice(self):

@@ -229,6 +229,13 @@ class AmisCallbackConfig(models.Model):
         help='Bật: chỉ phát hành hóa đơn meInvoice cho đơn có shopee_order_ref. '
              'Tắt: phát hành cho tất cả đơn hàng.',
     )
+    meinvoice_skip_api = fields.Boolean(
+        string='Bỏ qua gọi API meInvoice (Dry-run)',
+        default=False,
+        help='Bật khi test: hệ thống sẽ giả lập thành công mà KHÔNG gọi API meInvoice thật.\n'
+             'Dữ liệu sẽ KHÔNG được gửi tới Cơ quan Thuế.\n'
+             'Tắt khi chạy thực tế.',
+    )
 
     # Mapping cứng: shopee.shop.identifier → account_object_name MISA
     SHOPEE_SHOP_ACCOUNT_MAP = {
@@ -824,6 +831,28 @@ class AmisCallbackConfig(models.Model):
             'PublishInvoiceData': None,
         }
         _logger.info('meInvoice push_invoice: SignType=%d, count=%d', sign_type, len(invoice_data_list))
+
+        # Dry-run mode: bỏ qua gọi API thật, trả về kết quả giả lập
+        if self.meinvoice_skip_api:
+            _logger.warning(
+                'meInvoice DRY-RUN: bỏ qua gọi API thật (meinvoice_skip_api=True). '
+                'Dữ liệu KHÔNG được gửi tới CQT.'
+            )
+            fake_results = []
+            for inv in invoice_data_list:
+                fake_results.append({
+                    'RefID': inv.get('RefID', ''),
+                    'TransactionID': 'DRY-RUN-%s' % inv.get('RefID', '')[:8],
+                    'InvTemplateNo': '1',
+                    'InvSeries': inv.get('InvSeries', ''),
+                    'InvNo': '00000000',
+                    'InvCode': 'DRY-RUN',
+                    'InvDate': inv.get('InvDate', ''),
+                    'ErrorCode': '',
+                    'DescriptionErrorCode': '',
+                })
+            return fake_results
+
         body = self._post_meinvoice('/invoice', payload)
 
         def _parse_result_field(raw):
