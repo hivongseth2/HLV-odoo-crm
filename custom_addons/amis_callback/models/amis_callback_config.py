@@ -178,8 +178,10 @@ class AmisCallbackConfig(models.Model):
     )
     meinvoice_sign_type = fields.Integer(
         string='SignType (meInvoice)',
-        default=2,
-        help='2: HSM có hiển thị CKS (hóa đơn thường).\n5: Không hiển thị CKS (hóa đơn MTT/máy tính tiền).',
+        default=1,
+        help='1: USB token (ký bằng USB token qua meInvoice agent — dùng cho hóa đơn thường).\n'
+             '2: HSM server-side (cần cấu hình HSM trên hệ thống meInvoice).\n'
+             '5: Không hiển thị CKS — chỉ dùng cho hóa đơn MTT (máy tính tiền, series char[4]=M).',
     )
     meinvoice_stock_out_address = fields.Char(
         string='Địa chỉ kho xuất hàng (meInvoice)',
@@ -824,7 +826,30 @@ class AmisCallbackConfig(models.Model):
         _logger.info('meInvoice push_invoice: SignType=%d, count=%d', sign_type, len(invoice_data_list))
         body = self._post_meinvoice('/invoice', payload)
 
-        publish_results = body.get('publishInvoiceResult') or []
+        def _parse_result_field(raw):
+            """publishInvoiceResult / createInvoiceResult là JSON string hoặc list."""
+            if not raw:
+                return []
+            if isinstance(raw, list):
+                return raw
+            try:
+                parsed = __import__('json').loads(raw)
+                return parsed if isinstance(parsed, list) else []
+            except Exception:
+                return []
+
+        publish_results = _parse_result_field(body.get('publishInvoiceResult'))
+        if not publish_results:
+            # SignType=1 (USB token): invoice tạo xong chờ agent ký,
+            # API trả createInvoiceResult thay vì publishInvoiceResult
+            create_results = _parse_result_field(body.get('createInvoiceResult'))
+            if create_results:
+                _logger.info(
+                    'meInvoice: publishInvoiceResult rỗng, dùng createInvoiceResult làm fallback '
+                    '(USB token — invoice đã tạo, chờ ký).'
+                )
+                publish_results = create_results
+
         _logger.info('meInvoice publishInvoiceResult: %s', publish_results)
         return publish_results
 
