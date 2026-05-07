@@ -321,6 +321,10 @@ a { color:inherit; }
 .sr-v-code { font-family:monospace; font-weight:700; font-size:1rem; color:#198754; }
 .sr-v-val  { font-size:.8rem; color:#198754; font-weight:600; }
 
+/* ── Smooth scroll ── */
+html { scroll-behavior: smooth; }
+.scroll-mt { scroll-margin-top: 32px; }
+
 /* ── Responsive ── */
 @media (max-width:900px) {
     .sr-main-row { grid-template-columns:1fr; }
@@ -454,10 +458,16 @@ a { color:inherit; }
                     <div>
                         <h1 class="sr-cust-name"><t t-out="partner.name"/></h1>
                         <div class="sr-cust-meta">
-                            <t t-if="partner.phone">
+                            <t t-if="masked_phone">
                                 <span class="sr-meta-item">
                                     <span class="ms">call</span>
-                                    <t t-out="partner.phone"/>
+                                    <t t-out="masked_phone"/>
+                                </span>
+                            </t>
+                            <t t-if="masked_email">
+                                <span class="sr-meta-item">
+                                    <span class="ms">mail</span>
+                                    <t t-out="masked_email"/>
                                 </span>
                             </t>
                             <t t-if="partner.ref">
@@ -560,42 +570,60 @@ a { color:inherit; }
                             <span class="ms">search</span>
                             <span>Tra cứu lại</span>
                         </a>
-                        <div class="sr-act-btn">
+                        <a href="#loyalty-history" class="sr-act-btn">
                             <span class="ms">history</span>
                             <span>Lịch sử</span>
-                        </div>
-                        <div class="sr-act-btn">
+                        </a>
+                        <a href="#loyalty-vouchers" class="sr-act-btn">
                             <span class="ms">redeem</span>
                             <t t-if="active_vouchers">
                                 <span><t t-out="len(active_vouchers)"/> Voucher</span>
                             </t>
                             <t t-else=""><span>Voucher</span></t>
-                        </div>
-                        <div class="sr-act-btn">
+                        </a>
+                        <a href="#loyalty-tiers" class="sr-act-btn">
                             <span class="ms ms-fill">workspace_premium</span>
                             <t t-if="partner.loyalty_tier_id">
                                 <span><t t-out="partner.loyalty_tier_id.name"/></span>
                             </t>
-                            <t t-else=""><span>Hạng</span></t>
-                        </div>
+                            <t t-else=""><span>Ưu đãi hạng</span></t>
+                        </a>
                     </div>
                 </div>
             </div>
 
             <!-- Vouchers -->
-            <t t-if="active_vouchers">
-                <div class="sr-voucher-section">
-                    <h3 class="sr-vs-title">Voucher đang có (<t t-out="len(active_vouchers)"/>)</h3>
+            <div id="loyalty-vouchers" class="sr-voucher-section scroll-mt">
+                <h3 class="sr-vs-title">
+                    <t t-if="active_vouchers">
+                        Voucher đang có (<t t-out="len(active_vouchers)"/>)
+                    </t>
+                    <t t-else="">Voucher của bạn</t>
+                </h3>
+                <t t-if="active_vouchers">
                     <div class="sr-voucher-list">
                         <t t-foreach="active_vouchers" t-as="v">
                             <div class="sr-voucher-pill">
                                 <span class="ms">confirmation_number</span>
                                 <span class="sr-v-code"><t t-out="v.code"/></span>
                                 <span class="sr-v-val">
-                                    <t t-if="v.discount_type == 'fixed'">
+                                    <t t-if="v.reward_type == 'free_shipping'">
+                                        Miễn phí vận chuyển
+                                    </t>
+                                    <t t-elif="v.reward_type == 'gift'">
+                                        Quà tặng kèm
+                                        <t t-if="v.gift_product_id">
+                                            (<t t-out="v.gift_qty"/> x <t t-out="v.gift_product_id.name"/>)
+                                        </t>
+                                    </t>
+                                    <t t-elif="v.discount_type == 'fixed'">
                                         – <t t-out="'{:,.0f}'.format(v.discount_value)"/>đ
                                     </t>
-                                    <t t-else="">– <t t-out="v.discount_value"/>%</t>
+                                    <t t-else="">– <t t-out="v.discount_value"/>%
+                                        <t t-if="v.max_discount_amount">
+                                            (tối đa <t t-out="'{:,.0f}'.format(v.max_discount_amount)"/>đ)
+                                        </t>
+                                    </t>
                                     <t t-if="v.date_expiry">
                                         · HSD <t t-out="v.date_expiry.strftime('%d/%m/%Y')"/>
                                     </t>
@@ -603,11 +631,17 @@ a { color:inherit; }
                             </div>
                         </t>
                     </div>
-                </div>
-            </t>
+                </t>
+                <t t-else="">
+                    <div class="sr-empty" style="padding:24px">
+                        <span class="ms" style="font-size:36px;display:block;margin-bottom:8px;opacity:.4">redeem</span>
+                        <p style="margin:0;font-size:.9rem">Bạn chưa có Voucher nào. Tích điểm để đổi Voucher!</p>
+                    </div>
+                </t>
+            </div>
 
             <!-- History -->
-            <div class="sr-hist-section">
+            <div id="loyalty-history" class="sr-hist-section scroll-mt">
                 <div class="sr-hist-header">
                     <h3 class="sr-hist-title">Lịch sử tích lũy gần đây</h3>
                 </div>
@@ -673,7 +707,7 @@ a { color:inherit; }
         </div>
 
         <!-- Tier reference footer -->
-        <section class="sr-section sr-section-bg">
+        <section id="loyalty-tiers" class="sr-section sr-section-bg scroll-mt">
             <div class="sr-cont">
                 <h2 class="sr-sec-title">Hệ thống cấp bậc thành viên</h2>
                 <div class="sr-divider"></div>
