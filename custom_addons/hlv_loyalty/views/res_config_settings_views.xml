@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Kế thừa Settings - Thêm cấu hình Loyalty -->
+    <record id="res_config_settings_view_form_loyalty" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.loyalty</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="90"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="Loyalty" string="Khách hàng thân thiết" name="hlv_loyalty">
+                    <block title="Cấu hình Loyalty" name="loyalty_setting_container">
+                        <setting id="loyalty_program_setting"
+                                 string="Chương trình Loyalty mặc định"
+                                 help="Chọn chương trình tích điểm mặc định">
+                            <field name="loyalty_program_id"
+                                   options="{'no_create': True}"/>
+                        </setting>
+                        <setting id="loyalty_manual_adjust_setting"
+                                 string="Cho phép điều chỉnh điểm thủ công"
+                                 help="Cho phép Admin HQ điều chỉnh điểm loyalty bằng tay">
+                            <field name="loyalty_allow_manual_adjust"/>
+                        </setting>
+                        <setting id="loyalty_notification_setting"
+                                 string="Gửi thông báo tích điểm"
+                                 help="Gửi email/thông báo cho khách khi được tích điểm">
+                            <field name="loyalty_send_notification"/>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+</odoo>

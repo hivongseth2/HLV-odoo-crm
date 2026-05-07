@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <!-- Nhóm quyền loyalty -->
+        <record id="group_loyalty_admin" model="res.groups">
+            <field name="name">Loyalty Admin (HQ)</field>
+            <field name="comment">Quản trị viên Loyalty tại Công ty Mẹ - Full quyền CRUD</field>
+            <field name="category_id" ref="base.module_category_sales_sales"/>
+            <field name="implied_ids" eval="[(4, ref('sales_team.group_sale_manager'))]"/>
+        </record>
+
+        <!-- ============================================ -->
+        <!-- Record Rules: loyalty.program -->
+        <!-- ============================================ -->
+        <!-- Tất cả user đều đọc được chương trình -->
+        <record id="loyalty_program_rule_read_all" model="ir.rule">
+            <field name="name">Loyalty Program: Đọc tất cả</field>
+            <field name="model_id" ref="model_hlv_loyalty_program"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+
+        <!-- Chỉ Loyalty Admin mới sửa/tạo/xóa chương trình -->
+        <record id="loyalty_program_rule_admin" model="ir.rule">
+            <field name="name">Loyalty Program: Admin Full</field>
+            <field name="model_id" ref="model_hlv_loyalty_program"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+            <field name="groups" eval="[(4, ref('group_loyalty_admin'))]"/>
+        </record>
+
+        <!-- ============================================ -->
+        <!-- Record Rules: loyalty.history -->
+        <!-- ============================================ -->
+        <!-- User đọc tất cả history -->
+        <record id="loyalty_history_rule_read_all" model="ir.rule">
+            <field name="name">Loyalty History: Đọc tất cả</field>
+            <field name="model_id" ref="model_hlv_loyalty_history"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+
+        <!-- Admin Full CRUD -->
+        <record id="loyalty_history_rule_admin" model="ir.rule">
+            <field name="name">Loyalty History: Admin Full</field>
+            <field name="model_id" ref="model_hlv_loyalty_history"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+            <field name="groups" eval="[(4, ref('group_loyalty_admin'))]"/>
+        </record>
+
+        <!-- ============================================ -->
+        <!-- Record Rules: loyalty.voucher -->
+        <!-- ============================================ -->
+        <!-- User đọc voucher -->
+        <record id="loyalty_voucher_rule_read_all" model="ir.rule">
+            <field name="name">Loyalty Voucher: Đọc tất cả</field>
+            <field name="model_id" ref="model_hlv_loyalty_voucher"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+            <field name="groups" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+
+        <!-- Salesman có thể sử dụng (write) voucher khi áp dụng vào đơn hàng -->
+        <record id="loyalty_voucher_rule_salesman" model="ir.rule">
+            <field name="name">Loyalty Voucher: Salesman Write</field>
+            <field name="model_id" ref="model_hlv_loyalty_voucher"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+            <field name="groups" eval="[(4, ref('sales_team.group_sale_salesman'))]"/>
+        </record>
+
+        <!-- Admin Full -->
+        <record id="loyalty_voucher_rule_admin" model="ir.rule">
+            <field name="name">Loyalty Voucher: Admin Full</field>
+            <field name="model_id" ref="model_hlv_loyalty_voucher"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+            <field name="groups" eval="[(4, ref('group_loyalty_admin'))]"/>
+        </record>
+
+    </data>
+</odoo>

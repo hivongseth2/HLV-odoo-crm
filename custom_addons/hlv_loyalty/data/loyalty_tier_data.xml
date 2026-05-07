@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="loyalty_tier_dong" model="hlv.loyalty.tier">
+        <field name="name">Đồng</field>
+        <field name="min_points">0</field>
+        <field name="max_points">999</field>
+        <field name="color">brown</field>
+        <field name="icon">fa-medal</field>
+        <field name="tier_image" type="base64" file="hlv_loyalty/static/description/brozen.png"/>
+        <field name="description">Thành viên mới</field>
+        <field name="sequence">10</field>
+    </record>
+    <record id="loyalty_tier_bac" model="hlv.loyalty.tier">
+        <field name="name">Bạc</field>
+        <field name="min_points">1000</field>
+        <field name="max_points">4999</field>
+        <field name="color">silver</field>
+        <field name="icon">fa-star</field>
+        <field name="tier_image" type="base64" file="hlv_loyalty/static/description/platinum.png"/>
+        <field name="description">Khách hàng thân thiết</field>
+        <field name="sequence">20</field>
+    </record>
+    <record id="loyalty_tier_vang" model="hlv.loyalty.tier">
+        <field name="name">Vàng</field>
+        <field name="min_points">5000</field>
+        <field name="max_points">19999</field>
+        <field name="color">gold</field>
+        <field name="icon">fa-trophy</field>
+        <field name="tier_image" type="base64" file="hlv_loyalty/static/description/gold.png"/>
+        <field name="description">Khách hàng VIP</field>
+        <field name="sequence">30</field>
+    </record>
+    <record id="loyalty_tier_kimcuong" model="hlv.loyalty.tier">
+        <field name="name">Kim cương</field>
+        <field name="min_points">20000</field>
+        <field name="color">diamond</field>
+        <field name="icon">fa-gem</field>
+        <field name="tier_image" type="base64" file="hlv_loyalty/static/description/platinum.png"/>
+        <field name="description">Khách hàng VVIP</field>
+        <field name="sequence">40</field>
+    </record>
+</odoo>

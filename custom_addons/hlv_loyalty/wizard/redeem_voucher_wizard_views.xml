@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_loyalty_redeem_voucher_wizard_form" model="ir.ui.view">
+        <field name="name">loyalty.redeem.voucher.wizard.form</field>
+        <field name="model">hlv.loyalty.redeem.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Đổi Voucher">
+                <group>
+                    <group string="Thông tin Khách hàng">
+                        <field name="partner_id"/>
+                        <field name="current_points" widget="integer"/>
+                    </group>
+                    <group string="Chọn Gói Voucher">
+                        <field name="package_id" options="{'no_create': True}"/>
+                        <field name="points_required"/>
+                        <field name="discount_info"/>
+                        <field name="remaining_points"
+                               decoration-danger="remaining_points &lt; 0"
+                               decoration-success="remaining_points &gt;= 0"/>
+                    </group>
+                </group>
+                <footer>
+                    <button name="action_redeem" string="Đổi Voucher" type="object"
+                            class="btn-primary" confirm="Bạn có chắc chắn muốn đổi điểm lấy Voucher?"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

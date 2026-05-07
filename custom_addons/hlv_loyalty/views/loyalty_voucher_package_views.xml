@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Form View -->
+    <record id="view_loyalty_voucher_package_form" model="ir.ui.view">
+        <field name="name">hlv.loyalty.voucher.package.form</field>
+        <field name="model">hlv.loyalty.voucher.package</field>
+        <field name="arch" type="xml">
+            <form string="Gói đổi Voucher">
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1>
+                            <field name="name" placeholder="Tên gói..."/>
+                        </h1>
+                    </div>
+
+                    <!-- Banner quy đổi -->
+                    <div class="row g-0 mb-4 border">
+                        <div class="col bg-warning text-dark p-4 text-center">
+                            <div class="fw-bold small text-uppercase mb-2"
+                                 style="letter-spacing:1px; opacity:.7">Cần</div>
+                            <div class="fs-2 fw-bold">
+                                <field name="points_required" nolabel="1"/>
+                            </div>
+                            <div class="small mt-1" style="opacity:.8">điểm</div>
+                        </div>
+                        <div class="col-auto d-flex align-items-center justify-content-center
+                                    px-4 bg-light border-start border-end text-muted fw-bold fs-2">
+                            →
+                        </div>
+                        <div class="col bg-success text-white p-4 text-center">
+                            <div class="fw-bold small text-uppercase mb-2"
+                                 style="letter-spacing:1px; opacity:.8">Phần thưởng</div>
+                            <div class="fs-2 fw-bold">
+                                <field name="reward_type" nolabel="1"/>
+                            </div>
+                        </div>
+                        <div class="col bg-info text-white p-4 text-center">
+                            <div class="fw-bold small text-uppercase mb-2"
+                                 style="letter-spacing:1px; opacity:.8">Hiệu lực</div>
+                            <div class="fs-2 fw-bold">
+                                <field name="validity_days" nolabel="1"/>
+                            </div>
+                            <div class="small mt-1" style="opacity:.85">ngày</div>
+                        </div>
+                    </div>
+
+                    <group>
+                        <group string="Cấu hình gói">
+                            <field name="program_id"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="active" widget="boolean_toggle"/>
+                        </group>
+                        <group string="Giá trị quy đổi">
+                            <field name="points_required"/>
+                            <field name="reward_type" widget="badge"
+                                decoration-success="reward_type == 'discount'"
+                                decoration-info="reward_type == 'free_shipping'"
+                                decoration-warning="reward_type == 'gift'"/>
+                            <field name="discount_type" widget="badge"
+                                invisible="reward_type != 'discount'"
+                                   decoration-success="discount_type == 'fixed'"
+                                   decoration-info="discount_type == 'percent'"/>
+                            <field name="discount_value" invisible="reward_type != 'discount'"/>
+                            <field name="max_discount_amount"
+                                invisible="reward_type != 'discount' or discount_type != 'percent'"/>
+                            <field name="gift_product_id" invisible="reward_type != 'gift'"/>
+                            <field name="gift_qty" invisible="reward_type != 'gift'"/>
+                            <field name="validity_days"/>
+                        </group>
+                    </group>
+                    <group string="Phạm vi áp dụng">
+                        <field name="apply_on" widget="radio"/>
+                        <field name="product_category_ids" widget="many2many_tags"
+                               invisible="apply_on != 'category'"/>
+                        <field name="min_order_amount"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- List View -->
+    <record id="view_loyalty_voucher_package_list" model="ir.ui.view">
+        <field name="name">hlv.loyalty.voucher.package.list</field>
+        <field name="model">hlv.loyalty.voucher.package</field>
+        <field name="arch" type="xml">
+            <list string="Gói đổi Voucher" decoration-muted="not active">
+                <field name="name"/>
+                <field name="program_id"/>
+                <field name="points_required" string="Điểm cần"/>
+                  <field name="reward_type" widget="badge"
+                      decoration-success="reward_type == 'discount'"
+                      decoration-info="reward_type == 'free_shipping'"
+                      decoration-warning="reward_type == 'gift'"/>
+                <field name="discount_type" widget="badge"
+                      optional="show"
+                       decoration-success="discount_type == 'fixed'"
+                       decoration-info="discount_type == 'percent'"/>
+                <field name="discount_value" string="Giá trị giảm"/>
+                <field name="max_discount_amount" optional="show"/>
+                  <field name="gift_product_id" optional="show"/>
+                  <field name="gift_qty" optional="hide"/>
+                <field name="min_order_amount" string="Đơn tối thiểu"/>
+                <field name="validity_days" string="Hiệu lực (ngày)"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_loyalty_voucher_package" model="ir.actions.act_window">
+        <field name="name">Gói đổi Voucher</field>
+        <field name="res_model">hlv.loyalty.voucher.package</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Tạo gói đổi Voucher đầu tiên!
+            </p>
+        </field>
+    </record>
+</odoo>

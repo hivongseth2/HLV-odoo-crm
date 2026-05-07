@@ -1,0 +1,317 @@
+{
+  "name": "HLV Zalo Mini App API Export",
+  "version": "1.0.0",
+  "generated_from": "custom_addons/hlv_loyalty/docs/api.md",
+  "base_url": "/api/v1",
+  "auth": {
+    "type": "public",
+    "header": "Authorization",
+    "format": "Bearer {API_KEY}",
+    "note": "Routes are public in Odoo; Authorization header is optional for gateway compatibility"
+  },
+  "content_type": "application/json",
+  "response_format": {
+    "success": {
+      "success": true,
+      "data": {}
+    },
+    "error": {
+      "success": false,
+      "error": {
+        "code": "ERROR_CODE",
+        "message": "Error message"
+      }
+    }
+  },
+  "endpoints": [
+    {
+      "id": 1,
+      "name": "Auth Zalo",
+      "method": "POST",
+      "path": "/auth/zalo",
+      "auth_required": false,
+      "description": "Authenticate Zalo user and create session/api key",
+      "body": {
+        "access_token": "string",
+        "user_id": "string"
+      }
+    },
+    {
+      "id": 2,
+      "name": "List categories",
+      "method": "GET",
+      "path": "/categories",
+      "query": {
+        "parent_id": "number|null"
+      }
+    },
+    {
+      "id": 3,
+      "name": "List products",
+      "method": "GET",
+      "path": "/products",
+      "query": {
+        "category_id": "number",
+        "search": "string",
+        "sort": "price_asc|price_desc|best_seller|newest",
+        "page": "number",
+        "limit": "number",
+        "featured": "boolean",
+        "best_seller": "boolean"
+      }
+    },
+    {
+      "id": 4,
+      "name": "Product detail",
+      "method": "GET",
+      "path": "/products/{id}",
+      "path_params": {
+        "id": "number"
+      }
+    },
+    {
+      "id": 5,
+      "name": "List banners",
+      "method": "GET",
+      "path": "/banners",
+      "query": {
+        "position": "home_slider|category_top"
+      }
+    },
+    {
+      "id": 6,
+      "name": "List orders",
+      "method": "GET",
+      "path": "/orders",
+      "query": {
+        "state": "pending|shipping|done|cancelled",
+        "page": "number",
+        "limit": "number"
+      }
+    },
+    {
+      "id": 7,
+      "name": "Order detail",
+      "method": "GET",
+      "path": "/orders/{id}",
+      "path_params": {
+        "id": "number"
+      }
+    },
+    {
+      "id": 8,
+      "name": "Create order",
+      "method": "POST",
+      "path": "/orders",
+      "body": {
+        "address_id": "number",
+        "voucher_code": "string",
+        "note": "string",
+        "items": [
+          {
+            "product_id": "number",
+            "quantity": "number"
+          }
+        ]
+      }
+    },
+    {
+      "id": 9,
+      "name": "List addresses",
+      "method": "GET",
+      "path": "/addresses"
+    },
+    {
+      "id": 10,
+      "name": "Create address",
+      "method": "POST",
+      "path": "/addresses",
+      "body": {
+        "name": "string",
+        "phone": "string",
+        "street": "string",
+        "ward": "string",
+        "district": "string",
+        "city": "string",
+        "is_default": "boolean"
+      }
+    },
+    {
+      "id": 11,
+      "name": "Update address",
+      "method": "PUT",
+      "path": "/addresses/{id}",
+      "path_params": {
+        "id": "number"
+      },
+      "body": {
+        "name": "string",
+        "phone": "string",
+        "street": "string",
+        "ward": "string",
+        "district": "string",
+        "city": "string",
+        "is_default": "boolean"
+      }
+    },
+    {
+      "id": 12,
+      "name": "Delete address",
+      "method": "DELETE",
+      "path": "/addresses/{id}",
+      "path_params": {
+        "id": "number"
+      }
+    },
+    {
+      "id": 13,
+      "name": "Account profile",
+      "method": "GET",
+      "path": "/account",
+      "description": "Returns Zalo account, loyalty points, avatar, tier, default address, and cart summary"
+    },
+    {
+      "id": 14,
+      "name": "Get cart",
+      "method": "GET",
+      "path": "/cart",
+      "description": "Returns the current draft cart for the authenticated Zalo partner"
+    },
+    {
+      "id": 15,
+      "name": "Add cart item",
+      "method": "POST",
+      "path": "/cart/items",
+      "body": {
+        "product_id": "number",
+        "quantity": "number"
+      }
+    },
+    {
+      "id": 16,
+      "name": "Update cart item",
+      "method": "PUT",
+      "path": "/cart/items/{line_id}",
+      "path_params": {
+        "line_id": "number"
+      },
+      "body": {
+        "quantity": "number"
+      }
+    },
+    {
+      "id": 17,
+      "name": "Delete cart item",
+      "method": "DELETE",
+      "path": "/cart/items/{line_id}",
+      "path_params": {
+        "line_id": "number"
+      }
+    },
+    {
+      "id": 18,
+      "name": "Clear cart",
+      "method": "POST",
+      "path": "/cart/clear"
+    },
+    {
+      "id": 19,
+      "name": "Checkout cart",
+      "method": "POST",
+      "path": "/cart/checkout",
+      "body": {
+        "address_id": "number",
+        "voucher_code": "string",
+        "note": "string"
+      }
+    },
+    {
+      "id": 20,
+      "name": "List loyalty tiers",
+      "method": "GET",
+      "path": "/loyalty/tiers",
+      "description": "Returns tier image_url, icon, description, and benefits",
+      "image_route": "/loyalty/tiers/{tier_id}/image"
+    },
+    {
+      "id": 21,
+      "name": "Lookup loyalty partner",
+      "method": "GET",
+      "path": "/loyalty/partner/lookup",
+      "query": {
+        "phone": "string",
+        "email": "string"
+      },
+      "rules": [
+        "Require phone or email"
+      ]
+    },
+    {
+      "id": 22,
+      "name": "Loyalty partner detail",
+      "method": "GET",
+      "path": "/loyalty/partner/{partner_id}",
+      "path_params": {
+        "partner_id": "number"
+      },
+      "description": "Returns partner image_url plus current and next tier image_url",
+      "image_route": "/loyalty/partners/{partner_id}/image"
+    },
+    {
+      "id": 23,
+      "name": "Loyalty history",
+      "method": "GET",
+      "path": "/loyalty/partner/{partner_id}/history",
+      "path_params": {
+        "partner_id": "number"
+      },
+      "query": {
+        "page": "number",
+        "limit": "number",
+        "type": "earn|redeem|return|manual"
+      }
+    },
+    {
+      "id": 24,
+      "name": "Partner vouchers",
+      "method": "GET",
+      "path": "/loyalty/vouchers/{partner_id}",
+      "path_params": {
+        "partner_id": "number"
+      },
+      "query": {
+        "state": "active|used|expired|cancelled"
+      }
+    },
+    {
+      "id": 25,
+      "name": "Voucher packages",
+      "method": "GET",
+      "path": "/loyalty/voucher-packages"
+    },
+    {
+      "id": 26,
+      "name": "Redeem voucher",
+      "method": "POST",
+      "path": "/loyalty/redeem",
+      "body": {
+        "partner_id": "number",
+        "package_id": "number"
+      }
+    },
+    {
+      "id": 27,
+      "name": "Validate voucher",
+      "method": "POST",
+      "path": "/loyalty/voucher/validate",
+      "body": {
+        "code": "string",
+        "order_amount": "number"
+      }
+    }
+  ],
+  "notes": [
+    "Province/ward/district can use public API https://provinces.open-api.vn/api/",
+    "If your deployment already prefixes API path, prepend that host/base path in Mini App env config"
+  ]
+}
