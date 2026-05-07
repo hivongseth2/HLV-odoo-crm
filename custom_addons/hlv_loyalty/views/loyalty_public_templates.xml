@@ -152,6 +152,12 @@ a { color:inherit; }
 .sr-tier-card:hover .tc-icon { transform:rotate(0deg); }
 .tc-icon .ms { font-size:28px; }
 .tc-icon .fa  { font-size:24px; }
+.tc-tier-img {
+    width:28px;
+    height:28px;
+    object-fit:contain;
+    display:block;
+}
 
 /* Tier icon clickable */
 .tc-icon-btn { cursor:pointer; }
@@ -459,8 +465,15 @@ html { scroll-behavior: smooth; }
                             <div t-att-class="'tc-icon tc-icon-btn'"
                                  t-att-style="'background:' + tc_color + ('18' if not is_dark else '; background:rgba(255,255,255,.08)')"
                                  title="Xem quyền lợi hạng" tabindex="0" role="button">
-                                <i t-att-class="'fa ' + (tier.icon or 'fa-medal')"
-                                   t-att-style="'color:' + ('rgba(255,220,80,.9)' if is_dark else tc_color)"/>
+                                <t t-if="tier.image_url">
+                                    <img class="tc-tier-img"
+                                         t-att-src="tier.image_url"
+                                         t-att-alt="tier.name or 'Tier icon'"/>
+                                </t>
+                                <t t-else="">
+                                    <i t-att-class="'fa ' + (tier.icon or 'fa-medal')"
+                                       t-att-style="'color:' + ('rgba(255,220,80,.9)' if is_dark else tc_color)"/>
+                                </t>
                             </div>
                             <!-- Benefits popup (positioned relative to card) -->
                             <div t-att-class="'tc-benefits-popup' + (' tc-pop-dark' if is_dark else '')">
@@ -800,8 +813,15 @@ html { scroll-behavior: smooth; }
                             <div t-att-class="'tc-icon tc-icon-btn'"
                                  t-att-style="'background:' + tc_color + ('18' if not is_dark else '; background:rgba(255,255,255,.08)')"
                                  title="Xem quyền lợi hạng" tabindex="0" role="button">
-                                <i t-att-class="'fa ' + (tier.icon or 'fa-medal')"
-                                   t-att-style="'color:' + ('rgba(255,220,80,.9)' if is_dark else tc_color)"/>
+                                <t t-if="tier.image_url">
+                                    <img class="tc-tier-img"
+                                         t-att-src="tier.image_url"
+                                         t-att-alt="tier.name or 'Tier icon'"/>
+                                </t>
+                                <t t-else="">
+                                    <i t-att-class="'fa ' + (tier.icon or 'fa-medal')"
+                                       t-att-style="'color:' + ('rgba(255,220,80,.9)' if is_dark else tc_color)"/>
+                                </t>
                             </div>
                             <!-- Benefits popup (positioned relative to card) -->
                             <div t-att-class="'tc-benefits-popup' + (' tc-pop-dark' if is_dark else '')">
