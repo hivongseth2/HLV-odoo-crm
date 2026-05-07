@@ -114,18 +114,18 @@ class SaleOrderAmisSync(models.Model):
         help='Ghi đè ký hiệu hóa đơn lấy từ cấu hình meInvoice.',
     )
 
-    # ── Liên kết hóa đơn điện tử ─────────────────────────────────────────────
-    meinvoice_invoice_ids = fields.One2many(
-        'meinvoice.invoice', 'sale_order_id', string='Hóa đơn điện tử',
+    # ── Liên kết hóa đơn điện tử nháp ─────────────────────────────────────────
+    amis_draft_invoice_ids = fields.One2many(
+        'meinvoice.invoice', 'sale_order_id', string='Hóa đơn điện tử (nháp)',
     )
-    meinvoice_invoice_count = fields.Integer(
-        compute='_compute_meinvoice_invoice_count', string='Số HĐĐT',
+    amis_draft_invoice_count = fields.Integer(
+        compute='_compute_amis_draft_invoice_count', string='Số HĐĐT',
     )
 
-    @api.depends('meinvoice_invoice_ids')
-    def _compute_meinvoice_invoice_count(self):
+    @api.depends('amis_draft_invoice_ids')
+    def _compute_amis_draft_invoice_count(self):
         for order in self:
-            order.meinvoice_invoice_count = len(order.meinvoice_invoice_ids)
+            order.amis_draft_invoice_count = len(order.amis_draft_invoice_ids)
 
     def action_sync_misa_sa_invoice(self):
         """Tạo job sync hóa đơn bán hàng (SAInvoice) lên MISA — được gọi bởi nút bấm."""

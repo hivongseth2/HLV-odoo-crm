@@ -263,9 +263,9 @@
                     <!-- Xem danh sách HĐĐT đã tạo -->
                     <button name="action_view_meinvoice_drafts" type="object"
                             class="oe_stat_button" icon="fa-file-text"
-                            invisible="meinvoice_invoice_count == 0">
+                            invisible="amis_draft_invoice_count == 0">
                         <div class="o_field_widget o_stat_info">
-                            <field name="meinvoice_invoice_count" widget="statinfo" string="HĐĐT"/>
+                            <field name="amis_draft_invoice_count" widget="statinfo" string="HĐĐT"/>
                         </div>
                     </button>
                     <!-- SA Invoice (ẩn, giữ code) -->
@@ -311,7 +311,7 @@
                                 <field name="meinvoice_prefill_payment_method"/>
                             </group>
                         </group>
-                        <field name="meinvoice_invoice_ids" nolabel="1">
+                        <field name="amis_draft_invoice_ids" nolabel="1">
                             <list string="Danh sách HĐĐT" create="false" delete="false"
                                   default_order="create_date desc"
                                   decoration-info="state == 'draft'"
