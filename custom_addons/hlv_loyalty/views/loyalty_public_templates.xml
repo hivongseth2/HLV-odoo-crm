@@ -126,14 +126,20 @@ a { color:inherit; }
 .sr-divider { width:80px; height:4px; background:var(--c-sec); border-radius:4px; margin-bottom:32px; }
 
 /* ── Tier Grid ── */
-.sr-tier-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:32px; }
+.sr-tier-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:32px; perspective:1200px; }
 .sr-tier-card {
     background:transparent;
     border-radius:16px;
     padding:0;
-    transition:transform .3s cubic-bezier(.4,0,.2,1);
+    transition:transform .4s cubic-bezier(.4,0,.2,1), filter .4s;
+    transform-style:preserve-3d;
 }
-.sr-tier-card:hover { transform:translateY(-6px); }
+@media (hover:hover) {
+    .sr-tier-card:hover {
+        transform:rotateY(8deg) rotateX(-3deg) scale(1.05) translateY(-4px);
+        filter:drop-shadow(-10px 18px 28px rgba(0,0,0,.28));
+    }
+}
 .sr-tier-card-asset {
     width:100%;
     height:auto;
@@ -146,6 +152,49 @@ a { color:inherit; }
     border-radius:16px;
     overflow:visible;
     cursor:pointer;
+}
+/* Shimmer sweep across card on hover (Effect 1) */
+.sr-tier-visual::before {
+    content:'';
+    position:absolute; inset:0;
+    border-radius:16px;
+    background:linear-gradient(105deg,transparent 30%,rgba(255,255,255,.22) 50%,transparent 70%);
+    background-size:200% 100%;
+    background-position:120% 0;
+    pointer-events:none;
+    z-index:3;
+}
+@media (hover:hover) {
+    .sr-tier-card:hover .sr-tier-visual::before {
+        animation:shimmer-sweep .65s ease forwards;
+    }
+}
+@keyframes shimmer-sweep {
+    from { background-position:120% 0; }
+    to   { background-position:-30% 0; }
+}
+/* Animated gradient border glow (Effect 1 border) */
+.sr-tier-visual::after {
+    content:'';
+    position:absolute; inset:-2px;
+    border-radius:18px;
+    background:linear-gradient(115deg,rgba(255,255,255,0) 25%,rgba(255,255,255,.55) 50%,rgba(255,255,255,0) 75%);
+    background-size:200% 100%;
+    background-position:100% 0;
+    z-index:-1;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .3s;
+}
+@media (hover:hover) {
+    .sr-tier-card:hover .sr-tier-visual::after {
+        opacity:1;
+        animation:border-glow 1.8s ease-in-out infinite;
+    }
+}
+@keyframes border-glow {
+    0%,100% { background-position:100% 0; }
+    50%      { background-position:-50% 0; }
 }
 .sr-tier-card.current .sr-tier-visual {
     outline:2px solid var(--c-sec);
@@ -211,6 +260,38 @@ a { color:inherit; }
 .tc-pop-platinum .tc-icon-badge { background:rgba(0,0,0,.12); }
 .tc-icon-badge .fa { font-size:13px; }
 .tc-pop-empty { font-size:.85rem; opacity:.6; margin:0; color:inherit; }
+
+/* Hover expand benefits panel (Effect 2) */
+.tc-hover-benefits {
+    max-height:0;
+    overflow:hidden;
+    opacity:0;
+    border-radius:12px;
+    margin-top:0;
+    transition:max-height .5s cubic-bezier(.4,0,.2,1), opacity .3s .08s, margin-top .3s;
+}
+@media (hover:hover) {
+    .sr-tier-card:hover .tc-hover-benefits {
+        max-height:240px;
+        opacity:1;
+        margin-top:8px;
+    }
+}
+.tc-hb-inner  { padding:10px 14px 12px; border-radius:12px; }
+.tc-hb-list   { list-style:none; padding:0; margin:0; }
+.tc-hb-item   { display:flex; align-items:center; gap:9px; padding:5px 0;
+                border-bottom:1px solid rgba(0,0,0,.07); font-size:.82rem; }
+.tc-hb-item:last-child { border-bottom:none; }
+.tc-hb-ico    { width:22px; height:22px; border-radius:6px; flex-shrink:0;
+                display:flex; align-items:center; justify-content:center; font-size:11px; }
+/* Per-tier panel backgrounds */
+.tc-hb-brown   { background:linear-gradient(135deg,rgba(184,134,11,.13),rgba(92,70,8,.08));   color:#5C4608; }
+.tc-hb-silver  { background:linear-gradient(135deg,rgba(192,199,209,.35),rgba(122,134,150,.2)); color:#374151; }
+.tc-hb-gold    { background:linear-gradient(135deg,rgba(252,211,77,.18),rgba(146,64,14,.1));  color:#78350F; }
+.tc-hb-platinum{ background:linear-gradient(135deg,rgba(220,220,224,.35),rgba(150,155,162,.2)); color:#374151; }
+.tc-hb-diamond { background:linear-gradient(135deg,rgba(6,182,212,.13),rgba(14,116,144,.08)); color:#0E7490; }
+.tc-hb-brown .tc-hb-ico,.tc-hb-gold .tc-hb-ico,.tc-hb-diamond .tc-hb-ico { background:rgba(255,255,255,.45); }
+.tc-hb-silver .tc-hb-ico,.tc-hb-platinum .tc-hb-ico { background:rgba(0,0,0,.08); }
 
 /* Tier badge (top-right) */
 .tc-badge {
@@ -529,6 +610,21 @@ html { scroll-behavior: smooth; }
                                 </div>
                             </div>
                             <div class="tc-card-label"><t t-out="tier.name"/></div>
+                            <div t-att-class="'tc-hover-benefits tc-hb-' + (tier.color or 'brown')">
+                                <div class="tc-hb-inner">
+                                    <t t-if="tier.benefit_ids">
+                                        <ul class="tc-hb-list">
+                                            <t t-foreach="tier.benefit_ids" t-as="b">
+                                                <li class="tc-hb-item">
+                                                    <span class="tc-hb-ico"><i t-att-class="'fa ' + (b.icon or 'fa-check')" aria-hidden="true"/></span>
+                                                    <span><t t-out="b.name"/></span>
+                                                </li>
+                                            </t>
+                                        </ul>
+                                    </t>
+                                    <t t-else=""><p style="margin:0;opacity:.5;font-size:.8rem">Chưa có quyền lợi.</p></t>
+                                </div>
+                            </div>
                         </div>
                     </t>
                 </div>
@@ -847,6 +943,21 @@ html { scroll-behavior: smooth; }
                                 </div>
                             </div>
                             <div class="tc-card-label"><t t-out="tier.name"/></div>
+                            <div t-att-class="'tc-hover-benefits tc-hb-' + (tier.color or 'brown')">
+                                <div class="tc-hb-inner">
+                                    <t t-if="tier.benefit_ids">
+                                        <ul class="tc-hb-list">
+                                            <t t-foreach="tier.benefit_ids" t-as="b">
+                                                <li class="tc-hb-item">
+                                                    <span class="tc-hb-ico"><i t-att-class="'fa ' + (b.icon or 'fa-check')" aria-hidden="true"/></span>
+                                                    <span><t t-out="b.name"/></span>
+                                                </li>
+                                            </t>
+                                        </ul>
+                                    </t>
+                                    <t t-else=""><p style="margin:0;opacity:.5;font-size:.8rem">Chưa có quyền lợi.</p></t>
+                                </div>
+                            </div>
                         </div>
                     </t>
                 </div>
