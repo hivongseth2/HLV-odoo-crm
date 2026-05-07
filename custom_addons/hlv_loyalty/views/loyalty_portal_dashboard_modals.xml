@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+<!-- ================================================================
+     loyalty_portal_dashboard_modals.xml
+     Modal dialogs called from loyalty_public_dashboard:
+       - Change phone number
+       - Change password
+================================================================ -->
+<template id="loyalty_portal_dashboard_modals" name="[modals] Dashboard">
+
+    <!-- Modal: Change phone -->
+    <div id="modal-phone"
+         style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center">
+        <div style="background:#fff;border-radius:16px;padding:36px;width:90%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+            <h3 style="margin:0 0 20px;font-family:'Manrope',sans-serif">Đổi số điện thoại</h3>
+            <t t-if="phone_error">
+                <div style="background:#fff0f0;border:1px solid #ffb3b3;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:.85rem;color:#c0392b">
+                    <t t-out="phone_error"/>
+                </div>
+            </t>
+            <form action="/loyalty/change-phone" method="post">
+                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                <div style="margin-bottom:20px">
+                    <label style="display:block;font-size:.82rem;font-weight:600;color:#454652;margin-bottom:6px">Số điện thoại mới</label>
+                    <input type="tel" name="new_phone"
+                           t-att-value="partner.phone or ''"
+                           required="required"
+                           style="width:100%;padding:11px 14px;border:1.5px solid #d0d0d8;border-radius:8px;font-size:.95rem;font-family:inherit"/>
+                </div>
+                <div style="display:flex;gap:10px">
+                    <button type="submit" style="flex:1;padding:12px;background:var(--c-pri);color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:inherit">Xác nhận</button>
+                    <button type="button" onclick="document.getElementById('modal-phone').style.display='none'"
+                            style="flex:1;padding:12px;background:#f3f4f5;color:#454652;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;font-family:inherit">Hủy</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Change password -->
+    <div id="modal-pw"
+         t-att-style="'display:' + ('flex' if show_pw_modal else 'none') + ';position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center'">
+        <div style="background:#fff;border-radius:16px;padding:36px;width:90%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+            <h3 style="margin:0 0 20px;font-family:'Manrope',sans-serif">Đổi mật khẩu</h3>
+            <t t-if="pw_error">
+                <div style="background:#fff0f0;border:1px solid #ffb3b3;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:.85rem;color:#c0392b">
+                    <t t-out="pw_error"/>
+                </div>
+            </t>
+            <form action="/loyalty/change-password" method="post">
+                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                <div style="margin-bottom:14px">
+                    <label style="display:block;font-size:.82rem;font-weight:600;color:#454652;margin-bottom:6px">Mật khẩu hiện tại</label>
+                    <input type="password" name="old_password" required="required"
+                           style="width:100%;padding:11px 14px;border:1.5px solid #d0d0d8;border-radius:8px;font-size:.95rem;font-family:inherit"/>
+                </div>
+                <div style="margin-bottom:14px">
+                    <label style="display:block;font-size:.82rem;font-weight:600;color:#454652;margin-bottom:6px">Mật khẩu mới</label>
+                    <input type="password" name="new_password" required="required"
+                           style="width:100%;padding:11px 14px;border:1.5px solid #d0d0d8;border-radius:8px;font-size:.95rem;font-family:inherit"/>
+                </div>
+                <div style="margin-bottom:20px">
+                    <label style="display:block;font-size:.82rem;font-weight:600;color:#454652;margin-bottom:6px">Xác nhận mật khẩu mới</label>
+                    <input type="password" name="confirm_password" required="required"
+                           style="width:100%;padding:11px 14px;border:1.5px solid #d0d0d8;border-radius:8px;font-size:.95rem;font-family:inherit"/>
+                </div>
+                <div style="display:flex;gap:10px">
+                    <button type="submit" style="flex:1;padding:12px;background:var(--c-pri);color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:inherit">Đổi mật khẩu</button>
+                    <button type="button" onclick="document.getElementById('modal-pw').style.display='none'"
+                            style="flex:1;padding:12px;background:#f3f4f5;color:#454652;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;font-family:inherit">Hủy</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</template>
+
+</odoo>

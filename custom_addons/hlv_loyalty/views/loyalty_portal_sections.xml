@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+<!-- ================================================================
+     loyalty_portal_sections.xml
+     Reusable sub-templates shared by dashboard AND result page:
+       - loyalty_portal_vouchers_section
+       - loyalty_portal_history_section
+       - loyalty_portal_tiers_section
+================================================================ -->
+
+<!-- ── Vouchers ── -->
+<template id="loyalty_portal_vouchers_section" name="[section] Vouchers">
+    <div id="loyalty-vouchers" class="sr-voucher-section scroll-mt">
+        <h3 class="sr-vs-title">
+            <t t-if="active_vouchers">
+                Voucher đang có (<t t-out="len(active_vouchers)"/>)
+            </t>
+            <t t-else="">Voucher của bạn</t>
+        </h3>
+        <t t-if="active_vouchers">
+            <div class="sr-voucher-list">
+                <t t-foreach="active_vouchers" t-as="v">
+                    <div class="sr-voucher-pill">
+                        <span class="ms">confirmation_number</span>
+                        <span class="sr-v-code"><t t-out="v.code"/></span>
+                        <span class="sr-v-val">
+                            <t t-if="v.reward_type == 'free_shipping'">Miễn phí vận chuyển</t>
+                            <t t-elif="v.reward_type == 'gift'">
+                                Quà tặng kèm
+                                <t t-if="v.gift_product_id">
+                                    (<t t-out="v.gift_qty"/> x <t t-out="v.gift_product_id.name"/>)
+                                </t>
+                            </t>
+                            <t t-elif="v.discount_type == 'fixed'">
+                                – <t t-out="'{:,.0f}'.format(v.discount_value)"/>đ
+                            </t>
+                            <t t-else="">– <t t-out="v.discount_value"/>%
+                                <t t-if="v.max_discount_amount">
+                                    (tối đa <t t-out="'{:,.0f}'.format(v.max_discount_amount)"/>đ)
+                                </t>
+                            </t>
+                            <t t-if="v.date_expiry">
+                                · HSD <t t-out="v.date_expiry.strftime('%d/%m/%Y')"/>
+                            </t>
+                        </span>
+                    </div>
+                </t>
+            </div>
+        </t>
+        <t t-else="">
+            <div class="sr-empty" style="padding:24px">
+                <span class="ms" style="font-size:36px;display:block;margin-bottom:8px;opacity:.4">redeem</span>
+                <p style="margin:0;font-size:.9rem">Bạn chưa có Voucher nào. Tích điểm để đổi Voucher!</p>
+            </div>
+        </t>
+    </div>
+</template>
+
+<!-- ── History ── -->
+<template id="loyalty_portal_history_section" name="[section] History">
+    <div id="loyalty-history" class="sr-hist-section scroll-mt">
+        <div class="sr-hist-header">
+            <h3 class="sr-hist-title">Lịch sử tích lũy gần đây</h3>
+        </div>
+        <div class="sr-tbl-wrap">
+            <t t-if="recent_history">
+                <table class="sr-tbl">
+                    <thead>
+                        <tr>
+                            <th>Ngày giao dịch</th>
+                            <th>Loại hình</th>
+                            <th>Số điểm</th>
+                            <th>Nội dung chi tiết</th>
+                            <th style="text-align:right">Trạng thái</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <t t-foreach="recent_history" t-as="h">
+                            <tr>
+                                <td>
+                                    <div class="td-date"><t t-out="h.date.strftime('%d Thg %m, %Y')"/></div>
+                                    <div class="td-time"><t t-out="h.date.strftime('%H:%M')"/></div>
+                                </td>
+                                <td>
+                                    <t t-if="h.transaction_type == 'earn'">
+                                        <span class="sr-badge badge-earn"><span class="ms">shopping_bag</span> Mua hàng</span>
+                                    </t>
+                                    <t t-elif="h.transaction_type == 'redeem'">
+                                        <span class="sr-badge badge-redeem"><span class="ms">redeem</span> Đổi Voucher</span>
+                                    </t>
+                                    <t t-elif="h.transaction_type == 'return'">
+                                        <span class="sr-badge badge-return"><span class="ms">undo</span> Hoàn hàng</span>
+                                    </t>
+                                    <t t-else="">
+                                        <span class="sr-badge badge-manual"><span class="ms">edit_note</span> Thủ công</span>
+                                    </t>
+                                </td>
+                                <td t-att-class="'td-pts ' + ('pos' if h.point_amount > 0 else 'neg')">
+                                    <t t-out="('+' if h.point_amount > 0 else '') + '{:,}'.format(h.point_amount)"/>
+                                </td>
+                                <td class="td-desc"><t t-out="h.description or ''"/></td>
+                                <td class="td-status">Hoàn tất</td>
+                            </tr>
+                        </t>
+                    </tbody>
+                </table>
+            </t>
+            <t t-else="">
+                <div class="sr-empty">
+                    <span class="ms">inbox</span>
+                    <p>Chưa có giao dịch điểm nào.</p>
+                </div>
+            </t>
+        </div>
+    </div>
+</template>
+
+<!-- ── Tiers ── -->
+<template id="loyalty_portal_tiers_section" name="[section] Tiers">
+    <section id="loyalty-tiers" class="sr-section sr-section-bg scroll-mt">
+        <div class="sr-cont">
+            <h2 class="sr-sec-title">Hệ thống cấp bậc thành viên</h2>
+            <div class="sr-divider"></div>
+            <div class="sr-tier-grid">
+                <t t-foreach="tiers" t-as="tier">
+                    <t t-set="is_current" t-value="partner.loyalty_tier_id and tier.id == partner.loyalty_tier_id.id"/>
+                    <t t-set="card_folder" t-value="'classic_tier_card' if tier.color == 'brown' else ('silver_tier_card' if tier.color == 'silver' else ('gold_tier_card' if tier.color == 'gold' else 'diamond_tier_card'))"/>
+                    <div t-att-class="'sr-tier-card' + (' current' if is_current else '')">
+                        <div class="sr-tier-visual">
+                            <t t-if="is_current">
+                                <span class="tc-badge you">BẠN</span>
+                            </t>
+                            <img class="sr-tier-card-asset"
+                                 t-att-src="'/hlv_loyalty/static/description/icon/' + card_folder + '/card.svg'"
+                                 t-att-alt="tier.name or 'Tier Card'"/>
+                            <div t-att-class="'tc-benefits-popup tc-pop-' + (tier.color or 'brown')">
+                                <div class="tc-pop-header">
+                                    <span class="tc-pop-title">Quyền lợi hạng <t t-out="tier.name"/></span>
+                                    <button class="tc-pop-close" aria-label="Đóng">&#x2715;</button>
+                                </div>
+                                <t t-if="tier.benefit_ids">
+                                    <ul class="tc-pop-list">
+                                        <t t-foreach="tier.benefit_ids" t-as="b">
+                                            <li class="tc-pop-item">
+                                                <span class="tc-icon-badge"><i t-att-class="'fa ' + (b.icon or 'fa-check')" aria-hidden="true"/></span>
+                                                <span><t t-out="b.name"/></span>
+                                            </li>
+                                        </t>
+                                    </ul>
+                                </t>
+                                <t t-else=""><p class="tc-pop-empty">Chưa có quyền lợi.</p></t>
+                            </div>
+                        </div>
+                        <div class="tc-card-label"><t t-out="tier.name"/></div>
+                        <div t-att-class="'tc-hover-benefits tc-hb-' + (tier.color or 'brown')">
+                            <div class="tc-hb-inner">
+                                <t t-if="tier.benefit_ids">
+                                    <ul class="tc-hb-list">
+                                        <t t-foreach="tier.benefit_ids" t-as="b">
+                                            <li class="tc-hb-item">
+                                                <span class="tc-hb-ico"><i t-att-class="'fa ' + (b.icon or 'fa-check')" aria-hidden="true"/></span>
+                                                <span><t t-out="b.name"/></span>
+                                            </li>
+                                        </t>
+                                    </ul>
+                                </t>
+                                <t t-else=""><p style="margin:0;opacity:.5;font-size:.8rem">Chưa có quyền lợi.</p></t>
+                            </div>
+                        </div>
+                    </div>
+                </t>
+            </div>
+        </div>
+    </section>
+</template>
+
+</odoo>

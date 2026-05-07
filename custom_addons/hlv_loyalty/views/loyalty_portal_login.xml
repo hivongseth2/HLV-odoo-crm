@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+<!-- ================================================================
+     loyalty_portal_login.xml
+     Public login page + home redirect stub.
+================================================================ -->
+<template id="loyalty_public_login" name="Loyalty Portal - Đăng nhập">
+    <t t-call="web.layout">
+        <t t-set="head">
+            <meta name="viewport" content="width=device-width, initial-scale=1"/>
+            <link rel="preconnect" href="https://fonts.googleapis.com"/>
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"/>
+            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;display=swap"/>
+            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"/>
+            <link rel="stylesheet" href="/hlv_loyalty/static/src/css/loyalty_login.css"/>
+        </t>
+        <t t-set="body_classname">lp-page</t>
+
+        <div class="lp-wrap">
+
+            <!-- ── Left: brand panel ── -->
+            <div class="lp-left">
+                <div class="lp-left-bg"></div>
+                <div class="lp-left-overlay"></div>
+                <div class="lp-left-content">
+                    <div>
+                        <span class="lp-badge">Cổng thành viên</span>
+                    </div>
+                    <div class="lp-left-bottom">
+                        <div class="lp-brand-name">Hoàng Long Vũ<br/>Members</div>
+                        <p class="lp-brand-desc">
+                            Chào mừng bạn đến với hệ thống thành viên thân thiết —
+                            nơi ghi nhận mọi giá trị bạn tạo ra.
+                        </p>
+                        <div class="lp-footer-line">
+                            © 2025 Hoàng Long Vũ. Bảo lưu mọi quyền.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Right: login form ── -->
+            <div class="lp-right">
+                <div>
+                    <span class="lp-eyebrow">Truy cập đặc quyền</span>
+                    <h1 class="lp-title">Đăng nhập Thành viên</h1>
+                    <p class="lp-subtitle">Nhập thông tin của bạn để truy cập bảng điều khiển thành viên.</p>
+
+                    <t t-if="error">
+                        <div class="lp-error">
+                            <span class="ms">error</span>
+                            <t t-out="error"/>
+                        </div>
+                    </t>
+
+                    <form action="/loyalty/login" method="post">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+
+                        <div class="lp-field">
+                            <label class="lp-label" for="lp_login">Email hoặc Số điện thoại</label>
+                            <div class="lp-input-wrap">
+                                <span class="ms lp-input-icon">person</span>
+                                <input id="lp_login" type="text" name="login"
+                                       t-att-value="login_val or ''"
+                                       autocomplete="username"
+                                       required="required"
+                                       class="lp-input"
+                                       placeholder="name@reserve.com"/>
+                            </div>
+                        </div>
+
+                        <div class="lp-field" style="margin-bottom:8px">
+                            <label class="lp-label" for="lp_pass">Mật khẩu</label>
+                            <div class="lp-input-wrap">
+                                <span class="ms lp-input-icon">lock</span>
+                                <input id="lp_pass" type="password" name="password"
+                                       autocomplete="current-password"
+                                       required="required"
+                                       class="lp-input"
+                                       placeholder="••••••••"/>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="lp-btn">Đăng nhập</button>
+                    </form>
+
+                    <div class="lp-support">
+                        Chưa là thành viên? Vui lòng liên hệ bộ phận hỗ trợ.
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </t>
+</template>
+
+<!-- Redirect stub – kept for backward compatibility -->
+<template id="loyalty_public_home" name="Tra cuu Loyalty">
+    <t t-call="hlv_loyalty.loyalty_public_login"/>
+</template>
+
+</odoo>

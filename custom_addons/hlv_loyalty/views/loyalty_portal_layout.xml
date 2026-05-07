@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+<!-- ================================================================
+     loyalty_portal_layout.xml
+     Shared QWeb layout – loads fonts, CSS, and tier-popup JS.
+     All portal templates call:  <t t-call="hlv_loyalty.loyalty_public_layout">
+================================================================ -->
+<template id="loyalty_public_layout" name="Loyalty Public Layout">
+    <t t-call="web.layout">
+        <t t-set="head">
+            <meta name="viewport" content="width=device-width, initial-scale=1"/>
+            <link rel="preconnect" href="https://fonts.googleapis.com"/>
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"/>
+            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800;900&amp;family=Inter:wght@400;500;600&amp;display=swap"/>
+            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"/>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"/>
+            <link rel="stylesheet" href="/hlv_loyalty/static/src/css/loyalty_portal.css"/>
+        </t>
+        <t t-out="0"/>
+        <script>
+(function () {
+    function closeAll() {
+        document.querySelectorAll('.tc-benefits-popup.open').forEach(function (p) {
+            p.classList.remove('open');
+        });
+    }
+    function init() {
+        document.querySelectorAll('.sr-tier-visual').forEach(function (visual) {
+            visual.addEventListener('click', function (e) {
+                if (e.target.closest('.tc-pop-close')) { closeAll(); return; }
+                if (e.target.closest('.tc-benefits-popup')) return;
+                e.stopPropagation();
+                var popup = visual.querySelector('.tc-benefits-popup');
+                if (!popup) return;
+                var isOpen = popup.classList.contains('open');
+                closeAll();
+                if (!isOpen) popup.classList.add('open');
+            });
+        });
+        document.addEventListener('click', closeAll);
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAll(); });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+        </script>
+    </t>
+</template>
+
+</odoo>
