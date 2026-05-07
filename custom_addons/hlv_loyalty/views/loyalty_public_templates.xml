@@ -43,7 +43,7 @@ a { color:inherit; }
 
 /* ── Hero (Home) ── */
 .sr-hero {
-    background: linear-gradient(135deg,#000666 0%,#1a237e 55%,#251800 100%);
+    background: linear-gradient(135deg, #1e89ca 0%, #0d75b4 55%, #1779b4 100%);
     padding: 80px 24px 120px;
     text-align: center;
     position: relative;
@@ -58,7 +58,7 @@ a { color:inherit; }
     margin-bottom: 16px;
 }
 .sr-hero-sub {
-    color: #8690ee;
+    color: #fff3dbde;
     font-size: 1.05rem;
     font-weight: 500;
     max-width: 540px;
@@ -505,17 +505,6 @@ html { scroll-behavior: smooth; }
                                 <span class="tc-pts-num"><t t-out="'{:,}'.format(tier.min_points)"/></span>
                                 <span class="tc-pts-unit"> điểm</span>
                             </div>
-                            <t t-if="tier.benefit_ids">
-                                <ul class="tc-benefits">
-                                    <t t-foreach="tier.benefit_ids" t-as="b">
-                                        <li class="tc-benefit">
-                                                          <i t-att-class="'fa ' + (b.icon or 'fa-check')"
-                                                              t-att-style="'color:' + tc_color"/>
-                                            <t t-out="b.name"/>
-                                        </li>
-                                    </t>
-                                </ul>
-                            </t>
                             <div class="tc-bar-bg">
                                 <div class="tc-bar-fill"
                                      t-att-style="'background:linear-gradient(90deg,' + tc_color + ',' + tc_color + 'aa); width:' + ('100%' if tier_first else '0%')"/>
@@ -860,16 +849,17 @@ html { scroll-behavior: smooth; }
                                 <span class="tc-pts-num"><t t-out="'{:,}'.format(tier.min_points)"/></span>
                                 <span class="tc-pts-unit"> điểm</span>
                             </div>
-                            <t t-if="tier.benefit_ids">
-                                <ul class="tc-benefits">
-                                    <t t-foreach="tier.benefit_ids" t-as="b">
-                                        <li class="tc-benefit">
-                                                          <i t-att-class="'fa ' + (b.icon or 'fa-check')"
-                                                              t-att-style="'color:' + tc_color"/>
-                                            <t t-out="b.name"/>
-                                        </li>
-                                    </t>
-                                </ul>
+                            <div class="tc-bar-bg">
+                                <div class="tc-bar-fill"
+                                     t-att-style="'background:linear-gradient(90deg,' + tc_color + ',' + tc_color + 'aa); width:' + ('100%' if tier_first else '0%')"/>
+                            </div>
+                            <t t-if="tier_first">
+                                <span class="tc-bar-label" t-att-style="'color:' + tc_color">ACTIVE TIER</span>
+                            </t>
+                            <t t-elif="tier.min_points">
+                                <span class="tc-bar-label" style="color:var(--c-ink-v)">
+                                    <t t-out="'{:,}'.format(tier.min_points)"/> PTS TO GO
+                                </span>
                             </t>
                         </div>
                     </t>
