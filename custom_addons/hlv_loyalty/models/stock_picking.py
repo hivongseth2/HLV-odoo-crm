@@ -65,8 +65,7 @@ class StockPicking(models.Model):
         # Luôn tích vào công ty gốc (commercial_partner_id)
         root_partner = partner.commercial_partner_id or partner
 
-        # Tạo bản ghi lịch sử điểm
-        self.env['hlv.loyalty.history'].sudo().create({
+        base_vals = {
             'partner_id': root_partner.id,
             'point_amount': points,
             'transaction_type': 'earn',
@@ -76,6 +75,20 @@ class StockPicking(models.Model):
             'company_id': self.company_id.id,
             'sale_company_id': sale_order.company_id.id,
             'delivery_company_id': self.company_id.id,
+        }
+
+        # 1. Điểm xếp hạng – tự động xác nhận
+        self.env['hlv.loyalty.history'].sudo().create({
+            **base_vals,
+            'point_type': 'ranking',
+            'state': 'confirmed',
+        })
+
+        # 2. Điểm đổi thưởng – chờ nhân viên xác nhận
+        self.env['hlv.loyalty.history'].sudo().create({
+            **base_vals,
+            'point_type': 'exchange',
+            'state': 'pending',
         })
 
         self.loyalty_points_earned = points
@@ -135,7 +148,7 @@ class StockPicking(models.Model):
         # Luôn thu hồi từ công ty gốc
         root_partner = partner.commercial_partner_id or partner
 
-        self.env['hlv.loyalty.history'].sudo().create({
+        base_vals = {
             'partner_id': root_partner.id,
             'point_amount': -points_to_deduct,
             'transaction_type': 'return',
@@ -145,7 +158,35 @@ class StockPicking(models.Model):
             'company_id': self.company_id.id,
             'sale_company_id': origin_picking.sale_id.company_id.id,
             'delivery_company_id': self.company_id.id,
+        }
+
+        # Hủy điểm exchange đang pending của phiếu gốc (chưa xác nhận)
+        pending_exchange = self.env['hlv.loyalty.history'].sudo().search([
+            ('picking_id', '=', origin_picking.id),
+            ('point_type', '=', 'exchange'),
+            ('state', '=', 'pending'),
+        ])
+        pending_exchange.write({'state': 'cancelled'})
+
+        # Thu hồi điểm xếp hạng (confirmed)
+        self.env['hlv.loyalty.history'].sudo().create({
+            **base_vals,
+            'point_type': 'ranking',
+            'state': 'confirmed',
         })
+
+        # Thu hồi điểm đổi thưởng đã xác nhận (nếu có)
+        confirmed_exchange = self.env['hlv.loyalty.history'].sudo().search([
+            ('picking_id', '=', origin_picking.id),
+            ('point_type', '=', 'exchange'),
+            ('state', '=', 'confirmed'),
+        ])
+        if confirmed_exchange:
+            self.env['hlv.loyalty.history'].sudo().create({
+                **base_vals,
+                'point_type': 'exchange',
+                'state': 'confirmed',
+            })
         _logger.info(
             'Loyalty: Thu hồi %d điểm từ %s do hoàn hàng phiếu %s',
             points_to_deduct, partner.name, self.name,

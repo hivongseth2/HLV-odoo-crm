@@ -9,8 +9,18 @@ class ResPartner(models.Model):
     _inherit = 'res.partner'
 
     loyalty_total_points = fields.Integer(
-        string='Tổng điểm tích lũy', compute='_compute_loyalty_total_points',
+        string='Điểm xếp hạng', compute='_compute_loyalty_total_points',
         store=True, readonly=True,
+        help='Điểm tự động xác nhận, dùng để tính hạng thành viên.',
+    )
+    loyalty_exchange_points = fields.Integer(
+        string='Điểm đổi thưởng', compute='_compute_loyalty_exchange_points',
+        store=True, readonly=True,
+        help='Điểm đã được nhân viên xác nhận, dùng để đổi Voucher.',
+    )
+    loyalty_pending_points = fields.Integer(
+        string='Điểm chờ xác nhận', compute='_compute_loyalty_pending_points',
+        store=False, readonly=True,
     )
     loyalty_history_ids = fields.One2many(
         'hlv.loyalty.history', 'partner_id', string='Lịch sử điểm',
@@ -34,20 +44,51 @@ class ResPartner(models.Model):
 
     @api.depends(
         'loyalty_history_ids', 'loyalty_history_ids.point_amount',
+        'loyalty_history_ids.point_type', 'loyalty_history_ids.state',
         'child_ids.loyalty_history_ids', 'child_ids.loyalty_history_ids.point_amount',
+        'child_ids.loyalty_history_ids.point_type', 'child_ids.loyalty_history_ids.state',
     )
     def _compute_loyalty_total_points(self):
+        """Điểm xếp hạng: ranking confirmed + legacy records (point_type=False)."""
         History = self.env['hlv.loyalty.history']
         for partner in self:
-            if not partner.parent_id:
-                # Root partner: aggregate own + all direct children
-                all_ids = [partner.id] + partner.child_ids.ids
-                records = History.search([('partner_id', 'in', all_ids)])
-                partner.loyalty_total_points = sum(records.mapped('point_amount'))
-            else:
-                partner.loyalty_total_points = sum(
-                    partner.loyalty_history_ids.mapped('point_amount')
-                )
+            all_ids = [partner.id] + (partner.child_ids.ids if not partner.parent_id else [])
+            records = History.search([
+                ('partner_id', 'in', all_ids),
+                ('point_type', 'in', ['ranking', False]),
+                ('state', 'in', ['confirmed', False]),
+            ])
+            partner.loyalty_total_points = sum(records.mapped('point_amount'))
+
+    @api.depends(
+        'loyalty_history_ids', 'loyalty_history_ids.point_amount',
+        'loyalty_history_ids.point_type', 'loyalty_history_ids.state',
+        'child_ids.loyalty_history_ids', 'child_ids.loyalty_history_ids.point_amount',
+        'child_ids.loyalty_history_ids.point_type', 'child_ids.loyalty_history_ids.state',
+    )
+    def _compute_loyalty_exchange_points(self):
+        """Điểm đổi thưởng: exchange confirmed + legacy records (point_type=False)."""
+        History = self.env['hlv.loyalty.history']
+        for partner in self:
+            all_ids = [partner.id] + (partner.child_ids.ids if not partner.parent_id else [])
+            records = History.search([
+                ('partner_id', 'in', all_ids),
+                ('point_type', 'in', ['exchange', False]),
+                ('state', 'in', ['confirmed', False]),
+            ])
+            partner.loyalty_exchange_points = sum(records.mapped('point_amount'))
+
+    def _compute_loyalty_pending_points(self):
+        """Điểm exchange đang chờ xác nhận."""
+        History = self.env['hlv.loyalty.history']
+        for partner in self:
+            all_ids = [partner.id] + (partner.child_ids.ids if not partner.parent_id else [])
+            records = History.search([
+                ('partner_id', 'in', all_ids),
+                ('point_type', '=', 'exchange'),
+                ('state', '=', 'pending'),
+            ])
+            partner.loyalty_pending_points = sum(records.mapped('point_amount'))
 
     @api.depends('loyalty_total_points')
     def _compute_loyalty_tier(self):

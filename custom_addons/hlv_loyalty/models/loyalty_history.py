@@ -27,6 +27,19 @@ class HlvLoyaltyHistory(models.Model):
         ('manual', 'Điều chỉnh thủ công'),
     ], string='Loại giao dịch', required=True, index=True)
 
+    point_type = fields.Selection([
+        ('ranking', 'Điểm xếp hạng'),
+        ('exchange', 'Điểm đổi thưởng'),
+    ], string='Loại điểm', index=True, default='ranking',
+        help='Ranking: tự động xác nhận, dùng để tính hạng thành viên.\n'
+             'Exchange: cần nhân viên xác nhận, dùng để đổi Voucher.')
+
+    state = fields.Selection([
+        ('pending', 'Chờ xác nhận'),
+        ('confirmed', 'Đã xác nhận'),
+        ('cancelled', 'Đã hủy'),
+    ], string='Trạng thái', default='confirmed', index=True, tracking=True)
+
     description = fields.Char(string='Mô tả')
 
     # Tham chiếu chéo
@@ -64,3 +77,15 @@ class HlvLoyaltyHistory(models.Model):
             label = type_labels.get(rec.transaction_type, '')
             sign = '+' if rec.point_amount >= 0 else ''
             rec.display_name = f"{label}: {sign}{rec.point_amount} điểm - {rec.partner_id.name or ''}"
+
+    def action_confirm(self):
+        """Nhân viên xác nhận điểm đổi thưởng đang chờ."""
+        for rec in self:
+            if rec.state == 'pending':
+                rec.state = 'confirmed'
+
+    def action_cancel(self):
+        """Hủy bản ghi điểm đang chờ."""
+        for rec in self:
+            if rec.state == 'pending':
+                rec.state = 'cancelled'

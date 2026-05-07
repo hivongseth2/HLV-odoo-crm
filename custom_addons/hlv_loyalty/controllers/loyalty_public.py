@@ -48,6 +48,8 @@ def _load_partner_data(partner):
         'next_tier': next_tier,
         'masked_phone': _mask_phone(root.phone),
         'masked_email': _mask_email(root.email),
+        'exchange_points': root.loyalty_exchange_points,
+        'pending_points': root.loyalty_pending_points,
     }
 
 

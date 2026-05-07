@@ -15,7 +15,10 @@ class HlvRedeemVoucherWizard(models.TransientModel):
         'res.partner', string='Khách hàng', required=True, readonly=True,
     )
     current_points = fields.Integer(
-        string='Điểm hiện tại', compute='_compute_current_points',
+        string='Điểm đổi thưởng hiện tại', compute='_compute_current_points',
+    )
+    pending_points = fields.Integer(
+        string='Điểm chờ xác nhận', compute='_compute_current_points',
     )
     package_id = fields.Many2one(
         'hlv.loyalty.voucher.package', string='Gói Voucher',
@@ -35,7 +38,12 @@ class HlvRedeemVoucherWizard(models.TransientModel):
     @api.depends('partner_id')
     def _compute_current_points(self):
         for wiz in self:
-            wiz.current_points = wiz.partner_id.loyalty_total_points if wiz.partner_id else 0
+            if not wiz.partner_id:
+                wiz.current_points = 0
+                wiz.pending_points = 0
+            else:
+                wiz.current_points = wiz.partner_id.loyalty_exchange_points
+                wiz.pending_points = wiz.partner_id.loyalty_pending_points
 
     @api.depends('package_id')
     def _compute_discount_info(self):
@@ -74,11 +82,12 @@ class HlvRedeemVoucherWizard(models.TransientModel):
         if not package:
             raise UserError('Vui lòng chọn Gói Voucher!')
 
-        # Validate điểm
-        if partner.loyalty_total_points < package.points_required:
+        # Validate điểm đổi thưởng
+        if partner.loyalty_exchange_points < package.points_required:
             raise UserError(
-                f'Không đủ điểm! Cần {package.points_required} điểm, '
-                f'hiện có {partner.loyalty_total_points} điểm.'
+                f'Không đủ điểm đổi thưởng! Cần {package.points_required} điểm, '
+                f'hiện có {partner.loyalty_exchange_points} điểm đổi thưởng.'
+                + (f'\n({partner.loyalty_pending_points} điểm đang chờ xác nhận.)' if partner.loyalty_pending_points > 0 else '')
             )
 
         # Kiểm tra quyền (chỉ Admin HQ mới được điều chỉnh)
@@ -95,11 +104,13 @@ class HlvRedeemVoucherWizard(models.TransientModel):
             'date_expiry': date_expiry,
         })
 
-        # Trừ điểm - tạo bản ghi lịch sử
+        # Trừ điểm đổi thưởng - tạo bản ghi lịch sử
         self.env['hlv.loyalty.history'].sudo().create({
             'partner_id': partner.id,
             'point_amount': -package.points_required,
             'transaction_type': 'redeem',
+            'point_type': 'exchange',
+            'state': 'confirmed',
             'description': f'Đổi Voucher [{package.name}] - Mã: {voucher.code}',
             'voucher_id': voucher.id,
             'company_id': self.env.company.id,
