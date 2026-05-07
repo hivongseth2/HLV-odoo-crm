@@ -85,11 +85,39 @@ class LoyaltyPublicPortal(http.Controller):
                 ('active', '=', True),
             ], order='min_points asc', limit=1)
 
+        # Mask thông tin nhạy cảm
+        masked_phone = self._mask_phone(root_partner.phone)
+        masked_email = self._mask_email(root_partner.email)
+
         return request.render('hlv_loyalty.loyalty_public_result', {
             'tiers': tiers,
             'partner': root_partner,
+            'masked_phone': masked_phone,
+            'masked_email': masked_email,
             'active_vouchers': active_vouchers,
             'recent_history': recent_history,
             'next_tier': next_tier,
             'keyword': keyword,
         })
+
+    @staticmethod
+    def _mask_phone(phone):
+        """Mask SĐT: giữ 3 số đầu + *** + 2 số cuối. VD: 091****78"""
+        if not phone:
+            return ''
+        digits = ''.join(c for c in phone if c.isdigit())
+        if len(digits) < 6:
+            return '***'
+        return digits[:3] + '*' * (len(digits) - 5) + digits[-2:]
+
+    @staticmethod
+    def _mask_email(email):
+        """Mask email: giữ 2 ký tự đầu + *** + domain. VD: ng***@gmail.com"""
+        if not email:
+            return ''
+        if '@' not in email:
+            return '***'
+        local, domain = email.split('@', 1)
+        if len(local) <= 2:
+            return local + '***@' + domain
+        return local[:2] + '*' * (len(local) - 2) + '@' + domain
