@@ -435,7 +435,7 @@
     </record>
 
     <!-- Danh sách hóa đơn meInvoice đã phát hành -->
-    <record id="view_meinvoice_invoice_list" model="ir.ui.view">
+    <record id="view_sale_order_meinvoice_list" model="ir.ui.view">
         <field name="name">sale.order.meinvoice.list</field>
         <field name="model">sale.order</field>
         <field name="arch" type="xml">
@@ -458,7 +458,7 @@
         <field name="name">Danh sách hóa đơn điện tử</field>
         <field name="res_model">sale.order</field>
         <field name="view_mode">list,form</field>
-        <field name="view_ids" eval="[(5, 0, 0), (0, 0, {'view_mode': 'list', 'view_id': ref('view_meinvoice_invoice_list')})]" />
+        <field name="view_ids" eval="[(5, 0, 0), (0, 0, {'view_mode': 'list', 'view_id': ref('view_sale_order_meinvoice_list')})]" />
         <field name="domain">[('misa_meinvoice_synced', '=', True)]</field>
         <field name="context">{'search_default_misa_meinvoice_synced': 1}</field>
     </record>
