@@ -130,17 +130,32 @@ class DeliveryPlannerServiceFetch(models.AbstractModel):
         ))
         pack_dict = {}
         if package_ids:
-            for p in self.env['stock.quant.package'].sudo().search_read(
+            pack_raw = self.env['stock.quant.package'].sudo().search_read(
                 [('id', 'in', package_ids)],
                 ['id', 'name', 'location_id', 'pack_sequence', 'pack_total'],
-            ):
+            )
+            # Batch fetch location usage để detect kiện đã giao (location ngoài kho)
+            pack_loc_ids = list({r['location_id'][0] for r in pack_raw if r.get('location_id')})
+            loc_usage_map = {}
+            if pack_loc_ids:
+                for lr in self.env['stock.location'].sudo().search_read(
+                    [('id', 'in', pack_loc_ids)], ['id', 'usage']
+                ):
+                    loc_usage_map[lr['id']] = lr['usage']
+            for p in pack_raw:
                 # location_id là Many2one → [id, name] hoặc False
                 loc_raw = p.get('location_id')
+                loc_id = loc_raw[0] if isinstance(loc_raw, (list, tuple)) and loc_raw else None
                 loc_name = loc_raw[1] if isinstance(loc_raw, (list, tuple)) and loc_raw else ''
+                loc_usage = loc_usage_map.get(loc_id, 'internal')
+                # is_shipped = True nếu kiện đã rời kho (customer/supplier location)
+                # → items đã tính vào qty_delivered, không double-count trong qty_packed
+                is_shipped = loc_usage not in ('internal', 'transit', 'view')
                 pack_dict[p['id']] = {
                     'id': p['id'],
                     'name': p.get('name') or '',
                     'location_name': loc_name,
+                    'is_shipped': is_shipped,
                     'pack_sequence': p.get('pack_sequence') or 0,
                     'pack_total': p.get('pack_total') or 0,
                 }
@@ -219,13 +234,14 @@ class DeliveryPlannerServiceFetch(models.AbstractModel):
             if pname not in so_picking_packs[so_id][pick_id]['packages_dict']:
                 pack_info = pack_dict.get(pid, {
                     'id': pid, 'name': pname,
-                    'location_name': '', 'pack_sequence': 0, 'pack_total': 0,
+                    'location_name': '', 'is_shipped': False, 'pack_sequence': 0, 'pack_total': 0,
                 })
                 so_picking_packs[so_id][pick_id]['packages_dict'][pname] = {
                     'id': pid,
                     'name': pname,
                     'picking_id': pick_id,
                     'location_name': pack_info.get('location_name') or '',
+                    'is_shipped': pack_info.get('is_shipped', False),
                     'sequence': pack_info.get('pack_sequence') or 0,
                     'total': pack_info.get('pack_total') or 0,
                     'product_map': {},
