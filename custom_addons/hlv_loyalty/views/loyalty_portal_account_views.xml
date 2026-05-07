@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+<!-- ── Form view ── -->
+<record id="hlv_loyalty_portal_account_form" model="ir.ui.view">
+    <field name="name">hlv.loyalty.portal.account.form</field>
+    <field name="model">hlv.loyalty.portal.account</field>
+    <field name="arch" type="xml">
+        <form string="Tài khoản Portal Loyalty">
+            <header>
+                <button name="action_reset_password_wizard"
+                        string="Reset Mật khẩu"
+                        type="object"
+                        class="btn-secondary"
+                        groups="sales_team.group_sale_manager"/>
+            </header>
+            <sheet>
+                <div class="oe_title">
+                    <label for="username" string="Tên đăng nhập"/>
+                    <h1><field name="username" placeholder="vd: nguyenvan_a"/></h1>
+                </div>
+                <group>
+                    <group string="Thông tin tài khoản">
+                        <field name="partner_id" domain="[('is_company','=',False)]"/>
+                        <field name="phone"/>
+                        <field name="active"/>
+                    </group>
+                    <group string="Mật khẩu">
+                        <field name="password_hash" string="Hash (chỉ đọc)" readonly="1"/>
+                    </group>
+                </group>
+            </sheet>
+        </form>
+    </field>
+</record>
+
+<!-- ── List view ── -->
+<record id="hlv_loyalty_portal_account_list" model="ir.ui.view">
+    <field name="name">hlv.loyalty.portal.account.list</field>
+    <field name="model">hlv.loyalty.portal.account</field>
+    <field name="arch" type="xml">
+        <list string="Tài khoản Portal Loyalty" editable="bottom">
+            <field name="partner_id"/>
+            <field name="username"/>
+            <field name="phone"/>
+            <field name="active"/>
+        </list>
+    </field>
+</record>
+
+<!-- ── Action ── -->
+<record id="action_hlv_loyalty_portal_account" model="ir.actions.act_window">
+    <field name="name">Tài khoản Portal Loyalty</field>
+    <field name="res_model">hlv.loyalty.portal.account</field>
+    <field name="view_mode">list,form</field>
+    <field name="context">{'active_test': False}</field>
+</record>
+
+<!-- ── Menu ── -->
+<menuitem
+    id="menu_hlv_loyalty_portal_account"
+    name="Tài khoản Portal"
+    parent="menu_loyalty_config"
+    action="action_hlv_loyalty_portal_account"
+    sequence="20"
+    groups="sales_team.group_sale_manager"
+/>
+
+</odoo>

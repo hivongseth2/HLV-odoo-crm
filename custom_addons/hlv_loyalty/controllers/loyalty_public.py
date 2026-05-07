@@ -1,123 +1,210 @@
 # -*- coding: utf-8 -*-
+import re
 from odoo import http
 from odoo.http import request
+from odoo.exceptions import UserError
+
+_SESSION_KEY = 'hlv_loyalty_account_id'
+
+
+def _get_current_account():
+    """Return the logged-in portal account or None."""
+    account_id = request.session.get(_SESSION_KEY)
+    if not account_id:
+        return None
+    account = request.env['hlv.loyalty.portal.account'].sudo().browse(account_id)
+    if not account.exists() or not account.active:
+        request.session.pop(_SESSION_KEY, None)
+        return None
+    return account
+
+
+def _load_partner_data(partner):
+    """Load all dashboard data for a partner."""
+    root = partner.commercial_partner_id or partner
+    tiers = request.env['hlv.loyalty.tier'].sudo().search(
+        [('active', '=', True)], order='min_points asc'
+    )
+    active_vouchers = request.env['hlv.loyalty.voucher'].sudo().search([
+        ('partner_id', '=', root.id),
+        ('state', '=', 'active'),
+    ])
+    recent_history = request.env['hlv.loyalty.history'].sudo().search([
+        ('partner_id', '=', root.id),
+    ], order='date desc', limit=10)
+    next_tier = None
+    if root.loyalty_tier_id:
+        next_tier = request.env['hlv.loyalty.tier'].sudo().search([
+            ('min_points', '>', root.loyalty_total_points),
+            ('active', '=', True),
+        ], order='min_points asc', limit=1)
+    return {
+        'tiers': tiers,
+        'partner': root,
+        'active_vouchers': active_vouchers,
+        'recent_history': recent_history,
+        'next_tier': next_tier,
+        'masked_phone': _mask_phone(root.phone),
+        'masked_email': _mask_email(root.email),
+    }
 
 
 class LoyaltyPublicPortal(http.Controller):
 
+    # ── Home: login or dashboard ───────────────────────────────────────────
+
     @http.route('/loyalty', type='http', auth='public', website=True, sitemap=False)
     def loyalty_home(self, **kwargs):
-        """Trang chủ tra cứu loyalty."""
+        account = _get_current_account()
+        if account:
+            return request.redirect('/loyalty/dashboard')
         tiers = request.env['hlv.loyalty.tier'].sudo().search(
             [('active', '=', True)], order='min_points asc'
         )
-        return request.render('hlv_loyalty.loyalty_public_home', {
-            'tiers': tiers,
+        return request.render('hlv_loyalty.loyalty_public_login', {
             'error': None,
-            'partner': None,
+            'tiers': tiers,
         })
 
-    @http.route('/loyalty/search', type='http', auth='public', website=True,
-                sitemap=False, methods=['GET', 'POST'])
-    def loyalty_search(self, **post):
-        """Tra cứu điểm và hạng bằng SĐT hoặc email."""
+    # ── Login ──────────────────────────────────────────────────────────────
+
+    @http.route('/loyalty/login', type='http', auth='public', website=True,
+                sitemap=False, methods=['POST'])
+    def loyalty_login(self, **post):
+        login = (post.get('login') or '').strip()
+        password = (post.get('password') or '').strip()
+
         tiers = request.env['hlv.loyalty.tier'].sudo().search(
             [('active', '=', True)], order='min_points asc'
         )
 
-        keyword = (post.get('keyword') or '').strip()
-        if not keyword:
-            return request.render('hlv_loyalty.loyalty_public_home', {
+        if not login or not password:
+            return request.render('hlv_loyalty.loyalty_public_login', {
+                'error': 'Vui lòng nhập tên đăng nhập và mật khẩu.',
                 'tiers': tiers,
-                'error': 'Vui lòng nhập số điện thoại hoặc email.',
-                'partner': None,
-                'keyword': keyword,
             })
 
-        # Tìm partner theo SĐT, email hoặc tên — loại bỏ delivery address
-        _EXCLUDE_TYPES = ['delivery', 'invoice', 'other', 'private']
-        partner = request.env['res.partner'].sudo().search([
-            '|', '|',
-            ('phone', 'ilike', keyword),
-            ('email', 'ilike', keyword),
-            ('name', 'ilike', keyword),
-            ('type', 'not in', _EXCLUDE_TYPES),
-            ('loyalty_total_points', '>', 0),
-        ], order='loyalty_total_points desc', limit=1)
-
-        if not partner:
-            # Fallback: bỏ điều kiện điểm
-            partner = request.env['res.partner'].sudo().search([
-                '|', '|',
-                ('phone', 'ilike', keyword),
-                ('email', 'ilike', keyword),
-                ('name', 'ilike', keyword),
-                ('type', 'not in', _EXCLUDE_TYPES),
-            ], limit=1)
-
-        if not partner:
-            return request.render('hlv_loyalty.loyalty_public_home', {
+        account = request.env['hlv.loyalty.portal.account'].sudo().authenticate(
+            login, password
+        )
+        if not account:
+            return request.render('hlv_loyalty.loyalty_public_login', {
+                'error': 'Tên đăng nhập hoặc mật khẩu không đúng.',
+                'login_val': login,
                 'tiers': tiers,
-                'error': f'Không tìm thấy khách hàng với thông tin: "{keyword}"',
-                'partner': None,
-                'keyword': keyword,
             })
 
-        # Dùng commercial_partner_id để lấy điểm
-        root_partner = partner.commercial_partner_id or partner
+        request.session[_SESSION_KEY] = account.id
+        return request.redirect('/loyalty/dashboard')
 
-        # Lấy voucher đang active
-        active_vouchers = request.env['hlv.loyalty.voucher'].sudo().search([
-            ('partner_id', '=', root_partner.id),
-            ('state', '=', 'active'),
-        ])
+    # ── Logout ─────────────────────────────────────────────────────────────
 
-        # Lấy lịch sử gần nhất
-        recent_history = request.env['hlv.loyalty.history'].sudo().search([
-            ('partner_id', '=', root_partner.id),
-        ], order='date desc', limit=10)
+    @http.route('/loyalty/logout', type='http', auth='public', website=True,
+                sitemap=False, methods=['GET', 'POST'])
+    def loyalty_logout(self, **kwargs):
+        request.session.pop(_SESSION_KEY, None)
+        return request.redirect('/loyalty')
 
-        # Tier tiếp theo
-        next_tier = None
-        if root_partner.loyalty_tier_id:
-            next_tier = request.env['hlv.loyalty.tier'].sudo().search([
-                ('min_points', '>', root_partner.loyalty_total_points),
-                ('active', '=', True),
-            ], order='min_points asc', limit=1)
+    # ── Dashboard ─────────────────────────────────────────────────────────
 
-        # Mask thông tin nhạy cảm
-        masked_phone = self._mask_phone(root_partner.phone)
-        masked_email = self._mask_email(root_partner.email)
+    @http.route('/loyalty/dashboard', type='http', auth='public', website=True,
+                sitemap=False)
+    def loyalty_dashboard(self, **kwargs):
+        account = _get_current_account()
+        if not account:
+            return request.redirect('/loyalty')
+        data = _load_partner_data(account.partner_id)
+        data['account'] = account
+        data['success'] = kwargs.get('success')
+        data['error'] = kwargs.get('error')
+        return request.render('hlv_loyalty.loyalty_public_dashboard', data)
 
-        return request.render('hlv_loyalty.loyalty_public_result', {
-            'tiers': tiers,
-            'partner': root_partner,
-            'masked_phone': masked_phone,
-            'masked_email': masked_email,
-            'active_vouchers': active_vouchers,
-            'recent_history': recent_history,
-            'next_tier': next_tier,
-            'keyword': keyword,
-        })
+    # ── Change phone ──────────────────────────────────────────────────────
 
-    @staticmethod
-    def _mask_phone(phone):
-        """Mask SĐT: giữ 3 số đầu + *** + 2 số cuối. VD: 091****78"""
-        if not phone:
-            return ''
-        digits = ''.join(c for c in phone if c.isdigit())
-        if len(digits) < 6:
-            return '***'
-        return digits[:3] + '*' * (len(digits) - 5) + digits[-2:]
+    @http.route('/loyalty/change-phone', type='http', auth='public', website=True,
+                sitemap=False, methods=['POST'])
+    def loyalty_change_phone(self, **post):
+        account = _get_current_account()
+        if not account:
+            return request.redirect('/loyalty')
 
-    @staticmethod
-    def _mask_email(email):
-        """Mask email: giữ 2 ký tự đầu + *** + domain. VD: ng***@gmail.com"""
-        if not email:
-            return ''
-        if '@' not in email:
-            return '***'
-        local, domain = email.split('@', 1)
-        if len(local) <= 2:
-            return local + '***@' + domain
-        return local[:2] + '*' * (len(local) - 2) + '@' + domain
+        new_phone = (post.get('new_phone') or '').strip()
+        if not new_phone:
+            data = _load_partner_data(account.partner_id)
+            data['account'] = account
+            data['phone_error'] = 'Số điện thoại không được để trống.'
+            data['show_phone_modal'] = True
+            return request.render('hlv_loyalty.loyalty_public_dashboard', data)
+
+        if not re.match(r'^[\d\s\-\+]{7,15}$', new_phone):
+            data = _load_partner_data(account.partner_id)
+            data['account'] = account
+            data['phone_error'] = 'Số điện thoại không hợp lệ.'
+            data['show_phone_modal'] = True
+            return request.render('hlv_loyalty.loyalty_public_dashboard', data)
+
+        account.partner_id.sudo().write({'phone': new_phone})
+        return request.redirect('/loyalty/dashboard?success=phone_updated')
+
+    # ── Change password ───────────────────────────────────────────────────
+
+    @http.route('/loyalty/change-password', type='http', auth='public', website=True,
+                sitemap=False, methods=['POST'])
+    def loyalty_change_password(self, **post):
+        account = _get_current_account()
+        if not account:
+            return request.redirect('/loyalty')
+
+        old_password = (post.get('old_password') or '').strip()
+        new_password = (post.get('new_password') or '').strip()
+        confirm_password = (post.get('confirm_password') or '').strip()
+
+        error = None
+        if not old_password or not new_password or not confirm_password:
+            error = 'Vui lòng điền đầy đủ thông tin.'
+        elif not account._verify_password(old_password, account.password_hash):
+            error = 'Mật khẩu hiện tại không đúng.'
+        elif new_password != confirm_password:
+            error = 'Mật khẩu mới và xác nhận không khớp.'
+        elif len(new_password) < 6:
+            error = 'Mật khẩu mới phải có ít nhất 6 ký tự.'
+
+        if error:
+            data = _load_partner_data(account.partner_id)
+            data['account'] = account
+            data['pw_error'] = error
+            data['show_pw_modal'] = True
+            return request.render('hlv_loyalty.loyalty_public_dashboard', data)
+
+        try:
+            account.sudo().set_password(new_password)
+        except UserError as e:
+            data = _load_partner_data(account.partner_id)
+            data['account'] = account
+            data['pw_error'] = str(e)
+            data['show_pw_modal'] = True
+            return request.render('hlv_loyalty.loyalty_public_dashboard', data)
+
+        return request.redirect('/loyalty/dashboard?success=password_changed')
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _mask_phone(phone):
+    if not phone:
+        return ''
+    digits = ''.join(c for c in phone if c.isdigit())
+    if len(digits) < 6:
+        return '***'
+    return digits[:3] + '*' * (len(digits) - 5) + digits[-2:]
+
+
+def _mask_email(email):
+    if not email:
+        return ''
+    if '@' not in email:
+        return '***'
+    local, domain = email.split('@', 1)
+    if len(local) <= 2:
+        return local + '***@' + domain
+    return local[:2] + '*' * (len(local) - 2) + '@' + domain

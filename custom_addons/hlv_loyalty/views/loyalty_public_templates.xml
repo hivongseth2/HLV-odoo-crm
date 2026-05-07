@@ -538,41 +538,73 @@ html { scroll-behavior: smooth; }
 </template>
 
 <!-- ===== HOME PAGE ===== -->
-<template id="loyalty_public_home" name="Tra cuu Loyalty">
+<!-- ===== LOGIN PAGE ===== -->
+<template id="loyalty_public_login" name="Loyalty Portal - Đăng nhập">
     <t t-call="hlv_loyalty.loyalty_public_layout">
 
         <!-- Hero -->
-        <section class="sr-hero">
+        <section class="sr-hero" style="padding-bottom:60px">
             <div class="sr-hero-inner">
-                <h1 class="sr-hero-title">Trang tra cứu hạng khách hàng</h1>
-                <p class="sr-hero-sub">Khám phá đặc quyền và hành trình thăng hạng của bạn tại Hoàng Long Vũ.</p>
-                <div class="sr-search-wrap">
-                    <form action="/loyalty/search" method="post">
-                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                        <div class="sr-glass">
-                            <div class="sr-glass-field">
-                                <span class="ms">person_search</span>
-                                <input type="text" name="keyword" autocomplete="off"
-                                       placeholder="Nhập số điện thoại hoặc email của bạn..."
-                                       t-att-value="keyword or ''"/>
-                            </div>
-                            <button type="submit" class="sr-glass-btn">Tra cứu ngay</button>
-                        </div>
-                    </form>
-                    <div class="sr-search-hints">
-                        <span class="sr-hint">
-                            <span class="ms ms-fill ms-sm">check_circle</span> Bảo mật thông tin
-                        </span>
-                        <span class="sr-hint">
-                            <span class="ms ms-fill ms-sm">check_circle</span> Kết quả tức thì
-                        </span>
-                    </div>
-                    <t t-if="error"><div class="sr-error"><t t-out="error"/></div></t>
-                </div>
+                <h1 class="sr-hero-title">Cổng thành viên thân thiết</h1>
+                <p class="sr-hero-sub">Đăng nhập để xem điểm, voucher và ưu đãi của bạn.</p>
             </div>
         </section>
 
-        <!-- Tier Cards -->
+        <!-- Login card -->
+        <div style="max-width:440px;margin:-40px auto 60px;padding:0 16px">
+            <div style="background:#fff;border-radius:20px;box-shadow:0 12px 40px rgba(0,0,0,.12);padding:40px 36px">
+                <h2 style="font-family:'Manrope',sans-serif;font-size:1.4rem;font-weight:800;margin:0 0 8px;color:#191c1d">Đăng nhập</h2>
+                <p style="margin:0 0 28px;font-size:.88rem;color:#666">Dùng tên đăng nhập hoặc số điện thoại</p>
+
+                <t t-if="error">
+                    <div style="background:#fff0f0;border:1px solid #ffb3b3;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:.88rem;color:#c0392b">
+                        <span class="ms ms-fill ms-sm" style="vertical-align:middle;margin-right:6px">error</span>
+                        <t t-out="error"/>
+                    </div>
+                </t>
+
+                <form action="/loyalty/login" method="post">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <div style="margin-bottom:18px">
+                        <label style="display:block;font-size:.82rem;font-weight:600;color:#454652;margin-bottom:6px">
+                            Tên đăng nhập / Số điện thoại
+                        </label>
+                        <div style="position:relative">
+                            <span class="ms" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#999;font-size:20px">person</span>
+                            <input type="text" name="login"
+                                   t-att-value="login_val or ''"
+                                   autocomplete="username"
+                                   required="required"
+                                   style="width:100%;padding:12px 14px 12px 40px;border:1.5px solid #d0d0d8;border-radius:10px;font-size:.95rem;outline:none;transition:border .2s;font-family:inherit"
+                                   placeholder="vd: nguyenvan_a hoặc 0912345678"/>
+                        </div>
+                    </div>
+                    <div style="margin-bottom:28px">
+                        <label style="display:block;font-size:.82rem;font-weight:600;color:#454652;margin-bottom:6px">
+                            Mật khẩu
+                        </label>
+                        <div style="position:relative">
+                            <span class="ms" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#999;font-size:20px">lock</span>
+                            <input type="password" name="password"
+                                   autocomplete="current-password"
+                                   required="required"
+                                   style="width:100%;padding:12px 14px 12px 40px;border:1.5px solid #d0d0d8;border-radius:10px;font-size:.95rem;outline:none;transition:border .2s;font-family:inherit"
+                                   placeholder="Mật khẩu của bạn"/>
+                        </div>
+                    </div>
+                    <button type="submit"
+                            style="width:100%;padding:14px;background:linear-gradient(135deg,#1e89ca,#0d75b4);color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:.3px">
+                        Đăng nhập
+                    </button>
+                </form>
+
+                <p style="margin:24px 0 0;font-size:.8rem;text-align:center;color:#999">
+                    Chưa có tài khoản? Vui lòng liên hệ bộ phận hỗ trợ.
+                </p>
+            </div>
+        </div>
+
+        <!-- Tier Cards preview -->
         <section class="sr-section">
             <div class="sr-cont">
                 <h2 class="sr-sec-title">Hệ thống cấp bậc thành viên</h2>
@@ -630,6 +662,442 @@ html { scroll-behavior: smooth; }
                 </div>
             </div>
         </section>
+
+    </t>
+</template>
+
+<!-- ===== HOME (redirect to login) — kept for compat ===== -->
+<template id="loyalty_public_home" name="Tra cuu Loyalty">
+    <t t-call="hlv_loyalty.loyalty_public_login"/>
+</template>
+
+<!-- ===== DASHBOARD (authenticated) ===== -->
+<template id="loyalty_public_dashboard" name="Loyalty Portal - Dashboard">
+    <t t-call="hlv_loyalty.loyalty_public_layout">
+
+        <!-- Top bar -->
+        <div style="background:#fff;border-bottom:1px solid #e7e8e9;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+            <a href="/loyalty" style="font-weight:700;font-size:1.1rem;color:var(--c-pri);font-family:'Manrope',sans-serif;text-decoration:none">
+                🏆 Members Portal
+            </a>
+            <div style="display:flex;align-items:center;gap:12px">
+                <span style="font-size:.88rem;color:#666">
+                    Xin chào, <strong><t t-out="partner.name"/></strong>
+                </span>
+                <a href="/loyalty/logout"
+                   style="padding:7px 16px;background:#f3f4f5;border-radius:20px;font-size:.82rem;font-weight:600;color:#454652;text-decoration:none">
+                    Đăng xuất
+                </a>
+            </div>
+        </div>
+
+        <!-- Success / error flash -->
+        <t t-if="success">
+            <div style="max-width:900px;margin:16px auto 0;padding:0 16px">
+                <div style="background:#eaf7ee;border:1px solid #b2dfca;border-radius:10px;padding:12px 16px;font-size:.88rem;color:#256e45">
+                    <t t-if="success == 'phone_updated'">✓ Số điện thoại đã được cập nhật.</t>
+                    <t t-elif="success == 'password_changed'">✓ Mật khẩu đã được đổi thành công.</t>
+                    <t t-else="">✓ Cập nhật thành công.</t>
+                </div>
+            </div>
+        </t>
+
+        <!-- Profile hero -->
+        <section class="sr-result-hero">
+            <div class="sr-rc">
+                <div class="sr-result-top">
+                    <div style="display:flex;align-items:center;gap:20px">
+                        <!-- Avatar -->
+                        <div style="width:72px;height:72px;border-radius:50%;overflow:hidden;background:#d0d8e8;flex-shrink:0;border:3px solid rgba(255,255,255,.4)">
+                            <t t-if="partner.image_1920">
+                                <img t-att-src="'/web/image/res.partner/' + str(partner.id) + '/image_1920'"
+                                     style="width:100%;height:100%;object-fit:cover"
+                                     t-att-alt="partner.name or ''"/>
+                            </t>
+                            <t t-else="">
+                                <span class="ms ms-fill" style="font-size:40px;color:#fff;display:flex;align-items:center;justify-content:center;height:100%">account_circle</span>
+                            </t>
+                        </div>
+                        <div>
+                            <h1 class="sr-cust-name"><t t-out="partner.name"/></h1>
+                            <div class="sr-cust-meta">
+                                <t t-if="masked_phone">
+                                    <span class="sr-meta-item">
+                                        <span class="ms">call</span>
+                                        <t t-out="masked_phone"/>
+                                    </span>
+                                </t>
+                                <t t-if="masked_email">
+                                    <span class="sr-meta-item">
+                                        <span class="ms">mail</span>
+                                        <t t-out="masked_email"/>
+                                    </span>
+                                </t>
+                                <t t-if="partner.ref">
+                                    <span class="sr-meta-item">
+                                        <span class="ms">verified_user</span>
+                                        ID: <t t-out="partner.ref"/>
+                                    </span>
+                                </t>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Balance pill -->
+                    <div class="sr-bal-pill">
+                        <div class="sr-bal-avatar">
+                            <t t-if="partner.loyalty_tier_id and partner.loyalty_tier_id.image_url">
+                                <img class="sr-bal-avatar-img"
+                                     t-att-src="partner.loyalty_tier_id.image_url"
+                                     t-att-alt="partner.loyalty_tier_id.name or 'Tier image'"/>
+                            </t>
+                            <t t-else="">
+                                <span class="ms ms-fill ms-lg">workspace_premium</span>
+                            </t>
+                            <t t-if="partner.loyalty_tier_id">
+                                <span class="sr-bal-tier-tag">
+                                    <t t-out="(partner.loyalty_tier_id.name or '').upper()"/>
+                                </span>
+                            </t>
+                        </div>
+                        <div>
+                            <div class="sr-bal-lbl">Current Balance</div>
+                            <div>
+                                <span class="sr-bal-num"><t t-out="'{:,}'.format(partner.loyalty_total_points)"/></span>
+                                <span class="sr-bal-unit"> PTS</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="sr-wm" aria-hidden="true">
+                <span class="ms ms-xl">stat_3</span>
+            </div>
+        </section>
+
+        <!-- Body -->
+        <div class="sr-body">
+
+            <!-- Profile actions row -->
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px">
+                <!-- Change phone button -->
+                <button onclick="document.getElementById('modal-phone').style.display='flex'"
+                        style="padding:10px 18px;border:1.5px solid #d0d0d8;border-radius:10px;background:#fff;font-size:.88rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;font-family:inherit">
+                    <span class="ms" style="font-size:18px">edit</span> Đổi số điện thoại
+                </button>
+                <!-- Change password button -->
+                <button onclick="document.getElementById('modal-pw').style.display='flex'"
+                        style="padding:10px 18px;border:1.5px solid #d0d0d8;border-radius:10px;background:#fff;font-size:.88rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;font-family:inherit">
+                    <span class="ms" style="font-size:18px">lock_reset</span> Đổi mật khẩu
+                </button>
+            </div>
+
+            <!-- Row: Progress + Actions -->
+            <div class="sr-main-row">
+                <!-- Progress card -->
+                <t t-if="next_tier">
+                    <t t-set="pts"      t-value="partner.loyalty_total_points"/>
+                    <t t-set="cur_min"  t-value="partner.loyalty_tier_id.min_points if partner.loyalty_tier_id else 0"/>
+                    <t t-set="needed"   t-value="next_tier.min_points - cur_min"/>
+                    <t t-set="pct"      t-value="min(100, int((pts - cur_min) * 100 / max(needed, 1)))"/>
+                    <t t-set="grad_s"   t-value="partner.loyalty_tier_id.badge_color if partner.loyalty_tier_id else '#cd7f32'"/>
+                    <t t-set="grad_e"   t-value="next_tier.badge_color or '#d4a017'"/>
+                    <div class="sr-card">
+                        <div class="sr-pc-header">
+                            <div>
+                                <h3 class="sr-card-title">Tiến trình hạng <t t-out="next_tier.name"/></h3>
+                                <p class="sr-card-sub">
+                                    Tích lũy thêm
+                                    <strong><t t-out="'{:,}'.format(next_tier.min_points - pts)"/> điểm</strong>
+                                    để thăng hạng
+                                </p>
+                            </div>
+                            <div class="sr-pc-need">
+                                <div class="sr-pc-need-lbl">Cần thiết</div>
+                                <div class="sr-pc-need-num"><t t-out="'{:,}'.format(next_tier.min_points)"/> PTS</div>
+                            </div>
+                        </div>
+                        <div class="sr-prog-bg">
+                            <div class="sr-prog-fill"
+                                 t-att-style="'width:' + str(pct) + '%; background:linear-gradient(90deg,' + grad_s + ',' + grad_e + ')'"/>
+                        </div>
+                        <div class="sr-prog-labels">
+                            <span>
+                                <t t-out="partner.loyalty_tier_id.name if partner.loyalty_tier_id else 'Mới'"/>
+                                (<t t-out="'{:,}'.format(cur_min)"/>)
+                            </span>
+                            <span>
+                                <t t-out="next_tier.name"/> (<t t-out="'{:,}'.format(next_tier.min_points)"/>)
+                            </span>
+                        </div>
+                        <div class="sr-ghost" aria-hidden="true">
+                            <span class="ms" style="font-size:200px">trophy</span>
+                        </div>
+                    </div>
+                </t>
+                <t t-else="">
+                    <div class="sr-card sr-top-tier">
+                        <span class="ms ms-lg ms-fill" style="color:var(--c-sec);display:block;margin-bottom:12px;">emoji_events</span>
+                        <h3 class="sr-card-title">Chúc mừng!</h3>
+                        <p class="sr-card-sub">Bạn đã đạt cấp bậc cao nhất
+                            <t t-if="partner.loyalty_tier_id">
+                                — <strong><t t-out="partner.loyalty_tier_id.name"/></strong>
+                            </t>
+                        </p>
+                    </div>
+                </t>
+
+                <!-- Quick info panel -->
+                <div class="sr-actions">
+                    <h3 class="sr-actions-title">Thao tác nhanh</h3>
+                    <div class="sr-actions-grid">
+                        <a href="#loyalty-history" class="sr-act-btn">
+                            <span class="ms">history</span>
+                            <span>Lịch sử</span>
+                        </a>
+                        <a href="#loyalty-vouchers" class="sr-act-btn">
+                            <span class="ms">redeem</span>
+                            <t t-if="active_vouchers">
+                                <span><t t-out="len(active_vouchers)"/> Voucher</span>
+                            </t>
+                            <t t-else=""><span>Voucher</span></t>
+                        </a>
+                        <a href="#loyalty-tiers" class="sr-act-btn">
+                            <span class="ms ms-fill">workspace_premium</span>
+                            <t t-if="partner.loyalty_tier_id">
+                                <span><t t-out="partner.loyalty_tier_id.name"/></span>
+                            </t>
+                            <t t-else=""><span>Ưu đãi hạng</span></t>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Vouchers -->
+            <div id="loyalty-vouchers" class="sr-voucher-section scroll-mt">
+                <h3 class="sr-vs-title">
+                    <t t-if="active_vouchers">
+                        Voucher đang có (<t t-out="len(active_vouchers)"/>)
+                    </t>
+                    <t t-else="">Voucher của bạn</t>
+                </h3>
+                <t t-if="active_vouchers">
+                    <div class="sr-voucher-list">
+                        <t t-foreach="active_vouchers" t-as="v">
+                            <div class="sr-voucher-pill">
+                                <span class="ms">confirmation_number</span>
+                                <span class="sr-v-code"><t t-out="v.code"/></span>
+                                <span class="sr-v-val">
+                                    <t t-if="v.reward_type == 'free_shipping'">Miễn phí vận chuyển</t>
+                                    <t t-elif="v.reward_type == 'gift'">
+                                        Quà tặng kèm
+                                        <t t-if="v.gift_product_id">
+                                            (<t t-out="v.gift_qty"/> x <t t-out="v.gift_product_id.name"/>)
+                                        </t>
+                                    </t>
+                                    <t t-elif="v.discount_type == 'fixed'">
+                                        – <t t-out="'{:,.0f}'.format(v.discount_value)"/>đ
+                                    </t>
+                                    <t t-else="">– <t t-out="v.discount_value"/>%
+                                        <t t-if="v.max_discount_amount">
+                                            (tối đa <t t-out="'{:,.0f}'.format(v.max_discount_amount)"/>đ)
+                                        </t>
+                                    </t>
+                                    <t t-if="v.date_expiry">
+                                        · HSD <t t-out="v.date_expiry.strftime('%d/%m/%Y')"/>
+                                    </t>
+                                </span>
+                            </div>
+                        </t>
+                    </div>
+                </t>
+                <t t-else="">
+                    <div class="sr-empty" style="padding:24px">
+                        <span class="ms" style="font-size:36px;display:block;margin-bottom:8px;opacity:.4">redeem</span>
+                        <p style="margin:0;font-size:.9rem">Bạn chưa có Voucher nào. Tích điểm để đổi Voucher!</p>
+                    </div>
+                </t>
+            </div>
+
+            <!-- History -->
+            <div id="loyalty-history" class="sr-hist-section scroll-mt">
+                <div class="sr-hist-header">
+                    <h3 class="sr-hist-title">Lịch sử tích lũy gần đây</h3>
+                </div>
+                <div class="sr-tbl-wrap">
+                    <t t-if="recent_history">
+                        <table class="sr-tbl">
+                            <thead>
+                                <tr>
+                                    <th>Ngày giao dịch</th>
+                                    <th>Loại hình</th>
+                                    <th>Số điểm</th>
+                                    <th>Nội dung chi tiết</th>
+                                    <th style="text-align:right">Trạng thái</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="recent_history" t-as="h">
+                                    <tr>
+                                        <td>
+                                            <div class="td-date"><t t-out="h.date.strftime('%d Thg %m, %Y')"/></div>
+                                            <div class="td-time"><t t-out="h.date.strftime('%H:%M')"/></div>
+                                        </td>
+                                        <td>
+                                            <t t-if="h.transaction_type == 'earn'">
+                                                <span class="sr-badge badge-earn"><span class="ms">shopping_bag</span> Mua hàng</span>
+                                            </t>
+                                            <t t-elif="h.transaction_type == 'redeem'">
+                                                <span class="sr-badge badge-redeem"><span class="ms">redeem</span> Đổi Voucher</span>
+                                            </t>
+                                            <t t-elif="h.transaction_type == 'return'">
+                                                <span class="sr-badge badge-return"><span class="ms">undo</span> Hoàn hàng</span>
+                                            </t>
+                                            <t t-else="">
+                                                <span class="sr-badge badge-manual"><span class="ms">edit_note</span> Thủ công</span>
+                                            </t>
+                                        </td>
+                                        <td t-att-class="'td-pts ' + ('pos' if h.point_amount > 0 else 'neg')">
+                                            <t t-out="('+' if h.point_amount > 0 else '') + '{:,}'.format(h.point_amount)"/>
+                                        </td>
+                                        <td class="td-desc"><t t-out="h.description or ''"/></td>
+                                        <td class="td-status">Hoàn tất</td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+                    </t>
+                    <t t-else="">
+                        <div class="sr-empty">
+                            <span class="ms">inbox</span>
+                            <p>Chưa có giao dịch điểm nào.</p>
+                        </div>
+                    </t>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tier reference footer -->
+        <section id="loyalty-tiers" class="sr-section sr-section-bg scroll-mt">
+            <div class="sr-cont">
+                <h2 class="sr-sec-title">Hệ thống cấp bậc thành viên</h2>
+                <div class="sr-divider"></div>
+                <div class="sr-tier-grid">
+                    <t t-foreach="tiers" t-as="tier">
+                        <t t-set="is_current" t-value="partner.loyalty_tier_id and tier.id == partner.loyalty_tier_id.id"/>
+                        <t t-set="card_folder" t-value="'classic_tier_card' if tier.color == 'brown' else ('silver_tier_card' if tier.color == 'silver' else ('gold_tier_card' if tier.color == 'gold' else 'diamond_tier_card'))"/>
+                        <div t-att-class="'sr-tier-card' + (' current' if is_current else '')">
+                            <div class="sr-tier-visual">
+                                <t t-if="is_current">
+                                    <span class="tc-badge you">BẠN</span>
+                                </t>
+                                <img class="sr-tier-card-asset"
+                                     t-att-src="'/hlv_loyalty/static/description/icon/' + card_folder + '/card.svg'"
+                                     t-att-alt="tier.name or 'Tier Card'"/>
+                                <div t-att-class="'tc-benefits-popup tc-pop-' + (tier.color or 'brown')">
+                                    <div class="tc-pop-header">
+                                        <span class="tc-pop-title">Quyền lợi hạng <t t-out="tier.name"/></span>
+                                        <button class="tc-pop-close" aria-label="Đóng">&#x2715;</button>
+                                    </div>
+                                    <t t-if="tier.benefit_ids">
+                                        <ul class="tc-pop-list">
+                                            <t t-foreach="tier.benefit_ids" t-as="b">
+                                                <li class="tc-pop-item">
+                                                    <span class="tc-icon-badge"><i t-att-class="'fa ' + (b.icon or 'fa-check')" aria-hidden="true"/></span>
+                                                    <span><t t-out="b.name"/></span>
+                                                </li>
+                                            </t>
+                                        </ul>
+                                    </t>
+                                    <t t-else="">
+                                        <p class="tc-pop-empty">Chưa có quyền lợi.</p>
+                                    </t>
+                                </div>
+                            </div>
+                            <div class="tc-card-label"><t t-out="tier.name"/></div>
+                            <div t-att-class="'tc-hover-benefits tc-hb-' + (tier.color or 'brown')">
+                                <div class="tc-hb-inner">
+                                    <t t-if="tier.benefit_ids">
+                                        <ul class="tc-hb-list">
+                                            <t t-foreach="tier.benefit_ids" t-as="b">
+                                                <li class="tc-hb-item">
+                                                    <span class="tc-hb-ico"><i t-att-class="'fa ' + (b.icon or 'fa-check')" aria-hidden="true"/></span>
+                                                    <span><t t-out="b.name"/></span>
+                                                </li>
+                                            </t>
+                                        </ul>
+                                    </t>
+                                    <t t-else=""><p style="margin:0;opacity:.5;font-size:.8rem">Chưa có quyền lợi.</p></t>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </div>
+            </div>
+        </section>
+
+        <!-- Modal: Change phone -->
+        <div id="modal-phone"
+             style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center">
+            <div style="background:#fff;border-radius:16px;padding:36px;width:90%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+                <h3 style="margin:0 0 20px;font-family:'Manrope',sans-serif">Đổi số điện thoại</h3>
+                <t t-if="phone_error">
+                    <div style="background:#fff0f0;border:1px solid #ffb3b3;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:.85rem;color:#c0392b">
+                        <t t-out="phone_error"/>
+                    </div>
+                </t>
+                <form action="/loyalty/change-phone" method="post">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <div style="margin-bottom:20px">
+                        <label style="display:block;font-size:.82rem;font-weight:600;color:#454652;margin-bottom:6px">Số điện thoại mới</label>
+                        <input type="tel" name="new_phone"
+                               t-att-value="partner.phone or ''"
+                               required="required"
+                               style="width:100%;padding:11px 14px;border:1.5px solid #d0d0d8;border-radius:8px;font-size:.95rem;font-family:inherit"/>
+                    </div>
+                    <div style="display:flex;gap:10px">
+                        <button type="submit" style="flex:1;padding:12px;background:var(--c-pri);color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:inherit">Xác nhận</button>
+                        <button type="button" onclick="document.getElementById('modal-phone').style.display='none'"
+                                style="flex:1;padding:12px;background:#f3f4f5;color:#454652;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;font-family:inherit">Hủy</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal: Change password -->
+        <div id="modal-pw"
+             t-att-style="'display:' + ('flex' if show_pw_modal else 'none') + ';position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center'">
+            <div style="background:#fff;border-radius:16px;padding:36px;width:90%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+                <h3 style="margin:0 0 20px;font-family:'Manrope',sans-serif">Đổi mật khẩu</h3>
+                <t t-if="pw_error">
+                    <div style="background:#fff0f0;border:1px solid #ffb3b3;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:.85rem;color:#c0392b">
+                        <t t-out="pw_error"/>
+                    </div>
+                </t>
+                <form action="/loyalty/change-password" method="post">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <div style="margin-bottom:14px">
+                        <label style="display:block;font-size:.82rem;font-weight:600;color:#454652;margin-bottom:6px">Mật khẩu hiện tại</label>
+                        <input type="password" name="old_password" required="required"
+                               style="width:100%;padding:11px 14px;border:1.5px solid #d0d0d8;border-radius:8px;font-size:.95rem;font-family:inherit"/>
+                    </div>
+                    <div style="margin-bottom:14px">
+                        <label style="display:block;font-size:.82rem;font-weight:600;color:#454652;margin-bottom:6px">Mật khẩu mới</label>
+                        <input type="password" name="new_password" required="required"
+                               style="width:100%;padding:11px 14px;border:1.5px solid #d0d0d8;border-radius:8px;font-size:.95rem;font-family:inherit"/>
+                    </div>
+                    <div style="margin-bottom:20px">
+                        <label style="display:block;font-size:.82rem;font-weight:600;color:#454652;margin-bottom:6px">Xác nhận mật khẩu mới</label>
+                        <input type="password" name="confirm_password" required="required"
+                               style="width:100%;padding:11px 14px;border:1.5px solid #d0d0d8;border-radius:8px;font-size:.95rem;font-family:inherit"/>
+                    </div>
+                    <div style="display:flex;gap:10px">
+                        <button type="submit" style="flex:1;padding:12px;background:var(--c-pri);color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:inherit">Đổi mật khẩu</button>
+                        <button type="button" onclick="document.getElementById('modal-pw').style.display='none'"
+                                style="flex:1;padding:12px;background:#f3f4f5;color:#454652;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;font-family:inherit">Hủy</button>
+                    </div>
+                </form>
+            </div>
+        </div>
 
     </t>
 </template>
