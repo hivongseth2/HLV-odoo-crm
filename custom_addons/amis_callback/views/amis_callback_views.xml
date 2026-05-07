@@ -182,6 +182,7 @@
                     <group string="meInvoice - Hóa đơn điện tử đầu ra">
                         <group>
                             <field name="meinvoice_enabled"/>
+                            <field name="meinvoice_inbot_client_id"/>
                             <field name="meinvoice_api_url"/>
                             <field name="meinvoice_app_id"/>
                             <field name="meinvoice_taxcode"/>

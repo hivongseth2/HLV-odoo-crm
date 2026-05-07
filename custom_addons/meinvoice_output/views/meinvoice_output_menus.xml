@@ -7,12 +7,19 @@
               sequence="98"
               groups="base.group_user"/>
 
-    <!-- Danh sách hóa đơn -->
+    <!-- Danh sách hóa đơn kéo từ meInvoice về -->
     <menuitem id="menu_meinvoice_output_invoice_list"
-              name="Hóa đơn điện tử đầu ra"
+              name="Hóa đơn đầu ra (Inbot)"
               parent="menu_meinvoice_output_root"
               action="action_meinvoice_output_invoice"
               sequence="10"/>
+
+    <!-- Phát hành HĐĐT mới (meinvoice.invoice từ amis_callback) -->
+    <menuitem id="menu_meinvoice_publish_invoice"
+              name="Phát hành HĐĐT"
+              parent="menu_meinvoice_output_root"
+              action="amis_callback.action_meinvoice_invoice"
+              sequence="15"/>
 
     <!-- Lấy hóa đơn (wizard) -->
     <menuitem id="menu_meinvoice_output_fetch"

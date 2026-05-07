@@ -23,7 +23,7 @@ Tính năng:
     'author': 'Your Company',
     'website': '',
     'license': 'LGPL-3',
-    'depends': ['base', 'sale_management', 'base_setup'],
+    'depends': ['base', 'sale_management', 'base_setup', 'amis_callback'],
     'data': [
         'security/ir.model.access.csv',
         'data/meinvoice_output_data.xml',

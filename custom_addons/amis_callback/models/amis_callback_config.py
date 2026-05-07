@@ -140,6 +140,11 @@ class AmisCallbackConfig(models.Model):
         default=False,
         help='Bật để dùng MISA meInvoice API phát hành hóa đơn điện tử đầu ra thay vì SAInvoice ACT.',
     )
+    meinvoice_inbot_client_id = fields.Char(
+        string='meInvoice Inbot Client ID',
+        help='ClientID dùng cho meInvoice Inbot API (/api2) — lấy danh sách hóa đơn đầu ra.\n'
+             'Khác với App ID dùng cho /api/integration. Do MISA cấp khi đăng ký Inbot.',
+    )
     meinvoice_api_url = fields.Char(
         string='meInvoice API URL',
         default='https://api.meinvoice.vn/api/integration',

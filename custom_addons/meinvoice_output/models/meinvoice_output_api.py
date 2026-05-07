@@ -39,20 +39,32 @@ class MeinvoiceOutputAPI(models.AbstractModel):
 
     # ─── Config helpers ───────────────────────────────────────────────────────
 
+    def _get_amis_config(self):
+        """Lấy record cấu hình từ amis.callback.config (dùng chung credentials)."""
+        config = self.env['amis.callback.config'].sudo().search([], limit=1, order='id asc')
+        if not config:
+            raise UserError(_(
+                'Chưa có cấu hình AMIS Callback. '
+                'Vui lòng tạo cấu hình trong menu AMIS Callback → Cấu hình.'
+            ))
+        return config
+
     def _get_base_url(self):
-        env_mode = self.env['ir.config_parameter'].sudo().get_param(
-            'meinvoice_output.environment', 'sandbox'
-        )
-        return BASE_URLS.get(env_mode, BASE_URLS['sandbox'])
+        """Tạo base URL cho Inbot API (/api2) từ integration URL của amis_callback."""
+        from urllib.parse import urlparse
+        config = self._get_amis_config()
+        api_url = (config.meinvoice_api_url or 'https://api.meinvoice.vn/api/integration').rstrip('/')
+        parsed = urlparse(api_url)
+        return '%s://%s/api2' % (parsed.scheme, parsed.netloc)
 
     def _get_credentials(self):
-        p = self.env['ir.config_parameter'].sudo()
+        config = self._get_amis_config()
         return {
-            'client_id': p.get_param('meinvoice_output.client_id', ''),
-            'app_id':    p.get_param('meinvoice_output.app_id', ''),
-            'username':  p.get_param('meinvoice_output.username', ''),
-            'password':  p.get_param('meinvoice_output.password', ''),
-            'tax_code':  p.get_param('meinvoice_output.tax_code', ''),
+            'client_id': config.meinvoice_inbot_client_id or '',
+            'app_id':    config.meinvoice_app_id or '',
+            'username':  config.meinvoice_username or '',
+            'password':  config.meinvoice_password or '',
+            'tax_code':  config.meinvoice_taxcode or '',
         }
 
     # ─── Token management ─────────────────────────────────────────────────────
