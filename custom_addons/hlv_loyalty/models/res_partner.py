@@ -32,12 +32,22 @@ class ResPartner(models.Model):
         'hlv.loyalty.portal.account', 'partner_id', string='Tài khoản Portal',
     )
 
-    @api.depends('loyalty_history_ids', 'loyalty_history_ids.point_amount')
+    @api.depends(
+        'loyalty_history_ids', 'loyalty_history_ids.point_amount',
+        'child_ids.loyalty_history_ids', 'child_ids.loyalty_history_ids.point_amount',
+    )
     def _compute_loyalty_total_points(self):
+        History = self.env['hlv.loyalty.history']
         for partner in self:
-            partner.loyalty_total_points = sum(
-                partner.loyalty_history_ids.mapped('point_amount')
-            )
+            if not partner.parent_id:
+                # Root partner: aggregate own + all direct children
+                all_ids = [partner.id] + partner.child_ids.ids
+                records = History.search([('partner_id', 'in', all_ids)])
+                partner.loyalty_total_points = sum(records.mapped('point_amount'))
+            else:
+                partner.loyalty_total_points = sum(
+                    partner.loyalty_history_ids.mapped('point_amount')
+                )
 
     @api.depends('loyalty_total_points')
     def _compute_loyalty_tier(self):

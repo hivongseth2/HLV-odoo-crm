@@ -44,6 +44,9 @@
             <field name="username"/>
             <field name="phone"/>
             <field name="active"/>
+            <button name="action_reset_password_wizard" string="Reset mật khẩu"
+                    type="object" icon="fa-key" class="btn-sm"
+                    groups="sales_team.group_sale_manager"/>
         </list>
     </field>
 </record>

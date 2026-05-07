@@ -22,15 +22,17 @@ def _get_current_account():
 def _load_partner_data(partner):
     """Load all dashboard data for a partner."""
     root = partner.commercial_partner_id or partner
+    # Collect root + all direct children to catch points on child contacts/sub-companies
+    all_partner_ids = [root.id] + root.child_ids.ids
     tiers = request.env['hlv.loyalty.tier'].sudo().search(
         [('active', '=', True)], order='min_points asc'
     )
     active_vouchers = request.env['hlv.loyalty.voucher'].sudo().search([
-        ('partner_id', '=', root.id),
+        ('partner_id', 'in', all_partner_ids),
         ('state', '=', 'active'),
     ])
     recent_history = request.env['hlv.loyalty.history'].sudo().search([
-        ('partner_id', '=', root.id),
+        ('partner_id', 'in', all_partner_ids),
     ], order='date desc', limit=10)
     next_tier = None
     if root.loyalty_tier_id:
