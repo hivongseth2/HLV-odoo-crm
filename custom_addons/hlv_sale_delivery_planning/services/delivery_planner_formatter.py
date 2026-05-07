@@ -161,12 +161,17 @@ class DeliveryPlannerServiceFormatter(models.AbstractModel):
         ]
 
         # --- Tổng số lượng đã đóng kiện theo tên sản phẩm ---
+        # Chỉ đếm kiện còn trong kho (is_shipped=False).
+        # Kiện đã giao (location.usage == 'customer') đã nằm trong qty_delivered rồi,
+        # nếu trừ thêm sẽ double-count và làm "Thiếu" bị nhỏ hơn thực tế.
         qty_packed_map = {}
         total_packages_count = 0
         package_groups = so_packages_dict.get(so.id, [])
         for group in package_groups:
             for pack in group.get('packages', []):
                 total_packages_count += 1
+                if pack.get('is_shipped'):
+                    continue  # Đã giao, items đã tính trong qty_delivered
                 for prod_name, qty in pack.get('product_map', {}).items():
                     qty_packed_map[prod_name] = qty_packed_map.get(prod_name, 0.0) + qty
 
