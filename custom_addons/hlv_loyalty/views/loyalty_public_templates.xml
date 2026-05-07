@@ -136,13 +136,14 @@ a { color:inherit; }
 .sr-tier-card-asset {
     width:100%;
     height:auto;
+    max-width:100%;
     display:block;
     border-radius:16px;
 }
 .sr-tier-visual {
     position:relative;
     border-radius:16px;
-    overflow:hidden;
+    overflow:visible;
 }
 .sr-tier-card.current .sr-tier-visual {
     outline:2px solid var(--c-sec);
