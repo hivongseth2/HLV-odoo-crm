@@ -13,24 +13,24 @@ class MeinvoiceInvoice(models.Model):
 
     _name = 'meinvoice.invoice'
     _description = 'Hóa đơn điện tử meInvoice'
-    _rec_name = 'display_name'
+    _rec_name = 'name'
     _order = 'create_date desc'
 
-    display_name = fields.Char(
+    name = fields.Char(
         string='Tiêu đề',
-        compute='_compute_display_name',
+        compute='_compute_name',
         store=True,
     )
 
     @api.depends('sale_order_id', 'inv_no', 'inv_series')
-    def _compute_display_name(self):
+    def _compute_name(self):
         for rec in self:
             if rec.inv_no:
-                rec.display_name = '%s %s' % (rec.inv_series or '', rec.inv_no)
+                rec.name = '%s %s' % (rec.inv_series or '', rec.inv_no)
             elif rec.sale_order_id:
-                rec.display_name = 'Nháp — %s' % rec.sale_order_id.name
+                rec.name = 'Nháp — %s' % rec.sale_order_id.name
             else:
-                rec.display_name = 'Nháp #%d' % (rec.id or 0)
+                rec.name = 'Nháp #%d' % (rec.id or 0)
 
     sale_order_id = fields.Many2one(
         'sale.order', string='Đơn hàng', ondelete='restrict', required=True, readonly=True, index=True,
