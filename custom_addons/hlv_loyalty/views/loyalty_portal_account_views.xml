@@ -21,7 +21,7 @@
                 </div>
                 <group>
                     <group string="Thông tin tài khoản">
-                        <field name="partner_id" domain="[('is_company','=',True),('customer_rank','>',0)]" context="{'show_vat': True}"/>
+                        <field name="partner_id" domain="[('is_company','=',True),('parent_id','=',False)]" context="{'show_vat': True}"/>
                         <field name="phone"/>
                         <field name="active"/>
                     </group>
@@ -40,7 +40,7 @@
     <field name="model">hlv.loyalty.portal.account</field>
     <field name="arch" type="xml">
         <list string="Tài khoản Portal Loyalty" editable="bottom">
-            <field name="partner_id" domain="[('is_company','=',True),('customer_rank','>',0)]" context="{'show_vat': True}"/>
+            <field name="partner_id" domain="[('is_company','=',True),('parent_id','=',False)]" context="{'show_vat': True}"/>
             <field name="username"/>
             <field name="phone"/>
             <field name="active"/>
