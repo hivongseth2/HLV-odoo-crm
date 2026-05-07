@@ -127,20 +127,20 @@ a { color:inherit; }
 /* ── Tier Grid ── */
 .sr-tier-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:32px; }
 .sr-tier-card {
-    background:var(--c-surf-0);
-    border-radius:8px;
-    padding:32px;
+    background:transparent;
+    border-radius:16px;
+    padding:0;
     position:relative;
     transition:transform .3s cubic-bezier(.4,0,.2,1), box-shadow .3s;
 }
-.sr-tier-card:hover { transform:translateY(-8px); box-shadow:0 20px 50px rgba(0,6,102,.12); }
-.sr-tier-card.dark { background:var(--c-pri); color:#fff; }
-.sr-tier-card.dark .tc-desc,
-.sr-tier-card.dark .tc-pts-unit,
-.sr-tier-card.dark .tc-benefit { color:rgba(255,255,255,.65); }
-.sr-tier-card.dark .tc-pts-num { color:#fff; }
-.sr-tier-card.dark .tc-bar-bg { background:rgba(255,255,255,.1); }
+.sr-tier-card:hover { transform:translateY(-6px); box-shadow:0 20px 50px rgba(0,6,102,.12); }
 .sr-tier-card.current { box-shadow:0 0 0 2px var(--c-sec),0 8px 32px rgba(0,6,102,.1); }
+.sr-tier-card-asset {
+    width:100%;
+    height:auto;
+    display:block;
+    border-radius:16px;
+}
 
 /* Floating icon box (top-left) */
 .tc-icon {
@@ -193,6 +193,14 @@ a { color:inherit; }
 .tc-badge.popular { background:var(--c-sec-c); color:#5c420c; }
 .tc-badge.you     { background:var(--c-sec);   color:#fff; }
 
+.tc-card-label {
+    margin-top:10px;
+    font-size:.95rem;
+    font-weight:800;
+    color:var(--c-ink);
+    text-align:left;
+}
+
 .tc-name { font-size:1.5rem; font-weight:900; margin:36px 0 4px; }
 .sr-tier-card.dark .tc-name { color:#fff; }
 .tc-desc { font-size:.875rem; color:var(--c-ink-v); margin-bottom:24px; }
@@ -211,7 +219,7 @@ a { color:inherit; }
 
 /* ── Result Hero ── */
 .sr-result-hero {
-    background: linear-gradient(135deg,#000666 0%,#1a237e 100%);
+    background: linear-gradient(135deg, #1e89ca 0%, #0d75b4 55%, #1779b4 100%);
     padding: 48px 32px 96px;
     position: relative;
     overflow: hidden;
@@ -460,63 +468,16 @@ html { scroll-behavior: smooth; }
                 <div class="sr-divider"></div>
                 <div class="sr-tier-grid">
                     <t t-foreach="tiers" t-as="tier">
-                        <t t-set="is_dark"    t-value="tier_last"/>
                         <t t-set="is_popular" t-value="not tier_last and not tier_first and tier_index == tier_size - 2"/>
-                        <t t-set="tc_color"   t-value="tier.badge_color or '#cd7f32'"/>
-                        <div t-att-class="'sr-tier-card' + (' dark' if is_dark else '')">
+                        <t t-set="card_folder" t-value="'classic_tier_card' if tier.color == 'brown' else ('silver_tier_card' if tier.color == 'silver' else ('gold_tier_card' if tier.color == 'gold' else 'diamond_tier_card'))"/>
+                        <div class="sr-tier-card">
                             <t t-if="is_popular">
                                 <span class="tc-badge popular">MOST POPULAR</span>
                             </t>
-                            <!-- Floating icon (click to view benefits) -->
-                            <div t-att-class="'tc-icon tc-icon-btn'"
-                                 t-att-style="'background:' + tc_color + ('18' if not is_dark else '; background:rgba(255,255,255,.08)')"
-                                 title="Xem quyền lợi hạng" tabindex="0" role="button">
-                                <t t-if="tier.image_url">
-                                    <img class="tc-tier-img"
-                                         t-att-src="tier.image_url"
-                                         t-att-alt="tier.name or 'Tier icon'"/>
-                                </t>
-                                <t t-else="">
-                                    <i t-att-class="'fa ' + (tier.icon or 'fa-medal')"
-                                       t-att-style="'color:' + ('rgba(255,220,80,.9)' if is_dark else tc_color)"/>
-                                </t>
-                            </div>
-                            <!-- Benefits popup (positioned relative to card) -->
-                            <div t-att-class="'tc-benefits-popup' + (' tc-pop-dark' if is_dark else '')">
-                                <div class="tc-pop-title">Quyền lợi hạng <t t-out="tier.name"/></div>
-                                <t t-if="tier.benefit_ids">
-                                    <ul class="tc-pop-list">
-                                        <t t-foreach="tier.benefit_ids" t-as="b">
-                                            <li class="tc-pop-item">
-                                                <i t-att-class="'fa ' + (b.icon or 'fa-check')"
-                                                   t-att-style="'color:' + tc_color"/>
-                                                <span><t t-out="b.name"/></span>
-                                            </li>
-                                        </t>
-                                    </ul>
-                                </t>
-                                <t t-else="">
-                                    <span class="tc-pop-empty">Chưa có quyền lợi nào.</span>
-                                </t>
-                            </div>
-                            <h3 class="tc-name"><t t-out="tier.name"/></h3>
-                            <p class="tc-desc"><t t-out="tier.description or ''"/></p>
-                            <div class="tc-pts-wrap">
-                                <span class="tc-pts-num"><t t-out="'{:,}'.format(tier.min_points)"/></span>
-                                <span class="tc-pts-unit"> điểm</span>
-                            </div>
-                            <div class="tc-bar-bg">
-                                <div class="tc-bar-fill"
-                                     t-att-style="'background:linear-gradient(90deg,' + tc_color + ',' + tc_color + 'aa); width:' + ('100%' if tier_first else '0%')"/>
-                            </div>
-                            <t t-if="tier_first">
-                                <span class="tc-bar-label" t-att-style="'color:' + tc_color">ACTIVE TIER</span>
-                            </t>
-                            <t t-elif="tier.min_points">
-                                <span class="tc-bar-label" style="color:var(--c-ink-v)">
-                                    <t t-out="'{:,}'.format(tier.min_points)"/> PTS TO GO
-                                </span>
-                            </t>
+                            <img class="sr-tier-card-asset"
+                                 t-att-src="'/hlv_loyalty/static/description/icon/' + card_folder + '/card.svg'"
+                                 t-att-alt="tier.name or 'Tier Card'"/>
+                            <div class="tc-card-label"><t t-out="tier.name"/></div>
                         </div>
                     </t>
                 </div>
@@ -804,63 +765,16 @@ html { scroll-behavior: smooth; }
                 <div class="sr-divider"></div>
                 <div class="sr-tier-grid">
                     <t t-foreach="tiers" t-as="tier">
-                        <t t-set="is_dark"    t-value="tier_last"/>
                         <t t-set="is_current" t-value="partner.loyalty_tier_id and tier.id == partner.loyalty_tier_id.id"/>
-                        <t t-set="tc_color"   t-value="tier.badge_color or '#cd7f32'"/>
-                        <div t-att-class="'sr-tier-card' + (' dark' if is_dark else '') + (' current' if is_current else '')">
+                        <t t-set="card_folder" t-value="'classic_tier_card' if tier.color == 'brown' else ('silver_tier_card' if tier.color == 'silver' else ('gold_tier_card' if tier.color == 'gold' else 'diamond_tier_card'))"/>
+                        <div t-att-class="'sr-tier-card' + (' current' if is_current else '')">
                             <t t-if="is_current">
                                 <span class="tc-badge you">BẠN</span>
                             </t>
-                            <!-- Floating icon (click to view benefits) -->
-                            <div t-att-class="'tc-icon tc-icon-btn'"
-                                 t-att-style="'background:' + tc_color + ('18' if not is_dark else '; background:rgba(255,255,255,.08)')"
-                                 title="Xem quyền lợi hạng" tabindex="0" role="button">
-                                <t t-if="tier.image_url">
-                                    <img class="tc-tier-img"
-                                         t-att-src="tier.image_url"
-                                         t-att-alt="tier.name or 'Tier icon'"/>
-                                </t>
-                                <t t-else="">
-                                    <i t-att-class="'fa ' + (tier.icon or 'fa-medal')"
-                                       t-att-style="'color:' + ('rgba(255,220,80,.9)' if is_dark else tc_color)"/>
-                                </t>
-                            </div>
-                            <!-- Benefits popup (positioned relative to card) -->
-                            <div t-att-class="'tc-benefits-popup' + (' tc-pop-dark' if is_dark else '')">
-                                <div class="tc-pop-title">Quyền lợi hạng <t t-out="tier.name"/></div>
-                                <t t-if="tier.benefit_ids">
-                                    <ul class="tc-pop-list">
-                                        <t t-foreach="tier.benefit_ids" t-as="b">
-                                            <li class="tc-pop-item">
-                                                <i t-att-class="'fa ' + (b.icon or 'fa-check')"
-                                                   t-att-style="'color:' + tc_color"/>
-                                                <span><t t-out="b.name"/></span>
-                                            </li>
-                                        </t>
-                                    </ul>
-                                </t>
-                                <t t-else="">
-                                    <span class="tc-pop-empty">Chưa có quyền lợi nào.</span>
-                                </t>
-                            </div>
-                            <h3 class="tc-name"><t t-out="tier.name"/></h3>
-                            <p class="tc-desc"><t t-out="tier.description or ''"/></p>
-                            <div class="tc-pts-wrap">
-                                <span class="tc-pts-num"><t t-out="'{:,}'.format(tier.min_points)"/></span>
-                                <span class="tc-pts-unit"> điểm</span>
-                            </div>
-                            <div class="tc-bar-bg">
-                                <div class="tc-bar-fill"
-                                     t-att-style="'background:linear-gradient(90deg,' + tc_color + ',' + tc_color + 'aa); width:' + ('100%' if tier_first else '0%')"/>
-                            </div>
-                            <t t-if="tier_first">
-                                <span class="tc-bar-label" t-att-style="'color:' + tc_color">ACTIVE TIER</span>
-                            </t>
-                            <t t-elif="tier.min_points">
-                                <span class="tc-bar-label" style="color:var(--c-ink-v)">
-                                    <t t-out="'{:,}'.format(tier.min_points)"/> PTS TO GO
-                                </span>
-                            </t>
+                            <img class="sr-tier-card-asset"
+                                 t-att-src="'/hlv_loyalty/static/description/icon/' + card_folder + '/card.svg'"
+                                 t-att-alt="tier.name or 'Tier Card'"/>
+                            <div class="tc-card-label"><t t-out="tier.name"/></div>
                         </div>
                     </t>
                 </div>
