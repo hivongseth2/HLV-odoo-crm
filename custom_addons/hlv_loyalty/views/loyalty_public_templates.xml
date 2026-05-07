@@ -130,16 +130,23 @@ a { color:inherit; }
     background:transparent;
     border-radius:16px;
     padding:0;
-    position:relative;
-    transition:transform .3s cubic-bezier(.4,0,.2,1), box-shadow .3s;
+    transition:transform .3s cubic-bezier(.4,0,.2,1);
 }
-.sr-tier-card:hover { transform:translateY(-6px); box-shadow:0 20px 50px rgba(0,6,102,.12); }
-.sr-tier-card.current { box-shadow:0 0 0 2px var(--c-sec),0 8px 32px rgba(0,6,102,.1); }
+.sr-tier-card:hover { transform:translateY(-6px); }
 .sr-tier-card-asset {
     width:100%;
     height:auto;
     display:block;
     border-radius:16px;
+}
+.sr-tier-visual {
+    position:relative;
+    border-radius:16px;
+    overflow:hidden;
+}
+.sr-tier-card.current .sr-tier-visual {
+    outline:2px solid var(--c-sec);
+    outline-offset:0;
 }
 
 /* Floating icon box (top-left) */
@@ -471,12 +478,14 @@ html { scroll-behavior: smooth; }
                         <t t-set="is_popular" t-value="not tier_last and not tier_first and tier_index == tier_size - 2"/>
                         <t t-set="card_folder" t-value="'classic_tier_card' if tier.color == 'brown' else ('silver_tier_card' if tier.color == 'silver' else ('gold_tier_card' if tier.color == 'gold' else 'diamond_tier_card'))"/>
                         <div class="sr-tier-card">
-                            <t t-if="is_popular">
-                                <span class="tc-badge popular">MOST POPULAR</span>
-                            </t>
-                            <img class="sr-tier-card-asset"
-                                 t-att-src="'/hlv_loyalty/static/description/icon/' + card_folder + '/card.svg'"
-                                 t-att-alt="tier.name or 'Tier Card'"/>
+                            <div class="sr-tier-visual">
+                                <t t-if="is_popular">
+                                    <span class="tc-badge popular">MOST POPULAR</span>
+                                </t>
+                                <img class="sr-tier-card-asset"
+                                     t-att-src="'/hlv_loyalty/static/description/icon/' + card_folder + '/card.svg'"
+                                     t-att-alt="tier.name or 'Tier Card'"/>
+                            </div>
                             <div class="tc-card-label"><t t-out="tier.name"/></div>
                         </div>
                     </t>
@@ -768,12 +777,14 @@ html { scroll-behavior: smooth; }
                         <t t-set="is_current" t-value="partner.loyalty_tier_id and tier.id == partner.loyalty_tier_id.id"/>
                         <t t-set="card_folder" t-value="'classic_tier_card' if tier.color == 'brown' else ('silver_tier_card' if tier.color == 'silver' else ('gold_tier_card' if tier.color == 'gold' else 'diamond_tier_card'))"/>
                         <div t-att-class="'sr-tier-card' + (' current' if is_current else '')">
-                            <t t-if="is_current">
-                                <span class="tc-badge you">BẠN</span>
-                            </t>
-                            <img class="sr-tier-card-asset"
-                                 t-att-src="'/hlv_loyalty/static/description/icon/' + card_folder + '/card.svg'"
-                                 t-att-alt="tier.name or 'Tier Card'"/>
+                            <div class="sr-tier-visual">
+                                <t t-if="is_current">
+                                    <span class="tc-badge you">BẠN</span>
+                                </t>
+                                <img class="sr-tier-card-asset"
+                                     t-att-src="'/hlv_loyalty/static/description/icon/' + card_folder + '/card.svg'"
+                                     t-att-alt="tier.name or 'Tier Card'"/>
+                            </div>
                             <div class="tc-card-label"><t t-out="tier.name"/></div>
                         </div>
                     </t>
