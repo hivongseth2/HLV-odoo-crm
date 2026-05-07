@@ -2,7 +2,7 @@
 import json
 import logging
 
-from odoo import fields, models
+from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
@@ -13,10 +13,27 @@ class MeinvoiceInvoice(models.Model):
 
     _name = 'meinvoice.invoice'
     _description = 'Hóa đơn điện tử meInvoice'
+    _rec_name = 'display_name'
     _order = 'create_date desc'
 
+    display_name = fields.Char(
+        string='Tiêu đề',
+        compute='_compute_display_name',
+        store=True,
+    )
+
+    @api.depends('sale_order_id', 'inv_no', 'inv_series')
+    def _compute_display_name(self):
+        for rec in self:
+            if rec.inv_no:
+                rec.display_name = '%s %s' % (rec.inv_series or '', rec.inv_no)
+            elif rec.sale_order_id:
+                rec.display_name = 'Nháp — %s' % rec.sale_order_id.name
+            else:
+                rec.display_name = 'Nháp #%d' % (rec.id or 0)
+
     sale_order_id = fields.Many2one(
-        'sale.order', string='Đơn hàng', ondelete='restrict', required=True, readonly=True,
+        'sale.order', string='Đơn hàng', ondelete='restrict', required=True, readonly=True, index=True,
     )
     partner_id = fields.Many2one(
         related='sale_order_id.partner_id', string='Khách hàng', store=True, readonly=True,
@@ -44,6 +61,10 @@ class MeinvoiceInvoice(models.Model):
     buyer_email = fields.Char(string='Email người mua')
 
     # ── Tổng tiền (readonly, tính từ SO lúc tạo nháp) ────────────────────────
+    currency_id = fields.Many2one(
+        'res.currency', string='Tiền tệ', default=lambda self: self.env.ref('base.VND'),
+        readonly=True,
+    )
     total_sale_oc = fields.Float(
         string='Thành tiền (trước CK, trước thuế)', readonly=True, digits=(16, 0),
     )

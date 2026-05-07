@@ -111,6 +111,7 @@
                   decoration-info="state == 'draft'"
                   decoration-success="state == 'published'"
                   decoration-muted="state == 'cancelled'">
+                <field name="create_date" string="Ngày tạo" optional="show"/>
                 <field name="sale_order_id" string="Đơn hàng"/>
                 <field name="partner_id" string="Khách hàng"/>
                 <field name="state" widget="badge"
@@ -121,9 +122,13 @@
                 <field name="inv_date" string="Ngày HĐ"/>
                 <field name="buyer_legal_name" string="Tên người mua"/>
                 <field name="buyer_tax_code" string="MST" optional="show"/>
-                <field name="total_amount_oc" string="Tổng tiền"/>
-                <field name="inv_no" string="Số HĐ" optional="show"/>
+                <field name="total_amount_oc" string="Tổng tiền" widget="monetary"
+                       options="{'currency_field': 'currency_id'}"/>
+                <field name="inv_no" string="Số HĐ"/>
                 <field name="inv_code" string="Mã CQT" optional="show"/>
+                <field name="transaction_id" string="Transaction ID" optional="hide"/>
+                <!-- virtual currency field for monetary widget -->
+                <field name="currency_id" invisible="1"/>
                 <button name="action_publish" type="object" string="Gửi CQT"
                         icon="fa-paper-plane"
                         invisible="state != 'draft'"
@@ -135,10 +140,49 @@
         </field>
     </record>
 
+    <!-- Search view -->
+    <record id="view_meinvoice_invoice_search" model="ir.ui.view">
+        <field name="name">meinvoice.invoice.search</field>
+        <field name="model">meinvoice.invoice</field>
+        <field name="arch" type="xml">
+            <search string="Tìm kiếm hóa đơn điện tử">
+                <field name="sale_order_id" string="Đơn hàng"/>
+                <field name="partner_id" string="Khách hàng"/>
+                <field name="inv_no" string="Số hóa đơn"/>
+                <field name="inv_series" string="Ký hiệu"/>
+                <field name="buyer_legal_name" string="Tên người mua"/>
+                <field name="buyer_tax_code" string="MST"/>
+                <field name="transaction_id" string="Transaction ID"/>
+                <separator/>
+                <filter name="filter_draft" string="Nháp" domain="[('state','=','draft')]"/>
+                <filter name="filter_published" string="Đã phát hành" domain="[('state','=','published')]"/>
+                <filter name="filter_cancelled" string="Đã hủy" domain="[('state','=','cancelled')]"/>
+                <separator/>
+                <filter name="filter_today" string="Hôm nay"
+                        domain="[('create_date','&gt;=', (context_today()).strftime('%Y-%m-%d 00:00:00')),
+                                 ('create_date','&lt;=', (context_today()).strftime('%Y-%m-%d 23:59:59'))]"/>
+                <filter name="filter_this_month" string="Tháng này"
+                        domain="[('inv_date','&gt;=',(context_today()).strftime('%Y-%m-01'))]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_state" string="Trạng thái" context="{'group_by': 'state'}"/>
+                    <filter name="group_partner" string="Khách hàng" context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_inv_date" string="Ngày HĐ" context="{'group_by': 'inv_date:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
     <!-- Action window (dùng cho menu chính) -->
     <record id="action_meinvoice_invoice" model="ir.actions.act_window">
         <field name="name">Hóa đơn điện tử</field>
         <field name="res_model">meinvoice.invoice</field>
         <field name="view_mode">list,form</field>
+        <field name="view_ids" eval="[
+            (5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_meinvoice_invoice_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_meinvoice_invoice_form')}),
+        ]"/>
+        <field name="search_view_id" ref="view_meinvoice_invoice_search"/>
+        <field name="context">{'search_default_filter_draft': 0}</field>
     </record>
 </odoo>
