@@ -166,6 +166,25 @@
                                    decoration-muted="state == 'expired'"/>
                         </list>
                     </field>
+                    <!-- Tài khoản Portal Loyalty -->
+                    <div class="fw-bold text-uppercase small mb-2 mt-3"
+                         style="letter-spacing:1px; color:#6c757d; border-bottom:2px solid #dee2e6; padding-bottom:6px;">
+                        Tài khoản Portal
+                    </div>
+                    <field name="loyalty_portal_account_ids" nolabel="1"
+                           groups="sales_team.group_sale_manager">
+                        <list editable="bottom">
+                            <field name="username" placeholder="Tên đăng nhập..."/>
+                            <field name="active" optional="show"/>
+                            <field name="password_hash" string="Mật khẩu" readonly="1"
+                                   optional="hide"/>
+                            <button name="action_reset_password_wizard"
+                                    string="Reset mật khẩu"
+                                    type="object"
+                                    icon="fa-key"
+                                    class="btn-sm"/>
+                        </list>
+                    </field>
                 </page>
             </xpath>
         </field>

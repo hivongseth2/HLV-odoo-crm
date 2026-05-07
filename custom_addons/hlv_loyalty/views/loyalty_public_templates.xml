@@ -540,129 +540,300 @@ html { scroll-behavior: smooth; }
 <!-- ===== HOME PAGE ===== -->
 <!-- ===== LOGIN PAGE ===== -->
 <template id="loyalty_public_login" name="Loyalty Portal - Đăng nhập">
-    <t t-call="hlv_loyalty.loyalty_public_layout">
+    <t t-call="web.layout">
+        <t t-set="head">
+            <meta name="viewport" content="width=device-width, initial-scale=1"/>
+            <link rel="preconnect" href="https://fonts.googleapis.com"/>
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous"/>
+            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;display=swap"/>
+            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"/>
+            <style>
+*  { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background: #0f1117; min-height: 100vh; }
+.ms { font-family:'Material Symbols Outlined'; font-weight:normal; font-style:normal;
+      font-size:20px; line-height:1; display:inline-block; white-space:nowrap; direction:ltr;
+      -webkit-font-smoothing:antialiased; vertical-align:middle; }
 
-        <!-- Hero -->
-        <section class="sr-hero" style="padding-bottom:60px">
-            <div class="sr-hero-inner">
-                <h1 class="sr-hero-title">Cổng thành viên thân thiết</h1>
-                <p class="sr-hero-sub">Đăng nhập để xem điểm, voucher và ưu đãi của bạn.</p>
-            </div>
-        </section>
+/* ── Layout ── */
+.lp-wrap {
+    display: flex;
+    min-height: 100vh;
+}
 
-        <!-- Login card -->
-        <div style="max-width:440px;margin:-40px auto 60px;padding:0 16px">
-            <div style="background:#fff;border-radius:20px;box-shadow:0 12px 40px rgba(0,0,0,.12);padding:40px 36px">
-                <h2 style="font-family:'Manrope',sans-serif;font-size:1.4rem;font-weight:800;margin:0 0 8px;color:#191c1d">Đăng nhập</h2>
-                <p style="margin:0 0 28px;font-size:.88rem;color:#666">Dùng tên đăng nhập hoặc số điện thoại</p>
+/* ── Left Panel ── */
+.lp-left {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    display: none;
+}
+@media (min-width: 900px) { .lp-left { display: block; } }
 
-                <t t-if="error">
-                    <div style="background:#fff0f0;border:1px solid #ffb3b3;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:.88rem;color:#c0392b">
-                        <span class="ms ms-fill ms-sm" style="vertical-align:middle;margin-right:6px">error</span>
-                        <t t-out="error"/>
+.lp-left-bg {
+    position: absolute;
+    inset: 0;
+    background-image: url('https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=1200&auto=format&fit=crop&q=80');
+    background-size: cover;
+    background-position: center;
+    filter: brightness(.55);
+}
+.lp-left-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        180deg,
+        rgba(10,8,5,.15) 0%,
+        rgba(10,8,5,.05) 40%,
+        rgba(10,8,5,.75) 100%
+    );
+}
+.lp-left-content {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 48px 52px;
+    z-index: 1;
+}
+.lp-badge {
+    display: inline-block;
+    padding: 6px 14px;
+    border: 1px solid rgba(212,175,55,.6);
+    border-radius: 30px;
+    color: #d4af37;
+    font-size: .7rem;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    backdrop-filter: blur(4px);
+    background: rgba(212,175,55,.08);
+}
+.lp-left-bottom { }
+.lp-brand-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2.6rem;
+    font-weight: 600;
+    color: #fff;
+    line-height: 1.2;
+    margin-bottom: 16px;
+    letter-spacing: .5px;
+}
+.lp-brand-desc {
+    color: rgba(255,255,255,.65);
+    font-size: .9rem;
+    line-height: 1.65;
+    max-width: 360px;
+    font-weight: 300;
+}
+.lp-footer-line {
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 1px solid rgba(255,255,255,.12);
+    color: rgba(255,255,255,.35);
+    font-size: .75rem;
+}
+
+/* ── Right Panel ── */
+.lp-right {
+    width: 100%;
+    max-width: 520px;
+    background: #13141a;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 60px 56px;
+    flex-shrink: 0;
+}
+@media (max-width: 899px) {
+    .lp-right { max-width: 100%; padding: 48px 28px; }
+}
+
+.lp-eyebrow {
+    display: inline-block;
+    padding: 5px 13px;
+    border-radius: 30px;
+    background: rgba(212,175,55,.12);
+    border: 1px solid rgba(212,175,55,.3);
+    color: #d4af37;
+    font-size: .68rem;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 28px;
+}
+.lp-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2rem;
+    font-weight: 600;
+    color: #f0ede8;
+    margin-bottom: 8px;
+    letter-spacing: .3px;
+}
+.lp-subtitle {
+    color: rgba(240,237,232,.45);
+    font-size: .85rem;
+    font-weight: 300;
+    margin-bottom: 40px;
+    line-height: 1.6;
+}
+
+/* ── Form ── */
+.lp-field { margin-bottom: 20px; }
+.lp-label {
+    display: block;
+    font-size: .75rem;
+    font-weight: 500;
+    color: rgba(240,237,232,.5);
+    margin-bottom: 8px;
+    letter-spacing: .8px;
+    text-transform: uppercase;
+}
+.lp-input-wrap { position: relative; }
+.lp-input-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: rgba(240,237,232,.25);
+    font-size: 18px;
+    pointer-events: none;
+}
+.lp-input {
+    width: 100%;
+    padding: 14px 16px 14px 42px;
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 8px;
+    color: #f0ede8;
+    font-size: .92rem;
+    font-family: 'Inter', sans-serif;
+    outline: none;
+    transition: border .2s, background .2s;
+}
+.lp-input::placeholder { color: rgba(240,237,232,.2); }
+.lp-input:focus {
+    border-color: rgba(212,175,55,.5);
+    background: rgba(212,175,55,.04);
+}
+
+.lp-btn {
+    width: 100%;
+    padding: 15px;
+    background: linear-gradient(135deg, #c9a227, #a07d18);
+    color: #0f0e0b;
+    border: none;
+    border-radius: 8px;
+    font-size: .92rem;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    letter-spacing: .5px;
+    margin-top: 8px;
+    transition: opacity .2s, transform .1s;
+}
+.lp-btn:hover { opacity: .9; transform: translateY(-1px); }
+.lp-btn:active { transform: translateY(0); }
+
+.lp-error {
+    background: rgba(192,57,43,.15);
+    border: 1px solid rgba(192,57,43,.4);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 24px;
+    font-size: .83rem;
+    color: #f1948a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.lp-support {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid rgba(255,255,255,.07);
+    text-align: center;
+    color: rgba(240,237,232,.25);
+    font-size: .78rem;
+}
+            </style>
+        </t>
+        <t t-set="body_classname">lp-page</t>
+
+        <div class="lp-wrap">
+
+            <!-- ── Left: brand panel ── -->
+            <div class="lp-left">
+                <div class="lp-left-bg"></div>
+                <div class="lp-left-overlay"></div>
+                <div class="lp-left-content">
+                    <div>
+                        <span class="lp-badge">Cổng thành viên</span>
                     </div>
-                </t>
-
-                <form action="/loyalty/login" method="post">
-                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                    <div style="margin-bottom:18px">
-                        <label style="display:block;font-size:.82rem;font-weight:600;color:#454652;margin-bottom:6px">
-                            Tên đăng nhập / Số điện thoại
-                        </label>
-                        <div style="position:relative">
-                            <span class="ms" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#999;font-size:20px">person</span>
-                            <input type="text" name="login"
-                                   t-att-value="login_val or ''"
-                                   autocomplete="username"
-                                   required="required"
-                                   style="width:100%;padding:12px 14px 12px 40px;border:1.5px solid #d0d0d8;border-radius:10px;font-size:.95rem;outline:none;transition:border .2s;font-family:inherit"
-                                   placeholder="vd: nguyenvan_a hoặc 0912345678"/>
+                    <div class="lp-left-bottom">
+                        <div class="lp-brand-name">Hoàng Long Vũ<br/>Members</div>
+                        <p class="lp-brand-desc">
+                            Chào mừng bạn đến với hệ thống thành viên thân thiết —
+                            nơi ghi nhận mọi giá trị bạn tạo ra.
+                        </p>
+                        <div class="lp-footer-line">
+                            © 2025 Hoàng Long Vũ. Bảo lưu mọi quyền.
                         </div>
                     </div>
-                    <div style="margin-bottom:28px">
-                        <label style="display:block;font-size:.82rem;font-weight:600;color:#454652;margin-bottom:6px">
-                            Mật khẩu
-                        </label>
-                        <div style="position:relative">
-                            <span class="ms" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#999;font-size:20px">lock</span>
-                            <input type="password" name="password"
-                                   autocomplete="current-password"
-                                   required="required"
-                                   style="width:100%;padding:12px 14px 12px 40px;border:1.5px solid #d0d0d8;border-radius:10px;font-size:.95rem;outline:none;transition:border .2s;font-family:inherit"
-                                   placeholder="Mật khẩu của bạn"/>
-                        </div>
-                    </div>
-                    <button type="submit"
-                            style="width:100%;padding:14px;background:linear-gradient(135deg,#1e89ca,#0d75b4);color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:.3px">
-                        Đăng nhập
-                    </button>
-                </form>
-
-                <p style="margin:24px 0 0;font-size:.8rem;text-align:center;color:#999">
-                    Chưa có tài khoản? Vui lòng liên hệ bộ phận hỗ trợ.
-                </p>
-            </div>
-        </div>
-
-        <!-- Tier Cards preview -->
-        <section class="sr-section">
-            <div class="sr-cont">
-                <h2 class="sr-sec-title">Hệ thống cấp bậc thành viên</h2>
-                <div class="sr-divider"></div>
-                <div class="sr-tier-grid">
-                    <t t-foreach="tiers" t-as="tier">
-                        <t t-set="is_popular" t-value="not tier_last and not tier_first and tier_index == tier_size - 2"/>
-                        <t t-set="card_folder" t-value="'classic_tier_card' if tier.color == 'brown' else ('silver_tier_card' if tier.color == 'silver' else ('gold_tier_card' if tier.color == 'gold' else 'diamond_tier_card'))"/>
-                        <div class="sr-tier-card">
-                            <div class="sr-tier-visual">
-                                <t t-if="is_popular">
-                                    <span class="tc-badge popular">MOST POPULAR</span>
-                                </t>
-                                <img class="sr-tier-card-asset"
-                                     t-att-src="'/hlv_loyalty/static/description/icon/' + card_folder + '/card.svg'"
-                                     t-att-alt="tier.name or 'Tier Card'"/>
-                                <div t-att-class="'tc-benefits-popup tc-pop-' + (tier.color or 'brown')">
-                                    <div class="tc-pop-header">
-                                        <span class="tc-pop-title">Quyền lợi hạng <t t-out="tier.name"/></span>
-                                        <button class="tc-pop-close" aria-label="Đóng">&#x2715;</button>
-                                    </div>
-                                    <t t-if="tier.benefit_ids">
-                                        <ul class="tc-pop-list">
-                                            <t t-foreach="tier.benefit_ids" t-as="b">
-                                                <li class="tc-pop-item">
-                                                    <span class="tc-icon-badge"><i t-att-class="'fa ' + (b.icon or 'fa-check')" aria-hidden="true"/></span>
-                                                    <span><t t-out="b.name"/></span>
-                                                </li>
-                                            </t>
-                                        </ul>
-                                    </t>
-                                    <t t-else="">
-                                        <p class="tc-pop-empty">Chưa có quyền lợi.</p>
-                                    </t>
-                                </div>
-                            </div>
-                            <div class="tc-card-label"><t t-out="tier.name"/></div>
-                            <div t-att-class="'tc-hover-benefits tc-hb-' + (tier.color or 'brown')">
-                                <div class="tc-hb-inner">
-                                    <t t-if="tier.benefit_ids">
-                                        <ul class="tc-hb-list">
-                                            <t t-foreach="tier.benefit_ids" t-as="b">
-                                                <li class="tc-hb-item">
-                                                    <span class="tc-hb-ico"><i t-att-class="'fa ' + (b.icon or 'fa-check')" aria-hidden="true"/></span>
-                                                    <span><t t-out="b.name"/></span>
-                                                </li>
-                                            </t>
-                                        </ul>
-                                    </t>
-                                    <t t-else=""><p style="margin:0;opacity:.5;font-size:.8rem">Chưa có quyền lợi.</p></t>
-                                </div>
-                            </div>
-                        </div>
-                    </t>
                 </div>
             </div>
-        </section>
 
+            <!-- ── Right: login form ── -->
+            <div class="lp-right">
+                <div>
+                    <span class="lp-eyebrow">Truy cập đặc quyền</span>
+                    <h1 class="lp-title">Đăng nhập Thành viên</h1>
+                    <p class="lp-subtitle">Nhập thông tin của bạn để truy cập bảng điều khiển thành viên.</p>
+
+                    <t t-if="error">
+                        <div class="lp-error">
+                            <span class="ms">error</span>
+                            <t t-out="error"/>
+                        </div>
+                    </t>
+
+                    <form action="/loyalty/login" method="post">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+
+                        <div class="lp-field">
+                            <label class="lp-label" for="lp_login">Email hoặc Số điện thoại</label>
+                            <div class="lp-input-wrap">
+                                <span class="ms lp-input-icon">person</span>
+                                <input id="lp_login" type="text" name="login"
+                                       t-att-value="login_val or ''"
+                                       autocomplete="username"
+                                       required="required"
+                                       class="lp-input"
+                                       placeholder="name@reserve.com"/>
+                            </div>
+                        </div>
+
+                        <div class="lp-field" style="margin-bottom:8px">
+                            <label class="lp-label" for="lp_pass">Mật khẩu</label>
+                            <div class="lp-input-wrap">
+                                <span class="ms lp-input-icon">lock</span>
+                                <input id="lp_pass" type="password" name="password"
+                                       autocomplete="current-password"
+                                       required="required"
+                                       class="lp-input"
+                                       placeholder="••••••••"/>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="lp-btn">Đăng nhập</button>
+                    </form>
+
+                    <div class="lp-support">
+                        Chưa là thành viên? Vui lòng liên hệ bộ phận hỗ trợ.
+                    </div>
+                </div>
+            </div>
+
+        </div>
     </t>
 </template>
 

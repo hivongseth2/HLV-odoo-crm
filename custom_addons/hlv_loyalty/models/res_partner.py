@@ -28,6 +28,9 @@ class ResPartner(models.Model):
         'hlv.loyalty.tier', string='Hạng thành viên',
         compute='_compute_loyalty_tier', store=False, readonly=True,
     )
+    loyalty_portal_account_ids = fields.One2many(
+        'hlv.loyalty.portal.account', 'partner_id', string='Tài khoản Portal',
+    )
 
     @api.depends('loyalty_history_ids', 'loyalty_history_ids.point_amount')
     def _compute_loyalty_total_points(self):

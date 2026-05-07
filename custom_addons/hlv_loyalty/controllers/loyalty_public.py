@@ -58,12 +58,8 @@ class LoyaltyPublicPortal(http.Controller):
         account = _get_current_account()
         if account:
             return request.redirect('/loyalty/dashboard')
-        tiers = request.env['hlv.loyalty.tier'].sudo().search(
-            [('active', '=', True)], order='min_points asc'
-        )
         return request.render('hlv_loyalty.loyalty_public_login', {
             'error': None,
-            'tiers': tiers,
         })
 
     # ── Login ──────────────────────────────────────────────────────────────
@@ -74,14 +70,9 @@ class LoyaltyPublicPortal(http.Controller):
         login = (post.get('login') or '').strip()
         password = (post.get('password') or '').strip()
 
-        tiers = request.env['hlv.loyalty.tier'].sudo().search(
-            [('active', '=', True)], order='min_points asc'
-        )
-
         if not login or not password:
             return request.render('hlv_loyalty.loyalty_public_login', {
                 'error': 'Vui lòng nhập tên đăng nhập và mật khẩu.',
-                'tiers': tiers,
             })
 
         account = request.env['hlv.loyalty.portal.account'].sudo().authenticate(
@@ -91,7 +82,6 @@ class LoyaltyPublicPortal(http.Controller):
             return request.render('hlv_loyalty.loyalty_public_login', {
                 'error': 'Tên đăng nhập hoặc mật khẩu không đúng.',
                 'login_val': login,
-                'tiers': tiers,
             })
 
         request.session[_SESSION_KEY] = account.id

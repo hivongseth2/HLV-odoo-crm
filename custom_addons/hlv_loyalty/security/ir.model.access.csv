@@ -14,4 +14,5 @@ access_hlv_loyalty_tier_manager,hlv.loyalty.tier.manager,model_hlv_loyalty_tier,
 access_hlv_loyalty_tier_benefit_user,hlv.loyalty.tier.benefit.user,model_hlv_loyalty_tier_benefit,base.group_user,1,0,0,0
 access_hlv_loyalty_tier_benefit_manager,hlv.loyalty.tier.benefit.manager,model_hlv_loyalty_tier_benefit,sales_team.group_sale_manager,1,1,1,1
 access_hlv_loyalty_portal_account_manager,hlv.loyalty.portal.account.manager,model_hlv_loyalty_portal_account,sales_team.group_sale_manager,1,1,1,1
+access_hlv_loyalty_portal_account_user,hlv.loyalty.portal.account.user,model_hlv_loyalty_portal_account,base.group_user,1,0,0,0
 access_hlv_loyalty_reset_password_wizard,hlv.loyalty.reset.password.wizard,model_hlv_loyalty_reset_password_wizard,sales_team.group_sale_manager,1,1,1,1
