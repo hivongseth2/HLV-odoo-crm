@@ -18,7 +18,7 @@
     --c-sec:    #fcc50e;
     --c-sec-c:  #ffd793;
     --c-surf:   #f8f9fa;
-    --c-surf-lo:#f3f4f5;
+    --c-surf-lo: #f3f4f5;
     --c-surf-0: #ffffff;
     --c-surf-hi:#e7e8e9;
     --c-ink:    #191c1d;
