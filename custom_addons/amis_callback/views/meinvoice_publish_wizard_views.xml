@@ -1,6 +1,148 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_meinvoice_publish_wizard_form" model="ir.ui.view">
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         meinvoice.invoice — Hóa đơn điện tử (lưu trữ bền vững)
+    ═══════════════════════════════════════════════════════════════════════════ -->
+
+    <!-- Form view -->
+    <record id="view_meinvoice_invoice_form" model="ir.ui.view">
+        <field name="name">meinvoice.invoice.form</field>
+        <field name="model">meinvoice.invoice</field>
+        <field name="arch" type="xml">
+            <form string="Hóa đơn điện tử meInvoice">
+                <header>
+                    <button name="action_publish" type="object"
+                            string="Gửi lên Cơ quan Thuế"
+                            class="btn-primary"
+                            invisible="state != 'draft'"
+                            confirm="Xác nhận gửi hóa đơn này lên Cơ quan Thuế? Thao tác không thể hoàn tác."/>
+                    <button name="action_view_invoice" type="object"
+                            string="Xem hóa đơn"
+                            invisible="state != 'published'"/>
+                    <button name="action_cancel" type="object"
+                            string="Hủy nháp"
+                            invisible="state != 'draft'"
+                            confirm="Hủy hóa đơn nháp này?"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,published,cancelled"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="sale_order_id" readonly="1"/>
+                            <field name="partner_id" readonly="1"/>
+                        </group>
+                        <group/>
+                    </group>
+                    <notebook>
+                        <page string="Thông tin hóa đơn" name="invoice_info">
+                            <group string="Thông tin phát hành">
+                                <group>
+                                    <field name="inv_series" readonly="state != 'draft'"/>
+                                    <field name="inv_date" readonly="state != 'draft'"/>
+                                    <field name="payment_method" readonly="state != 'draft'"/>
+                                </group>
+                            </group>
+                            <group string="Thông tin người mua">
+                                <group>
+                                    <field name="buyer_legal_name" readonly="state != 'draft'"/>
+                                    <field name="buyer_full_name" readonly="state != 'draft'"/>
+                                    <field name="buyer_tax_code" readonly="state != 'draft'"/>
+                                </group>
+                                <group>
+                                    <field name="buyer_address" readonly="state != 'draft'"/>
+                                    <field name="buyer_phone" readonly="state != 'draft'"/>
+                                    <field name="buyer_email" readonly="state != 'draft'"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Chi tiết hàng hóa" name="invoice_lines">
+                            <field name="line_ids" nolabel="1" readonly="state != 'draft'">
+                                <list editable="bottom">
+                                    <field name="sort_order" string="STT"/>
+                                    <field name="item_code" string="Mã hàng"/>
+                                    <field name="item_name" string="Tên hàng hóa/dịch vụ"/>
+                                    <field name="unit_name" string="ĐVT"/>
+                                    <field name="quantity" string="Số lượng"/>
+                                    <field name="unit_price" string="Đơn giá"/>
+                                    <field name="discount_rate" string="% CK"/>
+                                    <field name="discount_amount_oc" string="Tiền CK"/>
+                                    <field name="amount_without_vat_oc" string="Trước thuế"/>
+                                    <field name="vat_rate_name" string="Thuế suất"/>
+                                    <field name="vat_amount_oc" string="Tiền thuế"/>
+                                    <field name="amount_oc" string="Thành tiền"/>
+                                </list>
+                            </field>
+                            <group class="oe_subtotal_footer oe_right" string=" ">
+                                <field name="total_sale_oc" string="Tổng thành tiền"/>
+                                <field name="total_discount_oc" string="Chiết khấu"/>
+                                <field name="total_net_oc" string="Trước thuế"/>
+                                <field name="total_vat_oc" string="Thuế GTGT"/>
+                                <field name="total_amount_oc" class="oe_subtotal_footer_separator"/>
+                                <field name="total_amount_in_words" string="Bằng chữ"/>
+                            </group>
+                        </page>
+                        <page string="Kết quả phát hành" name="result_info"
+                              invisible="state != 'published'">
+                            <group>
+                                <group>
+                                    <field name="inv_no" readonly="1" string="Số hóa đơn"/>
+                                    <field name="inv_series_result" readonly="1" string="Ký hiệu"/>
+                                    <field name="inv_date_result" readonly="1" string="Ngày HĐ"/>
+                                </group>
+                                <group>
+                                    <field name="inv_code" readonly="1" string="Mã CQT"/>
+                                    <field name="transaction_id" readonly="1" string="Transaction ID"/>
+                                </group>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- List view -->
+    <record id="view_meinvoice_invoice_list" model="ir.ui.view">
+        <field name="name">meinvoice.invoice.list</field>
+        <field name="model">meinvoice.invoice</field>
+        <field name="arch" type="xml">
+            <list string="Hóa đơn điện tử meInvoice" default_order="create_date desc"
+                  decoration-info="state == 'draft'"
+                  decoration-success="state == 'published'"
+                  decoration-muted="state == 'cancelled'">
+                <field name="sale_order_id" string="Đơn hàng"/>
+                <field name="partner_id" string="Khách hàng"/>
+                <field name="state" widget="badge"
+                       decoration-info="state == 'draft'"
+                       decoration-success="state == 'published'"
+                       decoration-danger="state == 'cancelled'"/>
+                <field name="inv_series" string="Ký hiệu"/>
+                <field name="inv_date" string="Ngày HĐ"/>
+                <field name="buyer_legal_name" string="Tên người mua"/>
+                <field name="buyer_tax_code" string="MST" optional="show"/>
+                <field name="total_amount_oc" string="Tổng tiền"/>
+                <field name="inv_no" string="Số HĐ" optional="show"/>
+                <field name="inv_code" string="Mã CQT" optional="show"/>
+                <button name="action_publish" type="object" string="Gửi CQT"
+                        icon="fa-paper-plane"
+                        invisible="state != 'draft'"
+                        confirm="Gửi hóa đơn này lên Cơ quan Thuế?"/>
+                <button name="action_view_invoice" type="object" string="Xem HĐ"
+                        icon="fa-eye"
+                        invisible="state != 'published'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Action window (dùng cho menu chính) -->
+    <record id="action_meinvoice_invoice" model="ir.actions.act_window">
+        <field name="name">Hóa đơn điện tử</field>
+        <field name="res_model">meinvoice.invoice</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>
+
         <field name="name">meinvoice.publish.wizard.form</field>
         <field name="model">meinvoice.publish.wizard</field>
         <field name="arch" type="xml">

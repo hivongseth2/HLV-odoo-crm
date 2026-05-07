@@ -251,29 +251,21 @@
         <field name="arch" type="xml">
             <data>
                 <xpath expr="//div[@name='button_box']" position="inside">
+                    <!-- Tạo hóa đơn điện tử nháp từ đơn hàng -->
                     <button name="action_publish_meinvoice_invoice" type="object"
-                            class="oe_stat_button" icon="fa-file-text-o"
-                            invisible="not misa_sa_voucher_synced or misa_meinvoice_synced or state not in ('sale','done')">
+                            class="oe_stat_button" icon="fa-plus"
+                            invisible="state not in ('sale','done')">
                         <div class="o_field_widget o_stat_info">
-                            <span class="o_stat_text">Phát hành</span>
+                            <span class="o_stat_text">Tạo</span>
                             <span class="o_stat_text">HĐĐT</span>
                         </div>
                     </button>
-                    <button name="action_view_meinvoice_invoice" type="object"
+                    <!-- Xem danh sách HĐĐT đã tạo -->
+                    <button name="action_view_meinvoice_drafts" type="object"
                             class="oe_stat_button" icon="fa-file-text"
-                            invisible="not misa_meinvoice_synced"
-                            title="Xem hóa đơn trên meInvoice (link tồn tại 5 phút)">
+                            invisible="meinvoice_invoice_count == 0">
                         <div class="o_field_widget o_stat_info">
-                            <field name="misa_meinvoice_inv_no" widget="statinfo" string="Số HĐ"/>
-                        </div>
-                    </button>
-                    <button name="action_reset_meinvoice_invoice" type="object"
-                            class="oe_stat_button" icon="fa-refresh"
-                            invisible="not misa_meinvoice_synced"
-                            confirm="Reset sẽ cho phép phát hành lại HĐĐT meInvoice. Tiếp tục?">
-                        <div class="o_field_widget o_stat_info">
-                            <span class="o_stat_text">Reset</span>
-                            <span class="o_stat_text">meInvoice</span>
+                            <field name="meinvoice_invoice_count" widget="statinfo" string="HĐĐT"/>
                         </div>
                     </button>
                     <!-- SA Invoice (ẩn, giữ code) -->
@@ -304,6 +296,48 @@
                     </button>
                 </xpath>
                 <xpath expr="//notebook" position="inside">
+                    <page string="Hóa đơn điện tử" name="meinvoice_page">
+                        <group string="Thông tin xuất hóa đơn (điền trước)">
+                            <group>
+                                <field name="meinvoice_prefill_buyer_legal_name"/>
+                                <field name="meinvoice_prefill_buyer_full_name"/>
+                                <field name="meinvoice_prefill_buyer_tax_code"/>
+                            </group>
+                            <group>
+                                <field name="meinvoice_prefill_buyer_address"/>
+                                <field name="meinvoice_prefill_buyer_phone"/>
+                                <field name="meinvoice_prefill_buyer_email"/>
+                                <field name="meinvoice_prefill_inv_series"/>
+                                <field name="meinvoice_prefill_payment_method"/>
+                            </group>
+                        </group>
+                        <field name="meinvoice_invoice_ids" nolabel="1">
+                            <list string="Danh sách HĐĐT" create="false" delete="false"
+                                  default_order="create_date desc"
+                                  decoration-info="state == 'draft'"
+                                  decoration-success="state == 'published'"
+                                  decoration-muted="state == 'cancelled'">
+                                <field name="create_date" string="Ngày tạo"/>
+                                <field name="state" widget="badge"
+                                       decoration-info="state == 'draft'"
+                                       decoration-success="state == 'published'"
+                                       decoration-danger="state == 'cancelled'"/>
+                                <field name="inv_series" string="Ký hiệu"/>
+                                <field name="inv_date" string="Ngày HĐ"/>
+                                <field name="buyer_legal_name" string="Tên người mua"/>
+                                <field name="buyer_tax_code" string="MST" optional="show"/>
+                                <field name="total_amount_oc" string="Tổng tiền"/>
+                                <field name="inv_no" string="Số HĐ" optional="show"/>
+                                <button name="action_publish" type="object" string="Gửi CQT"
+                                        icon="fa-paper-plane"
+                                        invisible="state != 'draft'"
+                                        confirm="Gửi hóa đơn này lên Cơ quan Thuế?"/>
+                                <button name="action_view_invoice" type="object" string="Xem HĐ"
+                                        icon="fa-eye"
+                                        invisible="state != 'published'"/>
+                            </list>
+                        </field>
+                    </page>
                     <page string="MISA" name="misa_info"
                           invisible="not misa_sa_voucher_synced and not misa_sa_invoice_synced and not misa_meinvoice_synced">
                         <group>
@@ -432,6 +466,6 @@
     <menuitem id="menu_amis_callback_root" name="AMIS Callback" sequence="30" web_icon="amis_callback,static/description/icon.png"/>
     <menuitem id="menu_amis_callback_logs" name="Nhật ký callback" parent="menu_amis_callback_root" action="action_amis_callback_log" sequence="10"/>
     <menuitem id="menu_amis_sync_jobs" name="Hàng đợi đồng bộ MISA" parent="menu_amis_callback_root" action="action_amis_sync_job" sequence="15"/>
-    <menuitem id="menu_meinvoice_invoices" name="Hóa đơn điện tử" parent="menu_amis_callback_root" action="action_meinvoice_invoice_list" sequence="18"/>
+    <menuitem id="menu_meinvoice_invoices" name="Hóa đơn điện tử" parent="menu_amis_callback_root" action="action_meinvoice_invoice" sequence="18"/>
     <menuitem id="menu_amis_callback_config" name="Cấu hình" parent="menu_amis_callback_root" action="action_amis_callback_config" sequence="20" groups="base.group_system"/>
 </odoo>

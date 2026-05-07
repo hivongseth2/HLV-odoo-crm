@@ -4,7 +4,7 @@ import uuid
 import logging
 from datetime import datetime
 
-from odoo import fields, models
+from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
@@ -73,6 +73,59 @@ class SaleOrderAmisSync(models.Model):
         copy=False,
         help='Ngày phát hành hóa đơn điện tử.',
     )
+
+    # ── Thông tin xuất hóa đơn điền trước (pre-fill) ─────────────────────────
+    meinvoice_prefill_buyer_legal_name = fields.Char(
+        string='Tên đơn vị (pháp lý)',
+        copy=False,
+        help='Tên đơn vị mua hàng theo pháp lý. Ưu tiên điền vào hóa đơn nháp.',
+    )
+    meinvoice_prefill_buyer_full_name = fields.Char(
+        string='Họ tên người nhận HĐ',
+        copy=False,
+        help='Họ tên người mua hoặc người nhận hóa đơn.',
+    )
+    meinvoice_prefill_buyer_tax_code = fields.Char(
+        string='MST người mua',
+        copy=False,
+        help='Mã số thuế của đơn vị mua hàng.',
+    )
+    meinvoice_prefill_buyer_address = fields.Char(
+        string='Địa chỉ người mua',
+        copy=False,
+        help='Địa chỉ đầy đủ của đơn vị mua hàng.',
+    )
+    meinvoice_prefill_buyer_phone = fields.Char(
+        string='SĐT người mua',
+        copy=False,
+    )
+    meinvoice_prefill_buyer_email = fields.Char(
+        string='Email người mua',
+        copy=False,
+    )
+    meinvoice_prefill_payment_method = fields.Char(
+        string='Phương thức TT',
+        copy=False,
+        default='TM/CK',
+    )
+    meinvoice_prefill_inv_series = fields.Char(
+        string='Ký hiệu HĐ (override)',
+        copy=False,
+        help='Ghi đè ký hiệu hóa đơn lấy từ cấu hình meInvoice.',
+    )
+
+    # ── Liên kết hóa đơn điện tử ─────────────────────────────────────────────
+    meinvoice_invoice_ids = fields.One2many(
+        'meinvoice.invoice', 'sale_order_id', string='Hóa đơn điện tử',
+    )
+    meinvoice_invoice_count = fields.Integer(
+        compute='_compute_meinvoice_invoice_count', string='Số HĐĐT',
+    )
+
+    @api.depends('meinvoice_invoice_ids')
+    def _compute_meinvoice_invoice_count(self):
+        for order in self:
+            order.meinvoice_invoice_count = len(order.meinvoice_invoice_ids)
 
     def action_sync_misa_sa_invoice(self):
         """Tạo job sync hóa đơn bán hàng (SAInvoice) lên MISA — được gọi bởi nút bấm."""
@@ -343,21 +396,56 @@ class SaleOrderAmisSync(models.Model):
     # ── meInvoice: Phát hành hóa đơn điện tử ──────────────────────────────────
 
     def action_publish_meinvoice_invoice(self):
-        """Mở wizard xem trước và xác nhận phát hành hóa đơn điện tử meInvoice."""
+        """Tạo hóa đơn điện tử nháp từ đơn hàng và mở để chỉnh sửa trước khi gửi CQT."""
         self.ensure_one()
         if self.state not in ('sale', 'done'):
             raise UserError('Đơn hàng phải ở trạng thái Đã xác nhận hoặc Hoàn thành.')
-        if self.misa_meinvoice_synced:
-            raise UserError('Đơn hàng "%s" đã được phát hành hóa đơn meInvoice rồi.' % self.name)
 
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
         if not config.meinvoice_enabled:
             raise UserError('Tính năng phát hành HĐĐT meInvoice chưa được bật trong cấu hình.')
 
-        # Tính invoice_data để pre-fill wizard
+        # Kiểm tra hóa đơn nháp chưa xử lý
+        existing_draft = self.env['meinvoice.invoice'].search([
+            ('sale_order_id', '=', self.id),
+            ('state', '=', 'draft'),
+        ], limit=1)
+        if existing_draft:
+            raise UserError(
+                'Đã có hóa đơn nháp cho đơn hàng này. '
+                'Vui lòng hoàn thành hoặc hủy hóa đơn nháp hiện tại trước khi tạo mới.'
+            )
+
+        # Tính invoice_data từ SO
         invoice_data = self._build_meinvoice_invoice_data(config)
 
-        # Tạo wizard lines từ OriginalInvoiceDetail
+        # Ưu tiên thông tin từ pre-fill trên SO; nếu trống thì lấy từ dữ liệu tính toán
+        buyer_legal_name = (
+            self.meinvoice_prefill_buyer_legal_name or invoice_data.get('BuyerLegalName', '')
+        ).strip()
+        buyer_full_name = (
+            self.meinvoice_prefill_buyer_full_name or invoice_data.get('BuyerFullName', '')
+        ).strip()
+        buyer_tax_code = (
+            self.meinvoice_prefill_buyer_tax_code or invoice_data.get('BuyerTaxCode', '')
+        ).strip()
+        buyer_address = (
+            self.meinvoice_prefill_buyer_address or invoice_data.get('BuyerAddress', '')
+        ).strip()
+        buyer_phone = (
+            self.meinvoice_prefill_buyer_phone or invoice_data.get('BuyerPhoneNumber', '')
+        ).strip()
+        buyer_email = (
+            self.meinvoice_prefill_buyer_email or invoice_data.get('BuyerEmail', '')
+        ).strip()
+        inv_series = (
+            self.meinvoice_prefill_inv_series or invoice_data.get('InvSeries', '')
+        ).strip()
+        payment_method = (
+            self.meinvoice_prefill_payment_method or invoice_data.get('PaymentMethodName', 'TM/CK')
+        ).strip()
+
+        # Tạo dòng hàng hóa từ OriginalInvoiceDetail
         line_vals = []
         for item in invoice_data.get('OriginalInvoiceDetail', []):
             line_vals.append((0, 0, {
@@ -382,17 +470,18 @@ class SaleOrderAmisSync(models.Model):
         except Exception:
             inv_date = _date.today()
 
-        wizard = self.env['meinvoice.publish.wizard'].create({
+        import json as _json
+        draft = self.env['meinvoice.invoice'].create({
             'sale_order_id': self.id,
-            'inv_series': invoice_data.get('InvSeries', ''),
+            'inv_series': inv_series,
             'inv_date': inv_date,
-            'payment_method': invoice_data.get('PaymentMethodName', 'TM/CK'),
-            'buyer_legal_name': invoice_data.get('BuyerLegalName', ''),
-            'buyer_full_name': invoice_data.get('BuyerFullName', ''),
-            'buyer_tax_code': invoice_data.get('BuyerTaxCode', ''),
-            'buyer_address': invoice_data.get('BuyerAddress', ''),
-            'buyer_phone': invoice_data.get('BuyerPhoneNumber', ''),
-            'buyer_email': invoice_data.get('BuyerEmail', ''),
+            'payment_method': payment_method,
+            'buyer_legal_name': buyer_legal_name,
+            'buyer_full_name': buyer_full_name,
+            'buyer_tax_code': buyer_tax_code,
+            'buyer_address': buyer_address,
+            'buyer_phone': buyer_phone,
+            'buyer_email': buyer_email,
             'total_sale_oc': invoice_data.get('TotalSaleAmountOC', 0),
             'total_discount_oc': invoice_data.get('TotalDiscountAmountOC', 0),
             'total_net_oc': invoice_data.get('TotalAmountWithoutVATOC', 0),
@@ -400,16 +489,29 @@ class SaleOrderAmisSync(models.Model):
             'total_amount_oc': invoice_data.get('TotalAmountOC', 0),
             'total_amount_in_words': invoice_data.get('TotalAmountInWords', ''),
             'line_ids': line_vals,
-            'invoice_data_json': __import__('json').dumps(invoice_data, ensure_ascii=False, default=str),
+            'invoice_data_json': _json.dumps(invoice_data, ensure_ascii=False, default=str),
         })
+        _logger.info('meInvoice draft created for SO %s → meinvoice.invoice id=%d', self.name, draft.id)
 
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Xem trước hóa đơn điện tử — %s' % self.name,
-            'res_model': 'meinvoice.publish.wizard',
-            'res_id': wizard.id,
+            'name': 'Hóa đơn điện tử — %s' % self.name,
+            'res_model': 'meinvoice.invoice',
+            'res_id': draft.id,
             'view_mode': 'form',
-            'target': 'new',
+            'target': 'current',
+        }
+
+    def action_view_meinvoice_drafts(self):
+        """Mở danh sách hóa đơn điện tử của đơn hàng này."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Hóa đơn điện tử — %s' % self.name,
+            'res_model': 'meinvoice.invoice',
+            'view_mode': 'list,form',
+            'domain': [('sale_order_id', '=', self.id)],
+            'context': {'default_sale_order_id': self.id},
         }
 
     def action_view_meinvoice_invoice(self):
