@@ -176,28 +176,40 @@ a { color:inherit; }
 .tc-benefits-popup {
     display:none;
     position:absolute; inset:0;
-    background:rgba(15,15,30,0.88);
     border-radius:16px;
     padding:16px 18px;
     z-index:200;
     overflow-y:auto;
-    color:#fff;
     text-align:left;
-    backdrop-filter:blur(2px);
+    backdrop-filter:blur(6px);
 }
 .tc-benefits-popup.open { display:flex; flex-direction:column; }
-.tc-pop-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
-.tc-pop-title { font-size:.75rem; font-weight:900; letter-spacing:1.5px; text-transform:uppercase;
-                color:rgba(255,255,255,.55); margin:0; }
-.tc-pop-close { background:none; border:none; color:rgba(255,255,255,.6); cursor:pointer;
-                font-size:18px; line-height:1; padding:0; flex-shrink:0; }
-.tc-pop-close:hover { color:#fff; }
+/* Per-tier gradient backgrounds matching SVG card gradients */
+.tc-pop-brown   { background:linear-gradient(135deg,rgba(184,134,11,.94),rgba(92,70,8,.97));    color:#fff; }
+.tc-pop-silver  { background:linear-gradient(135deg,rgba(232,233,235,.96),rgba(122,134,150,.94)); color:#374151; }
+.tc-pop-gold    { background:linear-gradient(135deg,rgba(252,211,77,.94),rgba(146,64,14,.97));   color:#fff; }
+.tc-pop-platinum{ background:linear-gradient(135deg,rgba(220,220,224,.96),rgba(150,155,162,.94)); color:#374151; }
+.tc-pop-diamond { background:linear-gradient(135deg,rgba(6,182,212,.94),rgba(14,116,144,.97));   color:#fff; }
+.tc-pop-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.tc-pop-title { font-size:.72rem; font-weight:900; letter-spacing:1.5px; text-transform:uppercase;
+                opacity:.65; margin:0; color:inherit; }
+.tc-pop-close { background:none; border:none; cursor:pointer; color:inherit;
+                font-size:18px; line-height:1; padding:0; flex-shrink:0; opacity:.6; }
+.tc-pop-close:hover { opacity:1; }
 .tc-pop-list { list-style:none; padding:0; margin:0; flex:1; }
-.tc-pop-item { display:flex; align-items:center; gap:10px; padding:7px 0;
-               border-bottom:1px solid rgba(255,255,255,.1); font-size:.875rem; color:#fff; }
+.tc-pop-item { display:flex; align-items:center; gap:10px; padding:6px 0;
+               border-bottom:1px solid rgba(255,255,255,.18); font-size:.875rem; color:inherit; }
+.tc-pop-silver .tc-pop-item,
+.tc-pop-platinum .tc-pop-item { border-bottom-color:rgba(0,0,0,.1); }
 .tc-pop-item:last-child { border-bottom:none; }
-.tc-pop-item .fa { font-size:14px; flex-shrink:0; color:rgba(255,255,255,.7); }
-.tc-pop-empty { font-size:.85rem; color:rgba(255,255,255,.5); margin:0; }
+/* Icon badge circle */
+.tc-icon-badge { width:26px; height:26px; border-radius:8px; flex-shrink:0;
+                 background:rgba(255,255,255,.25);
+                 display:flex; align-items:center; justify-content:center; }
+.tc-pop-silver .tc-icon-badge,
+.tc-pop-platinum .tc-icon-badge { background:rgba(0,0,0,.12); }
+.tc-icon-badge .fa { font-size:13px; }
+.tc-pop-empty { font-size:.85rem; opacity:.6; margin:0; color:inherit; }
 
 /* Tier badge (top-right) */
 .tc-badge {
@@ -495,7 +507,7 @@ html { scroll-behavior: smooth; }
                                 <img class="sr-tier-card-asset"
                                      t-att-src="'/hlv_loyalty/static/description/icon/' + card_folder + '/card.svg'"
                                      t-att-alt="tier.name or 'Tier Card'"/>
-                                <div class="tc-benefits-popup">
+                                <div t-att-class="'tc-benefits-popup tc-pop-' + (tier.color or 'brown')">
                                     <div class="tc-pop-header">
                                         <span class="tc-pop-title">Quyền lợi hạng <t t-out="tier.name"/></span>
                                         <button class="tc-pop-close" aria-label="Đóng">&#x2715;</button>
@@ -504,7 +516,7 @@ html { scroll-behavior: smooth; }
                                         <ul class="tc-pop-list">
                                             <t t-foreach="tier.benefit_ids" t-as="b">
                                                 <li class="tc-pop-item">
-                                                    <i t-att-class="'fa ' + (b.icon or 'fa-check')"/>
+                                                    <span class="tc-icon-badge"><i t-att-class="'fa ' + (b.icon or 'fa-check')" aria-hidden="true"/></span>
                                                     <span><t t-out="b.name"/></span>
                                                 </li>
                                             </t>
@@ -813,7 +825,7 @@ html { scroll-behavior: smooth; }
                                 <img class="sr-tier-card-asset"
                                      t-att-src="'/hlv_loyalty/static/description/icon/' + card_folder + '/card.svg'"
                                      t-att-alt="tier.name or 'Tier Card'"/>
-                                <div class="tc-benefits-popup">
+                                <div t-att-class="'tc-benefits-popup tc-pop-' + (tier.color or 'brown')">
                                     <div class="tc-pop-header">
                                         <span class="tc-pop-title">Quyền lợi hạng <t t-out="tier.name"/></span>
                                         <button class="tc-pop-close" aria-label="Đóng">&#x2715;</button>
@@ -822,7 +834,7 @@ html { scroll-behavior: smooth; }
                                         <ul class="tc-pop-list">
                                             <t t-foreach="tier.benefit_ids" t-as="b">
                                                 <li class="tc-pop-item">
-                                                    <i t-att-class="'fa ' + (b.icon or 'fa-check')"/>
+                                                    <span class="tc-icon-badge"><i t-att-class="'fa ' + (b.icon or 'fa-check')" aria-hidden="true"/></span>
                                                     <span><t t-out="b.name"/></span>
                                                 </li>
                                             </t>
