@@ -153,8 +153,8 @@ a { color:inherit; }
 .tc-icon .ms { font-size:28px; }
 .tc-icon .fa  { font-size:24px; }
 .tc-tier-img {
-    width:28px;
-    height:28px;
+    width:100px;
+    height:100px;
     object-fit:contain;
     display:block;
 }
@@ -248,6 +248,12 @@ a { color:inherit; }
     display:flex; align-items:center; justify-content:center; flex-shrink:0;
 }
 .sr-bal-avatar .ms { color:var(--c-sec-c); font-size:36px; }
+.sr-bal-avatar-img {
+    width:46px;
+    height:46px;
+    object-fit:contain;
+    display:block;
+}
 .sr-bal-tier-tag {
     position:absolute; bottom:-4px; right:-4px;
     background:#fff; color:var(--c-pri);
@@ -570,7 +576,14 @@ html { scroll-behavior: smooth; }
                     <!-- Balance pill -->
                     <div class="sr-bal-pill">
                         <div class="sr-bal-avatar">
-                            <span class="ms ms-fill ms-lg">workspace_premium</span>
+                            <t t-if="partner.loyalty_tier_id and partner.loyalty_tier_id.image_url">
+                                <img class="sr-bal-avatar-img"
+                                     t-att-src="partner.loyalty_tier_id.image_url"
+                                     t-att-alt="partner.loyalty_tier_id.name or 'Tier image'"/>
+                            </t>
+                            <t t-else="">
+                                <span class="ms ms-fill ms-lg">workspace_premium</span>
+                            </t>
                             <t t-if="partner.loyalty_tier_id">
                                 <span class="sr-bal-tier-tag">
                                     <t t-out="(partner.loyalty_tier_id.name or '').upper()"/>
