@@ -13,9 +13,9 @@
             <style>
 /* ── Palette ── */
 :root {
-    --c-pri:    #000666;
-    --c-pri-c:  #1a237e;
-    --c-sec:    #765a22;
+    --c-pri:    #1779b4;
+    --c-pri-c:  #1677b3;
+    --c-sec:    #fcc50e;
     --c-sec-c:  #ffd793;
     --c-surf:   #f8f9fa;
     --c-surf-lo:#f3f4f5;
