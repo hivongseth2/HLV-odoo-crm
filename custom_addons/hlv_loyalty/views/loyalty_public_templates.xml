@@ -144,6 +144,7 @@ a { color:inherit; }
     position:relative;
     border-radius:16px;
     overflow:visible;
+    cursor:pointer;
 }
 .sr-tier-card.current .sr-tier-visual {
     outline:2px solid var(--c-sec);
@@ -171,26 +172,32 @@ a { color:inherit; }
 .tc-icon-btn { cursor:pointer; }
 .tc-icon-btn:focus { outline:none; box-shadow:0 0 0 3px rgba(118,90,34,.5); border-radius:8px; }
 
-/* Benefits popup */
+/* Benefits popup overlay */
 .tc-benefits-popup {
     display:none;
-    position:absolute; top:52px; left:12px;
-    background:var(--c-surf-0); border-radius:10px; padding:16px 18px;
-    box-shadow:0 8px 32px rgba(0,6,102,.18); border:1px solid var(--c-out);
-    min-width:200px; max-width:280px; z-index:200; text-align:left;
+    position:absolute; inset:0;
+    background:rgba(15,15,30,0.88);
+    border-radius:16px;
+    padding:16px 18px;
+    z-index:200;
+    overflow-y:auto;
+    color:#fff;
+    text-align:left;
+    backdrop-filter:blur(2px);
 }
-.tc-pop-dark { background:var(--c-pri-c) !important; border-color:rgba(255,255,255,.15) !important; color:#fff; }
-.tc-benefits-popup.open { display:block; }
+.tc-benefits-popup.open { display:flex; flex-direction:column; }
+.tc-pop-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
 .tc-pop-title { font-size:.75rem; font-weight:900; letter-spacing:1.5px; text-transform:uppercase;
-                margin-bottom:10px; color:var(--c-ink-v); }
-.tc-pop-dark .tc-pop-title { color:rgba(255,255,255,.5); }
-.tc-pop-list { list-style:none; padding:0; margin:0; }
+                color:rgba(255,255,255,.55); margin:0; }
+.tc-pop-close { background:none; border:none; color:rgba(255,255,255,.6); cursor:pointer;
+                font-size:18px; line-height:1; padding:0; flex-shrink:0; }
+.tc-pop-close:hover { color:#fff; }
+.tc-pop-list { list-style:none; padding:0; margin:0; flex:1; }
 .tc-pop-item { display:flex; align-items:center; gap:10px; padding:7px 0;
-               border-bottom:1px solid var(--c-surf-hi); font-size:.875rem; }
+               border-bottom:1px solid rgba(255,255,255,.1); font-size:.875rem; color:#fff; }
 .tc-pop-item:last-child { border-bottom:none; }
-.tc-pop-dark .tc-pop-item { border-color:rgba(255,255,255,.1); }
-.tc-pop-item .fa { font-size:14px; flex-shrink:0; }
-.tc-pop-empty { font-size:.85rem; color:var(--c-ink-v); }
+.tc-pop-item .fa { font-size:14px; flex-shrink:0; color:rgba(255,255,255,.7); }
+.tc-pop-empty { font-size:.85rem; color:rgba(255,255,255,.5); margin:0; }
 
 /* Tier badge (top-right) */
 .tc-badge {
@@ -402,29 +409,31 @@ html { scroll-behavior: smooth; }
         <t t-out="0"/>
         <script>
 (function () {
+    function closeAll() {
+        document.querySelectorAll('.tc-benefits-popup.open').forEach(function (p) { p.classList.remove('open'); });
+    }
     function init() {
-        document.querySelectorAll('.tc-icon-btn').forEach(function (btn) {
-            btn.addEventListener('click', function (e) {
+        /* Click on card image area → toggle popup */
+        document.querySelectorAll('.sr-tier-visual').forEach(function (visual) {
+            visual.addEventListener('click', function (e) {
+                /* close button inside popup */
+                if (e.target.closest('.tc-pop-close')) {
+                    closeAll();
+                    return;
+                }
+                /* clicking inside an already-open popup → do nothing (allow scroll) */
+                if (e.target.closest('.tc-benefits-popup')) return;
                 e.stopPropagation();
-                var card = btn.closest('.sr-tier-card');
-                if (!card) return;
-                var popup = card.querySelector('.tc-benefits-popup');
+                var popup = visual.querySelector('.tc-benefits-popup');
                 if (!popup) return;
                 var isOpen = popup.classList.contains('open');
-                document.querySelectorAll('.tc-benefits-popup.open').forEach(function (p) { p.classList.remove('open'); });
+                closeAll();
                 if (!isOpen) popup.classList.add('open');
             });
-            btn.addEventListener('keydown', function (e) {
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); btn.click(); }
-            });
         });
-        document.addEventListener('click', function () {
-            document.querySelectorAll('.tc-benefits-popup.open').forEach(function (p) { p.classList.remove('open'); });
-        });
+        document.addEventListener('click', closeAll);
         document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') {
-                document.querySelectorAll('.tc-benefits-popup.open').forEach(function (p) { p.classList.remove('open'); });
-            }
+            if (e.key === 'Escape') closeAll();
         });
     }
     if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', init); }
@@ -486,6 +495,25 @@ html { scroll-behavior: smooth; }
                                 <img class="sr-tier-card-asset"
                                      t-att-src="'/hlv_loyalty/static/description/icon/' + card_folder + '/card.svg'"
                                      t-att-alt="tier.name or 'Tier Card'"/>
+                                <div class="tc-benefits-popup">
+                                    <div class="tc-pop-header">
+                                        <span class="tc-pop-title">Quyền lợi hạng <t t-out="tier.name"/></span>
+                                        <button class="tc-pop-close" aria-label="Đóng">&#x2715;</button>
+                                    </div>
+                                    <t t-if="tier.benefit_ids">
+                                        <ul class="tc-pop-list">
+                                            <t t-foreach="tier.benefit_ids" t-as="b">
+                                                <li class="tc-pop-item">
+                                                    <i t-att-class="'fa ' + (b.icon or 'fa-check')"/>
+                                                    <span><t t-out="b.name"/></span>
+                                                </li>
+                                            </t>
+                                        </ul>
+                                    </t>
+                                    <t t-else="">
+                                        <p class="tc-pop-empty">Chưa có quyền lợi.</p>
+                                    </t>
+                                </div>
                             </div>
                             <div class="tc-card-label"><t t-out="tier.name"/></div>
                         </div>
@@ -785,6 +813,25 @@ html { scroll-behavior: smooth; }
                                 <img class="sr-tier-card-asset"
                                      t-att-src="'/hlv_loyalty/static/description/icon/' + card_folder + '/card.svg'"
                                      t-att-alt="tier.name or 'Tier Card'"/>
+                                <div class="tc-benefits-popup">
+                                    <div class="tc-pop-header">
+                                        <span class="tc-pop-title">Quyền lợi hạng <t t-out="tier.name"/></span>
+                                        <button class="tc-pop-close" aria-label="Đóng">&#x2715;</button>
+                                    </div>
+                                    <t t-if="tier.benefit_ids">
+                                        <ul class="tc-pop-list">
+                                            <t t-foreach="tier.benefit_ids" t-as="b">
+                                                <li class="tc-pop-item">
+                                                    <i t-att-class="'fa ' + (b.icon or 'fa-check')"/>
+                                                    <span><t t-out="b.name"/></span>
+                                                </li>
+                                            </t>
+                                        </ul>
+                                    </t>
+                                    <t t-else="">
+                                        <p class="tc-pop-empty">Chưa có quyền lợi.</p>
+                                    </t>
+                                </div>
                             </div>
                             <div class="tc-card-label"><t t-out="tier.name"/></div>
                         </div>
