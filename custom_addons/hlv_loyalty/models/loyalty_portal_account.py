@@ -5,6 +5,20 @@ import re
 from odoo import models, fields, api, exceptions
 
 
+def _normalize_phone(phone: str) -> str:
+    """Strip non-digits; convert +84/84 prefix → 0 (Vietnamese standard)."""
+    if not phone:
+        return ''
+    digits = re.sub(r'\D', '', phone)
+    # +84xxxxxxxxx (11 digits starting with 84) → 0xxxxxxxxx
+    if len(digits) == 11 and digits.startswith('84'):
+        digits = '0' + digits[2:]
+    # 084xxxxxxxxx (12 digits starting with 084) is unlikely but handle it
+    elif len(digits) == 12 and digits.startswith('084'):
+        digits = '0' + digits[3:]
+    return digits
+
+
 class HlvLoyaltyPortalAccount(models.Model):
     _name = 'hlv.loyalty.portal.account'
     _description = 'Tài khoản cổng Loyalty'
@@ -20,15 +34,46 @@ class HlvLoyaltyPortalAccount(models.Model):
     password_hash = fields.Char(string='Mật khẩu (hash)', copy=False)
     active = fields.Boolean(default=True)
 
-    # Convenience: mirror phone from partner so users can update it here
-    phone = fields.Char(
-        string='Số điện thoại', related='partner_id.phone',
-        readonly=False, store=False,
+    # Dedicated login phone – stored separately, defaults to partner's phone
+    portal_phone = fields.Char(
+        string='SĐT đăng nhập',
+        help='Số điện thoại dùng để đăng nhập cổng Loyalty. '
+             'Mặc định lấy từ SĐT của khách hàng. Lưu dưới dạng chuẩn hóa (0xxxxxxxxx).',
+        index=True,
     )
 
     _sql_constraints = [
         ('username_uniq', 'UNIQUE(username)', 'Tên đăng nhập đã tồn tại.'),
     ]
+
+    # ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    @api.onchange('partner_id')
+    def _onchange_partner_id_phone(self):
+        """Pre-fill portal_phone from partner when partner is selected."""
+        if self.partner_id and not self.portal_phone:
+            self.portal_phone = _normalize_phone(self.partner_id.phone or '')
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        company = self.env.company
+        default_pw = getattr(company, 'loyalty_portal_default_password', None) or 'hlv@2026'
+        for vals in vals_list:
+            # Auto-fill portal_phone from partner if not provided
+            if not vals.get('portal_phone') and vals.get('partner_id'):
+                partner = self.env['res.partner'].browse(vals['partner_id'])
+                vals['portal_phone'] = _normalize_phone(partner.phone or '')
+            else:
+                vals['portal_phone'] = _normalize_phone(vals.get('portal_phone') or '')
+            # Set default password hash if no hash provided
+            if not vals.get('password_hash'):
+                vals['password_hash'] = self._hash_password(default_pw)
+        return super().create(vals_list)
+
+    def write(self, vals):
+        if 'portal_phone' in vals:
+            vals['portal_phone'] = _normalize_phone(vals['portal_phone'] or '')
+        return super().write(vals)
 
     # ── Password helpers ──────────────────────────────────────────────────────
 
@@ -61,22 +106,23 @@ class HlvLoyaltyPortalAccount(models.Model):
     def authenticate(self, login: str, plain_password: str):
         """
         Return the account record if credentials are valid, else False.
-        Accepts username OR phone number as login.
+        Accepts username OR portal_phone as login.
+        Phone input is normalized before comparison.
         """
         login = (login or '').strip()
         plain_password = (plain_password or '').strip()
         if not login or not plain_password:
             return False
 
-        # Normalize phone: strip spaces/dashes for comparison
-        phone_normalized = re.sub(r'[\s\-\.]', '', login)
+        # Normalize login as phone and search both username and portal_phone
+        phone_normalized = _normalize_phone(login)
 
-        domain = [
-            ('active', '=', True),
-            '|',
-            ('username', '=', login),
-            ('partner_id.phone', '=', phone_normalized),
-        ]
+        domain = [('active', '=', True)]
+        if phone_normalized:
+            domain += ['|', ('username', '=', login), ('portal_phone', '=', phone_normalized)]
+        else:
+            domain += [('username', '=', login)]
+
         accounts = self.sudo().search(domain)
         for acc in accounts:
             if self._verify_password(plain_password, acc.password_hash):

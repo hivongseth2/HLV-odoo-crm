@@ -8,7 +8,7 @@
         - Sử dụng Voucher trên toàn hệ thống (cross-company)
         - Xử lý hoàn hàng / hủy Voucher / hết hạn
     """,
-    "version": "18.0.1.1.0",
+    "version": "18.0.1.2.0",
     "category": "Sales",
     "author": "HLV",
     "depends": ["sale_management", "stock", "mail", "website"],

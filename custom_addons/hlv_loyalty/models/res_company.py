@@ -17,3 +17,8 @@ class ResCompany(models.Model):
         string='Gửi thông báo tích điểm', default=True,
         help='Gửi email/thông báo cho khách khi được tích điểm',
     )
+    loyalty_portal_default_password = fields.Char(
+        string='Mật khẩu mặc định Portal',
+        default='hlv@2026',
+        help='Mật khẩu mặc định khi tạo tài khoản Portal Loyalty mới. Tối thiểu 6 ký tự.',
+    )

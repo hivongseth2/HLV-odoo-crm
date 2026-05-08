@@ -22,7 +22,7 @@
                 <group>
                     <group string="Thông tin tài khoản">
                         <field name="partner_id" domain="[('is_company','=',True),('parent_id','=',False)]" context="{'show_vat': True}"/>
-                        <field name="phone"/>
+                        <field name="portal_phone" placeholder="vd: 0912345678"/>
                         <field name="active"/>
                     </group>
                     <group string="Mật khẩu">
@@ -42,7 +42,7 @@
         <list string="Tài khoản Portal Loyalty" editable="bottom">
             <field name="partner_id" domain="[('is_company','=',True),('parent_id','=',False)]" context="{'show_vat': True}"/>
             <field name="username"/>
-            <field name="phone"/>
+            <field name="portal_phone"/>
             <field name="active"/>
             <button name="action_reset_password_wizard" string="Reset mật khẩu"
                     type="object" icon="fa-key" class="btn-sm"

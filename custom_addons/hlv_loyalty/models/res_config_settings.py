@@ -20,3 +20,8 @@ class ResConfigSettings(models.TransientModel):
         readonly=False,
         string='Gửi thông báo tích điểm',
     )
+    loyalty_portal_default_password = fields.Char(
+        related='company_id.loyalty_portal_default_password',
+        readonly=False,
+        string='Mật khẩu mặc định Portal',
+    )
