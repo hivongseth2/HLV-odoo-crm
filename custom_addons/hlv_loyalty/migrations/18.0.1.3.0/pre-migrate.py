@@ -14,7 +14,7 @@ def migrate(cr, version):
     # 1. Add loyalty_default_discount to res_partner
     cr.execute("""
         ALTER TABLE res_partner
-        ADD COLUMN IF NOT EXISTS loyalty_default_discount numeric DEFAULT 5.0;
+        ADD COLUMN IF NOT EXISTS loyalty_default_discount numeric DEFAULT 0.05;
     """)
     _logger.info("migration 18.0.1.3.0: added loyalty_default_discount to res_partner")
 
