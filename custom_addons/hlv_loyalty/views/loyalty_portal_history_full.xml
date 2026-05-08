@@ -22,6 +22,27 @@
         <!-- Body -->
         <div class="sr-body" style="padding-top:32px">
             <div class="sr-hist-section">
+
+                <!-- Info box: điểm tích lũy vs đổi thưởng -->
+                <t t-if="program">
+                    <div class="sr-pts-info-box">
+                        <div class="sr-pts-info-card sr-pts-info-ranking">
+                            <div class="sr-pts-info-icon"><span class="ms ms-fill">trending_up</span></div>
+                            <div>
+                                <div class="sr-pts-info-label">Điểm Tích lũy <span class="sr-badge badge-pt-ranking" style="font-size:.65rem;padding:2px 8px;vertical-align:middle">Ranking</span></div>
+                                <div class="sr-pts-info-desc"><t t-out="program.portal_ranking_desc or ''"/></div>
+                            </div>
+                        </div>
+                        <div class="sr-pts-info-card sr-pts-info-exchange">
+                            <div class="sr-pts-info-icon"><span class="ms ms-fill">swap_horiz</span></div>
+                            <div>
+                                <div class="sr-pts-info-label">Điểm Đổi thưởng <span class="sr-badge badge-pt-exchange" style="font-size:.65rem;padding:2px 8px;vertical-align:middle">Exchange</span></div>
+                                <div class="sr-pts-info-desc"><t t-out="program.portal_exchange_desc or ''"/></div>
+                            </div>
+                        </div>
+                    </div>
+                </t>
+
                 <div class="sr-hist-header">
                     <h3 class="sr-hist-title">
                         Toàn bộ lịch sử tích lũy
@@ -29,12 +50,36 @@
                             (<t t-out="len(all_history)"/> giao dịch)
                         </t>
                     </h3>
-                    <!-- Legend -->
-                    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-                        <span class="sr-badge badge-pt-ranking"><span class="ms">trending_up</span> Tích lũy</span>
-                        <span class="sr-badge badge-pt-exchange"><span class="ms">swap_horiz</span> Đổi điểm</span>
+                </div>
+
+                <!-- Filter bar -->
+                <div class="sr-filter-bar">
+                    <div class="sr-filter-group">
+                        <span class="sr-filter-label">Loại điểm:</span>
+                        <a t-att-href="'/loyalty/history?pt=all&amp;st=' + active_st"
+                           t-att-class="'sr-filter-pill' + (' active' if active_pt == 'all' else '')">Tất cả</a>
+                        <a t-att-href="'/loyalty/history?pt=ranking&amp;st=' + active_st"
+                           t-att-class="'sr-filter-pill sr-fp-ranking' + (' active' if active_pt == 'ranking' else '')">
+                            <span class="ms" style="font-size:14px">trending_up</span> Tích lũy
+                        </a>
+                        <a t-att-href="'/loyalty/history?pt=exchange&amp;st=' + active_st"
+                           t-att-class="'sr-filter-pill sr-fp-exchange' + (' active' if active_pt == 'exchange' else '')">
+                            <span class="ms" style="font-size:14px">swap_horiz</span> Đổi thưởng
+                        </a>
+                    </div>
+                    <div class="sr-filter-group">
+                        <span class="sr-filter-label">Trạng thái:</span>
+                        <a t-att-href="'/loyalty/history?pt=' + active_pt + '&amp;st=all'"
+                           t-att-class="'sr-filter-pill' + (' active' if active_st == 'all' else '')">Tất cả</a>
+                        <a t-att-href="'/loyalty/history?pt=' + active_pt + '&amp;st=pending'"
+                           t-att-class="'sr-filter-pill' + (' active' if active_st == 'pending' else '')">Chờ XN</a>
+                        <a t-att-href="'/loyalty/history?pt=' + active_pt + '&amp;st=confirmed'"
+                           t-att-class="'sr-filter-pill' + (' active' if active_st == 'confirmed' else '')">Hoàn tất</a>
+                        <a t-att-href="'/loyalty/history?pt=' + active_pt + '&amp;st=cancelled'"
+                           t-att-class="'sr-filter-pill' + (' active' if active_st == 'cancelled' else '')">Đã hủy</a>
                     </div>
                 </div>
+
                 <div class="sr-tbl-wrap">
                     <t t-if="all_history">
                         <table class="sr-tbl">
@@ -42,9 +87,9 @@
                                 <tr>
                                     <th>Ngày giao dịch</th>
                                     <th>Loại hình</th>
-                                    <th>Loại điểm</th>
-                                    <th>Số điểm</th>
                                     <th>Nội dung chi tiết</th>
+                                    <th class="th-pts-ranking"><span class="ms" style="font-size:14px">trending_up</span> Điểm TL</th>
+                                    <th class="th-pts-exchange"><span class="ms" style="font-size:14px">swap_horiz</span> Điểm ĐT</th>
                                     <th style="text-align:right">Trạng thái</th>
                                 </tr>
                             </thead>
@@ -69,18 +114,21 @@
                                                 <span class="sr-badge badge-manual"><span class="ms">edit_note</span> Thủ công</span>
                                             </t>
                                         </td>
-                                        <td>
-                                            <t t-if="h.point_type == 'ranking'">
-                                                <span class="sr-badge badge-pt-ranking"><span class="ms">trending_up</span> Tích lũy</span>
-                                            </t>
-                                            <t t-else="">
-                                                <span class="sr-badge badge-pt-exchange"><span class="ms">swap_horiz</span> Đổi điểm</span>
-                                            </t>
-                                        </td>
-                                        <td t-att-class="'td-pts ' + ('pos' if h.point_amount > 0 else 'neg')">
-                                            <t t-out="('+' if h.point_amount > 0 else '') + '{:,}'.format(h.point_amount)"/>
-                                        </td>
                                         <td class="td-desc"><t t-out="h.description or ''"/></td>
+                                        <!-- Điểm Tích lũy (ranking) -->
+                                        <td t-att-class="'td-pts th-pts-ranking ' + ('pos' if h.point_amount > 0 else 'neg') if h.point_type == 'ranking' else 'td-pts-empty'">
+                                            <t t-if="h.point_type == 'ranking'">
+                                                <t t-out="('+' if h.point_amount > 0 else '') + '{:,}'.format(h.point_amount)"/>
+                                            </t>
+                                            <t t-else=""><span class="td-dash">–</span></t>
+                                        </td>
+                                        <!-- Điểm Đổi thưởng (exchange) -->
+                                        <td t-att-class="'td-pts th-pts-exchange ' + ('pos' if h.point_amount > 0 else 'neg') if h.point_type == 'exchange' else 'td-pts-empty'">
+                                            <t t-if="h.point_type == 'exchange'">
+                                                <t t-out="('+' if h.point_amount > 0 else '') + '{:,}'.format(h.point_amount)"/>
+                                            </t>
+                                            <t t-else=""><span class="td-dash">–</span></t>
+                                        </td>
                                         <td class="td-status">
                                             <t t-out="dict(pending='Chờ XN', confirmed='Hoàn tất', cancelled='Đã hủy').get(h.state, h.state)"/>
                                         </td>
@@ -97,10 +145,10 @@
                                             <t t-out="('+' if h.point_amount > 0 else '') + '{:,}'.format(h.point_amount)"/>
                                         </span>
                                         <t t-if="h.point_type == 'ranking'">
-                                            <span class="sr-badge badge-pt-ranking" style="font-size:.62rem;padding:2px 7px"><span class="ms">trending_up</span></span>
+                                            <span class="sr-badge badge-pt-ranking" style="font-size:.62rem;padding:2px 7px"><span class="ms">trending_up</span> TL</span>
                                         </t>
                                         <t t-else="">
-                                            <span class="sr-badge badge-pt-exchange" style="font-size:.62rem;padding:2px 7px"><span class="ms">swap_horiz</span></span>
+                                            <span class="sr-badge badge-pt-exchange" style="font-size:.62rem;padding:2px 7px"><span class="ms">swap_horiz</span> ĐT</span>
                                         </t>
                                     </div>
                                     <div class="shc-body">
@@ -119,7 +167,7 @@
                     <t t-else="">
                         <div class="sr-empty">
                             <span class="ms">inbox</span>
-                            <p>Chưa có giao dịch điểm nào.</p>
+                            <p>Không có giao dịch nào khớp với bộ lọc.</p>
                         </div>
                     </t>
                 </div>

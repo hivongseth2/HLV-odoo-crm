@@ -293,6 +293,56 @@ a { color:inherit; }
 .sr-topbar-logout { padding:7px 16px; background:#f3f4f5; border-radius:20px;
                     font-size:.82rem; font-weight:600; color:#454652; text-decoration:none; }
 
+/* ── Point info box ── */
+.sr-pts-info-box {
+    display:grid; grid-template-columns:1fr 1fr; gap:14px;
+    margin:0 0 22px;
+}
+.sr-pts-info-card {
+    display:flex; align-items:flex-start; gap:12px;
+    padding:14px 16px; border-radius:12px;
+}
+.sr-pts-info-ranking {
+    background:rgba(23,121,180,.07); border-left:4px solid var(--c-pri);
+}
+.sr-pts-info-exchange {
+    background:rgba(25,135,84,.07); border-left:4px solid #198754;
+}
+.sr-pts-info-icon { flex-shrink:0; font-size:22px; margin-top:1px; }
+.sr-pts-info-ranking .sr-pts-info-icon { color:var(--c-pri); }
+.sr-pts-info-exchange .sr-pts-info-icon { color:#198754; }
+.sr-pts-info-label { font-size:.82rem; font-weight:700; color:var(--c-ink); margin-bottom:4px; }
+.sr-pts-info-desc  { font-size:.78rem; color:var(--c-ink-v); line-height:1.5; }
+
+/* ── Filter bar ── */
+.sr-filter-bar {
+    display:flex; flex-wrap:wrap; gap:10px 24px;
+    padding:12px 0 16px; border-bottom:1px solid var(--c-surf-hi);
+    margin-bottom:16px;
+}
+.sr-filter-group { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+.sr-filter-label { font-size:.75rem; font-weight:700; color:var(--c-ink-v); white-space:nowrap; }
+.sr-filter-pill {
+    display:inline-flex; align-items:center; gap:4px;
+    padding:5px 12px; border-radius:20px; font-size:.78rem; font-weight:600;
+    text-decoration:none; color:var(--c-ink-v);
+    background:var(--c-surf-hi); border:1px solid transparent;
+    transition:background .15s, color .15s;
+}
+.sr-filter-pill:hover { background:#e0e4ff; color:var(--c-pri); }
+.sr-filter-pill.active {
+    background:var(--c-pri); color:#fff; border-color:var(--c-pri);
+}
+.sr-fp-ranking.active  { background:var(--c-pri); border-color:var(--c-pri); }
+.sr-fp-exchange.active { background:#198754; border-color:#198754; }
+
+/* ── Split point columns ── */
+.th-pts-ranking { color:var(--c-pri); text-align:right; white-space:nowrap; }
+.th-pts-exchange { color:#198754; text-align:right; white-space:nowrap; }
+.td-pts-empty { text-align:right; color:#ccc; }
+.td-dash { font-size:.9rem; }
+.td-pts.th-pts-ranking, .td-pts.th-pts-exchange { text-align:right; }
+
 /* ── Responsive ── */
 @media (max-width:900px) {
     .sr-main-row { grid-template-columns:1fr; }
@@ -325,6 +375,11 @@ a { color:inherit; }
     .sr-topbar { padding:10px 14px; }
     .sr-topbar-name { display:none; }
     .sr-topbar-logout { padding:6px 12px; font-size:.8rem; }
+    /* Info box stacks */
+    .sr-pts-info-box { grid-template-columns:1fr; }
+    /* Filter bar wraps */
+    .sr-filter-bar { gap:8px 16px; }
+    .sr-filter-pill { font-size:.72rem; padding:4px 10px; }
 }
 @media (max-width:480px) {
     .sr-tier-grid { grid-template-columns:1fr 1fr; }

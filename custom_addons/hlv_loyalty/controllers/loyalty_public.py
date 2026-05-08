@@ -37,6 +37,9 @@ def _load_partner_data(partner):
     tiers = request.env['hlv.loyalty.tier'].sudo().search(
         [('active', '=', True)], order='min_points asc'
     )
+    program = request.env['hlv.loyalty.program'].sudo().search(
+        [('active', '=', True)], limit=1
+    )
     # Recent 5 active vouchers + total count
     active_vouchers = request.env['hlv.loyalty.voucher'].sudo().search([
         ('partner_id', 'in', all_partner_ids),
@@ -61,6 +64,7 @@ def _load_partner_data(partner):
         ], order='min_points asc', limit=1)
     return {
         'tiers': tiers,
+        'program': program,
         'partner': root,
         'active_vouchers': active_vouchers,
         'active_vouchers_count': active_vouchers_count,
@@ -218,14 +222,31 @@ class LoyaltyPublicPortal(http.Controller):
             return request.redirect('/loyalty')
         root = account.partner_id.commercial_partner_id or account.partner_id
         all_partner_ids = [root.id] + root.child_ids.ids
-        all_history = request.env['hlv.loyalty.history'].sudo().search([
-            ('partner_id', 'in', all_partner_ids),
-        ], order='date desc')
+
+        # ── Filter params ──────────────────────────────────────────────────
+        active_pt = kwargs.get('pt', 'all')   # all | ranking | exchange
+        active_st = kwargs.get('st', 'all')   # all | pending | confirmed | cancelled
+        if active_pt not in ('all', 'ranking', 'exchange'):
+            active_pt = 'all'
+        if active_st not in ('all', 'pending', 'confirmed', 'cancelled'):
+            active_st = 'all'
+
+        domain = [('partner_id', 'in', all_partner_ids)]
+        if active_pt != 'all':
+            domain.append(('point_type', '=', active_pt))
+        if active_st != 'all':
+            domain.append(('state', '=', active_st))
+
+        all_history = request.env['hlv.loyalty.history'].sudo().search(
+            domain, order='date desc'
+        )
         data = _load_partner_data(account.partner_id)
         data['account'] = account
         if account.portal_phone:
             data['masked_phone'] = _mask_phone(account.portal_phone)
         data['all_history'] = all_history
+        data['active_pt'] = active_pt
+        data['active_st'] = active_st
         return request.render('hlv_loyalty.loyalty_portal_history_full', data)
 
     # ── Full vouchers page ────────────────────────────────────────────────────

@@ -78,9 +78,9 @@
                         <tr>
                             <th>Ngày giao dịch</th>
                             <th>Loại hình</th>
-                            <th>Loại điểm</th>
-                            <th>Số điểm</th>
-                            <th>Nội dung chi tiết</th>
+                            <th>Nội dung</th>
+                            <th class="th-pts-ranking"><span class="ms" style="font-size:14px">trending_up</span> Điểm TL</th>
+                            <th class="th-pts-exchange"><span class="ms" style="font-size:14px">swap_horiz</span> Điểm ĐT</th>
                             <th style="text-align:right">Trạng thái</th>
                         </tr>
                     </thead>
@@ -105,18 +105,21 @@
                                         <span class="sr-badge badge-manual"><span class="ms">edit_note</span> Thủ công</span>
                                     </t>
                                 </td>
-                                <td>
-                                    <t t-if="h.point_type == 'ranking'">
-                                        <span class="sr-badge badge-pt-ranking"><span class="ms">trending_up</span> Tích lũy</span>
-                                    </t>
-                                    <t t-else="">
-                                        <span class="sr-badge badge-pt-exchange"><span class="ms">swap_horiz</span> Đổi điểm</span>
-                                    </t>
-                                </td>
-                                <td t-att-class="'td-pts ' + ('pos' if h.point_amount > 0 else 'neg')">
-                                    <t t-out="('+' if h.point_amount > 0 else '') + '{:,}'.format(h.point_amount)"/>
-                                </td>
                                 <td class="td-desc"><t t-out="h.description or ''"/></td>
+                                <!-- Điểm Tích lũy (ranking) -->
+                                <td t-att-class="'td-pts th-pts-ranking ' + ('pos' if h.point_amount > 0 else 'neg') if h.point_type == 'ranking' else 'td-pts-empty'">
+                                    <t t-if="h.point_type == 'ranking'">
+                                        <t t-out="('+' if h.point_amount > 0 else '') + '{:,}'.format(h.point_amount)"/>
+                                    </t>
+                                    <t t-else=""><span class="td-dash">–</span></t>
+                                </td>
+                                <!-- Điểm Đổi thưởng (exchange) -->
+                                <td t-att-class="'td-pts th-pts-exchange ' + ('pos' if h.point_amount > 0 else 'neg') if h.point_type == 'exchange' else 'td-pts-empty'">
+                                    <t t-if="h.point_type == 'exchange'">
+                                        <t t-out="('+' if h.point_amount > 0 else '') + '{:,}'.format(h.point_amount)"/>
+                                    </t>
+                                    <t t-else=""><span class="td-dash">–</span></t>
+                                </td>
                                 <td class="td-status"><t t-out="dict(pending='Chờ XN', confirmed='Hoàn tất', cancelled='Đã hủy').get(h.state, h.state)"/></td>
                             </tr>
                         </t>

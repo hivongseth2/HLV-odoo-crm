@@ -52,6 +52,23 @@ class HlvLoyaltyProgram(models.Model):
         help='Số ngày kể từ ngày đổi Voucher',
     )
 
+    portal_ranking_desc = fields.Text(
+        string='Mô tả Điểm Tích lũy (Portal)',
+        default=(
+            'Điểm tích lũy dùng để xếp hạng thành viên, không dùng để đổi thưởng. '
+            'Mỗi 100.000đ mua hàng = 1 điểm.'
+        ),
+        help='Đoạn mô tả hiển thị cho khách hàng trên trang portal về Điểm Tích lũy.',
+    )
+    portal_exchange_desc = fields.Text(
+        string='Mô tả Điểm Đổi thưởng (Portal)',
+        default=(
+            'Điểm đổi thưởng có thể dùng để đổi Voucher hoặc tiền chiết khấu. '
+            'Mỗi 10.000đ chiết khấu = 1 điểm.'
+        ),
+        help='Đoạn mô tả hiển thị cho khách hàng trên trang portal về Điểm Đổi thưởng.',
+    )
+
     note = fields.Html(string='Ghi chú')
 
     _sql_constraints = [
