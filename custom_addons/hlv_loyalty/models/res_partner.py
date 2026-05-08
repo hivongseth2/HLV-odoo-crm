@@ -127,6 +127,19 @@ class ResPartner(models.Model):
             partner.loyalty_history_count = history_map.get(partner.id, 0)
             partner.loyalty_voucher_count = voucher_map.get(partner.id, 0)
 
+    def _get_loyalty_root(self):
+        """Return the topmost partner in the parent chain for loyalty operations.
+
+        Unlike commercial_partner_id (which stops at the first is_company=True),
+        this walks all the way up so company-type branches (is_company=True with
+        parent_id) share the same loyalty balance as their parent company.
+        """
+        self.ensure_one()
+        partner = self
+        while partner.parent_id:
+            partner = partner.parent_id
+        return partner
+
     def action_view_loyalty_history(self):
         self.ensure_one()
         return {

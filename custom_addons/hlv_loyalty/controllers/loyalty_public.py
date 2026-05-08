@@ -31,7 +31,7 @@ def _get_current_account():
 
 def _load_partner_data(partner):
     """Load dashboard data for a partner — recent 5 rows for history/vouchers."""
-    root = partner.commercial_partner_id or partner
+    root = partner._get_loyalty_root()
     # Collect root + all direct children to catch points on child contacts/sub-companies
     all_partner_ids = [root.id] + root.child_ids.ids
     tiers = request.env['hlv.loyalty.tier'].sudo().search(
@@ -220,7 +220,7 @@ class LoyaltyPublicPortal(http.Controller):
         account = _get_current_account()
         if not account:
             return request.redirect('/loyalty')
-        root = account.partner_id.commercial_partner_id or account.partner_id
+        root = account.partner_id._get_loyalty_root()
         all_partner_ids = [root.id] + root.child_ids.ids
 
         # ── Filter params ──────────────────────────────────────────────────
@@ -262,7 +262,7 @@ class LoyaltyPublicPortal(http.Controller):
         if active_tab not in ('gift', 'cash', 'history'):
             active_tab = 'gift'
 
-        root = account.partner_id.commercial_partner_id or account.partner_id
+        root = account.partner_id._get_loyalty_root()
         all_partner_ids = [root.id] + root.child_ids.ids
 
         program = request.env['hlv.loyalty.program'].sudo().search(
@@ -303,7 +303,7 @@ class LoyaltyPublicPortal(http.Controller):
         if not pkg_id:
             return request.redirect('/loyalty/redeem?tab=gift')
 
-        root = account.partner_id.commercial_partner_id or account.partner_id
+        root = account.partner_id._get_loyalty_root()
         pkg = request.env['hlv.loyalty.voucher.package'].sudo().browse(pkg_id)
         if not pkg.exists() or not pkg.active:
             return request.redirect('/loyalty/redeem?tab=gift')
@@ -338,7 +338,7 @@ class LoyaltyPublicPortal(http.Controller):
         if not account:
             return request.redirect('/loyalty')
 
-        root = account.partner_id.commercial_partner_id or account.partner_id
+        root = account.partner_id._get_loyalty_root()
         avail = root.loyalty_exchange_points
 
         points_to_redeem = int(post.get('points_to_redeem') or 0)
@@ -408,7 +408,7 @@ class LoyaltyPublicPortal(http.Controller):
         account = _get_current_account()
         if not account:
             return request.redirect('/loyalty')
-        root = account.partner_id.commercial_partner_id or account.partner_id
+        root = account.partner_id._get_loyalty_root()
         all_partner_ids = [root.id] + root.child_ids.ids
         all_vouchers = request.env['hlv.loyalty.voucher'].sudo().search([
             ('partner_id', 'in', all_partner_ids),

@@ -68,7 +68,7 @@ class StockPicking(models.Model):
         )
         # Fallback: không có dòng nào đặt loyalty_discount_pct → dùng % mặc định của contact
         if discount_amount <= 0:
-            root_partner_lookup = partner.commercial_partner_id or partner
+            root_partner_lookup = partner._get_loyalty_root()
             # loyalty_default_discount lưu dạng 0-1 (Odoo convention: 0.05 = 5%)
             fallback_pct = root_partner_lookup.loyalty_default_discount or 0.0
             discount_amount = delivered_subtotal * fallback_pct
@@ -88,8 +88,8 @@ class StockPicking(models.Model):
         if existing:
             return
 
-        # Luôn tích vào công ty gốc (commercial_partner_id)
-        root_partner = partner.commercial_partner_id or partner
+        # Luôn tích vào công ty gốc (đi lên hết chuỗi parent_id)
+        root_partner = partner._get_loyalty_root()
 
         base_vals = {
             'partner_id': root_partner.id,
@@ -189,7 +189,7 @@ class StockPicking(models.Model):
         if ranking_to_deduct <= 0 and not origin_exchange_hist:
             return
 
-        root_partner = partner.commercial_partner_id or partner
+        root_partner = partner._get_loyalty_root()
         pct_label = '' if is_full_return else f' ({int(ratio * 100)}%)'
 
         base_vals = {

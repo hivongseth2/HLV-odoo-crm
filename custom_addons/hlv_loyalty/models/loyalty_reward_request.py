@@ -140,7 +140,7 @@ class HlvLoyaltyRewardRequest(models.Model):
     def _deduct_exchange_points(self, description):
         """Deduct exchange points from partner, return history record."""
         self.ensure_one()
-        root = self.partner_id.commercial_partner_id or self.partner_id
+        root = self.partner_id._get_loyalty_root()
         avail = root.loyalty_exchange_points
         if avail < self.points_required:
             raise UserError(
@@ -164,7 +164,7 @@ class HlvLoyaltyRewardRequest(models.Model):
         program = pkg.program_id
         validity = pkg.validity_days or (program.voucher_validity_days if program else 30) or 30
         expiry = fields.Datetime.now() + timedelta(days=validity)
-        root = self.partner_id.commercial_partner_id or self.partner_id
+        root = self.partner_id._get_loyalty_root()
         return self.env['hlv.loyalty.voucher'].sudo().create({
             'partner_id': root.id,
             'package_id': pkg.id,
