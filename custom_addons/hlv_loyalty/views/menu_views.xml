@@ -54,6 +54,13 @@
               action="action_loyalty_voucher_package"
               sequence="20"/>
 
+    <!-- Yêu cầu đổi thưởng -->
+    <menuitem id="menu_loyalty_reward_request"
+              name="Yêu cầu đổi thưởng"
+              parent="menu_loyalty_management"
+              action="action_loyalty_reward_request"
+              sequence="25"/>
+
     <!-- Hạng thành viên -->
     <menuitem id="menu_loyalty_tier"
               name="Hạng thành viên"

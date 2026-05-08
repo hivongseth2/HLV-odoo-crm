@@ -8,7 +8,7 @@
         - Sử dụng Voucher trên toàn hệ thống (cross-company)
         - Xử lý hoàn hàng / hủy Voucher / hết hạn
     """,
-    "version": "18.0.1.4.0",
+    "version": "18.0.1.5.0",
     "category": "Sales",
     "author": "HLV",
     "depends": ["sale_management", "stock", "mail", "website"],
@@ -16,6 +16,7 @@
         "security/loyalty_security.xml",
         "security/ir.model.access.csv",
         "data/cron_expire_voucher.xml",
+        "data/loyalty_reward_request_sequence.xml",
         "wizard/redeem_voucher_wizard_views.xml",
         "wizard/loyalty_reset_password_wizard_views.xml",
         "views/loyalty_program_views.xml",
@@ -35,6 +36,8 @@
         "views/loyalty_portal_result.xml",
         "views/loyalty_portal_history_full.xml",
         "views/loyalty_portal_vouchers_full.xml",
+        "views/loyalty_reward_request_views.xml",
+        "views/loyalty_portal_redeem.xml",
         "views/menu_views.xml",
         "data/loyalty_tier_data.xml",
     ],

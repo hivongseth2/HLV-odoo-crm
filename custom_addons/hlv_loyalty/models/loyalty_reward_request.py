@@ -1,0 +1,184 @@
+# -*- coding: utf-8 -*-
+import logging
+from datetime import timedelta
+from odoo import models, fields, api
+from odoo.exceptions import UserError
+
+_logger = logging.getLogger(__name__)
+
+
+class HlvLoyaltyRewardRequest(models.Model):
+    _name = 'hlv.loyalty.reward.request'
+    _description = 'Yêu cầu đổi thưởng Loyalty'
+    _order = 'date_request desc, id desc'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _rec_name = 'name'
+
+    name = fields.Char(
+        string='Mã yêu cầu', readonly=True, copy=False, default='New',
+    )
+    partner_id = fields.Many2one(
+        'res.partner', string='Khách hàng', required=True,
+        index=True, ondelete='restrict', tracking=True,
+    )
+    request_type = fields.Selection([
+        ('gift', 'Đổi quà (Voucher)'),
+        ('cash', 'Đổi tiền mặt'),
+    ], string='Loại yêu cầu', required=True, default='gift', tracking=True)
+
+    # ── Gift fields ────────────────────────────────────────────────────────
+    package_id = fields.Many2one(
+        'hlv.loyalty.voucher.package', string='Gói quà',
+        domain=[('active', '=', True)],
+    )
+
+    # ── Cash fields ────────────────────────────────────────────────────────
+    points_to_redeem = fields.Integer(string='Số điểm muốn đổi', default=0)
+    bank_name = fields.Char(string='Ngân hàng')
+    account_number = fields.Char(string='Số tài khoản')
+    account_name = fields.Char(string='Chủ tài khoản')
+
+    # ── Computed ───────────────────────────────────────────────────────────
+    points_required = fields.Integer(
+        string='Điểm yêu cầu', compute='_compute_points_required', store=True,
+    )
+    cash_value = fields.Float(
+        string='Giá trị quy đổi (đ)', compute='_compute_cash_value',
+        store=True, digits=(15, 0),
+    )
+
+    # ── Snapshot ───────────────────────────────────────────────────────────
+    balance_at_request = fields.Integer(
+        string='Số dư ĐT lúc gửi', readonly=True,
+        help='Điểm đổi thưởng của khách tại thời điểm gửi yêu cầu',
+    )
+
+    # ── Notes ──────────────────────────────────────────────────────────────
+    customer_note = fields.Text(string='Ghi chú của khách')
+    admin_note = fields.Text(string='Ghi chú xử lý', tracking=True)
+
+    # ── State ──────────────────────────────────────────────────────────────
+    state = fields.Selection([
+        ('pending', 'Chờ duyệt'),
+        ('done', 'Đã xử lý'),
+        ('cancelled', 'Đã hủy'),
+    ], string='Trạng thái', default='pending', required=True,
+        tracking=True, index=True)
+
+    date_request = fields.Datetime(
+        string='Ngày yêu cầu', default=fields.Datetime.now, readonly=True,
+    )
+    date_done = fields.Datetime(string='Ngày xử lý', readonly=True)
+    done_by_id = fields.Many2one('res.users', string='Người xử lý', readonly=True)
+
+    # ── Result links ───────────────────────────────────────────────────────
+    history_id = fields.Many2one(
+        'hlv.loyalty.history', string='Giao dịch điểm', readonly=True,
+    )
+    voucher_id = fields.Many2one(
+        'hlv.loyalty.voucher', string='Voucher phát hành', readonly=True,
+    )
+    company_id = fields.Many2one(
+        'res.company', string='Công ty',
+        default=lambda self: self.env.company, readonly=True,
+    )
+
+    # ── Compute ────────────────────────────────────────────────────────────
+
+    @api.depends('request_type', 'package_id', 'points_to_redeem')
+    def _compute_points_required(self):
+        for rec in self:
+            if rec.request_type == 'gift' and rec.package_id:
+                rec.points_required = rec.package_id.points_required
+            elif rec.request_type == 'cash':
+                rec.points_required = rec.points_to_redeem
+            else:
+                rec.points_required = 0
+
+    @api.depends('request_type', 'points_to_redeem')
+    def _compute_cash_value(self):
+        program = self.env['hlv.loyalty.program'].sudo().search(
+            [('active', '=', True)], limit=1
+        )
+        rate = program.cash_rate_per_point if program else 0.0
+        for rec in self:
+            if rec.request_type == 'cash' and rec.points_to_redeem > 0:
+                rec.cash_value = rec.points_to_redeem * rate
+            else:
+                rec.cash_value = 0.0
+
+    # ── ORM ────────────────────────────────────────────────────────────────
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get('name', 'New') == 'New':
+                vals['name'] = (
+                    self.env['ir.sequence'].next_by_code('hlv.loyalty.reward.request')
+                    or 'New'
+                )
+        return super().create(vals_list)
+
+    # ── Business logic ─────────────────────────────────────────────────────
+
+    def _deduct_exchange_points(self, description):
+        """Deduct exchange points from partner, return history record."""
+        self.ensure_one()
+        root = self.partner_id.commercial_partner_id or self.partner_id
+        avail = root.loyalty_exchange_points
+        if avail < self.points_required:
+            raise UserError(
+                f'Không đủ điểm đổi thưởng.\n'
+                f'Khách hàng hiện có {avail:,} điểm, yêu cầu {self.points_required:,} điểm.'
+            )
+        return self.env['hlv.loyalty.history'].sudo().create({
+            'partner_id': root.id,
+            'point_amount': -self.points_required,
+            'point_type': 'exchange',
+            'transaction_type': 'redeem',
+            'state': 'confirmed',
+            'description': description,
+            'company_id': self.company_id.id,
+        })
+
+    def _create_voucher(self):
+        """Create voucher for gift request, return voucher record."""
+        self.ensure_one()
+        pkg = self.package_id
+        program = pkg.program_id
+        validity = pkg.validity_days or (program.voucher_validity_days if program else 30) or 30
+        expiry = fields.Datetime.now() + timedelta(days=validity)
+        root = self.partner_id.commercial_partner_id or self.partner_id
+        return self.env['hlv.loyalty.voucher'].sudo().create({
+            'partner_id': root.id,
+            'package_id': pkg.id,
+            'date_expiry': expiry,
+        })
+
+    def action_done(self):
+        """Admin marks request as done → deduct points, create voucher if gift."""
+        for rec in self:
+            if rec.state != 'pending':
+                raise UserError('Chỉ có thể xử lý yêu cầu đang Chờ duyệt.')
+            desc = f'Đổi thưởng #{rec.name} – {rec.partner_id.name}'
+            hist = rec._deduct_exchange_points(desc)
+            voucher_id = False
+            if rec.request_type == 'gift' and rec.package_id:
+                voucher_id = rec._create_voucher().id
+            rec.write({
+                'state': 'done',
+                'date_done': fields.Datetime.now(),
+                'done_by_id': self.env.user.id,
+                'history_id': hist.id,
+                'voucher_id': voucher_id or False,
+            })
+            _logger.info(
+                'Loyalty RewardRequest: %s done (%s) – %d pts deducted from %s',
+                rec.name, rec.request_type, rec.points_required, rec.partner_id.name,
+            )
+
+    def action_cancel(self):
+        for rec in self:
+            if rec.state == 'done':
+                raise UserError('Không thể hủy yêu cầu đã xử lý.')
+            rec.write({'state': 'cancelled'})

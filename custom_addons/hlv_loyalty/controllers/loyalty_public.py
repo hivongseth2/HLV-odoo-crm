@@ -249,7 +249,158 @@ class LoyaltyPublicPortal(http.Controller):
         data['active_st'] = active_st
         return request.render('hlv_loyalty.loyalty_portal_history_full', data)
 
-    # ── Full vouchers page ────────────────────────────────────────────────────
+    # ── Reward redemption page ────────────────────────────────────────────
+
+    @http.route('/loyalty/redeem', type='http', auth='public', website=True,
+                sitemap=False)
+    def loyalty_redeem(self, **kwargs):
+        account = _get_current_account()
+        if not account:
+            return request.redirect('/loyalty')
+
+        active_tab = kwargs.get('tab', 'gift')
+        if active_tab not in ('gift', 'cash', 'history'):
+            active_tab = 'gift'
+
+        root = account.partner_id.commercial_partner_id or account.partner_id
+        all_partner_ids = [root.id] + root.child_ids.ids
+
+        program = request.env['hlv.loyalty.program'].sudo().search(
+            [('active', '=', True)], limit=1
+        )
+        packages = request.env['hlv.loyalty.voucher.package'].sudo().search([
+            ('active', '=', True),
+        ], order='points_required asc')
+        my_requests = request.env['hlv.loyalty.reward.request'].sudo().search([
+            ('partner_id', 'in', all_partner_ids),
+        ], order='date_request desc', limit=50)
+
+        data = _load_partner_data(account.partner_id)
+        data.update({
+            'account': account,
+            'active_tab': active_tab,
+            'program': program,
+            'packages': packages,
+            'my_requests': my_requests,
+            'success_msg': kwargs.get('success_msg', ''),
+            'error_msg': kwargs.get('error_msg', ''),
+            'form_vals': {},
+        })
+        if account.portal_phone:
+            data['masked_phone'] = _mask_phone(account.portal_phone)
+        return request.render('hlv_loyalty.loyalty_portal_redeem', data)
+
+    # ── Submit gift redemption (auto-processed) ───────────────────────────
+
+    @http.route('/loyalty/redeem/gift', type='http', auth='public', website=True,
+                sitemap=False, methods=['POST'])
+    def loyalty_redeem_gift(self, **post):
+        account = _get_current_account()
+        if not account:
+            return request.redirect('/loyalty')
+
+        pkg_id = int(post.get('package_id') or 0)
+        if not pkg_id:
+            return request.redirect('/loyalty/redeem?tab=gift')
+
+        root = account.partner_id.commercial_partner_id or account.partner_id
+        pkg = request.env['hlv.loyalty.voucher.package'].sudo().browse(pkg_id)
+        if not pkg.exists() or not pkg.active:
+            return request.redirect('/loyalty/redeem?tab=gift')
+
+        avail = root.loyalty_exchange_points
+        if avail < pkg.points_required:
+            return request.redirect(
+                f'/loyalty/redeem?tab=gift&error_msg='
+                f'Không đủ điểm. Bạn có {avail} điểm, cần {pkg.points_required} điểm.'
+            )
+
+        # Create and immediately process (gift = no admin approval needed)
+        rq = request.env['hlv.loyalty.reward.request'].sudo().create({
+            'partner_id': root.id,
+            'request_type': 'gift',
+            'package_id': pkg.id,
+            'balance_at_request': avail,
+            'company_id': request.env.company.id,
+        })
+        rq.action_done()
+
+        voucher_code = rq.voucher_id.code if rq.voucher_id else ''
+        msg = f'Đổi quà thành công! Voucher của bạn: {voucher_code}' if voucher_code else 'Đổi quà thành công!'
+        return request.redirect(f'/loyalty/redeem?tab=history&success_msg={msg}')
+
+    # ── Submit cash redemption (pending → admin approves) ─────────────────
+
+    @http.route('/loyalty/redeem/cash', type='http', auth='public', website=True,
+                sitemap=False, methods=['POST'])
+    def loyalty_redeem_cash(self, **post):
+        account = _get_current_account()
+        if not account:
+            return request.redirect('/loyalty')
+
+        root = account.partner_id.commercial_partner_id or account.partner_id
+        avail = root.loyalty_exchange_points
+
+        points_to_redeem = int(post.get('points_to_redeem') or 0)
+        bank_name = (post.get('bank_name') or '').strip()
+        account_number = (post.get('account_number') or '').strip()
+        account_name = (post.get('account_name') or '').strip()
+        customer_note = (post.get('customer_note') or '').strip()
+
+        errors = []
+        if points_to_redeem <= 0:
+            errors.append('Vui lòng nhập số điểm muốn đổi.')
+        elif points_to_redeem > avail:
+            errors.append(f'Không đủ điểm. Bạn có {avail:,} điểm, yêu cầu {points_to_redeem:,} điểm.')
+        if not bank_name:
+            errors.append('Vui lòng nhập tên ngân hàng.')
+        if not account_number:
+            errors.append('Vui lòng nhập số tài khoản.')
+        if not account_name:
+            errors.append('Vui lòng nhập tên chủ tài khoản.')
+
+        if errors:
+            # Re-render with errors + form values
+            program = request.env['hlv.loyalty.program'].sudo().search(
+                [('active', '=', True)], limit=1
+            )
+            packages = request.env['hlv.loyalty.voucher.package'].sudo().search(
+                [('active', '=', True)], order='points_required asc'
+            )
+            all_partner_ids = [root.id] + root.child_ids.ids
+            my_requests = request.env['hlv.loyalty.reward.request'].sudo().search([
+                ('partner_id', 'in', all_partner_ids),
+            ], order='date_request desc', limit=50)
+            data = _load_partner_data(account.partner_id)
+            data.update({
+                'account': account,
+                'active_tab': 'cash',
+                'program': program,
+                'packages': packages,
+                'my_requests': my_requests,
+                'success_msg': '',
+                'error_msg': ' | '.join(errors),
+                'form_vals': post,
+            })
+            if account.portal_phone:
+                data['masked_phone'] = _mask_phone(account.portal_phone)
+            return request.render('hlv_loyalty.loyalty_portal_redeem', data)
+
+        request.env['hlv.loyalty.reward.request'].sudo().create({
+            'partner_id': root.id,
+            'request_type': 'cash',
+            'points_to_redeem': points_to_redeem,
+            'bank_name': bank_name,
+            'account_number': account_number,
+            'account_name': account_name,
+            'customer_note': customer_note,
+            'balance_at_request': avail,
+            'company_id': request.env.company.id,
+        })
+        return request.redirect(
+            '/loyalty/redeem?tab=history'
+            '&success_msg=Yêu cầu đổi tiền đã được gửi. Chúng tôi sẽ xử lý sớm nhất!'
+        )
 
     @http.route('/loyalty/vouchers', type='http', auth='public', website=True,
                 sitemap=False)

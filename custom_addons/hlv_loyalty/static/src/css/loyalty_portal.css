@@ -387,3 +387,152 @@ a { color:inherit; }
     .sr-bal-pill { flex-direction:column; align-items:flex-start; gap:8px; }
     .sr-actions-grid { grid-template-columns:1fr 1fr; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   Đổi thưởng page (/loyalty/redeem)
+══════════════════════════════════════════════════════════════ */
+
+/* Hero btn highlight for redeem */
+.sr-hero-btn-redeem { background:var(--c-sec); color:var(--c-ink) !important; border-color:var(--c-sec); }
+.sr-hero-btn-redeem:hover { background:var(--c-sec-c); }
+
+/* Balance bar */
+.sr-redeem-balance {
+    display:flex; align-items:center; gap:20px; flex-wrap:wrap;
+    background:var(--c-surf-0); border-radius:14px; padding:16px 20px;
+    box-shadow:0 1px 6px rgba(0,6,102,.07); margin-bottom:20px;
+}
+.sr-rb-item { display:flex; align-items:center; gap:10px; }
+.sr-rb-lbl { font-size:.72rem; color:var(--c-ink-v); font-weight:600; text-transform:uppercase; letter-spacing:.5px; }
+.sr-rb-val { font-size:1.1rem; font-weight:800; color:var(--c-ink); font-family:'Manrope',sans-serif; }
+
+/* Flash messages */
+.sr-flash {
+    display:flex; align-items:center; gap:10px;
+    padding:12px 16px; border-radius:10px; margin-bottom:16px;
+    font-size:.88rem; font-weight:500;
+}
+.sr-flash-ok { background:#eaf7ee; border:1px solid #b2dfca; color:#256e45; }
+.sr-flash-err { background:#fdecea; border:1px solid #f5c6cb; color:#842029; }
+
+/* Tab pills */
+.sr-tab-pills {
+    display:flex; gap:8px; margin-bottom:24px; flex-wrap:wrap;
+    border-bottom:2px solid var(--c-surf-hi); padding-bottom:0;
+}
+.sr-tab-pill {
+    display:inline-flex; align-items:center; gap:7px;
+    padding:10px 20px; font-size:.88rem; font-weight:700;
+    text-decoration:none; color:var(--c-ink-v);
+    border-radius:8px 8px 0 0; border-bottom:3px solid transparent;
+    margin-bottom:-2px; transition:color .15s, border-color .15s;
+}
+.sr-tab-pill:hover { color:var(--c-pri); }
+.sr-tab-pill.active { color:var(--c-pri); border-bottom-color:var(--c-pri); background:rgba(23,121,180,.05); }
+
+/* Package grid */
+.sr-pkg-grid {
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:16px;
+}
+.sr-pkg-card {
+    background:var(--c-surf-0); border-radius:14px; padding:20px 18px;
+    box-shadow:0 2px 8px rgba(0,6,102,.07); border:2px solid transparent;
+    display:flex; flex-direction:column; gap:10px;
+    transition:border-color .15s, box-shadow .15s;
+}
+.sr-pkg-card:hover { border-color:var(--c-pri); box-shadow:0 4px 16px rgba(23,121,180,.12); }
+.sr-pkg-disabled { opacity:.55; pointer-events:none; filter:grayscale(.4); }
+.sr-pkg-top { display:flex; align-items:center; justify-content:space-between; }
+.sr-pkg-pts { text-align:right; }
+.sr-pkg-pts-num { font-size:1.5rem; font-weight:900; color:var(--c-pri); font-family:'Manrope',sans-serif; }
+.sr-pkg-pts-lbl { font-size:.72rem; color:var(--c-ink-v); }
+.sr-pkg-name { font-size:1rem; font-weight:700; color:var(--c-ink); }
+.sr-pkg-desc { font-size:.82rem; color:var(--c-ink-v); flex:1; }
+.sr-pkg-form { margin-top:auto; }
+.sr-pkg-btn {
+    width:100%; padding:10px 0; border:none; border-radius:8px;
+    background:var(--c-pri); color:#fff; font-size:.88rem; font-weight:700;
+    cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;
+    transition:background .15s;
+}
+.sr-pkg-btn:hover { background:var(--c-pri-c); }
+.sr-pkg-insufficient {
+    margin-top:auto; padding:9px 12px; background:var(--c-surf-lo);
+    border-radius:8px; font-size:.78rem; color:#888; text-align:center;
+    display:flex; align-items:center; justify-content:center; gap:5px;
+}
+
+/* Cash form */
+.sr-cash-wrap { max-width:620px; }
+.sr-cash-form { background:var(--c-surf-0); border-radius:14px; padding:24px; box-shadow:0 2px 8px rgba(0,6,102,.07); }
+.sr-cf-section { margin-bottom:24px; }
+.sr-cf-title {
+    font-size:.9rem; font-weight:700; color:var(--c-ink);
+    margin:0 0 14px; display:flex; align-items:center; gap:7px;
+    padding-bottom:8px; border-bottom:1px solid var(--c-surf-hi);
+}
+.sr-cf-field { margin-bottom:14px; }
+.sr-cf-label { display:block; font-size:.78rem; font-weight:700; color:var(--c-ink-v); margin-bottom:6px; }
+.sr-required { color:#ba1a1a; }
+.sr-cf-input {
+    width:100%; padding:10px 13px; border:1px solid var(--c-out); border-radius:8px;
+    font-size:.9rem; font-family:inherit; color:var(--c-ink);
+    background:var(--c-surf); transition:border-color .15s;
+}
+.sr-cf-input:focus { outline:none; border-color:var(--c-pri); background:#fff; }
+.sr-cf-textarea { min-height:80px; resize:vertical; }
+.sr-cf-hint { font-size:.75rem; color:#888; margin-top:5px; }
+.sr-cf-actions { text-align:right; }
+.sr-cf-submit {
+    padding:11px 28px; border:none; border-radius:8px;
+    background:var(--c-pri); color:#fff; font-size:.9rem; font-weight:700;
+    cursor:pointer; display:inline-flex; align-items:center; gap:8px;
+    transition:background .15s;
+}
+.sr-cf-submit:hover { background:var(--c-pri-c); }
+
+/* Request card list */
+.sr-req-list { display:flex; flex-direction:column; gap:12px; }
+.sr-req-card {
+    background:var(--c-surf-0); border-radius:12px; overflow:hidden;
+    box-shadow:0 1px 6px rgba(0,6,102,.07);
+    border-left:4px solid var(--c-out);
+}
+.sr-rq-pending { border-left-color:#d67000; }
+.sr-rq-done    { border-left-color:#198754; }
+.sr-rq-cancelled { border-left-color:#aaa; }
+.sr-rq-head {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 16px; border-bottom:1px solid var(--c-surf-hi); gap:12px;
+}
+.sr-rq-name { display:flex; align-items:center; gap:8px; font-size:.9rem; }
+.sr-rq-type-badge {
+    font-size:.68rem; font-weight:700; padding:2px 8px; border-radius:10px; color:#fff;
+}
+.rq-type-gift { background:var(--c-pri); }
+.rq-type-cash { background:#198754; }
+.sr-rq-state {
+    font-size:.78rem; font-weight:700; display:flex; align-items:center; gap:4px; flex-shrink:0;
+}
+.rq-st-pending  { color:#d67000; }
+.rq-st-done     { color:#198754; }
+.rq-st-cancelled{ color:#aaa; }
+.sr-rq-body { padding:12px 16px; }
+.sr-rq-row { display:flex; align-items:baseline; gap:8px; margin-bottom:5px; font-size:.83rem; }
+.sr-rq-lbl { color:var(--c-ink-v); font-weight:600; min-width:110px; flex-shrink:0; }
+.sr-rq-val { color:var(--c-ink); }
+.sr-rq-voucher .sr-rq-val { font-weight:700; }
+.sr-rq-vcode { color:var(--c-pri); display:flex; align-items:center; gap:4px; }
+.sr-rq-date { font-size:.72rem; color:#999; margin-top:8px; display:flex; align-items:center; gap:5px; }
+
+@media (max-width:768px) {
+    .sr-redeem-balance { gap:12px 16px; }
+    .sr-pkg-grid { grid-template-columns:1fr 1fr; }
+    .sr-cash-wrap { max-width:100%; }
+    .sr-tab-pill { padding:8px 14px; font-size:.8rem; }
+}
+@media (max-width:480px) {
+    .sr-pkg-grid { grid-template-columns:1fr; }
+    .sr-rq-lbl { min-width:90px; }
+}
+

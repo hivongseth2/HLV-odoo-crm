@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ── List View ── -->
+    <record id="view_loyalty_reward_request_list" model="ir.ui.view">
+        <field name="name">hlv.loyalty.reward.request.list</field>
+        <field name="model">hlv.loyalty.reward.request</field>
+        <field name="arch" type="xml">
+            <list string="Yêu cầu đổi thưởng"
+                  decoration-warning="state == 'pending'"
+                  decoration-success="state == 'done'"
+                  decoration-muted="state == 'cancelled'">
+                <field name="name"/>
+                <field name="date_request"/>
+                <field name="partner_id"/>
+                <field name="request_type" widget="badge"
+                       decoration-info="request_type == 'gift'"
+                       decoration-warning="request_type == 'cash'"/>
+                <field name="package_id" optional="show"/>
+                <field name="points_required"/>
+                <field name="cash_value" optional="show"/>
+                <field name="balance_at_request" optional="hide"/>
+                <field name="state" widget="badge"
+                       decoration-warning="state == 'pending'"
+                       decoration-success="state == 'done'"
+                       decoration-danger="state == 'cancelled'"/>
+                <field name="done_by_id" optional="hide"/>
+                <field name="date_done" optional="hide"/>
+                <button name="action_done" string="✓ Duyệt" type="object"
+                        class="btn-success btn-sm"
+                        invisible="state != 'pending'"/>
+                <button name="action_cancel" string="Hủy" type="object"
+                        class="btn-danger btn-sm"
+                        invisible="state != 'pending'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ── Form View ── -->
+    <record id="view_loyalty_reward_request_form" model="ir.ui.view">
+        <field name="name">hlv.loyalty.reward.request.form</field>
+        <field name="model">hlv.loyalty.reward.request</field>
+        <field name="arch" type="xml">
+            <form string="Yêu cầu đổi thưởng">
+                <header>
+                    <button name="action_done" string="✓ Đánh dấu đã xử lý"
+                            type="object" class="btn-primary"
+                            invisible="state != 'pending'"
+                            confirm="Xác nhận xử lý yêu cầu này? Điểm sẽ bị trừ ngay lập tức."/>
+                    <button name="action_cancel" string="Hủy yêu cầu"
+                            type="object" class="btn-secondary"
+                            invisible="state != 'pending'"
+                            confirm="Hủy yêu cầu này?"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="pending,done,cancelled"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Thông tin yêu cầu">
+                            <field name="partner_id" readonly="state != 'pending'"/>
+                            <field name="request_type" readonly="state != 'pending'"/>
+                            <field name="date_request"/>
+                            <field name="balance_at_request"/>
+                        </group>
+                        <group string="Kết quả xử lý">
+                            <field name="state" readonly="1"/>
+                            <field name="date_done" readonly="1"/>
+                            <field name="done_by_id" readonly="1"/>
+                            <field name="history_id" readonly="1"/>
+                            <field name="voucher_id" readonly="1" invisible="request_type != 'gift'"/>
+                        </group>
+                    </group>
+
+                    <!-- Gift details -->
+                    <group string="Chi tiết đổi quà" invisible="request_type != 'gift'">
+                        <group>
+                            <field name="package_id" readonly="state != 'pending'"/>
+                            <field name="points_required"/>
+                        </group>
+                    </group>
+
+                    <!-- Cash details -->
+                    <group string="Chi tiết đổi tiền" invisible="request_type != 'cash'">
+                        <group>
+                            <field name="points_to_redeem" readonly="state != 'pending'"/>
+                            <field name="points_required"/>
+                            <field name="cash_value"/>
+                        </group>
+                        <group string="Thông tin ngân hàng">
+                            <field name="bank_name" readonly="state != 'pending'"/>
+                            <field name="account_number" readonly="state != 'pending'"/>
+                            <field name="account_name" readonly="state != 'pending'"/>
+                        </group>
+                    </group>
+
+                    <group>
+                        <group string="Ghi chú khách hàng">
+                            <field name="customer_note" nolabel="1" readonly="1"/>
+                        </group>
+                        <group string="Ghi chú xử lý (nội bộ)">
+                            <field name="admin_note" nolabel="1"/>
+                        </group>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- ── Search View ── -->
+    <record id="view_loyalty_reward_request_search" model="ir.ui.view">
+        <field name="name">hlv.loyalty.reward.request.search</field>
+        <field name="model">hlv.loyalty.reward.request</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="partner_id"/>
+                <separator/>
+                <filter string="Chờ duyệt" name="pending" domain="[('state','=','pending')]"/>
+                <filter string="Đã xử lý" name="done" domain="[('state','=','done')]"/>
+                <filter string="Đã hủy" name="cancelled" domain="[('state','=','cancelled')]"/>
+                <separator/>
+                <filter string="Đổi quà" name="gift" domain="[('request_type','=','gift')]"/>
+                <filter string="Đổi tiền" name="cash" domain="[('request_type','=','cash')]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter string="Trạng thái" name="by_state" context="{'group_by':'state'}"/>
+                    <filter string="Loại yêu cầu" name="by_type" context="{'group_by':'request_type'}"/>
+                    <filter string="Khách hàng" name="by_partner" context="{'group_by':'partner_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ── Action ── -->
+    <record id="action_loyalty_reward_request" model="ir.actions.act_window">
+        <field name="name">Yêu cầu đổi thưởng</field>
+        <field name="res_model">hlv.loyalty.reward.request</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_pending': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Chưa có yêu cầu đổi thưởng nào.
+            </p>
+        </field>
+    </record>
+</odoo>

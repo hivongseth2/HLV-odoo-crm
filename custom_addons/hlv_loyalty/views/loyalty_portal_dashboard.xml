@@ -107,6 +107,9 @@
                             class="sr-hero-btn">
                         <span class="ms" style="font-size:17px">lock_reset</span> Đổi mật khẩu
                     </button>
+                    <a href="/loyalty/redeem" class="sr-hero-btn sr-hero-btn-redeem">
+                        <span class="ms" style="font-size:17px">redeem</span> Đổi thưởng
+                    </a>
                 </div>
             </div>
             <div class="sr-wm" aria-hidden="true"><span class="ms ms-xl">stat_3</span></div>
