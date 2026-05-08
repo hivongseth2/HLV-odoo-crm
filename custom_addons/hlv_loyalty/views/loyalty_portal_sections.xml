@@ -12,12 +12,17 @@
 <!-- ── Vouchers ── -->
 <template id="loyalty_portal_vouchers_section" name="[section] Vouchers">
     <div id="loyalty-vouchers" class="sr-voucher-section scroll-mt">
-        <h3 class="sr-vs-title">
-            <t t-if="active_vouchers">
-                Voucher đang có (<t t-out="len(active_vouchers)"/>)
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px">
+            <h3 class="sr-vs-title" style="margin-bottom:0">
+                <t t-if="active_vouchers_count">
+                    Voucher đang có (<t t-out="active_vouchers_count"/>)
+                </t>
+                <t t-else="">Voucher của bạn</t>
+            </h3>
+            <t t-if="active_vouchers_count and active_vouchers_count > len(active_vouchers)">
+                <a href="/loyalty/vouchers" class="sr-view-all-link">Xem tất cả →</a>
             </t>
-            <t t-else="">Voucher của bạn</t>
-        </h3>
+        </div>
         <t t-if="active_vouchers">
             <div class="sr-voucher-list">
                 <t t-foreach="active_vouchers" t-as="v">
@@ -62,6 +67,9 @@
     <div id="loyalty-history" class="sr-hist-section scroll-mt">
         <div class="sr-hist-header">
             <h3 class="sr-hist-title">Lịch sử tích lũy gần đây</h3>
+            <t t-if="history_count and history_count > len(recent_history)">
+                <a href="/loyalty/history" class="sr-view-all-link">Xem tất cả (<t t-out="history_count"/>) →</a>
+            </t>
         </div>
         <div class="sr-tbl-wrap">
             <t t-if="recent_history">
@@ -70,6 +78,7 @@
                         <tr>
                             <th>Ngày giao dịch</th>
                             <th>Loại hình</th>
+                            <th>Loại điểm</th>
                             <th>Số điểm</th>
                             <th>Nội dung chi tiết</th>
                             <th style="text-align:right">Trạng thái</th>
@@ -77,10 +86,10 @@
                     </thead>
                     <tbody>
                         <t t-foreach="recent_history" t-as="h">
-                            <tr>
+                            <tr t-att-class="'row-pt-ranking' if h.point_type == 'ranking' else 'row-pt-exchange'">
                                 <td>
-                                    <div class="td-date"><t t-out="h.date.strftime('%d Thg %m, %Y')"/></div>
-                                    <div class="td-time"><t t-out="h.date.strftime('%H:%M')"/></div>
+                                    <div class="td-date"><t t-out="fmt_vn_date(h.date)"/></div>
+                                    <div class="td-time"><t t-out="fmt_vn_time(h.date)"/></div>
                                 </td>
                                 <td>
                                     <t t-if="h.transaction_type == 'earn'">
@@ -96,11 +105,19 @@
                                         <span class="sr-badge badge-manual"><span class="ms">edit_note</span> Thủ công</span>
                                     </t>
                                 </td>
+                                <td>
+                                    <t t-if="h.point_type == 'ranking'">
+                                        <span class="sr-badge badge-pt-ranking"><span class="ms">trending_up</span> Tích lũy</span>
+                                    </t>
+                                    <t t-else="">
+                                        <span class="sr-badge badge-pt-exchange"><span class="ms">swap_horiz</span> Đổi điểm</span>
+                                    </t>
+                                </td>
                                 <td t-att-class="'td-pts ' + ('pos' if h.point_amount > 0 else 'neg')">
                                     <t t-out="('+' if h.point_amount > 0 else '') + '{:,}'.format(h.point_amount)"/>
                                 </td>
                                 <td class="td-desc"><t t-out="h.description or ''"/></td>
-                                <td class="td-status">Hoàn tất</td>
+                                <td class="td-status"><t t-out="dict(pending='Chờ XN', confirmed='Hoàn tất', cancelled='Đã hủy').get(h.state, h.state)"/></td>
                             </tr>
                         </t>
                     </tbody>

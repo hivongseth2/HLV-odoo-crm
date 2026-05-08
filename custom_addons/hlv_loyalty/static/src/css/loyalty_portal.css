@@ -244,6 +244,21 @@ a { color:inherit; }
 .sr-empty { padding:48px; text-align:center; color:var(--c-ink-v); }
 .sr-empty .ms { font-size:48px; display:block; margin-bottom:12px; opacity:.4; }
 
+/* ── Point type row colors ── */
+.row-pt-ranking td  { background:rgba(23,121,180,.05); }
+.row-pt-exchange td { background:rgba(25,135,84,.06); }
+.row-pt-ranking:hover td  { background:rgba(23,121,180,.1); }
+.row-pt-exchange:hover td { background:rgba(25,135,84,.12); }
+/* Point type badges */
+.badge-pt-ranking  { background:#e3f2fd; color:#1565c0; }
+.badge-pt-exchange { background:#e8f5e9; color:#2e7d32; }
+
+/* ── View-all link ── */
+.sr-view-all-link { font-size:.82rem; font-weight:700; color:var(--c-pri); text-decoration:none;
+                    white-space:nowrap; padding:6px 14px; border:1.5px solid var(--c-pri);
+                    border-radius:20px; transition:background .2s, color .2s; }
+.sr-view-all-link:hover { background:var(--c-pri); color:#fff; }
+
 /* ── Vouchers ── */
 .sr-voucher-section { background:var(--c-surf-0); border-radius:12px; padding:24px 32px;
                       box-shadow:0 4px 24px rgba(0,6,102,.06); margin-bottom:40px; }
@@ -254,6 +269,12 @@ a { color:inherit; }
 .sr-voucher-pill .ms { color:#198754; font-size:18px; }
 .sr-v-code { font-family:monospace; font-weight:700; font-size:1rem; color:#198754; }
 .sr-v-val  { font-size:.8rem; color:#198754; font-weight:600; }
+/* Full-page voucher card */
+.sr-voucher-card { background:#f0fff4; border:2px dashed #198754; border-radius:12px;
+                   padding:18px 20px; min-width:220px; max-width:320px; flex:1; }
+.sr-vc-header { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.sr-vc-value  { font-size:1rem; font-weight:700; color:#198754; margin-bottom:6px; }
+.sr-vc-expiry { font-size:.78rem; color:#5a7a65; display:flex; align-items:center; gap:4px; }
 
 /* ── Misc ── */
 html { scroll-behavior:smooth; }

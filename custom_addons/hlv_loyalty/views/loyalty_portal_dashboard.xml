@@ -156,10 +156,10 @@
                 <div class="sr-actions">
                     <h3 class="sr-actions-title">Thao tác nhanh</h3>
                     <div class="sr-actions-grid">
-                        <a href="#loyalty-history" class="sr-act-btn"><span class="ms">history</span><span>Lịch sử</span></a>
-                        <a href="#loyalty-vouchers" class="sr-act-btn">
+                        <a href="/loyalty/history" class="sr-act-btn"><span class="ms">history</span><span>Lịch sử</span></a>
+                        <a href="/loyalty/vouchers" class="sr-act-btn">
                             <span class="ms">redeem</span>
-                            <t t-if="active_vouchers"><span><t t-out="len(active_vouchers)"/> Voucher</span></t>
+                            <t t-if="active_vouchers_count"><span><t t-out="active_vouchers_count"/> Voucher</span></t>
                             <t t-else=""><span>Voucher</span></t>
                         </a>
                         <a href="#loyalty-tiers" class="sr-act-btn">

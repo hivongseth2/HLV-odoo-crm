@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+<!-- ================================================================
+     loyalty_portal_vouchers_full.xml
+     Full active vouchers page at /loyalty/vouchers
+================================================================ -->
+<template id="loyalty_portal_vouchers_full" name="Loyalty Portal - Toàn bộ Voucher">
+    <t t-call="hlv_loyalty.loyalty_public_layout">
+
+        <!-- Top bar -->
+        <div style="background:#fff;border-bottom:1px solid #e7e8e9;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+            <a href="/loyalty/dashboard"
+               style="font-weight:700;font-size:1rem;color:var(--c-pri);font-family:'Manrope',sans-serif;text-decoration:none;display:flex;align-items:center;gap:6px">
+                <span class="ms" style="font-size:20px">arrow_back</span> Quay về Dashboard
+            </a>
+            <div style="display:flex;align-items:center;gap:12px">
+                <span style="font-size:.88rem;color:#666">
+                    Xin chào, <strong><t t-out="partner.name"/></strong>
+                </span>
+                <a href="/loyalty/logout"
+                   style="padding:7px 16px;background:#f3f4f5;border-radius:20px;font-size:.82rem;font-weight:600;color:#454652;text-decoration:none">
+                    Đăng xuất
+                </a>
+            </div>
+        </div>
+
+        <!-- Body -->
+        <div class="sr-body" style="padding-top:32px">
+            <div class="sr-voucher-section">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px">
+                    <h3 class="sr-vs-title" style="margin-bottom:0;font-size:1.375rem;color:var(--c-pri)">
+                        Voucher của bạn
+                        <t t-if="all_vouchers">
+                            (<t t-out="len(all_vouchers)"/> voucher đang hiệu lực)
+                        </t>
+                    </h3>
+                </div>
+                <t t-if="all_vouchers">
+                    <div class="sr-voucher-list">
+                        <t t-foreach="all_vouchers" t-as="v">
+                            <div class="sr-voucher-card">
+                                <div class="sr-vc-header">
+                                    <span class="ms" style="font-size:28px;color:#198754">confirmation_number</span>
+                                    <span class="sr-v-code" style="font-size:1.15rem"><t t-out="v.code"/></span>
+                                </div>
+                                <div class="sr-vc-value">
+                                    <t t-if="v.reward_type == 'free_shipping'">Miễn phí vận chuyển</t>
+                                    <t t-elif="v.reward_type == 'gift'">
+                                        Quà tặng kèm
+                                        <t t-if="v.gift_product_id">
+                                            (<t t-out="v.gift_qty"/> x <t t-out="v.gift_product_id.name"/>)
+                                        </t>
+                                    </t>
+                                    <t t-elif="v.discount_type == 'fixed'">
+                                        Giảm <t t-out="'{:,.0f}'.format(v.discount_value)"/>đ
+                                    </t>
+                                    <t t-else="">
+                                        Giảm <t t-out="v.discount_value"/>%
+                                        <t t-if="v.max_discount_amount">
+                                            (tối đa <t t-out="'{:,.0f}'.format(v.max_discount_amount)"/>đ)
+                                        </t>
+                                    </t>
+                                </div>
+                                <t t-if="v.date_expiry">
+                                    <div class="sr-vc-expiry">
+                                        <span class="ms" style="font-size:14px">schedule</span>
+                                        HSD: <t t-out="v.date_expiry.strftime('%d/%m/%Y')"/>
+                                    </div>
+                                </t>
+                            </div>
+                        </t>
+                    </div>
+                </t>
+                <t t-else="">
+                    <div class="sr-empty">
+                        <span class="ms" style="font-size:64px;display:block;margin-bottom:16px;opacity:.35">redeem</span>
+                        <p style="margin:0;font-size:1rem">Bạn chưa có Voucher nào. Tích điểm để đổi Voucher!</p>
+                        <a href="/loyalty/dashboard" style="display:inline-block;margin-top:16px;padding:10px 24px;background:var(--c-pri);color:#fff;border-radius:8px;text-decoration:none;font-weight:600">
+                            Quay về Dashboard
+                        </a>
+                    </div>
+                </t>
+            </div>
+        </div>
+
+    </t>
+</template>
+
+</odoo>

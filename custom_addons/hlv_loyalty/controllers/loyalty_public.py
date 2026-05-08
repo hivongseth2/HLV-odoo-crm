@@ -1,8 +1,18 @@
 # -*- coding: utf-8 -*-
 import re
+from datetime import timezone, timedelta as dt_timedelta
 from odoo import http
 from odoo.http import request
 from odoo.exceptions import UserError
+
+_VN_TZ = timezone(dt_timedelta(hours=7))
+
+
+def _vn_datetime(dt, fmt):
+    """Format a UTC Datetime to Vietnam local time (UTC+7)."""
+    if not dt:
+        return ''
+    return dt.replace(tzinfo=timezone.utc).astimezone(_VN_TZ).strftime(fmt)
 
 _SESSION_KEY = 'hlv_loyalty_account_id'
 
@@ -20,20 +30,29 @@ def _get_current_account():
 
 
 def _load_partner_data(partner):
-    """Load all dashboard data for a partner."""
+    """Load dashboard data for a partner — recent 5 rows for history/vouchers."""
     root = partner.commercial_partner_id or partner
     # Collect root + all direct children to catch points on child contacts/sub-companies
     all_partner_ids = [root.id] + root.child_ids.ids
     tiers = request.env['hlv.loyalty.tier'].sudo().search(
         [('active', '=', True)], order='min_points asc'
     )
+    # Recent 5 active vouchers + total count
     active_vouchers = request.env['hlv.loyalty.voucher'].sudo().search([
         ('partner_id', 'in', all_partner_ids),
         ('state', '=', 'active'),
+    ], limit=5)
+    active_vouchers_count = request.env['hlv.loyalty.voucher'].sudo().search_count([
+        ('partner_id', 'in', all_partner_ids),
+        ('state', '=', 'active'),
     ])
+    # Recent 5 history entries + total count
     recent_history = request.env['hlv.loyalty.history'].sudo().search([
         ('partner_id', 'in', all_partner_ids),
-    ], order='date desc', limit=10)
+    ], order='date desc', limit=5)
+    history_count = request.env['hlv.loyalty.history'].sudo().search_count([
+        ('partner_id', 'in', all_partner_ids),
+    ])
     next_tier = None
     if root.loyalty_tier_id:
         next_tier = request.env['hlv.loyalty.tier'].sudo().search([
@@ -44,12 +63,16 @@ def _load_partner_data(partner):
         'tiers': tiers,
         'partner': root,
         'active_vouchers': active_vouchers,
+        'active_vouchers_count': active_vouchers_count,
         'recent_history': recent_history,
+        'history_count': history_count,
         'next_tier': next_tier,
         'masked_phone': _mask_phone(root.phone),
         'masked_email': _mask_email(root.email),
         'exchange_points': root.loyalty_exchange_points,
         'pending_points': root.loyalty_pending_points,
+        'fmt_vn_date': lambda dt: _vn_datetime(dt, '%d Thg %m, %Y'),
+        'fmt_vn_time': lambda dt: _vn_datetime(dt, '%H:%M'),
     }
 
 
@@ -109,6 +132,9 @@ class LoyaltyPublicPortal(http.Controller):
             return request.redirect('/loyalty')
         data = _load_partner_data(account.partner_id)
         data['account'] = account
+        # Show portal_phone (login phone) in header, not partner.phone
+        if account.portal_phone:
+            data['masked_phone'] = _mask_phone(account.portal_phone)
         data['success'] = kwargs.get('success')
         data['error'] = kwargs.get('error')
         return request.render('hlv_loyalty.loyalty_public_dashboard', data)
@@ -137,7 +163,8 @@ class LoyaltyPublicPortal(http.Controller):
             data['show_phone_modal'] = True
             return request.render('hlv_loyalty.loyalty_public_dashboard', data)
 
-        account.partner_id.sudo().write({'phone': new_phone})
+        # Update portal_phone (login phone), not partner.phone
+        account.sudo().write({'portal_phone': new_phone})
         return request.redirect('/loyalty/dashboard?success=phone_updated')
 
     # ── Change password ───────────────────────────────────────────────────
@@ -180,6 +207,47 @@ class LoyaltyPublicPortal(http.Controller):
             return request.render('hlv_loyalty.loyalty_public_dashboard', data)
 
         return request.redirect('/loyalty/dashboard?success=password_changed')
+
+    # ── Full history page ─────────────────────────────────────────────────────
+
+    @http.route('/loyalty/history', type='http', auth='public', website=True,
+                sitemap=False)
+    def loyalty_history_full(self, **kwargs):
+        account = _get_current_account()
+        if not account:
+            return request.redirect('/loyalty')
+        root = account.partner_id.commercial_partner_id or account.partner_id
+        all_partner_ids = [root.id] + root.child_ids.ids
+        all_history = request.env['hlv.loyalty.history'].sudo().search([
+            ('partner_id', 'in', all_partner_ids),
+        ], order='date desc')
+        data = _load_partner_data(account.partner_id)
+        data['account'] = account
+        if account.portal_phone:
+            data['masked_phone'] = _mask_phone(account.portal_phone)
+        data['all_history'] = all_history
+        return request.render('hlv_loyalty.loyalty_portal_history_full', data)
+
+    # ── Full vouchers page ────────────────────────────────────────────────────
+
+    @http.route('/loyalty/vouchers', type='http', auth='public', website=True,
+                sitemap=False)
+    def loyalty_vouchers_full(self, **kwargs):
+        account = _get_current_account()
+        if not account:
+            return request.redirect('/loyalty')
+        root = account.partner_id.commercial_partner_id or account.partner_id
+        all_partner_ids = [root.id] + root.child_ids.ids
+        all_vouchers = request.env['hlv.loyalty.voucher'].sudo().search([
+            ('partner_id', 'in', all_partner_ids),
+            ('state', '=', 'active'),
+        ])
+        data = _load_partner_data(account.partner_id)
+        data['account'] = account
+        if account.portal_phone:
+            data['masked_phone'] = _mask_phone(account.portal_phone)
+        data['all_vouchers'] = all_vouchers
+        return request.render('hlv_loyalty.loyalty_portal_vouchers_full', data)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

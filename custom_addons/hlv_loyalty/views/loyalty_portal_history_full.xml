@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+<!-- ================================================================
+     loyalty_portal_history_full.xml
+     Full transaction history page at /loyalty/history
+================================================================ -->
+<template id="loyalty_portal_history_full" name="Loyalty Portal - Toàn bộ lịch sử">
+    <t t-call="hlv_loyalty.loyalty_public_layout">
+
+        <!-- Top bar -->
+        <div style="background:#fff;border-bottom:1px solid #e7e8e9;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+            <a href="/loyalty/dashboard"
+               style="font-weight:700;font-size:1rem;color:var(--c-pri);font-family:'Manrope',sans-serif;text-decoration:none;display:flex;align-items:center;gap:6px">
+                <span class="ms" style="font-size:20px">arrow_back</span> Quay về Dashboard
+            </a>
+            <div style="display:flex;align-items:center;gap:12px">
+                <span style="font-size:.88rem;color:#666">
+                    Xin chào, <strong><t t-out="partner.name"/></strong>
+                </span>
+                <a href="/loyalty/logout"
+                   style="padding:7px 16px;background:#f3f4f5;border-radius:20px;font-size:.82rem;font-weight:600;color:#454652;text-decoration:none">
+                    Đăng xuất
+                </a>
+            </div>
+        </div>
+
+        <!-- Body -->
+        <div class="sr-body" style="padding-top:32px">
+            <div class="sr-hist-section">
+                <div class="sr-hist-header">
+                    <h3 class="sr-hist-title">
+                        Toàn bộ lịch sử tích lũy
+                        <t t-if="all_history">
+                            (<t t-out="len(all_history)"/> giao dịch)
+                        </t>
+                    </h3>
+                    <!-- Legend -->
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+                        <span class="sr-badge badge-pt-ranking"><span class="ms">trending_up</span> Tích lũy</span>
+                        <span class="sr-badge badge-pt-exchange"><span class="ms">swap_horiz</span> Đổi điểm</span>
+                    </div>
+                </div>
+                <div class="sr-tbl-wrap">
+                    <t t-if="all_history">
+                        <table class="sr-tbl">
+                            <thead>
+                                <tr>
+                                    <th>Ngày giao dịch</th>
+                                    <th>Loại hình</th>
+                                    <th>Loại điểm</th>
+                                    <th>Số điểm</th>
+                                    <th>Nội dung chi tiết</th>
+                                    <th style="text-align:right">Trạng thái</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="all_history" t-as="h">
+                                    <tr t-att-class="'row-pt-ranking' if h.point_type == 'ranking' else 'row-pt-exchange'">
+                                        <td>
+                                            <div class="td-date"><t t-out="fmt_vn_date(h.date)"/></div>
+                                            <div class="td-time"><t t-out="fmt_vn_time(h.date)"/></div>
+                                        </td>
+                                        <td>
+                                            <t t-if="h.transaction_type == 'earn'">
+                                                <span class="sr-badge badge-earn"><span class="ms">shopping_bag</span> Mua hàng</span>
+                                            </t>
+                                            <t t-elif="h.transaction_type == 'redeem'">
+                                                <span class="sr-badge badge-redeem"><span class="ms">redeem</span> Đổi Voucher</span>
+                                            </t>
+                                            <t t-elif="h.transaction_type == 'return'">
+                                                <span class="sr-badge badge-return"><span class="ms">undo</span> Hoàn hàng</span>
+                                            </t>
+                                            <t t-else="">
+                                                <span class="sr-badge badge-manual"><span class="ms">edit_note</span> Thủ công</span>
+                                            </t>
+                                        </td>
+                                        <td>
+                                            <t t-if="h.point_type == 'ranking'">
+                                                <span class="sr-badge badge-pt-ranking"><span class="ms">trending_up</span> Tích lũy</span>
+                                            </t>
+                                            <t t-else="">
+                                                <span class="sr-badge badge-pt-exchange"><span class="ms">swap_horiz</span> Đổi điểm</span>
+                                            </t>
+                                        </td>
+                                        <td t-att-class="'td-pts ' + ('pos' if h.point_amount > 0 else 'neg')">
+                                            <t t-out="('+' if h.point_amount > 0 else '') + '{:,}'.format(h.point_amount)"/>
+                                        </td>
+                                        <td class="td-desc"><t t-out="h.description or ''"/></td>
+                                        <td class="td-status">
+                                            <t t-out="dict(pending='Chờ XN', confirmed='Hoàn tất', cancelled='Đã hủy').get(h.state, h.state)"/>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+                    </t>
+                    <t t-else="">
+                        <div class="sr-empty">
+                            <span class="ms">inbox</span>
+                            <p>Chưa có giao dịch điểm nào.</p>
+                        </div>
+                    </t>
+                </div>
+            </div>
+        </div>
+
+    </t>
+</template>
+
+</odoo>

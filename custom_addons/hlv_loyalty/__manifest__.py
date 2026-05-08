@@ -33,6 +33,8 @@
         "views/loyalty_portal_dashboard.xml",
         "views/loyalty_portal_dashboard_modals.xml",
         "views/loyalty_portal_result.xml",
+        "views/loyalty_portal_history_full.xml",
+        "views/loyalty_portal_vouchers_full.xml",
         "views/menu_views.xml",
         "data/loyalty_tier_data.xml",
     ],
