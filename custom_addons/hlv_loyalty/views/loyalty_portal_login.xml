@@ -21,9 +21,7 @@
 
             <!-- ── Left: brand panel ── -->
             <div class="lp-left">
-                <!-- <div class="lp-left-bg"> -->
                 <img src="/hlv_loyalty/static/src/img/loyalty_portal_login_bg.png" alt="Background" class="lp-left-bg"/>
-                </div>
                 <div class="lp-left-overlay"></div>
                 <div class="lp-left-content">
                     <div>
