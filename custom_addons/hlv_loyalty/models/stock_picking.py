@@ -44,13 +44,24 @@ class StockPicking(models.Model):
         if not program:
             return
 
-        # Tính giá trị đơn hàng (sau chiết khấu)
-        order_amount = sale_order.amount_untaxed
-        if order_amount <= 0:
+        # Tính tổng tiền chiết khấu trên các dòng hàng
+        discount_amount = sum(
+            line.price_unit * line.product_uom_qty * line.discount / 100.0
+            for line in sale_order.order_line
+            if line.discount > 0 and not line.display_type
+        )
+
+        # Fallback: nếu không có dòng nào chiết khấu → dùng % mặc định của contact
+        if discount_amount <= 0:
+            root_partner_lookup = partner.commercial_partner_id or partner
+            fallback_pct = root_partner_lookup.loyalty_default_discount or 0.0
+            discount_amount = sale_order.amount_untaxed * fallback_pct / 100.0
+
+        if discount_amount <= 0:
             return
 
         # Tính số điểm
-        points = program.calculate_points(order_amount)
+        points = program.calculate_points(discount_amount)
         if points <= 0:
             return
 
@@ -126,22 +137,8 @@ class StockPicking(models.Model):
         if existing:
             return
 
-        # Tính giá trị hàng trả lại
-        return_amount = sum(
-            move.product_id.lst_price * move.quantity
-            for move in self.move_ids
-            if move.state == 'done'
-        )
-        if return_amount <= 0:
-            return
-
-        program = self.env['hlv.loyalty.program'].sudo().search([
-            ('active', '=', True),
-        ], limit=1)
-        if not program:
-            return
-
-        points_to_deduct = program.calculate_points(return_amount)
+        # Thu hồi đúng số điểm đã tích ở phiếu xuất gốc
+        points_to_deduct = origin_picking.loyalty_points_earned
         if points_to_deduct <= 0:
             return
 

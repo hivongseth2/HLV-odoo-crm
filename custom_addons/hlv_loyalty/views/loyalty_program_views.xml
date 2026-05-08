@@ -51,6 +51,7 @@
 
                     <group>
                         <group string="Cấu hình chi tiết">
+                            <field name="discount_per_point"/>
                             <field name="earning_amount" widget="monetary"
                                    options="{'currency_field': 'currency_id'}"/>
                             <field name="earning_points"/>

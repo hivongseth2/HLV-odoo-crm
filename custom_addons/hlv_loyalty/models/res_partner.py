@@ -38,6 +38,12 @@ class ResPartner(models.Model):
         'hlv.loyalty.tier', string='Hạng thành viên',
         compute='_compute_loyalty_tier', store=False, readonly=True,
     )
+    loyalty_default_discount = fields.Float(
+        string='% Chiết khấu mặc định (Loyalty)',
+        default=5.0,
+        digits=(5, 2),
+        help='Tỉ lệ % chiết khấu mặc định để tính điểm Loyalty khi các dòng hàng không có chiết khấu. Admin có thể sửa trên từng khách hàng.',
+    )
     loyalty_portal_account_ids = fields.One2many(
         'hlv.loyalty.portal.account', 'partner_id', string='Tài khoản Portal',
     )

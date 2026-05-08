@@ -33,6 +33,12 @@ class HlvLoyaltyProgram(models.Model):
         string='Số điểm nhận được', required=True, default=1,
         help='Số điểm nhận được khi đạt mức tiền quy đổi',
     )
+    discount_per_point = fields.Float(
+        string='Mỗi X đồng chiết khấu = 1 điểm',
+        required=True, default=10000,
+        digits=(15, 0),
+        help='Số tiền chiết khấu trên dòng hàng (VNĐ) để được 1 điểm tích lũy. VD: 10.000đ chiết khấu = 1 điểm.',
+    )
 
     # Voucher packages
     voucher_package_ids = fields.One2many(
@@ -55,9 +61,9 @@ class HlvLoyaltyProgram(models.Model):
          'Số điểm nhận được phải lớn hơn 0!'),
     ]
 
-    def calculate_points(self, amount):
-        """Tính số điểm từ giá trị đơn hàng."""
+    def calculate_points(self, discount_amount):
+        """Tính số điểm từ tổng tiền chiết khấu trên các dòng hàng."""
         self.ensure_one()
-        if self.earning_amount <= 0:
+        if self.discount_per_point <= 0:
             return 0
-        return int(amount / self.earning_amount) * self.earning_points
+        return int(discount_amount / self.discount_per_point)

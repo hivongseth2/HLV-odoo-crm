@@ -181,6 +181,19 @@
                     <!-- Tài khoản Portal Loyalty -->
                     <div class="fw-bold text-uppercase small mb-2 mt-3"
                          style="letter-spacing:1px; color:#6c757d; border-bottom:2px solid #dee2e6; padding-bottom:6px;">
+                        Cấu hình Loyalty
+                    </div>
+                    <group>
+                        <group>
+                            <field name="loyalty_default_discount"
+                                   string="% Chiết khấu mặc định (Loyalty)"
+                                   widget="percentage"
+                                   help="Tỉ lệ % chiết khấu mặc định dùng để tính điểm khi dòng hàng không có chiết khấu"/>
+                        </group>
+                    </group>
+                    <!-- Tài khoản Portal Loyalty -->
+                    <div class="fw-bold text-uppercase small mb-2 mt-3"
+                         style="letter-spacing:1px; color:#6c757d; border-bottom:2px solid #dee2e6; padding-bottom:6px;">
                         Tài khoản Portal
                     </div>
                     <field name="loyalty_portal_account_ids" nolabel="1"
