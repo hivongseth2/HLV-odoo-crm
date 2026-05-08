@@ -259,18 +259,76 @@ a { color:inherit; }
 .sr-vc-value  { font-size:1rem; font-weight:700; color:#198754; margin-bottom:6px; }
 .sr-vc-expiry { font-size:.78rem; color:#5a7a65; display:flex; align-items:center; gap:4px; }
 
-/* ── Misc ── */
-html { scroll-behavior:smooth; }
-.scroll-mt { scroll-margin-top:32px; }
+/* ── History mobile card (shown on mobile, hidden on desktop) ── */
+.sr-hist-cards { display:none; }
+.sr-hist-card {
+    display:flex; align-items:center; gap:14px;
+    padding:13px 14px; border-radius:10px;
+    background:var(--c-surf-0); box-shadow:0 1px 4px rgba(0,6,102,.06);
+}
+.row-pt-ranking.sr-hist-card  { background:rgba(23,121,180,.05); border-left:3px solid var(--c-pri); }
+.row-pt-exchange.sr-hist-card { background:rgba(25,135,84,.06);  border-left:3px solid #198754; }
+.shc-left { display:flex; flex-direction:column; align-items:center; gap:5px;
+            min-width:54px; flex-shrink:0; text-align:center; }
+.shc-pts { font-family:'Manrope',sans-serif; font-weight:900; font-size:1.2rem; line-height:1; }
+.shc-pts.pos { color:var(--c-sec); }
+.shc-pts.neg { color:#ba1a1a; }
+.shc-body { flex:1; min-width:0; }
+.shc-desc { font-size:.82rem; color:var(--c-ink); font-weight:500; margin-bottom:5px;
+            white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.shc-meta { display:flex; align-items:center; justify-content:space-between; gap:6px; flex-wrap:wrap; }
+.shc-date { font-size:.72rem; color:var(--c-ink-v); }
+.shc-status { font-size:.72rem; font-weight:700; }
+.shc-st-done      { color:var(--c-pri); }
+.shc-st-pending   { color:#d67000; }
+.shc-st-cancelled { color:#ba1a1a; }
+
+/* ── Top bar on full pages ── */
+.sr-topbar { background:#fff; border-bottom:1px solid #e7e8e9; padding:14px 24px;
+             display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.sr-topbar-back { font-weight:700; font-size:1rem; color:var(--c-pri); font-family:'Manrope',sans-serif;
+                  text-decoration:none; display:flex; align-items:center; gap:6px; white-space:nowrap; }
+.sr-topbar-right { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.sr-topbar-name { font-size:.88rem; color:#666; }
+.sr-topbar-logout { padding:7px 16px; background:#f3f4f5; border-radius:20px;
+                    font-size:.82rem; font-weight:600; color:#454652; text-decoration:none; }
 
 /* ── Responsive ── */
-@media (max-width:900px) { .sr-main-row { grid-template-columns:1fr; } }
-@media (max-width:768px) {
-    .sr-body { padding:0 16px 60px; margin-top:-48px; }
-    .sr-result-hero { padding:32px 20px 80px; }
-    .sr-card, .sr-actions { padding:20px; }
-    .sr-bal-pill { flex-direction:column; border-radius:16px; align-items:flex-start; }
-    .sr-tbl th,.sr-tbl td { padding:12px 16px; }
-    .sr-tier-grid { grid-template-columns:1fr 1fr; gap:20px; }
+@media (max-width:900px) {
+    .sr-main-row { grid-template-columns:1fr; }
 }
-@media (max-width:480px) { .sr-tier-grid { grid-template-columns:1fr; } }
+@media (max-width:768px) {
+    /* Hero */
+    .sr-result-hero { padding:24px 16px 72px; }
+    .sr-result-top { flex-wrap:wrap; gap:16px; }
+    .sr-cust-name { font-size:1.5rem; margin-bottom:8px; }
+    .sr-cust-meta { gap:12px; }
+    .sr-bal-pill { width:100%; border-radius:14px; padding:14px 16px; gap:12px; }
+    .sr-bal-num { font-size:2rem; }
+    .sr-bal-avatar { width:60px; height:60px; }
+    .sr-hero-actions { margin-top:12px; }
+    .sr-hero-btn { font-size:.8rem; padding:7px 14px; }
+    /* Body */
+    .sr-body { padding:0 12px 60px; margin-top:-40px; }
+    .sr-card, .sr-actions { padding:18px 14px; }
+    .sr-hist-header { flex-direction:column; align-items:flex-start; gap:10px; }
+    /* Table → hide, show cards */
+    .sr-tbl-wrap { background:transparent; box-shadow:none; overflow:visible; border-radius:0; }
+    .sr-tbl { display:none; }
+    .sr-hist-cards { display:flex; flex-direction:column; gap:8px; }
+    /* Vouchers full width */
+    .sr-voucher-card { min-width:unset; max-width:unset; width:100%; }
+    .sr-voucher-list { flex-direction:column; }
+    /* Tiers */
+    .sr-tier-grid { grid-template-columns:1fr 1fr; gap:14px; }
+    /* Top bar full pages */
+    .sr-topbar { padding:10px 14px; }
+    .sr-topbar-name { display:none; }
+    .sr-topbar-logout { padding:6px 12px; font-size:.8rem; }
+}
+@media (max-width:480px) {
+    .sr-tier-grid { grid-template-columns:1fr 1fr; }
+    .sr-cust-name { font-size:1.25rem; }
+    .sr-bal-pill { flex-direction:column; align-items:flex-start; gap:8px; }
+    .sr-actions-grid { grid-template-columns:1fr 1fr; }
+}
