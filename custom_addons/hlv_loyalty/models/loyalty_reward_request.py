@@ -83,6 +83,22 @@ class HlvLoyaltyRewardRequest(models.Model):
         default=lambda self: self.env.company, readonly=True,
     )
 
+    # Related point history (for admin view)
+    partner_history_ids = fields.One2many(
+        'hlv.loyalty.history', compute='_compute_partner_history_ids',
+        string='Lịch sử điểm',
+    )
+
+    @api.depends('partner_id')
+    def _compute_partner_history_ids(self):
+        for rec in self:
+            if rec.partner_id:
+                rec.partner_history_ids = self.env['hlv.loyalty.history'].sudo().search([
+                    ('partner_id', '=', rec.partner_id.id),
+                ], order='date desc', limit=30)
+            else:
+                rec.partner_history_ids = self.env['hlv.loyalty.history']
+
     # ── Compute ────────────────────────────────────────────────────────────
 
     @api.depends('request_type', 'package_id', 'points_to_redeem')

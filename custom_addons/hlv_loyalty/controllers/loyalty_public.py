@@ -414,11 +414,16 @@ class LoyaltyPublicPortal(http.Controller):
             ('partner_id', 'in', all_partner_ids),
             ('state', '=', 'active'),
         ])
+        inactive_vouchers = request.env['hlv.loyalty.voucher'].sudo().search([
+            ('partner_id', 'in', all_partner_ids),
+            ('state', 'in', ['used', 'expired', 'cancelled']),
+        ])
         data = _load_partner_data(account.partner_id)
         data['account'] = account
         if account.portal_phone:
             data['masked_phone'] = _mask_phone(account.portal_phone)
         data['all_vouchers'] = all_vouchers
+        data['inactive_vouchers'] = inactive_vouchers
         return request.render('hlv_loyalty.loyalty_portal_vouchers_full', data)
 
 

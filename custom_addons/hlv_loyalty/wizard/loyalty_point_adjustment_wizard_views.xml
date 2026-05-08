@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_loyalty_point_adjustment_wizard_form" model="ir.ui.view">
+        <field name="name">hlv.loyalty.point.adjustment.wizard.form</field>
+        <field name="model">hlv.loyalty.point.adjustment.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Điều chỉnh điểm thủ công">
+                <group>
+                    <field name="partner_id" readonly="1"/>
+                    <field name="point_type" widget="radio"/>
+                    <field name="point_amount"
+                           help="Số dương (+) để cộng điểm, số âm (-) để trừ điểm"/>
+                    <field name="description" placeholder="Lý do điều chỉnh..."/>
+                </group>
+                <footer>
+                    <button name="action_adjust" string="Xác nhận điều chỉnh" type="object"
+                            class="btn-primary"
+                            confirm="Bạn có chắc chắn muốn điều chỉnh điểm cho khách hàng này?"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

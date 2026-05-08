@@ -128,6 +128,11 @@
                                         string="Đổi Voucher ngay"
                                         class="btn btn-warning fw-bold"
                                         icon="fa-exchange"/>
+                                <button name="action_open_point_adjustment_wizard" type="object"
+                                        string="Điều chỉnh điểm"
+                                        class="btn btn-outline-secondary fw-bold ms-2"
+                                        icon="fa-sliders"
+                                        groups="sales_team.group_sale_manager"/>
                             </div>
                         </div>
                     </div>

@@ -142,7 +142,10 @@
                                     </div>
                                     <div class="sr-pkg-divider"/>
                                     <t t-if="can_redeem">
-                                        <form t-att-action="'/loyalty/redeem/gift'" method="post" class="sr-pkg-form">
+                                        <form t-att-action="'/loyalty/redeem/gift'" method="post" class="sr-pkg-form"
+                                              t-att-data-pkg-name="pkg.name"
+                                              t-att-data-pts="pkg.points_required"
+                                              onsubmit="return confirm('Xác nhận đổi ' + this.dataset.pts + ' điểm lấy gói: ' + this.dataset.pkgName + '?')">
                                             <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                                             <input type="hidden" name="package_id" t-att-value="pkg.id"/>
                                             <button type="submit" class="sr-pkg-btn">
@@ -172,6 +175,7 @@
             <!-- ═══════════════ TAB: ĐỔI TIỀN ═══════════════ -->
             <t t-if="active_tab == 'cash'">
                 <div class="sr-rdm-pane">
+                    <div class="sr-cash-layout">
                     <div class="sr-cash-wrap">
                         <form action="/loyalty/redeem/cash" method="post" class="sr-cash-form" id="cash-form">
                             <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
@@ -239,7 +243,44 @@
                                 </button>
                             </div>
                         </form>
-                    </div>
+                    </div><!-- /sr-cash-wrap -->
+
+                    <!-- Right panel -->
+                    <div class="sr-cash-side">
+                        <div class="sr-cash-side-inner">
+                            <span class="ms sr-cash-side-icon">account_balance_wallet</span>
+                            <div class="sr-cash-side-ttl">Quy đổi điểm</div>
+                            <div class="sr-cash-side-pts">
+                                <span class="sr-cash-side-num"><t t-out="'{:,}'.format(exchange_points)"/></span>
+                                <span class="sr-cash-side-unit">points khả dụng</span>
+                            </div>
+                            <t t-if="program and program.cash_rate_per_point > 0">
+                                <div class="sr-cash-side-rate">
+                                    <span class="ms">swap_horiz</span>
+                                    1 điểm = <strong><t t-out="'{:,.0f}'.format(program.cash_rate_per_point)"/>đ</strong>
+                                </div>
+                                <div class="sr-cash-side-max">
+                                    Tối đa có thể đổi:<br/>
+                                    <strong><t t-out="'{:,.0f}'.format(exchange_points * program.cash_rate_per_point)"/>đ</strong>
+                                </div>
+                            </t>
+                            <div class="sr-cash-side-steps">
+                                <div class="sr-css-step">
+                                    <span class="ms sr-css-step-icon">edit_note</span>
+                                    <span>Nhập số điểm và thông tin ngân hàng</span>
+                                </div>
+                                <div class="sr-css-step">
+                                    <span class="ms sr-css-step-icon">send</span>
+                                    <span>Gửi yêu cầu</span>
+                                </div>
+                                <div class="sr-css-step">
+                                    <span class="ms sr-css-step-icon">verified</span>
+                                    <span>Chờ admin xác nhận và chuyển khoản</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div><!-- /sr-cash-side -->
+                    </div><!-- /sr-cash-layout -->
                 </div>
                 <t t-if="program and program.cash_rate_per_point > 0">
                     <script>

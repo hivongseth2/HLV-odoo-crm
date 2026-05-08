@@ -163,3 +163,17 @@ class ResPartner(models.Model):
                 'default_partner_id': root_partner.id,
             },
         }
+
+    def action_open_point_adjustment_wizard(self):
+        """Mở wizard Điều chỉnh điểm thủ công."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Điều chỉnh điểm',
+            'res_model': 'hlv.loyalty.point.adjustment.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_partner_id': self.id,
+            },
+        }

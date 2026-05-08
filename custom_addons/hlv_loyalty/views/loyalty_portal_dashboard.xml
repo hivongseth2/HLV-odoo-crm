@@ -107,9 +107,6 @@
                             class="sr-hero-btn">
                         <span class="ms" style="font-size:17px">lock_reset</span> Đổi mật khẩu
                     </button>
-                    <a href="/loyalty/redeem" class="sr-hero-btn sr-hero-btn-redeem">
-                        <span class="ms" style="font-size:17px">redeem</span> Đổi thưởng
-                    </a>
                 </div>
             </div>
             <div class="sr-wm" aria-hidden="true"><span class="ms ms-xl">stat_3</span></div>
@@ -160,9 +157,12 @@
                     <div class="sr-actions-grid">
                         <a href="/loyalty/history" class="sr-act-btn"><span class="ms">history</span><span>Lịch sử</span></a>
                         <a href="/loyalty/vouchers" class="sr-act-btn">
-                            <span class="ms">redeem</span>
+                            <span class="ms">confirmation_number</span>
                             <t t-if="active_vouchers_count"><span><t t-out="active_vouchers_count"/> Voucher</span></t>
                             <t t-else=""><span>Voucher</span></t>
+                        </a>
+                        <a href="/loyalty/redeem" class="sr-act-btn">
+                            <span class="ms">redeem</span><span>Đổi thưởng</span>
                         </a>
                         <a href="#loyalty-tiers" class="sr-act-btn">
                             <span class="ms ms-fill">workspace_premium</span>
