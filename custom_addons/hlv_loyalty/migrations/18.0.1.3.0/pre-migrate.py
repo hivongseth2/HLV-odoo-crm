@@ -3,6 +3,7 @@
 Migration 18.0.1.3.0
 - Add loyalty_default_discount column to res_partner (% chiết khấu mặc định Loyalty)
 - Add discount_per_point column to hlv_loyalty_program (số tiền chiết khấu / điểm)
+- Add loyalty_discount_pct column to sale_order_line (% CK Loyalty riêng, không ảnh hưởng giá)
 """
 import logging
 
@@ -23,4 +24,11 @@ def migrate(cr, version):
         ADD COLUMN IF NOT EXISTS discount_per_point numeric DEFAULT 10000;
     """)
     _logger.info("migration 18.0.1.3.0: added discount_per_point to hlv_loyalty_program")
+
+    # 3. Add loyalty_discount_pct to sale_order_line
+    cr.execute("""
+        ALTER TABLE sale_order_line
+        ADD COLUMN IF NOT EXISTS loyalty_discount_pct numeric DEFAULT 0.0;
+    """)
+    _logger.info("migration 18.0.1.3.0: added loyalty_discount_pct to sale_order_line")
     _logger.info("migration 18.0.1.3.0: done")

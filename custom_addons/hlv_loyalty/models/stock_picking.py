@@ -44,18 +44,29 @@ class StockPicking(models.Model):
         if not program:
             return
 
-        # Tính tổng tiền chiết khấu trên các dòng hàng
+        # Tính điểm theo từng phiếu: chỉ lấy hàng thực giao trong phiếu này
+        # move.sale_line_id → sale order line, move.quantity → done qty
         discount_amount = sum(
-            line.price_unit * line.product_uom_qty * line.discount / 100.0
-            for line in sale_order.order_line
-            if line.discount > 0 and not line.display_type
+            move.sale_line_id.price_unit * move.quantity
+            * (move.sale_line_id.loyalty_discount_pct / 100.0)
+            for move in self.move_ids
+            if move.state == 'done'
+            and move.sale_line_id
+            and move.sale_line_id.loyalty_discount_pct > 0
         )
 
-        # Fallback: nếu không có dòng nào chiết khấu → dùng % mặc định của contact
+        # Fallback: không có dòng nào đặt loyalty_discount_pct → dùng % mặc định của contact
         if discount_amount <= 0:
             root_partner_lookup = partner.commercial_partner_id or partner
             fallback_pct = root_partner_lookup.loyalty_default_discount or 0.0
-            discount_amount = sale_order.amount_untaxed * fallback_pct / 100.0
+            if fallback_pct > 0:
+                delivered_subtotal = sum(
+                    (move.sale_line_id.price_unit if move.sale_line_id
+                     else move.product_id.lst_price) * move.quantity
+                    for move in self.move_ids
+                    if move.state == 'done'
+                )
+                discount_amount = delivered_subtotal * fallback_pct / 100.0
 
         if discount_amount <= 0:
             return

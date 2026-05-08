@@ -187,8 +187,7 @@
                         <group>
                             <field name="loyalty_default_discount"
                                    string="% Chiết khấu mặc định (Loyalty)"
-                                   widget="percentage"
-                                   help="Tỉ lệ % chiết khấu mặc định dùng để tính điểm khi dòng hàng không có chiết khấu"/>
+                                   help="Tỉ lệ % chiết khấu mặc định dùng để tính điểm khi dòng hàng không có chiết khấu loyalty. VD: nhập 5 = 5%."/>
                         </group>
                     </group>
                     <!-- Tài khoản Portal Loyalty -->

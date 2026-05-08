@@ -6,6 +6,11 @@
         <field name="model">sale.order</field>
         <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
+            <!-- Thêm cột CK Loyalty vào dòng sản phẩm -->
+            <xpath expr="//field[@name='order_line']/list//field[@name='discount']" position="after">
+                <field name="loyalty_discount_pct" string="CK Loyalty (%)" optional="show"
+                       column_invisible="parent.state not in ['sale','done','draft','sent']"/>
+            </xpath>
             <!-- Thêm trường Voucher vào phần thông tin đơn hàng -->
             <xpath expr="//group[@name='sale_header']" position="inside">
                 <label for="loyalty_voucher_code" string="Mã Voucher"/>

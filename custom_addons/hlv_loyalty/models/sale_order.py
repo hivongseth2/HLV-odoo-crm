@@ -269,3 +269,9 @@ class SaleOrderLine(models.Model):
     loyalty_reward_voucher_id = fields.Many2one(
         'hlv.loyalty.voucher', string='Voucher thưởng', copy=False,
     )
+    loyalty_discount_pct = fields.Float(
+        string='CK Loyalty (%)',
+        default=0.0,
+        digits=(5, 2),
+        help='% chiết khấu dùng để tính điểm Loyalty cho dòng hàng này. Không ảnh hưởng giá bán. VD: 5 = 5%.',
+    )
