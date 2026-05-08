@@ -144,14 +144,18 @@
                     <t t-set="is_current" t-value="partner.loyalty_tier_id and tier.id == partner.loyalty_tier_id.id"/>
                     <t t-set="card_folder" t-value="'classic_tier_card' if tier.color == 'brown' else ('silver_tier_card' if tier.color == 'silver' else ('gold_tier_card' if tier.color == 'gold' else 'diamond_tier_card'))"/>
                     <div t-att-class="'sr-tier-card' + (' current' if is_current else '')">
-                        <div class="sr-tier-visual">
-                            <t t-if="is_current">
-                                <span class="tc-badge you">BẠN</span>
-                            </t>
-                            <img class="sr-tier-card-asset"
-                                 t-att-src="'/hlv_loyalty/static/description/icon/' + card_folder + '/card.svg'"
-                                 t-att-alt="tier.name or 'Tier Card'"/>
-                            <div t-att-class="'tc-benefits-popup tc-pop-' + (tier.color or 'brown')">
+                        <div class="tc-flip-inner">
+                            <!-- Front face: card image -->
+                            <div class="tc-flip-front">
+                                <t t-if="is_current">
+                                    <span class="tc-badge you">BẠN</span>
+                                </t>
+                                <img class="sr-tier-card-asset"
+                                     t-att-src="'/hlv_loyalty/static/description/icon/' + card_folder + '/card.svg'"
+                                     t-att-alt="tier.name or 'Tier Card'"/>
+                            </div>
+                            <!-- Back face: benefits -->
+                            <div t-att-class="'tc-flip-back tc-pop-' + (tier.color or 'brown')">
                                 <div class="tc-pop-header">
                                     <span class="tc-pop-title">Quyền lợi hạng <t t-out="tier.name"/></span>
                                     <button class="tc-pop-close" aria-label="Đóng">&#x2715;</button>
@@ -170,21 +174,6 @@
                             </div>
                         </div>
                         <div class="tc-card-label"><t t-out="tier.name"/></div>
-                        <div t-att-class="'tc-hover-benefits tc-hb-' + (tier.color or 'brown')">
-                            <div class="tc-hb-inner">
-                                <t t-if="tier.benefit_ids">
-                                    <ul class="tc-hb-list">
-                                        <t t-foreach="tier.benefit_ids" t-as="b">
-                                            <li class="tc-hb-item">
-                                                <span class="tc-hb-ico"><i t-att-class="'fa ' + (b.icon or 'fa-check')" aria-hidden="true"/></span>
-                                                <span><t t-out="b.name"/></span>
-                                            </li>
-                                        </t>
-                                    </ul>
-                                </t>
-                                <t t-else=""><p style="margin:0;opacity:.5;font-size:.8rem">Chưa có quyền lợi.</p></t>
-                            </div>
-                        </div>
                     </div>
                 </t>
             </div>

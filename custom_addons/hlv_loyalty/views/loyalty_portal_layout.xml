@@ -20,26 +20,16 @@
         <t t-out="0"/>
         <script>
 (function () {
-    function closeAll() {
-        document.querySelectorAll('.tc-benefits-popup.open').forEach(function (p) {
-            p.classList.remove('open');
-        });
-    }
     function init() {
-        document.querySelectorAll('.sr-tier-visual').forEach(function (visual) {
-            visual.addEventListener('click', function (e) {
-                if (e.target.closest('.tc-pop-close')) { closeAll(); return; }
-                if (e.target.closest('.tc-benefits-popup')) return;
-                e.stopPropagation();
-                var popup = visual.querySelector('.tc-benefits-popup');
-                if (!popup) return;
-                var isOpen = popup.classList.contains('open');
-                closeAll();
-                if (!isOpen) popup.classList.add('open');
+        document.querySelectorAll('.sr-tier-card').forEach(function (card) {
+            card.addEventListener('click', function (e) {
+                if (e.target.closest('.tc-pop-close')) {
+                    card.classList.remove('flipped');
+                    return;
+                }
+                card.classList.toggle('flipped');
             });
         });
-        document.addEventListener('click', closeAll);
-        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAll(); });
     }
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
