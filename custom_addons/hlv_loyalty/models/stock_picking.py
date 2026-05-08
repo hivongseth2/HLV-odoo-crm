@@ -122,11 +122,9 @@ class StockPicking(models.Model):
             })
 
         self.loyalty_points_earned = ranking_points
-
-        self.loyalty_points_earned = ranking_points
         _logger.info(
-            'Loyalty: Tích %d điểm cho %s từ phiếu %s (SO: %s)',
-            points, partner.name, self.name, sale_order.name,
+            'Loyalty: Tích ranking=%d exchange=%d cho %s từ phiếu %s (SO: %s)',
+            ranking_points, exchange_points, partner.name, self.name, sale_order.name,
         )
 
     def _loyalty_return_points(self):
