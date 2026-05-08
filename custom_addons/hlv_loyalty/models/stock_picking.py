@@ -123,7 +123,7 @@ class StockPicking(models.Model):
 
         self.loyalty_points_earned = ranking_points
 
-        self.loyalty_points_earned = points
+        self.loyalty_points_earned = ranking_points
         _logger.info(
             'Loyalty: Tích %d điểm cho %s từ phiếu %s (SO: %s)',
             points, partner.name, self.name, sale_order.name,
