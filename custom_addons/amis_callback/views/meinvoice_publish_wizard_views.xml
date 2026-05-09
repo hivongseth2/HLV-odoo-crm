@@ -16,6 +16,9 @@
                             class="btn-primary"
                             invisible="state != 'draft'"
                             confirm="Xác nhận gửi hóa đơn này lên Cơ quan Thuế? Thao tác không thể hoàn tác."/>
+                    <button name="action_preview_invoice" type="object"
+                            string="Xem trước HĐ"
+                            invisible="state != 'draft'"/>
                     <button name="action_view_invoice" type="object"
                             string="Xem hóa đơn"
                             invisible="state != 'published'"/>
@@ -133,6 +136,9 @@
                         icon="fa-paper-plane"
                         invisible="state != 'draft'"
                         confirm="Gửi hóa đơn này lên Cơ quan Thuế?"/>
+                <button name="action_preview_invoice" type="object" string="Xem trước"
+                        icon="fa-eye"
+                        invisible="state != 'draft'"/>
                 <button name="action_view_invoice" type="object" string="Xem HĐ"
                         icon="fa-eye"
                         invisible="state != 'published'"/>

@@ -333,6 +333,9 @@
                                         icon="fa-paper-plane"
                                         invisible="state != 'draft'"
                                         confirm="Gửi hóa đơn này lên Cơ quan Thuế?"/>
+                                <button name="action_preview_invoice" type="object" string="Xem trước"
+                                        icon="fa-eye"
+                                        invisible="state != 'draft'"/>
                                 <button name="action_view_invoice" type="object" string="Xem HĐ"
                                         icon="fa-eye"
                                         invisible="state != 'published'"/>

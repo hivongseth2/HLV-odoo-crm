@@ -188,6 +188,47 @@ class MeinvoiceInvoice(models.Model):
             },
         }
 
+    def action_preview_invoice(self):
+        """Xem trước hóa đơn nháp trên meInvoice (chưa phát hành, link tồn tại 5 phút)."""
+        self.ensure_one()
+        if self.state != 'draft':
+            raise UserError('Chỉ hóa đơn ở trạng thái Nháp mới có thể xem trước.')
+        if not self.invoice_data_json:
+            raise UserError('Chưa có dữ liệu hóa đơn. Vui lòng xóa và tạo lại từ đơn hàng.')
+
+        try:
+            invoice_data = json.loads(self.invoice_data_json)
+        except Exception:
+            raise UserError('Dữ liệu hóa đơn bị hỏng. Vui lòng xóa và tạo lại từ đơn hàng.')
+
+        # Patch buyer fields từ các trường hiện tại (giống action_publish)
+        inv_date = self.inv_date
+        new_series = (self.inv_series or '').strip()
+        invoice_data['InvSeries'] = new_series
+        invoice_data['InvDate'] = (
+            inv_date.strftime('%Y-%m-%d') if inv_date else invoice_data.get('InvDate', '')
+        )
+        invoice_data['PaymentMethodName'] = (self.payment_method or 'TM/CK').strip()
+        invoice_data['BuyerLegalName'] = (self.buyer_legal_name or '').strip()
+        invoice_data['BuyerFullName'] = (self.buyer_full_name or '').strip()
+        invoice_data['BuyerTaxCode'] = (self.buyer_tax_code or '').strip()
+        invoice_data['BuyerAddress'] = (self.buyer_address or '').strip()
+        invoice_data['BuyerPhoneNumber'] = (self.buyer_phone or '').strip()
+        invoice_data['BuyerEmail'] = (self.buyer_email or '').strip()
+        invoice_data['IsInvoiceCalculatingMachine'] = (
+            len(new_series) >= 5 and new_series[4].upper() == 'M'
+        )
+
+        config = self.env['amis.callback.config'].sudo().ensure_singleton()
+        result = config._post_meinvoice('/invoice/unpublishview', payload=invoice_data)
+        view_url = result.get('data') or result.get('Data') or ''
+        if not view_url:
+            err = result.get('errorCode') or result.get('ErrorCode') or ''
+            raise UserError('meInvoice không trả về link xem trước.%s' % (' Lỗi: ' + err if err else ''))
+
+        _logger.info('meInvoice unpublishview URL: %s', view_url)
+        return {'type': 'ir.actions.act_url', 'url': view_url, 'target': 'new'}
+
     def action_view_invoice(self):
         """Mở link xem hóa đơn đã phát hành trên cổng meInvoice (link tồn tại 5 phút)."""
         self.ensure_one()
