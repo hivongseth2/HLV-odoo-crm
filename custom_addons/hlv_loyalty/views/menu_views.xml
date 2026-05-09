@@ -10,7 +10,8 @@
     <menuitem id="menu_loyalty_management"
               name="Quản lý"
               parent="menu_loyalty_root"
-              sequence="10"/>
+              sequence="10"
+              groups="hlv_loyalty.group_loyalty_user"/>
 
     <!-- Khách hàng tích điểm -->
     <menuitem id="menu_loyalty_partner_overview"
@@ -38,7 +39,7 @@
               name="Cấu hình"
               parent="menu_loyalty_root"
               sequence="90"
-              groups="sales_team.group_sale_manager"/>
+              groups="hlv_loyalty.group_loyalty_admin"/>
 
     <!-- Chương trình -->
     <menuitem id="menu_loyalty_program"

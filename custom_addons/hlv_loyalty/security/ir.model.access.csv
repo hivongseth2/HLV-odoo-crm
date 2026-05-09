@@ -1,21 +1,33 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_hlv_loyalty_program_user,hlv.loyalty.program.user,model_hlv_loyalty_program,base.group_user,1,0,0,0
-access_hlv_loyalty_program_manager,hlv.loyalty.program.manager,model_hlv_loyalty_program,sales_team.group_sale_manager,1,1,1,1
-access_hlv_loyalty_history_user,hlv.loyalty.history.user,model_hlv_loyalty_history,base.group_user,1,0,0,0
-access_hlv_loyalty_history_manager,hlv.loyalty.history.manager,model_hlv_loyalty_history,sales_team.group_sale_manager,1,1,1,1
-access_hlv_loyalty_voucher_user,hlv.loyalty.voucher.user,model_hlv_loyalty_voucher,base.group_user,1,0,0,0
-access_hlv_loyalty_voucher_sale,hlv.loyalty.voucher.sale,model_hlv_loyalty_voucher,sales_team.group_sale_salesman,1,1,0,0
-access_hlv_loyalty_voucher_manager,hlv.loyalty.voucher.manager,model_hlv_loyalty_voucher,sales_team.group_sale_manager,1,1,1,1
-access_hlv_loyalty_voucher_package_user,hlv.loyalty.voucher.package.user,model_hlv_loyalty_voucher_package,base.group_user,1,0,0,0
-access_hlv_loyalty_voucher_package_manager,hlv.loyalty.voucher.package.manager,model_hlv_loyalty_voucher_package,sales_team.group_sale_manager,1,1,1,1
-access_hlv_loyalty_redeem_wizard_user,hlv.loyalty.redeem.wizard.user,model_hlv_loyalty_redeem_wizard,sales_team.group_sale_salesman,1,1,1,0
-access_hlv_loyalty_tier_user,hlv.loyalty.tier.user,model_hlv_loyalty_tier,base.group_user,1,0,0,0
-access_hlv_loyalty_tier_manager,hlv.loyalty.tier.manager,model_hlv_loyalty_tier,sales_team.group_sale_manager,1,1,1,1
-access_hlv_loyalty_tier_benefit_user,hlv.loyalty.tier.benefit.user,model_hlv_loyalty_tier_benefit,base.group_user,1,0,0,0
-access_hlv_loyalty_tier_benefit_manager,hlv.loyalty.tier.benefit.manager,model_hlv_loyalty_tier_benefit,sales_team.group_sale_manager,1,1,1,1
-access_hlv_loyalty_portal_account_manager,hlv.loyalty.portal.account.manager,model_hlv_loyalty_portal_account,sales_team.group_sale_manager,1,1,1,1
-access_hlv_loyalty_portal_account_user,hlv.loyalty.portal.account.user,model_hlv_loyalty_portal_account,base.group_user,1,0,0,0
-access_hlv_loyalty_reset_password_wizard,hlv.loyalty.reset.password.wizard,model_hlv_loyalty_reset_password_wizard,sales_team.group_sale_manager,1,1,1,1
-access_hlv_loyalty_point_adjustment_wizard,hlv.loyalty.point.adjustment.wizard,model_hlv_loyalty_point_adjustment_wizard,sales_team.group_sale_manager,1,1,1,1
-access_hlv_loyalty_reward_request_user,hlv.loyalty.reward.request.user,model_hlv_loyalty_reward_request,base.group_user,1,0,0,0
-access_hlv_loyalty_reward_request_manager,hlv.loyalty.reward.request.manager,model_hlv_loyalty_reward_request,sales_team.group_sale_manager,1,1,1,1
+# ── base.group_user: chỉ đọc những model cần cho tích hợp bán hàng ────────
+access_hlv_loyalty_program_base,hlv.loyalty.program.base,model_hlv_loyalty_program,base.group_user,1,0,0,0
+access_hlv_loyalty_voucher_base,hlv.loyalty.voucher.base,model_hlv_loyalty_voucher,base.group_user,1,0,0,0
+access_hlv_loyalty_tier_base,hlv.loyalty.tier.base,model_hlv_loyalty_tier,base.group_user,1,0,0,0
+access_hlv_loyalty_tier_benefit_base,hlv.loyalty.tier.benefit.base,model_hlv_loyalty_tier_benefit,base.group_user,1,0,0,0
+access_hlv_loyalty_package_base,hlv.loyalty.voucher.package.base,model_hlv_loyalty_voucher_package,base.group_user,1,0,0,0
+# ── group_loyalty_user (Xem): đọc toàn bộ dữ liệu loyalty ────────────────
+access_hlv_loyalty_program_luser,hlv.loyalty.program.luser,model_hlv_loyalty_program,hlv_loyalty.group_loyalty_user,1,0,0,0
+access_hlv_loyalty_history_luser,hlv.loyalty.history.luser,model_hlv_loyalty_history,hlv_loyalty.group_loyalty_user,1,0,0,0
+access_hlv_loyalty_voucher_luser,hlv.loyalty.voucher.luser,model_hlv_loyalty_voucher,hlv_loyalty.group_loyalty_user,1,0,0,0
+access_hlv_loyalty_package_luser,hlv.loyalty.voucher.package.luser,model_hlv_loyalty_voucher_package,hlv_loyalty.group_loyalty_user,1,0,0,0
+access_hlv_loyalty_tier_luser,hlv.loyalty.tier.luser,model_hlv_loyalty_tier,hlv_loyalty.group_loyalty_user,1,0,0,0
+access_hlv_loyalty_tier_benefit_luser,hlv.loyalty.tier.benefit.luser,model_hlv_loyalty_tier_benefit,hlv_loyalty.group_loyalty_user,1,0,0,0
+access_hlv_loyalty_portal_account_luser,hlv.loyalty.portal.account.luser,model_hlv_loyalty_portal_account,hlv_loyalty.group_loyalty_user,1,0,0,0
+access_hlv_loyalty_reward_request_luser,hlv.loyalty.reward.request.luser,model_hlv_loyalty_reward_request,hlv_loyalty.group_loyalty_user,1,0,0,0
+# ── group_loyalty_operator (Xử lý): tạo+sửa trên model nghiệp vụ ─────────
+access_hlv_loyalty_history_operator,hlv.loyalty.history.operator,model_hlv_loyalty_history,hlv_loyalty.group_loyalty_operator,1,1,1,0
+access_hlv_loyalty_voucher_operator,hlv.loyalty.voucher.operator,model_hlv_loyalty_voucher,hlv_loyalty.group_loyalty_operator,1,1,1,0
+access_hlv_loyalty_portal_account_operator,hlv.loyalty.portal.account.operator,model_hlv_loyalty_portal_account,hlv_loyalty.group_loyalty_operator,1,1,1,0
+access_hlv_loyalty_reward_request_operator,hlv.loyalty.reward.request.operator,model_hlv_loyalty_reward_request,hlv_loyalty.group_loyalty_operator,1,1,1,0
+access_hlv_loyalty_redeem_wizard_operator,hlv.loyalty.redeem.wizard.operator,model_hlv_loyalty_redeem_wizard,hlv_loyalty.group_loyalty_operator,1,1,1,1
+access_hlv_loyalty_reset_pwd_wizard_operator,hlv.loyalty.reset.password.wizard.operator,model_hlv_loyalty_reset_password_wizard,hlv_loyalty.group_loyalty_operator,1,1,1,1
+# ── group_loyalty_admin (Quản trị): toàn quyền RCWD trên mọi model ────────
+access_hlv_loyalty_program_admin,hlv.loyalty.program.admin,model_hlv_loyalty_program,hlv_loyalty.group_loyalty_admin,1,1,1,1
+access_hlv_loyalty_history_admin,hlv.loyalty.history.admin,model_hlv_loyalty_history,hlv_loyalty.group_loyalty_admin,1,1,1,1
+access_hlv_loyalty_voucher_admin,hlv.loyalty.voucher.admin,model_hlv_loyalty_voucher,hlv_loyalty.group_loyalty_admin,1,1,1,1
+access_hlv_loyalty_package_admin,hlv.loyalty.voucher.package.admin,model_hlv_loyalty_voucher_package,hlv_loyalty.group_loyalty_admin,1,1,1,1
+access_hlv_loyalty_tier_admin,hlv.loyalty.tier.admin,model_hlv_loyalty_tier,hlv_loyalty.group_loyalty_admin,1,1,1,1
+access_hlv_loyalty_tier_benefit_admin,hlv.loyalty.tier.benefit.admin,model_hlv_loyalty_tier_benefit,hlv_loyalty.group_loyalty_admin,1,1,1,1
+access_hlv_loyalty_portal_account_admin,hlv.loyalty.portal.account.admin,model_hlv_loyalty_portal_account,hlv_loyalty.group_loyalty_admin,1,1,1,1
+access_hlv_loyalty_reward_request_admin,hlv.loyalty.reward.request.admin,model_hlv_loyalty_reward_request,hlv_loyalty.group_loyalty_admin,1,1,1,1
+access_hlv_loyalty_point_adj_wizard_admin,hlv.loyalty.point.adjustment.wizard.admin,model_hlv_loyalty_point_adjustment_wizard,hlv_loyalty.group_loyalty_admin,1,1,1,1

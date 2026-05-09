@@ -127,12 +127,13 @@
                                 <button name="action_open_redeem_wizard" type="object"
                                         string="Đổi Voucher ngay"
                                         class="btn btn-warning fw-bold"
-                                        icon="fa-exchange"/>
+                                        icon="fa-exchange"
+                                        groups="hlv_loyalty.group_loyalty_operator"/>
                                 <button name="action_open_point_adjustment_wizard" type="object"
                                         string="Điều chỉnh điểm"
                                         class="btn btn-outline-secondary fw-bold ms-2"
                                         icon="fa-sliders"
-                                        groups="sales_team.group_sale_manager"/>
+                                        groups="hlv_loyalty.group_loyalty_admin"/>
                             </div>
                         </div>
                     </div>
@@ -202,7 +203,7 @@
                         Tài khoản Portal
                     </div>
                     <field name="loyalty_portal_account_ids" nolabel="1"
-                           groups="sales_team.group_sale_manager">
+                           groups="hlv_loyalty.group_loyalty_operator">
                         <list editable="bottom">
                             <field name="username" placeholder="Tên đăng nhập..."/>
                             <field name="active" optional="show"/>

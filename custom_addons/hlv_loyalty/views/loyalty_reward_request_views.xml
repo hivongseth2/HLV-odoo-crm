@@ -27,10 +27,12 @@
                 <field name="date_done" optional="hide"/>
                 <button name="action_done" string="✓ Duyệt" type="object"
                         class="btn-success btn-sm"
-                        invisible="state != 'pending'"/>
+                        invisible="state != 'pending'"
+                        groups="hlv_loyalty.group_loyalty_operator"/>
                 <button name="action_cancel" string="Hủy" type="object"
                         class="btn-danger btn-sm"
-                        invisible="state != 'pending'"/>
+                        invisible="state != 'pending'"
+                        groups="hlv_loyalty.group_loyalty_operator"/>
             </list>
         </field>
     </record>
@@ -45,10 +47,12 @@
                     <button name="action_done" string="✓ Đánh dấu đã xử lý"
                             type="object" class="btn-primary"
                             invisible="state != 'pending'"
+                            groups="hlv_loyalty.group_loyalty_operator"
                             confirm="Xác nhận xử lý yêu cầu này? Điểm sẽ bị trừ ngay lập tức."/>
                     <button name="action_cancel" string="Hủy yêu cầu"
                             type="object" class="btn-secondary"
                             invisible="state != 'pending'"
+                            groups="hlv_loyalty.group_loyalty_operator"
                             confirm="Hủy yêu cầu này?"/>
                     <field name="state" widget="statusbar"
                            statusbar_visible="pending,done,cancelled"/>

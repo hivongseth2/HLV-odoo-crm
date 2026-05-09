@@ -9,10 +9,12 @@
                 <header>
                     <button name="action_confirm" string="Xác nhận điểm"
                             type="object" class="btn-primary"
-                            invisible="state != 'pending'"/>
+                            invisible="state != 'pending'"
+                            groups="hlv_loyalty.group_loyalty_operator"/>
                     <button name="action_cancel" string="Hủy"
                             type="object" class="btn-secondary"
-                            invisible="state != 'pending'"/>
+                            invisible="state != 'pending'"
+                            groups="hlv_loyalty.group_loyalty_operator"/>
                     <field name="state" widget="statusbar"
                            statusbar_visible="pending,confirmed"/>
                 </header>
