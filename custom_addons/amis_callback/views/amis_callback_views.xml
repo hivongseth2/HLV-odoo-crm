@@ -322,29 +322,37 @@
                             <list string="Danh sách HĐĐT" create="false" delete="false"
                                   default_order="create_date desc"
                                   decoration-info="state == 'draft'"
-                                  decoration-success="state == 'published'"
+                                  decoration-warning="state == 'submitted'"
+                                  decoration-success="state == 'accepted'"
+                                  decoration-danger="state == 'rejected'"
                                   decoration-muted="state == 'cancelled'">
                                 <field name="create_date" string="Ngày tạo"/>
                                 <field name="state" widget="badge"
                                        decoration-info="state == 'draft'"
-                                       decoration-success="state == 'published'"
-                                       decoration-danger="state == 'cancelled'"/>
+                                       decoration-warning="state == 'submitted'"
+                                       decoration-success="state == 'accepted'"
+                                       decoration-danger="state in ('rejected','cancelled')"/>
                                 <field name="inv_series" string="Ký hiệu"/>
                                 <field name="inv_date" string="Ngày HĐ"/>
                                 <field name="buyer_legal_name" string="Tên người mua"/>
                                 <field name="buyer_tax_code" string="MST" optional="show"/>
                                 <field name="total_amount_oc" string="Tổng tiền"/>
                                 <field name="inv_no" string="Số HĐ" optional="show"/>
+                                <field name="cqt_status_desc" string="Kết quả CQT" optional="show"/>
                                 <button name="action_publish" type="object" string="Gửi CQT"
                                         icon="fa-paper-plane"
                                         invisible="state != 'draft'"
+                                        groups="amis_callback.group_meinvoice_accountant"
                                         confirm="Gửi hóa đơn này lên Cơ quan Thuế?"/>
                                 <button name="action_preview_invoice" type="object" string="Xem trước"
                                         icon="fa-eye"
                                         invisible="state != 'draft'"/>
+                                <button name="action_check_cqt_status" type="object" string="CQT?"
+                                        icon="fa-refresh"
+                                        invisible="state != 'submitted'"/>
                                 <button name="action_view_invoice" type="object" string="Xem HĐ"
                                         icon="fa-eye"
-                                        invisible="state != 'published'"/>
+                                        invisible="state not in ('submitted','accepted','rejected')"/>
                             </list>
                         </field>
                     </page>
@@ -473,9 +481,14 @@
         <field name="context">{'search_default_misa_meinvoice_synced': 1}</field>
     </record>
 
-    <menuitem id="menu_amis_callback_root" name="AMIS Callback" sequence="30" web_icon="amis_callback,static/description/icon.png"/>
-    <menuitem id="menu_amis_callback_logs" name="Nhật ký callback" parent="menu_amis_callback_root" action="action_amis_callback_log" sequence="10"/>
-    <menuitem id="menu_amis_sync_jobs" name="Hàng đợi đồng bộ MISA" parent="menu_amis_callback_root" action="action_amis_sync_job" sequence="15"/>
-    <menuitem id="menu_meinvoice_invoices" name="Hóa đơn điện tử" parent="menu_amis_callback_root" action="action_meinvoice_invoice" sequence="18"/>
-    <menuitem id="menu_amis_callback_config" name="Cấu hình" parent="menu_amis_callback_root" action="action_amis_callback_config" sequence="20" groups="base.group_system"/>
+    <menuitem id="menu_amis_callback_root" name="AMIS Callback" sequence="30" web_icon="amis_callback,static/description/icon.png"
+              groups="amis_callback.group_meinvoice_user"/>
+    <menuitem id="menu_amis_callback_logs" name="Nhật ký callback" parent="menu_amis_callback_root" action="action_amis_callback_log" sequence="10"
+              groups="amis_callback.group_meinvoice_manager"/>
+    <menuitem id="menu_amis_sync_jobs" name="Hàng đợi đồng bộ MISA" parent="menu_amis_callback_root" action="action_amis_sync_job" sequence="15"
+              groups="amis_callback.group_meinvoice_manager"/>
+    <menuitem id="menu_meinvoice_invoices" name="Hóa đơn điện tử" parent="menu_amis_callback_root" action="action_meinvoice_invoice" sequence="18"
+              groups="amis_callback.group_meinvoice_user"/>
+    <menuitem id="menu_amis_callback_config" name="Cấu hình" parent="menu_amis_callback_root" action="action_amis_callback_config" sequence="20"
+              groups="amis_callback.group_meinvoice_manager"/>
 </odoo>

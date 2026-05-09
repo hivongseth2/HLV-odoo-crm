@@ -41,10 +41,12 @@ class MeinvoiceInvoice(models.Model):
     state = fields.Selection(
         [
             ('draft', 'Nháp'),
-            ('published', 'Đã phát hành'),
+            ('submitted', 'Đã gửi CQT'),
+            ('accepted', 'CQT chấp nhận'),
+            ('rejected', 'CQT từ chối'),
             ('cancelled', 'Đã hủy'),
         ],
-        string='Trạng thái', default='draft', required=True,
+        string='Trạng thái', default='draft', required=True, tracking=True,
     )
 
     # ── Thông tin hóa đơn (chỉnh sửa được khi nháp) ─────────────────────────
@@ -91,19 +93,14 @@ class MeinvoiceInvoice(models.Model):
     inv_series_result = fields.Char(string='Ký hiệu (kết quả)', readonly=True, copy=False)
     inv_date_result = fields.Date(string='Ngày HĐ (kết quả)', readonly=True, copy=False)
 
-    # ── Trạng thái CQT ───────────────────────────────────────────────────────
-    cqt_status = fields.Selection(
-        [
-            ('unknown', 'Chưa kiểm tra'),
-            ('pending', 'Đang chờ CQT'),
-            ('accepted', 'CQT chấp nhận'),
-            ('rejected', 'CQT từ chối'),
-        ],
-        string='Trạng thái CQT', default='unknown', readonly=True, copy=False,
-    )
-    cqt_status_code = fields.Char(string='Mã trạng thái CQT', readonly=True, copy=False)
-    cqt_status_desc = fields.Char(string='Mô tả CQT', readonly=True, copy=False)
+    # ── Trạng thái CQT chi tiết (từ API /invoice/status) ────────────────────
+    cqt_status_code = fields.Char(string='Mã trạng thái CQT (raw)', readonly=True, copy=False)
+    cqt_status_desc = fields.Char(string='Mô tả trạng thái CQT', readonly=True, copy=False)
     cqt_checked_at = fields.Datetime(string='Kiểm tra CQT lúc', readonly=True, copy=False)
+    cqt_check_queued = fields.Boolean(
+        string='Cần kiểm tra CQT', default=False, copy=False, index=True,
+        help='Cron sẽ gọi /invoice/status để cập nhật trạng thái khi field này là True.',
+    )
 
     # ─────────────────────────────────────────────────────────────────────────
 
@@ -161,7 +158,7 @@ class MeinvoiceInvoice(models.Model):
                 raise UserError('meInvoice phát hành lỗi: %s' % err_code)
 
         self.write({
-            'state': 'published',
+            'state': 'submitted',
             'transaction_id': transaction_id,
             'inv_no': inv_no,
             'inv_code': inv_code,
@@ -169,6 +166,7 @@ class MeinvoiceInvoice(models.Model):
             'inv_date_result': inv_date_result or (
                 inv_date.strftime('%Y-%m-%d') if inv_date else False
             ),
+            'cqt_check_queued': True,  # đưa vào queue cron check CQT
         })
 
         # Cập nhật SO để backward compat với các field kết quả trên đơn hàng
@@ -185,7 +183,7 @@ class MeinvoiceInvoice(models.Model):
         })
 
         _logger.info(
-            'meInvoice published for SO %s: TransactionID=%s InvNo=%s',
+            'meInvoice submitted for SO %s: TransactionID=%s InvNo=%s — chờ CQT xác nhận.',
             order.name, transaction_id, inv_no,
         )
 
@@ -193,8 +191,8 @@ class MeinvoiceInvoice(models.Model):
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': 'Phát hành HĐĐT thành công',
-                'message': 'Hóa đơn %s %s đã được phát hành. TransactionID: %s' % (
+                'title': 'Đã gửi lên Cơ quan Thuế',
+                'message': 'Hóa đơn %s %s đã được gửi. TransactionID: %s — Hệ thống sẽ tự kiểm tra kết quả CQT.' % (
                     inv_series_result or new_series, inv_no, transaction_id,
                 ),
                 'type': 'success',
@@ -244,10 +242,10 @@ class MeinvoiceInvoice(models.Model):
         return {'type': 'ir.actions.act_url', 'url': view_url, 'target': 'new'}
 
     def action_check_cqt_status(self):
-        """Kiểm tra trạng thái CQT của hóa đơn đã phát hành."""
+        """Kiểm tra trạng thái CQT của hóa đơn đã gửi CQT."""
         self.ensure_one()
-        if self.state != 'published' or not self.transaction_id:
-            raise UserError('Chỉ hóa đơn đã phát hành mới có thể kiểm tra trạng thái CQT.')
+        if self.state not in ('submitted', 'accepted', 'rejected') or not self.transaction_id:
+            raise UserError('Chỉ hóa đơn đã gửi CQT mới có thể kiểm tra trạng thái.')
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
         status_list = config.get_meinvoice_invoice_status([self.transaction_id])
 
@@ -274,29 +272,30 @@ class MeinvoiceInvoice(models.Model):
             raw_status = 0
 
         if raw_status == 2:
-            cqt_status = 'accepted'
+            new_state = 'accepted'
             msg_type = 'success'
             msg = 'Cơ quan Thuế đã chấp nhận hóa đơn.'
         elif raw_status == 3:
-            cqt_status = 'rejected'
+            new_state = 'rejected'
             msg_type = 'danger'
             msg = 'Cơ quan Thuế từ chối hóa đơn.'
         elif raw_status == 1:
-            cqt_status = 'pending'
+            new_state = 'submitted'
             msg_type = 'info'
             msg = 'Đang chờ Cơ quan Thuế xác nhận.'
         else:
-            cqt_status = 'unknown'
+            new_state = self.state
             msg_type = 'warning'
             msg = 'Không xác định được trạng thái CQT (mã: %s).' % raw_status
 
         self.write({
-            'cqt_status': cqt_status,
+            'state': new_state,
             'cqt_status_code': str(raw_status),
             'cqt_status_desc': desc or msg,
             'cqt_checked_at': now,
+            'cqt_check_queued': new_state == 'submitted',  # re-queue nếu vẫn đang chờ
         })
-        _logger.info('CQT status check %s → %s: %s', self.transaction_id, cqt_status, desc)
+        _logger.info('CQT status check %s → %s: %s', self.transaction_id, new_state, desc)
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
@@ -310,8 +309,8 @@ class MeinvoiceInvoice(models.Model):
     def action_download_pdf(self):
         """Tải hóa đơn dạng PDF từ meInvoice."""
         self.ensure_one()
-        if self.state != 'published' or not self.transaction_id:
-            raise UserError('Chỉ hóa đơn đã phát hành mới có thể tải xuống.')
+        if self.state not in ('submitted', 'accepted', 'rejected') or not self.transaction_id:
+            raise UserError('Chỉ hóa đơn đã gửi CQT mới có thể tải xuống.')
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
         url = config.get_meinvoice_download_url(self.transaction_id, file_type='PDF')
         if not url:
@@ -321,8 +320,8 @@ class MeinvoiceInvoice(models.Model):
     def action_download_xml(self):
         """Tải hóa đơn dạng XML từ meInvoice."""
         self.ensure_one()
-        if self.state != 'published' or not self.transaction_id:
-            raise UserError('Chỉ hóa đơn đã phát hành mới có thể tải xuống.')
+        if self.state not in ('submitted', 'accepted', 'rejected') or not self.transaction_id:
+            raise UserError('Chỉ hóa đơn đã gửi CQT mới có thể tải xuống.')
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
         url = config.get_meinvoice_download_url(self.transaction_id, file_type='XML')
         if not url:
@@ -330,10 +329,10 @@ class MeinvoiceInvoice(models.Model):
         return {'type': 'ir.actions.act_url', 'url': url, 'target': 'new'}
 
     def action_view_invoice(self):
-        """Mở link xem hóa đơn đã phát hành trên cổng meInvoice (link tồn tại 5 phút)."""
+        """Mở link xem hóa đơn đã gửi CQT trên cổng meInvoice (link tồn tại 5 phút)."""
         self.ensure_one()
-        if self.state != 'published' or not self.transaction_id:
-            raise UserError('Chỉ hóa đơn đã phát hành mới có thể xem.')
+        if self.state not in ('submitted', 'accepted', 'rejected') or not self.transaction_id:
+            raise UserError('Chỉ hóa đơn đã gửi CQT mới có thể xem.')
         config = self.env['amis.callback.config'].sudo().ensure_singleton()
         view_url = config.get_meinvoice_publishview_url([self.transaction_id])
         if not view_url:
@@ -342,9 +341,9 @@ class MeinvoiceInvoice(models.Model):
 
     def action_cancel(self):
         for rec in self:
-            if rec.state == 'published':
-                raise UserError('Không thể hủy hóa đơn đã phát hành.')
-            rec.write({'state': 'cancelled'})
+            if rec.state in ('accepted',):
+                raise UserError('Không thể hủy hóa đơn đã được CQT chấp nhận.')
+            rec.write({'state': 'cancelled', 'cqt_check_queued': False})
         return True
 
 

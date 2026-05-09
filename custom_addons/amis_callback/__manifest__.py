@@ -6,6 +6,7 @@
     "author": "ChatGPT",
     "depends": ["base", "stock", "purchase", "sale"],
     "data": [
+        "security/res_groups.xml",
         "security/ir.model.access.csv",
         "data/sequence.xml",
         "data/ir_cron.xml",

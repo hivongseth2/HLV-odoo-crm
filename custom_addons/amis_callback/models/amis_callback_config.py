@@ -1000,7 +1000,7 @@ class AmisCallbackConfig(models.Model):
         raise UserError('Danh sách mẫu hóa đơn meInvoice:\n\n' + '\n'.join(lines))
 
     def action_check_meinvoice_status_cron(self):
-        """Cron: kiểm tra trạng thái CQT cho tất cả hóa đơn đã phát hành chưa được xác nhận."""
+        """Cron: kiểm tra trạng thái CQT cho hóa đơn trong queue (cqt_check_queued=True)."""
         config = self.sudo().search([], limit=1, order='id asc')
         if not config or not config.meinvoice_enabled or not config.meinvoice_auto_check_status:
             return
@@ -1011,10 +1011,9 @@ class AmisCallbackConfig(models.Model):
         interval_hours = max(1, config.meinvoice_status_check_interval or 2)
         cutoff = _dt.utcnow() - _td(hours=interval_hours)
 
-        # Tìm hóa đơn đã phát hành, CQT chưa xác nhận, chưa check gần đây
+        # Chỉ check hóa đơn đã được queue, chưa check gần đây
         invoices = self.env['meinvoice.invoice'].sudo().search([
-            ('state', '=', 'published'),
-            ('cqt_status', 'not in', ['accepted', 'rejected']),
+            ('cqt_check_queued', '=', True),
             ('transaction_id', '!=', False),
             '|',
             ('cqt_checked_at', '=', False),
@@ -1022,7 +1021,7 @@ class AmisCallbackConfig(models.Model):
         ])
 
         if not invoices:
-            _logger.info('meInvoice status cron: không có hóa đơn cần kiểm tra.')
+            _logger.info('meInvoice status cron: không có hóa đơn trong queue.')
             return
 
         _logger.info('meInvoice status cron: kiểm tra %d hóa đơn...', len(invoices))
@@ -1057,22 +1056,27 @@ class AmisCallbackConfig(models.Model):
 
             # meInvoice InvStatus: 1=đang chờ, 2=CQT chấp nhận, 3=CQT từ chối
             if raw_status == 2:
-                cqt_status = 'accepted'
+                new_state = 'accepted'
+                still_pending = False
             elif raw_status == 3:
-                cqt_status = 'rejected'
+                new_state = 'rejected'
+                still_pending = False
             elif raw_status == 1:
-                cqt_status = 'pending'
+                new_state = 'submitted'
+                still_pending = True   # re-queue để check lại lần sau
             else:
-                cqt_status = 'unknown'
+                new_state = inv.state  # giữ nguyên nếu không rõ
+                still_pending = True
 
             inv.sudo().write({
-                'cqt_status': cqt_status,
+                'state': new_state,
                 'cqt_status_code': str(raw_status),
                 'cqt_status_desc': desc,
                 'cqt_checked_at': now,
+                'cqt_check_queued': still_pending,
             })
             _logger.info(
-                'meInvoice status: %s → %s (%s)', inv.transaction_id, cqt_status, desc
+                'meInvoice cron: %s → state=%s (%s)', inv.transaction_id, new_state, desc
             )
 
 
