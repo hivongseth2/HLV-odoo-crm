@@ -65,13 +65,65 @@ def get_tax_included(env, company, product=None):
     return False
 
 
+def _find_order_line_for_escrow_item(so, item_data):
+    """
+    Tìm sale.order.line phù hợp với 1 item trong escrow.
+
+    Thứ tự ưu tiên:
+    1. Khớp SKU chính xác (default_code == sku)
+    2. Khớp SKU sau khi normalize (bỏ khoảng trắng, uppercase)
+    3. Khớp qua bảng shopee.item (item_id + model_id)
+
+    :return: sale.order.line recordset (có thể rỗng)
+    """
+    sku = item_data.get('model_sku', '') or item_data.get('item_sku', '')
+    item_id = item_data.get('item_id', 0)
+    model_id = item_data.get('model_id', 0)
+
+    # 1. Khớp SKU chính xác
+    if sku:
+        line = so.order_line.filtered(lambda l: l.product_id.default_code == sku)
+        if line:
+            return line
+
+    # 2. Khớp SKU sau khi normalize (bỏ space, uppercase)
+    if sku:
+        sku_norm = sku.replace(' ', '').upper()
+        line = so.order_line.filtered(
+            lambda l: (l.product_id.default_code or '').replace(' ', '').upper() == sku_norm
+        )
+        if line:
+            _logger.info(
+                "Shopee Escrow: Khớp SKU normalized '%s' → '%s'",
+                sku, line[0].product_id.default_code,
+            )
+            return line
+
+    # 3. Khớp qua bảng shopee.item (item_id + model_id)
+    if item_id:
+        domain = [('shopee_item_identifier', '=', str(item_id))]
+        if model_id:
+            domain.append(('shopee_model_identifier', '=', str(model_id)))
+        shopee_item = so.env['shopee.item'].sudo().search(domain, limit=1)
+        if shopee_item and shopee_item.product_id:
+            product = shopee_item.product_id
+            line = so.order_line.filtered(lambda l: l.product_id.id == product.id)
+            if line:
+                _logger.info(
+                    "Shopee Escrow: Khớp qua shopee.item (item_id=%s, model_id=%s) → product=%s",
+                    item_id, model_id, product.name,
+                )
+                return line
+
+    return so.order_line.browse()  # empty recordset
+
+
 def update_order_lines_from_escrow(so, escrow_data):
     """
     Cập nhật price_unit và discount cho các sale.order.line
     dựa trên danh sách items trong order_income của dữ liệu Escrow.
 
-    Khớp sản phẩm theo model_sku (hoặc item_sku nếu model_sku rỗng)
-    với default_code của product.product trong Odoo.
+    Khớp sản phẩm theo thứ tự: SKU chính xác → SKU normalized → shopee.item mapping.
 
     :param so: sale.order record
     :param escrow_data: dict — giá trị của key 'response' từ Shopee escrow API
@@ -81,12 +133,13 @@ def update_order_lines_from_escrow(so, escrow_data):
 
     for item_data in item_list:
         sku = item_data.get('model_sku', '') or item_data.get('item_sku', '')
-        if not sku:
-            continue
 
-        line = so.order_line.filtered(lambda l: l.product_id.default_code == sku)
+        line = _find_order_line_for_escrow_item(so, item_data)
         if not line:
-            _logger.debug("Shopee Escrow: Không tìm thấy dòng SP có SKU '%s' trong đơn %s", sku, so.name)
+            _logger.warning(
+                "Shopee Escrow: Không tìm thấy dòng SP nào cho SKU='%s' item_id=%s trong đơn %s",
+                sku, item_data.get('item_id', '?'), so.name,
+            )
             continue
 
         qty = item_data.get('quantity_purchased', 1) or 1
