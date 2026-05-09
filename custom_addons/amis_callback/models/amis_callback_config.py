@@ -228,6 +228,17 @@ class AmisCallbackConfig(models.Model):
         string='Tên người mua mặc định (meInvoice)',
         help='Tên BuyerLegalName/BuyerFullName fallback khi không xác định được kênh Shopee.',
     )
+    meinvoice_shopee_default_address = fields.Char(
+        string='Địa chỉ người mua mặc định - Shopee (meInvoice)',
+        default='Khách hàng không cung cấp thông tin',
+        help='Địa chỉ BuyerAddress ghi vào hóa đơn nháp tự động tạo cho đơn Shopee.',
+    )
+    meinvoice_auto_draft_on_confirm = fields.Boolean(
+        string='Tự động tạo HĐĐT nháp khi xác nhận đơn Shopee',
+        default=True,
+        help='Bật: khi xác nhận đơn hàng Shopee (có shopee_order_ref), '
+             'tự động tạo hóa đơn điện tử nháp meInvoice.',
+    )
     meinvoice_shopee_only = fields.Boolean(
         string='Chỉ phát hành HĐĐT cho đơn Shopee (meInvoice)',
         default=True,

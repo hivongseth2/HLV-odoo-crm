@@ -162,12 +162,14 @@
                     <group string="meInvoice - Tên người mua mặc định theo kênh Shopee">
                         <group>
                             <field name="meinvoice_shopee_only"/>
+                            <field name="meinvoice_auto_draft_on_confirm"/>
                             <field name="meinvoice_shopee_milwaukee_buyer_name"/>
                             <field name="meinvoice_shopee_hlv_buyer_name"/>
                             <field name="meinvoice_shopee_dewalt_buyer_name"/>
                         </group>
                         <group>
                             <field name="meinvoice_default_buyer_name"/>
+                            <field name="meinvoice_shopee_default_address"/>
                         </group>
                     </group>
                     <group string="Hóa đơn VAT kèm SAInvoice (cũ - ACT)">

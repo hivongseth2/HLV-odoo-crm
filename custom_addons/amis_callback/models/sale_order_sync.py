@@ -127,6 +127,103 @@ class SaleOrderAmisSync(models.Model):
         for order in self:
             order.amis_draft_invoice_count = len(order.amis_draft_invoice_ids)
 
+    def action_confirm(self):
+        """Override: sau khi xác nhận, tự động tạo HĐ nháp meInvoice cho đơn Shopee."""
+        res = super().action_confirm()
+        for order in self:
+            if order.state in ('sale', 'done'):
+                order._auto_create_shopee_meinvoice_draft()
+        return res
+
+    def _auto_create_shopee_meinvoice_draft(self):
+        """Tự động tạo hóa đơn điện tử nháp nếu đây là đơn Shopee và config cho phép."""
+        self.ensure_one()
+
+        # Chỉ xử lý khi có shopee_order_ref
+        if not (getattr(self, 'shopee_order_ref', None) or ''):
+            return
+
+        config = self.env['amis.callback.config'].sudo().search([], limit=1, order='id asc')
+        if not config or not config.meinvoice_enabled:
+            return
+        if not config.meinvoice_auto_draft_on_confirm:
+            return
+
+        # Không tạo nếu đã có nháp
+        existing = self.env['meinvoice.invoice'].sudo().search([
+            ('sale_order_id', '=', self.id),
+            ('state', '=', 'draft'),
+        ], limit=1)
+        if existing:
+            _logger.info(
+                'Skip auto-draft meInvoice for SO %s: đã có nháp id=%d', self.name, existing.id
+            )
+            return
+
+        try:
+            import json as _json
+            from datetime import date as _date
+
+            invoice_data = self._build_meinvoice_invoice_data(config)
+
+            buyer_full_name = config.get_meinvoice_buyer_name(self)
+            buyer_address = (config.meinvoice_shopee_default_address or 'Khách hàng không cung cấp thông tin').strip()
+
+            inv_series = (self.meinvoice_prefill_inv_series or invoice_data.get('InvSeries', '')).strip()
+            payment_method = (self.meinvoice_prefill_payment_method or invoice_data.get('PaymentMethodName', 'TM/CK')).strip()
+
+            inv_date_str = invoice_data.get('InvDate', '')
+            try:
+                inv_date = _date.fromisoformat(inv_date_str)
+            except Exception:
+                inv_date = _date.today()
+
+            line_vals = []
+            for item in invoice_data.get('OriginalInvoiceDetail', []):
+                line_vals.append((0, 0, {
+                    'sort_order': item.get('SortOrder', 0),
+                    'item_code': item.get('ItemCode', ''),
+                    'item_name': item.get('ItemName', ''),
+                    'unit_name': item.get('UnitName', ''),
+                    'quantity': item.get('Quantity', 0),
+                    'unit_price': item.get('UnitPrice', 0),
+                    'discount_rate': item.get('DiscountRate', 0),
+                    'discount_amount_oc': item.get('DiscountAmountOC', 0),
+                    'amount_oc': item.get('AmountOC', 0),
+                    'amount_without_vat_oc': item.get('AmountWithoutVATOC', 0),
+                    'vat_rate_name': item.get('VATRateName', ''),
+                    'vat_amount_oc': item.get('VATAmountOC', 0),
+                }))
+
+            draft = self.env['meinvoice.invoice'].sudo().create({
+                'sale_order_id': self.id,
+                'inv_series': inv_series,
+                'inv_date': inv_date,
+                'payment_method': payment_method,
+                'buyer_legal_name': '',  # để trống cho đơn Shopee
+                'buyer_full_name': buyer_full_name,
+                'buyer_tax_code': '',
+                'buyer_address': buyer_address,
+                'buyer_phone': '',
+                'buyer_email': '',
+                'total_sale_oc': invoice_data.get('TotalSaleAmountOC', 0),
+                'total_discount_oc': invoice_data.get('TotalDiscountAmountOC', 0),
+                'total_net_oc': invoice_data.get('TotalAmountWithoutVATOC', 0),
+                'total_vat_oc': invoice_data.get('TotalVATAmountOC', 0),
+                'total_amount_oc': invoice_data.get('TotalAmountOC', 0),
+                'total_amount_in_words': invoice_data.get('TotalAmountInWords', ''),
+                'line_ids': line_vals,
+                'invoice_data_json': _json.dumps(invoice_data, ensure_ascii=False, default=str),
+            })
+            _logger.info(
+                'Auto-created meInvoice draft id=%d for Shopee SO %s', draft.id, self.name
+            )
+        except Exception:
+            _logger.exception(
+                'Auto-create meInvoice draft failed for SO %s — bỏ qua, không block xác nhận đơn.',
+                self.name,
+            )
+
     def action_sync_misa_sa_invoice(self):
         """Tạo job sync hóa đơn bán hàng (SAInvoice) lên MISA — được gọi bởi nút bấm."""
         for order in self:
