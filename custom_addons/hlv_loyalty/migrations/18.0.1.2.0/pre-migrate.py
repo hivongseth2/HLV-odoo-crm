@@ -23,37 +23,50 @@ def _normalize_phone(phone):
 
 
 def migrate(cr, version):
-    # 1. Add portal_phone column if not exists
+    # Check if table exists (new DB install won't have it yet — table created after pre-migrate)
     cr.execute("""
-        ALTER TABLE hlv_loyalty_portal_account
-        ADD COLUMN IF NOT EXISTS portal_phone VARCHAR;
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = 'hlv_loyalty_portal_account'
+        )
     """)
+    table_exists = cr.fetchone()[0]
 
-    # 2. Populate from partner phone for existing accounts
-    cr.execute("""
-        UPDATE hlv_loyalty_portal_account a
-        SET portal_phone = p.phone
-        FROM res_partner p
-        WHERE a.partner_id = p.id
-          AND a.portal_phone IS NULL
-          AND p.phone IS NOT NULL
-    """)
-    cr.execute("SELECT id, portal_phone FROM hlv_loyalty_portal_account WHERE portal_phone IS NOT NULL")
-    rows = cr.fetchall()
-    for row_id, raw_phone in rows:
-        normalized = _normalize_phone(raw_phone)
-        if normalized != raw_phone:
-            cr.execute(
-                "UPDATE hlv_loyalty_portal_account SET portal_phone = %s WHERE id = %s",
-                (normalized, row_id)
-            )
-    _logger.info("migration 18.0.1.2.0: portal_phone populated for %d records", len(rows))
+    if table_exists:
+        # 1. Add portal_phone column if not exists
+        cr.execute("""
+            ALTER TABLE hlv_loyalty_portal_account
+            ADD COLUMN IF NOT EXISTS portal_phone VARCHAR;
+        """)
 
-    # 3. Add index on portal_phone
-    cr.execute("""
-        CREATE INDEX IF NOT EXISTS hlv_loyalty_portal_account_portal_phone_idx
-        ON hlv_loyalty_portal_account (portal_phone);
-    """)
+        # 2. Populate from partner phone for existing accounts
+        cr.execute("""
+            UPDATE hlv_loyalty_portal_account a
+            SET portal_phone = p.phone
+            FROM res_partner p
+            WHERE a.partner_id = p.id
+              AND a.portal_phone IS NULL
+              AND p.phone IS NOT NULL
+        """)
+        cr.execute("SELECT id, portal_phone FROM hlv_loyalty_portal_account WHERE portal_phone IS NOT NULL")
+        rows = cr.fetchall()
+        for row_id, raw_phone in rows:
+            normalized = _normalize_phone(raw_phone)
+            if normalized != raw_phone:
+                cr.execute(
+                    "UPDATE hlv_loyalty_portal_account SET portal_phone = %s WHERE id = %s",
+                    (normalized, row_id)
+                )
+        _logger.info("migration 18.0.1.2.0: portal_phone populated for %d records", len(rows))
+
+        # 3. Add index on portal_phone
+        cr.execute("""
+            CREATE INDEX IF NOT EXISTS hlv_loyalty_portal_account_portal_phone_idx
+            ON hlv_loyalty_portal_account (portal_phone);
+        """)
+    else:
+        _logger.info("migration 18.0.1.2.0: hlv_loyalty_portal_account not found (fresh install), skipping column migration")
 
     # 4. Add loyalty_portal_default_password to res_company if not exists
     cr.execute("""
