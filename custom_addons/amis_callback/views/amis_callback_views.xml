@@ -117,6 +117,7 @@
                 <header>
                     <button name="action_connect_misa" type="object" string="Kết nối MISA" class="btn-primary"/>
                     <button name="action_connect_meinvoice" type="object" string="Kết nối meInvoice" class="btn-secondary"/>
+                    <button name="action_get_meinvoice_templates" type="object" string="Lấy mẫu HĐ" class="btn-secondary"/>
                     <button name="action_sync_catalog_to_odoo" type="object" string="Đồng bộ danh mục hàng hóa" class="btn-secondary"/>
                     <button name="action_sync_catalog_unmapped_only" type="object" string="Đồng bộ sản phẩm mới" class="btn-secondary"/>
                     <button name="check_call_back_data" type="object" string="Kiểm tra Callback" class="btn-secondary"/>
@@ -197,6 +198,9 @@
                             <field name="meinvoice_inv_series"/>
                             <field name="meinvoice_sign_type"/>
                             <field name="meinvoice_skip_api"/>
+                            <field name="meinvoice_auto_check_status"/>
+                            <field name="meinvoice_status_check_interval"
+                                   invisible="not meinvoice_auto_check_status"/>
                             <field name="meinvoice_stock_out_address"/>
                             <field name="meinvoice_stock_in_address"/>
                             <field name="meinvoice_is_pxk"/>

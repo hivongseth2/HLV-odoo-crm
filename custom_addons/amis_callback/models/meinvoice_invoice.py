@@ -91,6 +91,20 @@ class MeinvoiceInvoice(models.Model):
     inv_series_result = fields.Char(string='Ký hiệu (kết quả)', readonly=True, copy=False)
     inv_date_result = fields.Date(string='Ngày HĐ (kết quả)', readonly=True, copy=False)
 
+    # ── Trạng thái CQT ───────────────────────────────────────────────────────
+    cqt_status = fields.Selection(
+        [
+            ('unknown', 'Chưa kiểm tra'),
+            ('pending', 'Đang chờ CQT'),
+            ('accepted', 'CQT chấp nhận'),
+            ('rejected', 'CQT từ chối'),
+        ],
+        string='Trạng thái CQT', default='unknown', readonly=True, copy=False,
+    )
+    cqt_status_code = fields.Char(string='Mã trạng thái CQT', readonly=True, copy=False)
+    cqt_status_desc = fields.Char(string='Mô tả CQT', readonly=True, copy=False)
+    cqt_checked_at = fields.Datetime(string='Kiểm tra CQT lúc', readonly=True, copy=False)
+
     # ─────────────────────────────────────────────────────────────────────────
 
     def action_publish(self):
@@ -228,6 +242,92 @@ class MeinvoiceInvoice(models.Model):
 
         _logger.info('meInvoice unpublishview URL: %s', view_url)
         return {'type': 'ir.actions.act_url', 'url': view_url, 'target': 'new'}
+
+    def action_check_cqt_status(self):
+        """Kiểm tra trạng thái CQT của hóa đơn đã phát hành."""
+        self.ensure_one()
+        if self.state != 'published' or not self.transaction_id:
+            raise UserError('Chỉ hóa đơn đã phát hành mới có thể kiểm tra trạng thái CQT.')
+        config = self.env['amis.callback.config'].sudo().ensure_singleton()
+        status_list = config.get_meinvoice_invoice_status([self.transaction_id])
+
+        from datetime import datetime as _dt
+        now = _dt.utcnow()
+        if not status_list:
+            self.write({'cqt_checked_at': now})
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Kiểm tra CQT',
+                    'message': 'meInvoice không trả về trạng thái cho hóa đơn này.',
+                    'type': 'warning', 'sticky': False,
+                },
+            }
+
+        item = status_list[0]
+        raw_status = item.get('InvStatus') or item.get('invStatus') or item.get('Status') or 0
+        desc = (item.get('Description') or item.get('description') or '').strip()
+        try:
+            raw_status = int(raw_status)
+        except (TypeError, ValueError):
+            raw_status = 0
+
+        if raw_status == 2:
+            cqt_status = 'accepted'
+            msg_type = 'success'
+            msg = 'Cơ quan Thuế đã chấp nhận hóa đơn.'
+        elif raw_status == 3:
+            cqt_status = 'rejected'
+            msg_type = 'danger'
+            msg = 'Cơ quan Thuế từ chối hóa đơn.'
+        elif raw_status == 1:
+            cqt_status = 'pending'
+            msg_type = 'info'
+            msg = 'Đang chờ Cơ quan Thuế xác nhận.'
+        else:
+            cqt_status = 'unknown'
+            msg_type = 'warning'
+            msg = 'Không xác định được trạng thái CQT (mã: %s).' % raw_status
+
+        self.write({
+            'cqt_status': cqt_status,
+            'cqt_status_code': str(raw_status),
+            'cqt_status_desc': desc or msg,
+            'cqt_checked_at': now,
+        })
+        _logger.info('CQT status check %s → %s: %s', self.transaction_id, cqt_status, desc)
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Trạng thái CQT',
+                'message': '%s%s' % (msg, (' — ' + desc) if desc and desc != msg else ''),
+                'type': msg_type, 'sticky': False,
+            },
+        }
+
+    def action_download_pdf(self):
+        """Tải hóa đơn dạng PDF từ meInvoice."""
+        self.ensure_one()
+        if self.state != 'published' or not self.transaction_id:
+            raise UserError('Chỉ hóa đơn đã phát hành mới có thể tải xuống.')
+        config = self.env['amis.callback.config'].sudo().ensure_singleton()
+        url = config.get_meinvoice_download_url(self.transaction_id, file_type='PDF')
+        if not url:
+            raise UserError('meInvoice không trả về link tải PDF.')
+        return {'type': 'ir.actions.act_url', 'url': url, 'target': 'new'}
+
+    def action_download_xml(self):
+        """Tải hóa đơn dạng XML từ meInvoice."""
+        self.ensure_one()
+        if self.state != 'published' or not self.transaction_id:
+            raise UserError('Chỉ hóa đơn đã phát hành mới có thể tải xuống.')
+        config = self.env['amis.callback.config'].sudo().ensure_singleton()
+        url = config.get_meinvoice_download_url(self.transaction_id, file_type='XML')
+        if not url:
+            raise UserError('meInvoice không trả về link tải XML.')
+        return {'type': 'ir.actions.act_url', 'url': url, 'target': 'new'}
 
     def action_view_invoice(self):
         """Mở link xem hóa đơn đã phát hành trên cổng meInvoice (link tồn tại 5 phút)."""

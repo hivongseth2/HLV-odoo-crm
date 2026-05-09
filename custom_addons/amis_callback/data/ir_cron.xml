@@ -21,4 +21,15 @@ if records:
         <field name="interval_type">minutes</field>
         <field name="active">True</field>
     </record>
+
+    <record id="ir_cron_meinvoice_check_cqt_status" model="ir.cron">
+        <field name="name">meInvoice: Kiểm tra trạng thái CQT hóa đơn đã phát hành</field>
+        <field name="model_id" ref="model_amis_callback_config"/>
+        <field name="state">code</field>
+        <field name="code">model.action_check_meinvoice_status_cron()</field>
+        <field name="interval_number">2</field>
+        <field name="interval_type">hours</field>
+        <field name="active">True</field>
+        <field name="numbercall">-1</field>
+    </record>
 </odoo>

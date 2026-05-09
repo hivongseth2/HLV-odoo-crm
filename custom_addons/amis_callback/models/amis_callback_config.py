@@ -239,6 +239,24 @@ class AmisCallbackConfig(models.Model):
         help='Bật: khi xác nhận đơn hàng Shopee (có shopee_order_ref), '
              'tự động tạo hóa đơn điện tử nháp meInvoice.',
     )
+    meinvoice_auto_check_status = fields.Boolean(
+        string='Tự động kiểm tra trạng thái CQT (meInvoice)',
+        default=True,
+        help='Bật: cron tự động gọi /invoice/status để cập nhật trạng thái CQT '
+             'cho hóa đơn đã phát hành chưa được xác nhận.',
+    )
+    meinvoice_status_check_interval = fields.Integer(
+        string='Tần suất kiểm tra CQT (giờ)',
+        default=2,
+        help='Sau bao nhiêu giờ kể từ lần check cuối thì check lại trạng thái CQT. '
+             'Mặc định 2 giờ.',
+    )
+    meinvoice_auto_draft_on_confirm = fields.Boolean(
+        string='Tự động tạo HĐĐT nháp khi xác nhận đơn Shopee',
+        default=True,
+        help='Bật: khi xác nhận đơn hàng Shopee (có shopee_order_ref), '
+             'tự động tạo hóa đơn điện tử nháp meInvoice.',
+    )
     meinvoice_shopee_only = fields.Boolean(
         string='Chỉ phát hành HĐĐT cho đơn Shopee (meInvoice)',
         default=True,
@@ -914,6 +932,149 @@ class AmisCallbackConfig(models.Model):
         url = body.get('data') or body.get('Data') or ''
         _logger.info('meInvoice publishview URL: %s', url)
         return url
+
+    def get_meinvoice_invoice_status(self, transaction_ids):
+        """Tra cứu trạng thái hóa đơn từ CQT qua meInvoice /invoice/status.
+
+        Args:
+            transaction_ids: list[str] — danh sách TransactionID.
+
+        Returns:
+            list[dict] — danh sách {TransactionID, InvStatus, Description, ...}
+        """
+        self.ensure_one()
+        if not transaction_ids:
+            return []
+        body = self._post_meinvoice('/invoice/status', payload=transaction_ids)
+        data = body.get('data') or body.get('Data') or []
+        if isinstance(data, dict):
+            data = [data]
+        _logger.info('meInvoice invoice status: %s', data)
+        return data
+
+    def get_meinvoice_download_url(self, transaction_id, file_type='PDF'):
+        """Lấy link tải hóa đơn (PDF hoặc XML) qua meInvoice /invoice/download.
+
+        Args:
+            transaction_id: str — TransactionID hóa đơn đã phát hành.
+            file_type: str — 'PDF' hoặc 'XML'.
+
+        Returns:
+            str — download URL, hoặc '' nếu không lấy được.
+        """
+        self.ensure_one()
+        if not transaction_id:
+            raise UserError('Thiếu TransactionID để tải hóa đơn.')
+        payload = {'TransactionID': transaction_id, 'FileType': file_type.upper()}
+        body = self._post_meinvoice('/invoice/download', payload=payload)
+        url = body.get('data') or body.get('Data') or ''
+        _logger.info('meInvoice download URL (%s): %s', file_type, url)
+        return url
+
+    def get_meinvoice_templates(self):
+        """Lấy danh sách mẫu hóa đơn từ meInvoice /invoice/templates.
+
+        Returns:
+            list[dict] — danh sách template.
+        """
+        self.ensure_one()
+        # meInvoice /invoice/templates dùng GET (payload rỗng)
+        body = self._post_meinvoice('/invoice/templates', payload={})
+        data = body.get('data') or body.get('Data') or []
+        if isinstance(data, dict):
+            data = [data]
+        _logger.info('meInvoice templates (%d): %s', len(data), data)
+        return data
+
+    def action_get_meinvoice_templates(self):
+        """Nút bấm: lấy và hiển thị danh sách mẫu hóa đơn."""
+        self.ensure_one()
+        templates = self.get_meinvoice_templates()
+        if not templates:
+            raise UserError('meInvoice không trả về mẫu hóa đơn nào.')
+        lines = []
+        for t in templates:
+            tid = t.get('TemplateID') or t.get('templateId') or t.get('id') or '?'
+            tname = t.get('TemplateName') or t.get('templateName') or t.get('name') or ''
+            lines.append('%s — %s' % (tid, tname))
+        raise UserError('Danh sách mẫu hóa đơn meInvoice:\n\n' + '\n'.join(lines))
+
+    def action_check_meinvoice_status_cron(self):
+        """Cron: kiểm tra trạng thái CQT cho tất cả hóa đơn đã phát hành chưa được xác nhận."""
+        config = self.sudo().search([], limit=1, order='id asc')
+        if not config or not config.meinvoice_enabled or not config.meinvoice_auto_check_status:
+            return
+
+        from datetime import timedelta as _td
+        from datetime import datetime as _dt
+
+        interval_hours = max(1, config.meinvoice_status_check_interval or 2)
+        cutoff = _dt.utcnow() - _td(hours=interval_hours)
+
+        # Tìm hóa đơn đã phát hành, CQT chưa xác nhận, chưa check gần đây
+        invoices = self.env['meinvoice.invoice'].sudo().search([
+            ('state', '=', 'published'),
+            ('cqt_status', 'not in', ['accepted', 'rejected']),
+            ('transaction_id', '!=', False),
+            '|',
+            ('cqt_checked_at', '=', False),
+            ('cqt_checked_at', '<', cutoff),
+        ])
+
+        if not invoices:
+            _logger.info('meInvoice status cron: không có hóa đơn cần kiểm tra.')
+            return
+
+        _logger.info('meInvoice status cron: kiểm tra %d hóa đơn...', len(invoices))
+        transaction_ids = [inv.transaction_id for inv in invoices]
+
+        try:
+            status_list = config.get_meinvoice_invoice_status(transaction_ids)
+        except Exception:
+            _logger.exception('meInvoice status cron: gọi API thất bại.')
+            return
+
+        # Map TransactionID → status result
+        status_map = {}
+        for item in (status_list or []):
+            tid = (item.get('TransactionID') or item.get('transactionId') or '').strip()
+            if tid:
+                status_map[tid] = item
+
+        now = _dt.utcnow()
+        for inv in invoices:
+            item = status_map.get(inv.transaction_id)
+            if not item:
+                inv.sudo().write({'cqt_checked_at': now})
+                continue
+
+            raw_status = item.get('InvStatus') or item.get('invStatus') or item.get('Status') or 0
+            desc = (item.get('Description') or item.get('description') or '').strip()
+            try:
+                raw_status = int(raw_status)
+            except (TypeError, ValueError):
+                raw_status = 0
+
+            # meInvoice InvStatus: 1=đang chờ, 2=CQT chấp nhận, 3=CQT từ chối
+            if raw_status == 2:
+                cqt_status = 'accepted'
+            elif raw_status == 3:
+                cqt_status = 'rejected'
+            elif raw_status == 1:
+                cqt_status = 'pending'
+            else:
+                cqt_status = 'unknown'
+
+            inv.sudo().write({
+                'cqt_status': cqt_status,
+                'cqt_status_code': str(raw_status),
+                'cqt_status_desc': desc,
+                'cqt_checked_at': now,
+            })
+            _logger.info(
+                'meInvoice status: %s → %s (%s)', inv.transaction_id, cqt_status, desc
+            )
+
 
     def action_sync_catalog_to_odoo(self):
         """Đồng bộ danh mục hàng hóa (type=2) và đơn vị tính (type=4) từ MISA

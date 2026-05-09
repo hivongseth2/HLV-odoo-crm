@@ -19,6 +19,15 @@
                     <button name="action_preview_invoice" type="object"
                             string="Xem trước HĐ"
                             invisible="state != 'draft'"/>
+                    <button name="action_check_cqt_status" type="object"
+                            string="Kiểm tra CQT"
+                            invisible="state != 'published'"/>
+                    <button name="action_download_pdf" type="object"
+                            string="Tải PDF"
+                            invisible="state != 'published'"/>
+                    <button name="action_download_xml" type="object"
+                            string="Tải XML"
+                            invisible="state != 'published'"/>
                     <button name="action_view_invoice" type="object"
                             string="Xem hóa đơn"
                             invisible="state != 'published'"/>
@@ -98,6 +107,18 @@
                                     <field name="transaction_id" readonly="1" string="Transaction ID"/>
                                 </group>
                             </group>
+                            <group string="Trạng thái Cơ quan Thuế">
+                                <group>
+                                    <field name="cqt_status" readonly="1" widget="badge"
+                                           decoration-info="cqt_status == 'pending'"
+                                           decoration-success="cqt_status == 'accepted'"
+                                           decoration-danger="cqt_status == 'rejected'"/>
+                                    <field name="cqt_status_desc" readonly="1" string="Mô tả"/>
+                                </group>
+                                <group>
+                                    <field name="cqt_checked_at" readonly="1" string="Kiểm tra lúc"/>
+                                </group>
+                            </group>
                         </page>
                     </notebook>
                 </sheet>
@@ -129,6 +150,11 @@
                        options="{'currency_field': 'currency_id'}"/>
                 <field name="inv_no" string="Số HĐ"/>
                 <field name="inv_code" string="Mã CQT" optional="show"/>
+                <field name="cqt_status" string="CQT" widget="badge"
+                       decoration-info="cqt_status == 'pending'"
+                       decoration-success="cqt_status == 'accepted'"
+                       decoration-danger="cqt_status == 'rejected'"
+                       optional="show"/>
                 <field name="transaction_id" string="Transaction ID" optional="hide"/>
                 <!-- virtual currency field for monetary widget -->
                 <field name="currency_id" invisible="1"/>
@@ -139,6 +165,12 @@
                 <button name="action_preview_invoice" type="object" string="Xem trước"
                         icon="fa-eye"
                         invisible="state != 'draft'"/>
+                <button name="action_check_cqt_status" type="object" string="CQT?"
+                        icon="fa-refresh"
+                        invisible="state != 'published'"/>
+                <button name="action_download_pdf" type="object" string="PDF"
+                        icon="fa-download"
+                        invisible="state != 'published'"/>
                 <button name="action_view_invoice" type="object" string="Xem HĐ"
                         icon="fa-eye"
                         invisible="state != 'published'"/>
