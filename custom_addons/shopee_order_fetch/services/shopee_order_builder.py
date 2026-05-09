@@ -93,15 +93,18 @@ def find_or_create_delivery_address(env, parent_partner, addr):
     return delivery
 
 
+FALLBACK_PRODUCT_TEMPLATE_ID = 17768  # Sản phẩm mặc định khi không tìm thấy trong Odoo
+
+
 def find_or_create_shopee_item(env, item_data, shop):
     """
-    Tìm hoặc tạo shopee.item từ item_data; trả về product.product.
+    Tìm shopee.item từ item_data; trả về product.product.
 
     Thứ tự tìm kiếm:
     1. shopee.item theo item_id + model_id
     2. product.product theo model_sku (default_code)
     3. product.product theo tên sản phẩm
-    4. Tạo product mới nếu không tìm thấy
+    4. Fallback về sản phẩm cố định (product_template id: FALLBACK_PRODUCT_TEMPLATE_ID)
     """
     ShopeeItem = env['shopee.item'].sudo()
 
@@ -131,16 +134,32 @@ def find_or_create_shopee_item(env, item_data, shop):
             [('name', '=', item_name)], limit=1
         )
 
-    # 4. Tạo mới
+    # 4. Fallback về sản phẩm cố định thay vì tạo mới
     if not product:
-        product = env['product.product'].sudo().create({
-            'name': item_name or f"Shopee Item {item_id}",
-            'default_code': sku or '',
-            'type': 'consu',
-            'sale_ok': True,
-            'is_storable': True,
-        })
-        _logger.info("Shopee: Đã tạo sản phẩm '%s' (SKU: %s)", product.name, sku)
+        # 4a. Thử theo product_template id cố định
+        tmpl = env['product.template'].sudo().browse(FALLBACK_PRODUCT_TEMPLATE_ID)
+        if tmpl.exists():
+            product = tmpl.product_variant_ids[:1]
+
+        # 4b. Nếu template không tồn tại → tìm theo SKU 'product_shopee' hoặc tên chứa 'Sản phẩm shopee'
+        if not product:
+            product = env['product.product'].sudo().search(
+                [('default_code', '=', 'product_shopee')], limit=1
+            )
+        if not product:
+            product = env['product.product'].sudo().search(
+                [('name', 'ilike', 'Sản phẩm shopee')], limit=1
+            )
+
+        if not product:
+            raise ValueError(
+                "Shopee: Không tìm thấy sản phẩm fallback. "
+                "Vui lòng tạo sản phẩm có SKU 'product_shopee' hoặc tên chứa 'Sản phẩm shopee'."
+            )
+        _logger.warning(
+            "Shopee: Không tìm thấy sản phẩm cho item_id=%s, SKU='%s', tên='%s' → dùng fallback '%s'",
+            item_id, sku, item_name, product.name,
+        )
 
     # 5. Tạo shopee.item record nếu chưa tồn tại
     if not existing_item and shop:
