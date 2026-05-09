@@ -26,18 +26,18 @@ class HlvLoyaltyProgram(models.Model):
 
     # Tỷ lệ tích điểm
     earning_amount = fields.Float(
-        string='Số tiền quy đổi', required=True, default=100000,
-        help='Số tiền hàng thực tế để được 1 điểm (VNĐ)',
+        string='Số tiền tích lũy quy đổi', required=True, default=100000,
+        help='Số tiền hàng tích lũy thực tế để được 1 điểm (VNĐ)',
     )
     earning_points = fields.Integer(
-        string='Số điểm nhận được', required=True, default=1,
-        help='Số điểm nhận được khi đạt mức tiền quy đổi',
+        string='Số điểm tích lũy nhận được', required=True, default=1,
+        help='Số điểm tích lũy nhận được khi đạt mức tiền quy đổi',
     )
     discount_per_point = fields.Float(
-        string='Mỗi X đồng chiết khấu = 1 điểm',
+        string='Mỗi X đồng chiết khấu = 1 điểm (điểm đổi thưởng)',
         required=True, default=10000,
         digits=(15, 0),
-        help='Số tiền chiết khấu trên dòng hàng (VNĐ) để được 1 điểm tích lũy. VD: 10.000đ chiết khấu = 1 điểm.',
+        help='Số tiền chiết khấu trên dòng hàng (VNĐ) để được 1 điểm đổi thưởng. VD: 10.000đ chiết khấu = 1 điểm.',
     )
 
     # Voucher packages
@@ -53,7 +53,7 @@ class HlvLoyaltyProgram(models.Model):
     )
 
     cash_rate_per_point = fields.Float(
-        string='Giá trị quy đổi tiền (đ/điểm)',
+        string='Giá trị quy đổi tiền đổi thưởng (đ/điểm)',
         required=True, default=10000,
         digits=(15, 0),
         help='Mỗi 1 điểm đổi thưởng = X đồng khi khách chọn đổi tiền mặt. VD: 10.000.',
