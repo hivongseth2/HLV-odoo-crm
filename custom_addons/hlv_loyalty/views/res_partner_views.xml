@@ -94,7 +94,7 @@
 
             <!-- Tab Loyalty -->
             <xpath expr="//notebook" position="inside">
-                <page string="Loyalty" name="loyalty_tab">
+                <page string="Loyalty" name="loyalty_tab" invisible="parent_id != False">
 
                     <!-- Panel tổng điểm + nút đổi -->
                     <div class="row g-0 mb-3 border">
